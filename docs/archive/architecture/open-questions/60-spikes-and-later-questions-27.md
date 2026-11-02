@@ -8,7 +8,7 @@ The ruled, closed, resolved and withdrawn entries of [part 60](../../../architec
 *(REQ-ORCH-096; REQ-ORCH-104's stuck-mode clause; REQ-ORCH-105, "after every activation cycle … counters and fingerprints MUST
 reset"; REQ-ORCH-078 and [`PD-ORCH-015`](../../../product/directives/pd-orch-015.md#pd-orch-015), the plan correction;
 [`PD-ORCH-009`](../../../product/directives/pd-orch-009.md#pd-orch-009) revision 3. Raised 2026-10-14 by fin43 (`fin43-live-findings`) from
-[`../../../defects/fixed/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md`](../../../defects/fixed/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md).)*
+[`../../defects/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md`](../../defects/a-stuck-trigger-a-roots-unanswered-empty-turn-armed-lands-after-a-later-plan-correction.md).)*
 
 **What is open.** A root's final empty turn that the run does not follow up — the re-prompt answered by a second silence, or an
 empty turn after an answer and a plan correction — arms a stuck trigger that stays pending in that root's supervisor. Confirmed by
@@ -34,7 +34,7 @@ withdrawn, so no classification is asked, no corrective message follows, and no 
 A repetition, cycle or raw-count trigger is kept, so the case stays disjoint from `PD-ORCH-016`. The correction also counts as
 REQ-ORCH-105's todo-correction instruction and restarts the consecutive-activation series — REQ-ORCH-105 as written, which the
 build did not do (recorded as
-[`../../../defects/fixed/a-plan-correction-does-not-restart-the-consecutive-activation-series.md`](../../../defects/fixed/a-plan-correction-does-not-restart-the-consecutive-activation-series.md)).
+[`../../defects/a-plan-correction-does-not-restart-the-consecutive-activation-series.md`](../../defects/a-plan-correction-does-not-restart-the-consecutive-activation-series.md)).
 Recorded as [`PD-ORCH-009`](../../../product/directives/pd-orch-009.md#pd-orch-009) revision 4 beside [OQ-283](59-spikes-and-later-questions-26.md#oq-283)'s ruling, citing
 REQ-ORCH-078, REQ-ORCH-096, REQ-ORCH-099, REQ-ORCH-102 and REQ-ORCH-105 without change. A root resumed with a child's report
 after an empty turn is outside this ruling: measured, recorded as a defect note and raised as [OQ-296](#oq-296). *The as-built
@@ -57,7 +57,7 @@ the failure warning "a job that ended without producing an artifact"; REQ-LIBRAR
 [`PD-LIBRARY-002`](../../../product/directives/pd-library-002.md#pd-library-002) revision 2 (c), the retrospective's three notices;
 [`PD-CONFIG-003`](../../../product/directives/pd-config-003.md#pd-config-003) revision 2 and OQ-223, the timed-out detail. Raised
 2026-10-14 by fin43 (`fin43-live-findings`) from the live scenario run at `ce5f952` (finding F3) and
-[`../../../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`](../../../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).
+[`../../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`](../../defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).
 Ruled 2026-10-14 under R-072, below.)*
 
 **What is open.** A collector that crashes (a provider's 401, a refused request, any raise other than the timeout) still stores
@@ -115,7 +115,7 @@ prefix is added to or removed from every line of the candidate"; [`PD-TOOLS-015`
 shift leaves a `new_string` line with no visible character as given; [`PD-TOOLS-019`](../../../product/directives/pd-tools-019.md#pd-tools-019),
 which sets a trailing `\r` aside at level 3 and does not decide this; [`PD-TOOLS-014`](../../../product/directives/pd-tools-014.md#pd-tools-014)'s
 level-3 near miss. Raised 2026-10-14 by fin43 (`fin43-rename-and-match`) from
-[`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../../../defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md);
+[`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../../defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md);
 numbered from the top of the plan's range, OQ-281 to OQ-295, to keep clear of its sibling bundles: whichever lands second takes
 the next free number.)*
 
@@ -164,7 +164,7 @@ whose corrective joins the report?** *(REQ-ORCH-096, "an empty reply with no cal
 stuck-mode clause; REQ-ORCH-055..059, the parent resumed with its children's reports;
 [`PD-ORCH-009`](../../../product/directives/pd-orch-009.md#pd-orch-009) revision 4, whose case names three follow-ups and leaves this one out.
 Raised 2026-10-14 by fin44 (`fin44-supervision-and-match`) from
-[`../../../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../../../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md),
+[`../../defects/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../../defects/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md),
 as [OQ-284](#oq-284)'s ruling asked; the plan's range OQ-296 to OQ-310, its first free number on this branch — renumbered at
 landing if a sibling took it first.)*
 
@@ -198,7 +198,7 @@ REQ-ORCH-102, REQ-ORCH-105 and REQ-ORCH-106 without change. *The as-built readin
 in one request, one stuck activation per silent wait, and a root that waited silently across three batches escalated
 (`agent_session_aborted`) — is kept above as the falsified one.* Written and built 2026-10-14 by fin45
 (`fin45-supervision-and-quit`): `IterationChildren.runWithChildren` calls `withdrawStuck()` as the parent is taken into the wait;
-[`../../../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../../../defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
+[`../../defects/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`](../../defects/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md)
 moved to `fixed/`.
 *Dated 2026-10-13, a day before the question was raised, until fin46 (`fin46-accept1-12`) corrected it on 2026-10-14 from the
 consortium's ruling record, whose sitting ruled it 2026-10-14 by 10:14 UTC.*
@@ -217,7 +217,7 @@ unsaved settings present, a user-initiated close raises the save/discard/cancel 
 case; REQ-SHELL-021 gate (1); REQ-SHELL-121's quit; [`PD-SHELL-009`](../../../product/directives/pd-shell-009.md#pd-shell-009)'s last case, a quit
 that starts outside any window; PD-ORCH-005 clause 9, the quit that asks every main window's guard before confirming any.
 Raised by the orchestrator's consortium as HR1 from
-[`../../../defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../../../defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md),
+[`../../defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../../defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md),
 which asked that "whether Chromium's `unresponsive` judgement is that point" be raised with the repair and not decided in it;
 entered 2026-10-14 by fin44 (`fin44-hang-and-seams`) at the first free number of the plan's range, OQ-296 to OQ-310 — renumbered
 at landing if a sibling took it first.)*
@@ -226,7 +226,7 @@ at landing if a sibling took it first.)*
 through `askRendererGuard`, `apps/desktop/src/main/main-windows.ts`), and `guardClose` documents that a guard that cannot answer
 allows. Since 2026-10-14 a renderer that is **gone** (crashed, killed, its contents destroyed) cannot answer, so its question
 rejects at once or the moment it goes (fin43, built without a directive:
-[`../../../defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](../../../defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md)).
+[`../../defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](../../defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md)).
 A renderer that is alive but **hung** — its main thread in an endless loop or stopped — is not gone: the question is sent and
 never answered, nothing bounds the wait, and both a person's close of that window and the application's quit
 (`closeThroughGuards`, `apps/desktop/src/main/exit.ts`), a SIGTERM's included, are held until it recovers or the process is

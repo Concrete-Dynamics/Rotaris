@@ -176,7 +176,7 @@ pnpm dev                                            # the application through el
 
 `packages/kernel/src/generated/`, which every build imports, is not committed: the first `pnpm dev`, `pnpm build` or
 `pnpm package` writes it with the generator behind `pnpm symbols`, and `pnpm symbols` or a test run keeps it current
-([the repaired note](docs/defects/fixed/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md)). If Electron's runtime is
+([the repaired note](docs/archive/defects/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md)). If Electron's runtime is
 missing, as it is in a new Git worktree, `node node_modules/electron/install.js` installs it.
 
 ## Concepts

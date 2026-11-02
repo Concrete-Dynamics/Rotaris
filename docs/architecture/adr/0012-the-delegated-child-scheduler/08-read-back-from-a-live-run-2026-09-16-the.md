@@ -56,7 +56,7 @@ block. What this execution changes is what the block is worth at the end of it.
 reasons before it answers, and the backstop aborted the step in flight at ceiling + 30 s three times, after 115.4 s,
 87.0 s and 104.8 s of generation with no text and no tool call; the streamed reasoning stayed in the transcript as
 `thinking` rows and nothing else of the step was kept
-([`a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md`](../../../defects/fixed/a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md)).
+([`a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md`](../../../archive/defects/a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md)).
 At `71ad8e8` all three landings finished inside the window. The question was put to the owner as OQ-196, who ruled on
 2026-10-06 ([R-071](../../../product/requests.md#r-071)) to keep the 30 s so the child's limit stays hard, and to keep the cut
 step's reasoning in the transcript alone; `PD-ORCH-004` revision 5 writes the bound down. The reason above stands: the

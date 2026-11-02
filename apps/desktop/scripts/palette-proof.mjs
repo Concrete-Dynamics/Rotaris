@@ -19,7 +19,7 @@ import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/rendere
  *     input block and would pass through a disabled window. The host-input half is WIN32 ONLY: its driver is
  *     `os-input.ps1` (Win32 cursor and keyboard queue, `IsWindowEnabled`), and X11 has no per-window enabled state
  *     to report. On any other platform that half is stated not applicable in `results.json` and the application's
- *     own reading is still asserted (`docs/defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md`).
+ *     own reading is still asserted (`docs/archive/defects/palette-proof-reads-the-win32-host-input-on-every-platform.md`).
  *  4. The shortcut table still carries the window: Ctrl+3, Ctrl+, and Ctrl+L, and Ctrl+Return declining while the send
  *     control is disabled (REQ-SHELL-049/050).
  *  5. The palette is reachable at the minimum window size (REQ-SHELL-022's 1000×680).
@@ -96,7 +96,7 @@ async function launch(name, s, extra, opts = {}) {
   // Every relayed renderer console line; a check fails on any but REQ-SESSION-161's run-start decline, which is the replica's
   // own recovery: the `persona-follows-display` stage met it in 2 of 6 launches on fin46's base (loads 0.87 and 2.99), in 1 of 8
   // after the repair (loads 2.55 to 4.26), and in 2 of 4 when first seen (loads 1.9 to 3.1)
-  // (docs/defects/fixed/palette-proof-fails-on-the-replicas-documented-run-start-decline.md). `replicaDeclines` keeps the count.
+  // (docs/archive/defects/palette-proof-fails-on-the-replicas-documented-run-start-decline.md). `replicaDeclines` keeps the count.
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
   return { log, png, elapsedMs: Date.now() - started, errors, replicaDeclines: replicaRunStartDeclines(errors) };
 }
@@ -155,7 +155,7 @@ if (wanted('palette')) {
   // Wave 2 added exactly three commands (`requirements.move`, `terminal.open`, `run.compress`) taking COMMANDS to 16.
   // Stage C (PD-SHELL-001) added `workspace.chooseNewWindow`, taking COMMANDS to 17. `library.proposals`
   // (REQ-LIBRARY-174) took it to 18 and did NOT update this number, leaving this proof red until Part AT found it
-  // (`docs/defects/fixed/the-palette-proof-counts-a-registry-that-moved-on.md`); Part AT's own
+  // (`docs/archive/defects/the-palette-proof-counts-a-registry-that-moved-on.md`); Part AT's own
   // `improvements.retrospective` (PD-LIBRARY-002) takes it to 19. The count is asserted rather than derived on
   // purpose: a command that appears without anyone deciding to add it is what this line is here to catch.
   // N71 (2026-10-13) returned two entries from `OMITTED_COMMANDS` — "Search transcript" (Ctrl+F, REQ-SHELL-049) and
@@ -399,7 +399,7 @@ if (wanted('search-and-reasoning')) {
 //    so its persona window holds a reasoning row; that window is popped out from Mission's agent table, then the main window's palette turns reasoning
 //    bodies on, and the persona window's reasoning row is read before and after. Until channel 14 (`display:changed`) the
 //    persona window kept the value it booted with
-//    (docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md).
+//    (docs/archive/defects/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md).
 const s7 = scenario('persona-follows-display');
 if (wanted('persona-follows-display')) {
   setPreference(s7, 'interface/agentPopout', true);

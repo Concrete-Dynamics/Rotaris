@@ -40,7 +40,7 @@ function yamlScalar(value: string): string {
   // every other string too, so one rule covers the whole block and no value can break the frontmatter. JSON leaves U+2028
   // and U+2029 raw, and a reader that takes either for a line break (YAML 1.1 does, as `.` in a pattern does) would split
   // the line, so both are written as their escapes, which every YAML double-quoted scalar reads back as the character
-  // (docs/defects/fixed/a-title-holding-a-unicode-line-separator-writes-a-frontmatter-the-splitter-does-not-read.md).
+  // (docs/archive/defects/a-title-holding-a-unicode-line-separator-writes-a-frontmatter-the-splitter-does-not-read.md).
   return JSON.stringify(value).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 

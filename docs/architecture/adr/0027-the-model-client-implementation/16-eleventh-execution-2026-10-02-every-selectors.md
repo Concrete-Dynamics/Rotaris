@@ -4,7 +4,7 @@ Part 16 of 18 of [ADR-0027](../0027-the-model-client-implementation.md), which i
 
 ## Eleventh execution — 2026-10-02, every selector's choice clears an exclusion (REQ-MONITOR-194, REQ-MONITOR-146, REQ-NOTIFY-074)
 
-*The repair of [`a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`](../../../defects/fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md)
+*The repair of [`a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`](../../../archive/defects/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md)
 (fin10). Completes the eighth execution's mechanism for the two selectors outside a run.*
 
 The eighth execution cleared an exclusion on the run's own two paths. The composer's "Model for the next run" wrote the

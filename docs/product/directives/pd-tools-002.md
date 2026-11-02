@@ -65,4 +65,4 @@ identifier since 2026-09-21 and removes the same downgrade clause from each, whi
 REQ-SANDBOX-104 was written in this directive's own commit (`ed1c167`) and read "Narrowed by" with nothing here behind it,
 and the notes at REQ-TOOLS-071 and REQ-TOOLS-072, with the missing one at REQ-TOOLS-069, are written now. No rule text
 changed ([OQ-222](../../architecture/open-questions.md), ruled under [R-072](../requests.md#r-072);
-[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)).*
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../../archive/defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)).*

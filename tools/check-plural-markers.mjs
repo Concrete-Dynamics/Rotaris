@@ -13,7 +13,7 @@
  *
  * `http(s)` is a scheme, not a plural, and passes. Live-run finding L11 (2026-09-29) is why this exists: "Added Katalyst;
  * discovered 1 model(s)." in the sign-in dialog, and some thirty more sites the grep behind the repair found
- * (docs/defects/fixed/a-literal-plural-marker-is-rendered-in-sign-in-notices.md).
+ * (docs/archive/defects/a-literal-plural-marker-is-rendered-in-sign-in-notices.md).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';

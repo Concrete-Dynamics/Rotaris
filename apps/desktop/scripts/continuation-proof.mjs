@@ -218,7 +218,7 @@ await scenarioRun('later-run', async () => {
   expect(/^\s+child_timeout: 60\s*$/m.test(yaml), `Save did not store 60 seconds:\n${yaml}`);
   // REQ-CONFIG-446 / REQ-CONFIG-419: between the edit and Save the file still holds 3 s, and the field's description says so;
   // after Save it states the 60 s the file now holds. Until 2026-10-15 the first reading stated the unsaved 60 as stored
-  // (docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md).
+  // (docs/archive/defects/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md).
   expect(saved.descriptionAfterEdit === 'Stored as 3 seconds.' && saved.descriptionAtEnd === 'Stored as 60 seconds.', `the Per-agent timeout's description before and after Save: ${JSON.stringify([saved.descriptionAfterEdit, saved.descriptionAtEnd])}`);
   const r2 = await launch('later-run-2', s, {
     ROTARIS_SCRIPT: 'continue:coding-agent:alpha-continued,answer,answer', ROTARIS_CHILD_SCRIPT: 'read,answer',

@@ -202,12 +202,12 @@ back-pointers at REQ-LIBRARY-017, REQ-MONITOR-173, REQ-NOTIFY-251 and REQ-WORKSP
 2026-09-17, as [R-033](../requests.md#r-033) named them, while this line named three. REQ-LIBRARY-017 is recorded under
 Extends because its clauses bind an analysis that a run triggered, and the rule above leaves them whole for the per-run
 analyst. No rule text changed ([OQ-222](../../architecture/open-questions.md), ruled under [R-072](../requests.md#r-072);
-[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)).*
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement`](../../archive/defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)).*
 
 *Revision 2, 2026-10-13 ([OQ-236](../../archive/architecture/open-questions/51-spikes-and-later-questions-18.md#oq-236), ruled under [R-072](../requests.md#r-072)): the
 Narrows line is added and REQ-LIBRARY-126 and REQ-LIBRARY-128 join the Extends line, each requirement with its back-pointer;
 the cases are the revision-2 paragraph's (a) to (g)
-([`pd-library-002-reaches-further-requirements-its-disposition-does-not-name`](../../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md)).*
+([`pd-library-002-reaches-further-requirements-its-disposition-does-not-name`](../../archive/defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md)).*
 
 *Revision 3, 2026-10-13 ([OQ-271](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271), ruled under [R-072](../requests.md#r-072)):
 REQ-LIBRARY-034 joins the Narrows line with its back-pointer (clause (h)). REQ-LIBRARY-017 stays on the Extends line, and
@@ -282,7 +282,7 @@ written to the log at its capture, whatever the presenter.
 > no later run's analysis was captured — its null source session reached the post-run job's `considered_session_ids` and the
 > parse threw; repaired in `captureImprovementJob`, which records no session for it, and the reading raised as
 > [OQ-271](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-271)
-> ([`fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md)).
+> ([`fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../../archive/defects/a-post-run-analysis-after-a-retrospective-is-never-captured.md)).
 > **The live steps:** `live-run.mjs`'s `ask` now lets its run's analysis finish and its `ask-retrospective` presses the
 > gesture (Ctrl+6, Proposals) and waits for the pass to end, asserting one retrospective artifact with no session that read the
 > ask session, its notice, and the run host's "at the workspace root" line listing `workspace:` files alone; launch 8 of the
@@ -319,9 +319,9 @@ written to the log at its capture, whatever the presenter.
 > "Open Models settings" (`open-settings`, `models`), where it reached the generic "The retrospective could not be started"
 > notice with no action before. **Found by building:** at analysis the warning read the reason's own period and then its own
 > (`passFailureDetail`), so "… running a retrospective.." — repaired in the same change
-> ([`fixed/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md`](../../defects/fixed/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md));
+> ([`fixed/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md`](../../archive/defects/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md));
 > and the lease checks the entry role's provider rather than the retrospective model's, recorded and not repaired
-> ([`fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md))
+> ([`fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../../archive/defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md))
 > — *repaired 2026-10-14 by fin46 (`fin46-accept1-11`): "its entry provider" is read as the sign-in provider of the model the
 > retrospective's request goes to (`retrospective_model`, then `medium_model`), which `leasedSetup` now requires
 > (`PreparedRun.retrospectiveAuthProvider`); a continuation still requires the entry role's. The sentence is unchanged.*

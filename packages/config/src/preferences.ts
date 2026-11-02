@@ -14,7 +14,7 @@ import { syntheticOriginOf } from './slots.js';
  * REQ-CONFIG-341: the origin is one of exactly `workspace`, `global`, `discovered` and `default` — the contract's
  * vocabulary, so the read-back cannot name a member the Scope column does not have. `default` marks a built-in value.
  * Until 2026-10-02 the fourth member was `built-in`
- * (`docs/defects/fixed/the-scope-column-names-the-built-in-origin-built-in-not-default.md`).
+ * (`docs/archive/defects/the-scope-column-names-the-built-in-origin-built-in-not-default.md`).
  */
 export type Origin = (typeof CONFIG_ORIGINS)[number];
 

@@ -7,7 +7,7 @@ Part 9 of 9 of [ADR-0024](../0024-evidence-and-audit-files.md), which indexes ev
 **Measured, then repaired.** The duress live run of 2026-09-29 (pack `2026-09-29T12-40-51-800Z`, session `c0066cc5`) ended
 at its deadline by the harness's immediate exit, a crash, with the orchestrator's `wait_for_tasks` call open; a repair of a
 copy of its store settled that call's transcript row and left its ring row (ordinal 218) `running`
-([`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](../../../defects/fixed/a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md),
+([`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](../../../archive/defects/a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md),
 acceptance A30). An orderly end settles every ring row still open when the run's tool ports close (the run host's gate
 sink, `close`); a crash closes none, and no other path settled one.
 

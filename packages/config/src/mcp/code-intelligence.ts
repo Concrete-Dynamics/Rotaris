@@ -55,7 +55,7 @@ export function neverGrantNames(): string[] {
  * arguments confine it to — a symbol rename by the file that declares the symbol and not the files whose references it
  * rewrote, a replacement across the whole project (no path argument) by nothing, a directory-scoped one by the directory —
  * because the arguments name no more than that and the result's text is the server's
- * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+ * (docs/archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
  */
 export interface CodeIntelligenceEdit {
   readonly paths: readonly string[];
@@ -88,7 +88,7 @@ export function codeIntelligenceEdit(callable: string, args: Readonly<Record<str
  *
  * The pinned runtime answered a symbol rename before its language server had loaded the project, so the first rename of a
  * server session renamed the declaring file alone and said it succeeded; its referencing-symbol search waits for the loading
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ * (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  */
 export interface CodeIntelligenceWarmUp {
   readonly tool: string;
@@ -119,7 +119,7 @@ export function codeIntelligenceWarmUp(reported: string, args: Readonly<Record<s
  *
  * In a workspace no `tsconfig.json` or `jsconfig.json` covers, the TypeScript language server holds the files open in it alone, the
  * pinned runtime opens the declaring file alone, and a rename stayed in that file after clause 2's search
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ * (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  */
 export interface CodeIntelligenceProjectFile {
   readonly relativePath: string;

@@ -226,7 +226,7 @@ async function artifactNames() {
  * DECLARED version renders through the naming module, composed nowhere else. `declared` is the manifest's own text
  * (`0.1.0rc1`), never electron-builder's `appInfo.version`, which is that text normalised through loose SemVer
  * (`0.1.0-rc1`): comparing against the normalised value made both sides equally wrong and let a hyphenated prerelease
- * name through (`docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`). `renderedNames` are the
+ * name through (`docs/archive/defects/a-prerelease-version-reaches-the-installer-hyphenated.md`). `renderedNames` are the
  * names as electron-builder will produce them — one per configured `artifactName`, its macros expanded by electron-builder
  * itself (`configuredArtifactNames`). No configured name at all is refused too: `pnpm package` supplies them, and a bare
  * `electron-builder --win` would fall back to electron-builder's own pattern.
@@ -295,7 +295,7 @@ function peArchOf(bytes) {
  * OQ-400 (2026-10-15): first, before anything runs, the interpreter must be built for the artifact's architecture — its
  * PE machine field equal to `arch` — and the bundle's marker must say it was built for that architecture. An arm64
  * interpreter answers its versions correctly on an ARM64 build host, so the spawn below could never catch it there
- * (`docs/defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`). `spawn` is
+ * (`docs/archive/defects/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`). `spawn` is
  * `spawnSync` but in the tests.
  */
 function checkRuntime(appOutDir, arch, spawn = spawnSync) {

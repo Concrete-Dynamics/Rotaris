@@ -38,7 +38,7 @@ export class TerminalStreamSet {
    * reached they read the emulator as it parses, so a backlog of deltas queued ahead of the frame still moves the
    * preview forward. The write queue parses in order, so at most one screen frame per stream is between its reset and
    * its text at a time. Seen once in `terminal-proof`'s live section as an empty row preview after the closing frame
-   * (`docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
+   * (`docs/archive/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
    */
   private readonly held = new Map<string, readonly string[]>();
   /** REQ-SHELL-108: the total only ever climbs within a session. */

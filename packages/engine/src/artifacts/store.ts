@@ -257,7 +257,7 @@ export class ArtifactStore {
    * everything after it stays as saved. A document that is absent is written whole from the record; one that cannot be
    * read is left as it is, with a warning, because the application never writes a rendering over a person's edit. Before
    * the ruling the whole rendering was written over an edited document too, while `edited_at` and ` · edited` stayed
-   * (docs/defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md).
+   * (docs/archive/defects/a-re-render-writes-over-a-persons-saved-artifact-edit.md).
    */
   private rerender(id: string): void {
     const record = this.lookup(id);

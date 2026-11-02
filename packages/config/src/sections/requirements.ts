@@ -214,7 +214,7 @@ export function readRequirementsSection(value: unknown, sink: ProblemSink): Requ
  * renders the warning): not a key of this domain, where the checkouts it would name live, and that it is ignored while the rest
  * loads. Until 2026-10-15 it ended at "… where REQ-GIT-137 fixes them" and did not say the rest of the configuration loaded, which
  * the carve-out's report conveys and `WITHDRAWN_STORE_SUBPATH` beside it said (acceptance finding A8,
- * docs/defects/fixed/the-worktree-subpath-report-does-not-say-the-rest-of-the-configuration-loaded.md).
+ * docs/archive/defects/the-worktree-subpath-report-does-not-say-the-rest-of-the-configuration-loaded.md).
  */
 export const NOT_A_KEY_WORKTREE_SUBPATH =
   'is not a configuration key of this domain (REQ-CONFIG-194): requirement-unit checkouts live where REQ-GIT-137 fixes them; it is ignored, and the rest of the configuration loaded';
@@ -251,7 +251,7 @@ export const REQUIREMENT_CHECKOUT_SUBPATH = 'requirements/worktrees';
 export function worktreeStorageCollision(subpath: string, platform: NodeJS.Platform = process.platform): string | null {
   const trimmed = subpath.trim() === '' ? 'worktrees' : subpath.trim();
   // An absolute value leaves `.rotaris` as surely as a climbing one: REQ-GIT-005's to refuse, not this check's to report as
-  // inside (`docs/defects/fixed/an-absolute-worktree-storage-subpath-is-reported-as-resolving-inside-rotaris.md`).
+  // inside (`docs/archive/defects/an-absolute-worktree-storage-subpath-is-reported-as-resolving-inside-rotaris.md`).
   if (/^[\\/]/.test(trimmed) || /^[A-Za-z]:/.test(trimmed)) return null;
   const segments: string[] = [];
   for (const part of trimmed.replace(/\\/g, '/').split('/')) {

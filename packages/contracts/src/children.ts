@@ -210,7 +210,7 @@ export const AgentRecordSchema = z.object({
    * REQ-MONITOR-049/060: whether a grant was recorded for this agent. Only where none was do the persona's declared tools
    * stand in for `grantedTools` on the surface; a recorded grant is shown as it is, an empty one as no native tool. Until
    * 2026-10-01 an empty list stood for "no grant recorded", so a grant the controls left empty listed every declared tool
-   * (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+   * (docs/archive/defects/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
    */
   grantRecorded: z.boolean(),
   /** REQ-MONITOR-044/060: the distinct tool names this agent has called, in first-call order (maintained incrementally, REQ-MONITOR-038). */

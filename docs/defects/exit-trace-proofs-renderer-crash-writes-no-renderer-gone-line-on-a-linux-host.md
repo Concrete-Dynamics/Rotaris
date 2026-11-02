@@ -28,4 +28,4 @@ None is shown contradicted by the product. The renderer half of the exit trace (
 
 - `apps/desktop/scripts/exit-trace-proof.mjs` — launch 2: `renderersOf`, the `SIGSEGV`, and the two checks that fail.
 - `apps/desktop/src/main/index.ts` — the `render-process-gone` handler that writes `RENDERER GONE (…)` (not changed here).
-- `docs/defects/fixed/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md` — the note under which this launch was built.
+- `docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md` — the note under which this launch was built.

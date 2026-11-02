@@ -283,7 +283,7 @@ describe('policy (ADR-0017, REQ-TOOLS-011..029, 039..047)', () => {
      * A real directory and the run host's own resolver (`realPathOf`, a throw read as unresolvable). Until 2026-09-28
      * this case ran over `D:/ws` with a resolver that joined the root itself, which is how the path scope handing the
      * resolver the RAW argument hid: in the run host that argument resolved against the process directory, and this
-     * process's directory is not the workspace (`docs/defects/fixed/path-scope-resolves-a-relative-path-against-the-process-directory.md`).
+     * process's directory is not the workspace (`docs/archive/defects/path-scope-resolves-a-relative-path-against-the-process-directory.md`).
      */
     const ws = realPathOf(mkdtempSync(join(tmpdir(), 'req-tools-018-')));
     const elsewhere = realPathOf(mkdtempSync(join(tmpdir(), 'req-tools-018-elsewhere-')));

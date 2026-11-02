@@ -9,7 +9,7 @@ import type { CommandAt, CommandContext, MainWindowState } from './context.js';
  * REQ-HOOKS-106/107 and ESC-34 (REQ-NOTIFY-044) at main's hooks facet: the review a notice action asks for is the
  * workspace the action names, whichever window it was activated in, and the decision taken in that review is stored
  * against the workspace the dialog was opened for, never against whichever main window a dialog's command resolves to
- * (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md). Driven with plain objects where the
+ * (docs/archive/defects/a-hook-review-notice-for-another-workspace-opens-nothing.md). Driven with plain objects where the
  * run host, the review flow and the dialog were, as `skills.test.ts` drives its facet.
  */
 function fakeRunHost(reply: (req: RunHostRequest) => ProcessReply) {

@@ -2,7 +2,7 @@
  * The Settings › Runtime number-field steps and their reading (`settings-runtime-field.mjs`), pinned against log text in the
  * capture seams' own shapes. Since 2026-10-15 the reading carries the field's `aria-description` after the edit and after
  * Save, which `continuation-proof`'s later-run scenario holds to the stored value
- * (REQ-CONFIG-446, REQ-CONFIG-419; `docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
+ * (REQ-CONFIG-446, REQ-CONFIG-419; `docs/archive/defects/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the helper is plain ESM beside the scripts that run it.

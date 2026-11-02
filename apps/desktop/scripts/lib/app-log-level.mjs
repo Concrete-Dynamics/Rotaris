@@ -9,7 +9,7 @@
  * written with `host.log`), the sign-in's `providers: Added …`, the run host's code-intelligence discovery and `child_timeout=`
  * lines. A run at `warning` or `error` would read each absence as an outcome: the duress and swarm deadline checks failed as
  * `ended`, every bare timed-out check passed whatever happened
- * (`docs/defects/fixed/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`).
+ * (`docs/archive/defects/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`).
  *
  * Raising those lines instead was not taken: PD-MONITOR-002 makes the level a field that means what it says, the one level
  * every threshold keeps is `error`, and a capture's progress line, a provider added or a discovery that succeeded is no error

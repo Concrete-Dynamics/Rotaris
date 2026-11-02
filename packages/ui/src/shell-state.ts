@@ -79,7 +79,7 @@ export interface ShellState {
    * the popup's place in front of them is REQ-CHAT-002's. Each surface registers a
    * closer that returns whether it closed anything; an unregistered slot is skipped. The transcript pane registers the
    * search panel's closer while the panel is open (since 2026-10-14; until then nothing filled the slot,
-   * `docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md`).
+   * `docs/archive/defects/window-level-escape-skips-the-open-transcript-search-panel.md`).
    */
   readonly overlays: Readonly<Record<OverlayKind, OverlayCloser | null>>;
   registerOverlay(kind: OverlayKind, close: OverlayCloser | null): void;

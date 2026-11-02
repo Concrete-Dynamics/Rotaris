@@ -3,7 +3,7 @@
 Windows-only; for the Windows session; seen on Windows 11 ARM64 (build 26200), Node 24.18.0 arm64,
 `C:/dev/Rotaris-crw-wt-loc1-proofcwd` at `65c38641` plus plan `loc1`'s `proof-cwd` working tree (2026-10-20). Recorded, not
 repaired: that bundle repaired the same class in `lib/working-directory.mjs`'s `assertOpened`
-([`assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md`](fixed/assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md)),
+([`assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md`](../archive/defects/assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md)),
 and these checks are outside its task.
 
 `workspace-proof` spells its project folders from `evidenceDirectory`, which resolves the repository from the script's

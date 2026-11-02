@@ -46,7 +46,7 @@ interface ProofLog {
    * Every keydown and every mouseup the window received, counted in the capture phase. The harness waits on these after
    * each key and click instead of on a fixed pause, because the page handles an event in the same dispatch that counts
    * it: on a loaded host a fixed pause read the state before the event had arrived
-   * (`docs/defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`).
+   * (`docs/archive/defects/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`).
    */
   keydowns: number;
   pointerUps: number;
@@ -69,7 +69,7 @@ interface EchoProbe { sentinel: string; eventAt: number | null; pressedAt: numbe
  * REQ-SHELL-102, REQ-CHAT-063/076: the row preview and the persona card's preview sampled from a closing `screen` frame's
  * arrival until every surface has parsed it — at once, then on every task the page gets — counting the samples whose
  * lines were empty. The window is where a reset that had parsed before the final text read `[]`
- * (`docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
+ * (`docs/archive/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
  */
 interface PreviewWatch {
   streamId: string;

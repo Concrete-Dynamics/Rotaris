@@ -1,6 +1,6 @@
 /**
  * The artifact names `pnpm package` hands electron-builder, rendered from the DECLARED version (REQ-STARTUP-031,
- * REQ-STARTUP-158, REQ-STARTUP-027/029; `docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`).
+ * REQ-STARTUP-158, REQ-STARTUP-027/029; `docs/archive/defects/a-prerelease-version-reaches-the-installer-hyphenated.md`).
  * Two things are pinned without a packaging run (IC-3): the names the module renders for a stable and each prerelease
  * kind, and that the configuration `pnpm package` writes — the repository's yml with the names set, parsed and dumped by
  * electron-builder's own `js-yaml` — is loaded by electron-builder's own configuration loader with both `artifactName`

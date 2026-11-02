@@ -15,7 +15,7 @@ import { createDeliveryService, type DeliveryService, type RunGitPort } from './
  * Only Git is faked (the copy is no repository): the unit's "worktree" is a directory the fake names, where the run's
  * `proposed-requirements.json` is written as a finished run leaves it.
  *
- * docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md: until
+ * docs/archive/defects/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md: until
  * 2026-10-13 the act was refused naming OQ-45's improvement store and the review offered no way to accept a proposal.
  */
 const FIXTURE = resolve(import.meta.dirname, '..', '..', 'scripts', 'fixtures', 'requirements-store');

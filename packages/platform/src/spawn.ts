@@ -44,7 +44,7 @@ export function spawnChild(spec: SpawnSpec): ChildProcess {
  * cannot `stat` an alias (`EACCES`; `existsSync` is false) though it starts when run, and `lstat` reads it as a symbolic
  * link, so it is taken where `stat` refuses with `EACCES` and `lstat` reads a link. Until 2026-10-15 only the `stat` was
  * asked, and a pwsh installed by `winget install Microsoft.PowerShell` on Windows 11 ARM64 was passed over for Windows
- * PowerShell 5.1 (docs/defects/fixed/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md).
+ * PowerShell 5.1 (docs/archive/defects/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md).
  */
 export function presentExecutable(path: string): boolean {
   try {
@@ -97,7 +97,7 @@ export function findExecutable(command: string, env: Readonly<Record<string, str
  * without regard to case), or null when it cannot be listed and the lookup must `stat` each candidate. Until 2026-10-20
  * the lookup `stat`ed every directory under every PATHEXT extension: 1,105 calls on a Windows 11 host with 85 PATH
  * entries and 13 extensions, about 880 ms a lookup at that host's 0.8 ms a `stat`, paid on every configuration load
- * (docs/defects/fixed/a-configuration-load-costs-about-half-a-second-on-a-windows-host-with-a-long-path.md). A directory
+ * (docs/archive/defects/a-configuration-load-costs-about-half-a-second-on-a-windows-host-with-a-long-path.md). A directory
  * gains a new modification time when an entry is added, removed or renamed in it, so a kept listing costs one `stat`.
  * A listing is kept only when the directory's time did not move while it was read, and only when that time carries a
  * fraction of a millisecond: a coarse filesystem (FAT's two seconds, exFAT's ten milliseconds) can take an entry in

@@ -45,7 +45,7 @@ export function bindReasoningPreference(host: ReasoningPreferenceHost | null): v
  * changed: no host bound, or a write main refused — which is reported with main's reason, and the store is left alone.
  * Activations run one at a time, each reading the state the one before it left: the store changes only once main has
  * answered, so two activations inside one round trip would otherwise both write the same value
- * (`docs/defects/fixed/two-reasoning-toggles-inside-one-write-both-write-the-same-value.md`).
+ * (`docs/archive/defects/two-reasoning-toggles-inside-one-write-both-write-the-same-value.md`).
  */
 let toggles: Promise<unknown> = Promise.resolve();
 export function toggleReasoningBodies(): Promise<boolean | null> {

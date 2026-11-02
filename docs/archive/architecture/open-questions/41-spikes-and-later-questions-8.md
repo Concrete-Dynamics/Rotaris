@@ -10,7 +10,7 @@ REQ-SHELL-114, a notice's "optional action (label plus action identifier)"; REQ-
 REQ-NOTIFY-062, "an action opening the cloud account surface"; REQ-NOTIFY-063, "offering another model or a retry once the
 provider resets … and offering an action opening model settings"; REQ-NOTIFY-064, "an action returning to the workspace
 view". Raised 2026-10-02 by the repair of
-[`the-retry-run-notice-action-has-no-target.md`](../../../defects/fixed/the-retry-run-notice-action-has-no-target.md),
+[`the-retry-run-notice-action-has-no-target.md`](../../defects/the-retry-run-notice-action-has-no-target.md),
 as OQ-177, and renumbered OQ-178 at its merge because `origin/main` had taken OQ-176 meanwhile and this branch's OQ-176
 became OQ-177. ~~Open.~~ Ruled 2026-10-06.)*
 
@@ -32,9 +32,9 @@ last published it (REQ-CHAT-014), else as stored (REQ-NOTIFY-066), else — the 
 the session the window follows (REQ-NOTIFY-030), and is refused, with the reason in a warning notice, when no session
 is followed or there is nothing to resubmit. The composer keeps the draft: nothing outside the composer clears it. *Since
 2026-10-02 (fin8, the repair of
-[`the-retry-action-reads-the-last-prompt-from-the-resident-window.md`](../../../defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md)
+[`the-retry-action-reads-the-last-prompt-from-the-resident-window.md`](../../defects/the-retry-action-reads-the-last-prompt-from-the-resident-window.md)
 and
-[`the-retry-action-resubmits-a-prompt-without-its-images.md`](../../../defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md)):*
+[`the-retry-action-resubmits-a-prompt-without-its-images.md`](../../defects/the-retry-action-resubmits-a-prompt-without-its-images.md)):*
 the blank-draft branch is the engine's (`session.retry`, `Sessions.retry`). It reads the last submitted prompt over every
 row, released ones included, where the window had searched its replica's resident window and refused once the prompt was
 released; and it resubmits the prompt's images with it, read back from the session's directory and verified by digest,
@@ -69,7 +69,7 @@ path shows REQ-PROVIDER-118/140's sentence and says to correct the key the model
 field, no save-and-retry control, and nothing directing the user to a shell or a terminal. The first path (another model) is
 unaffected. Device-code and browser providers read `unavailable` and say their flow is not provided by this build (the flows
 are owed, `packages/providers/src/catalogue.ts`); that is a gap of the build, not of the specification, and is recorded on
-[the 401 note](../../../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
+[the 401 note](../../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
 
 **What a ruling decides.** Whether such a provider is offered a key field at all — writing the key into the configuration
 the model reads (a write into the user's project files, which REQ-NOTIFY-047 keeps out of notice actions but not out of a
@@ -81,7 +81,7 @@ dialog), or into the credential store with the model then pointed at it — or o
 *(REQ-TRACE-477, a flow's ending delivered to the surface told it began; REQ-TRACE-482, "the system itself picks up the
 next candidate as capacity becomes available"; REQ-TRACE-463; REQ-TRACE-476, "without re-running completed units".
 Raised 2026-10-02 by the repair of
-[`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../../../defects/fixed/a-rejected-card-back-in-ready-can-never-start-its-next-unit.md),
+[`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../../defects/a-rejected-card-back-in-ready-can-never-start-its-next-unit.md),
 bundle `fin9-queue-dispatch-and-disclosure`, as OQ-179, and renumbered OQ-180 when the bundle merged `origin/main`,
 which had taken OQ-179 meanwhile. Open until 2026-10-06; ruled that day by the owner, and built.)*
 
@@ -116,7 +116,7 @@ another view?** *(REQ-NOTIFY-071, "a successful fallback restart opens a non-mod
 continuing run"; ADR-0048's non-modal window-level level, "an in-window panel that does not trap focus and leaves the rest
 navigable"; REQ-SHELL-022's minimum; REQ-CHAT-010's 180 px transcript floor; REQ-NOTIFY-030. Raised 2026-10-02 by the
 401 note's part B, second repair round,
-[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
+[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
 as OQ-180, and renumbered OQ-181 at the branch's merge beside the note's parts C and D (2026-10-02) because `origin/main` had
 taken OQ-179 meanwhile and the branch's own OQ-179 took OQ-180 (since renumbered OQ-182, at the branch's third merge,
 because `origin/main` had taken OQ-180). ~~Open.~~ Ruled 2026-10-06.)*
@@ -167,7 +167,7 @@ same prompt. Where the restart cannot begin, the fallback bookkeeping is cleared
 published instead"; REQ-NOTIFY-069, "a recorded last prompt"; REQ-NOTIFY-045, whose retry "resubmits the current composer
 draft, or the last submitted prompt"; REQ-NOTIFY-072/075, "a second authentication failure"; REQ-SESSION-026. Raised
 2026-10-02 by the 401 note's part A,
-[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
+[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
 as OQ-177, renumbered OQ-179 at its first merge because `origin/main` had taken OQ-177 and OQ-178 meanwhile, and renumbered
 OQ-180 at its second (2026-10-02, beside the note's parts C and D) because `origin/main` had taken OQ-179 meanwhile, part D's
 question above, and renumbered OQ-182 at its third (2026-10-02) because `origin/main` had taken OQ-180 meanwhile (bundle
@@ -248,7 +248,7 @@ what does it say after a refused continuation of a confined session?"; that thir
 (REQ-SANDBOX-121, "A workspace indicator naming the backend appears only for a session whose recorded result is confined"; REQ-MONITOR-257 and REQ-NOTIFY-030, "the sandbox indicator"; REQ-NOTIFY-061, "The sandbox indicator
 stops describing the run as sandboxed"; REQ-SHELL-038, the strip's items left to right, a closed list; REQ-SHELL-047, "An
 item added to the strip is given its threshold here"; REQ-TOOLS-184. Raised 2026-10-02 by the repair of
-[`no-workspace-indicator-names-the-confinement-backend.md`](../../../defects/fixed/no-workspace-indicator-names-the-confinement-backend.md)
+[`no-workspace-indicator-names-the-confinement-backend.md`](../../defects/no-workspace-indicator-names-the-confinement-backend.md)
 (fin8). ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** kept as built, and added to the specification's status-strip item list at that position: the indicator `sandbox: <backend>` (or `sandbox: confined`), named "Confinement backend", stands right after the file-access flag and before the mode flag, and is shown at every width. [`PD-SHELL-008`](../../../product/directives/pd-shell-008.md#pd-shell-008) narrows REQ-SHELL-038, REQ-SHELL-047 and REQ-SANDBOX-121.

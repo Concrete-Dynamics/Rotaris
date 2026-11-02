@@ -17,7 +17,7 @@ rule, `REQ-WORKSPACE-082`'s prompt condition, the silent marking of a workspace 
 > directory-only rule was never asked about a file, so `gen/*` then `!gen/keep/` dropped `gen/keep/f.ts`, which git keeps,
 > from the contains-code walk and the search tools alike, and `a**b` matched across a slash. The reader now answers in
 > git's order, ancestors first
-> ([note](../../../defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md)).
+> ([note](../../../archive/defects/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md)).
 
 **(1) Classification was decided by the runtime's own extension list, not by this domain's.** The
 contains-code test that gates a 1800 s indexing stage matched against
@@ -28,7 +28,7 @@ decided"; `REQ-WORKSPACE-091` then binds the two skipped stages to "a workspace 
 (REQ-WORKSPACE-098)". The two sets disagree in both directions on real trees — a workspace of `main.tf`
 and `deploy.sh` is `code` under the manifest and `non-code` under the specification. **The falsified
 reason is kept beside its replacement** in `run-host/mcp.ts`. Found while building, not by the proof;
-recorded as `docs/defects/fixed/classification-decided-by-the-runtimes-extension-list.md`, which also carries
+recorded as `docs/archive/defects/classification-decided-by-the-runtimes-extension-list.md`, which also carries
 the narrower half — the subset gitignore reader honoured `!` and `**` and last-match-wins, the three
 things `REQ-WORKSPACE-100` names, and not character classes or escapes.
 

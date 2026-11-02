@@ -20,7 +20,7 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
   });
 
   /*
-   * The repair of `docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`: the
+   * The repair of `docs/archive/defects/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`: the
    * Mission view reads a run as active only when it is busy and not in recovery, so the root must hand it the same fact.
    * `recovery` is required, so dropping it fails typecheck; handing it `false` would offer Pause beside a root drawn
    * `paused` and fails here (`cancel-paused.test.ts` pins the view itself).
@@ -60,7 +60,7 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
    * REQ-SHELL-038 (a closed list) draws no run state in the status strip. Until 2026-10-02 the strip named it
    * (`statusStripRunItem`, from a third `useNeedsRecovery` call the window root made, so it read `Run needs recovery` as the
    * run header does: PD-ORCH-005 clause 13, OQ-100, acceptance A35). The strip's repair
-   * (docs/defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md) dropped the
+   * (docs/archive/defects/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md) dropped the
    * item, so no strip text can disagree with the run header about the recovery state; the Workspace view's run header
    * and the Mission view's subtitle carry it.
    */

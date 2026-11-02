@@ -20,7 +20,7 @@
  * user-initiated close's): unsaved settings stay unsaved (`quitGuardsOutsideAnyWindow`, `exit.ts`). On
  * Windows, Electron emits no `before-quit` at a logout or shutdown at all; a main window's `session-end` starts the orderly
  * shutdown there instead, asking nothing (`SessionEndShutdown`, `exit.ts`;
- * `docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`).
+ * `docs/archive/defects/a-windows-logout-skips-the-orderly-shutdown.md`).
  */
 
 /** The answer `1` is Yes, "close anyway"; `0`, Cancel, is the default and what Escape and the close control give. */

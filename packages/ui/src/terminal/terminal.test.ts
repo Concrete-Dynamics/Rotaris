@@ -486,7 +486,7 @@ describe('emulator — a character grid, not a log (REQ-SHELL-095), applied by s
  * An emulator whose parse completes on a LATER task, one queued write per `step()`, as xterm drains its write queue on
  * macrotasks and yields between chunks: the reset of a `screen` frame lands before its text, and a snapshot taken
  * between the two reads an empty screen
- * (`docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
+ * (`docs/archive/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
  */
 function slowEmulators() {
   const queue: { readonly op: () => void; readonly parsed?: (() => void) | undefined }[] = [];

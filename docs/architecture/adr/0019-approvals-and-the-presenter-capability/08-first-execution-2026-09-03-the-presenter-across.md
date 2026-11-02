@@ -47,7 +47,7 @@ unattended case reached without a lapse.
 `PD-ORCH-005`).** *"A late or absent confirmation is a presenter error"* was false for a request queued behind an open
 dialog. Main confirmed only what it showed, so such a request was denied unshown once the open dialog had stayed up for
 10 s, although `REQ-TOOLS-063` drops a queued request only on a timeout or a cancellation
-(`docs/defects/fixed/a-queued-approval-is-denied-unshown-after-ten-seconds.md`). Main now acknowledges a request that
+(`docs/archive/defects/a-queued-approval-is-denied-unshown-after-ten-seconds.md`). Main now acknowledges a request that
 waits behind the open dialog, or behind requests queued ahead of it, with `approval.queued`. The bound then no longer
 applies. A request main never acknowledges is still a presenter error at 10 s. The gate races the presentation against
 its own wait, so a queued request that times out or is cancelled is dropped unshown and counts as cancelled

@@ -326,7 +326,7 @@ function spanOf(members: readonly TranscriptRow[]): { startedAt: string; endedAt
  * to zero rows. `previousThinking` is the immediately previous thinking row OF THE ROW'S OWN AGENT
  * (`previousThinkingByAgent`): REQ-CHAT-048's "per agent" is read as scoping the whole rule, so another agent's reasoning
  * between two equal bursts does not keep the second (OQ-91 names the other reading; the repair is recorded in
- * docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md). It is the
+ * docs/archive/defects/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md). It is the
  * only lookback the incremental bound has to preserve.
  */
 function hygiene(row: TranscriptRow, previousThinking: TranscriptRow | null, o: ProjectOptions, expanded: boolean): TranscriptRow | null {
@@ -444,7 +444,7 @@ function dropRepeatedDiffs(rows: readonly TranscriptRow[]): TranscriptRow[] {
  * colour. **This step emits the header alone.** It once emitted the members a second time as top-level rows,
  * which drew every member twice the moment a line was opened in the product — once nested under the rule and
  * once beneath it with a gutter of its own. Recorded as
- * `docs/defects/fixed/an-expanded-activity-line-draws-its-members-twice.md` and repaired here; the members are
+ * `docs/archive/defects/an-expanded-activity-line-draws-its-members-twice.md` and repaired here; the members are
  * still carried on the header, which is what `Row.tsx` reveals and what REQ-CHAT-065's blob is built from.
  *
  * **PD-CHAT-004 revision 2 — runs INTERLEAVE.** One pass: a runnable row joins its agent's open run, or opens
@@ -628,7 +628,7 @@ function cleanCut(rows: readonly TranscriptRow[], b: number, o: Pick<ProjectOpti
 export function projectDisplay(o: ProjectOptions, incremental?: { readonly previous: readonly DisplayRow[]; readonly from: number }): DisplayRow[] {
   // REQ-CHAT-069's scope filter is NOT applied here: it is `scopedRows` in `TranscriptSurface.tsx`, applied by
   // the surface that owns the toggle. One requirement, one implementation — a second copy here was unreachable
-  // and disagreed about the kinds (docs/defects/fixed/the-in-projection-scope-filter-is-never-reached.md).
+  // and disagreed about the kinds (docs/archive/defects/the-in-projection-scope-filter-is-never-reached.md).
   const deduped = dropRepeatedDiffs(o.rows);
 
   let startRow = 0;

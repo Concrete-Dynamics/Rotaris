@@ -4,7 +4,7 @@ import { CONTRACT_SCHEMA_VERSION, type RunHostRequest } from '@rotaris/contracts
 import { ProcessLink, type MessagePortLike } from '@rotaris/shell';
 import { handOffOpenedWorkspace, type WorkspaceOpenedRequest } from './workspace-handoff.js';
 
-// docs/defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md: `compression-proof`'s `automatic` launch
+// docs/archive/defects/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md: `compression-proof`'s `automatic` launch
 // logged "UNHANDLED rejection in main: Error: no reply to workspace.opened within 5000 ms" and never reached its measurement.
 // These run the hand-off over main's own `ProcessLink` against a run host that answers late or never; vitest fails a file
 // in which a rejection goes unhandled, so a hand-off that let the timeout escape is red here as well as by its result.

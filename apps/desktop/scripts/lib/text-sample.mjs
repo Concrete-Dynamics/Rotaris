@@ -7,7 +7,7 @@
  * text's own colour. The status strip scrolls horizontally, and its last item used to be measured as two device-pixel
  * columns at the window's right edge. Where the branch label and the theme's name placed it decided whether that
  * item passed. That defect is recorded in
- * `docs/defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`.
+ * `docs/archive/defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`.
  *
  * The probe inside the page MEASURES: the text's box and the boxes that clip it. It computes the on-screen part with
  * `clipRect`, whose source is injected into the page, so the page and the tests run the same code. This module

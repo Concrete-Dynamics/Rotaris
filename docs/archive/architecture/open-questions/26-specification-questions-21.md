@@ -53,7 +53,7 @@ timeout (default 120 s; 0 disables) for still-running background children withou
 "if the loop has not reached a stop check within 30.0 seconds, a hard cancel follows"; REQ-MONITOR-129; `PD-ORCH-005`
 clause 3, which keeps the explicit cancel "as today", and OQ-96's "The explicit cancel and a child summarising". Raised
 2026-09-29 by the repair round of
-[`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](../../../defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md)
+[`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](../../defects/a-root-call-that-ignores-the-stop-holds-the-run-open.md)
 under [R-067](../../../product/requests.md#r-067). Numbered OQ-119 on its branch; renumbered OQ-121 at the merge, origin/main's OQ-119 and OQ-120 having taken the numbers first. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built, since it follows REQ-ORCH-080: the explicit cancel's drain is REQ-ORCH-080's own bound and runs after the 30 s grace, whether or not the root returned, so it can take 150 s at the defaults; the 30 s still bounds how long any one execution is awaited, and a stop or a quit drains nothing.
@@ -81,7 +81,7 @@ the background children paused rather than cancelled.
 
 <a id="oq-122"></a>
 
-**OQ-122 — May the window open the setup dialog before the open's resolution, and what does a skip answered in that interval record?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-084, REQ-WORKSPACE-086, REQ-WORKSPACE-088, REQ-WORKSPACE-102, REQ-WORKSPACE-105, REQ-WORKSPACE-111, REQ-WORKSPACE-141; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../../../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md` under [R-062](../../../product/requests.md#r-062). Raised as OQ-109 on its branch, then renumbered OQ-118 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile, and renumbered OQ-122 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
+**OQ-122 — May the window open the setup dialog before the open's resolution, and what does a skip answered in that interval record?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-084, REQ-WORKSPACE-086, REQ-WORKSPACE-088, REQ-WORKSPACE-102, REQ-WORKSPACE-105, REQ-WORKSPACE-111, REQ-WORKSPACE-141; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../../defects/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md` under [R-062](../../../product/requests.md#r-062). Raised as OQ-109 on its branch, then renumbered OQ-118 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile, and renumbered OQ-122 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: the window may open the setup dialog before the open's resolution, and a skip answered in that interval performs the open's one automatic resolution first, recording every given id except one the live run is attempting or one already completed.
 
@@ -117,14 +117,14 @@ Readings:
 `apps/desktop/src/main/initialization.ts`). It keeps REQ-WORKSPACE-105's values as they are. It records every given
 id except one the live run is attempting, which is the exception ADR-0064 already rests on REQ-WORKSPACE-084, and one
 already recorded completed, which is not pending (REQ-WORKSPACE-086; added 2026-09-29 by the repair of
-`../../../defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`). It runs the
+`../../defects/a-skip-can-move-a-completed-task-into-skipped.md`). It runs the
 open's resolution once, and only when the window has plainly accepted input, since the skip is the window's own
 answer (REQ-WORKSPACE-102). **A ruling would decide** whether the dialog may precede the resolution at all. If it may
 not, the first reading replaces the second, and the skip path then never meets an unresolved open.
 
 <a id="oq-123"></a>
 
-**OQ-123 — Which run does REQ-WORKSPACE-105's "no run is in progress" mean: any run, or one that answers the setup prompt?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-103, REQ-WORKSPACE-105, REQ-WORKSPACE-106, REQ-WORKSPACE-107, REQ-WORKSPACE-110, REQ-WORKSPACE-112; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../../../defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md` under [R-062](../../../product/requests.md#r-062). Raised as OQ-110 on its branch, then renumbered OQ-119 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile — `main`'s OQ-110 already stood when this one was raised under that number — and renumbered OQ-123 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
+**OQ-123 — Which run does REQ-WORKSPACE-105's "no run is in progress" mean: any run, or one that answers the setup prompt?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-103, REQ-WORKSPACE-105, REQ-WORKSPACE-106, REQ-WORKSPACE-107, REQ-WORKSPACE-110, REQ-WORKSPACE-112; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../../defects/the-setup-dialog-takes-a-background-run-as-its-own.md` under [R-062](../../../product/requests.md#r-062). Raised as OQ-110 on its branch, then renumbered OQ-119 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile — `main`'s OQ-110 already stood when this one was raised under that number — and renumbered OQ-123 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: REQ-WORKSPACE-105's "no run is in progress" means a run that answers the setup prompt — one the user started — so a background run neither withdraws the prompt nor is drawn in its dialog until Initialize is pressed.
 
@@ -163,7 +163,7 @@ on the background start and the composer gate goes with it.
 <a id="oq-124"></a>
 
 **OQ-124 — Which agents' elapsed clocks advance: REQ-MONITOR-045's "live", or every agent neither ended nor paused?** *(REQ-MONITOR-107, "While the agent is live the figure advances"; REQ-MONITOR-045, "An agent is \"live\" exactly when its presentation state is running"; REQ-MONITOR-064, whose "live (running, waiting, or queued)" uses the word in a second, wider sense; REQ-MONITOR-110/111 with resolution item 25 of `docs/spec/resolutions/02-run-monitoring-steering.md`, "A surface holding a spawn timestamp and showing a fallback … is now a defect"; OQ-100, whose reading keeps a `paused` agent's figure off "This task". Raised 2026-09-29 by the repair of
-[`a-waiting-agents-elapsed-time-is-not-shown.md`](../../../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)
+[`a-waiting-agents-elapsed-time-is-not-shown.md`](../../defects/a-waiting-agents-elapsed-time-is-not-shown.md)
 under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-122 and renumbered OQ-124 at the merge, main having
 taken OQ-122 and OQ-123.)*
 
@@ -197,7 +197,7 @@ REQ-MONITOR-111's "a surface that has a spawn timestamp and shows a fallback …
 <a id="oq-125"></a>
 
 **OQ-125 — What does an agent surface's artifact link open, and which artifacts does it list as an agent's?** *(REQ-MONITOR-052 and REQ-MONITOR-069, "artifact links", which name no target; REQ-MONITOR-044, "artifacts (name, producer, ready flag), produced and received artifact ids"; REQ-MONITOR-068's persona-wide card; REQ-LIBRARY-102, which lets "actions" deep-link to the Library's artifacts tab; REQ-LIBRARY-131's modeless, per-window artifact inspector; REQ-LIBRARY-136, which hides superseded artifacts from the Library's table. Raised 2026-09-29 by the repair of
-[`the-inspector-says-no-artifact-store-and-no-tools.md`](../../../defects/fixed/the-inspector-says-no-artifact-store-and-no-tools.md)
+[`the-inspector-says-no-artifact-store-and-no-tools.md`](../../defects/the-inspector-says-no-artifact-store-and-no-tools.md)
 (live-run finding K1) under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-123 and renumbered OQ-125 at
 the merge, main having taken OQ-122 and OQ-123.)*
 
@@ -215,12 +215,12 @@ run-level agent is matched by the entry persona and by each root's two names fro
 the name its rows carry and its canonical name). A root publishes and reads under its canonical instance name
 (REQ-LIBRARY-093). *As first built, the run-level agent was matched by the entry persona alone, "which is the name the
 root publishes under". The repair of
-[`a-roots-publish-names-its-persona-as-its-author.md`](../../../defects/fixed/a-roots-publish-names-its-persona-as-its-author.md)
+[`a-roots-publish-names-its-persona-as-its-author.md`](../../defects/a-roots-publish-names-its-persona-as-its-author.md)
 (2026-09-29, R-067) made that false for a persona id the canonicaliser rewrites. The links read the roots' names since
-[`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](../../../defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+[`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](../../defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
 A plan cycle's root, which no iteration row records, is named by its publishes; one that published nothing is named only
 while its run is live
-([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../../../defects/fixed/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
+([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../../defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
 open). Reported back 2026-10-01, at the repair's first execution (acceptance A22, R-067): no longer true — every plan
 cycle's root is recorded when its turn starts (`plan_roots`, store v30) and named from there, whether or not it
 published, so what such a root read is the run-level agent's received link at the gate and after it.* A superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in
@@ -235,7 +235,7 @@ words: "ready" (REQ-LIBRARY-136), else the status.
 trigger counts "tool calls" and "messages" against their thresholds; REQ-ORCH-100, the message-count threshold 60;
 REQ-ORCH-104, whose raw-count fallback declares a loop from "repeated identical assistant messages". Raised 2026-09-29 by
 the repair of live-run finding D3,
-[`tool-only-steps-read-as-three-identical-messages.md`](../../../defects/fixed/tool-only-steps-read-as-three-identical-messages.md),
+[`tool-only-steps-read-as-three-identical-messages.md`](../../defects/tool-only-steps-read-as-three-identical-messages.md),
 under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-124 and renumbered
 OQ-126 at the merge, main having taken OQ-124 and OQ-125.)*
 

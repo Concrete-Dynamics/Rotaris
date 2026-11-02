@@ -30,7 +30,7 @@ two sign-in methods, Copilot's and codex's discovery, the bridges, the usage and
 the grant on Windows; `<data>/tokens` replacing the reserved `credentials`; the lock inside the directory (OQ-19); the
 shipped capability metadata empty (OQ-18); REQ-PROVIDER-091's override read as the named-entry overlay; the zero-model
 recovery without "edit by hand" (no configuration editor). `ROTARIS_CAPTURE_PROVIDER_FILL`, `ROTARIS_CAPTURE_WAIT`
-and `ROTARIS_CAPTURE_WAIT_MS` are verification seams (with a typed prompt, the wait's bound counts from the prompt's submission since 2026-10-07: live-run finding P6, [`a-captures-wait-starts-before-its-prompt-is-typed.md`](../../defects/fixed/a-captures-wait-starts-before-its-prompt-is-typed.md), and the live run's kill limit for such a launch adds the typing time, `apps/desktop/scripts/lib/prompt-typing.mjs`); a third `>>key` segment on the fill seam fills the key field and presses the dialog's own button, which is how `pnpm live-run` signs in unattended (`AGENTS.md`) and how `pnpm slice-proof` gives the registered endpoint its stored key; `ROTARIS_CAPTURE_PROVIDER_EMPTY_OK` takes the
+and `ROTARIS_CAPTURE_WAIT_MS` are verification seams (with a typed prompt, the wait's bound counts from the prompt's submission since 2026-10-07: live-run finding P6, [`a-captures-wait-starts-before-its-prompt-is-typed.md`](../../archive/defects/a-captures-wait-starts-before-its-prompt-is-typed.md), and the live run's kill limit for such a launch adds the typing time, `apps/desktop/scripts/lib/prompt-typing.mjs`); a third `>>key` segment on the fill seam fills the key field and presses the dialog's own button, which is how `pnpm live-run` signs in unattended (`AGENTS.md`) and how `pnpm slice-proof` gives the registered endpoint its stored key; `ROTARIS_CAPTURE_PROVIDER_EMPTY_OK` takes the
 zero-model alert's own "Continue anyway", so an endpoint whose `/models` answers with nothing does not strand a run
 that no one is watching.
 
@@ -59,11 +59,11 @@ earlier scenarios from their evidence. On 2026-09-05 every scenario passed on th
 key (`.proof/slice-proof/results.json`), after two runs that each found a defect. Since 2026-09-29 (R-067) it reads the
 credential file where the product writes it on the running platform (`tokensDirFor`): the Windows spelling it used
 everywhere left the first launch's wait, the strays check and the sign-out check with nothing to read off Windows
-([note](../../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)).
+([note](../../archive/defects/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)).
 Since 2026-10-01 step 3 reads the priming from the run host's opening credential report (`lib/priming-report.mjs`,
 pinned against `LeaseReportLog`): the provider among the authenticated, nothing unresolved (REQ-PROVIDER-067/068), in
 place of "credentials: 1 provider(s) authenticated", a line nothing writes
-([note](../../defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md)). ~~Not yet run since.~~
+([note](../../archive/defects/slice-proof-asserts-a-priming-line-the-product-does-not-write.md)). ~~Not yet run since.~~
 **First run against a self-hosted endpoint, 2026-10-02** (`katalyst`, `qwen3.8-flash-next`, the stored key,
 xvfb, as root): every scenario passed on a fresh profile — first launch (`Added Katalyst; discovered 1 model.`), slots,
 run (`completed`, one settled tool row, the request at `…/v1/chat/completions`), the three intents (`question`,
@@ -76,7 +76,7 @@ the discovered layer (the Models page shows them `discovered`; re-selecting the 
 saved file. Recorded in [`first-executions.md`](../first-executions.md).
 **Since 2026-10-04 it asserts only what a requirement fixes about a live model's answers** (`lib/live-answers.mjs`), after
 three of five runs on 2026-10-03 went red on what the model answered or how long the shared endpoint took
-([note](../../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)). Each intent prompt accepts the
+([note](../../archive/defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)). Each intent prompt accepts the
 categories REQ-ORCH-006 and REQ-ORCH-021 leave in reach of it, the reason written beside each (`INTENTS`). The README
 question admitted `explicit_trivial`, which was [OQ-198](../open-questions.md)'s to narrow; since the owner's ruling of 2026-10-06
 ([`PD-ORCH-011`](../../product/directives/pd-orch-011.md#pd-orch-011), [R-071](../../product/requests.md#r-071)) it accepts the answer group alone. A fallback stays a red, and one
@@ -128,7 +128,7 @@ all three and deleted two of them with the sandbox — so each scenario now leav
 store is copied out before the sandbox goes. Until then every defect that skill found came from a session driven
 by hand, and the live run had found exactly one defect in its life, which was its own.
 
-*First Windows live run, 2026-10-20 (the Windows ARM64 session; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](../live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)):* the key came from the DPAPI registry file, as the run's key-source line said; `terminal` passed every check on its 11 win32 shapes, `crlf` (its first run anywhere) passed, and `frictions` failed twice — an upstream stream reset, and a child that never sent its SIGINT ([`a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md`](../../defects/a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md)). The first attempt (`2026-10-15T15-16-50-373Z`) lost its verdicts to a `crlf` overrun ([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](../../defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
+*First Windows live run, 2026-10-20 (the Windows ARM64 session; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](../live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)):* the key came from the DPAPI registry file, as the run's key-source line said; `terminal` passed every check on its 11 win32 shapes, `crlf` (its first run anywhere) passed, and `frictions` failed twice — an upstream stream reset, and a child that never sent its SIGINT ([`a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md`](../../defects/a-signal-sent-without-session-action-is-read-as-a-query-and-dropped-silently.md)). The first attempt (`2026-10-15T15-16-50-373Z`) lost its verdicts to a `crlf` overrun ([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](../../archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
 
 **What the model was sent, and what came back, is recorded by a loopback proxy** the sandbox's `base_url` points
 at (`apps/desktop/scripts/lib/model-traffic.mjs`, `--no-record-traffic` to bypass). The product emits one line
@@ -144,8 +144,8 @@ a call the product aborts is let go at the endpoint too and written `aborted`, a
 that made the call rather than the one current when it ended, and a call still open when the proxy closes is written
 `in-flight at close`: the first live run had nine aborted calls finish upstream and land `complete` in the next scenario's
 file, and the duress pack was one record short of its log
-(`docs/defects/fixed/the-recording-proxy-does-not-pass-a-client-abort-upstream.md`,
-`docs/defects/fixed/the-recording-proxy-writes-nothing-for-a-call-in-flight-at-close.md`). Shown live the same day
+(`docs/archive/defects/the-recording-proxy-does-not-pass-a-client-abort-upstream.md`,
+`docs/archive/defects/the-recording-proxy-writes-nothing-for-a-call-in-flight-at-close.md`). Shown live the same day
 (pack `2026-09-29T21-11-24-678Z`): `faults-stall`'s stalled call was let go at 120.5 s, the product's own idle bound,
 not the rule's 300 s hold, and every scenario's records matched its log's `model request POST` lines.*
 
@@ -159,13 +159,13 @@ from a loop that was free: the same shape as 2026-09-12's finding that a proof w
 `runElectron` now spawns asynchronously and resolves on `close`, keeping the SIGKILL-on-timeout behaviour its
 callers read; the regression guard asserts **both legs**, that the `spawnSync` child is not served and the
 `spawn` child is, because without the first the second could pass for an unrelated reason
-(`docs/defects/fixed/the-recording-proxy-could-not-answer-while-spawnsync-blocked.md`).
+(`docs/archive/defects/the-recording-proxy-could-not-answer-while-spawnsync-blocked.md`).
 *Since 2026-10-20 it no longer resolves on `close`:* on Windows the bound's SIGKILL ends main alone, and at `8080fbda`
 two processes of the killed main kept its pipes for eight hours, so the run waited as long. It settles on the child's
 `exit` and a five-second drain of the pipes (`scripts/lib/settle-launch.mjs`), and a launch that overruns or exits
 non-zero is a failed check of its scenario, its session preserved, the run ended through `scripts/lib/run-ending.mjs`,
 which writes `results.json` and the manifest whatever ends it
-(`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`).
+(`docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`).
 
 **A proxy in the path can also misbehave on purpose, which is the `faults` scenario.** A rule names a kind
 (`status`, `cut`, `stall`, `malformed`), the path it watches and the **1-based index** of the call it fires at,
@@ -182,7 +182,7 @@ what the checks claim about the product is unverified, and that first execution 
 ladder sees them, which the owner ruled is the specification's order; the scenario shows the run surviving the refusals,
 not the ladder waiting or falling back. Its check once passed on the call count alone; since 2026-09-29 it reads, for each
 injected refusal, the session log's dispatch-layer line or the ladder's own issue, and names which layer it was
-(`docs/defects/fixed/two-live-run-checks-cannot-see-what-they-claim.md`).*
+(`docs/archive/defects/two-live-run-checks-cannot-see-what-they-claim.md`).*
 
 **Two scenarios enter the gap this page names below** — "short tasks against an unmetered endpoint, so no
 generation near the model timeout, no multi-line command, and no re-spawn", where all seven of one session's
@@ -211,11 +211,11 @@ Since fin40 (2026-10-13) each shape is read from the first send that reached exe
 confirming run at `0bc3eee` read `long-output` from a send REQ-ORCH-029's todo gate had refused unrun and failed "all 40
 lines" on 0 markers while the same command, sent again after the list, had returned all 40; a gate-refused send is now
 counted beside its shape, a shape whose every send was refused is a NOTE, and a permission block is still read
-(`docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`).
+(`docs/archive/defects/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`).
 Since fin41 (2026-10-13) "refused unrun" is every refusal `gate.ts` settles before a call runs (`GATE_REFUSALS`: the todo
 gate, the schema check, the plan gate's hold, another agent's write scope and a `pre_tool` hook's block), and an
 `interrupted` call counts as unreached only when it settled `blocked` — an approval withdrawn before it ran
-(`docs/defects/fixed/the-live-runs-terminal-reader-counts-a-send-the-gate-refused-for-another-reason-as-reached.md`).
+(`docs/archive/defects/the-live-runs-terminal-reader-counts-a-send-the-gate-refused-for-another-reason-as-reached.md`).
 It reads `tool_calls` — `args.command` and the `[terminal_diagnostic]` block — never the model's prose, and the
 shapes whose behaviour is faithful to a requirement (`REQ-TOOLS-113`'s marker, `REQ-TOOLS-036/038`'s deny) are
 **NOTEs measuring their cost** rather than checks accusing the product; so is a shape the model never issued.

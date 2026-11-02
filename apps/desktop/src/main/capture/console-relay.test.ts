@@ -5,7 +5,7 @@ import { type ConsoleMessageDetails, onConsoleWarning } from './console-relay.js
 
 /**
  * The capture's console relay listens in the details form of Electron's `console-message` event, never the deprecated
- * positional arguments (`docs/defects/fixed/the-captures-console-relay-listens-with-the-deprecated-console-message-arguments.md`).
+ * positional arguments (`docs/archive/defects/the-captures-console-relay-listens-with-the-deprecated-console-message-arguments.md`).
  */
 
 const details = (level: ConsoleMessageDetails['level'], message: string): ConsoleMessageDetails => ({ level, message, lineNumber: 7, sourceId: 'file:///app.js' });

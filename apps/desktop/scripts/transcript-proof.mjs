@@ -22,7 +22,7 @@
  *   3c. capacity   — a planted run of 400 one-line system notices, the shortest row PD-CHAT-003 draws, in a window
  *                   resized to 1440x4300 — inside `H_MAX`, and tall enough that the pool's old 30 px capacity unit bound
  *                   fewer slots than the viewport shows rows: every row on screen is bound, at the tail and in the middle
- *                   (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md). Xvfb with no
+ *                   (docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md). Xvfb with no
  *                   window manager does not clamp the window to its screen, so the standard `-screen 0 1600x1000x24` asks
  *                   it; a host that clamps the window below that height records the stage NOT ASKED, with the height it
  *                   allowed, and the verdict names it — never as passed.
@@ -41,7 +41,7 @@
  *                   under its child's whole run). After the run, the rows the renderer's replica holds are the rows the store
  *                   recorded, each in its recorded form, which is what the projection draws from (REQ-MONITOR-214,
  *                   PD-CHAT-004 rev 2;
- *                   docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md).
+ *                   docs/archive/defects/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md).
  *
  * Evidence under `.proof/transcript-proof/`: one PNG and one log per launch, the two traces, `results.json`.
  * `--skip-build` skips the build. `--only=<stages>` runs the named stages alone (comma-separated, of `invariance`,
@@ -107,7 +107,7 @@ async function launch(name, extra, timeoutMs = 240_000, electronArgs = [], where
   writeFileSync(join(output, `${name}.log`), log);
   // ADR-0045's measurement observer: a delivery whose render leaves an observation at the depth just delivered makes the
   // browser defer it and report a ResizeObserver loop in the renderer console, which every launch's log carries
-  // (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). Collected
+  // (docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). Collected
   // here and enforced after the last launch, so a red run keeps every stage's evidence.
   const loops = log.split('\n').filter((line) => line.includes('ResizeObserver loop'));
   if (loops.length > 0) resizeObserverLoops.push({ launch: name, lines: loops.length, first: loops[0].trim().slice(0, 300) });
@@ -119,7 +119,7 @@ async function launch(name, extra, timeoutMs = 240_000, electronArgs = [], where
   // ("held by another run in this application (pid …)"). Measured 2026-09-28: the behaviour launch opened S1200 1.5 s after the invariance launch's main exited
   // and was refused by the run host that launch had left exiting. So each launch ends only when its children are gone.
   // Since the repair of that window (recorded as
-  // `docs/defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`)
+  // `docs/archive/defects/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`)
   // main ends its run host before it exits, so this wait finds the run host gone; it stays as the guard that says so if that ever stops being true.
   const children = [...log.matchAll(/"process":"[a-z-]+","pid":(\d+)/g)].map((m) => Number(m[1]));
   const started = Date.now();
@@ -238,7 +238,7 @@ function plant(sid, total, opts = {}) {
   });
 }
 /**
- * docs/defects/fixed/live-rows-are-never-measured.md: one agent, a name too long for the 112 px role column, and a run
+ * docs/archive/defects/live-rows-are-never-measured.md: one agent, a name too long for the 112 px role column, and a run
  * long enough that `.activity__segments` MUST wrap — with the last call still `running`, so the activity line is
  * LIVE. That combination is the one the pool used to position by `estimateHeight` for the whole time it was live,
  * drawing three wrapped lines into a 36 px allocation and through the row beneath it.
@@ -269,7 +269,7 @@ function plantLiveRun(sid) {
     const last = new Date(Date.UTC(2026, 8, 6, 9, 1, 0, 0)).toISOString();
     planned.push({ sid, i: CALLS, kind: 'agent', settled: 1, body: 'the row the activity line used to be drawn through', at: last, ts: last.slice(11, 19), persona: 'requirements-engineer', name: 'requirements-engineer', toolName: null, toolStatus: null, callKey: null, durationMs: null, startedAt: null, output: null });
     db.transaction((batch) => { for (const row of batch) insert.run(row); })(planned);
-    // docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md: a user row
+    // docs/archive/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md: a user row
     // carrying an image attachment, and a row beneath it. Opening the attachment's native `<details>` grows the row with no
     // commit and under the SAME measurement key, so only the observer's delivery can move the row beneath. The image's file
     // was never written, so it projects unavailable (REQ-CHAT-173) and opening it reveals the reason line; that is growth
@@ -284,7 +284,7 @@ function plantLiveRun(sid) {
 }
 
 /**
- * docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md: a run of one-line system notices,
+ * docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md: a run of one-line system notices,
  * which REQ-CHAT-057's attribution rule makes ONE block, so every notice after the first is the shortest row PD-CHAT-003
  * draws — 23.8 px in the built app (2026-09-30).
  */
@@ -388,10 +388,10 @@ const behaviour = await launch('behaviour', {
     `(() => { const el = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound === 'tool:call-long'); return el ? { expandedShowsAll: /output line 25/.test(el.innerText), expandedShowsMarker: /cut short/.test(el.innerText) } : null; })()@10800`,
     `(() => { document.querySelector('[data-testid="transcript-search-close"]').click(); return true; })()@11200`,
     // REQ-CHAT-074 "opened by toolbar button": the toolbar's search control opens the panel with the caret in its field
-    // (docs/defects/fixed/the-transcript-has-no-toolbar-control-for-search.md). Then REQ-SHELL-055 step (1): Escape with
+    // (docs/archive/defects/the-transcript-has-no-toolbar-control-for-search.md). Then REQ-SHELL-055 step (1): Escape with
     // focus on the panel's Next button — outside its field, so the field's own Escape is not what answers — reaches the
     // window, closes the panel and returns focus to the composer
-    // (docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md).
+    // (docs/archive/defects/window-level-escape-skips-the-open-transcript-search-panel.md).
     `(() => { const b = document.querySelector('[data-testid="transcript-search-open"]'); if (!b) return { control: false }; b.click(); return { control: true, label: b.getAttribute('aria-label'), title: b.getAttribute('title') }; })()@11400`,
     `(() => { const i = document.querySelector('[data-testid="transcript-search-input"]'); const n = document.querySelector('[data-testid="transcript-search-next"]'); const open = i !== null; const caretInField = open && document.activeElement === i; if (n) { n.focus(); n.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); } return { open, caretInField, escapeFrom: n ? 'transcript-search-next' : null }; })()@11600`,
     `(() => ({ open: document.querySelector('[data-testid="transcript-search-input"]') !== null, composerFocused: document.activeElement !== null && document.activeElement.classList.contains('composer__input') }))()@11800`,
@@ -470,7 +470,7 @@ const behaviour = await launch('behaviour', {
    * position moved".** A row BELOW the reader that is measured after the older span arrives changes the transcript's
    * height without moving the reader — a row the pool binds in its bottom overscan for a frame is — so the difference
    * also carried that row's estimate error: with the estimate made to err long (4.6 px on such a row,
-   * docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md) it read
+   * docs/archive/defects/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md) it read
    * 4.2 to 4.6 px while the anchor row had moved 0.4 px. The two figures are still recorded; what is held to 4 px is
    * the anchor itself: the row at the top of the viewport before the request, read on a settled pool before the scroll
    * that asks for the span, is where the reader's own 100 px scroll put it once the span has been placed. Both reads
@@ -513,7 +513,7 @@ const behaviour = await launch('behaviour', {
 // REQ-CHAT-058 says heights are MEASURED rather than assumed, and the pool positions every slot from the prefix
 // sum of those heights. The property that makes the sum right is the one a reader actually sees: no two slots
 // overlap. This reads boxes rather than attributes, because a row drawn through another row is in the DOM,
-// focusable, carrying every identifier it should — and unreadable (docs/defects/fixed/live-rows-are-never-measured.md).
+// focusable, carrying every identifier it should — and unreadable (docs/archive/defects/live-rows-are-never-measured.md).
 if (wanted('geometry')) {
   // One line, deliberately: the log reader's `capture: eval-at (\d+) (.*?) → (.*)$` cannot span newlines, and a
   // multi-line expression parses as no result at all rather than as an error.
@@ -526,7 +526,7 @@ if (wanted('geometry')) {
   // stale detection settles the call (ADR-0002). An appointment catches such a window by luck, and so did the
   // main-process wait this replaced (`>>.activity__now@~8000`), whose read ran as a separate script after its match
   // and lost the window in three runs of three on 2026-09-28 (fix round 1 of R-062; the probe that timed the windows
-  // is recorded in docs/defects/fixed/the-geometry-stage-catches-its-live-line-in-one-sample-or-none.md). Gives up at
+  // is recorded in docs/archive/defects/the-geometry-stage-catches-its-live-line-in-one-sample-or-none.md). Gives up at
   // 8 s and reads whatever is there, so the guard below still fails honestly.
   const LIVE_SAMPLE_AT = 8000;
   const LIVE_WATCH_FROM = 1;
@@ -540,13 +540,13 @@ if (wanted('geometry')) {
   // appointment caught that window once in a run, 33 ms after the reasoning row appeared, and read 3.4 px; a first form
   // of this watch, from the reasoning row alone, caught a one-line agent message inside a block doing the same in some
   // runs and not others
-  // (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
+  // (docs/archive/defects/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
   // Every overlapping pair on those frames is recorded and held to 1 px: the ones with a NEW row on either side, and —
   // since 2026-10-01 — `otherOverlaps`, a pair of two rows already drawn, which is a row that changed shape positioned by
   // the height its identity drew last. That pair was recorded and not held while it was a known defect (21.8 px on the
   // planted activity line turning live again, one run in six); the pane now measures such a row at the commit, before
   // the frame is painted
-  // (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
+  // (docs/archive/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
   const NEW_ROWS_WATCH_FROM = 2;
   const NEW_ROWS_FRAMES = 12;
   const NEW_ROWS = `(async () => { const until = performance.now() + 9000; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const bound = () => [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound); let seen = null; const fresh = []; const frames = []; let n = 0; let watchTo = -1; while (performance.now() < until) { const slots = bound(); if (slots.length > 0) { const keys = slots.map((x) => x.dataset.bound); if (seen === null) seen = new Set(keys); else { const added = keys.filter((k) => !seen.has(k)); if (added.length > 0) { for (const k of added) { seen.add(k); fresh.push(k); } watchTo = n + ${NEW_ROWS_FRAMES}; } if (n <= watchTo) { const boxes = slots.map((x) => { const r = x.getBoundingClientRect(); return { key: x.dataset.bound, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.top - b.top); const pairs = []; for (let i = 1; i < boxes.length; i += 1) { const o = Math.round((boxes[i - 1].bottom - boxes[i].top) * 10) / 10; if (o > 0) pairs.push({ frame: n, px: o, pair: [boxes[i - 1].key, boxes[i].key] }); } frames.push(pairs); } } } n += 1; await frame(); } const all = frames.flat(); const isNew = (p) => fresh.includes(p.pair[0]) || fresh.includes(p.pair[1]); const mine = all.filter(isNew); const worst = mine.reduce((a, b) => (b.px > a.px ? b : a), { px: 0, pair: null }); return { fresh, frames: frames.length, overlapping: mine, worstOverlapPx: worst.px, pair: worst.pair, otherOverlaps: all.filter((p) => !isNew(p)) }; })()`;
@@ -621,7 +621,7 @@ if (wanted('geometry')) {
 // 1440x4300, inside `H_MAX`, and the transcript read at the tail (the pane follows on open) and in the middle: the bound
 // slots must cover the viewport from its top to its bottom with no gap, and the viewport must have shown more rows than
 // the old unit's pool held, or the stage asked the question of nothing
-// (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+// (docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
 if (wanted('capacity')) {
   const TALL = { width: 1440, height: 4300 };
   const OLD_VISIBLE = Math.ceil(4320 / 30);
@@ -669,7 +669,7 @@ if (wanted('capacity')) {
 // row behind it. Two children of one run each hold a terminal command open (`sleep`) while the other appends, so each
 // call settles below rows the other wrote. After the run, the replica — the projection's whole input — must hold every
 // recorded row in its recorded form; `projector.test.ts` holds the projection to drawing every row it is handed
-// (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md).
+// (docs/archive/defects/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md).
 if (wanted('interleave')) {
   const where = { workspace: join(output, 'interleave', 'workspace'), local: join(output, 'interleave', 'local'), preferences: join(output, 'interleave', 'preferences') };
   mkdirSync(join(where.workspace, '.rotaris'), { recursive: true });
@@ -747,7 +747,7 @@ if (wanted('interleave')) {
 // REQ-CHAT-055's append clause, read as that requirement fixes it: a comparison of two SHOWN-UPDATE times, taken
 // after the frame showing the update has been painted. Never a synchronous figure.
 //
-// The R-048 measurement round (docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md)
+// The R-048 measurement round (docs/archive/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md)
 // tightened how the comparison is taken, because two passes in three with a spread wider than the effect was not a
 // verdict either way:
 //
@@ -785,7 +785,7 @@ const TRACE_CATEGORIES = ['devtools.timeline', 'disabled-by-default-devtools.tim
 async function appendRun(name, sid, tracePath = null) {
   const electronArgs = tracePath === null ? [] : [`--trace-startup=${TRACE_CATEGORIES}`, `--trace-startup-file=${tracePath}`, '--trace-startup-format=json', '--trace-startup-duration=300'];
   // The host's load at the launch's start and end (`append-rerun.mjs`): a red is read beside it, and one taken above the
-  // CPU count is re-run once (docs/defects/fixed/transcript-proofs-append-comparison-goes-red-under-host-load.md).
+  // CPU count is re-run once (docs/archive/defects/transcript-proofs-append-comparison-goes-red-under-host-load.md).
   const start = hostLoad();
   const r = await launch(name, {
     ROTARIS_SCRIPT: APPEND_SCRIPT,

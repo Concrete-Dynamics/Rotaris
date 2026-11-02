@@ -40,7 +40,7 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
       // Both under the LOCAL profile: the roaming half is exactly what the requirement excludes.
       // REQ-CONFIG-001 spells the global configuration scope `%LOCALAPPDATA%\rotaris\rotaris\`; until 2026-09-29 this
       // answered `rotaris\config`, a name the requirement never spells (repaired under R-067;
-      // `docs/defects/fixed/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
+      // `docs/archive/defects/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
       // No earlier directory is adopted (REQ-STARTUP-145; REQ-CONFIG-058, withdrawn: there is no earlier name). The data directory is the sibling `rotaris\data`, so the two stay
       // different directories (D-04).
       return { config: join(local, name, name), data: join(local, name, 'data') };
@@ -68,9 +68,9 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
  * and ignore it." The one reading of the configuration and data homes, so `resolveUserDirs` and `resolvePreferenceRoot` never
  * part over them. Until finacc3 the first read the variables with `??` and the second with `||`, so `XDG_CONFIG_HOME=` put
  * the configuration directory at the relative path `rotaris` while the preference store fell back to `~/.config`
- * (`docs/defects/fixed/an-empty-xdg-config-home-puts-the-configuration-directory-at-a-relative-path.md`); until fin30 a
+ * (`docs/archive/defects/an-empty-xdg-config-home-puts-the-configuration-directory-at-a-relative-path.md`); until fin30 a
  * relative value was still used as it stood, so the per-user directories landed under the working directory
- * (`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`). The variables are read off
+ * (`docs/archive/defects/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`). The variables are read off
  * Windows and macOS alone, so "absolute" is POSIX's: a Windows spelling such as `D:/x` names nothing a POSIX launch can resolve.
  * `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are two of REQ-STARTUP-147's platform-convention directory variables (amended
  * 2026-10-13, OQ-247): each locates a directory and decides nothing else.
@@ -84,7 +84,7 @@ export function xdgBaseDirectory(value: string | undefined, fallback: string): s
  * which is relative to drive C's current directory). The one reading of it, so `resolveUserDirs` and `resolvePreferenceRoot`
  * never part over it. Until fin30 both took it with `??`, so `set LOCALAPPDATA=` put the configuration directory, the data
  * directory and the preference store at `rotaris\rotaris`, `rotaris\data` and `Rotaris\Rotaris`, relative to the working
- * directory (`docs/defects/fixed/an-empty-localappdata-puts-the-per-user-directories-at-a-relative-path.md`). REQ-STARTUP-145's
+ * directory (`docs/archive/defects/an-empty-localappdata-puts-the-per-user-directories-at-a-relative-path.md`). REQ-STARTUP-145's
  * per-user location is never one relative to wherever the application happened to be started.
  * `LOCALAPPDATA` is one of REQ-STARTUP-147's platform-convention directory variables (amended 2026-10-13, OQ-247): it
  * locates the machine-local per-user root and decides nothing else.
@@ -120,7 +120,7 @@ export function dataLayout(dirs: UserDirs, platform: NodeJS.Platform = process.p
      * Electron's default (`$XDG_CONFIG_HOME/<name>` taken as it stands, `%APPDATA%\<name>` on Windows, the roaming profile)
      * is not one of them, so main places it here, under the machine-local data directory, before `app` is ready
      * (`placeChromiumProfile`, `apps/desktop/src/main/chromium-profile.ts`;
-     * `docs/defects/fixed/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
+     * `docs/archive/defects/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
      */
     chromiumProfile: join(dirs.data, 'chromium'),
   } as const;

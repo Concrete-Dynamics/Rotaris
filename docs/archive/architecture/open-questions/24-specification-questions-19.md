@@ -46,7 +46,7 @@ proxy's record showing the same two gaps; the row is in `first-executions.md`.
 wrapping every attempt, which has no status, so `fromError` classified it `unknown` and fatal — a 429 that outlasted the
 five retries failed the step outright and REQ-ORCH-091 (c)'s wait never began; a 503 did the same instead of spending
 REQ-ORCH-092's transient budget. `fromError` now classifies the last attempt's error. Recorded and repaired the same day,
-[`../../../defects/fixed/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md`](../../../defects/fixed/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md);
+[`../../defects/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md`](../../defects/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md);
 pinned by `ai-sdk-client.test.ts` ("OQ-110 (REQ-ORCH-091/092): when the dispatch layer's retries are exhausted …").
 
 **Built 2026-09-29 under R-067 — the live run's ladder check.** The ruling's last clause ("the live run's ladder check is to
@@ -55,7 +55,7 @@ injected, the check requires the session log's dispatch-layer line naming that s
 `transient_llm_error` issue, never the call count, and a NOTE names which layer it was. Shown live the same day (pack
 `2026-09-29T21-11-24-678Z`, passed): both refusals answered by the dispatch layer (`HTTP 429 waited 2006 ms, retry 1 of 5`;
 `HTTP 500 waited 4002 ms, retry 2 of 5`), the ladder not reached. Recorded in
-[`../../../defects/fixed/two-live-run-checks-cannot-see-what-they-claim.md`](../../../defects/fixed/two-live-run-checks-cannot-see-what-they-claim.md).
+[`../../defects/two-live-run-checks-cannot-see-what-they-claim.md`](../../defects/two-live-run-checks-cannot-see-what-they-claim.md).
 
 <a id="oq-111"></a>
 
@@ -82,7 +82,7 @@ overwrite. Nothing is built by the ruling; the repair is owed to the note that r
 pass `reportFacts` beside it. The transcript's start is the ledger row's task, as one event cut to REQ-ORCH-110's 2,000;
 the blocks the payload puts ahead of the task are replaced by a marker stating their size. Then comes the marker, then
 the most recent part, 12,000 characters with the markers. The note is
-[`a-long-childs-report-denies-the-edits-it-made`](../../../defects/fixed/a-long-childs-report-denies-the-edits-it-made.md),
+[`a-long-childs-report-denies-the-edits-it-made`](../../defects/a-long-childs-report-denies-the-edits-it-made.md),
 repaired. Two bounds the ruling leaves to the build are raised as questions of their own: a task longer than 2,000
 characters (OQ-119) and the size of the facts (OQ-120).
 Live on 2026-09-29 (duress, session `b4a768a2`), none of the six stored reports denied its own edited files, where the
@@ -120,7 +120,7 @@ says. Nothing is built by this ruling; the finding's note is D6's in `docs/defec
 **Built 2026-09-29 under [R-067](../../../product/requests.md#r-067).** `IterationChildren.delegate` refuses the scope straight
 after the scope's own validation (`writesFiles`, `scopeWithoutWriterReason` and `fileWriters` in
 `children/write-scope.ts`); the note is
-[`delegate-accepts-a-write-scope-for-a-persona-that-cannot-write`](../../../defects/fixed/delegate-accepts-a-write-scope-for-a-persona-that-cannot-write.md),
+[`delegate-accepts-a-write-scope-for-a-persona-that-cannot-write`](../../defects/delegate-accepts-a-write-scope-for-a-persona-that-cannot-write.md),
 repaired. "After REQ-TOOLS-006's controls" is read as the two a child's grant meets, `coordinator_only` and
 `read_only`: the run-scoped allow-list binds the entry agent alone, and the `tool_restrictions` map is applied to no
 agent's grant today (recorded as a defect of its own), so the check follows the grant the tool port builds.
@@ -143,7 +143,7 @@ writers named, and 15 s later it delegated the task to `docs-writer`.
 and, when that finds none, by its canonical name. A child of a later iteration whose name repeats an earlier child's
 finds the earlier report's artifact by name and rewrites it in place: the earlier report's summary, findings and status
 are replaced by the later child's, while the record keeps the earlier child's task id and creation time
-([`a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`](../../../defects/fixed/a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md)).
+([`a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`](../../defects/a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md)).
 The requirement's parenthesis does not say when the fallback applies. Read as "when the task-id lookup finds nothing",
 two children with different task ids share one artifact, and the earlier child's report is no longer materialized,
 against the same requirement's next sentence.

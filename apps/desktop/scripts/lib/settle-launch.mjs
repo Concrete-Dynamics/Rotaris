@@ -6,7 +6,7 @@
  * and error has let go of them: the main process AND every descendant that inherited the handles. At `8080fbda` on Windows
  * the `crlf` launch overran its 522,320 ms bound, the harness's SIGKILL ended main alone (`child.kill` on Windows ends that
  * one process), and two utility processes of the dead main kept the pipes, so `close`, and with it the harness, came eight
- * hours later (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`, its 2026-10-20
+ * hours later (`docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`, its 2026-10-20
  * addendum; the orphans are the Windows session's own note,
  * `docs/defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`). Here the wait settles on
  * the child's `exit` and then drains the pipes for at most `drainMs`; whatever still holds them after that is let go and

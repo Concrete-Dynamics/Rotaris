@@ -59,7 +59,7 @@ empty now.
   `grantEvidence`), written on the child's row once the port is ready, from the port's own surface — the one resolved
   with its native names reserved and narrowed to the tools that joined the callable map. A name a native tool shadows
   is therefore recorded under its prefixed callable name, as the port offers it, and a tool the controls withheld is
-  not recorded at all (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+  not recorded at all (`docs/archive/defects/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
 - *The mask.* `REQ-MCP-081` says the mask "carries no character of the value … and no indication of that value's
   length"; `REQ-TOOLS-171`'s display mask (`ab****yz`) carries four characters and a length band. The rendering
   of a stored secret uses `REQ-TOOLS-171`'s **marker** `***` (`REDACTION_MARK`), which is the one of the two the
@@ -87,7 +87,7 @@ empty now.
   versions of its inputs) feeds the executors, the model's listing, the prompt section and ~~the spawn evidence~~ —
   *corrected 2026-10-01:* the port's grant (`ToolPort.grant` / `grantEvidence`), recorded on a child's row once the port
   is ready. The spawn evidence was a second resolution with no names reserved (`McpHost.evidenceFor`, removed then;
-  `docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+  `docs/archive/defects/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
 
 **Found in existing code (the tally's twenty-ninth).** *ADR-0033's transport on Windows:* `spawnChild` starts a
 command by bare name; `npx` and `uvx` on Windows are `npx.cmd`/`uvx.cmd`, which `spawn` cannot start by name and —
@@ -132,7 +132,7 @@ the user before anyone touched the isolated-run start: the orchestrator's defaul
 Requirements board run confined to its worktree whose `get_diagnostics_for_file` answered from the main checkout — the edit
 scenario's uncommitted `clearCompleted`, not the `completedCount` just written in the tree — and three agents read the
 answer and saved two false explanations into project memory
-([note](../../../defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)). The
+([note](../../../archive/defects/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)). The
 reading "resolved per workspace" held; what it implied was that the tool port handed `configured(ctx.workspaceRoot).cfg` and
 the anchoring root to `prepare`, `surfaceFor` and `executorsFor`, and `session.start` ran discovery the same way, while the
 port's context already carried the worktree as `effectiveRoot`. **The repair keeps the load per workspace and binds at the
@@ -168,7 +168,7 @@ one taking the filesystem fill-in, one named `lsp` — and reads the root each w
 (REQ-MCP-054) are now driven through `scripts/lib/driver.mjs`: every click, choice and read waits for its condition
 instead of firing at an offset from the window's load. On a loaded Linux host the offsets had produced two
 REQ-MCP-115 reds the product had not earned, a toggle clicked before its row was drawn and a relaunch row probed
-before it was drawn ([note](../../../defects/fixed/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md)). The
+before it was drawn ([note](../../../archive/defects/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md)). The
 assertions are unchanged. Three runs in a row as root under Xvfb all passed every launch that applies on Linux; the
 `.cmd` runner check is stated not applicable off win32, as before. **Found nothing new about the mechanism:** the
 override's wording, its absence after a relaunch, the five fates, the granted set, the two contacts per two probes,
@@ -187,11 +187,11 @@ persona's first spawn whose `mcp_tools` narrows a server. `DiagnosticSeverity` n
 `resolvePersonaMcp`, and the sink writes it at `debug`, so the default threshold drops it and `ROTARIS_APP_LOG_LEVEL=debug`
 restores it. No other diagnostic changed level. Pinned by "REQ-MCP-059 (A41): …" in `config/src/mcp/mcp.test.ts` and
 "REQ-MCP-059, PD-MONITOR-002 (A41): …" in `run-host/mcp.test.ts`, both red on the unrepaired code
-([note](../../../defects/fixed/the-mcp-grant-count-is-logged-at-info-not-debug.md)).
+([note](../../../archive/defects/the-mcp-grant-count-is-logged-at-info-not-debug.md)).
 *On Windows, 2026-10-21 (the Windows ARM64 session's F1; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, Git Bash, built at `af692eea`):* every mcp-proof launch whose configuration narrows `beta` wrote "persona orchestrator: 2 of 5 tools granted on server 'beta' (REQ-MCP-059)" at `debug` once, beside one "surface for orchestrator" line; launch 6, which narrows nothing, wrote none. Orchestrator is the one persona the proof narrows, so "once per persona" reads once. A scratch launch over a copy of the proof's profile without `ROTARIS_APP_LOG_LEVEL` wrote no grant line and no `debug` line at all (the surface line stayed); the same launch at `debug` wrote the grant line again.
 
 **A sixth fate in launch 6 — 2026-10-03 (fin13; the counts above kept as they were measured).** "The five fates" above
 is what launch 6 recorded until 2026-10-03. Since then it also declares a server `broken` that exits before initialize,
 and its child's row records `{ fate: 'dropped', reason: 'discovery-failed' }` (REQ-MCP-114 with REQ-MCP-042), so the
 launch records six. Before, `grantEvidence` recorded such a server `connected` with no tool
-([note](../../../defects/fixed/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md)).
+([note](../../../archive/defects/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md)).

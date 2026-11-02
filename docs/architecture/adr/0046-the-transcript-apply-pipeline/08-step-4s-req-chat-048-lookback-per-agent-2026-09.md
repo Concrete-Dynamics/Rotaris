@@ -4,7 +4,7 @@ Part 8 of 8 of [ADR-0046](../0046-the-transcript-apply-pipeline.md), which index
 
 ## Step 4's REQ-CHAT-048 lookback, per agent — 2026-09-28
 
-*Recorded under R-062, repairing `docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md`.*
+*Recorded under R-062, repairing `docs/archive/defects/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md`.*
 
 Step 4 kept **one** lookback for REQ-CHAT-048 — the immediately previous thinking row of any agent — and compared names,
 so agent A's repeated burst was displayed twice whenever agent B reasoned between the copies. Read with "per agent"

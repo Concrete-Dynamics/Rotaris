@@ -137,7 +137,7 @@ export function sessionCommands(
            * REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-005: the tree goes under the directory `worktree_storage_subpath` names, read
            * from the workspace service's resolved view (main parses no YAML) and sent on the session target. Until 2026-10-13 no
            * subpath was sent and every tree went under `worktrees/` whatever the file said
-           * (docs/defects/fixed/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md).
+           * (docs/archive/defects/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md).
            * REQ-GIT-071 / REQ-GIT-138: a configuration that does not load creates nothing — not even the tree the run host
            * would refuse a moment later — so the start is refused here, on the run host's own terms, with the load's report.
            */
@@ -163,7 +163,7 @@ export function sessionCommands(
        * REQ-NOTIFY-030/032: main mints the base tree's id too, so the window that asked follows the session from the moment it
        * is asked for (`MainWindows.beginStart`): a run failing before the renderer's `session.subscribe` arrives is the
        * focused session's failure, not another's. Until 2026-10-06 main learned of the follow only at that subscription
-       * (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+       * (docs/archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
        */
       sessionId ??= randomUUID();
       mainWindows.beginStart(w.wcId, sessionId);
@@ -220,7 +220,7 @@ export function sessionCommands(
         // reaches the window holding the session's workspace first (`session.focusFromNotice`), so a refusal here is one in the
         // session's own workspace — a deleted session — and is the ordinary error there. The silence of 2026-10-14 for a press in
         // a window holding another workspace (`fromNotice`) is withdrawn with the case it answered
-        // (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+        // (docs/archive/defects/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
         if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
         return refusal(r, 'The session could not be loaded');
       }
@@ -296,7 +296,7 @@ export function sessionCommands(
       // REQ-NOTIFY-058 / REQ-NOTIFY-029: the run host answers `ack` only once the prompt has launched a run of the session
       // (the engine refuses one while a run is active), so the session's standing notice — "The run failed", REQ-NOTIFY-032's
       // warning — is cleared as a start clears it. Until 2026-10-06 only `session.start` did
-      // (docs/defects/fixed/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md).
+      // (docs/archive/defects/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md).
       await notices.clearForRunStart(req.sessionId);
       return { ok: true };
     },
@@ -319,7 +319,7 @@ export function sessionCommands(
       // BEFORE it takes effect. A run that fails within milliseconds of its start can end before the renderer's subscription
       // reaches main — 30 ms against 57 ms at load 10 in finacc2's acceptance, and not at all on a quiet host — so
       // resilience-proof's auth-fallback launches widen that window to make it certain, and assert the started session is
-      // still the focused one (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+      // still the focused one (docs/archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
       const delay = __ROTARIS_SEAMS__ && capturing ? Number(process.env['ROTARIS_CAPTURE_SUBSCRIBE_DELAY_MS'] ?? 0) : 0;
       if (delay > 0) {
         log(`capture: session.subscribe held ${delay} ms before it takes effect`);
@@ -342,7 +342,7 @@ export function sessionCommands(
       // attach's snapshot and the run's events have already drawn the run as active, so a dialog opened in between
       // meets the composer's settling send. That window is the app's and a few milliseconds wide, which no script hits
       // reliably; held, `part-j-proof`'s steer-early launch opens the steer dialog inside it every time
-      // (docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md).
+      // (docs/archive/defects/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md).
       const hold = __ROTARIS_SEAMS__ && capturing ? Number(process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS'] ?? 0) : 0;
       if (hold > 0 && r.kind === 'ack') {
         log(`capture: session.subscribe reply held ${hold} ms`);

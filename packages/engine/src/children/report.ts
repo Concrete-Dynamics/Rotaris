@@ -265,7 +265,7 @@ export function isNativeFileWritingTool(toolName: string): boolean {
  * a reading PD-ORCH-004's first execution stated as open. The duress live run at `a68f121` falsified it: a tester
  * continuation made 11 single-file content replacements of one document that returned `ok`, and its report read "Its
  * file-writing calls changed no workspace paths.", its edited files empty
- * (`docs/defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`).
+ * (`docs/archive/defects/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`).
  */
 export function writtenPathsOf(toolName: string, args: Readonly<Record<string, unknown>> | null, tier?: EditTierNames): readonly string[] | null {
   return writeReadingOf(toolName, args, undefined, tier)?.paths ?? null;
@@ -282,11 +282,11 @@ export function writtenPathsOf(toolName: string, args: Readonly<Record<string, u
  *
  * Until fin38 the map was a set of callables and the manifest was asked by the callable, so a `tool_name_map` rename on the
  * code-intelligence entry made its EDIT tool no write
- * (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
+ * (docs/archive/defects/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
  *
  * The reason, kept beside it: until fin36 every reader matched the name alone, so with the shipped entry disabled another
  * server's tool named like the single-file content replacement listed whatever its `relative_path` argument held among the child's edited files
- * (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
+ * (docs/archive/defects/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
  */
 export type EditTierNames = ReadonlyMap<string, string> | undefined;
 export function editTierNamesOf(grant: AgentGrant | null | undefined): EditTierNames {
@@ -307,7 +307,7 @@ export function editTierNamesOf(grant: AgentGrant | null | undefined): EditTierN
  * The reading it replaces, kept beside it: until the ruling a cross-file call was listed by its argument path alone, so a
  * rename listed one file of thirty and a whole-project replacement none, and a child whose only writes were such calls read
  * "Its file-writing calls changed no workspace paths."
- * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+ * (docs/archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
  */
 export interface WriteReading {
   readonly paths: readonly string[];
@@ -403,7 +403,7 @@ export function commandsFrom(messages: readonly ChatMessage[]): readonly { comma
  * be listed whatever answered it. A write a sibling's claim refused (PD-TOOLS-006), one the permission gate or a
  * pre-tool hook refused, a `haet_edit` whose find text matched nothing — each changed nothing, and each reached
  * `edited_files`, the fallback's "Files touched" and, since OQ-111, the facts the pass is told never to deny
- * (`docs/defects/fixed/a-reports-edited-files-counts-refused-writes.md`). Every such refusal is answered with
+ * (`docs/archive/defects/a-reports-edited-files-counts-refused-writes.md`). Every such refusal is answered with
  * `isError: true` (the gate's `finish`, the file tools' `errorObservation`).
  *
  * A call cut off is answered with `isError: true` too, and it is NOT one reading. A call a rest cut before it

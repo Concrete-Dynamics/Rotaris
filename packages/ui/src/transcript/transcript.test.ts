@@ -66,7 +66,7 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   });
 
   /*
-   * docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md: PD-CHAT-003 lifted REQ-CHAT-057's
+   * docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md: PD-CHAT-003 lifted REQ-CHAT-057's
    * 30 px floor off the row's box, and a one-line system notice inside a block drew 23.8 px in the built app (2026-09-30).
    * A capacity counted in 30 px units left the rows past `first + capacity - 1` unbound — blank space at the bottom of a
    * tall viewport (REQ-CHAT-165). The unit is now the shortest a row can draw, whatever it carries.
@@ -148,7 +148,7 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     expect(updateShape(d(['a', 'x']), d(['a', 'y', 'z']))).toBe('other');
     // The fourth: the last row keeps its identity and grows while rows are appended after it. Its key is the same on
     // both sides, so the keys alone read this as `append`; what tells it apart is the last row's content
-    // (docs/defects/fixed/the-update-shape-never-answers-extend.md).
+    // (docs/archive/defects/the-update-shape-never-answers-extend.md).
     const streamed = (body: string) => ({ shape: 'row' as const, key: 'row:1', row: row(1, { body, settled: false }) });
     const a = { shape: 'row' as const, key: 'row:0', row: row(0) };
     const before = [a, streamed('The answer')];
@@ -213,7 +213,7 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     expect(oneLine).toBe(ROW_MIN_HEIGHT);
     // An agent message's one line is a Markdown paragraph, which keeps its 8 px bottom margin inside the row (REQ-CHAT-056):
     // the unit and that margin, still well under the old padding box. (This read 30 until 2026-09-30, when the built
-    // app drew such a row 33.4 px — docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md.)
+    // app drew such a row 33.4 px — docs/archive/defects/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md.)
     const message = estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'one line' }) });
     expect(message).toBe(ROW_MIN_HEIGHT + 8);
     expect(message).toBeLessThan(46);
@@ -237,7 +237,7 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   });
 
   // ---- the estimate is never short of what a new row draws before its first measurement -----------------------
-  // docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md: a new
+  // docs/archive/defects/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md: a new
   // row at the tail is positioned by its estimate until the measurement pass reaches it, so an estimate SHORT of what
   // the row draws puts it through the row beneath it for those frames. The figures are the built app's, read from a
   // planted transcript of every row kind below at a 740 px viewport on 2026-09-30 (slot heights, which include the row
@@ -289,7 +289,7 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     }
   });
 
-  // ---- the estimate models WRAPPING (docs/defects/fixed/live-rows-are-never-measured.md) ------------------------
+  // ---- the estimate models WRAPPING (docs/archive/defects/live-rows-are-never-measured.md) ------------------------
   // The three below are the regression for the constant that used to sit in `estimateHeight`: a group was 36 px
   // however many segments it drew, a body line was a `\n` rather than a drawn line, and the role gutter's own
   // wrapping was not modelled at all. Each one put the row beneath through the middle of the text.
@@ -453,7 +453,7 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
   });
 
   // The pane mounts under Electron and this suite has no document, so what pins these two is their source
-  // (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
+  // (docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
   it('ADR-0045: the measurement observer lives as long as the pane, so a delivery never makes it again', () => {
     // React flushes a pending passive effect before the next render, and the next render can be the delivery's own
     // `flushSync`: an effect that depended on the displayed rows disconnected the delivering observer and observed every
@@ -543,7 +543,7 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
   });
 
   /*
-   * docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md: a row whose content
+   * docs/archive/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md: a row whose content
    * changes has no measurement under its new key, so the table places it by the height its identity drew last — and a row
    * that GROWS was drawn through the row beneath it until the observer's delivery rendered, a frame later. transcript-proof
    * read 21.8 px on the planted activity line turning live again (52.9 px settled, 74.7 px live).
@@ -641,7 +641,7 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     expect(reads).toBeLessThanOrEqual(4);
 
     // Against the first form's answer, over pairs that share objects, share keys on new objects, and differ. The first
-    // form never answered `extend` (docs/defects/fixed/the-update-shape-never-answers-extend.md): its answer stands
+    // form never answered `extend` (docs/archive/defects/the-update-shape-never-answers-extend.md): its answer stands
     // everywhere else, and where it said `append` the last row's content now decides between `append` and `extend`.
     const oracle = (a: readonly DisplayRow[], b: readonly DisplayRow[]) => {
       const x = a.map((d) => d.key);
@@ -714,7 +714,7 @@ describe('ADR-0046 step 4 — the projection', () => {
     // REQ-CHAT-065's "reveal its members beneath it" is `Row.tsx`'s to draw, hanging them from PD-CHAT-004's
     // one continuous rule. Step 4 emits the header ALONE and carries the members on it: emitting them a second
     // time as top-level rows drew every member twice the moment a line was opened
-    // (`docs/defects/fixed/an-expanded-activity-line-draws-its-members-twice.md`).
+    // (`docs/archive/defects/an-expanded-activity-line-draws-its-members-twice.md`).
     const open = projectDisplay(options(rows, { expanded: new Set([group.key]) }));
     expect(open.map((d) => d.shape)).toEqual(['row', 'group', 'row']);
     expect(asGroup(open[1]).members.map((m) => m.index)).toEqual([1, 2, 3]);
@@ -787,7 +787,7 @@ describe('ADR-0046 step 4 — the projection', () => {
   /**
    * REQ-CHAT-048's "per agent" read as scoping the whole rule (OQ-91): the comparison is with the SAME agent's
    * immediately previous thinking row, so another agent's reasoning between two equal bursts does not save the repeat.
-   * docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md.
+   * docs/archive/defects/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md.
    */
   describe('REQ-CHAT-048 per agent, with two agents\' reasoning interleaved', () => {
     const by = (name: string) => (i: number, body: string, over: Partial<TranscriptRow> = {}) =>
@@ -897,7 +897,7 @@ describe('ADR-0046 step 4 — the projection', () => {
 
   it('REQ-CHAT-061/166: expanding a member of an activity line lifts the display caps for THAT member', () => {
     // The defect this pins (R0-4;
-    // docs/defects/fixed/expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md): the member
+    // docs/archive/defects/expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md): the member
     // opened onto the capped projection because the card's key (`callKey ?? index`) stranded from the key `hygiene` holds the caps against (`rowKey`).
     const output = Array.from({ length: 30 }, (_, i) => `member line ${i}`).join('\n');
     const rows = [tool(0, 'read_file', { output }), tool(1, 'glob', { output })];
@@ -1116,7 +1116,7 @@ describe('PD-CHAT-004 — the activity line', () => {
 describe('ADR-0046 step 4 — the incremental bound', () => {
   it('REQ-CHAT-069: the projection does not filter by agent — the surface that owns the toggle does', () => {
     // One requirement, one implementation: `scopedRows` in `TranscriptSurface.tsx` is it, and the projection
-    // draws whatever rows it is given (docs/defects/fixed/the-in-projection-scope-filter-is-never-reached.md).
+    // draws whatever rows it is given (docs/archive/defects/the-in-projection-scope-filter-is-never-reached.md).
     const rows = [row(0, { kind: 'user' }), row(1, { name: 'alpha' }), row(2, { name: 'beta' }), row(3, { kind: 'verifier', name: 'beta' })];
     const display = projectDisplay(options(rows, { groupTools: false }));
     expect(display.map((d) => (d.shape === 'row' ? d.row.index : -1))).toEqual([0, 1, 2, 3]);

@@ -67,7 +67,7 @@ record, not copied here."*
 ***Extended 2026-10-14 (fin44, `fin44-optional-findings`).*** Step 9a's write of `origin.txt` was the one failure before step 8
 left outside the guard: a throw there rejected the restore after the run host had closed its store, with the copy left
 behind. It now returns through the same discard, as "the restored store's origin could not be written: …"; pinned by
-`store.test.ts` ([the note](../../../defects/fixed/a-restores-origin-write-that-fails-rejects-with-the-staging-copy-left-behind.md)).
+`store.test.ts` ([the note](../../defects/a-restores-origin-write-that-fails-rejects-with-the-staging-copy-left-behind.md)).
 
 <a id="oq-266"></a>
 
@@ -76,7 +76,7 @@ fails for any reason MUST leave the store exactly as it was … no reader may ob
 REQ-SESSION-202's last paragraph, under which an absent place is "an absence and not this condition, including while a restore
 is under way"; REQ-SESSION-043; REQ-SESSION-200; ADR-0058's restore, steps 8 and 9, and README B2; OQ-48, deferred under
 [R-071](../../../product/requests.md#r-071). Raised 2026-10-13 by fin41, task N42, as OQ-265, after measuring the case (renumbered OQ-266 at landing, origin/main holding OQ-264):
-[`../../../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../../../defects/fixed/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).
+[`../../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md`](../../defects/a-restore-cut-between-its-two-renames-leaves-the-workspace-to-open-as-an-empty-store.md).
 **Ruled 2026-10-13.**)*
 
 **What is open.** `pnpm restore-kill-proof` killed a real `restoreStore` process between step 8 (the target displaced) and step
@@ -158,7 +158,7 @@ to the displaced one in 10 of 10, the journal gone and the staging copy kept in 
 ***Corrected 2026-10-14 (fin44, `fin44-optional-findings`).*** "Where the prepared copy is kept" was written from the journal
 alone, so a copy deleted by hand before the next open was still named. `cutRestore.staging` is now `null` when the open does
 not find the copy, and the notice then names none
-([the note](../../../defects/fixed/the-cut-restore-notice-says-the-prepared-copy-is-kept-without-looking.md)). The notice is now driven in
+([the note](../../defects/the-cut-restore-notice-says-the-prepared-copy-is-kept-without-looking.md)). The notice is now driven in
 the built app: `store-resolution-proof` launch D leaves a cut restore on disk before a launch, once with the prepared copy and once
 without, and reads the notice's exact detail and the store put back (green 2026-10-14, load average 1.5 to 1.9).
 
@@ -168,7 +168,7 @@ without, and reads the notice's exact detail and the store put back (green 2026-
 *(REQ-NOTIFY-044 as amended under ESC-34 — "open the hook review for a named workspace", acting "on that object without
 asking the user anything further"; REQ-NOTIFY-224; ESC-34's consequences, "navigating between workspaces from a notice is
 owed"; PD-SHELL-001's add route; REQ-STARTUP-163; REQ-SHELL-017/021. Raised 2026-10-13 by fin41 (item N86) while repairing
-[`../../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md);
+[`../../defects/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../../defects/a-hook-review-notice-for-another-workspace-opens-nothing.md);
 the plan's range began at OQ-261, and origin/main already held OQ-261 to OQ-266. Ruled 2026-10-13 under R-072, below.)*
 
 **What is open.** Notices are application-wide, so the unreviewed-hooks notice of workspace A can be activated in a window

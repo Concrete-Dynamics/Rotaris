@@ -40,14 +40,14 @@ obvious implementation has each:
 above kept as it stood on 2026-09-12: the cancellation clause is now built. `MainWindows` reports a workspace no live
 main window holds any more (`workspaceClosed`) and main calls `InitializationCoordinator.close`, which cancels the run
 on `REQ-WORKSPACE-109`'s terms and records nothing for it — [ADR-0064](../adr/0064-the-project-initialization-registry.md)'s
-sixth round, [the fixed note](../../defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md),
+sixth round, [the fixed note](../../archive/defects/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md),
 shown by `workspace-proof`'s scenario 8b. The same rule for a close that is not a switch's is a reading, and
 [OQ-141](../open-questions.md) stays open for it — *ruled 2026-10-06 as built ([R-071](../../product/requests.md#r-071)): a close that is not a switch's cancels the same way*.)* No in-flight worktree integration is
 observable from main (`worktree.integrate`: none; `'integrating'`: one occurrence, an unread member of
 `MERGE_STATUSES`), so `REQ-SHELL-021`'s second gate is written in its place in the fixed order as an explicit
 no-op that names the state it would read. *(That sentence was false until 2026-10-15: no such no-op existed in
 `apps/desktop/src/main/`, so the gate's place was held by nothing
-([the note](../../defects/fixed/the-integration-in-progress-close-guard-has-no-code.md)). Since 2026-10-15 (fin47) it holds:
+([the note](../../archive/defects/the-integration-in-progress-close-guard-has-no-code.md)). Since 2026-10-15 (fin47) it holds:
 `apps/desktop/src/main/integration-guard.ts` builds REQ-SHELL-119 guard (2) and REQ-SHELL-021 / REQ-STARTUP-053 gate (2) in their
 places — the close's between the unsaved-settings guard and the active-run confirmation (`guardClose`), the workspace-open flow's
 between gates 1 and 3 — over `noWorktreeIntegration`, the reader that names a binding's `'integrating'` status and answers none

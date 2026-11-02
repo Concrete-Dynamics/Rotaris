@@ -37,7 +37,7 @@ export const SCRIPTED_PROVIDER = 'scripted';
  * `base_url` is a provider this build knows no endpoint for, refused as any other (REQ-EVENTS-021/019), and one with a
  * `base_url` is an OpenAI-compatible provider name authenticated as configured (REQ-CONFIG-082, ADR-0029/0030). Until the
  * ruling's build the provider was tested bare, and a shipped build answered it with the scripted client and no credential
- * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+ * (docs/archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
  */
 export function isScriptedProvider(provider: string): boolean {
   return __ROTARIS_SEAMS__ && provider === SCRIPTED_PROVIDER;
@@ -514,7 +514,7 @@ export interface ConfigureDeps {
    * FALSIFIED 2026-10-20, kept beside its replacement: "the launch has already awaited the probe, and a
    * continuation reads what that launch settled" — no continuation settled it, so one reached before any
    * launch or Settings read was refused as unavailable with no reason
-   * (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
+   * (docs/archive/defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
    */
   readonly confinement?: (() => AvailabilityVerdict | null) | undefined;
   /** PD-PROVIDER-001: the shared-quota caps the provider catalogue declares, by provider id, as main handed them. */
@@ -536,7 +536,7 @@ export interface PrepareOptions {
    * model then does not refuse it: the setup is completed with the retrospective's model in the entry model's place, and the log
    * says so. With no resolvable retrospective model either, the `no-model` refusal stands. Until 2026-10-15 the entry role's
    * refusal stood for the retrospective too, and was answered "The workspace configuration could not be loaded"
-   * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
+   * (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
    * Nor is it met by ADR-0022's start-time confinement gate, which is a run start's (see the gate in `prepareRun`).
    *
    * PD-LIBRARY-002 revision 6 (OQ-363, ruled 2026-10-20 under R-072): nor by a run's other refusals of a configuration that loads.
@@ -561,7 +561,7 @@ export interface PrepareOptions {
  * - `unloaded`: the configuration did not load, or did not apply over the current settings — the one refusal a reader may word
  *   as "the configuration could not be loaded". Every other refusal is of a configuration that loaded (REQ-NOTIFY-254: the
  *   reason is worded by the layer that determined it), which a retrospective says as such
- *   (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+ *   (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
  * - `no-model`: no usable model for the entry role; for a retrospective, no resolvable retrospective model either.
  * - none: a run's other refusals (an unknown `default_persona`, referential errors with no one present), which a retrospective
  *   never meets since PD-LIBRARY-002 revision 6.
@@ -582,7 +582,7 @@ export interface PreparedRun {
    * `retrospective_model`, then `medium_model` (`retrospectiveOf`) — when that model names one; null when no retrospective model
    * resolves, or the model is the scripted client's. A retrospective's lease refuses on this provider, as a run's refuses on its
    * entry provider. Until 2026-10-14 the retrospective's lease checked the entry role's provider
-   * (docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md).
+   * (docs/archive/defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md).
    */
   readonly retrospectiveAuthProvider: string | null;
   readonly complete: (bearers: Readonly<Record<string, string>>) => ConfiguredRun;
@@ -610,7 +610,7 @@ export function restingCatalogueOf(workspaceRoot: string, deps: Pick<ConfigureDe
  * Read behind `__ROTARIS_SEAMS__` on the read's own line, so a packaged build compiles the read and its name out and answers a
  * model with the scripted client nowhere (OQ-312: nor where an entry names the `scripted` provider). Until 2026-10-14 it was read
  * with no flag, and one variable replaced every model of a shipped build with the stand-in
- * (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md).
+ * (docs/archive/defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md).
  */
 export function scriptedDialect(env: Readonly<Record<string, string | undefined>>): boolean {
   return __ROTARIS_SEAMS__ ? env['ROTARIS_MODEL_DIALECT'] === 'scripted' : false;
@@ -667,7 +667,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
    * records a confinement fact from it (REQ-SANDBOX-094), and the configured mode stays as the file states it. Until 2026-10-15 it
    * was gated, and refused wherever the run host had not yet settled the verdict — `peek()` is null until a run start or
    * Settings asks — or where confinement is unavailable
-   * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+   * (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
    */
   const verdict = deps.confinement?.() ?? null;
   let moded: LoadedConfiguration = granted;

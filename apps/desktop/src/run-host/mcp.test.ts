@@ -12,7 +12,7 @@ import { configurationForExecutionRoot, grantEvidence, McpHost } from './mcp.js'
 
 /**
  * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
- * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ * (docs/archive/defects/unit-tests-leave-their-temporary-directories-behind.md).
  */
 const scratchDirs: string[] = [];
 function scratchDir(prefix: string): string {
@@ -63,7 +63,7 @@ describe('a persona\'s MCP lines on its first spawn (REQ-MCP-059, REQ-MCP-065, R
   });
 
   // REQ-MCP-005: a callable a `tool_name_map` renamed carries its reported name in the evidence, so the engine's readers ask the
-  // binding manifest by it (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
+  // binding manifest by it (docs/archive/defects/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
   it('REQ-MCP-005: the evidence maps a granted renamed callable to its reported name, and says nothing where none is renamed', () => {
     const plain = host();
     expect(grantEvidence(plain.mcp.surfaceFor(plain.cfg, '/ws', 'tester', null)).renamed).toBeUndefined();
@@ -112,7 +112,7 @@ describe('a persona\'s MCP lines on its first spawn (REQ-MCP-059, REQ-MCP-065, R
  * REQ-WORKSPACE-092/109: the run host's `shutdown` ends the code-intelligence setup under way before the host exits.
  * Before, nothing in the shutdown reached the setup: at an orderly quit of the built app the step's process and one it had
  * started were both still running 5 s after the application exited (measured 2026-10-01;
- * `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+ * `docs/archive/defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
  * The stand-in runtime here holds `project create`, ignores the ask to terminate, and starts a descendant that ignores it too.
  */
 describe('the setup at the run host\'s shutdown (REQ-WORKSPACE-092, REQ-WORKSPACE-109)', () => {
@@ -183,7 +183,7 @@ describe('the setup at the run host\'s shutdown (REQ-WORKSPACE-092, REQ-WORKSPAC
 /**
  * REQ-WORKSPACE-091/092, REQ-MCP-099/112: the run host carries each step's facts — `skipped`, `output`, `startError` —
  * onto the status beside its own `detail`, so the initialization coordinator can write the step in its own domain's
- * words while the MCP category keeps the run host's (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
+ * words while the MCP category keeps the run host's (`docs/archive/defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
  * Before this case only `workspace-proof`'s scenario 8g read the mapping, in the built app.
  */
 describe('the setup step facts on the run host\'s status (REQ-WORKSPACE-091, REQ-WORKSPACE-092, REQ-MCP-099, REQ-MCP-112)', () => {
@@ -376,7 +376,7 @@ describe('McpHost.prepare\'s discovery lines (REQ-MCP-048, U4)', () => {
  * Live-run finding G3 (default run at 27a5127): an MCP executor's `schema` was `z.record(z.string(), z.unknown())`
  * while the model was handed the server's `inputSchema`, so the gate's REQ-TOOLS-032 check passed every object and a
  * call missing three required properties was sent to the server
- * (docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). The executor now checks
+ * (docs/archive/defects/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). The executor now checks
  * a call against the schema the model was given; a valid call is sent exactly as the model wrote it.
  */
 describe('an MCP call checked against the input schema the model was given (REQ-TOOLS-032, REQ-SESSION-136)', () => {
@@ -539,7 +539,7 @@ describe('an MCP call checked against the input schema the model was given (REQ-
    * The fin18 verifier's probes, through this rig and a real gate: calls the server's own schema accepts, which the first
    * repair refused on every re-issue — a Unicode property escape zod read without the `u` flag, and an object `items` the
    * gate's array repair rewrote before the check saw it
-   * (docs/defects/fixed/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md).
+   * (docs/archive/defects/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md).
    */
   it('a valid call is sent unchanged when its pattern is a Unicode property escape, and one the pattern refuses is never sent', async () => {
     const r = rig({ type: 'object', required: ['name'], properties: { name: { type: 'string', pattern: '^\\p{L}+$' } } });
@@ -593,7 +593,7 @@ describe('an MCP call checked against the input schema the model was given (REQ-
 /**
  * OQ-245 (XE1, ruled 2026-10-13 under R-072): a cross-file code-intelligence EDIT call changes files its arguments do not
  * name, so the run host observes what it can reach before and after it, whatever it returned
- * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+ * (docs/archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
  */
 describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', () => {
   // The bundled runtime's names come from the manifest alone (REQ-MCP-116).
@@ -652,7 +652,7 @@ describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', 
   it('another server\'s tool named like a cross-file EDIT tool is not observed: the EDIT tier is the code-intelligence server\'s (REQ-MCP-015)', async () => {
     // Before the repair the executor asked the name alone, so a user's own server's tool called like the tier was walked
     // over the whole project and its changes read as an EDIT call's
-    // (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
+    // (docs/archive/defects/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
     const r = rig((root) => {
       writeFileSync(join(root, 'src', 'a.ts'), 'export const sum = 1;\n');
       return { isError: false, text: 'done' };
@@ -676,7 +676,7 @@ describe('a cross-file EDIT call is observed by the files it changed (OQ-245)', 
 /*
  * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the pinned runtime answered a symbol rename before its language server had
  * loaded the project, so the first rename of a server session renamed the declaring file alone and said it succeeded
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Before
+ * (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Before
  * forwarding the rename the run host sends the referencing-symbol search of the same symbol and file and discards its answer,
  * both within the rename's one REQ-MCP-003 allowance; the search writes no record. The runtime's names and argument names come
  * from the manifest alone (REQ-MCP-116).
@@ -859,7 +859,7 @@ describe('a symbol rename is preceded by the referencing-symbol search of the sa
  * PD-MCP-004 revision 2 (OQ-362, ruled 2026-10-20 under R-072), clause 5: in a workspace no `tsconfig.json` or `jsconfig.json`
  * covers, the TypeScript language server holds the open files alone, so clause 2's search answered `{}` and the rename changed the
  * declaring file alone while saying it succeeded
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). For a rename whose
+ * (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). For a rename whose
  * declaring file the runtime serves with its TypeScript language and no project file covers, the run host places a `jsconfig.json`
  * of the product's own at the root before the search and removes it when the call ends, whatever ended it; renames overlapping at
  * one root share it; a leftover is removed at the next run start and adopted by the next rename; a file whose bytes are not the

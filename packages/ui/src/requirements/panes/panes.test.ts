@@ -56,7 +56,7 @@ describe('REQ-TRACE-419..422: the review', () => {
 });
 
 describe('REQ-TRACE-427..430: the run\'s proposed technical requirements on the review', () => {
-  // docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md: the
+  // docs/archive/defects/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md: the
   // proposals were listed as text with no way to accept one.
   const proposed = (acceptedAs: string | null = null) => payload({ work: { ...payload().work, proposalsState: 'present', proposals: [
     { title: 'Audit log retention', description: 'Kept seven years.', derivedFrom: 'REQ-101', origin: 'REQ-101', unit: 'u1', acceptedAs },

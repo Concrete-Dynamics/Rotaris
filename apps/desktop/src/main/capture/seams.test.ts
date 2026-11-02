@@ -122,7 +122,7 @@ function typing() {
   return { host, clock, sent };
 }
 
-describe('the TYPE and TYPE_AT seams type a line break as Shift+Enter (REQ-CHAT-001; docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md)', () => {
+describe('the TYPE and TYPE_AT seams type a line break as Shift+Enter (REQ-CHAT-001; docs/archive/defects/the-driver-and-the-type-seams-type-a-newline-as-a-character.md)', () => {
   it('REQ-CHAT-001: ROTARIS_CAPTURE_TYPE sends no `\\n` character, keeps each break as Shift+Enter, and submits once at the end', () => {
     const t = typing();
     process.env['ROTARIS_CAPTURE_TYPE'] = 'one\ntwo@100';
@@ -191,7 +191,7 @@ function personaWindow() {
 
 describe('ROTARIS_CAPTURE_PERSONA_PROBE_AT reads the first persona window (seams.ts)', () => {
   /*
-   * docs/defects/fixed/mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md: mission-proof
+   * docs/archive/defects/mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md: mission-proof
    * item 8 read the window once at 6.5 s, and under a load average of about 15 the window was created 1.6 s after the click
    * and painted its first frame after the probe, which read `[]` (REQ-MONITOR-213's assertion then failed on a window that
    * had not been drawn). A fixed-instant probe now waits, from its instant, for the window's first paint — bounded at 5 s,

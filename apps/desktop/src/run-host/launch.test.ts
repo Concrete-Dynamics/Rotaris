@@ -305,7 +305,7 @@ describe('the continuation lease (REQ-PROVIDER-066; a defect note, removed once 
   });
 
   /*
-   * PD-LIBRARY-002 with ADR-0030 and REQ-PROVIDER-066 (docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md):
+   * PD-LIBRARY-002 with ADR-0030 and REQ-PROVIDER-066 (docs/archive/defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md):
    * a retrospective authenticates as a run does, and a run's lease refuses on the provider its own first request needs. The
    * retrospective's only request goes to its own model — `retrospective_model`, then `medium_model` (`retrospectiveOf`) — so its
    * lease refuses on that model's provider, never on the entry role's. Until the repair it checked the entry role's provider.
@@ -365,7 +365,7 @@ ${retrospective === 'slot' ? 'retrospective_model: analyst\n' : ''}`);
   });
 
   /*
-   * PD-LIBRARY-002 with ADR-0030 and REQ-PROVIDER-066 (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md):
+   * PD-LIBRARY-002 with ADR-0030 and REQ-PROVIDER-066 (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md):
    * the retrospective sends nothing to the entry role's model, so an entry role with no usable model does not refuse it — its
    * setup is completed on its own model (`retrospectiveOf`). Until the repair `prepareRun`'s `no-model` refusal on the entry
    * role became `unconfigured`, which `retrospective.capture` answered "The workspace configuration could not be loaded".
@@ -410,7 +410,7 @@ ${retrospective === 'slot' ? 'retrospective_model: analyst\n' : ''}`);
 
   /*
    * PD-LIBRARY-002 (ADR-0065 decision 5) with REQ-SANDBOX-094/095/097 and REQ-NOTIFY-254
-   * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md): ADR-0022's
+   * (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md): ADR-0022's
    * start-time gate is a run start's — it protects the shell a run would open — and a retrospective opens none, runs no tool and
    * starts no session. Until the repair `leasedSetup` prepared through the gate, which read the run host's verdict as unavailable
    * before a run start or Settings had settled it (`confinement.peek()` null), and turned that refusal — like every refusal but
@@ -519,7 +519,7 @@ ${retrospective === 'slot' ? 'retrospective_model: analyst\n' : ''}`);
 
   /*
    * REQ-SANDBOX-097 with REQ-SANDBOX-095/071
-   * (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md): the
+   * (docs/archive/defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md): the
    * continuation's lease prepares the run through ADR-0022's start-time gate, which reads the cached verdict synchronously, so
    * it settles that verdict first, as `launchSession` does. Until 2026-10-20 it did not: before any run start or Settings read
    * had settled it, the gate read `null`, the preparation was refused, nothing was leased, and the engine's `configure` then

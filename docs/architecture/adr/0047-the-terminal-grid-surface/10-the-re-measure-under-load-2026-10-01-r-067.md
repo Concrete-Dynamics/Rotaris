@@ -6,7 +6,7 @@ Part 10 of 12 of [ADR-0047](../0047-the-terminal-grid-surface.md), which indexes
 
 *Defect fifty-five came back: `pnpm terminal-proof`'s `theme.remeasureReportsOnce` failed once under load with the same
 three shapes, `118×26`, `118×25`, `89×19`
-([note](../../../defects/fixed/a-font-change-under-load-reports-an-intermediate-terminal-geometry.md)).*
+([note](../../../archive/defects/a-font-change-under-load-reports-an-intermediate-terminal-geometry.md)).*
 
 **The cause.** The repair above silenced the resize observer only once the theme-change layout effect had run. That
 effect runs when React renders the root's mutation, and React renders it in a scheduler task, not in the mutation

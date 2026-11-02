@@ -125,7 +125,7 @@ describe('R-062: ending a proof launch within its bound', () => {
 
   it.skipIf(!POSIX)('spawnBounded keeps the pipes open across SIGTERM, so the quit path\'s own line reaches the proof', async () => {
     // What `spawnSync`'s timeout breaks: it closes its ends of the pipes as it signals, the line below meets EPIPE,
-    // and the product's uncaught-exception handler loops on it (`docs/defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`, repaired 2026-09-29).
+    // and the product's uncaught-exception handler loops on it (`docs/archive/defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`, repaired 2026-09-29).
     const r = await spawnBounded(process.execPath, ['-e', "process.on('SIGTERM', () => { console.log('quit: requested (before-quit)'); process.exit(0); }); console.log('ready'); setInterval(() => {}, 1000);"], { timeoutMs: 800, graceMs: 5_000 });
     expect(r.overran).toMatchObject({ timeoutMs: 800, endedBy: 'SIGTERM' });
     expect(r.status).toBe(0);
@@ -173,7 +173,7 @@ describe('R-062: ending a proof launch within its bound', () => {
       process.kill(-proof.pid!, sig); // the proof's whole group, as a terminal sends it
       expect(await died).toEqual({ code: null, signal: sig });
       // Not "within 2.5 s": the launch dies at once, and a loaded host's PID 1 reaps it when it reaps it
-      // (`docs/defects/fixed/the-signal-test-gives-a-dead-proofs-launch-two-and-a-half-seconds-to-be-gone.md`).
+      // (`docs/archive/defects/the-signal-test-gives-a-dead-proofs-launch-two-and-a-half-seconds-to-be-gone.md`).
       expect(await goneWithin(launched)).toBe(true);
     } finally {
       try { process.kill(-proof.pid!, 'SIGKILL'); } catch { /* gone */ }
@@ -209,7 +209,7 @@ describe('R-062: ending a proof launch within its bound', () => {
   });
 
   /*
-   * finacc3 A2-19 (docs/defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md): a launch's main
+   * finacc3 A2-19 (docs/archive/defects/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md): a launch's main
    * process exited and the proof moved on while the rest of its process group still ran — Electron's zygotes, its GPU,
    * utility and renderer processes, and a `git diff --numstat` the Git view had started — so the next proof could meet
    * them. A launch now ends with its whole group: what outlives the leader by the grace is ended with SIGKILL and named.
@@ -229,7 +229,7 @@ describe('R-062: ending a proof launch within its bound', () => {
   });
 
   /*
-   * fin34 (docs/defects/fixed/a-proof-can-exit-while-a-setup-step-the-app-started-in-its-own-process-group-is-still-ending.md):
+   * fin34 (docs/archive/defects/a-proof-can-exit-while-a-setup-step-the-app-started-in-its-own-process-group-is-still-ending.md):
    * the product starts a project-setup step leading a process group of its own, which the group drain never reached, so a
    * proof could exit — and the next one start — while the step was still ending. The drain now finds what the launch
    * started by the mark its environment carries, and ends what outlives the grace.

@@ -211,7 +211,7 @@ export function childModelKey(persona: Pick<Persona, 'modelRef' | 'modelKey'> | 
  * The persona `name` names, an alias resolved to its target (REQ-ORCH-034: "Role aliases MUST be resolved before spawn") —
  * the one the ledger will spawn, so admission reads the same role: REQ-ORCH-153's plan-gate refusal, the grant and the
  * model key. The built-in path read `BUILT_IN_PERSONAS` alone until 2026-09-30, so `coder` and `playwright` read as no
- * persona there (`docs/defects/fixed/delegate-reads-no-alias-on-the-built-in-table.md`).
+ * persona there (`docs/archive/defects/delegate-reads-no-alias-on-the-built-in-table.md`).
  */
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
   return (deps.personas ? deps.personas.resolve(name) : resolveRole(name))?.persona;
@@ -665,7 +665,7 @@ export class IterationChildren implements DelegationOps {
    *
    * Until 2026-10-07 this counted the references that resolved, before any budget applied, and the observation said "N
    * artifacts were attached to its context", so a caller could be told of an artifact its child never received
-   * (`docs/defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`).
+   * (`docs/archive/defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`).
    */
   private resolveAttachments(references: readonly string[]): AttachmentOutcome | undefined {
     if (references.length === 0) return undefined;
@@ -1355,7 +1355,7 @@ export class IterationChildren implements DelegationOps {
      * `remainder` holds it for the attempts REQ-ORCH-088's fallback retry replaced. Until fin22 the settle counted
      * `Math.max(made, live)` over the attempts together, so a replaced attempt's completed calls hid a call the retry started
      * and never completed
-     * (`docs/defects/fixed/a-replaced-attempts-completed-calls-hide-the-retrys-unfinished-call-from-the-count.md`); fin22's
+     * (`docs/archive/defects/a-replaced-attempts-completed-calls-hide-the-retrys-unfinished-call-from-the-count.md`); fin22's
      * first repair read a raised attempt's calls from `onToolStarted`, which no replay fires, and an attempt with an outcome
      * from that outcome, which a re-prompt or corrective turn that raised never joined — both lost a call (repair round 1).
      */

@@ -56,7 +56,7 @@ describe('toAgentRecord — the new fields of REQ-MONITOR-044 (Part R)', () => {
   });
   /*
    * REQ-MONITOR-049/060 with REQ-MCP-065 and REQ-TOOLS-006
-   * (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md): whether a grant was recorded is
+   * (docs/archive/defects/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md): whether a grant was recorded is
    * read from the row's MCP evidence, which the grant's writer marks `recorded`, and not from the native list's length —
    * an empty native list is a grant the controls left empty. A row written before the marker keeps the reading it had:
    * an empty list is no grant recorded, a non-empty one is the grant.
@@ -128,7 +128,7 @@ describe('toAgentRecord — PD-ORCH-005 clauses 13 and 18 (OQ-100): an agent a c
 /**
  * PD-CONFIG-003 revision 3 (OQ-234): a failed agent whose stored report carries REQ-ORCH-088's timeout error is presented
  * with the limit it ran under and whether it was cut off while making progress; every other agent with nothing
- * (docs/defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
+ * (docs/archive/defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
  */
 describe('toAgentRecord — the per-agent timeout (PD-CONFIG-003 revision 3)', () => {
   const report = (over: Record<string, unknown>): string => JSON.stringify({ agent_name: 'helper', role: 'coding-agent', status: 'failed', summary: 's', key_findings: [], last_response: '', final_response: '', errors: [], ...over });

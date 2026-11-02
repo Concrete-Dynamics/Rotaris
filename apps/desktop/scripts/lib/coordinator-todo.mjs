@@ -102,9 +102,9 @@ export const EIGHT_HEX = /^[0-9a-f]{8}$/;
  * REQ-TOOLS-144 over every coordinating session (one whose root delegated) the run kept: every phase and task id of the plans it
  * stores — the root's agent plan (`rootPlan`, `sessions.todo`'s envelope) and each child's own (`children.todo`) — is eight hex
  * characters. Until fin47's finding A6 a `replace` stored a new task under the id its model sent (`impl101` in the 3c03287 swarm
- * session, docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md), and only an autopsy reading the
+ * session, docs/archive/defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md), and only an autopsy reading the
  * stored plans could see it; this reading makes a recurrence fail the run (fin47's reviewers' finding, bundle `fin47-accept1-6`,
- * docs/defects/fixed/the-live-run-never-checks-that-a-stored-plan-id-is-eight-hex.md).
+ * docs/archive/defects/the-live-run-never-checks-that-a-stored-plan-id-is-eight-hex.md).
  *
  * `sessions`: `{ scenario, rootNames, calls: { tool_name, agent_name }[], rootPlan: { phases } | null, children: { canonical_name,
  * todo }[] }[]`. Returns `coordinating` (the sessions read), `plans` and `ids` (how many plans and ids were read), and `foreign` —
@@ -200,11 +200,11 @@ export function todoItemReading(sessions) {
  * one) carries, by id, or null where the text holds none.
  *
  * Any id is read, not only the eight-hex one REQ-TOOLS-144 generates: until fin47 (finding A6) a `replace` stored a new task
- * under the id its model sent (docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md), so a pack
+ * under the id its model sent (docs/archive/defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md), so a pack
  * recorded before it holds such ids, and until fin47 this reader matched
  * `([0-9a-f]{8})` alone, so every task of the 3c03287 swarm session (`impl101`, …) was invisible to `heldItemReading`, whose
  * checks then passed having read nothing (finding A7,
- * docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md). An id is a parenthesised token with
+ * docs/archive/defects/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md). An id is a parenthesised token with
  * no space, followed by the line's end or ` — `. A name or description holding such a token too leaves its line several
  * readings: the lines of one reading are taken first, then each reading of the others that no line has given yet.
  *
@@ -240,7 +240,7 @@ export function todoStates(text) {
  * no task under that id (the coordinator removed it, `remove_task` protecting no held item, or never had it); `not parsed` — a
  * line other than a phase's carries it in a shape the reader does not take (a line break in a name, a rendering it does not
  * know), a gap of the reader's. Until 2026-10-20 both read as one `unread`, which the live run's detail could only call unread
- * (fin47's reviewers' finding, docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md).
+ * (fin47's reviewers' finding, docs/archive/defects/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md).
  */
 export function todoItemState(text, id) {
   const at = typeof text === 'string' ? text.indexOf('Todo state:') : -1;
@@ -280,13 +280,13 @@ const TASK_ID = / \(([^()\s]+)\)(?= — |$)/g;
  *   possible; target 0). The calls carry `args`, the arguments the record stores;
  * - `closes` — every such close a root `replace` sent, whatever its result stored (`sent`, `stored`): the case revision 3
  *   decides, asked. Empty, `restoredOverClose` measured nothing, and the live run says so in a NOTE rather than a PASS (at
- *   `0bc3eee` every coordinator closed with `update`: docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md);
+ *   `0bc3eee` every coordinator closed with `update`: docs/archive/defects/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md);
  * - `namedRestores` — each accepted root `replace` whose observation names a task it kept over a different state (a NOTE);
  * - `heldReads` — how many states of a held item those Todo states gave (`heldPending` and `closedWhileHeld` read these), and
  *   `unread` — each held item, and each item a closing `replace` sent, that the Todo state its call carried gave no state for
  *   (target 0), with `why`: `not shown` or `not parsed` (`todoItemState`). Until fin47 a model-chosen id was never read, and
  *   the three checks passed over a session having read nothing of it (finding A7,
- *   docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md); until 2026-10-20 an item the Todo
+ *   docs/archive/defects/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md); until 2026-10-20 an item the Todo
  *   state did not show read the same as one the reader could not parse.
  *
  * Since `PD-TOOLS-008` revision 4 and `PD-TOOLS-006` revision 11 (OQ-333, ruled 2026-10-15 under R-072) a served item no longer
@@ -426,7 +426,7 @@ function closesItem(args, item) {
  * Until fin46 the window was the row's `spawned_at` to `completed_at`. A `session_id` follow-up clears `completed_at`, and a
  * quit that then pauses the child leaves it null, so the 3c3f447 terminal run read a tester as holding its item across the
  * gap between its first `child_end` and the follow-up, and failed a close the coordinator made in that gap (finding L2,
- * `docs/defects/fixed/the-live-runs-held-item-check-holds-a-followed-up-child-across-the-gap-between-its-runs.md`). With no
+ * `docs/archive/defects/the-live-runs-held-item-check-holds-a-followed-up-child-across-the-gap-between-its-runs.md`). With no
  * timeline entry for the child the row's window stands, as before.
  */
 export function holdingWindows(child, timeline) {

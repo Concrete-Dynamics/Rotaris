@@ -204,7 +204,7 @@ export function createRunHost() {
    * Verification only, and compiled out of a packaged build: where the scripted client keeps each agent's place between
    * the client of one run and the next — a continue in this process, or after a relaunch — for the call that ends with
    * no message and so leaves no mark in the record (`StandingLedger`; the repair of
-   * `docs/defects/fixed/the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md`). It sits in
+   * `docs/archive/defects/the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md`). It sits in
    * the data directory, which a proof's root isolates; a real provider's client never reads or writes it.
    */
   const standing = __ROTARIS_SEAMS__ ? fileLedger(join(resolveUserDirs().data, 'scripted-standing.json'), (m) => log(m, 'warn')) : undefined;
@@ -256,7 +256,7 @@ export function createRunHost() {
      * Both are read behind `__ROTARIS_SEAMS__` (`captureHome`, above), so a packaged build carries neither and always
      * takes `homedir()`; until 2026-10-14 they were read with no test at all, and either one set redirected a shipped
      * build's discovery and injected what it found into an agent's context
-     * (docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
+     * (docs/archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
      */
     ...(captureHome ? { home: captureHome } : {}),
     /*

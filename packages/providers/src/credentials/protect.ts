@@ -67,7 +67,7 @@ export function parseDacl(sddl: string): Dacl | null {
  * An ACE's trustee as a SID. SDDL writes a few well-known accounts as two-letter aliases: SYSTEM as `SY`, and the
  * machine's built-in Administrator and Guest (relative identifiers 500 and 501) as `LA` and `LG` — so on that account
  * the owner's own entry reads back as `LA`, never as its SID, and every save was refused
- * (docs/defects/fixed/on-the-built-in-administrator-account-every-credential-save-is-refused-at-the-read-back.md).
+ * (docs/archive/defects/on-the-built-in-administrator-account-every-credential-save-is-refused-at-the-read-back.md).
  * An alias is read as the owner only when the owner's SID carries that relative identifier. A domain account with
  * identifier 500 is written as its SID, not `LA`, so for it an `LA` entry (the machine's Administrator) is read as the
  * owner too: the one reading the alias leaves open, and an account that can take ownership of the file regardless.

@@ -16,7 +16,7 @@
  * The same variable moves the skill search's machine-wide root, `/etc/codex/skills` (REQ-WORKSPACE-051, off Windows
  * only): both discoveries read under the one machine-wide directory, so the run host lists `<profile.machine>/skills`
  * and never the operator's own. Before the seam existed a skill there entered the scripted model's catalog and the
- * captured calls (`docs/defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
+ * captured calls (`docs/archive/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
  *
  * The functional half, four launches against one scratch profile whose workspace is a Git repository in which every
  * workspace instruction file's committed text differs from its working copy:

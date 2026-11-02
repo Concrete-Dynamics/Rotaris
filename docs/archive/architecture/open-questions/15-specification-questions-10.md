@@ -85,7 +85,7 @@ consumer to state what a host with no matching archive is told.
 
 <a id="oq-89"></a>
 
-**OQ-89 — Under a burst, is REQ-CHAT-055's append comparison read on the update as it arrived, or on an update that arrived alone?** *(REQ-CHAT-055, REQ-CHAT-154, REQ-CHAT-157; ADR-0045's measurement point. Raised 2026-09-28 by the measurement round R-048 authorized, taken under [R-062](../../../product/requests.md#r-062); the note is `docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`. Raised as OQ-76 on its branch; renumbered OQ-89 at the merge, because OQ-76 to OQ-88 were already on `main`.)*
+**OQ-89 — Under a burst, is REQ-CHAT-055's append comparison read on the update as it arrived, or on an update that arrived alone?** *(REQ-CHAT-055, REQ-CHAT-154, REQ-CHAT-157; ADR-0045's measurement point. Raised 2026-09-28 by the measurement round R-048 authorized, taken under [R-062](../../../product/requests.md#r-062); the note is `docs/archive/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`. Raised as OQ-76 on its branch; renumbered OQ-89 at the merge, because OQ-76 to OQ-88 were already on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the first reading is taken, as the entry recommends: REQ-CHAT-055's comparison is read on every update as it arrived, the queue in front of it included, with the third sentence read at one frame of slack as `transcript-proof` reads it. A conformance harness need not construct the quiet-surface case, and work proportional to the visible rows is within the requirement.
 
@@ -145,7 +145,7 @@ ms; only a profile of the same increments names that, which is why the proof now
 
 <a id="oq-90"></a>
 
-**OQ-90 — Are the variables that name a launch's artifact removed from what the product's children inherit, and which requirement says so?** *(REQ-STARTUP-147, REQ-STARTUP-106, REQ-HOOKS-032; ADR-0054, "The updater", item (6). Raised 2026-09-28 by repairing `docs/defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md` under [R-062](../../../product/requests.md#r-062).)*
+**OQ-90 — Are the variables that name a launch's artifact removed from what the product's children inherit, and which requirement says so?** *(REQ-STARTUP-147, REQ-STARTUP-106, REQ-HOOKS-032; ADR-0054, "The updater", item (6). Raised 2026-09-28 by repairing `docs/archive/defects/the-artifact-variables-reach-the-products-own-child-processes.md` under [R-062](../../../product/requests.md#r-062).)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed, with one sentence added to REQ-STARTUP-147 that REQ-HOOKS-032 cites, as the entry recommends: main removes the variables naming its launch's artifact from its own environment before it starts any child, and a hook sees the application's environment less those two. [`PD-STARTUP-004`](../../../product/directives/pd-startup-004.md#pd-startup-004) states it and narrows both requirements.
 
@@ -169,7 +169,7 @@ Recommended: both, as one sentence in REQ-STARTUP-147 that REQ-HOOKS-032 cites.
 
 **OQ-91 — Does REQ-CHAT-048's "per agent" scope the comparison, or only the row that is dropped?** *(REQ-CHAT-048;
 ADR-0046 step 4, the lookback its bounded form preserves. Raised 2026-09-28 by repairing
-`docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md` under
+`docs/archive/defects/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md` under
 [R-062](../../../product/requests.md#r-062); raised as OQ-90 on its branch and renumbered at the merge, OQ-90 having been taken on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: "per agent" scopes the whole rule, so an agent's unstamped repeat is compared with that agent's own previous thinking row, whatever other agents reasoned in between.
@@ -196,7 +196,7 @@ else depends on it.
 
 <a id="oq-92"></a>
 
-**OQ-92 — Where does `THIRD-PARTY-LICENSES.txt` report the tool-server package versions REQ-STARTUP-152 asks it to?** *(REQ-STARTUP-152 with REQ-STARTUP-142 and REQ-STARTUP-058. Raised 2026-09-28 by repairing the notices file's tools section under [R-062](../../../product/requests.md#r-062); the note is `../../../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`; raised as OQ-90 on its branch and renumbered at the merge, OQ-90 and OQ-91 having been taken on `main`.)*
+**OQ-92 — Where does `THIRD-PARTY-LICENSES.txt` report the tool-server package versions REQ-STARTUP-152 asks it to?** *(REQ-STARTUP-152 with REQ-STARTUP-142 and REQ-STARTUP-058. Raised 2026-09-28 by repairing the notices file's tools section under [R-062](../../../product/requests.md#r-062); the note is `../../defects/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`; raised as OQ-90 on its branch and renumbered at the merge, OQ-90 and OQ-91 having been taken on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: the notices file's `Tools provisioned after installation` section gains a third sub-heading, `Tool-server packages`, after the language servers. [`PD-STARTUP-005`](../../../product/directives/pd-startup-005.md#pd-startup-005) extends REQ-STARTUP-142.
 
@@ -218,7 +218,7 @@ somewhere else in the file.
 
 <a id="oq-93"></a>
 
-**OQ-93 — Is a text field spell-checked, and if so, from what?** *(REQ-STARTUP-160, REQ-SHELL-005, REQ-STARTUP-159. Raised 2026-09-28 by the repair of `docs/defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, under [R-062](../../../product/requests.md#r-062). Numbered OQ-91 on its branch because OQ-90 was already taken on a branch in flight beside it; renumbered OQ-93 at the merge, OQ-91 and OQ-92 having been taken on `main`.)*
+**OQ-93 — Is a text field spell-checked, and if so, from what?** *(REQ-STARTUP-160, REQ-SHELL-005, REQ-STARTUP-159. Raised 2026-09-28 by the repair of `docs/archive/defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, under [R-062](../../../product/requests.md#r-062). Numbered OQ-91 on its branch because OQ-90 was already taken on a branch in flight beside it; renumbered OQ-93 at the merge, OQ-91 and OQ-92 having been taken on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** no text field is spell-checked in the first release: the dictionary list is emptied and the spellchecker turned off for every session on every platform, as built (`apps/desktop/src/main/runtime-requests.ts`).
 

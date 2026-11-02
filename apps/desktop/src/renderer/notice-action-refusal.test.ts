@@ -5,7 +5,7 @@ import { reportNoticeActionRefusal } from './notice-action-refusal.js';
 
 /**
  * REQ-NOTIFY-254 / REQ-NOTIFY-003: a notice action main refuses is said on screen, in main's words, as a persistent notice
- * (docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md). `notice-proof` section 6e
+ * (docs/archive/defects/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md). `notice-proof` section 6e
  * presses the hook review where it is refused in the built app and reads the notice.
  */
 function harness(reply: CommandOutcome | Error = { ok: true, value: { id: 7 } }) {
@@ -77,7 +77,7 @@ describe("the hook-review arm hands main's answer to the refusal report", () => 
  * revision 3) and `open-project-init` (`projectInit.open`, PD-WORKSPACE-005 revision 3). Main refuses them with "The window
  * holding the session closed before it could focus it" / "…the project closed before Settings › Project could open"
  * (`window.gone`), "No main window is open" (`window.notMain`) or a refused reach; until 2026-10-15 each arm wrote the refusal to
- * the console alone (docs/defects/fixed/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
+ * the console alone (docs/archive/defects/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
  * `notice-proof` section 6f presses both where the reach is refused in the built app.
  */
 describe("the focus-session and project-setup arms hand main's answer to the refusal report", () => {

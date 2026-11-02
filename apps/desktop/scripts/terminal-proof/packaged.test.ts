@@ -76,7 +76,7 @@ describe('the packaged terminal-streaming section reports a launch that found no
 });
 
 /*
- * docs/defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md: the packaged launch set
+ * docs/archive/defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md: the packaged launch set
  * `ROTARIS_MODEL_DIALECT=scripted`, `ROTARIS_SCRIPT=git` and `ROTARIS_CAPTURE_EVAL_AT`, which a packaged build compiles out
  * (ADR-0056; `seam-check.mjs`'s FORBIDDEN), and named a `provider: scripted` model a packaged build answers with no client
  * (OQ-312). Against any package `pnpm package` produces, it measured nothing. It now reaches the stub through the shipped model

@@ -4,7 +4,7 @@
  * repeat, the stall timeout or 30 s, whichever is longer (`stallRepeat` in `packages/engine/src/children/stall.ts`). Before
  * the revision the build wrote one at every evaluation, REQ-MONITOR-117's cadence (5 s at the default 90 s threshold), and
  * the `faults-stall` scenario's check, which asked only that one existed, passed that too
- * (`docs/defects/fixed/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md`).
+ * (`docs/archive/defects/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md`).
  *
  * **One stall, one silence.** A stall is a silence of one agent's watch; its start is fixed while it lasts (no event moves
  * the watch's last-event time during it), and each issue says how long the silence had lasted when it was written. So an

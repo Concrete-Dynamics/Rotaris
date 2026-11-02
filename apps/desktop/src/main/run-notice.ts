@@ -14,7 +14,7 @@ export type NoticePublish = Extract<ProcessEvent, { kind: 'notice.publish' }>;
  * root the run host recorded the session under (`workspaceRoot`, stamped by `withSessionRoot`), the run's own
  * `workspaceRoot` — is built by the same composer as the one raised at the workspace's open, so the two read alike and its
  * action names THAT workspace, never the focused window's
- * (docs/defects/fixed/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md). Its key stays the engine's
+ * (docs/archive/defects/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md). Its key stays the engine's
  * `hooks.review:<workspace>:<fingerprint>`; one that carries no root names no workspace and offers no action. Every other notice
  * keeps its own words; `session.reopen` names the session's recorded root (PD-SHELL-001 revision 3) and the rest the active
  * window's workspace, read through `activeWorkspace`.

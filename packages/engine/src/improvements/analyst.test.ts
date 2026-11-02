@@ -310,7 +310,7 @@ describe("REQ-LIBRARY-015..034 improvement analyst", () => {
 });
 
 /**
- * fin46 L1 (docs/defects/fixed/the-improvement-analyst-is-never-told-the-verifier-sections-shape.md): the live run at
+ * fin46 L1 (docs/archive/defects/the-improvement-analyst-is-never-told-the-verifier-sections-shape.md): the live run at
  * b9e3005 lost its retrospective to a proposed_verifier_section holding invented keys, because neither system text
  * named that block's keys. Both schemas are strict, so the text must name every key they take, and only those.
  */
@@ -562,7 +562,7 @@ describe("REQ-LIBRARY-032/165 improvement capture", () => {
   });
 
   /*
-   * docs/defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md (fin42) and OQ-271's ruling (R-072,
+   * docs/archive/defects/a-post-run-analysis-after-a-retrospective-is-never-captured.md (fin42) and OQ-271's ruling (R-072,
    * PD-LIBRARY-002 revision 3 (h)): a retrospective artifact carries no source session (revision 2 (a)), so the per-run
    * history drops it before REQ-LIBRARY-034's bound. Every artifact supplied then has the source session REQ-LIBRARY-025
    * records. Before fin42 the null reached `considered_session_ids` and the job's parse threw; before revision 3 the

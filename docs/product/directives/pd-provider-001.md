@@ -22,7 +22,7 @@ are the two numbers above, declared since 2026-10-06 (fin22) on the catalogue en
 (`packages/config/src/sections/models.ts`) applies a model's stated `max_parallel`, else its provider's declared cap.
 Until then they were held by configuration's provider-conditional default (`defaultMaxParallel`), a list of two provider
 names, as recorded in
-[`the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md`](../../defects/fixed/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md).
+[`the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md`](../../archive/defects/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md).
 
 **Why, and what it costs.** OQ-6: REQ-PROVIDER-002 spells the mode `hosted-cloud` where REQ-CONFIG-370 spells it
 `rotaris-cloud`, and REQ-CONFIG-095 gives one provider a cap of 3 where REQ-MONITOR-021 gives every declaring provider 2

@@ -108,7 +108,7 @@ describe('decide — the pure decision (REQ-TRACE-384/385/386)', () => {
     expect(k.ok && k.value.to).toBe('review');
   });
   it('accept-proposal records on the review and moves nothing; accept-change-work is refused naming the offer it needs, not OQ-45 (REQ-TRACE-427..433, 411..413); edit and create record a summary and move nothing (Part AP)', () => {
-    // docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md: both
+    // docs/archive/defects/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md: both
     // refused naming OQ-45's improvement store, a question closed on 2026-09-11 and a store neither action needs.
     const accepted = decide(state('review'), now(), 'accept-proposal', USER, { at, payload: { proposal: '0' } });
     expect(accepted.ok && accepted.value.writes).toBe(true);

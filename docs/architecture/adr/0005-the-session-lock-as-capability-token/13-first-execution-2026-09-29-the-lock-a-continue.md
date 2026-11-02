@@ -4,8 +4,8 @@ Part 13 of 15 of [ADR-0005](../0005-the-session-lock-as-capability-token.md), wh
 
 ## First execution — 2026-09-29, the lock a continue takes back
 
-*Recorded under R-067; the repair of `../../../defects/fixed/a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md`
-and `../../../defects/fixed/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`.*
+*Recorded under R-067; the repair of `../../../archive/defects/a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md`
+and `../../../archive/defects/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`.*
 
 **Built and run:** "the lock is still the capability … the run host must not write a session's rows without holding its
 lock" now holds for every run in a process, not only its first. A continue — by message (`Sessions.prompt`), the

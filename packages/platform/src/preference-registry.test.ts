@@ -11,7 +11,7 @@ import { PANE_LAYOUT_PANES, PANE_LAYOUT_VIEWS, PREFERENCE_KEYS, PreferenceStore,
  * list — the agent pop-out as `interface/agentPopOut`, the terminal auto-open as `terminal/autoOpen`, and each pane layout as
  * one object under `panels/<view>` — where the table registers `interface/agentPopout`, `interface/terminalPopout`,
  * `panels/version` and `panels/{view-key}/state` / `panels/{view-key}/panes`
- * (docs/defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md).
+ * (docs/archive/defects/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md).
  */
 const SPEC = resolve(dirname(fileURLToPath(import.meta.url)), '../../../docs/spec/12-desktop-shell-windows.md');
 /** The domain's parts, in order: since 2026-10-26 its file is an index (docs/README.md, "The document budget"). */
@@ -126,7 +126,7 @@ describe('a pane layout is stored under `panels/version`, `panels/{view-key}/sta
     expect(JSON.parse(readFileSync(store.file, 'utf8'))).toEqual({ 'panels/version': 1, 'panels/git/panes': 2, 'panels/git/state': [1, 2] });
   });
 
-  // docs/defects/fixed/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md: each old object
+  // docs/archive/defects/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md: each old object
   // stood alone (its own version, refused unless 1), where the registered keys share one stamp. Only a version-1 object is
   // carried, and the stamp it sets is 1, so no old object decides another view's layout.
   it('carries only an old object at version 1 and stamps 1, so an object at another version, or none, decides no other view', () => {

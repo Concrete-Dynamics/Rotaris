@@ -9,7 +9,7 @@
  *                          printed kept — and never by REQ-TOOLS-098's soft pause, which a command that prints every 0.5 s
  *                          never meets. The live run's silent wedge soft-paused 70 s before the default 100 s cap on every
  *                          run, so the cap had been reached only in a unit test
- *                          (`docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`).
+ *                          (`docs/archive/defects/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`).
  *   2. inferred-create   — PD-TOOLS-007: a `write_file` call with a path and content and no `operation`, for a file that does
  *                          not exist, is read as a create: the file lands, the result carries the directive's sentence, and
  *                          the record stores the arguments the gate read (`operation: create`).
@@ -17,7 +17,7 @@
  *                          untouched (PD-TOOLS-007: only a create is inferred), and the refusal, an `invalid_request` at the
  *                          tool gate, files a `tool_error` issue referencing it (REQ-SESSION-136). No proof had sent the shape: the scripted
  *                          `write` step always named its operation
- *                          (`docs/defects/fixed/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md`).
+ *                          (`docs/archive/defects/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md`).
  *
  * Each launch asserts from the store's `tool_calls`, `issues` and the workspace on disk, never from the model's prose. Evidence
  * under `.proof/tool-shapes-proof/`: one log per launch and `results.json`. `--skip-build` skips the build.

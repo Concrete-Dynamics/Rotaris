@@ -6,7 +6,7 @@
  * which deleted the sandbox and exited: no `results.json` was written, so the checks the three earlier scenarios had
  * computed in memory were lost with it, and the failed scenario kept its application logs and nothing it had left in the
  * store — no autopsy, transcript, session log or summary
- * (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`). Two parts repair it:
+ * (`docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`). Two parts repair it:
  *
  *   - `launchFailure` makes a launch that overran or exited non-zero a FAILED check of its scenario, preserves the session
  *     it left (the newest it created, else the newest the store holds, which a follow-up launch continued) the way a

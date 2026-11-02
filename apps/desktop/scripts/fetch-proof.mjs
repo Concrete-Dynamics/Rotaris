@@ -103,7 +103,7 @@ function saveConfiguration(runtime, strategy = null) {
  * them (the proof's own first finding). It is `spawnBounded`'s since 2026-09-30: its own bound was a bare `child.kill()`
  * at 150 s — SIGTERM, no SIGKILL, no overrun flag — and the application answers SIGTERM with `quit: exiting with status
  * 0`, so an overrun passed `launch`'s status check as a clean exit and failed later, misattributed, at the store
- * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`).
+ * (`docs/archive/defects/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`).
  */
 function spawnElectron(env, onSpawn = null) {
   return spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], { timeoutMs: 150_000, cwd: app, env, onSpawn });

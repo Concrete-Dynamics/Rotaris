@@ -13,7 +13,7 @@ import { executeTasks, recordSkip, stampOnly } from './execute.js';
 
 /**
  * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
- * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ * (docs/archive/defects/unit-tests-leave-their-temporary-directories-behind.md).
  */
 const scratchDirs: string[] = [];
 function scratchDir(prefix: string): string {
@@ -48,7 +48,7 @@ describe('the gitignore matcher', () => {
   });
 
   /*
-   * docs/defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md: every rule carried
+   * docs/archive/defects/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md: every rule carried
    * a descendant suffix, so `gen/*` matched `gen/keep/f.ts` itself and the directory-only `!gen/keep/` was
    * never asked about the file. Git decides a path by its ancestors first, then by the rules matching the
    * path alone, and keeps the file.
@@ -166,7 +166,7 @@ describe('workspace classification', () => {
     expect(classifyWorkspace(nested)).toBe('code');
   });
 
-  /** docs/defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md: the classifier's walk. */
+  /** docs/archive/defects/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md: the classifier's walk. */
   it('counts source in a directory re-included under an ignored glob, as git keeps it', () => {
     const root = tree();
     mkdirSync(join(root, 'gen', 'keep'), { recursive: true });

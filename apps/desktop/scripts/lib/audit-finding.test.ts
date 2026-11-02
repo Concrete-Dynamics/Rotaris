@@ -2,7 +2,7 @@
  * `ui-audit` files every finding under the sweep that found it (the evidence of `docs/design/README.md` §7, R-007;
  * docs/architecture/views/04-seams.md §8 step 6). A contract row carries its relation's `kind`, which once overwrote
  * `CONTRACT` in `report.json` and in `ui-review`'s `manifest.json`
- * (docs/defects/fixed/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md).
+ * (docs/archive/defects/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md).
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the audit library is plain ESM beside the scripts that run it.

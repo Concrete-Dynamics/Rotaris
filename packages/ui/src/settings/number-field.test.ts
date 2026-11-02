@@ -11,7 +11,7 @@ import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
  * PD-CONFIG-003 and its revision 2: every Settings › Runtime number field keeps its clamp, and every value inside it can be
  * typed. Until fin34 five of the six clamped each keystroke, so "70" typed into Compression threshold became 50 and then 95,
  * and "4" typed into a cleared Depth cap became 14
- * (`docs/defects/fixed/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`).
+ * (`docs/archive/defects/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`).
  */
 const FIELDS: readonly (readonly [string, NumberRange])[] = [
   ['max-depth', DEPTH_CAP_RANGE], ['max-active', FAN_OUT_RANGE], ['child-timeout', CHILD_TIMEOUT_MINUTES],

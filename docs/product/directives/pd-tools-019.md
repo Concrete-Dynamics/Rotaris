@@ -58,11 +58,11 @@ three is otherwise revised.*
 > at load 1.0 to 1.5 on four CPUs: `shift-lf` asserted (level 3, both sentences, exact bytes), and the new `near-lf` and
 > `retry-lf` steps through `haet_edit` (the level-3 near miss naming the line endings, its quote applying, the file wholly CRLF).
 > **Found:** a block with a blank interior line never reaches level 3, on LF and CRLF alike — not decided by this ruling, recorded
-> as [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../../defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md)
+> as [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../../archive/defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md)
 > and raised as [OQ-295](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-295). **What was not measured.** A live run: the `crlf` scenario
 > (`lib/crlf-scenario.mjs`) now fails a level-4 window edit whose `old_string` was a uniform indent off, checks a level-3 one lands
 > at the file's depth and a level-3 near miss names the endings, and is the orchestrator's to run. Repairs
-> [`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../../defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
+> [`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3`](../../archive/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **First live execution, 2026-10-20** (the Windows ARM64 session's live run; Windows 11 ARM64 (build 26200.9457), Node 24.18.0 arm64, Electron 44.1.1 arm64, dev tree, pwsh 7.6.6, at `00957641`; packs `2026-10-20T07-55-35-723Z` (terminal, frictions) and `2026-10-20T08-14-16-333Z` (crlf), endpoint `katalyst`, unmetered; [`live-00957641-windows-terminal-frictions-crlf-autopsy.md`](../../architecture/live-runs/live-00957641-windows-terminal-frictions-crlf-autopsy.md)). `crlf` completed and passed: not asked: the window edit landed at level 2, so neither the level-4 FAIL nor the level-3 depth check was reached, and the model made no level-3 near miss with an LF `old_string`. The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).

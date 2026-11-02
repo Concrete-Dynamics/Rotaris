@@ -77,7 +77,7 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
   /**
    * REQ-NOTIFY-060/061: a continuation refused at the confinement gate keeps its class through the engine (`confinement`),
    * so main reports it in REQ-NOTIFY-061's notice; any other configuration refusal stays `configuration`. Before the repair of
-   * `docs/defects/fixed/a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md` both read `configuration`.
+   * `docs/archive/defects/a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md` both read `configuration`.
    */
   it('REQ-NOTIFY-061: a continuation refused at the confinement gate is refused as `confinement`, another refusal as `configuration`', async () => {
     const client = new ScriptedModelClient([answer('one')]);
@@ -654,7 +654,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     expect(handoffArtifact(sid)).toBe('a0000003');
   });
 
-  it('REQ-LIBRARY-093: a root\'s publish names the root instance by its canonical name, never its persona, in a run\'s first iteration and in a continue\'s (docs/defects/fixed/a-roots-publish-names-its-persona-as-its-author.md)', async () => {
+  it('REQ-LIBRARY-093: a root\'s publish names the root instance by its canonical name, never its persona, in a run\'s first iteration and in a continue\'s (docs/archive/defects/a-roots-publish-names-its-persona-as-its-author.md)', async () => {
     const script: ScriptedCall[] = [
       toolCalls([{ callId: 'w1', name: 'publish', args: {} }], 'Publishing.'), answer('Published.'),
       toolCalls([{ callId: 'w2', name: 'publish', args: {} }], 'Publishing again.'), answer('Published again.'),
@@ -694,7 +694,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     expect([...published].sort(byRoot).map((a) => [a.created_by, a.source_persona, a.conversation_id])).toEqual([...roots].map((r) => ({ conversation_id: r.root_task_id })).sort(byRoot).map((r) => ['Lead-Planner', 'Lead Planner', r.conversation_id]));
     // The surfaces know the run-level agent by the persona id; the session names each root by its rows' name and its
     // canonical name, so the root's publishes are the run-level agent's links
-    // (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+    // (docs/archive/defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
     sessions.owner(sid)!.reconcile();
     const seen = snapshots.at(-1)!;
     expect(seen.entryRoots).toEqual([{ name: 'Lead Planner', canonical: 'Lead-Planner' }]);
@@ -703,7 +703,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
 
   /*
    * REQ-MONITOR-057/060 with PD-ORCH-003 (the second repair of
-   * docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md): the live
+   * docs/archive/defects/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md): the live
    * run's chips are its root's (`entryTools`) from the run's start, so the record carries the persona that root runs as,
    * before it has written any row; a surface read the persona from the transcript alone, and drew the previous root's.
    */
@@ -820,7 +820,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     });
 
     /*
-     * docs/defects/fixed/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md (acceptance A22, R-067):
+     * docs/archive/defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md (acceptance A22, R-067):
      * a plan cycle's root that READ an artifact of the session and published none was named only by its live run, so at
      * the gate the artifact's consumer — its canonical name, `Lead-Planner` (REQ-LIBRARY-099, REQ-LIBRARY-093) — was no
      * agent's, and the run-level agent lost its received link (REQ-MONITOR-044/052/069). The session records each plan

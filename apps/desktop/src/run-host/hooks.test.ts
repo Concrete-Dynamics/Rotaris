@@ -8,7 +8,7 @@ import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/stor
 import { createHookPort, HOOKS_LOAD_WARNING } from './hooks.js';
 
 /**
- * `docs/defects/fixed/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`: the root passes `ctx.log` on as
+ * `docs/archive/defects/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`: the root passes `ctx.log` on as
  * the engine's `log` sink and writes its own account of an unresolvable set through it. Both are "the application log
  * only" (REQ-HOOKS-138, PD-MONITOR-002); the run host sends what `Sessions` hands it as a `log` event at `info`.
  */

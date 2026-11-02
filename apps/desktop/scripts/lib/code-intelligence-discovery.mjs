@@ -1,7 +1,7 @@
 /**
  * Whether a launch's code-intelligence discovery succeeded, read from its application log — so a live run can never pass
  * over a launch in which code intelligence did not run
- * (`docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`, finding U5 of the
+ * (`docs/archive/defects/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`, finding U5 of the
  * duress live run at 1763f7f: the tree had no bundle, setup and discovery failed, and all 18 checks passed in silence).
  *
  * The lines it reads (the run host's, `apps/desktop/src/run-host/mcp.ts` and `packages/mcp/src/discovery.ts`):
@@ -73,7 +73,7 @@ export function codeIntelligenceDiscovery(log) {
  * The first discovery in the log that listed the server's tools: `{ listed, ms, project }` (`project` null on a line from
  * before REQ-MCP-034's binding was shown, `643e17c`), or null when none did. code-intel-proof's launch 2 records these; until
  * 2026-10-06 it matched the line without its ` (project …)` part, read nothing and recorded `NaN`
- * (docs/defects/fixed/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md).
+ * (docs/archive/defects/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md).
  */
 export function codeIntelligenceListing(log) {
   for (const line of String(log ?? '').split(/\r?\n/)) {

@@ -46,7 +46,7 @@ export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
  * 13. reauth:prompt        — main → the main windows: the non-modal re-authentication prompt (REQ-NOTIFY-071)
  * 14. display:changed      — main → every window: one transcript display preference main has just stored, so a window
  *     that did not write it (a persona window, a second main window) redraws its rows too (REQ-CHAT-167, REQ-CONFIG-403;
- *     2026-10-14, `docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`)
+ *     2026-10-14, `docs/archive/defects/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`)
  * 15. project-init:open     — main → ONE main window, the one holding the named workspace or added for it: open Settings ›
  *     Project there (PD-WORKSPACE-005 revisions 2 and 3, OQ-262, OQ-294 — a project-setup banner's `open-project-init`,
  *     activated in any window; held for an added window until its renderer reports `projectInit.ready`)

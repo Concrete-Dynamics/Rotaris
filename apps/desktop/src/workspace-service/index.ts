@@ -56,7 +56,7 @@ const restoreInFlight = new RestoreInFlight();
  */
 function instructionEnv(): { home: string; platform: NodeJS.Platform; machineDir?: string } {
   // Behind the build-time flag since 2026-10-14: a packaged build always reads the user's own home
-  // (docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
+  // (docs/archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
   const home = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'] : undefined;
   /*
    * `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`: the same seam for the machine-wide base, so the inventory a proof reads

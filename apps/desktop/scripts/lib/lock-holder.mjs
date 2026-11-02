@@ -8,9 +8,9 @@
  * after the run host, so the pid is dead when the launch returns (`spawnSync`'s until 2026-09-29, `spawnBounded`'s
  * since). Before that, the run host outlived main by up to 1.8 s, and a repair launch started inside that window found
  * the holder alive and correctly made no repair
- * (`docs/defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`).
+ * (`docs/archive/defects/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`).
  * `checkpoint-proof` then reported that as the repair failing
- * (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).
+ * (`docs/archive/defects/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).
  *
  * `lockHolderAfterExit` reads the holder AT ONCE, which is the product's guarantee. It keeps probing afterwards only
  * so a failure can say how long the holder outlived its application; it never waits for a result it can then pass.

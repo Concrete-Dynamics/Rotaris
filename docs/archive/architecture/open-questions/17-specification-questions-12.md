@@ -108,7 +108,7 @@ first new iteration (`PD-ORCH-003` revision 2). Building it raised OQ-102, OQ-10
 Until they are built, the readings above stand.
 
 **Beside it, 2026-10-01 — which persona the surfaces draw the run-level agent as (not ruled; recorded by the repair of
-[`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`](../../../defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md)).**
+[`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`](../../defects/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md)).**
 This question settles the name a resumed root dispatches under, not the persona the surfaces draw the run-level agent as
 once the entry persona has changed between runs (`default_persona` is read for every run, and PD-ORCH-003 lets a plan
 cycle run fresh after an iteration). The specification does not state it: REQ-MONITOR-060's stand-in is "the persona's

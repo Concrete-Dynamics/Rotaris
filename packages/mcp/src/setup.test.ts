@@ -7,7 +7,7 @@ import { runSetupSteps, SETUP_SHUTDOWN_GRACE_MS, SETUP_TERMINATE_GRACE_MS, type 
 
 /**
  * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
- * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ * (docs/archive/defects/unit-tests-leave-their-temporary-directories-behind.md).
  */
 const scratchDirs: string[] = [];
 function scratchDir(prefix: string): string {
@@ -125,7 +125,7 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
    * REQ-WORKSPACE-092: "nothing the step launched SHALL still be running 5 s later — neither the command the step itself
    * started nor anything descended from it". On POSIX the termination reached the step alone, so a process the step had
    * started outlived the cancellation; measured 2026-10-01 on the built app at an orderly quit too
-   * (`docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+   * (`docs/archive/defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
    * The step here starts a descendant that ignores the ask to terminate, writes both pids, and holds.
    */
   const family = 'const a = process.argv.slice(1); const root = a[1]; const cp = require("child_process"); const g = cp.spawn(process.execPath, ["-e", "process.on(\'SIGTERM\', () => {}); setTimeout(() => {}, 20000)"], { stdio: "ignore" }); require("fs").writeFileSync(require("path").join(root, "pids"), process.pid + " " + g.pid); if (a[0] === "stubborn") process.on("SIGTERM", () => {}); setTimeout(() => {}, 20000);';

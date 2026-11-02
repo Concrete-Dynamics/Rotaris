@@ -1,9 +1,9 @@
 /**
  * `live-run`'s sign-in check reads the starter document (REQ-CONFIG-025, REQ-WORKSPACE-038) rather than the file's
  * existence, which a file holding only the initialization record satisfied
- * (`docs/defects/fixed/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`),
+ * (`docs/archive/defects/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`),
  * and `slice-proof`'s first-launch scenario reads it rather than the persona line alone
- * (`docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
+ * (`docs/archive/defects/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
  * The reader is held to the product's own `starterDocument`, so the two cannot drift apart unseen.
  */
 import { readFileSync } from 'node:fs';
@@ -65,7 +65,7 @@ describe('the starter agents.yaml read by its content (REQ-CONFIG-025, REQ-WORKS
     expect(starterMissing(text)).toEqual(['small_model']);
   });
 
-  // docs/defects/fixed/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md: the
+  // docs/archive/defects/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md: the
   // starter shipped until 2026-10-06 stated the retrospective slot and its companion as a thirteenth and fourteenth null.
   it('names an explicit null beyond REQ-WORKSPACE-038\'s twelve — the fourteen-null starter shipped before 2026-10-06', () => {
     const fourteen = `${starterDocument()}retrospective_model: null\nretrospective_model_thinking: null\n`;

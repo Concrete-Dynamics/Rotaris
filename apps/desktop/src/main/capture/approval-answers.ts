@@ -1,7 +1,7 @@
 /**
  * The approval dialog's scripted answers — verification only. Main reads the raw text from the environment behind
  * `__ROTARIS_SEAMS__` and hands it here, so a packaged build never reads it
- * (`docs/defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md`). This module names no variable,
+ * (`docs/archive/defects/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md`). This module names no variable,
  * so it carries nothing the packaged seam check would have to find.
  *
  * The grammar, entries separated by `;;`:

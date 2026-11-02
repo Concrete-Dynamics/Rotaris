@@ -1,7 +1,7 @@
 /**
  * The packaging hooks' naming rule (REQ-STARTUP-031, REQ-STARTUP-158): `checkNaming` at afterPack over what electron-builder
  * is configured to produce, `artifactBuildCompleted` over what it did produce — both against the DECLARED version, never
- * electron-builder's normalised `appInfo.version` (`docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`).
+ * electron-builder's normalised `appInfo.version` (`docs/archive/defects/a-prerelease-version-reaches-the-installer-hyphenated.md`).
  * The rendering of a configured pattern is electron-builder's own macro expander over the app-info shape it would hold for
  * a prerelease, so the defect's exact scenario — a `${version}` template — is what the hyphenated case refuses. No artifact
  * is built (IC-3); the native-module rules beside these need one and are measured by `pnpm package` on Windows.
@@ -90,7 +90,7 @@ describe('artifactBuildCompleted — the produced file against this tree\'s decl
 });
 
 /**
- * OQ-400, ruled 2026-10-15 under R-072 (`docs/defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`):
+ * OQ-400, ruled 2026-10-15 under R-072 (`docs/archive/defects/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`):
  * the "runtime" rule reads the packaged `python.exe`'s PE machine field before it spawns the interpreter, and refuses one built
  * for another architecture than the artifact's, and a marker whose `targetArch` is not the artifact's. An arm64 interpreter
  * answers its versions correctly on an ARM64 host, so before the guard every check passed there. The fixtures are PE headers

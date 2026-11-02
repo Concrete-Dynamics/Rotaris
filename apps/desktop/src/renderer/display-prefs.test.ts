@@ -5,7 +5,7 @@ import { createDisplayPrefs } from './display-prefs.js';
 /**
  * REQ-CHAT-167 / REQ-CONFIG-403 with PD-CONFIG-004: a window's boot read of the three display preferences, against main's
  * announcement of a change that lands while it is under way
- * (`docs/defects/fixed/a-windows-boot-read-of-the-display-preferences-can-overwrite-a-newer-announcement.md`).
+ * (`docs/archive/defects/a-windows-boot-read-of-the-display-preferences-can-overwrite-a-newer-announcement.md`).
  */
 function scriptedBridge() {
   const gets: { key: string; answer: (v: boolean | undefined) => void }[] = [];

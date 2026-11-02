@@ -22,8 +22,8 @@ suite's load the same detection took about 3.5 times that figure.
 Run alone straight after, the case **passed three times in a row** (`pnpm exec vitest run
 packages/agent-tools/src/terminal/terminal.test.ts -t "ends at once"`; 11.5 to 18.1 s each including boot and
 collection; sampled load 100 % before and 16 % after). It is the load shape OQ-144's family has met twice before —
-[the argc-0 note](fixed/the-argc-0-identity-test-reads-cmdline-before-the-exec-has-set-its-arguments.md) and
-[the soft-pause under-load note](fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md)
+[the argc-0 note](../archive/defects/the-argc-0-identity-test-reads-cmdline-before-the-exec-has-set-its-arguments.md) and
+[the soft-pause under-load note](../archive/defects/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md)
 — both recorded from an unrelated bundle's gate and both left unrepaired until their own work took them.
 
 Seen again 2026-10-31 in `pnpm check` (295.3 s, 7,233 tests, this the one failure) of the `confident-kepler-16f989`

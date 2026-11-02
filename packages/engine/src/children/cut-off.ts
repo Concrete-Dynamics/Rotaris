@@ -132,7 +132,7 @@ export class ProgressLog {
    * cut off while under way, or carries the run host's `unobserved` mark whatever it returned (`seen.ran`) — lists what its arguments name as a file and is remembered by name
    * (`unnamedBy`), so the report says it may have changed files the record cannot name and never that the child changed
    * none. The reason, kept beside it: until the ruling such a call listed its argument path alone, and a whole-project
-   * replacement nothing (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+   * replacement nothing (docs/archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
    */
   completed(at: Millis, toolName: string, args: Readonly<Record<string, unknown>>, ok: boolean, seen: { readonly observedPaths?: readonly string[] | undefined; readonly ran?: boolean | undefined } = {}): void {
     this.lastCompletedAt = at;

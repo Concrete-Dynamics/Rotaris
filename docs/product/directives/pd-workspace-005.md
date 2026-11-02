@@ -72,7 +72,7 @@ reopens a project the user closed, and that project becomes the remembered works
 resolution (REQ-WORKSPACE-102), and its pending setup may start again before the user reaches the retry; and, until the
 defect "a main window added after a notice was published does not show it" is repaired, the added window does not show the
 banner. *(That third cost lapsed the same day: the defect was repaired by fin44, a window asking main for the current notice
-when it boots, [`a-main-window-added-after-a-notice-was-published-does-not-show-it.md`](../../defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).)*
+when it boots, [`a-main-window-added-after-a-notice-was-published-does-not-show-it.md`](../../archive/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).)*
 
 *Revised by [R-072](../requests.md#r-072), 2026-10-13, ruling [OQ-262](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-262) (revision 2).*
 *Revised by [R-072](../requests.md#r-072), 2026-10-14, ruling [OQ-294](../../archive/architecture/open-questions/59-spikes-and-later-questions-26.md#oq-294) (revision 3): the
@@ -109,7 +109,7 @@ disposition "Narrows REQ-WORKSPACE-102, REQ-WORKSPACE-103" stands, and their bac
 > "Retry initialization", an unsaved Instructions edit in it still pending; a banner naming a folder no window holds gave
 > "Project closed-project is not open in any window." and no window was added. **Found:** a main window added after a
 > notice was published does not show it
-> ([`a-main-window-added-after-a-notice-was-published-does-not-show-it.md`](../../defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md)),
+> ([`a-main-window-added-after-a-notice-was-published-does-not-show-it.md`](../../archive/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md)),
 > not repaired there; repaired 2026-10-14 by fin44 (`notice.current`). The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **First execution, 2026-10-06.** Built the day it was written: `InitializationCoordinator.banner`, `namedBanner` and

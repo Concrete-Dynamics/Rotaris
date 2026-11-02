@@ -91,7 +91,7 @@ places on the Windows host (*corrected 2026-10-13: a Windows x64 host, deferred 
 rule's. **The proof found one thing beside the mechanism:** the sink recorded `CONNECT redirector.gvt1.com:443` —
 Chromium's own component updater reaching out from the built application, a request no requirement names and
 REQ-STARTUP-160's disclosure cannot carry — filed as
-`../../../defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, not repaired here.
+`../../../archive/defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, not repaired here.
 *Corrected 2026-09-28 by the repair (R-062): the cause named in that sentence was wrong.* A net-log of the same launch
 named the request as Electron's spellchecker downloading a Hunspell dictionary
 (`https://redirector.gvt1.com/edgedl/chrome/dict/en-us-10-1.bdic`), not the component updater, and
@@ -193,10 +193,10 @@ environment: neither variable, the launch's other variables kept; 11 checks, all
 terminal's reading measures. **Raised: OQ-90** — REQ-STARTUP-147 names the variables written for child processes and
 none removed from them, and REQ-HOOKS-032 says a run "sees exactly the environment the application itself was started
 with"; the build proceeds on this record's reading that a variable describing the artifact is not part of the
-environment a child is handed. The note: `../../../defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md`.
+environment a child is handed. The note: `../../../archive/defects/the-artifact-variables-reach-the-products-own-child-processes.md`.
 
 **Repaired 2026-09-28 (R-062): (7) the record passed to a successor that had stopped waiting.** The defect the
-paragraph above filed (`../../../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md`) is repaired
+paragraph above filed (`../../../archive/defects/the-record-can-pass-to-a-successor-that-stopped-waiting.md`) is repaired
 by making the pass two steps, as ADR-0055's restart section now records (*Amended 2026-09-28*). The predecessor offers
 the record. It rewrites the record only once the successor has acknowledged within the hand-over interval, on the
 timer port. A successor that closed first, or whose acknowledgement is late, leaves the record intact and fails the

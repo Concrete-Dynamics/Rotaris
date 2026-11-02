@@ -3,8 +3,8 @@ import { growthPair, interleavedMinima } from './growth-readings.test-support.js
 
 /**
  * REQ-TRACE-501 / REQ-TRACE-088: the readings the proof's linear-growth ratio is computed from
- * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`, and on an
- * oversubscribed host `docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
+ * (`docs/archive/defects/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`, and on an
+ * oversubscribed host `docs/archive/defects/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
  *
  * The pass is modelled, not run: a reader that costs `work × warmth(n)`, where `n` counts every pass the process has
  * made so far and `warmth` falls as the JIT warms, which is the shape that made the half-size side read cheap when it

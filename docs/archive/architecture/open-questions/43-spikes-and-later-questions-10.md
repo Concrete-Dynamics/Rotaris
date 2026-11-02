@@ -10,10 +10,10 @@ branch, a token label, and a duration label"; REQ-SESSION-030, the listing recor
 "Every attribute a listing shows about the session itself MUST be one of these — making a new attribute list-visible is a
 change to this field set, not a reader-side extension"; REQ-SESSION-042, "Building the list MUST read nothing but those
 listing records". Raised 2026-10-03 by
-[`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../../../defects/fixed/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md)
+[`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../../defects/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md)
 (fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). ~~Open.~~ Ruled 2026-10-06.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the three labels stay on the card, and the listing record's field list gains the token total, the run start time and the workspace path. The duration label is the latest run's, as built. [`PD-SESSION-001`](../../../product/directives/pd-session-001.md#pd-session-001) narrows REQ-SESSION-030. [`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../../../defects/fixed/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md), whose checkpoint half closed on 2026-10-03, closes with this ruling.
+**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the three labels stay on the card, and the listing record's field list gains the token total, the run start time and the workspace path. The duration label is the latest run's, as built. [`PD-SESSION-001`](../../../product/directives/pd-session-001.md#pd-session-001) narrows REQ-SESSION-030. [`the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md`](../../defects/the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md), whose checkpoint half closed on 2026-10-03, closes with this ruling.
 
 REQ-SESSION-030's twelve fields are `session_id`, `created_at`, `updated_at`, `execution_status`, `schema_version`,
 `internal`, `worktree`, `checkpoint_count`, `task_title`, `requirement_id`, `unit_id` and `awaiting_input`. None is a token
@@ -31,7 +31,7 @@ is read from, so building the list still reads one row per session and nothing e
 "change to this field set" it names), or leave it (and REQ-MONITOR-171 is amended).
 
 *(Added 2026-10-06, a case of the duration label, from finding G8 of the orchestrator's final default live run at `27a5127`
-([`fixed/a-continuations-run-timing-starts-after-its-pre-flight-where-a-launchs-counts-it.md`](../../../defects/fixed/a-continuations-run-timing-starts-after-its-pre-flight-where-a-launchs-counts-it.md)).
+([`fixed/a-continuations-run-timing-starts-after-its-pre-flight-where-a-launchs-counts-it.md`](../../defects/a-continuations-run-timing-starts-after-its-pre-flight-where-a-launchs-counts-it.md)).
 The label is the latest run's duration: for a session paused and continued it leaves the first run out (the live run's
 `resume` session ran 87.7 s over two runs; its label counts the continuation alone, 64.9 s once that repair counts the
 continuation's pre-flight). Neither REQ-SESSION-154 ("a relative-time duration label") nor REQ-MONITOR-171 ("a duration
@@ -48,10 +48,10 @@ could not be read", each "distinguishable from an ordinary branch name and from 
 SHALL render as empty text — no icon, no arrow, no tooltip — exactly when the snapshot's branch name is empty, which per
 REQ-WORKSPACE-029 covers git being unavailable, the folder not being a repository, a detached HEAD, and an unborn branch";
 REQ-SHELL-042, which owns the item and names neither state. Raised 2026-10-03 by the repair of
-[`the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md`](../../../defects/fixed/the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md)
+[`the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md`](../../defects/the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md)
 (fin11, bundle `fin11-strip-labels-and-auxiliary-windows`). ~~Open.~~ Ruled 2026-10-06.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the visible words and tooltips stay as built, and REQ-WORKSPACE-020 is amended to match them: `detached HEAD`, `no git repository`, `no git` and `—` before the first read, each with its tooltip and no icon. The base checkout's tooltip keeps its full stop and its singular or plural commit wording as built, REQ-GIT-122's form read as a template of them. [`PD-WORKSPACE-008`](../../../product/directives/pd-workspace-008.md#pd-workspace-008) narrows REQ-WORKSPACE-020 and REQ-GIT-122. [`the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md`](../../../defects/fixed/the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md) closes with this ruling. The ruling does not reach two states this entry never named: an unborn branch, and a repository whose branch could not be read. REQ-WORKSPACE-020's empty item (and, for the unreadable branch, REQ-GIT-161's empty value) still governs them, and the build departed there: it drew the branch icon, `—` and the tooltip "Branch this workspace is on: —.", as if `—` were a branch's name. Found by the verifier of this round and recorded, not repaired, in [`the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md`](../../../defects/fixed/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md); repaired by fin22 the same day, the item now REQ-WORKSPACE-020's empty item in both states.
+**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the visible words and tooltips stay as built, and REQ-WORKSPACE-020 is amended to match them: `detached HEAD`, `no git repository`, `no git` and `—` before the first read, each with its tooltip and no icon. The base checkout's tooltip keeps its full stop and its singular or plural commit wording as built, REQ-GIT-122's form read as a template of them. [`PD-WORKSPACE-008`](../../../product/directives/pd-workspace-008.md#pd-workspace-008) narrows REQ-WORKSPACE-020 and REQ-GIT-122. [`the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md`](../../defects/the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md) closes with this ruling. The ruling does not reach two states this entry never named: an unborn branch, and a repository whose branch could not be read. REQ-WORKSPACE-020's empty item (and, for the unreadable branch, REQ-GIT-161's empty value) still governs them, and the build departed there: it drew the branch icon, `—` and the tooltip "Branch this workspace is on: —.", as if `—` were a branch's name. Found by the verifier of this round and recorded, not repaired, in [`the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md`](../../defects/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md); repaired by fin22 the same day, the item now REQ-WORKSPACE-020's empty item in both states.
 
 REQ-GIT-161 requires a detached checkout and a non-repository to be conveyed, each in words or markers distinct from a branch
 name and from each other, and a repository whose branch could not be read to take REQ-GIT-112's empty value. REQ-WORKSPACE-020
@@ -80,7 +80,7 @@ stands for the strip's branch item, and an amendment to the other.
 the appended path SHALL be that tree's root"; REQ-MCP-035, "with no path arguments, the workspace root SHALL be appended";
 REQ-MCP-043 and REQ-MCP-050, `cwd` "the entry's configured value, or the workspace root when unset"; REQ-MCP-070, `lsp_init`
 "called once with the arguments `{"root": "<workspace_root>"}`". Raised 2026-10-03 by the repair of
-[`fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`](../../../defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)
+[`fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`](../../defects/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)
 (fin12, bundle `fin12-worktree-bound-code-intelligence`). Open until 2026-10-06; ruled then, below.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** as recommended, for a run in an isolated tree
@@ -111,7 +111,7 @@ is reached?** *(REQ-ORCH-088, on expiry "gracefully pause the child", narrowed b
 "finishes its current step and then stops", narrowed by `PD-ORCH-005` revision 2; REQ-CONFIG-131's
 `graceful_pause_tool_deadline`, which bounds in-flight tool calls only; REQ-CONFIG-113's `child_timeout`, the "hard per-child
 wall clock". Raised 2026-10-03 from finding U1 of the orchestrator's duress live run at `1763f7f`
-([`a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md`](../../../defects/fixed/a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md)).
+([`a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md`](../../defects/a-child-at-its-ceiling-has-the-model-step-in-flight-aborted-30-s-later.md)).
 ~~Open, the owner's.~~ **Ruled 2026-10-06.**)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current bound stays and is written down — what a child has in
@@ -156,7 +156,7 @@ change to the same field made while Settings is open by any other surface … la
 refresh never discards an edit in progress "with the single exception REQ-CONFIG-423 states for the permission-mode field,
 where a mode already applied to a live run displaces an unsaved selection"; REQ-CONFIG-288, the composer's control writes
 that key alone. Raised 2026-10-03 by the repair of
-[`fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`](../../../defects/fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md)
+[`fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`](../../defects/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md)
 (fin13, bundle `fin13-settings-last-write-and-record-pointers`), as OQ-196, and renumbered OQ-197 at its merge of
 `origin/main` because the landing-grace question had taken OQ-196 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
@@ -185,7 +185,7 @@ where no build is plausible?** *(REQ-ORCH-006, which names `explicit_trivial` wi
 are plausible the tie-break prefers `moderate_feature`"); REQ-ORCH-021, which groups `explicit_trivial` with
 `single_file_change` (micro) and apart from `question` and `exploration` (answer); REQ-ORCH-153, whose plan gate exempts the
 answer group alone. Raised 2026-10-04 by the repair of
-[`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../../../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)
+[`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../../defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)
 (fin15, bundle `fin15-slice-proof-live-answers`). ~~Open, the owner's.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** `explicit_trivial` means a small edit, and the tie-break chooses only among the plausible categories, so a request that changes nothing belongs to the answer group. [`PD-ORCH-011`](../../../product/directives/pd-orch-011.md#pd-orch-011) narrows REQ-ORCH-006. The classifier's instruction is unchanged, and `slice-proof` now expects the answer group alone for its question (`INTENTS` in `apps/desktop/scripts/lib/live-answers.mjs`, pinned by `live-answers.test.ts`).
@@ -196,7 +196,7 @@ it (runs 1, 3 and 5 to 10; run 2 went red before it), and with `explicit_trivial
 in one, run 4. Every run of 2026-10-04 whose evidence this session keeps answered `question`. *(Corrected 2026-10-04 at the repair round:
 this paragraph first said "five of the six runs … (runs 1, 3, 5, 6 and 7)", counting only the first seven runs' evidence
 and missing runs 8, 9 and 10, which the record of
-[`fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`](../../../defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md)
+[`fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`](../../defects/a-first-run-workspace-never-gets-the-starter-agents-yaml.md)
 keeps.)* The product's own classification instruction calls
 `explicit_trivial` and `single_file_change` "the two smallest edits" (`packages/engine/src/intent/classifier.ts`), but no
 requirement does. The name says an explicit, trivial request, and a one-line question about one file is that. The group says
@@ -226,7 +226,7 @@ skips that classifier for reports attributed to the coordinator role; REQ-ORCH-0
 check that compares the outcome with the request; REQ-TOOLS-180, a run terminates when the agent produces a message
 addressed to the user and requests no tool call in that turn; REQ-ORCH-095, a child's ending assessed into six categories,
 tool calls made counting as `work_performed`. Raised 2026-10-04 by the repair of
-[`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../../../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)
+[`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../../defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md)
 (fin15, bundle `fin15-slice-proof-live-answers`). ~~Open, the owner's.~~ **Ruled 2026-10-06.**)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** an execution iteration's entry role that ends its turn with neither

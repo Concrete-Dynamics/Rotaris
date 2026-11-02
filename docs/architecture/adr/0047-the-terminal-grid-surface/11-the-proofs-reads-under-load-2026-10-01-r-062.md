@@ -5,7 +5,7 @@ Part 11 of 12 of [ADR-0047](../0047-the-terminal-grid-surface.md), which indexes
 ## The proof's reads under load — 2026-10-01 (R-062)
 
 *`pnpm terminal-proof`'s wheel, selection and empty-copy checks, and its flood and echo readings, went red at random on a
-loaded host ([note](../../../defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md)).*
+loaded host ([note](../../../archive/defects/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md)).*
 
 **Which side.** The proof's, for every input check. Eighty runs beside pinned busy loops (load average 5.7 to 18 on four
 CPUs) kept every run's results. The two `wheel.subNotch` reds moved exactly three rows over the ten tenths of a notch, so the
@@ -23,7 +23,7 @@ time one keystroke of three missing the bound by 0 to 44 ms. Whether the bound h
 
 **Found along the way.** A closing `screen` frame resets each emulator and rewrites the final screen, which the library
 parses over several tasks; one read in that window saw the row preview empty while the grid showed the flood's last line
-([note](../../../defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md), recorded, not
+([note](../../../archive/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md), recorded, not
 repaired).
 
 **Repaired 2026-10-02 (fin7): the previews hold the replaced screen while a `screen` frame's reset and text parse.**
@@ -48,4 +48,4 @@ arrival hold).
 emulator): three runs on the repair passed 120 of 120 at load averages of 2.6 to 3.1 on 4 CPUs. Five runs on the code
 before had passed too, at 2.6 to 3.2, the closing text parsing in one task there: the window the note saw is shown by the
 tests, not by the proof on this host
-([note](../../../defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md), the outcome written on it).
+([note](../../../archive/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md), the outcome written on it).

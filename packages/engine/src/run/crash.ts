@@ -312,7 +312,7 @@ function withdrawStoredApprovals(dal: StoreDal, writer: SessionWriter, sessionId
  * v35) leaves the list, and the timeline records it as withdrawn by the crash in the words and fields the gate writes for
  * a live withdrawal (`question_withdrawn`, `packages/agent-tools/src/gate.ts`). The cut `ask_questions` call itself is
  * answered and its ring row settled above, as every call a crash cut is. Until v35 no question was stored, so a crash with
- * one waiting recorded no withdrawal (`docs/defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md`).
+ * one waiting recorded no withdrawal (`docs/archive/defects/a-crash-with-a-question-pending-records-no-withdrawal.md`).
  */
 function withdrawStoredQuestions(dal: StoreDal, writer: SessionWriter, sessionId: SessionId): number {
   const row = dal.getSession(sessionId);

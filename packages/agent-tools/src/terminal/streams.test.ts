@@ -188,7 +188,7 @@ describe('TerminalStreams — the sampling period is a ceiling (ADR-0021 Decisio
     expect(await h.streams.kill('bg:ts_0000000a')).toEqual({ ok: false, error: 'no-kill-capability' });
   });
 
-  // docs/defects/fixed/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md: the foreground
+  // docs/archive/defects/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md: the foreground
   // stream's kill dropped `killActive`'s answer, so a kill that terminated nothing answered ok.
   it('REQ-SHELL-092, REQ-TOOLS-128: a kill whose control terminated nothing answers `ended`, never ok, and leaves the stream as it was', async () => {
     const h = harness();
@@ -296,7 +296,7 @@ const shell = findShell();
  * REQ-TOOLS-104 sends Windows to PowerShell and every other host to a POSIX shell, so each command below is spelled
  * in the shell the host actually runs, as `terminal.test.ts` already does. This half was first written against
  * PowerShell alone, and on a POSIX host every command came back `not found`, exit 127, so nothing was measured there
- * (docs/defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md). What is under
+ * (docs/archive/defects/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md). What is under
  * test is the stream: its frames, its counter, its armed flush, its resize and its kill. None of that belongs to
  * either language. The two spellings produce the same output, and the assertions after them are identical.
  */

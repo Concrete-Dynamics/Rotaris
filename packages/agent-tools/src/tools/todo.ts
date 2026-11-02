@@ -64,7 +64,7 @@ const singleActive = (id: string, name: string) => `Only one task can be IN_PROG
  * while no task is active is still refused, but REQ-TOOLS-145's sentence names an "Active task" that does not exist. Until
  * fin21 it named the first of the list's tasks under the id the rejected `replace` minted, and the agent's `update` of that
  * id was refused "Unknown task id" (live-run finding a71-7,
- * docs/defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md). This sentence says what the list did
+ * docs/archive/defects/a-rejected-todo-replace-names-an-active-task-it-never-stored.md). This sentence says what the list did
  * and that nothing was saved, and names the tasks by the names the agent sent, since no id of theirs was ever stored.
  */
 const listMarksSeveralActive = (names: readonly string[], delegates: boolean) =>
@@ -108,7 +108,7 @@ const phaseInput = z.object({ id: z.string().optional(), name: z.string(), tasks
  * Tightening it moves that refusal ahead of `execute`, which is why `validationError` below exists: the
  * requirement mandates the words `Unsupported operation: <op>`, and a schema refusal would otherwise answer
  * with the gate's generic "do not match its schema" and make the mandated string unreachable — the same
- * ordering fault `docs/defects/fixed/a-misspelled-tool-reads-as-withheld-at-the-plan-gate.md` records.
+ * ordering fault `docs/archive/defects/a-misspelled-tool-reads-as-withheld-at-the-plan-gate.md` records.
  */
 const OPERATIONS = ['replace', 'add_phase', 'add_task', 'update', 'remove_task'] as const;
 const unsupported = (op: string): string => `Unsupported operation: ${op}. The operations are ${OPERATIONS.join(', ')}.`;
@@ -165,7 +165,7 @@ interface ResolvedPhase { readonly id: string; readonly sent?: string | undefine
  * with only when the list holds that id and no earlier entry of the same call has taken it; any other gets a generated one, as
  * `add_phase` and `add_task` give, and is a new phase or task. Until 2026-10-15 `replace` stored whatever id the call sent for a
  * new task (`t.id ?? hexId()`), so a task's id was the model's word and two tasks sent with one unknown id were both stored under
- * it (acceptance finding A6, docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md).
+ * it (acceptance finding A6, docs/archive/defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md).
  */
 function resolveIds(list: TodoList, phases: readonly PhaseInput[]): ResolvedPhase[] {
   const phaseIds = new Set(list.phases.map((p) => p.id));
@@ -243,7 +243,7 @@ export function todoTool(list: TodoList, opts: TodoToolOptions = {}): ToolExecut
            * the COMPLETED or ABANDONED the list sends for its id, and is then no active task against a mark in the same list.
            * Every other protected task is restored as REQ-TOOLS-146 states. Until 2026-10-13 every IN_PROGRESS task was restored,
            * so a delegated item `PD-TOOLS-006` revision 7 had marked could not be closed by a replace
-           * (docs/defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+           * (docs/archive/defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
            */
           const closes = new Map<string, TodoState>();
           for (const p of incoming) for (const t of p.tasks) {

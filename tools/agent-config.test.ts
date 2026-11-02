@@ -8,7 +8,7 @@
  * This pins what keeps that from drifting:
  * - every portable skill has its router, and the router's `name`, `description` and `argument-hint` are the canonical
  *   file's own and it points at that file (run-autopsy had none until 2026-10-13,
- *   `docs/defects/fixed/the-run-autopsy-skill-has-no-claude-skills-router.md`; this file was `skill-routers.test.ts`
+ *   `docs/archive/defects/the-run-autopsy-skill-has-no-claude-skills-router.md`; this file was `skill-routers.test.ts`
  *   until 2026-10-26, which pinned the router but let its description differ);
  * - a router carries no instructions of its own, and no router stands without a canonical skill;
  * - the repository has no root `CLAUDE.md` (the owner, 2026-10-27): one beside `AGENTS.md` is what Claude Code reads

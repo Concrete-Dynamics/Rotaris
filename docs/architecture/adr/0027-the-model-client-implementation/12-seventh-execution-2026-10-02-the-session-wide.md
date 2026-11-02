@@ -4,7 +4,7 @@ Part 12 of 18 of [ADR-0027](../0027-the-model-client-implementation.md), which i
 
 ## Seventh execution — 2026-10-02, the session-wide override followed from every agent's next call (REQ-ORCH-091 a/d, REQ-MONITOR-194)
 
-*The repair of [`a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md`](../../../defects/fixed/a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md).
+*The repair of [`a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md`](../../../archive/defects/a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md).
 Found a defect in the third execution's mechanism.*
 
 The third execution said the session-wide memory is persisted "so a later run of the session never returns to an exhausted

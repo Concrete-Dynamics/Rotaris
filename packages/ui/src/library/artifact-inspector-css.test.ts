@@ -24,7 +24,7 @@ type Element = CascadeElement;
 const { declarations, winner } = cascadeOf(SHEETS);
 
 describe('REQ-LIBRARY-132: the inspector\'s Markdown editor is drawn in the measured monospace face', () => {
-  // docs/defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md: the adopted
+  // docs/archive/defects/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md: the adopted
   // `textarea.input { resize: vertical; font-family: inherit }` (0,1,1) outranked `.artifact-inspector__editor` and `.mono`
   // (0,1,0), so the editor took the dialog's proportional face and a vertical resize grip.
   const preloaded: ArtifactLoaded = { id: 'art_12345678', slug: 'travel-plan', title: 'Travel plan', artifactKind: 'agent_published', status: 'published', producer: 'planner-1', persona: 'planner', edited: false, body: '---\nid: "art_12345678"\n---\n# Travel plan\n\n| a | b |\n|---|---|\n', fallback: false };
@@ -57,7 +57,7 @@ describe('REQ-LIBRARY-132: the inspector\'s Markdown editor is drawn in the meas
 });
 
 describe('an acknowledgement\'s close control stands clear of the inspector\'s Save at every window width', () => {
-  // docs/defects/fixed/an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md: the
+  // docs/archive/defects/an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md: the
   // inspector stood at the window's bottom-right corner with the stack's own 16 px insets (REQ-NOTIFY-012), so the
   // close control (which takes the pointer, REQ-NOTIFY-020) stood over Save's top-right corner: 1319,916 (12×17) over
   // 1270,923 (57×32) at 1360×980. The inspector stands centred, as the design language's dialogs do, with a narrow

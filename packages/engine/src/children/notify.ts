@@ -58,7 +58,7 @@ export function backgroundStartedMessage(started: readonly ChildRow[]): string {
 /**
  * REQ-ORCH-059's open-todo reminder lines: the parent's open plan items, up to the first five, so the parent sees what its
  * own plan still holds as its children finish. None when nothing is open. Missing until 2026-10-07
- * (`docs/defects/fixed/the-completion-notification-carries-no-open-todo-reminder-lines.md`, found ruling OQ-213).
+ * (`docs/archive/defects/the-completion-notification-carries-no-open-todo-reminder-lines.md`, found ruling OQ-213).
  */
 export function openTodoReminderLines(open: readonly string[]): string[] {
   if (open.length === 0) return [];
@@ -197,7 +197,7 @@ export function priorAgentContext(deps: readonly ChildRow[]): string {
  * a hand-off is the one answer the child was delegated to build on, and the routing sentence (`PD-TOOLS-006` revision 8) sends
  * exactly the long answers through it. In the duress live run at 552d346 the architect's 28,330-character answer reached the
  * writer as 4,000 characters and a marker, and the writer wrote 7 of the document's 8 sections from its own reading
- * (docs/defects/fixed/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md).
+ * (docs/archive/defects/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md).
  */
 export function inheritedContext(siblings: readonly ChildRow[]): HandOffBlock {
   if (siblings.length === 0) return { block: '', cuts: [] };
@@ -227,7 +227,7 @@ export const CHILD_REPORT_ARTIFACT_SENTENCE = 'When you end, the run keeps your 
  * (REQ-LIBRARY-097, REQ-LIBRARY-098) — then (5) the inherited-context block (REQ-TOOLS-152), and (6) the task last.
  * `artifactBlocks` arrives in that (3), (4) order. Item (2) has no block here: the verification suite REQ-ORCH-129
  * fills it from is not built. Item (5) was missing until 2026-09-28
- * (`docs/defects/fixed/the-inherited-context-reports-never-reach-the-child.md`).
+ * (`docs/archive/defects/the-inherited-context-reports-never-reach-the-child.md`).
  */
 export function childPayload(workspaceRoot: string, task: string, priorContext: string, artifactBlocks: readonly string[] = [], writeScopes = '', inheritedContext = ''): string {
   const parts: string[] = [];

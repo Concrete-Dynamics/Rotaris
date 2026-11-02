@@ -123,11 +123,11 @@ const endProbe = (log, selector) => { const m = log.match(new RegExp(`capture: p
 const windowsAt = (log, at) => { const m = log.match(new RegExp(`capture: windows-at ${at} → (\\[.*\\])`)); return m ? JSON.parse(m[1]) : null; };
 const results = {};
 // The replica's run-start decline is REQ-SESSION-161's own recovery, read from the code and left as a diagnostic
-// (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
+// (docs/archive/defects/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
 // start"); it met the timed-out item's first launch at a load of 15 on 4 CPUs, before any click. Every other console line still
 // fails a launch. The filter is `renderer-console.mjs`'s, shared with palette-proof since 2026-10-14, and since 2026-10-15 every
 // launch here reads through it, `painted` and `waiting` included, which start a delegating run and read the unfiltered lines
-// until then (docs/defects/fixed/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md).
+// until then (docs/archive/defects/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md).
 const unexpected = unexpectedRendererErrors;
 const expect = (cond, message) => { if (!cond) throw new Error(message); };
 const stateOf = (rowText) => (/(running|waiting|queued|done|failed|cancelled)/.exec(rowText) ?? [])[1] ?? null;
@@ -161,7 +161,7 @@ const s1 = scenario('painted');
   const states6 = probesAt(r.log, 6000, '.agent-table__state-text')?.map((p) => p.text) ?? [];
   // Each child keeps its own place in the scripted client's step list (run-host/scripted-client.ts), so every child holds
   // its own 14 s wait and all three are still running at 6 s. A row settled this early means the children took each
-  // other's steps again (docs/defects/fixed/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md).
+  // other's steps again (docs/archive/defects/the-scripted-clients-wait-prefix-is-spliced-out-of-the-list-every-child-shares.md).
   expect(states6.length === 3 && states6.every((t) => t === 'running'), `state text at 6 s: ${JSON.stringify(states6)}`);
   const tree6 = probesAt(r.log, 6000, '.mission__run-row + .agent-tree .agent-row') ?? [];
   expect(tree6.length === 3, `the tree under the run row had ${tree6.length} rows`);
@@ -239,7 +239,7 @@ const s1c = scenario('todo-list-owed');
 }
 
 // 1d. PD-CONFIG-003 revision 3 (OQ-234, the R-072 consortium's CN1; the repair of
-// docs/defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md): a child its per-agent timeout stops says
+// docs/archive/defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md): a child its per-agent timeout stops says
 // so where its failure shows. The limit is set to 3 s (`runtime.child_timeout`), so the seconds form is what is read here;
 // the minutes forms are pinned by packages/ui/src/agent-timeout.test.ts. Launch A: a child that completed a call (making
 // progress) — selected in the Workspace sidebar, the inspector's line under its unchanged meta line, the tree row's tag on a
@@ -360,7 +360,7 @@ const s1e = scenario('todo-item');
 }
 
 // 1f. REQ-ORCH-089's stalled tag in the narrow rows (the repair of
-// docs/defects/fixed/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md, fin35): the
+// docs/archive/defects/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md, fin35): the
 // timed-out tag of 1d took its own line because beside the state it squeezed the sidebar row's persona onto two lines and
 // scrolled the Mission card sideways; the stalled tag sat in the same nowrap label and the same cell. A child that reads
 // once and then holds its next call silent for 25 s with `child_stall_timeout: 3` is stalled for about 20 s: its sidebar row
@@ -382,7 +382,7 @@ const s1f = scenario('stalled', ['  child_stall_timeout: 3']);
   expect(g.treePersona && g.treePersona.h <= Math.ceil(g.personaLineHeight) + 1, `the sidebar row: persona ${JSON.stringify(g.treePersona)} at line height ${g.personaLineHeight}, main ${JSON.stringify(g.treeMain)}, meta ${JSON.stringify(g.treeMeta)} ${g.treeMetaClass} (the stalled tag squeezed the persona onto two lines)`);
   const t = evalsOf(r.log).find((e) => e.kind === 'stalled-mission');
   expect(t && t.tagText && t.cardScroll[0] <= t.cardScroll[1] && t.tagOwnLine, `the Mission table with the stalled tag: ${JSON.stringify(t)} (the card scrolled sideways, or the tag sat beside the state)`);
-  // The persona cell on one line (docs/defects/fixed/the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md):
+  // The persona cell on one line (docs/archive/defects/the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md):
   // before the repair "coding-agent" read "coding-" over "agent" in a 65 to 71 px column.
   expect(t.persona?.text === 'coding-agent' && t.persona.lines === 1, `the Mission table's persona cell: ${JSON.stringify(t.persona)} (the persona broke over two lines)`);
   expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
@@ -609,7 +609,7 @@ const s4c = scenario('cancel-run-persona');
 }
 
 // 4d. Cancel the run from the Workspace inspector (REQ-MONITOR-127/130/052, OQ-165's reading;
-// docs/defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md): the inspector
+// docs/archive/defects/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md): the inspector
 // following the run-level agent, its Cancel confirmed as "Cancel the run?". The run header and the meta line are read in one
 // snapshot: whenever the header reads `Cancelling…` the meta line reads `cancelling · …`. Before the repair the meta line read
 // the agent vocabulary alone, `running · …`, beside the header's `Cancelling…` until the record at rest arrived.
@@ -807,7 +807,7 @@ const s7 = scenario('settings');
   expect(treeRow?.data?.['data-state'] === settled, `the sidebar tree row: ${JSON.stringify(treeRow)} against ${settled}`);
   // The persona probe reads a painted window: from 6.5 s it waits for the window's first paint (bounded at 5 s) and logs how
   // long it waited. On 2026-10-01, at a load average of about 15, the window painted 1967 and 2093 ms after show — after a
-  // single reading at 6.5 s, which read `[]` (docs/defects/fixed/mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md).
+  // single reading at 6.5 s, which read `[]` (docs/archive/defects/mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md).
   const pName = personaProbesAt(r.log, 6500, '[data-testid="persona-agent-name"]')?.[0]?.text; const pState = personaProbesAt(r.log, 6500, '[data-testid="persona-agent-state"]')?.[0]?.text;
   const paintWait = (selector) => { const m = r.log.match(new RegExp(`capture: persona-probe-at 6500 ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} waited (\\d+) ms for the window's first paint(: not observed)?`)); return m ? { waitedMs: Number(m[1]), painted: m[2] === undefined } : { waitedMs: 0, painted: true }; };
   const probeWait = paintWait('[data-testid="persona-agent-state"]');

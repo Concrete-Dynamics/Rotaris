@@ -11,7 +11,7 @@ projection owner publishes a committed row alone only when it is the last row he
 — one agent's row settling after another agent appended behind it, the coordinator's `wait_for_tasks` settling under
 its child's whole run — with the rows after it (`ProjectionOwner.rowsFrom`, 2026-10-06; the first form published it
 alone and the view dropped every row behind it, H5 of the final duress run:
-`docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md`). Six steps, in order, on
+`docs/archive/defects/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md`). Six steps, in order, on
 every publication:
 
 | step | where | what it does |

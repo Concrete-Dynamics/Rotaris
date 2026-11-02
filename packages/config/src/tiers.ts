@@ -48,7 +48,7 @@ export interface LiveState {
  * (`dispatch.ts`) and keeps the state it held, so no value reaches `resolveMerged` below that the load would reject: a
  * fault there is the files', and `statingFile` can only name a file. Until 2026-10-14 the handover installed the state
  * unchecked, and a live `max_depth: 0` was refused at run start in the name of a scope file that held 4
- * (docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
+ * (docs/archive/defects/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
  * A runtime key outside Tier B is not overlaid, so it is not checked; a slot's empty string leaves the file's value.
  */
 export function liveStateProblems(live: LiveState): readonly Problem[] {

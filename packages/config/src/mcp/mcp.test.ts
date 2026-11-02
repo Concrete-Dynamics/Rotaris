@@ -20,7 +20,7 @@ import { launchedProjectOf, mcpConfigurationForExecutionRoot, resolveMcpConfigur
 
 /**
  * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
- * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ * (docs/archive/defects/unit-tests-leave-their-temporary-directories-behind.md).
  */
 const scratchDirs: string[] = [];
 function scratchDir(prefix: string): string {
@@ -219,7 +219,7 @@ describe('REQ-MCP-082/083/087/088/090 — secrets and the environment', () => {
     expect(readSecretsFile('x', 'global', () => null).value).toEqual([]);
   });
   it('the merge keys a server and a key apart, and its source carries no NUL byte Git would read as binary', () => {
-    // docs/defects/fixed/the-secret-merge-keys-carry-literal-nul-bytes-so-git-treats-their-file-as-binary.md
+    // docs/archive/defects/the-secret-merge-keys-carry-literal-nul-bytes-so-git-treats-their-file-as-binary.md
     const s = (server: string, key: string, scope: 'global' | 'workspace') => ({ server, key, value: `${server}|${key}`, scope });
     const merged = mergeSecrets([s('a b', 'c', 'global'), s('a', 'b c', 'global')], [s('a', 'b c', 'workspace')]);
     expect(merged.map((e) => `${e.server}/${e.key}@${e.scope}`)).toEqual(['a b/c@global', 'a/b c@workspace']);
@@ -243,7 +243,7 @@ describe('REQ-MCP-082/083/087/088/090 — secrets and the environment', () => {
     expect(d.diagnostics[0]).toMatchObject({ severity: 'info', scope: 'process', channels: 'log', key: 'mcp.url-unresolved.web_search.MISSING' });
     expect(d.diagnostics.filter((x) => x.severity === 'warning')).toEqual([]);
     // REQ-CONFIG-465: a disabled entry is unavailable because it is switched off; a resolved key would not change that,
-    // so its line says so and promises nothing (docs/defects/fixed/a-disabled-servers-unresolved-placeholder-line-says-a-key-would-make-it-available.md).
+    // so its line says so and promises nothing (docs/archive/defects/a-disabled-servers-unresolved-placeholder-line-says-a-key-would-make-it-available.md).
     expect(d.diagnostics[0]!.message).toMatch(/could not be resolved/);
     expect(d.diagnostics[0]!.message).toContain("disabled by its configured 'enabled: false'");
     expect(d.diagnostics[0]!.message).not.toMatch(/unavailable until/);
@@ -251,7 +251,7 @@ describe('REQ-MCP-082/083/087/088/090 — secrets and the environment', () => {
     expect(u.diagnostics[0]!.message).toMatch(/unavailable until it is/);
   });
   it('REQ-CONFIG-225: the unresolved-placeholder line names the file that stated the url, or the built-in defaults', () => {
-    // docs/defects/fixed/the-unresolved-placeholder-warning-names-no-configuration-file.md
+    // docs/archive/defects/the-unresolved-placeholder-warning-names-no-configuration-file.md
     const filed = resolveRemoteUrl('srv', 'https://x/?k=${MISSING}', {}, {}, true, '/ws/.rotaris/agents.yaml');
     expect(filed.diagnostics[0]!.message).toContain('mcp srv: the placeholder ${MISSING} in its url, set in /ws/.rotaris/agents.yaml, could not be resolved');
     const shipped = resolveRemoteUrl('web_search', 'https://x/?k=${MISSING}', {}, {}, false);

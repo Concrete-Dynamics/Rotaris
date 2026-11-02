@@ -70,7 +70,7 @@ and what the answer at that gate launches.
   the staleness OQ-106 reads for a later iteration of the same run ("The handoff is read once"), met here by the first
   turn after the resumed iteration; nothing rebuilds the payload for the plan cycle, and the pending tasks the preamble
   lists are what the approved plan releases. The repair of
-  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
   (2026-09-29) keeps this: it adds an execution iteration's own task after the launch content and rebuilds no
   handoff, and a plan cycle is sent no iteration task. *Until that repair this bullet called the staleness the behaviour
   that defect records; the repair left it, so it stands on this reading and the ruling question below.* Measured in
@@ -83,7 +83,7 @@ and what the answer at that gate launches.
   message, which is false after a `partial` close, and after a Continue action, whose last request is an earlier one
   (found by the iteration lane's third review); the behaviour was right and is unchanged.* The same append had made
   every approved prompt a second task, worked twice; that is repaired with it
-  ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../../../defects/fixed/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md)).
+  ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../../defects/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md)).
   The approved run is set up as any run is: the resumed root's persona covered the work already under way (OQ-97), and
   no iteration is open when the plan is decided, so the work after the gate runs as the entry role configured then.
 - **A revise is launched as any revise is.** After this hold the run has closed the resumed iteration, so the revise's

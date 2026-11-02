@@ -21,7 +21,7 @@ cannot be applied answers `{ok: false}` as REQ-MONITOR-005 allows and the *reaso
 
 *Questioned 2026-10-02 (fin10, OQ-188):* reading (a) predates REQ-MONITOR-303, which says keep waiting "resolves the wait as a
 retry and returns the status to `running`" in both variants. The reading stands as built until the owner rules; the gap is
-recorded in [`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../../../defects/fixed/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md),
+recorded in [`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../../../archive/defects/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md),
 with what a retry must then count as since the ladder reads the exclusion before every call (REQ-MONITOR-194).
 
 *Ruled 2026-10-06 (OQ-188, [R-071](../../../product/requests.md#r-071), [`PD-MONITOR-004`](../../../product/directives/pd-monitor-004.md#pd-monitor-004) revision 2),

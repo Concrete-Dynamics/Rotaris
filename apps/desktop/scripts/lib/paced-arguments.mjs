@@ -2,7 +2,7 @@
  * The live run's reading of the `faults-args` launch: the recording proxy paces every streamed piece of a tool call's
  * arguments (its `pace` rule), so one model step streams a `write_file` for longer than the stall threshold, and the
  * product must not call that agent stalled while it streams (REQ-ORCH-089, REQ-MONITOR-119; the repair of
- * `docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). Before the repair the adapter forwarded
+ * `docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). Before the repair the adapter forwarded
  * none of the pieces, and the duress live runs' child was warned stalled 94 s into a 97 s `write_file`.
  *
  * Nothing here is product code. It runs only from the live run.

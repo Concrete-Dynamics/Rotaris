@@ -5,7 +5,7 @@
  * The bundle is built for the ARTIFACT's architecture, never by default for the host's: `uv python install` with the bare
  * version picks an interpreter for the machine uv runs on, so on a Windows ARM64 host it would put an arm64 `python.exe`
  * into the `windows-x64` artifact, and nothing at packaging could tell
- * (`docs/defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`). The target is
+ * (`docs/archive/defects/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`). The target is
  * named by `--target=<platform>-<arch>`; the development tree defaults to the host (to `win32-x64` on a Windows ARM64 host, OQ-401), `package.mjs` passes `win32-x64`. The
  * interpreter is installed by its full uv key, the target's architecture is in the marker and in the pins' hash, and
  * `build-hooks.cjs`'s `checkRuntime` refuses a packaged interpreter whose PE machine field is not the artifact's.
@@ -66,7 +66,7 @@ export function pinsHashInput(pins, recipe, target, closureSha256) {
  * `{ error }` for a requirement that is not `name==version` or carries no hash — a range, a URL or an unhashed pin would
  * let the build resolve again, which is what the lock exists to prevent (REQ-STARTUP-143: the reviewed-exceptions table
  * can never disagree with the build it covers;
- * `docs/defects/fixed/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md`).
+ * `docs/archive/defects/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md`).
  */
 export function parseClosureLock(text) {
   const entries = [];

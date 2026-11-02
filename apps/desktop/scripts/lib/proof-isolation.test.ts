@@ -2,7 +2,7 @@
  * The harness's isolation, composed with the product's own resolution — on every platform, from
  * whichever platform is running the test.
  *
- * `docs/defects/fixed/proof-isolation-is-windows-only-so-a-driven-run-writes-the-users-real-data-directory.md`
+ * `docs/archive/defects/proof-isolation-is-windows-only-so-a-driven-run-writes-the-users-real-data-directory.md`
  * recorded that a driven launch on Linux or macOS ignored the scratch profile and opened its workspace
  * databases under the operator's own `~/.local/share/rotaris/`. The repair names both variable pairs at
  * every launch, and its POSIX half was argued from `dirs.ts` reading exactly those variables rather than
@@ -24,7 +24,7 @@ import { configDirFor, dataDirFor, machineIdFileFor, proofIsolationEnv, scratchH
  * launch's profile is a Windows path and a POSIX launch's a POSIX one. Until fin30 every case here spelled a Windows host's
  * profile for all three platforms, `D:/repo/.proof/…` once POSIX-spelled: a path no POSIX machine resolves, which the
  * product now ignores in `XDG_*` as the XDG Base Directory Specification says, and which `proofIsolationEnv` refuses
- * (`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
+ * (`docs/archive/defects/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
  */
 const WINDOWS_PROFILE = 'D:\\repo\\.proof\\transcript-proof\\profile';
 const POSIX_PROFILE = '/repo/.proof/transcript-proof/profile';
@@ -150,7 +150,7 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     // Each platform is handed the environment ITS launch gets, and the home that launch would run with: on
     // Windows the operator's (HOME is never moved there), on POSIX the scratch home `proofIsolationEnv` sets.
     // `darwin` composes every directory from that home, which is why the copy takes the scratch home too
-    // (`docs/defects/fixed/config-dir-for-answers-the-linux-directory-on-macos.md`).
+    // (`docs/archive/defects/config-dir-for-answers-the-linux-directory-on-macos.md`).
     for (const platform of ['win32', 'linux', 'darwin'] as const) {
       const local = localFor(platform);
       const launched = proofIsolationEnv({ profileRoot: profileFor(platform), local, preferences: preferencesFor(platform), platform });
@@ -163,7 +163,7 @@ describe('proof isolation lands inside the scratch profile on every platform', (
       // And the machine identifier (REQ-SESSION-046), which `sessions-proof` plants into the locks that name this machine.
       expect(machineIdFileFor(local, platform)).toBe(dataLayout(dirs, platform).machineId);
       // And the data directory itself, which the product joins its code-intelligence home to (`main/sentinel.ts`) and
-      // `code-intel-proof` keeps across runs (`docs/defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
+      // `code-intel-proof` keeps across runs (`docs/archive/defects/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
       expect(dataDirFor(local, platform)).toBe(dirs.data);
     }
     // The spelling `code-intel-proof` used everywhere, `<local>/rotaris/data`, is the Windows answer only.

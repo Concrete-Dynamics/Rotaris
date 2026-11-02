@@ -235,7 +235,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     expect(measured).toBeGreaterThanOrEqual(20);
     expect(foreign).toEqual([]);
   }, 60_000);
-  // `docs/defects/fixed/processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched.md`: the
+  // `docs/archive/defects/processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched.md`: the
   // empty-argument-vector rule above reads a program run with argc 0 the way it reads an exiting shell, on the kernels where
   // its `cmdline` reads empty. `processIdentity`'s comment states the reach by kernel; this pins it on the kernel that runs
   // the suite: before 5.18 such a program reads no identity (unwatched), from 5.18 it reads one empty argument (watched).
@@ -265,7 +265,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     }
   }, 20_000);
   /*
-   * docs/defects/fixed/the-argc-0-identity-test-reads-cmdline-before-the-exec-has-set-its-arguments.md: the case above read
+   * docs/archive/defects/the-argc-0-identity-test-reads-cmdline-before-the-exec-has-set-its-arguments.md: the case above read
    * `cmdline` once, as soon as `exe` named `cat`, and failed once in a loaded gate on kernel 6.18 with `expected '' to be '\0'`.
    * The kernel installs the new image (and with it `exe`) in `begin_new_exec`, and sets the bounds of its argument area later,
    * when the loader lays out the new stack; a read between the two reads an empty `cmdline`. The wait reads past it.
@@ -285,7 +285,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
   it.runIf(process.platform !== 'linux')('OQ-144: off Linux there is no /proc, and no identity to watch', () => {
     expect(processIdentity(process.pid)).toBeNull();
   });
-  // docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md: ConPTY writes a row the screen
+  // docs/archive/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md: ConPTY writes a row the screen
   // wraps as the row, a hard line end, a move back to the row's last column and that column's character again; the frame
   // scan rejoins it, and nothing else that looks like it.
   it('REQ-TOOLS-128: ConPTY\'s wrapped rows are rejoined for the marker scan, the repainted character once', () => {
@@ -306,7 +306,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
   it('the wrapper brackets the command with the two markers and recovers the exit status', () => {
     const w = wrapCommand({ kind: 'powershell', file: 'pwsh' }, 'git status', 'S', 'E');
     // One line or many, the command is carried as base64 into a guarded script block between the two markers
-    // (docs/defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md); it was spliced raw
+    // (docs/archive/defects/a-single-line-powershell-command-that-throws-loses-its-end-frame.md); it was spliced raw
     // into the line, `Write-Output 'S'; git status; Write-Output ('E:'…`, until 2026-10-15.
     expect(w).toMatch(/^\$global:LASTEXITCODE = \$null; \$global:E_ok = \$true; Write-Output 'S'; try \{ \$global:E_src = /);
     // The command alone is carried, parsed once by itself and then run with the flag's line after it.
@@ -490,7 +490,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     }
   });
   /*
-   * docs/defects/fixed/at-the-20-column-floor-an-interrupted-calls-poll-intermittently-carries-the-next-calls-wrapper-echo.md:
+   * docs/archive/defects/at-the-20-column-floor-an-interrupted-calls-poll-intermittently-carries-the-next-calls-wrapper-echo.md:
    * after C-c, dash prints a line end and its prompt (`\n# `) when it takes the interrupt, and the line discipline echoes
    * the next call's wrapper as it arrives. When the wrapper is written first, the echo begins on the `^C` row and the
    * prompt lands INSIDE it — measured at 20 columns, before the end statement's closing `"`. The joined match no longer
@@ -616,7 +616,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     expect(endOfExit(null, 'SIGTERM', none)).toEqual({ status: 'failed', exitCode: 143 });
     expect(endOfExit(null, 'SIGSEGV', new Set(['SIGINT']))).toEqual({ status: 'failed', exitCode: 139 });
   });
-  // docs/defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md: at the soft pause `execute` removed
+  // docs/archive/defects/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md: at the soft pause `execute` removed
   // the call's listener, awaited the emulator's write of what it held, and only then opened the paused call that `onData`
   // feeds. A chunk the PTY delivered inside that await reached neither, so no poll returned it; a chunk carrying the
   // command's own end frame resolved the already-settled call instead, and the paused call read "still running" with no
@@ -699,7 +699,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     await pwsh.s.run('$true', { timeoutMs: 5_000 });
     expect(pwsh.lines().every((w) => w.startsWith('$global:LASTEXITCODE'))).toBe(true);
   });
-  // docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md (live-run M1).
+  // docs/archive/defects/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md (live-run M1).
   it('REQ-TOOLS-096 (live-run M1): a POSIX command too long for one PTY line is staged in a script the line dot-sources; a short one keeps its line', async () => {
     const session = (backend: ShellBackend) => {
       const writes: string[] = [];
@@ -727,7 +727,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     const line = posix.lines()[before]!;
     expect(Buffer.byteLength(line)).toBeLessThanOrEqual(POSIX_LINE_BYTES);
     // The script's directory is the host's temporary directory, spelled with backslashes when this pure case runs on a
-    // Windows host (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+    // Windows host (`docs/archive/defects/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
     expect(line).toMatch(/^printf '%s\\n' '__rot_[0-9a-f]+_s'; command eval '\. '\\''[^']+[\\/]1\.sh'\\'''; printf '__rot_[0-9a-f]+_e:%s\\n' "\$\?"\r$/);
     const file = /'\\''([^']+[\\/]1\.sh)'\\''/.exec(line)![1]!;
     // The script holds the command as written, after the line that removes the script; only its user may read it.
@@ -760,7 +760,7 @@ describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-sta
     expect(snap?.env['MULTI']).toBe('first\nsecond');
   });
 
-  // docs/defects/fixed/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md: the capture is read off
+  // docs/archive/defects/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md: the capture is read off
   // an emulated screen of the session's own width, which the display may narrow to 20 columns (REQ-TOOLS-128). Each row
   // is `__rot_b64__:` and 64 characters, 76 columns, so below 76 every row wraps; the parse kept only the rows that began
   // with the marker, and at 40 columns fin15 measured three entries back, PATH and HOME gone and one name spliced from two.
@@ -810,7 +810,7 @@ describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-sta
   });
 });
 
-// docs/defects/fixed/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md: PowerShell's capture printed
+// docs/archive/defects/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md: PowerShell's capture printed
 // one plain row per variable and the parse rejoined a row the screen wrapped with a newline, so a `Path` wider than the
 // screen came back with newlines in it and a directory wider than the screen was cut at its edge. It now prints the POSIX
 // capture's encoded rows. No PowerShell runs on this host: `powershellCapture` prints what the command's loop prints
@@ -818,7 +818,7 @@ describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-sta
 // and the parse is read off the emulated screen at every width the display may give it. The Windows run is owed.
 // Run 2026-10-15 on Windows 11 ARM64 (pwsh 7.6.6 and 5.1): the real-PTY case "at every width from 20 to 240 columns a
 // hard-timeout reset restores PowerShell's directory and environment byte for byte" below; below 34 columns no call ended
-// until the same day's repair (docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
+// until the same day's repair (docs/archive/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
 describe('PD-TOOLS-001: the PowerShell shell-state capture survives a screen that wraps (REQ-TOOLS-104, REQ-TOOLS-128)', () => {
   const ps: ShellBackend = { kind: 'powershell', file: 'pwsh' };
   const powershellCapture = (cwd: string, env: Readonly<Record<string, string>>): string => {
@@ -1131,7 +1131,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(existsSync(marker)).toBe(false);
     } finally { await m.dispose(); rmSync(dir, { recursive: true, force: true }); }
   }, 30_000);
-  // docs/defects/fixed/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md: every reset path
+  // docs/archive/defects/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md: every reset path
   // re-applied PD-TOOLS-001's snapshot except the window's kill, which only finished the call; the next call read the
   // variable empty and stood in the spawn directory, and the kill's detail named no restore and no loss.
   it('PD-TOOLS-001, REQ-SHELL-092: a kill from the terminal window re-applies the directory and the exported variables, and the observation names the loss and the restore', async () => {
@@ -1155,7 +1155,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect((output(next.text) ?? '').split('\n').map((l) => l.trim())).toEqual(['[kept]', sub]);
     } finally { await m.dispose(); }
   }, 60_000);
-  // docs/defects/fixed/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md: `killActive` acted
+  // docs/archive/defects/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md: `killActive` acted
   // only on a call still `running`, a soft-paused command is not one, and the stream dropped the answer, so the window's kill
   // answered ok while the shell, the command and its grandchild all ran on, and the next call queued behind them to its cap.
   describe('REQ-SHELL-092, REQ-TOOLS-098: the window\'s kill of a soft-paused command', () => {
@@ -1351,7 +1351,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // before this one leaves `sleep 3` running soft-paused in this shared session, and a call that named none queued
     // behind it for ~1.45 s against the 1.5 s no-output window. Under load it paused, the product never saw it
     // complete, and the reset restored an older snapshot without the variable: the `[]` of
-    // docs/defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md (OQ-134, pinned below).
+    // docs/archive/defects/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md (OQ-134, pinned below).
     const set = await t.execute(args({ command: SH.setVar('ROTARIS_GONE', 'set'), timeout: 15 }), ctx());
     expect(diag(set.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
     const r = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx());
@@ -1405,7 +1405,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     } finally { await m.dispose(); rmSync(marker, { force: true }); }
   }, 60_000);
 
-  // docs/defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md: the
+  // docs/archive/defects/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md: the
   // OQ-38 case above types `x` and `y` with no Enter while its `sleep 3` runs soft-paused. The line discipline held them,
   // the next wrapped line was appended to them, `xyprintf: not found` replaced the start marker, and with no start marker
   // the capture kept the whole screen — `done-later`, the paused call's own `__rot_…_e:0`, the shell's error — while the
@@ -1543,7 +1543,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     } finally { await m.dispose(); }
   }, 60_000);
 
-  // docs/defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md: REQ-TOOLS-098's advice is to poll
+  // docs/archive/defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md: REQ-TOOLS-098's advice is to poll
   // or to interrupt with `C-c` and `is_input=true`. The interrupt makes an interactive `sh` abandon the rest of the wrapper's
   // line, so the paused call's end frame never prints, and before the repair nothing else in the stream said the line was
   // done: every poll between the interrupt and the next command read −1, `soft_pause`, "The process may still be running",
@@ -1948,7 +1948,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       await wideEchoCase(t);
     } finally { await m.dispose(); }
   }, 90_000);
-  // docs/defects/fixed/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md, through a real PTY: below
+  // docs/archive/defects/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md, through a real PTY: below
   // 76 columns the snapshot's rows wrap, and the reset restored a spliced environment and named it restored.
   it.skipIf(PS)('PD-TOOLS-001, REQ-TOOLS-128: at 20 and 40 columns a hard-timeout reset restores the directory and every exported variable whole', async () => {
     const dir = join(root, 'narrow-cwd');
@@ -1998,7 +1998,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const nonAscii = 'héllo-ü-日本-€';
     const asCode = "O'Brien $(whoami) `tick";
     // 20 and 33 too since 2026-10-15: below 34 columns every PowerShell call ran to its hard cap until ConPTY's wrapped rows
-    // were rejoined for the frame match (docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
+    // were rejoined for the frame match (docs/archive/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
     for (const cols of [20, 33, 34, 40, 64, 75, 76, 77, 120, 240]) {
       const { m, t } = await backendSession(shell!, { cols, env: { ROTARIS_SPAWN_ONLY: 'present' } });
       try {
@@ -2109,7 +2109,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(wrapCommand({ kind: 'powershell', file: 'pwsh' }, 'git status', 'S', 'E')).toContain('FromBase64String');
   }, 60_000);
 
-  // docs/defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md (Windows ARM64 session B3, 2026-10-15): on
+  // docs/archive/defects/a-single-line-powershell-command-that-throws-loses-its-end-frame.md (Windows ARM64 session B3, 2026-10-15): on
   // one line, a terminating error abandoned the rest of the wrapper's line and a parse error ran none of it, so the end
   // frame never printed and a command that failed at once read as the hard timeout, 124, with its session reset.
   it.runIf(PS)('REQ-TOOLS-097/179: a single-line command that throws or does not parse ends with exit 1 and its own error, never at the hard cap, and the session keeps its state', async () => {
@@ -2147,7 +2147,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(diag(kept.text)['session_reinitialized']).not.toBe(true);
   }, 60_000);
 
-  // docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md (live-run M1, 2026-10-06):
+  // docs/archive/defects/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md (live-run M1, 2026-10-06):
   // the POSIX wrapper was ONE physical line of any length, and the shell reads it through the PTY's canonical-mode line
   // discipline, which keeps 4,095 characters of a line on Linux (termios(3)) and 1,024 on macOS. A 3,700-character heredoc
   // wrapped to about 4,304 bytes reached the shell cut with its `'%b'` quote open: the shell stood on its continuation
@@ -2283,7 +2283,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const rows = (output(measured.text) ?? '').split('\n').map((l) => l.trim()).filter((l) => l !== '');
     // `Format-List` pads to its longest property: pwsh 7 lists `StandardDeviation`, Windows PowerShell 5.1 does not, so the
     // width is the shell's and the rows are what is under test
-    // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+    // (`docs/archive/defects/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
     expect(rows[0]).toMatch(/^Count +: 2$/);
     expect(rows.some((r) => /^Property +:$/.test(r))).toBe(true);
     // REQ-TOOLS-113's checks read the cleaned text, never the echoed command line.
@@ -2627,7 +2627,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1;\n');
     // The run's shape: `git diff --no-index` with differences exits 1 carrying the payload.
     // Windows PowerShell 5.1 has no `||`, and a line it cannot parse is now its own exit-1 parse error
-    // (docs/defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md), so PowerShell's spelling
+    // (docs/archive/defects/a-single-line-powershell-command-that-throws-loses-its-end-frame.md), so PowerShell's spelling
     // is the `;` both shells read; the second diff's status is the call's either way.
     const twice = PS ? 'git diff --no-index -- a b; git diff --no-index -- a b' : 'git diff --no-index -- a b || true; git diff --no-index -- a b';
     const r = await t.execute(args({ command: twice, timeout: 15 }), ctx());
@@ -2716,10 +2716,10 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // Sent the instant `start` returned, 38 of 200 such sessions survived under load (0 of 150 under `bash`, 0 of
     // 150 with `exec`); gated on the marker, with `exec`, none does. The product's delivery reaches every process of
     // the group and reports it sent in every one of those runs
-    // (docs/defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md). What the window cost
+    // (docs/archive/defects/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md). What the window cost
     // the product outside this case is repaired by re-delivery to a member that never received the signal, and is
     // pinned in background.test.ts (OQ-135;
-    // docs/defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
+    // docs/archive/defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
     const command = PS ? `Write-Output 'up'; ${SH.sleep(30)}` : `printf 'up\\n'; exec sleep 30`;
     const started = await t.execute(args({ command, background: true }), ctx());
     const id = /ts_[0-9a-f]{8}/.exec(started.text)![0];
@@ -2931,7 +2931,7 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     void FakeClock;
   });
 
-  // docs/defects/fixed/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md: a pwsh installed from its MSIX
+  // docs/archive/defects/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md: a pwsh installed from its MSIX
   // package (winget's choice on Windows 11 ARM64, measured 2026-10-15) is reached through an App Execution Alias, a reparse
   // point Node cannot `stat` (EACCES) though it starts when run, and `findShell` passed over it to Windows PowerShell 5.1.
   // Run where this host has such an alias; skipped elsewhere, since no test can make one.
@@ -2974,7 +2974,7 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
 
   // Live-run finding Q1 (552d346): a `send_signal` sent with `background: true` was read as a new spawn and refused as a missing
   // command, twice, because the description named only `query` / `kill` and never said how a session action is sent
-  // (docs/defects/fixed/a-session-action-sent-with-background-true-is-refused-as-a-missing-command.md).
+  // (docs/archive/defects/a-session-action-sent-with-background-true-is-refused-as-a-missing-command.md).
   it('REQ-TOOLS-110 (live-run Q1): the description says a session action is sent with session_id and background false or absent', () => {
     for (const d of [terminalDescription({ kind: 'posix', file: '/bin/sh' }), terminalDescription({ kind: 'powershell', file: 'pwsh.exe' })]) {
       for (const action of ['`query`', '`kill`', '`send_input`', '`send_signal`', '`list`']) expect(d).toContain(action);

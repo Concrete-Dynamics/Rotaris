@@ -21,7 +21,7 @@ export interface InstructionPolicy {
  * states, or the fatal report when it does not load. A fatal load leaves the configuration UNLOADED ("the load fails as a
  * whole rather than falling back to a default"), so a reader answers the report and never the shipped defaults, which
  * both readers below returned until 2026-10-14
- * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
+ * (docs/archive/defects/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
  */
 export type SavedRead<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly fault: string };
 
@@ -37,7 +37,7 @@ export const SKILLS_CONFIGURATION_UNLOADED = 'The workspace configuration did no
 /**
  * OQ-279: what `state` and `forceLoad` throw when the read they make of the saved `skills:` section does not load — carrying the
  * fault, so `dispatch.ts` answers the request with the refusal from THIS read, whatever an earlier read found
- * (docs/defects/fixed/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md).
+ * (docs/archive/defects/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md).
  */
 export class SkillsUnloaded extends Error {
   constructor(readonly fault: string) {
@@ -458,7 +458,7 @@ export class SkillHost {
    * files and they had drifted apart: the retrospective held its own copy of the rule — two names at the
    * workspace root, no policy at all — so a file the user had switched off was still read into an analysis
    * and could still be proposed as an edit, while injection honoured every switch
-   * (`docs/defects/fixed/the-retrospective-reads-instruction-files-the-user-switched-off.md`). Whether an ANALYSIS
+   * (`docs/archive/defects/the-retrospective-reads-instruction-files-the-user-switched-off.md`). Whether an ANALYSIS
    * is bound by a switch stated over what agents are GIVEN was **OQ-65**, ruled 2026-10-06 (R-071) as built: it is.
    *
    * FALSIFIED 2026-10-13, kept beside its replacement: "One computation, both callers." The retrospective was handed

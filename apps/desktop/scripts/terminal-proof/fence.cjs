@@ -5,7 +5,7 @@
  * that can overtake it. Until 2026-10-01 each input in the proof was followed by a FIXED pause and the state read after it,
  * and on a loaded host the read could come first: `wheel.subNotch`, `selection.text` and `selection.emptyCopyFails` went
  * red at random, a race in the proof and not a fault in the grid
- * (`docs/defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`). An input fence waits
+ * (`docs/archive/defects/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`). An input fence waits
  * instead until the page has COUNTED the event, which the page does in the capture phase of the same dispatch the grid
  * handles it in, and a fence that times out is recorded rather than read as a pass.
  */

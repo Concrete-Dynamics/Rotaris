@@ -19,7 +19,7 @@
  *
  * A name passed as a variable is accepted only where PASS_THROUGH names the file and the expression, each with its reason.
  * Acceptance finding A29 (2026-09-30) is why this exists:
- * docs/defects/fixed/the-run-writes-timeline-events-outside-its-closed-vocabulary.md.
+ * docs/archive/defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';

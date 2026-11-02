@@ -49,9 +49,9 @@ canonical name and the entry persona it runs as, and the persona and canonical n
 `entryRootsOf` reads), at every depth. The surfaces give the run-level agent every row and artifact carrying a root's name
 (§3, `SessionRecord.entryRoots`), so a child carrying one was drawn as both; until this only the root's direct children were
 kept off its canonical name
-([`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../../../defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md)).
+([`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../../../archive/defects/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md)).
 A root named like an earlier child is still drawn as both
-([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../../defects/fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
+([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../../archive/defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
 
 **The eleventh state (PD-ORCH-005).** `CHILD_TRANSITIONS` admits `paused` from every non-terminal state and leaves it
 for exactly the state the child resumes into (`RESUME_STATES`, `resumeStateFor`: where it waited, `queued` again for a
@@ -84,7 +84,7 @@ settle in `execute` writes (REQ-ORCH-098): `child_end`, `child_result`, `child_c
 Since 2026-09-30 a child the scheduler settles without an execution — one the cascade blocks, or one the finalize sweep
 cancels, started or not — is torn down too: `SchedulerDeps.teardown` writes the same three entries through
 `writeTeardown`, after its report and before the terminal callbacks (REQ-ORCH-098; OQ-152; the repair of
-[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md)).
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../../archive/defects/a-child-that-never-started-gets-no-teardown-timeline-entries.md)).
 Since 2026-10-01 so is a child every other path settles `cancelled` — the user's cancel of one child and its live
 descendants (`IterationChildren.cancel`, after each one's `child_user_cancelled`), the cancel of a paused child at rest
 (`Sessions.cancelPausedAtRest`), "continue without them" (`Run.cancelPausedAgents`), the crash record of an accepted
@@ -92,7 +92,7 @@ cancel (`recordAcceptedCancel`) and the stale-child settle (`settleStaleChildren
 with the report it stored. `writeTeardown` lives in `children/ledger.ts` beside `storeChildReport`, and takes its time from
 the writer's clock (`SessionWriter.wall`), because the last two run from the store alone. A cancelled child's execution
 that returns later finds its record terminal and writes none, so each end is torn down once (the repair of
-[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../../defects/fixed/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
+[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../../archive/defects/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
 
 **A settle's hook runs in line (REQ-HOOKS-076 / REQ-HOOKS-080; repaired 2026-09-29).** Both settles, the one at the end
 of `execute` and `settleRaised`, make the terminal move and write the teardown. Then they run the `child_completed` hook
@@ -109,7 +109,7 @@ settles as executions. So the hook finishes before the parent is given the repor
 `session_end`. Before this repair, a normal end did not wait for a settle: a parent took a child's report as soon as it
 found the child ended. The repair's first form waited only on the settles running when each wait began, so a second
 child that ended during the wait was taken while its hook ran (found by the verifier's fifth round). Both are recorded
-in [`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](../../../defects/fixed/a-child-completed-hook-can-finish-after-its-iteration-ends.md).
+in [`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](../../../archive/defects/a-child-completed-hook-can-finish-after-its-iteration-ends.md).
 
 **A child settled outside its execution fires the hook too (REQ-HOOKS-003 / REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-053 /
 REQ-ORCH-133 / PD-ORCH-005 clause 6; repaired 2026-09-30).** `IterationChildren` listens to every terminal move the
@@ -144,13 +144,13 @@ ended — ends `cancelled` and fires no `child_completed`, which would follow `s
 built reading; the repair of `a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`, 2026-10-01).
 The explicit cancel's sweep is awaited (`completionsSettled`) before `outlast`,
 bounded only by each hook's timeout. The note is
-[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md).
+[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../../archive/defects/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md).
 Since 2026-09-30 both settles end through one tail, `IterationChildren.afterTerminal`, which tells the scheduler in a
 `finally`: a raise out of the teardown or the hook port no longer leaves a parent waiting on a child that has ended
 (REQ-ORCH-048, REQ-TOOLS-156). A raise out of the hook port reduces to a warning and the settle goes on (REQ-HOOKS-079);
 one out of the teardown is re-raised after the scheduler is told, and `settleRaised`, finding the child terminal, only
 warns. Recorded in
-[`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](../../../defects/fixed/a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md).
+[`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](../../../archive/defects/a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md).
 
 **The stall watch and the corrective message (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112;
 `children/stall.ts`; OQ-127).** Each attempt of a child's execution runs a `StallWatch` on the clock port. Its
@@ -160,7 +160,7 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   among them (`tool-input`, since 2026-10-07), which is output for `quietFor` as the text, the reasoning and the complete
   call are (`OUTPUT_EVENTS`): before it a child streaming a long `write_file` was warned stalled and given a `stall` issue
   while the provider streamed at full speed (the duress live runs at `c2fdd6a` and `c2a9444`; the repair of
-  [`a-child-streaming-a-long-tool-call-is-reported-stalled.md`](../../../defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md));
+  [`a-child-streaming-a-long-tool-call-is-reported-stalled.md`](../../../archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md));
 - each tool call's start and end (`onToolStarted`, `onToolCompleted`);
 - every turn the run starts for the child (the `turn` closure in `execute`): its payload or record, its children's
   reports, a re-prompt, the corrective message — so a wait on its own children is not counted in the silence
@@ -168,7 +168,7 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
 - the end of each of those turns (`betweenTurns`, when the turn's promise settles): until the run starts the next, the
   child is waiting on its own children or ending, and an evaluation counts no silence — no stall, no wait on tools, the
   callback *not stalled* — so a wait on its own children is not reported as its stall (OQ-155, ruled as built in `PD-MONITOR-005`; the repair of
-  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)).
+  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../../archive/defects/a-child-waiting-on-its-own-children-is-reported-stalled.md)).
   Each child it waits on is watched by its own watch;
 - the start of an execution resumed into waiting (PD-ORCH-005 clause 4, `execute`, as the watch is armed): the child
   takes no step until a child of its own reports, so it is between its turns from the start. (Corrected 2026-09-30: the
@@ -176,7 +176,7 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   silence.)
 - each wait the run itself holds the agent in between two model steps (`StallWatch.imposedWait`, through
   `TurnDeps.onImposedWait` and `LadderDeps.imposedWait`; OQ-173, ruled as built in `PD-MONITOR-005`; the repair of
-  [`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../../../defects/fixed/a-provider-wait-or-a-compression-is-counted-as-a-stall.md),
+  [`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../../../archive/defects/a-provider-wait-or-a-compression-is-counted-as-a-stall.md),
   2026-10-01): `resilientStep`'s transient or validation backoff and its suspended wait on a provider limit, and a
   context compression's own model call, automatic or on a rejection (`runTurn`'s `compressing`). While one is held, an
   evaluation past the threshold reports the wait and no stall — the callback *not stalled* — and its release restarts the
@@ -212,7 +212,7 @@ finacc3 finding F11). *(Until 2026-10-06 every one of these lines went through
 were ruled together that day.)*
 
 Its per-evaluation callback reaches the host (REQ-ORCH-089, REQ-MONITOR-119/120/122; OQ-153; the repair of
-[`a-stalled-child-is-never-shown-stalled.md`](../../../defects/fixed/a-stalled-child-is-never-shown-stalled.md), 2026-09-30):
+[`a-stalled-child-is-never-shown-stalled.md`](../../../archive/defects/a-stalled-child-is-never-shown-stalled.md), 2026-09-30):
 `IterationChildren.stallEvaluated` keeps the silence of a stalled evaluation, else null, beside the agent's tool activity
 (`AgentActivity.stalled`), and `ProjectionOwner.refreshRecord` republishes the record whenever the figure changes — at every
 evaluation of a stall, and once at its recovery. The figure is `AgentRecord.stalledSeconds`, which the agent trees, the

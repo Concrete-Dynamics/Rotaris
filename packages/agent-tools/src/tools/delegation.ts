@@ -87,7 +87,7 @@ export interface DelegationPort {
  * relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into
  * those paths with write_file or haet_edit." It made the task the condition and never the persona, and in the duress live run
  * at 552d346 the coordinator gave `architect` a scope for `docs/decisions.md` by that habit (#92, refused in 5 ms; finding V2,
- * docs/defects/fixed/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md).
+ * docs/archive/defects/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md).
  */
 export const WRITE_SCOPE_SENTENCE = 'Work that writes files goes to a persona whose entry above writes workspace files; give that child write_scope: path globs relative to the workspace root (for example src/api/**); while the child runs, no other agent of this run may write into those paths with write_file or haet_edit. A write_scope given to any other persona is refused and nothing is started.';
 
@@ -106,7 +106,7 @@ export const HAND_OFF_SENTENCE = `depends_on and inherited_context each carry th
  * artifacts. Fixed, naming no persona; rendered only where the caller's run holds an artifact store, since a run without one keeps
  * no report artifact. Before it nothing the coordinator was offered said so, and in the default live run at 3c03287 it briefed a
  * codebase-analyst "Publish your findings as an artifact" (d0c3a7f0 #5), whose child invented `artifact_write` (#10, finding F10,
- * docs/defects/fixed/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md).
+ * docs/archive/defects/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md).
  */
 export const REPORT_ARTIFACT_SENTENCE = 'When a child ends, the run keeps its report as an artifact of kind child_report, which artifact_list shows and attach_artifacts hands on; ask a child for its findings in its report, and ask it to publish an artifact only where its entry says it publishes artifacts.';
 

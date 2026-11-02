@@ -40,7 +40,7 @@ export const app = join(repo, 'apps', 'desktop');
  * No proof workspace under the checkout's `.proof/` reads the enclosing repository. A proof that makes its workspace a plain
  * directory there and gives it no repository of its own left the app's git discovery to climb into the checkout the proof
  * runs in, so its Git view and status strip read that checkout's branches, worktrees and diffs — another plan's, on a host
- * shared by parallel plans (`docs/defects/fixed/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`).
+ * shared by parallel plans (`docs/archive/defects/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`).
  *
  * The bar is a `.git` FILE at `.proof/` naming no repository: git's discovery stops at the first `.git` it meets, and one that
  * names nothing answers "not a git repository" (exit 128), exactly what a workspace with no repository above it answers. A
@@ -97,7 +97,7 @@ export function findDatabases(root) {
 /**
  * A path in POSIX spelling whichever separator it was written with. Splitting on the HOST's `sep` left a
  * Windows-spelled path untouched on Linux, which is why `proof-isolation.test.ts` — written to be decidable on any
- * host — could only pass on Windows (`docs/defects/fixed/the-proof-isolation-test-passes-only-on-a-windows-host.md`).
+ * host — could only pass on Windows (`docs/archive/defects/the-proof-isolation-test-passes-only-on-a-windows-host.md`).
  */
 function toPosix(path) {
   return path.split(/[\\/]/).join(posix.sep);
@@ -110,7 +110,7 @@ function toPosix(path) {
  * `<LOCALAPPDATA>/rotaris/data` on win32 and `<XDG_DATA_HOME>/rotaris` — no `data` segment — everywhere
  * else, and `dataLayout` puts `workspaces` under whichever it got. Three scripts spelled the Windows
  * answer as a literal and so could only find a store on Windows
- * (`docs/defects/fixed/the-packaged-load-check-reads-its-store-at-a-windows-shaped-path.md`).
+ * (`docs/archive/defects/the-packaged-load-check-reads-its-store-at-a-windows-shaped-path.md`).
  *
  * On `darwin` the product reads neither variable pair: it composes every directory from the home directory
  * (`~/Library/Application Support/rotaris`, and `data` below it), so the answer there is rooted at the scratch
@@ -140,7 +140,7 @@ export function tokensDirFor(local, platform = process.platform, home = scratchH
  * location the store lives in") below `local`, by the same copied rule. `sessions-proof` read it at the Windows spelling
  * `local/rotaris/data/machine-id` on every platform. On Linux the app writes `<XDG_DATA_HOME>/rotaris/machine-id`, so
  * planting a lock that names this machine crashed with ENOENT, and `repair-all` and every launch after it went
- * unmeasured (`docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
+ * unmeasured (`docs/archive/defects/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
  */
 export function machineIdFileFor(local, platform = process.platform, home = scratchHomeFor(local)) {
   return dataSubdirFor(local, 'machine-id', platform, home);
@@ -156,12 +156,12 @@ export function machineIdFileFor(local, platform = process.platform, home = scra
  * `home` is the scratch home the launch was given. The macOS answer is composed from it and from nothing else,
  * because the product reads no `XDG_*` variable there; until 2026-09-28 this copy gave `darwin` the `XDG` answer,
  * a directory the product never reads on macOS
- * (`docs/defects/fixed/config-dir-for-answers-the-linux-directory-on-macos.md`). A caller that hands its launch a
+ * (`docs/archive/defects/config-dir-for-answers-the-linux-directory-on-macos.md`). A caller that hands its launch a
  * home of its own passes the same one here; one that does not takes the default `proofIsolationEnv` sets.
  *
  * The Windows answer moved with the product's on 2026-09-29: `resolveUserDirs` had spelled it `rotaris\config`, a
  * name REQ-CONFIG-001 never spells, and this copy followed it
- * (`docs/defects/fixed/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
+ * (`docs/archive/defects/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
  */
 export function configDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
   if (platform === 'win32') return win32.join(local, 'rotaris', 'rotaris');
@@ -175,7 +175,7 @@ export function configDirFor(local, platform = process.platform, home = scratchH
  * `<XDG_DATA_HOME>/rotaris`. For a location the product joins to it directly rather than through `dataLayout` — the
  * code-intelligence home (`src/main/sentinel.ts`). `slice-proof` and `code-intel-proof` spelled the Windows answer on
  * every platform
- * (`docs/defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
+ * (`docs/archive/defects/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
  */
 export function dataDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
   if (platform === 'win32') return win32.join(local, 'rotaris', 'data');
@@ -288,11 +288,11 @@ export function launchOptions({ local, preferences, home, extra = {} }) {
  * the path short whatever the profile's depth. The product reads this variable for the claim's socket and for
  * nothing else, so nothing but the socket moves (`socketDirectoryCandidates`, `packages/platform/src/instance.ts`).
  * Until fin30 this comment said "the product never reads this variable", which was untrue: the claim has read it
- * since 2026-09-19 (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
+ * since 2026-09-19 (`docs/archive/defects/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
  * Since fin30 the product also falls back on its own, to a private directory below the temporary directory (since
  * OQ-248, 2026-10-13, one each claim attempt makes and removes, `rotaris-XXXXXX`), when neither the runtime directory nor
  * the data directory can hold the socket
- * (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`), so this variable is no longer what
+ * (`docs/archive/defects/a-deep-data-directory-leaves-the-launch-windowless.md`), so this variable is no longer what
  * makes a deep profile launchable; it still keeps each profile's socket in a directory of that profile's own, and
  * `workspace-proof`'s scenario 13b takes it away to drive the fallback.
  */
@@ -307,7 +307,7 @@ export function proofIsolationEnv({ profileRoot, local, preferences, home, platf
   // rather than where this harness's directory rules look. A launch runs on the host that plans it, so its profile is
   // that host's own absolute path; one spelled for another host (`D:/repo/.proof/…` for a Linux launch, which
   // `proof-isolation.test.ts` once modelled) is refused here, loudly, instead
-  // (`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
+  // (`docs/archive/defects/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
   if (platform !== 'win32' && !posix.isAbsolute(data)) {
     throw new Error(`proofIsolationEnv: a ${platform} launch reads XDG_DATA_HOME, and ${data} is not an absolute POSIX path`);
   }

@@ -197,7 +197,7 @@ session starts, the columns govern again. The repair rebuilds `summary.md`, whic
 are never written by the repair. **Built 2026-10-06 (fin20):** `sessionOutcomeOf` and `recoveryEntryOf`
 (`packages/engine/src/run/summary.ts`), read by `toSessionRecord` and `renderSummary`; the rebuild in `Sessions.repairOne`;
 cases in `run/summary.test.ts` and `session-actions.test.ts`; `pnpm sessions-proof`'s repair reads the repaired session's `summary.md`. Noticed while building it, and recorded open:
-[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../../../defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md),
+[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../../defects/summary-md-carries-none-of-the-sections-its-requirement-lists.md),
 repaired 2026-10-06 by fin22: `summary.md` carries REQ-SESSION-140's sections, the Outcome block standing after the stop
 reason, before Metrics, and every rebuild (a run's, a continuation's, a repair's) reads the outcome through `summaryFactsOf`.
 

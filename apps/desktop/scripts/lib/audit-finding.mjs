@@ -6,7 +6,7 @@
  * its relation's own `kind` (`containment`, `align-x`, `schema`, …); spreading it after the sweep's kind once filed a
  * failing contract under that relation in `report.json` and in `ui-review`'s `manifest.json`, where a failing
  * `containment` contract read as the whole-document `CONTAINMENT` sweep but for case
- * (docs/defects/fixed/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md). The measured detail is
+ * (docs/archive/defects/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md). The measured detail is
  * spread first, so the sweep's kind, the view and the size always win; a detail's own `kind` moves to `relation`.
  *
  * @param kind the sweep that found it

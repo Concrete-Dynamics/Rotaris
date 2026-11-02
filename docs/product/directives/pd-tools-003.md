@@ -42,7 +42,7 @@ banner containing `failed` in any casing still warns through the banner check.
 > checks that the line reached the output at exit 0 with no marker warning and no `suspicious_success`, a regression
 > guard as `diff-exit-1` is for ESC-41. Writing that guard's positive half found that the here-string's own check
 > reads its command back and cannot fail, recorded as
-> [`the-here-string-check-reads-its-own-command-back.md`](../../defects/fixed/the-here-string-check-reads-its-own-command-back.md).
+> [`the-here-string-check-reads-its-own-command-back.md`](../../archive/defects/the-here-string-check-reads-its-own-command-back.md).
 > Two things were not measured. Run `2e21e324`'s git line is not recorded verbatim anywhere in the record, so only its
 > docker line is replayed. And the guard has not run against a real endpoint; the next live run of `terminal` is its
 > first. The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).

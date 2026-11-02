@@ -10,7 +10,7 @@ import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
  * The Runtime category's run-start mode hint (REQ-CONFIG-320, REQ-ORCH-152 narrowed by PD-ORCH-003). Until 2026-09-29
  * it read "The plan gate itself is not built in this version." — the gate has been built since ADR-0062, so the
  * sentence told a user that choosing `plan` does nothing, and it said nothing of a session's release
- * (`docs/defects/fixed/the-run-start-setting-says-the-plan-gate-is-not-built.md`). What a unit test can show is the
+ * (`docs/archive/defects/the-run-start-setting-says-the-plan-gate-is-not-built.md`). What a unit test can show is the
  * markup; the built app's reading is `settings-proof`'s run-start launches.
  */
 const snapshot: ConfigSnapshot = {

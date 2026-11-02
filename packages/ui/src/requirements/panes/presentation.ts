@@ -131,7 +131,7 @@ export function decidedNotice(label: string, id: string): string {
  * a run — re-run, send-back — is held behind the launch's disclosure (REQ-TRACE-472): its first answer is that nothing
  * has been recorded YET, and `afterDisclosure` carries the rest — the act's own result once the disclosure is
  * accepted, or the abandonment. Without it the pane kept that first answer as a refusal after the decision had been
- * taken (`docs/defects/fixed/a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`).
+ * taken (`docs/archive/defects/a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`).
  */
 export type DecisionResult =
   | { readonly ok: true }
@@ -160,7 +160,7 @@ export interface AnswerState { readonly waiting: string | null; readonly refusal
  * disclosure. The pane is told it is WAITING while the disclosure stands; once the disclosure is accepted the answer
  * was taken and nothing is said; an abandonment, or a refusal, is quoted. Until 2026-10-02 the pane drew the first
  * answer as its refusal and kept it after the resume was taken
- * (`docs/defects/fixed/a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`).
+ * (`docs/archive/defects/a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`).
  */
 export async function followAnswer(first: DecisionResult, onState: (state: AnswerState) => void): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
   const r = await followDecision(first, (sentence) => onState({ waiting: sentence, refusal: null }));

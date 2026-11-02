@@ -13,7 +13,7 @@ no POSIX shell had carried any of it.*
 POSIX host. It sent PowerShell there, so `/bin/sh` answered every command with `not found`, exit 127, and six of the
 proof's checks were red without the stream being measured at all. The proof sweep of 2026-09-28 read this as a proof
 failure, and the record, correctly, had no product defect to explain it. The note is
-[`terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`](../../../defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md).
+[`terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`](../../../archive/defects/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md).
 Each command is now spelled in the host's shell (the PowerShell spellings are the same literals as before). Every
 assertion is kept.
 
@@ -31,7 +31,7 @@ The echo figure is small because the kernel's line discipline echoes on a POSIX 
 keystroke itself. Either way it is the frame the armed flush produced.
 
 *Reported back 2026-09-29 (R-067), from the first live run's `terminal` scenario
-([`the-terminal-preview-shows-the-command-wrapper`](../../../defects/fixed/the-terminal-preview-shows-the-command-wrapper.md),
+([`the-terminal-preview-shows-the-command-wrapper`](../../../archive/defects/the-terminal-preview-shows-the-command-wrapper.md),
 live-run finding L9): **"the deltas byte-equal to the PTY's bytes" measured the wrong equality, and is kept here beside
 its replacement.** The foreground tap forwarded every byte the PTY produced. On a POSIX PTY those include the shell's
 echo of the whole wrapped line, which names both markers, the prompt, and — after the command, before the stream

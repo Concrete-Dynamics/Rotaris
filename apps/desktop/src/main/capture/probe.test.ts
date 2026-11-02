@@ -9,7 +9,7 @@ import { installFinish, installPromptSeam, promptEvents, submitEvents, textEvent
 
 /**
  * How a capture ends (`installFinish`): the immediate exit once what it waited for has happened, the application's quit
- * when its wait timed out — `docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`, the duress live
+ * when its wait timed out — `docs/archive/defects/the-drivers-quit-skips-the-applications-shutdown.md`, the duress live
  * run's deadline quit (PD-ORCH-005 clause 3: a quit brings a live run to rest).
  */
 
@@ -75,7 +75,7 @@ describe('a capture ends by the immediate exit or by the application\'s quit (pr
 });
 
 /**
- * When the wait starts (live-run finding P6, `docs/defects/fixed/a-captures-wait-starts-before-its-prompt-is-typed.md`): the
+ * When the wait starts (live-run finding P6, `docs/archive/defects/a-captures-wait-starts-before-its-prompt-is-typed.md`): the
  * final default live run at a68f121 typed the terminal scenario's 5,755-character prompt for about 27 s of its 420 s wait.
  * With a typed prompt the bound counts from the submission — the composer that held the text reads empty — and a prompt
  * never submitted is still bounded from the launch.
@@ -188,7 +188,7 @@ describe('the capture seam types a multi-line prompt as a person types it (REQ-C
 
 /**
  * The one decision about a typed line break, shared by the driver's `type` and the TYPE / TYPE_AT seams
- * (`docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`): each site keeps its own shape
+ * (`docs/archive/defects/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`): each site keeps its own shape
  * for an ordinary character, and none of them sends a `\n` as one.
  */
 describe('typed text carries its line breaks as Shift+Enter at every site (REQ-CHAT-001, probe.ts textEvents)', () => {
@@ -214,7 +214,7 @@ describe('typed text carries its line breaks as Shift+Enter at every site (REQ-C
 });
 
 /**
- * What a probe logs of a long text (`docs/defects/fixed/the-capture-probe-cuts-a-notice-before-the-artifact-its-failure-warning-names.md`,
+ * What a probe logs of a long text (`docs/archive/defects/the-capture-probe-cuts-a-notice-before-the-artifact-its-failure-warning-names.md`,
  * acceptance finding L5): the default live run at b9e3005 probed PD-LIBRARY-005's failure warning, whose parse-failure detail
  * quotes the validator's issues as JSON, and the 400-character cut ended it at "impart_47kGY2xb holds no proposa". The probe's
  * own script is run here over a stand-in document, so what is pinned is what the renderer evaluates.

@@ -1,6 +1,6 @@
 /**
  * The bundled code-intelligence runtime as `init-proof`'s precondition
- * (`docs/defects/fixed/init-proof-reads-a-missing-code-intelligence-bundle-as-a-task-that-recorded-nothing.md`).
+ * (`docs/archive/defects/init-proof-reads-a-missing-code-intelligence-bundle-as-a-task-that-recorded-nothing.md`).
  *
  * In a checkout without the bundle the shipped task's `create` exits 127, the task records nothing (REQ-WORKSPACE-084),
  * and the proof used to report "the background task recorded nothing" — naming the workspace file's writer when the cause
@@ -110,7 +110,7 @@ describe('init-proof states its bundle precondition and quotes the app\'s setup 
  * Finding A4 of fin47's acceptance round 1: `code-intel-proof` ran the bundle step only when the marker was absent and never
  * asked `bundle.mjs --check`, so PD-MCP-004's acceptance gate (launch 11, re-run on every pin change) ran on the recipe-3
  * runtime that 559003b superseded, without a word
- * (docs/defects/fixed/code-intel-proof-uses-a-stale-code-intelligence-bundle-without-checking-it.md).
+ * (docs/archive/defects/code-intel-proof-uses-a-stale-code-intelligence-bundle-without-checking-it.md).
  */
 describe('code-intel-proof checks the bundle is current, not only present, and records which one it ran on (A4)', () => {
   const text = readFileSync(resolve(import.meta.dirname, '..', 'code-intel-proof.mjs'), 'utf8');
@@ -142,7 +142,7 @@ describe('code-intel-proof checks the bundle is current, not only present, and r
 /*
  * Finding U5 of the duress live run at 1763f7f: a `--skip-build` live run on a tree without the bundle ran every scenario,
  * its setup and discovery failed, and it passed all 18 checks without a line saying code intelligence never ran
- * (docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md).
+ * (docs/archive/defects/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md).
  */
 describe('live-run states the same precondition, and says in every launch whether code intelligence ran (U5)', () => {
   const text = readFileSync(resolve(import.meta.dirname, '..', 'live-run.mjs'), 'utf8');
@@ -177,7 +177,7 @@ describe('live-run states the same precondition, and says in every launch whethe
  * where the call before it had inherited the streams. A first build from an empty cache (uv's interpreter and install) then
  * printed nothing for up to fifteen minutes, and a build printing more than `spawnSync`'s default `maxBuffer` of 1 MiB would have
  * been ended with ENOBUFS and read as a failed build
- * (docs/defects/fixed/ensure-bundles-build-shows-no-progress-and-fails-past-spawnsyncs-buffer.md). The build now streams its output
+ * (docs/archive/defects/ensure-bundles-build-shows-no-progress-and-fails-past-spawnsyncs-buffer.md). The build now streams its output
  * through as it runs and holds none; the check, whose output is short and is quoted in a refusal, is read back whole with a buffer
  * it cannot outgrow. A stand-in for `bundle.mjs` prints 2 MiB here, past that default.
  */

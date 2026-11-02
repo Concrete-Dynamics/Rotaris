@@ -77,7 +77,7 @@ was still buffered. The predecessor then read it, rewrote the record for a proce
 window. The record then named nobody running and no instance was left, which is what `REQ-STARTUP-121` and
 `REQ-STARTUP-161` exist to prevent. A later launch reclaims the dead pid's record under `REQ-STARTUP-164` (3), but the
 user who chose `Restart now` was left with nothing on screen. The note is
-`../../../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md`. The sequence is now: the predecessor
+`../../../archive/defects/the-record-can-pass-to-a-successor-that-stopped-waiting.md`. The sequence is now: the predecessor
 **offers** the record (`{"record":"offered"}`, deliberately not `ok:true`); the successor **acknowledges**
 (`{"ack":true}`), which proves it is still waiting and commits it to take the record; the predecessor waits for that
 acknowledgement **at most the hand-over interval, on the timer port**; and only then does it replace the record

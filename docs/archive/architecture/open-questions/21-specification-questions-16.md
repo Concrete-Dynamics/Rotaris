@@ -45,7 +45,7 @@ say what the decline's wording means before the crash is recorded.
   the recovery, as above. Recorded at the merged build's twelfth review round.
   *Until the merged build's review the projection named such a session's agents crash-left and the cancel wrote a crash
   record against the failed writer
-  ([`the-at-rest-cancel-writes-against-a-failed-store.md`](../../../defects/fixed/the-at-rest-cancel-writes-against-a-failed-store.md)).* *The first build accepted such a
+  ([`the-at-rest-cancel-writes-against-a-failed-store.md`](../../defects/the-at-rest-cancel-writes-against-a-failed-store.md)).* *The first build accepted such a
   session and reported `{resumed: true}` against the failed writer, where the same call had been refused `not-paused`
   before clause 18; the round-2 review found it.*
 - **A run whose explicit cancel was in flight when it crashed.** The run-level explicit cancel (REQ-MONITOR-126, the
@@ -63,7 +63,7 @@ say what the decline's wording means before the crash is recorded.
   written when the explicit cancel is accepted, read by `crashLeftOf`, `resumableOf`, `recordCrash` and
   `continueSession`, so that the next repair or continue ends those agents `cancelled` and closes the iteration — needs
   a stored field and a reading of what the repair then records, so it is not built ahead of a ruling
-  ([`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../../../defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md)).
+  ([`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../../defects/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md)).
   At the base the case was reachable only by a continue by message. *Recorded at the merged build's thirteenth review
   round; until then this question did not name it.* *Replaced 2026-09-29: the ruling below withdrew this reading, and
   its repair was built the same day (R-067) — the build now tells the case apart by the cancel's durable mark, and no
@@ -138,7 +138,7 @@ say what the decline's wording means before the crash is recorded.
 - **The lock.** `Sessions.prompt` tries to re-claim a lock it no longer holds, but it cannot: `resume` returns early for
   a session already live in this process. A probe placed in that branch was never reached on any crash-left path, so
   `continueSession` does not copy it
-  (`docs/defects/fixed/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`). *Repaired 2026-09-29
+  (`docs/archive/defects/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`). *Repaired 2026-09-29
   (R-067), and this bullet reported back in place: every continue — `prompt`, `continueSession` and `planDecision` —
   now claims the lock before its first write and the run it launches holds it (`holdForContinue`, through the at-rest
   cancel's `claimLockReaping`), so a crash-left session's continue reaps the dead local holder its crash left, or
@@ -171,7 +171,7 @@ action counts none of them, and clause 18's Continue does not resume them. REQ-M
 session" then holds across the host's death. No directive text changes: clause 3 already says it, and the reading above,
 which departed from it, is withdrawn by this ruling. The other questions of this entry stay open. Nothing is built by the
 ruling; the repair is owed to
-[`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../../../defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md).
+[`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../../defects/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md).
 
 *Built 2026-09-29 (R-067), and its first execution reported here.* The mark is `iterations.cancel_accepted_at` (store
 **v27**, appended): the reserved run id's `Run.cancelAgent` writes it on the iteration open in the store at the moment the

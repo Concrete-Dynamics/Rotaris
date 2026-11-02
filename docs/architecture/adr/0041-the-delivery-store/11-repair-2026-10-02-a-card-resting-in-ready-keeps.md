@@ -5,7 +5,7 @@ Part 11 of 16 of [ADR-0041](../0041-the-delivery-store.md), which indexes every 
 ## Repair — 2026-10-02: a card resting in `ready` keeps a way to start after a restart
 
 *Reported back in place, under CLAUDE.md's standing policy, by the repair of
-[`a-card-resting-in-ready-across-a-restart-can-never-be-started.md`](../../../defects/fixed/a-card-resting-in-ready-across-a-restart-can-never-be-started.md).*
+[`a-card-resting-in-ready-across-a-restart-can-never-be-started.md`](../../../archive/defects/a-card-resting-in-ready-across-a-restart-can-never-be-started.md).*
 
 The repair above takes over a recorded tree from `beforeCommit`, so it reached only a transition. **It left the queue's
 release, which has no transition, holding the launch the restart lost, and is kept above as it was written.** A card

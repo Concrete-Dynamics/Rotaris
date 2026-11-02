@@ -11,7 +11,7 @@ import { BackgroundManager, hasVforkWindow, missedSigint, shellComm, type Backgr
  * SIGINT that reaches a command between `dash`'s `vfork` and its `exec` is discarded by the command, and the shell holds
  * its own copy until the command ends. "Sent SIGINT" was reported while the session ran on: 45 of 200 `sleep 30`
  * sessions signalled the instant they started were still running 3 s later under six CPU burners, measured through this
- * manager on the branch before the repair (`docs/defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`).
+ * manager on the branch before the repair (`docs/archive/defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`).
  */
 describe('OQ-135: which members of a still-running group never received the SIGINT', () => {
   const m = (pid: number, ppid: number, comm: string, sigint: GroupMember['sigint'], cmdline: string | null = null, state = 'S'): GroupMember => ({ pid, ppid, comm, state, sigint, cmdline });

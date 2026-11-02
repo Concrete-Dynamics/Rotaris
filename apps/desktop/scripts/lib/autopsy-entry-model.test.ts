@@ -3,7 +3,7 @@
  * one. The script's reader and the engine's (`readAutopsy`) now both take the root's key from the root's own records;
  * this pins the script's copy against the engine's on the same inputs, so the two cannot drift apart — including the
  * ladder's automatic moves of the root
- * (`docs/defects/fixed/the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md`).
+ * (`docs/archive/defects/the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md`).
  */
 import { describe, expect, it } from 'vitest';
 import { childKeyAt as engineChildKeyAt, childModelKeys as engineChildModelKeys, ENTRY_KEY_UNDETERMINED, entryModelKeys as engineEntryModelKeys } from '@rotaris/engine';

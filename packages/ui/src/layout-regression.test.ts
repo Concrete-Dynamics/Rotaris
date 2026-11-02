@@ -18,7 +18,7 @@ describe('minimum-window layout regressions', () => {
 
   it('shrinks the strip\'s path link and branch item from their measured basis with no end ellipsis (REQ-WORKSPACE-149 rule 2)', () => {
     // Before the repair both were ordinary items: `text-overflow: ellipsis` cut a deep path at its END and the folder name
-    // was lost (docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md).
+    // was lost (docs/archive/defects/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md).
     const middle = rule(".status-strip__item[data-middle='1']");
     expect(middle).toContain('flex: 0 1 var(--status-strip-label-basis, auto)');
     expect(middle).toContain('min-width: 0');
@@ -65,7 +65,7 @@ describe('minimum-window layout regressions', () => {
 
   it('sizes the State column to its widest phrase over a 10ch floor, drawn whole on one line (REQ-GIT-109)', () => {
     // A fixed 10ch held `idle · ready` and not a bound row's `completed · ready`, which ran on under the Ahead figure at
-    // 1440x900 (docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md). The measured width
+    // 1440x900 (docs/archive/defects/the-git-views-worktree-state-cell-overruns-the-ahead-column.md). The measured width
     // arrives as `--git-state-fit` (GitView's `stateColumnFit`); the phrase never wraps, so it measures its own text.
     expect(rule('.git__col-state')).toContain('width: max(10ch, var(--git-state-fit, 10ch))');
     expect(rule('.git__col-state')).not.toMatch(/width:\s*10ch\s*(;|$)/u);
@@ -87,7 +87,7 @@ describe('minimum-window layout regressions', () => {
   it('keeps the Branch cell a table cell with its line inside it, the tags whole and the name eliding to a floor (UIR-002, REQ-GIT-077)', () => {
     // Until 2026-10-04 the cell was itself the flex box: wrapped in an anonymous cell, it stopped short of its row's height
     // and background, and at 1000x680 the base row's tags took its 9ch whole, leaving `main` no pixel
-    // (docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
+    // (docs/archive/defects/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
     const bodies = (selector: string) => [...css.replace(/\/\*[\s\S]*?\*\//gu, '').matchAll(/([^{}]+)\{([^}]*)\}/gu)]
       .filter((m) => (m[1] ?? '').split(',').some((s) => s.trim() === selector)).map((m) => m[2] ?? '');
     expect(bodies('.git__cell-branch').join(' ')).not.toMatch(/display\s*:/u);
@@ -163,7 +163,7 @@ describe('minimum-window layout regressions', () => {
   it('sets a folded rail\'s heading so a seven-letter label fits the eight-character rail on one line (REQ-TRACE-310, REQ-TRACE-309)', () => {
     // The rail is eight `ch` of its own font plus its 4 px margin a side; the heading had been drawn as a section kicker —
     // uppercase and tracked at --rt-tracking-label — and seven tracked capitals are wider than eight `ch`, so
-    // `overflow-wrap: anywhere` broke "Blocked" as "BLOCKE / D" (docs/defects/fixed/the-folded-blocked-rail-breaks-its-label-inside-the-word.md).
+    // `overflow-wrap: anywhere` broke "Blocked" as "BLOCKE / D" (docs/archive/defects/the-folded-blocked-rail-breaks-its-label-inside-the-word.md).
     // Measured on the built rail by requirements-proof's `fold` stage; this pins the rules that measurement depends on.
     expect(rule('.req-rail')).toContain('width: calc(8ch + 8px + 2 * var(--rt-hairline-width))');
     expect(rule('.req-rail')).toContain('padding: 4px');
@@ -179,7 +179,7 @@ describe('minimum-window layout regressions', () => {
   it('keeps a persona on one line in the Mission table, so a hyphenated name never breaks at its hyphen (REQ-MONITOR-274)', () => {
     // Measured 2026-10-13 in the built app at 1440x900: with no wrapping rule the table's automatic layout gave the persona
     // column 65 to 71 px and "coding-agent" read "coding-" over "agent"
-    // (docs/defects/fixed/the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md). A persona is one
+    // (docs/archive/defects/the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md). A persona is one
     // identifier, and the design material draws it on one line wherever it draws one.
     expect(rule('.agent-table__persona')).toContain('white-space: nowrap');
   });
@@ -187,7 +187,7 @@ describe('minimum-window layout regressions', () => {
   it('bounds the persona cell, so a long configured persona is cut with an ellipsis rather than widening the table (REQ-MONITOR-274)', () => {
     // fin36's review: with no bound the cell's min-content width is the whole name, which the table's automatic layout never
     // narrows, so a long `personas:` name scrolled the card sideways
-    // (docs/defects/fixed/a-long-persona-name-widens-the-mission-table-past-its-card.md). The bound clears every built-in
+    // (docs/archive/defects/a-long-persona-name-widens-the-mission-table-past-its-card.md). The bound clears every built-in
     // persona ("requirements-engineer", 21 characters, the longest) and matches the activity cell's ellipsis beside it.
     const persona = rule('.agent-table__persona');
     expect(persona).toContain('max-width: 24ch');

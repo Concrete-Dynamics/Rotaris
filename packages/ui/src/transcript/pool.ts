@@ -34,7 +34,7 @@ import type { DisplayRow } from './types.js';
  * (`transcript.test.ts` holds the figures). A wrapped row is a prediction from an average advance, set to err long.
  * And a row on screen is MEASURED, which is what bounds any estimate to the frames before its first measurement: a
  * slot a scroll rebinds is observed again (`observeAgain`), where it used to keep its estimate until the next
- * displayed change (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
+ * displayed change (docs/archive/defects/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
  *
  * **The estimate must estimate what the row DRAWS.** A thinking row's body is the whole streamed reasoning
  * text, but under REQ-CHAT-167 (show-reasoning default OFF) a collapsed one draws only its one-line summary —
@@ -163,7 +163,7 @@ function markdownHeight(text: string, width: number): number {
 function estimateBox(d: Exclude<DisplayRow, { shape: 'trailer' }>, expanded: boolean, width: number): number {
   const main = width > GUTTER ? width - GUTTER : 0;
   // REQ-CHAT-057's attribution shares the row's height: `.row__role` wraps inside its 112 px column rather than
-  // truncating (docs/defects/fixed/role-gutter-truncation-rule-is-inert.md), so a long agent name costs a second line
+  // truncating (docs/archive/defects/role-gutter-truncation-rule-is-inert.md), so a long agent name costs a second line
   // even when the main column needs only one.
   const role = (d.shape === 'group' ? d.role : d.row.name ?? '').toUpperCase();
   const roleLines = wrappedLines(role, ROLE_COLUMN, LABEL_CHARACTER);
@@ -243,7 +243,7 @@ export function observeAgain(observed: Map<number, string>, slot: number, key: s
  * capacity that shrank — is removed from `nodes`, forgotten in `observed` and unobserved, so a node mounted later in that
  * slot is observed by `observeAgain` even under the key the old node last held. The pane's one measurement observer
  * outlives every slot (ADR-0045: heights are measured;
- * docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md), so nothing else
+ * docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md), so nothing else
  * would observe it.
  */
 export function slotRef<T>(
@@ -276,7 +276,7 @@ export function slotRef<T>(
  * Before it, such a row was positioned by the height its identity drew last until the observer's delivery rendered, a
  * frame or more later — and a row that GREW was drawn through the row beneath it for those frames: 21.8 px, the planted
  * activity line turning live again in `transcript-proof`
- * (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md). The identity's
+ * (docs/archive/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md). The identity's
  * last height still positions the row for the render that binds it — a streaming row is placed by what it drew, never by
  * an estimate that would move every row below it twice per chunk — but that render is no longer the one painted.
  */
@@ -444,7 +444,7 @@ export function indexAt(table: OffsetTable, y: number): number {
  * span of visible rows wider than the pool itself is cut, from the top of the span. A viewport `H` tall can show
  * `ceil(H / h) + 1` rows of height `h`, one partly at either edge, which is one more than ADR-0045's `ceil(H_max / unit)`
  * counts; shedding overscan before a visible row is what keeps that row bound at `H_MAX`
- * (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+ * (docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
  */
 export function visibleRange(table: OffsetTable, scrollTop: number, viewportHeight: number, count: number, capacity: number): { first: number; last: number } {
   if (count === 0) return { first: 0, last: -1 };
@@ -462,7 +462,7 @@ export function visibleRange(table: OffsetTable, scrollTop: number, viewportHeig
   // the capacity less its overscan), and is the safety rail rather than the design. **Falsified 2026-10-01, kept beside
   // its replacement: "REQ-CHAT-057's 30 px floor bounds the span by the capacity".** PD-CHAT-003 draws rows shorter than
   // 30 px — a one-line system notice inside a block, 23.8 px — and this rail cut the bottom of a tall viewport of them
-  // (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+  // (docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
   if (last - first + 1 > capacity) last = first + capacity - 1;
   return { first, last };
 }
@@ -477,7 +477,7 @@ export function visibleRange(table: OffsetTable, scrollTop: number, viewportHeig
  * render that moved `first` rebound EVERY slot: a corrected height above the viewport moved `first` by one row or several,
  * each slot changed size inside the delivery, at the depth just delivered, and the browser deferred those sizes to the
  * next frame and reported "ResizeObserver loop completed with undelivered notifications"
- * (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). So a delivery's
+ * (docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). So a delivery's
  * render repositions the rows the pool holds and rebinds none; where it held back a span the viewport needs, the pane
  * rebinds by an ordinary render after the frame, outside any delivery. The held span is the viewport's with `OVERSCAN`
  * rows either side, and the delivery's render pins the tail or restores the anchor, so the rows on screen stay bound
@@ -532,7 +532,7 @@ export function restoreAnchor(display: readonly DisplayRow[], table: OffsetTable
  * extension with rows appended after it and a plain append differ only in whether the last row before the update
  * drew something else after it. The first form compared keys alone, and its `extend` branch required the last key to
  * be both the first that differed and equal on both sides, so it never answered `extend`
- * (docs/defects/fixed/the-update-shape-never-answers-extend.md). The content is read for that ONE row only, so the
+ * (docs/archive/defects/the-update-shape-never-answers-extend.md). The content is read for that ONE row only, so the
  * cost stays that of the rows the update changed (REQ-CHAT-055).
  */
 export type UpdateShape = 'append' | 'truncate' | 'replace' | 'extend' | 'other';

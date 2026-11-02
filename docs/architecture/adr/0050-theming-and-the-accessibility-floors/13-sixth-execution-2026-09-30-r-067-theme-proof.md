@@ -66,5 +66,5 @@ reopened that note, and it is repaired in the proof, not in the palette:
   execution explains the variation. So two matrices are compared by verdict, minimum and the skips named, not by count.
 
 The palette is unchanged, and OQ-56's disabled-text question is untouched. The repaired note is
-`../../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`. Not shown: Windows or macOS
+`../../../archive/defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`. Not shown: Windows or macOS
 (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).

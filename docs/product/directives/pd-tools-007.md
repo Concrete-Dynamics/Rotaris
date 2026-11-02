@@ -54,7 +54,7 @@ wrong, rather than telling it so first. The result says what was read, so the mo
 > not measured.** No live run has met the shape since: `pnpm live-run`'s `frictions` and `duress` scenarios now check that
 > no create-shaped call was refused for want of an operation (`lib/tool-frictions.mjs`), and that is their next run's to
 > show. The note is repaired:
-> [`write-files-first-use-refusal-recurred-under-duress.md`](../../defects/fixed/write-files-first-use-refusal-recurred-under-duress.md).
+> [`write-files-first-use-refusal-recurred-under-duress.md`](../../archive/defects/write-files-first-use-refusal-recurred-under-duress.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 >
 > **The live shape, 2026-10-06 (fin23).** The default live run at `c2a9444` met the directive in two sessions its check
@@ -64,23 +64,23 @@ wrong, rather than telling it so first. The result says what was read, so the mo
 > run", because the check read the `frictions` and `duress` sessions only, and it could not have seen a refused whole-file
 > write in any session, whose arguments the record stores cut to a string. Since fin23 the check reads every session the
 > run keeps, reads cut arguments, and reports a fenced refusal without failing it:
-> [`the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`](../../defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md).
+> [`the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`](../../archive/defects/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md).
 >
 > **The fence it judges by, 2026-10-06 (fin25).** fin23 judged every session's fence by the sandbox's workspace, while a
 > requirements run is fenced to its worktree under `<workspace>/.rotaris/requirements/worktrees/…` (the requirements
 > session's ordinal 66 at `c2a9444` was refused "outside workspace root '<that worktree>'"), so a create-shaped call naming
 > a workspace path outside the worktree would have read as the old shape. Since fin25 each session is judged by the fence
 > its own record names (`fenceRootOf`, the session's `worktree` before its `workspace_root`):
-> [`the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md`](../../defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
+> [`the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md`](../../archive/defects/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
 > The same round aligned the check's create shape with the product's own (`createOnlyTarget` and the schema the gate
 > applies after it): a call carrying `replace_all: false` or a key no operation reads is create-shaped, an empty path or a
 > `file_path` that is no string is not, and a test runs both readers over the same nineteen shapes:
-> [`the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md`](../../defects/fixed/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
+> [`the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md`](../../archive/defects/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
 >
 > **The built app, and a live run that asks, 2026-10-13 (fin42).** The shape had met the product live only by chance, and no
 > proof had sent it: the scripted `write` step names its operation, and the live run's `frictions` prompt said only "Create a
 > file", so a model that read the schema named the operation and every run since printed "PD-TOOLS-007's inferred create was
-> not asked" ([`the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md`](../../defects/fixed/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md)).
+> not asked" ([`the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md`](../../archive/defects/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md)).
 > `pnpm tool-shapes-proof` now sends it through the built application with the scripted step `writeinfer`: for an absent
 > file the call settled `ok`, its result carrying the sentence and its record `operation: create`, and the file landed; for
 > an existing one it was refused `invalid_request`, saying the file exists, its content untouched, with the `tool_error` issue

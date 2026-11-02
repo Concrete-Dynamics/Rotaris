@@ -10,7 +10,7 @@ back-pointer, in place": "Use `Superseded by`, `Narrowed by` or `Extended by` to
 Narrows line and `PD-LIBRARY-002`'s Extends and `New:` lines; the notes at REQ-SANDBOX-104 (Narrowed by `PD-TOOLS-002`),
 REQ-MONITOR-173, REQ-WORKSPACE-041, REQ-LIBRARY-017 and REQ-NOTIFY-251 (Extended by `PD-LIBRARY-002`), and at domain 14's
 introduction, which names no requirement. Raised 2026-10-06 by the F15 repair, which recorded the six as
-[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md`](../../../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md`](../../defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md)
 and left the reading per note to the directive's owner; opened here 2026-10-07 as the R-072 consortium's question BP1,
 the number the round assigned it, and ruled the same day.)*
 
@@ -44,10 +44,10 @@ of a `New:` line naming an identifier or standing beside another verb, and REQ-T
 ruling followed both**: A's note amendments, B's entry, converse check and generator refusal, and REQ-TOOLS-071 and
 REQ-TOOLS-072, which the rule names and narrows the same way as REQ-SANDBOX-104. `PD-LIBRARY-002`'s other candidate
 reaches have arguable verbs and go to a note of their own, with two further questions the advocates raised:
-[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../../../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
-[`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../../../defects/fixed/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md)
+[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
+[`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../../defects/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md)
 and
-[`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../../../defects/fixed/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
+[`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../../defects/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
 recorded and not repaired.
 
 **As built** (fin29, 2026-10-07). `PD-TOOLS-002`'s Narrows line names REQ-TOOLS-071, REQ-TOOLS-072 and REQ-SANDBOX-104 and
@@ -61,10 +61,10 @@ with every directive main gains, the delta does not). Pinned by `tools/symbol-ar
 disagrees, red on the old record with the six; every register entry has its note, red with REQ-TOOLS-069 and
 REQ-SHELL-119; the OQ-222 case, red on the old register) and by three counterfactuals in `pnpm directive-proof`, red
 against the old generator (29/32) and 32/32 after. Notes moved to `docs/defects/fixed/`:
-[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md`](../../../defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md),
-[`three-pd-tools-002-reaches-and-one-pd-shell-003-reach-lack-a-note-or-a-disposition.md`](../../../defects/fixed/three-pd-tools-002-reaches-and-one-pd-shell-003-reach-lack-a-note-or-a-disposition.md)
+[`six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md`](../../defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md),
+[`three-pd-tools-002-reaches-and-one-pd-shell-003-reach-lack-a-note-or-a-disposition.md`](../../defects/three-pd-tools-002-reaches-and-one-pd-shell-003-reach-lack-a-note-or-a-disposition.md)
 and
-[`the-symbol-generator-drops-an-identifier-written-on-a-new-line.md`](../../../defects/fixed/the-symbol-generator-drops-an-identifier-written-on-a-new-line.md).
+[`the-symbol-generator-drops-an-identifier-written-on-a-new-line.md`](../../defects/the-symbol-generator-drops-an-identifier-written-on-a-new-line.md).
 No product behaviour changed, so a live run shows nothing new.
 
 *Added 2026-10-13:* the follow-up this ruling left to a note of its own is ruled as [OQ-236](51-spikes-and-later-questions-18.md#oq-236) (R-072):
@@ -89,7 +89,7 @@ run's terminal session (`5df89df3`), call `#36`, the re-run child's 45 s wedge, 
 recorded `failed`, `timeout`, exit 124, "The command exceeded its timeout of 100 seconds; … (the call was cancelled)";
 issue 10 is `terminal_timeout` at `error`, and `summary.md` reads "Timeouts: 1". The console's NOTE said the hard cap was
 not reached. Recorded as
-[`a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md`](../../../defects/fixed/a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md).
+[`a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md`](../../defects/a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md).
 
 **What the build proceeded under, until 2026-10-07.** Both abort branches of `ForegroundSession.run`
 (`packages/agent-tools/src/terminal/foreground.ts`) returned 124 and `timedOut: true` with the error "the call was
@@ -118,7 +118,7 @@ reading 0). OQ-144's handshake parenthetical is revised in place beside the stru
 replaced and ended shells stands. The ruling's directive number was written as `PD-TOOLS-011` by advocate B, taken; it is
 `PD-TOOLS-013`. Noticed while ruling and recorded, not repaired: the gate's catch and fetch still file a `tool_error` for
 a call the run cancels
-([`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../../../defects/fixed/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md)).
+([`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../../defects/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md)).
 **Built 2026-10-07 (fin31):** `ForegroundResult.cancelled` and both abort branches of `ForegroundSession.run` (no exit code,
 `timedOut: false`), the `interrupted` kind, `InterruptedError` and the cancel's detail in `terminal/index.ts`, and the kind in
 both vocabularies of `classify.ts`; `gate.ts` and `export.ts` unchanged. The ruling's dispositions could not stand as
@@ -135,7 +135,7 @@ after.
 it fixes, none for `single_file_change`; PD-ORCH-011, "`explicit_trivial` and `single_file_change` are the two smallest
 edits"; PD-ORCH-006, the direct-work bundle a `single_file_change` grants; REQ-ORCH-021, the micro group. Raised 2026-10-07
 by fin30's repair of finacc3 A2-03,
-[`slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md`](../../../defects/fixed/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md).
+[`slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md`](../../defects/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md).
 Numbered past the round's assigned OQ-221 to OQ-224; raised as OQ-225, renumbered OQ-227 at landing because origin/main took
 OQ-225 (the REQ-ORCH-029 hold, PD-ORCH-015) and OQ-226 (fin31, PD-TOOLS-013). Open.)*
 
@@ -181,7 +181,7 @@ languages depend on the request saying so.
 *Built 2026-10-13 (fin34, `fin34-library-and-intent`); its first execution is reported in PD-ORCH-011's entry.* One sentence
 in `CLASSIFIER_SYSTEM_PROMPT`, pinned on all three rungs by `intent.test.ts` (red before); `live-answers.mjs`'s `why` and
 `intentOutcome` comment cite the revision; `packages/engine/CONTEXT.md`'s micro group names the meaning. Note moved:
-[`the-intent-classifiers-rungs-give-single-file-change-different-meanings.md`](../../../defects/fixed/the-intent-classifiers-rungs-give-single-file-change-different-meanings.md).
+[`the-intent-classifiers-rungs-give-single-file-change-different-meanings.md`](../../defects/the-intent-classifiers-rungs-give-single-file-change-different-meanings.md).
 **Not yet measured:** the live first execution (`pnpm slice-proof` against the registered self-hosted default), which the
 orchestrator runs under R-068; it should show the flag prompt (3b) in the build groups and the README append in the micro group.
 
@@ -193,7 +193,7 @@ alone"; REQ-NOTIFY-109, "back-to-back invocations of the same tool"; REQ-ORCH-10
 actions, the tool name and the whole arguments; REQ-NOTIFY-102, no corrective message where no loop occurs; REQ-ORCH-100,
 the raw count of 60; REQ-CONFIG-467 and OQ-114, the 2.0 s classification bound kept; OQ-126, the message limb. Raised
 2026-10-07 from finding D6 of the final duress live run at `a68f121`, recorded in
-[`the-raw-count-fallback-declares-a-loop-on-four-reads-of-different-files.md`](../../../defects/fixed/the-raw-count-fallback-declares-a-loop-on-four-reads-of-different-files.md),
+[`the-raw-count-fallback-declares-a-loop-on-four-reads-of-different-files.md`](../../defects/the-raw-count-fallback-declares-a-loop-on-four-reads-of-different-files.md),
 and ruled the same day under the owner's delegation; the consortium's question D6.)*
 
 The duress pack `2026-10-07T07-09-30-708Z` (session `e6747bd0`) holds the limb's first live firing. At
@@ -233,7 +233,7 @@ to the third activation's escalation, the stall watch or the ceiling.
 `rawFallbackHasEvidence` compares the last four tool events by `fingerprint`; `supervisor.test.ts` and `pnpm part-h-proof`'s
 `raw-count-varied` and `raw-count-same` launches pin it. Beside the ruling, recorded and not repaired: the classification timer
 is armed from `runtime.loop_classification_timeout` uncapped by REQ-NOTIFY-106's remaining budget
-([`the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`](../../../defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md));
+([`the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`](../../defects/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md));
 repaired 2026-10-13 (fin35): the bound is the smaller of the key and what remains of the 2 s budget, counted from the
 activity that satisfied the trigger.
 **Not yet measured:** a live run; the next should show no `loop_supervisor_activation` with `trigger: raw-count` unless the

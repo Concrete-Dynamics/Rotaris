@@ -15,14 +15,14 @@
  *                     launch left it (on Linux fin47 read "create succeeded — the project already exists" in each; on
  *                     Windows ARM64 the emulated setup's `create` is still running when each capture exits).
  *                     Until fin47 they ran in `apps/desktop`, opened the checkout and indexed the product's source
- *                     (`docs/defects/fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
+ *                     (`docs/archive/defects/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
  *   1′. about-present — the same About page with both of its files present (first-release-plan.md §4.4): the Build
  *                     row carries the identifier `pnpm build-id` wrote for this tree, no caption stands under the
  *                     licensing control, and the control opens the notices file where about.ts found it.
  *   1″. about-minimum — the same About page at REQ-SHELL-022's minimum content size, 1000×680: REQ-STARTUP-160's
  *                     network-activity disclosure is under its labelled heading, carries its three statements, and a
  *                     real pointer selection across it, once it is scrolled into view, reads every one of them
- *                     (`docs/defects/fixed/the-about-page-carries-no-network-activity-disclosure.md`).
+ *                     (`docs/archive/defects/the-about-page-carries-no-network-activity-disclosure.md`).
  *   2. instructions — the same workspace with `AGENTS.md` and `AGENTS.override.md` on disk: two rows, in the
  *                     requirement's order, source `workspace`, described by absolute path; the first row's switch
  *                     is turned off and saved, and the `instructions.overrides` policy lands in the file
@@ -41,7 +41,7 @@
  *                     workspace of its own set to `plan`: with no session followed it says what `plan` does and never
  *                     that the gate is not built; then a prompt is held at the gate, the plan approved, and the approved
  *                     session reopened, where the same hint states that the session is released and names the control
- *                     that re-arms it (`docs/defects/fixed/the-run-start-setting-says-the-plan-gate-is-not-built.md`).
+ *                     that re-arms it (`docs/archive/defects/the-run-start-setting-says-the-plan-gate-is-not-built.md`).
  *   8. personas-unset — the Personas Scope column (REQ-CONFIG-341), in a workspace of its own whose file sets only
  *                     `personas.tester.model`: the tester's Unset is found by its accessible name ("Unset model for
  *                     tester") and clicked; while the unset is pending no row reads its old origin and no Unset is
@@ -57,13 +57,13 @@
  *                     Runtime category's memory-diagnostics switch writes its key at once and the reloaded snapshot is
  *                     announced back to this window, as a sign-in's is. With nothing edited the strip carries no
  *                     `unsaved settings` and the save bar stays saved; after a real edit, a second reload keeps the edit
- *                     and the flag (`docs/defects/fixed/a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md`).
+ *                     and the flag (`docs/archive/defects/a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md`).
  *  11′. reload-last-write — the same workspace (REQ-CONFIG-419, REQ-CONFIG-423): two real writes of the circuit breaker
  *                     (off, then on) whose announcements the capture hands the window in one tick leave the form clean
- *                     with the breaker on (`docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`);
+ *                     with the breaker on (`docs/archive/defects/two-quick-configuration-reloads-mark-settings-unsaved.md`);
  *                     then `restricted` picked here and left unsaved is displaced by `autonomous` written through the
  *                     composer's path, and the form reads clean
- *                     (`docs/defects/fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`).
+ *                     (`docs/archive/defects/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`).
  *
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
@@ -267,7 +267,7 @@ if (text(noWorkspace.probes, '[data-testid="legal-error"]').length !== 0) throw 
 const caption = text(noWorkspace.probes, '[data-testid="licenses-caption"]')[0] ?? '';
 if (caption !== 'This build does not carry a third-party license bundle.') throw new Error(`the licensing caption was "${caption}"`);
 // The caption is set at its neighbours' type token (`--rt-text-sm`, `.about__value`'s), not the browser's default: until 2026-09-28
-// it was the largest text on the page (docs/defects/fixed/the-about-pages-licence-caption-is-set-in-the-browsers-default-size.md).
+// it was the largest text on the page (docs/archive/defects/the-about-pages-licence-caption-is-set-in-the-browsers-default-size.md).
 const captionSize = first(noWorkspace.probes, '[data-testid="licenses-caption"]')?.fontSize;
 const valueSizes = [...new Set(rows(noWorkspace.probes, '.about__value').map((p) => p.fontSize))];
 if (valueSizes.length !== 1 || valueSizes[0] === undefined) throw new Error(`the About values did not share one computed font size: ${JSON.stringify(valueSizes)}`);
@@ -554,8 +554,8 @@ results.runStartHint = {
 // A workspace whose file sets only `personas.tester.model`, so `tester` alone reads `model: workspace` and offers Unset at
 // the Workspace scope. The Unset is found by the accessible name REQ-CONFIG-341 gives it (field and role), clicked, and the
 // cell read while the unset is pending (`default`, no Unset) and after Discard (`workspace` and its Unset again)
-// (docs/defects/fixed/the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md,
-// docs/defects/fixed/the-scope-columns-unset-is-named-unset-and-nothing-else.md).
+// (docs/archive/defects/the-scope-columns-unset-leaves-the-field-reading-its-old-origin.md,
+// docs/archive/defects/the-scope-columns-unset-is-named-unset-and-nothing-else.md).
 const personasRoot = join(output, 'personas');
 const pWorkspace = join(personasRoot, 'workspace');
 const pLocal = join(personasRoot, 'local');
@@ -618,7 +618,7 @@ results.personasUnset = {
 // scope is switched to Global and the reasoning's Unset is clicked; Save. Each unset must land in the file it was made
 // in: until 2026-10-02 the role's pending entry held one scope, both unsets were saved at Global, the global layer was
 // asked to unset a model it did not hold, and the workspace's model stayed
-// (docs/defects/fixed/a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md).
+// (docs/archive/defects/a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md).
 const twoRoot = join(output, 'personas-two-scopes');
 const tWorkspace = join(twoRoot, 'workspace');
 const tLocal = join(twoRoot, 'local');
@@ -780,11 +780,11 @@ results.reloadClean = { opened: r0, afterReloadNoEdit: r1, afterEdit: r2, afterR
 // Launch 11 spaces its writes seconds apart, so the hook's saved state has always settled between them. Here the capture's
 // pair seam makes two real writes of the circuit breaker (off, then on again) and hands the window both announcements in
 // one tick: the unrepaired hook rebased the second against the saved state from before the first, kept the first's `off`
-// as an edit and read dirty (`docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`). Then the
+// as an edit and read dirty (`docs/archive/defects/two-quick-configuration-reloads-mark-settings-unsaved.md`). Then the
 // user picks `restricted` here and does not save, and the composer's write path (`config.setField` of the permission mode
 // alone, REQ-CONFIG-288) writes `autonomous`: for this one field the last write wins over the unsaved selection, so the
 // control shows `autonomous` and, nothing else being edited, the form is clean
-// (`docs/defects/fixed/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`).
+// (`docs/archive/defects/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`).
 const MODE_GROUP = '[aria-label="Permission mode, strictest first"]';
 const MODE_ACTIVE = `${MODE_GROUP} .seg-opt.is-active`;
 const lastProbes = [STRIP_UNSAVED, '.save-bar__status', BREAKER_ON, MODE_ACTIVE];

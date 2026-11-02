@@ -3,7 +3,7 @@
  * question called open fails, an open or deferred one passes, history that says it was ruled passes, a settled question's
  * answer called the build's reading fails unless its ruling stands beside it, and a question said to be raised fails
  * unless its sentence names one. Acceptance finding F16 of finacc3 (2026-10-06):
- * `docs/defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`.
+ * `docs/archive/defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`.
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

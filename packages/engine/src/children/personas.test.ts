@@ -87,7 +87,7 @@ describe('engine/personas — the coordinator\'s routing table (REQ-ORCH-028)', 
   /*
    * REQ-ORCH-028's default routing carries two capability clauses the built table dropped, and in both duress live runs of
    * 2026-10-06 the coordinator gave `codebase-analyst` a write task
-   * (docs/defects/fixed/the-built-routing-table-drops-req-orch-028s-capability-clauses.md; OQ-216).
+   * (docs/archive/defects/the-built-routing-table-drops-req-orch-028s-capability-clauses.md; OQ-216).
    */
   it('names codebase-analyst as reading the workspace without modifying it, and librarian as likewise not modifying it', () => {
     const prompt = BUILT_IN_PERSONAS.orchestrator.systemPrompt;
@@ -99,7 +99,7 @@ describe('engine/personas — the coordinator\'s routing table (REQ-ORCH-028)', 
    * PD-TOOLS-006 revision 8 (OQ-250, ruled 2026-10-07 under R-072): the table closes with one fixed sentence sending the work a
    * route implies to a persona whose catalogue entry allows it. In the duress run at a68f121 the coordinator gave architect
    * docs/decisions.md with a write_scope (call 115), as "design → architect" read
-   * (docs/defects/fixed/the-routing-table-leads-the-coordinator-past-delegates-catalogue.md).
+   * (docs/archive/defects/the-routing-table-leads-the-coordinator-past-delegates-catalogue.md).
    */
   it('closes the routes with the revision 8 sentence, verbatim, after the last route', () => {
     const prompt = BUILT_IN_PERSONAS.orchestrator.systemPrompt;

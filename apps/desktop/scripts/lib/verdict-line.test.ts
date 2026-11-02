@@ -1,6 +1,6 @@
 /**
  * The live run's verdict log line (`live-run.mjs`'s `finish`). At `ce5f952` the `crlf` scenario's two NOTEs, pushed with no
- * detail, printed "— undefined" (`docs/defects/fixed/a-live-run-verdict-with-no-detail-prints-undefined.md`).
+ * detail, printed "— undefined" (`docs/archive/defects/a-live-run-verdict-with-no-detail-prints-undefined.md`).
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

@@ -9,7 +9,7 @@ child without imposing any ordering" — had been accepted by the tool, written 
 this ledger, and resolved by nothing since the ledger was first executed on 2026-09-03. `childPayload` had no place
 for `REQ-TOOLS-154`'s item (5); an id naming no task was accepted where the requirement refuses the call. It was
 found by reading, while the payload order was being repaired (R-054), and is recorded as
-`docs/defects/fixed/the-inherited-context-reports-never-reach-the-child.md`.
+`docs/archive/defects/the-inherited-context-reports-never-reach-the-child.md`.
 
 **Where the rule was put, and why here.** The refusal is admission's, so it lives in `spawn` after `REQ-ORCH-046`'s
 dependency checks and before its cycle check (5), beside the empty-entry refusal that had stood alone: an unknown id

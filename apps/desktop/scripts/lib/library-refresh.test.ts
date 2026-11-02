@@ -1,7 +1,7 @@
 /**
  * `artifacts-proof`'s publish launch (REQ-LIBRARY-136): the empty Library is read when the Artifacts tab has loaded,
  * not at an appointment a startup stall can push past the leave
- * (`docs/defects/fixed/artifacts-proofs-publish-launch-reads-the-empty-library-in-a-window-a-startup-stall-closes.md`).
+ * (`docs/archive/defects/artifacts-proofs-publish-launch-reads-the-empty-library-in-a-window-a-startup-stall-closes.md`).
  * The schedule is read through the capture seam's own parser, so a step written in the waiting form is seen as one.
  */
 import { readFileSync } from 'node:fs';

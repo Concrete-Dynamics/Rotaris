@@ -119,7 +119,7 @@ function wait(timers: Timers, ms: Millis): Promise<void> {
  * On POSIX the step leads a process group of its own (`runSetupSteps` spawns it with `processGroup`), and the ask and the
  * force-kill go to the group: REQ-WORKSPACE-092's "nothing the step launched … neither the command the step itself
  * started nor anything descended from it". Before, the signal reached the step alone, and a process it had started
- * outlived its cancellation (measured 2026-10-01; `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+ * outlived its cancellation (measured 2026-10-01; `docs/archive/defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
  * The grace ends when the step and everything in its group have gone. `hurry` (the host's shutdown) shortens a grace
  * already under way to `hurry.graceMs` from the moment it fires.
  */

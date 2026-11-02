@@ -117,7 +117,7 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     // REQ-MONITOR-086: the run-wide count, which the synthetic root shows (OQ-159 as ruled, R-071): the session's
     // maintained aggregate, the roots' own compressions included. Until 2026-10-02 it summed `session.agents`, which holds
     // the children alone, so a root's compressions were counted nowhere
-    // (docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md).
+    // (docs/archive/defects/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md).
     compressions: session.compressions,
     reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: runLevelGrant(session.entryTools.resolved, entry.tools, busy),
     // The run-level agent's set is already `runLevelGrant`'s choice; no row records its grant (REQ-MCP-065 is per child).
@@ -141,7 +141,7 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
  * Only the run-level agent reads it: the composer's chip and the strip's model item name what the next run starts with
  * (REQ-MONITOR-146, REQ-SHELL-043), so `entryRole` keeps its model. Until 2026-10-03 the inspector named the configured key
  * while the root ran on a candidate
- * (docs/defects/fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md).
+ * (docs/archive/defects/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md).
  */
 export function runLevelModel(session: Pick<SessionRecord, 'entryModelKey'>, entryModel: string, live: boolean): string {
   return live && session.entryModelKey !== null ? session.entryModelKey : entryModel;
@@ -167,7 +167,7 @@ export interface EntryRole { readonly persona: string; readonly model: string; r
  * after an iteration as `orchestrator` and a plan cycle as `reviewer` the inspector drew `orchestrator`'s tools with
  * `reviewer`'s calls marking them; the first repair read the last root's `agent` row alone, and a live root whose first
  * steps were tool calls was drawn as the previous root until its first text, and one that had written no row at all
- * until then too (the verifier's finding; docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
+ * until then too (the verifier's finding; docs/archive/defects/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
  */
 export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 'role' | 'effectiveModel' | 'rawThinking' | 'declaredTools'>[], rows: readonly TranscriptRow[], agents: readonly Pick<AgentRecord, 'name'>[], roots: readonly Pick<EntryRoot, 'name'>[] = [], live: string | null = null, overrides: SessionRecord['modelOverrides'] = []): EntryRole {
   const childNames = new Set(agents.map((a) => a.name));
@@ -222,7 +222,7 @@ const NOT_FOLLOWED_KINDS = new Set(['user', 'system', 'intent', 'verifier', 'dif
  * persona a surface knows it by, and by the name any of the session's roots carries (`SessionRecord.entryRoots`, PD-ORCH-005
  * clause 4 with OQ-97): a root resumed as the entry role keeps its own persona's name on its rows while the entry persona
  * is another, and matched by the entry persona alone its rows were never the run-level agent's
- * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md). Never by a named row's persona: a child
+ * (docs/archive/defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md). Never by a named row's persona: a child
  * of the entry persona writes that persona too.
  */
 export function ownRow(row: TranscriptRow, agent: AgentRecord, roots: readonly EntryRoot[] = []): boolean {
@@ -282,7 +282,7 @@ export function mcpFateText(s: { readonly fate: 'connected' | 'dropped'; readonl
  * holds the write, terminal and commit tools its policy withholds. A recorded grant is shown as it is, an empty one as no
  * native tool (`grantRecorded`, REQ-TOOLS-006): until 2026-10-01 an empty list read as no grant recorded, so a child whose
  * controls removed every native tool listed them all
- * (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+ * (docs/archive/defects/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
  */
 export function resolvedTools(agent: Pick<AgentRecord, 'id' | 'grantedTools' | 'grantRecorded' | 'live'>, declared: readonly string[]): string[] {
   if (agent.grantedTools.length > 0 || agent.grantRecorded) return [...agent.grantedTools];
@@ -399,7 +399,7 @@ export function rowsOf(rows: readonly TranscriptRow[], agent: AgentRecord, roots
  * The names an agent's artifacts record it by: a child's canonical name; the run-level agent's entry persona and, for each
  * of the session's roots (`roots`), its persona and its canonical name — which its publishes and reads record
  * (REQ-LIBRARY-093) and which is not the entry persona for a persona the canonicaliser rewrites
- * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+ * (docs/archive/defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
  */
 function artifactNames(agent: Pick<AgentRecord, 'name'> & { readonly id?: string }, roots: readonly EntryRoot[]): string[] {
   return agent.id === RUN_AGENT_ID ? [agent.name, ...roots.flatMap((r) => [r.name, r.canonical])] : [agent.name];
@@ -437,7 +437,7 @@ export function stalledText(seconds: number | null): string | null {
  * Its `{state}` is `agentStateLabel`'s over the shown session (REQ-MONITOR-127/130, OQ-165's reading, ruled 2026-10-06 by R-071): the run-level agent
  * reads the run's `cancelling` while it is live and the session reads it, as a persona window does. Until 2026-10-01 the line
  * read `presentationState` alone, so beside the run header's `Cancelling…` it read `running`
- * (docs/defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md).
+ * (docs/archive/defects/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md).
  */
 /**
  * REQ-MONITOR-281 with REQ-MONITOR-086: the compression count the inspector's ring caption and a persona window's context card

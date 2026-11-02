@@ -280,7 +280,7 @@ describe('model — a system message reaches the provider (spike 6, live half: t
   });
 });
 
-describe('model — a replayed tool call always carries a mapping (REQ-TOOLS-032; docs/defects/fixed/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md)', () => {
+describe('model — a replayed tool call always carries a mapping (REQ-TOOLS-032; docs/archive/defects/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md)', () => {
   /*
    * The arguments text a model produced is replayed in the next request's assistant message. A text that parses to
    * something other than a plain object (a JSON string literal holding the object, a number, an array, null) used to be
@@ -321,7 +321,7 @@ describe('model — a replayed tool call always carries a mapping (REQ-TOOLS-032
   });
 });
 
-describe('model — a tool call\'s streamed arguments are model events (REQ-ORCH-089, REQ-ORCH-090; docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md)', () => {
+describe('model — a tool call\'s streamed arguments are model events (REQ-ORCH-089, REQ-ORCH-090; docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md)', () => {
   /*
    * An OpenAI-shaped endpoint streams a tool call's arguments in pieces, one `delta.tool_calls` chunk each. The SDK reads
    * them as `tool-input-start` and `tool-input-delta` parts and only then gives the complete `tool-call`. The adapter

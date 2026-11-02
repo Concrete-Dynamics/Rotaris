@@ -10,7 +10,7 @@ section past the budget is dropped, and so is every attachment after it", "the o
 size"; REQ-TOOLS-153, "any attachment warning"; REQ-TOOLS-154 item (4); REQ-LIBRARY-098, the `PRIOR AGENT CONTEXT (FULL)`
 block "within a 48,000-character budget"; REQ-ORCH-032; domain 05's resolution 26 and limits inventory; `PD-SESSION-002`,
 which counts the block's elisions. Raised 2026-10-07 from
-[`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../../../defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md),
+[`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../../defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md),
 recorded by fin28 while building `PD-SESSION-002`; the consortium's question AB1, numbered OQ-221 as the round assigned. Ruled
 the same day.)*
 
@@ -78,7 +78,7 @@ fin32 made the EDIT tier's calls file-writing calls and reads the path each chan
 listed by the declaring file alone, a whole-project cross-file replacement by nothing, and a directory-scoped one by the
 directory. A child whose only writes are such calls is told to its parent as having changed no workspace paths, and the pass's
 facts read "Edited files: (none)" — D1's falsehood for the two tools a refactorer exists to use. Recorded as
-[`a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../../../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+[`a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../../defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
 
 **What the build proceeds under.** fin32's literal reading: the argument path, none for a whole-project replacement.
 
@@ -113,12 +113,12 @@ couples the product to unpinned prose); deferral (a refactorer's rename is ordin
 (`packages/agent-tools/src/tools/observe.ts`) around the MCP executor, and `writeReadingOf` in the report and the cut-off;
 pinned by cases in five test files, red on the code before, and `pnpm code-intel-proof`'s ninth launch (`child-across`, red on
 the unrepaired build with `[]`, green with both files). The report-back is in `PD-ORCH-004`; the note is
-[fixed](../../../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+[fixed](../../defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
 *Measured for the rename 2026-10-13 (fin42, N59):* `pnpm code-intel-proof`'s tenth launch (`child-rename`) renames a TypeScript
 function across two files through the language server after a reference search, and the child's report and artifact list exactly
 both; its eleventh (`child-rename-cold`), the rename alone, lists exactly the one file it changed — the observation holds — and
 finds the runtime's rename reaching the declaring file alone, recorded as
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 and raised as [OQ-273](58-spikes-and-later-questions-25.md#oq-273). Not measured: a live run (the opt-in `rename` scenario, written). The report-back is in
 `PD-ORCH-004`, in place.
 
@@ -140,7 +140,7 @@ On a CRLF file a multi-line `old_string` written with `\n` alone matches only at
 (`packages/agent-tools/src/tools/files.ts`) writes `new_string`'s `\n`-only lines over the window's `\r\n` lines: the file is
 left with mixed line endings, and the success counts an unchanged line as changed because it lost its `\r`. The same apply drops
 a replaced line's trailing spaces that `new_string` does not repeat (a Markdown hard break). Probed and recorded as
-[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md`](../../../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
+[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md`](../../defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
 The specification fixes neither keeping the window's endings nor writing `new_string`'s.
 
 **What the build proceeds under.** The apply as built: `new_string`'s lines written as given.
@@ -175,12 +175,12 @@ and a success that counts an untouched line as changed, on the only platform shi
 to LF nor strip an unchanged line's trailing whitespace (`overwrite` or an exact level-1 `old_string` still can); where
 `old_string` repeats a line, the walk fixes which copy's bytes a paired line takes; `write_file` and `haet_edit` still differ at
 level 2; an implementation built from the specification alone writes `new_string` as given. Closes
-[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../../../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)
+[`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../../defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md)
 once built.
 **Built 2026-10-13 (fin36):** `carryWindow` in `writeFileTool`'s edit branch and `linePairs` in `diff.ts`; pinned by twelve
 cases under "PD-TOOLS-016" in `packages/agent-tools/src/tools/tools.test.ts` (ten red on the code before) and `diff.test.ts`. The
 level-1 sibling the ruling asked to probe writes `new_string`'s LF lines into a CRLF file through both tools; recorded as
-[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../../../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
+[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../../defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
 not decided here (raised as [OQ-254](54-spikes-and-later-questions-21.md#oq-254)). The first execution is in place under the directive.
 
 <a id="oq-247"></a>

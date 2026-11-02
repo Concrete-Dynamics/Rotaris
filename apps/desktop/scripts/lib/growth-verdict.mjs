@@ -7,7 +7,7 @@
  * readings as that side's. The script used to print `warmRunsMs` as the full readings and `halfWarmRunsMs ??
  * warmRunsMs` as the half ones; for the parse and the sweep `warmRunsMs` held the HALF readings, so a red printed the
  * half readings twice and never the full ones
- * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
+ * (`docs/archive/defects/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  *
  * A pair is what `growthPair` in `packages/workspace/src/traceability/growth-readings.test-support.ts` records:
  * `{ work: { full, half }, clock, ratio, fullRunsMs, halfRunsMs, fullMinMs, halfMinMs, wallRatio, fullCpuRunsMs,
@@ -16,7 +16,7 @@
  * 2026-10-02: where `clock` is `thread-cpu` the ratio, the floor and the readings the verdict names are the thread's CPU
  * time, and the wall-clock readings, their ratio and the host's load are printed beside them; a pair with no `clock`
  * (wall-clock readings alone) is judged on the wall clock as before. The ceiling, the lower bounds, the floor and the
- * work range are unchanged (`docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
+ * work range are unchanged (`docs/archive/defects/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
  */
 
 export const GROWTH_FLOOR_MS = 25;

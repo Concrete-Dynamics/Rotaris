@@ -100,7 +100,7 @@ export function statusStripSandboxItem(session: { readonly sandboxed: boolean; r
  * accessible name, and REQ-SHELL-047's two responsive thresholds. The list is closed: until 2026-10-02 the strip also drew
  * the run's state, the theme's name, each child service and the replica's applied/reset/refused counters, which no
  * requirement places there, and none of REQ-SHELL-038's workspace-path, model, tokens or cost items
- * (docs/defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md).
+ * (docs/archive/defects/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md).
  * REQ-SANDBOX-121's confinement indicator stands where OQ-184's build reading, confirmed 2026-10-06 by R-071, puts it, right after the file-access flag.
  * The cloud-credit item (REQ-SHELL-046) is present only once a credit balance is available, and this build reads none, so
  * the list never carries it.
@@ -339,7 +339,7 @@ export function runHeaderControlReason(state: RunState): string | null {
  * **Its wording changed with it, and the reason is a disagreement between two requirements.** REQ-CHAT-007
  * leaves this text to the implementation; REQ-WORKSPACE-112 fixes it, word for word, and differently. The
  * more specific statement is followed — its text conveys both facts REQ-CHAT-007 requires — and the
- * disagreement is recorded at `docs/defects/fixed/two-requirements-fix-the-composer-setup-refusal-differently.md`
+ * disagreement is recorded at `docs/archive/defects/two-requirements-fix-the-composer-setup-refusal-differently.md`
  * rather than settled here. The string itself lives in `contracts` beside the keyboard path's two, so the
  * gate and the error a submit raises cannot drift apart.
  */
@@ -408,7 +408,7 @@ export const DRAFT_WRITE_MS = 400;
  * it. The run's events draw "Steer the run" before the start's reply arrives, so the steer dialog (REQ-MONITOR-137)
  * can open and focus its field in that window; until 2026-10-01 the composer took the focus back from under the modal
  * and the steer's text was typed into the composer behind it
- * (`docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`).
+ * (`docs/archive/defects/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`).
  * Nothing in the specification moves focus out of an open modal (REQ-CHAT-002 gives a modal its own keys).
  *
  * The elements are compared by identity and nothing else is read of them, so the rule is checkable without a DOM.
@@ -462,7 +462,7 @@ export function historyDown(walk: HistoryWalk | null, history: readonly string[]
  * seconds completed, as a clock reads, never the nearest. The run header and the inspector's run-level row read the same
  * interval, and until 2026-10-07 the header floored it while the row (`elapsedLabel`) rounded it, so one run showed two
  * durations a second apart (acceptance K1,
- * `docs/defects/fixed/the-run-header-and-the-inspectors-run-level-row-read-one-run-duration-a-second-apart.md`).
+ * `docs/archive/defects/the-run-header-and-the-inspectors-run-level-row-read-one-run-duration-a-second-apart.md`).
  */
 export function wholeSeconds(seconds: number): number {
   return Math.max(0, Math.floor(seconds));

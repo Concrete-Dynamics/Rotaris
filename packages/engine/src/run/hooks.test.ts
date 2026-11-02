@@ -128,7 +128,7 @@ describe('engine/run — the lifecycle hook points (ADR-0015, REQ-HOOKS-003/080/
   });
 
   /**
-   * `docs/defects/fixed/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`: the port's `log` — "the
+   * `docs/archive/defects/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`: the port's `log` — "the
    * application log only" — was wired to the session's own log at `INFO`, which its `WARNING` default drops, so a hook
    * fault that reduces to a log entry (REQ-HOOKS-079/128/129) was recorded nowhere. REQ-HOOKS-138 admits the
    * application log and not the session log; PD-MONITOR-002 keeps `info` there by default.

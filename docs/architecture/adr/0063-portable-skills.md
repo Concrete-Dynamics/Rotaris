@@ -75,7 +75,7 @@ the four positions named and two of them stated empty.
 > exposure today. ~~`REQ-WORKSPACE-050`'s worktree half is still unbuilt and is recorded in `docs/defects/`.~~
 >
 > **Repaired, then executed in the built app.** The worktree half was built on 2026-09-22 (`0b3ebe3`) as the repair of
-> [`isolated-runs-read-instruction-files-from-the-base-workspace.md`](../../defects/fixed/isolated-runs-read-instruction-files-from-the-base-workspace.md)
+> [`isolated-runs-read-instruction-files-from-the-base-workspace.md`](../../archive/defects/isolated-runs-read-instruction-files-from-the-base-workspace.md)
 > (now under `fixed/`). On 2026-09-27 `pnpm injection-proof`'s isolated launch showed it in the built app: a run in
 > `.rotaris/worktrees/<sid>` received the worktree's committed text under the worktree's paths, while the catalog stayed
 > the base workspace's (first-release-plan §3.3; first-executions row 2026-09-27).
@@ -281,11 +281,11 @@ the one row renderer. No in-context column, as ESC-37's ruling requires.
 kind badge as its own earlier work, and `/skill <path>` carries that badge — so a skill named `skill` took the
 command or lost its own depending on which effect ran first, against REQ-SHELL-056 both ways. `/skills` would have
 had the same exposure. The two fixed names are now always taken
-([`a-skill-named-skill-takes-the-skill-command.md`](../../defects/fixed/a-skill-named-skill-takes-the-skill-command.md)).
+([`a-skill-named-skill-takes-the-skill-command.md`](../../archive/defects/a-skill-named-skill-takes-the-skill-command.md)).
 The same change's gate found the prompt-file registrar holding the same hole from the other side — the fixed
 commands register by effect after the prompt files are on a rebuilt registry, and a re-read took `/skills` back for
 a `skills.md` — so both registrars now hold the two names
-([`a-prompt-file-named-skills-takes-the-skills-command.md`](../../defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md)).
+([`a-prompt-file-named-skills-takes-the-skills-command.md`](../../archive/defects/a-prompt-file-named-skills-takes-the-skills-command.md)).
 
 **One gap the specification leaves is logged as OQ-67**, with the reading built: REQ-CHAT-162 asks for the listing
 to be reachable from the Settings tab, whose header actions REQ-WORKSPACE-067 fixes at two, so the tab's table is

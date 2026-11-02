@@ -357,7 +357,7 @@ export class LoopSupervisor {
    * from `since`, when the activity satisfied the criteria. Nothing left is a failed classification (REQ-NOTIFY-106's "rather
    * than a missed budget", REQ-NOTIFY-109): no call is dispatched only to be cut, and the fallback decides. Before this cap a
    * key set to 30 held the agent for 30 s on one classification
-   * (`docs/defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`). The reason the first repair
+   * (`docs/archive/defects/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`). The reason the first repair
    * gave, kept beside its replacement: the budget was read from the activation `check()` takes, so the whole of it was taken
    * to remain at dispatch — but the turn observes a call before it runs it, and the step's calls run before `check()` (fin35's
    * review).

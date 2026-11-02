@@ -1,6 +1,6 @@
 /**
  * The directory a launch with no workspace argument runs in, and the reading of what it opened
- * (`docs/defects/fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
+ * (`docs/archive/defects/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
  * `settings-proof` ran four such launches in `apps/desktop`, and each opened the checkout and indexed it.
  */
 import { execFileSync } from 'node:child_process';
@@ -50,7 +50,7 @@ describe('emptyWorkingDirectory — where a launch with no workspace argument ru
   it('the checkout\'s own `apps/desktop`, where the proof ran these launches, is in the repository', () => {
     // Asked, not made: `emptyWorkingDirectory` would empty it.
     // Git for Windows prints its top level with forward slashes; the host's resolve spells it natively
-    // (docs/defects/fixed/the-working-directory-case-compares-gits-forward-slashed-top-level-with-a-native-path.md).
+    // (docs/archive/defects/the-working-directory-case-compares-gits-forward-slashed-top-level-with-a-native-path.md).
     expect(resolve(enclosingRepository(app) ?? '')).toBe(realpathSync(repo));
   });
 });
@@ -103,7 +103,7 @@ describe('setupResidue — what the code-intelligence setup left in a directory'
  * `C:/dev/Rotaris-crw-wt-loc1-proofcwd/.proof` from `realpathSync.native` (both in backslashes), and the tree's short name
  * `C:/dev/ROA627~1` as itself and as the long name. `settings-proof` started through a path spelled in lower case failed
  * `assertOpened` at its first launch, which had opened exactly its working directory
- * (`docs/defects/fixed/assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md`).
+ * (`docs/archive/defects/assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md`).
  */
 describe('sameDirectory / assertOpened — one directory, however each side spells it', () => {
   /** A working directory as the app logs it on Windows: `canonicalPath`'s spelling. */

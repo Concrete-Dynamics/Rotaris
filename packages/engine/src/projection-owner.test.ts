@@ -44,7 +44,7 @@ describe('ProjectionOwner — the record is published when the ledger or the too
 /**
  * REQ-MONITOR-214: an increment carries "the lowest row index whose content may still change, the rows from that index
  * onward", and the replica replaces everything from that index with what the increment carries. H5 of the final duress
- * autopsy at 27a5127 (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md): a row that
+ * autopsy at 27a5127 (docs/archive/defects/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md): a row that
  * settled after ANOTHER agent appended rows behind it was published alone, and the view dropped those rows.
  */
 describe('ProjectionOwner — a row committed below the last held row is published with every row after it', () => {

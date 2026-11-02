@@ -2,7 +2,7 @@
  * What `theme-proof` reads a text's contrast from (REQ-SHELL-145, REQ-SHELL-160 (a)), against fixed numbers taken from
  * the captures that exposed the defect: the status strip's `applied · reset · refused` item at 150 % on a 1066 CSS px
  * window, measured whole at x = 1006 and as a 1.2 px sliver at x = 1064.8
- * (`docs/defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`).
+ * (`docs/archive/defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`).
  */
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';

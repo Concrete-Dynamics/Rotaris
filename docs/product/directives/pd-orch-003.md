@@ -123,7 +123,7 @@ minted as a numbered defect: it was written and found inside the same hour and n
 **One defect was found beside it, in code this change only passed through**: a `PopoverMenu` option's
 accessible name fuses its label and its hint with no separator — `Auto` + `start at once` announces as
 *"Autostart at once"* — which reaches every chip built on the component and predates this directive. Recorded
-as [`a-chip-option-announces-its-label-and-hint-as-one-word.md`](../../defects/fixed/a-chip-option-announces-its-label-and-hint-as-one-word.md)
+as [`a-chip-option-announces-its-label-and-hint-as-one-word.md`](../../archive/defects/a-chip-option-announces-its-label-and-hint-as-one-word.md)
 and deliberately not repaired here. The row is in
 [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
@@ -132,7 +132,7 @@ and deliberately not repaired here. The row is in
 > when the gate would hold the run, it parks before the first new iteration, and its plan cycle is told the pending
 > tasks and what became of the continue's message. Building it found every approved prompt worked twice, because a
 > plan decision's relaunch appended the gated prompt as a second task
-> ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../../defects/fixed/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md),
+> ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../../archive/defects/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md),
 > repaired: the relaunch appends none). The text met the code in these places, each recorded in [OQ-104](../../architecture/open-questions.md):
 > - an iteration a crash left open runs unheld once the crash is recorded, as a rest's does;
 > - the message limit, checked as the resumed iteration closes, wins over the hold;

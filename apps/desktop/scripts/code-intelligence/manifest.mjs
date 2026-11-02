@@ -87,7 +87,7 @@ const NEVER_GRANT = { memoryDeletion: 'delete_memory', memoryRename: 'rename_mem
  * empty (a cross-file replacement; its path argument may be a directory, so it is never listed as an edited file). The
  * reading it replaces, kept beside it: until the ruling every capability was listed by its path argument alone, so a
  * rename listed its declaring file and a whole-project replacement nothing
- * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+ * (docs/archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
  */
 const EDIT_ARGUMENTS = {
   replaceSymbolBody: { path: 'relative_path', scope: 'argument' },

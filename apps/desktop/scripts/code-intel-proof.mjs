@@ -42,7 +42,7 @@
  *                   exactly the files that changed on disk (OQ-245), the rename must reach the calling file, and the session must
  *                   hold the rename's one row and no row for the reference search the run host sends before it (PD-MCP-004:
  *                   the pinned runtime renamed the declaring file alone when the rename was its first cross-file request,
- *                   docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ *                   docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  *                   Since PD-MCP-004 revision 2 (OQ-362) it also asserts that no `jsconfig.json` was written beside its
  *                   `tsconfig.json`: a project file covers this workspace, so clause 5 does not apply.
  *                   PD-MCP-004's acceptance gate: it rests on the runtime's internals, so it is RE-RUN ON EVERY PIN CHANGE.
@@ -51,12 +51,12 @@
  *                   code-intelligence entry offers the cross-file replacement as `replace_across_project`; a delegated tester
  *                   calls it by that name → both files changed on disk in the child's stored report and its child-report artifact.
  *                   The shipped entry renames nothing, so only a doctored entry reaches fin38's repair
- *                   (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
+ *                   (docs/archive/defects/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
  *  13. child rename, cold, JavaScript — (fin47, OQ-362; PD-MCP-004 revision 2) launch 11's rename in a workspace of its own
  *                   holding two JavaScript ES modules and no `tsconfig.json` or `jsconfig.json`, the live run's `todo-app` shape:
  *                   the rename must reach the calling file. The live `rename` scenario at 3c03287 renamed the declaring file alone
  *                   there, PD-MCP-004's search notwithstanding
- *                   (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md);
+ *                   (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md);
  *                   since revision 2 (OQ-362, ruled 2026-10-20) the run host places a `jsconfig.json` of the product's own at the
  *                   root for the search and the rename, so the launch also asserts the log's one placement and one removal and
  *                   that no `jsconfig.json` or `tsconfig.json` stands at the root afterwards. Held, as launch 11's failure is.
@@ -88,7 +88,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 // `electron` is the harness's, by platform: this proof spelled `electron.exe` alone and could not launch off Windows
-// (`docs/defects/fixed/code-intel-proof-names-the-windows-electron-binary-alone.md`).
+// (`docs/archive/defects/code-intel-proof-names-the-windows-electron-binary-alone.md`).
 const mainEntry = join(app, 'out', 'main', 'index.js');
 const packagedExe = join(app, 'release', 'win-unpacked', 'Rotaris.exe');
 const packaged = process.env['ROTARIS_CODE_INTEL_PACKAGED'] === '1';
@@ -120,7 +120,7 @@ mkdirSync(dataDirFor(local), { recursive: true });
 // The bundle, then the build. `bundle.mjs --check` first, as `init-proof` and `live-run` ask it: a tree built under an older
 // recipe or pin is stale, and launch 11 is PD-MCP-004's acceptance gate, re-run on every pin change, so it must run on the
 // pinned runtime. This proof used to test the marker's presence alone and ran launches 1 to 13 on the recipe-3 bundle that
-// 559003b superseded, without a word (docs/defects/fixed/code-intel-proof-uses-a-stale-code-intelligence-bundle-without-checking-it.md).
+// 559003b superseded, without a word (docs/archive/defects/code-intel-proof-uses-a-stale-code-intelligence-bundle-without-checking-it.md).
 // Unlike `init-proof` it builds the bundle under `--skip-build` too, as it always built an absent one: the bundle is this
 // proof's subject (ADR-0035), and `--skip-build` skips the desktop build alone.
 const bundleState = ensureBundle({ skipBuild: false });
@@ -155,7 +155,7 @@ for (const ws of [workspace, noCode]) spawnSync('git', ['init', '-q'], { cwd: ws
 // in the background at open (ADR-0064, REQ-WORKSPACE-083/088). This proof measures ADR-0035's branch and REQ-MCP-099's
 // setup action; without the marker every launch opened a never-initialized workspace, the background task was already
 // running when section 5 clicked, and the run host refused the click
-// (`docs/defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md`).
+// (`docs/archive/defects/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md`).
 const INITIALIZED = ['initialization:', '  completed: []', '  skipped: [code-intelligence-setup]', "  last_run: '2026-09-28T00:00:00.000Z'"];
 const WORKSPACE = ['# workspace configuration', 'runtime:', '  permission_mode: autonomous', '  allow_unsandboxed_autonomous: true', 'rotaris:', '  delegation_strategy: single', ...INITIALIZED, ''].join('\n');
 const GLOBAL = ['# scratch configuration written by the code-intelligence proof', 'models:', '  scripted: { provider: scripted, model_id: scripted }', 'small_model: scripted', 'medium_model: scripted', 'large_model: scripted', ''].join('\n');
@@ -228,7 +228,7 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
   // The product's own order (`code-intelligence-launch.ts`): the token FIRST, where the sentinel reads it at its fixed
   // index (REQ-MCP-033), then `hostSwitches`, then `--`. The branch is a Chromium process too and as root it dies without
   // the switch; ahead of the token the sentinel does not see the token and the whole application starts instead
-  // (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
+  // (`docs/archive/defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
   const child = spawn(exe, [...before, TOKEN, ...hostSwitches, '--', ...tail], { env, cwd: ws, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   // The client rejects every pending request when the child exits, errors or is killed by the guard, with the exit
   // status and standard error's tail — a branch that dies fails here in seconds instead of hanging (`lib/line-rpc-client.mjs`).
@@ -341,7 +341,7 @@ if (want(2) || want(3)) {
   const connected = lines(r.log, /mcp code_intelligence: connected for the session/)[0] ?? '';
   if (!/hook code_intelligence:ok/.test(connected)) throw new Error(`discovery: the binding probe did not succeed: ${connected || '(no connected line)'}\n${lines(r.log, /code_intelligence/).slice(-10).join('\n')}`);
   // REQ-MCP-053's discovery time and the listing, read from the line as it is since REQ-MCP-034's binding was shown (with its
-  // project); an empty record fails the proof rather than writing null (docs/defects/fixed/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md).
+  // project); an empty record fails the proof rather than writing null (docs/archive/defects/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md).
   const listing = codeIntelligenceListing(r.log);
   if (listing === null || !Number.isFinite(listing.listed) || !Number.isFinite(listing.ms)) throw new Error(`discovery: no line records the discovery's listing and time:\n${lines(r.log, /mcp: discovery of |tool discovery failed/).join('\n') || r.log.slice(-2000)}`);
   if (listing.project !== noCode) throw new Error(`discovery: the listing line names the project ${listing.project}, not ${noCode}`);
@@ -376,7 +376,7 @@ if (want(4)) {
 }
 
 // ---- 5. project setup from the MCP category ------------------------------------------------------------------------
-// The presses wait for what they press (`docs/defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`).
+// The presses wait for what they press (`docs/archive/defects/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`).
 // Every setup launch raises one notice at the open's 800 ms slot ("No model provider is authenticated yet": the profile
 // has no provider, REQ-WORKSPACE-152), and that persistent banner, drawn above the view, moves Settings down by its own
 // height. A press whose point was read before it drew lands on whatever sat above its target. The shared seam's
@@ -384,7 +384,7 @@ if (want(4)) {
 // deflected onto a category above more than once: in `setup-again` on 2026-09-29, and then in `setup-cancel`, where
 // Start had already been pressed and the card, Cancel with it, left the screen before Cancel could be pressed (the fix
 // round's verifier, three reds in seven runs; the seam's own note,
-// `docs/defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`,
+// `docs/archive/defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`,
 // repaired 2026-09-30: the seam now presses again until the category is selected). These launches still do not use that seam. They open Settings with the Ctrl+7 chord, which has no point to miss, and every press waits until the notice
 // has been drawn (`body:has([data-testid="notice"])`), so no point is read before the one shift of the launch. The
 // category press is made only if MCP Servers is not the selected category. Start is pressed as soon as it is drawn
@@ -510,7 +510,7 @@ if (want(6)) {
 // ---- 8. a child's EDIT-tier write reaches its report ---------------------------------------------------------------
 // fin32 (PD-ORCH-004, REQ-MCP-015, REQ-ORCH-109): the duress live run at a68f121 had a tester continuation edit one document
 // eleven times through the single-file content replacement, every call `ok`, and its report said it changed nothing
-// (docs/defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md).
+// (docs/archive/defects/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md).
 // A delegating workspace (no `delegation_strategy: single`), a tester child whose one call is that tool, then its stored
 // report and its child-report artifact read for the path.
 if (want(8)) {
@@ -545,7 +545,7 @@ if (want(8)) {
 // ---- 9. a child's cross-file EDIT call lists every file it changed ---------------------------------------------------
 // fin35 (OQ-245, XE1, ruled 2026-10-13 under R-072): a cross-file replacement with no path argument reaches the whole
 // project, and until the ruling its report listed nothing — the arguments name no file, and the server's result is its own
-// prose (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md). The run host now
+// prose (docs/archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md). The run host now
 // observes the files it can reach before and after the call. A delegated tester whose one call is that replacement across two
 // files, then its stored report and its child-report artifact read for both. The replacement needs no language server.
 if (want(9)) {
@@ -596,7 +596,7 @@ if (want(9)) {
 // before it. The first launch of this pair as built was launch 11's shape, and its rename changed the declaring file alone while
 // saying "Successfully renamed … (1 changes applied)": the pinned runtime waits for the language server's project loading before
 // a references request and not before a rename
-// (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273).
+// (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273).
 // PD-MCP-004 (ruled 2026-10-13 under R-072) repairs it in the run host: every rename is preceded by the reference search of the
 // same symbol and file, its answer discarded and no row written. Launch 11 is that directive's acceptance gate, re-run on every pin
 // change: both files renamed, and the child's only rows the rename's. Its failure is held — it records what it read, the launches
@@ -640,7 +640,7 @@ function ownWorkspace(dir, packageName) {
 /**
  * `ws` is the workspace the launch opens (launches 10 and 11: the shared TypeScript one, which gains a `tsconfig.json`); `js` writes
  * the two files as JavaScript ES modules and no project file at all — launch 13's shape, the live run's `todo-app`
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-362); `bare`
+ * (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-362); `bare`
  * writes the two TypeScript files with no `tsconfig.json` — launch 15's shape. `mcpArgs` adds scripted arguments for the child's
  * other calls (launch 14's symbol overview). The reading also says which project files stand at the root after the launch and how
  * many of PD-MCP-004 revision 2's placement, adoption, removal and warn lines the application log holds for that root.
@@ -697,7 +697,7 @@ async function childRename({ name, symbol, renamed, files, childScript, ws = wor
   const called = readFileSync(calling, 'utf8');
   const both = [declaringRel, callingRel].sort();
   const reached = new RegExp(`function ${renamed}\\(`).test(declared) && !declared.includes(symbol) && new RegExp(`import \\{ ${renamed} \\}`).test(called) && !called.includes(symbol);
-  return { reading: { ...reading, reachedBoth: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) }, failure: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) ? null : `${name}: the rename of ${symbol} changed ${JSON.stringify(changedOnDisk)}, not both ${JSON.stringify(both)} — ${callingRel} still reads ${JSON.stringify(called)} (the call said ${JSON.stringify(resultText.slice(0, 200))}; REQ-MCP-015, PD-MCP-004; docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273)` };
+  return { reading: { ...reading, reachedBoth: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) }, failure: reached && JSON.stringify(changedOnDisk) === JSON.stringify(both) ? null : `${name}: the rename of ${symbol} changed ${JSON.stringify(changedOnDisk)}, not both ${JSON.stringify(both)} — ${callingRel} still reads ${JSON.stringify(called)} (the call said ${JSON.stringify(resultText.slice(0, 200))}; REQ-MCP-015, PD-MCP-004; docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, OQ-273)` };
 }
 if (want(10)) {
   const { reading, failure } = await childRename({ name: 'child-rename', symbol: 'countItems', renamed: 'tallyItems', files: ['src/rename-a.ts', 'src/rename-b.ts'], childScript: 'mcp:code_intelligence.find_referencing_symbols,mcp:code_intelligence.rename_symbol,answer' });
@@ -720,7 +720,7 @@ if (want(11)) {
 // ---- 12. an EDIT tool renamed by the entry's tool_name_map is still read as a write --------------------------------
 // fin42 (N59; REQ-MCP-005, REQ-ORCH-109): fin38 carried a granted callable's reported name to the engine, so a code-intelligence
 // EDIT tool a `tool_name_map` renames is read as the write it is; it was pinned by unit tests alone, since the shipped entry renames
-// nothing and no live run can reach it (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
+// nothing and no live run can reach it (docs/archive/defects/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
 // Here the global configuration renames the cross-file replacement, a delegated tester calls it by the new name across the whole
 // project, and its stored report and child-report artifact must list both files it changed. No language server.
 if (want(12)) {
@@ -764,7 +764,7 @@ if (want(12)) {
 // `rename` scenario at 3c03287 renamed in the `todo-app` fixture — `.js`/`.jsx` and no `tsconfig.json` or `jsconfig.json`, as a
 // Vite React project ships — and the rename changed the declaring file alone after the search: there the TypeScript language
 // server holds only the files open in it, the runtime opens the declaring file alone, and the search answers nothing
-// (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, reopened).
+// (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md, reopened).
 // Launch 13 is that shape in the built app: its own workspace, two ES modules, no project file, the rename as the child's only
 // call. It was red until OQ-362 was ruled and built. PD-MCP-004 revision 2 (ruled 2026-10-20 under R-072), clause 5: the run host
 // places a `jsconfig.json` of the product's own at the root for the search and the rename and removes it when the rename has

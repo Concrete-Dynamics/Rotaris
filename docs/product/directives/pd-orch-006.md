@@ -54,7 +54,7 @@ and is offered to every run alike (REQ-ORCH-150).
 > coordinating status in REQ-ORCH-025's sense (it is not a `single` run, so nothing is withheld), and is told that it does
 > the work itself. No `swarm` demand stands beside that statement, since the build renders REQ-ORCH-025's `swarm` text on
 > no run (`packages/engine/src/children/personas.ts` reads no run override;
-> [the defect recorded for it](../../defects/fixed/the-swarm-run-override-changes-no-instruction-text.md)). *(The reason, corrected
+> [the defect recorded for it](../../archive/defects/the-swarm-run-override-changes-no-instruction-text.md)). *(The reason, corrected
 > 2026-10-06, finacc3, finding F07: the build now renders the `swarm` text on every run the mapping does not grant the bundle,
 > `withRunOverride`, and withholds it on a granted run by a check of its own, OQ-205's reading; the outcome on a granted run is
 > unchanged. In that bundle's repair round 1 the function became `runOverrideLayer`, its text placed after everything else the

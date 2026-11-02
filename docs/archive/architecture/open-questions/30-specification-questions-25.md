@@ -10,7 +10,7 @@ of a switch on REQ-WORKSPACE-109's terms and records nothing for it; REQ-WORKSPA
 already under way … reach its own conclusion", and which says of closing only "the application"; REQ-WORKSPACE-084,
 every attempted task given exactly one recorded outcome; PD-SHELL-001, under which "closing the added window changes
 nothing else". Raised 2026-09-30 by the verification of the repair of
-[`a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`](../../../defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md)
+[`a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`](../../defects/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md)
 under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: REQ-WORKSPACE-013's rule applies to every run of a workspace no window holds any more, in all three cases, a user-started run included; the run is cancelled on REQ-WORKSPACE-109's terms and nothing is recorded for it.
@@ -54,7 +54,7 @@ reports, or the one its record holds?** *(REQ-ORCH-137, whose skip list names "t
 compares "the run's recorded stop reason" and says a stop reason outside the list always yields a job; REQ-EVENTS-088,
 under which a failed recording step stops every further authoritative write for the run. Raised 2026-09-30 by the
 verifier of the repair of
-[`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`](../../../defects/fixed/an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md)
+[`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`](../../defects/an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md)
 under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: REQ-ORCH-137's reading governs, so a run that ended on a recording failure yields no improvement job and the capture reads nothing.
@@ -81,7 +81,7 @@ record governs even then, so that the capture must read the store before it may 
 
 **OQ-143 — Which status and exit code does a background session read when its process could not be started?**
 *(REQ-TOOLS-109, REQ-TOOLS-179, REQ-TOOLS-100, REQ-TOOLS-103, REQ-TOOLS-112. Raised 2026-09-30 by the repair of
-[`a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md`](../../../defects/fixed/a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md)
+[`a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md`](../../defects/a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md)
 under [R-067](../../../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-142 on its branch, renumbered OQ-143 at the merge, OQ-142
 having been taken on `main`.)*
 
@@ -123,7 +123,7 @@ the start, by waiting for Node's `spawn` or `error` before `start` returns.
 **OQ-144 — What does a foreground call answer when its command replaces the session's shell, and what becomes of the
 session?** *(REQ-TOOLS-097, REQ-TOOLS-098, REQ-TOOLS-103, REQ-TOOLS-104, REQ-TOOLS-179; `PD-TOOLS-001`. Raised
 2026-09-30 by the repair of
-[`a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`](../../../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md)
+[`a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`](../../defects/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md)
 under [R-067](../../../product/requests.md#r-067), acceptance finding A9. ~~Open;~~ ruled 2026-10-06; numbered OQ-143 on its branch, renumbered
 OQ-144 at the merge, OQ-142 having been taken on `main`.)*
 
@@ -198,7 +198,7 @@ description then no longer naming the shell the next command runs in; and whethe
 with no exit code, as built, or something REQ-TOOLS-179 names.
 
 **The sibling case, a command that ENDS the session's shell** *(added 2026-10-01 by the repair of
-[`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../../../defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md);
+[`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../../defects/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md);
 the same question by another road, raised with this reading built and not ruled)*. `exit`, `exit 3`, `logout` or a
 `kill -9 $$` loses the end frame as a replacement does, because the shell that would print it is gone; the call read as a
 soft pause after the whole no-output window, and the next call ran in a fresh shell with the directory and variables
@@ -244,7 +244,7 @@ answered as built, or left to end the session; and which code the call carries.
 restricts named entities; an entity absent from the map is unrestricted"; REQ-CONFIG-062, which canonicalises "every key
 of a role's `tool_restrictions` mapping" as a role name; REQ-CONFIG-046; `PD-TOOLS-006` revision 3's "after
 REQ-TOOLS-006's controls". Raised 2026-09-29 under [R-067](../../../product/requests.md#r-067) by the repair of
-[`a-personas-tool-restrictions-never-narrow-its-grant.md`](../../../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md),
+[`a-personas-tool-restrictions-never-narrow-its-grant.md`](../../defects/a-personas-tool-restrictions-never-narrow-its-grant.md),
 acceptance finding A4. ~~Open;~~ ruled 2026-10-06; numbered OQ-141 on its branch, renumbered OQ-145 at the merge, OQ-141
 to OQ-144 having been taken on `main`.)*
 
@@ -280,7 +280,7 @@ Whether an allowed-tool list may name a tool-server tool or reach tool-server to
 REQ-TOOLS-098, under which a soft-paused command keeps running and the next call is typed behind it; REQ-TOOLS-127,
 under which the live stream and the observation carry what the command wrote. Raised 2026-09-29 by the repair of
 acceptance finding A10,
-[`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../../../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
+[`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../../defects/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
 under [R-067](../../../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-143 on its branch, renumbered OQ-146 at the merge,
 OQ-143 to OQ-145 having been taken on `main`.)*
 

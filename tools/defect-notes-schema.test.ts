@@ -2,7 +2,7 @@
  * `docs/defects/README.md` fixes a defect note's shape: a `## <name>` title, a description, a `## Specs` section and a
  * `## Relevant files` section. This reads every note, open or fixed, for the two sections a reader looks for first.
  * One fixed note had neither, as created in `90c492f`
- * (`docs/defects/fixed/two-fixed-defect-notes-miss-the-schema-or-their-repair.md`).
+ * (`docs/archive/defects/two-fixed-defect-notes-miss-the-schema-or-their-repair.md`).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';

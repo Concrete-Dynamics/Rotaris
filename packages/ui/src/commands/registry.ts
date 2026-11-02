@@ -128,7 +128,7 @@ export const COMMANDS: readonly Command[] = [
 /** REQ-SHELL-048's last sentence applied to REQ-SHELL-049's table: what is not offered, and why. Owed, not dropped. */
 // 2026-10-13 (fin41, N71): "Search transcript" (Ctrl+F) and "Toggle reasoning bodies" left this list. Their reasons —
 // no search panel, an unregistered `display/showReasoning` — had been false since Parts Z and AA, and the entries stayed
-// withheld until the defect note `docs/defects/fixed/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md` was repaired.
+// withheld until the defect note `docs/archive/defects/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md` was repaired.
 export const OMITTED_COMMANDS: readonly OmittedCommand[] = [
   { label: 'Open demo window', shortcut: null, reason: 'no demo mode exists yet (REQ-SHELL-162, REQ-SHELL-005); the entry returns with the mode' },
 ];

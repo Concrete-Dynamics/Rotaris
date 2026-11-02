@@ -40,7 +40,7 @@ machine's record, a malformed one, a dead process's — and a third exclusive cl
 a third lost claim returns `refused`, exit code 2, as before. As built the launch waits two hand-over intervals, not three:
 the final claim is attempted without a further hand-over, which the bound above admits and the register's row of
 2026-11-01 reports ([first executions](../../architecture/first-executions/34-the-register-33.md)). The note moved to
-`docs/defects/fixed/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`.
+`docs/archive/defects/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`.
 
 > **Narrows:** REQ-STARTUP-164
 

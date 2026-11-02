@@ -34,7 +34,7 @@ import { startRetrospective } from '../workspace-host.js';
  * FALSIFIED 2026-10-13, kept beside its replacement: "It is disabled only while an analysis is already running — one
  * FIFO orders both passes (REQ-LIBRARY-123), so a second gesture would queue rather than start". Queueing was the reason
  * NOT to disable it: REQ-LIBRARY-125 lets no control be disabled while analysis runs, and the palette queued anyway
- * (`docs/defects/fixed/the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md`).
+ * (`docs/archive/defects/the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md`).
  */
 export const RETROSPECTIVE_LABEL = 'Run retrospective';
 

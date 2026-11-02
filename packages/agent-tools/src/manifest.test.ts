@@ -9,11 +9,11 @@ import { describe, expect, it } from 'vitest';
  * hoisted `node_modules` (ADR-0056), so an undeclared import resolves through another package's declaration and fails
  * only when that one narrows or the linker changes: `zod`, imported by the gate and every tool, and `@rotaris/config`,
  * imported by the search tool, were both undeclared until 2026-10-06
- * (docs/defects/fixed/agent-tools-imports-zod-without-declaring-it.md). Tests are left out: they run from the root's
+ * (docs/archive/defects/agent-tools-imports-zod-without-declaring-it.md). Tests are left out: they run from the root's
  * development dependencies (`vitest`).
  */
 // `fileURLToPath`, not the URL's `pathname`: on Windows that is `/C:/…`, which `readdirSync` read as `C:\C:\…`
-// (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+// (`docs/archive/defects/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
 const SRC = fileURLToPath(new URL('.', import.meta.url));
 const MANIFEST = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { dependencies?: Record<string, string> };
 

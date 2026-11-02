@@ -287,11 +287,11 @@ expect(popup.first === 'stop' && popup.active === 0, `the first row should be /s
 // REQ-CHAT-162 names — `/skill <path>` and `/skills` — beside the per-skill commands; the built-ins and the palette
 // mirrors carry `action`. This launch discovers no skill and has no prompt file, so the set is exactly those two, and the
 // `skill` badge sits on exactly those two rows. Until 2026-09-28 the assertion read every row as `action`, which
-// `/skill` stopped matching on 2026-09-15 (`docs/defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
+// `/skill` stopped matching on 2026-09-15 (`docs/archive/defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
 // "Discovers no skill" rests on the launch's isolation: on a POSIX host a skill under the machine-wide
 // `/etc/codex/skills`, which this proof does not redirect (`ROTARIS_CAPTURE_SKILLS_MACHINE` exists since 2026-09-28
 // and is not set here), would add its own `skill` row and fail the exact set below
-// (`docs/defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
+// (`docs/archive/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
 const FIXED_SKILL_COMMANDS = ['skill', 'skills'];
 expect([...popup.kinds].sort().join(',') === 'action,skill', `the built-ins and mirrors carry the action badge and the two fixed skill commands the skill badge — no other kind: ${popup.kinds.join(',')}`);
 const skillBadged = rows.filter((r) => r.attrs['data-kind'] === 'skill').map((r) => r.attrs['data-command']).sort();
@@ -550,7 +550,7 @@ for (const [name, at] of PALETTE_PLAN) {
   // `--rt-surface`, the dock's (`.composer__dock` in shell.css; the field inside it is transparent): the product derives
   // the four against `COMPOSER_GROUND` (`highlight.ts`). Until 2026-09-29 this read `--rt-bg`, the product's premise
   // then, which the docked composer no longer paints — the check failed on all three palettes, the same fact as the
-  // partial shade's 4.06, 4.25 and 4.39:1 (docs/defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md).
+  // partial shade's 4.06, 4.25 and 4.39:1 (docs/archive/defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md).
   const surface = resolvedRole.surface;
   expect(typeof surface === 'string' && resolvedRole.surfaceAlpha === 1, `the composer's painted ground on ${name} must be an opaque colour to measure against: ${JSON.stringify({ surface, from: resolvedRole.surfaceFrom, alpha: resolvedRole.surfaceAlpha })}`);
   expect(sameColour(surface, resolvedRole.surfaceToken), `the composer's painted ground on ${name} should be that palette's --rt-surface (the dock's, COMPOSER_GROUND): ${surface} (painted by ${resolvedRole.surfaceFrom}; --rt-bg is ${resolvedRole.background}) vs ${resolvedRole.surfaceToken}`);

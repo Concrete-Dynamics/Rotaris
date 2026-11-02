@@ -54,7 +54,7 @@ describe('REQ-TOOLS-184: the status strip shows the preset in force, with or wit
 
 /*
  * REQ-SANDBOX-121 with REQ-MONITOR-257, REQ-NOTIFY-030 and REQ-NOTIFY-061 (the repair of
- * `docs/defects/fixed/no-workspace-indicator-names-the-confinement-backend.md`): no surface read the record's `sandboxed`,
+ * `docs/archive/defects/no-workspace-indicator-names-the-confinement-backend.md`): no surface read the record's `sandboxed`,
  * and the record carried no backend to name.
  */
 describe('REQ-SANDBOX-121: the strip names the confinement backend of the focused session, and only of a confined one', () => {
@@ -97,7 +97,7 @@ describe('REQ-SANDBOX-121: the strip names the confinement backend of the focuse
 /*
  * REQ-SHELL-038/039/041/043/044/045/047 with REQ-TOOLS-131/184 and OQ-184's build reading, confirmed 2026-10-06 by R-071: the strip's items, their order,
  * names, tooltips and the two thresholds. Before the repair of
- * docs/defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md the strip drew the
+ * docs/archive/defects/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md the strip drew the
  * run's state, the theme's name, the child services and the replica counters, none of the workspace path, model, tokens or
  * cost, the literal `workspace-scoped` whatever the opt-out said, and `bg sessions: N`, at every width.
  */

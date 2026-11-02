@@ -7,9 +7,9 @@ The ruled, closed, resolved and withdrawn entries of [part 29](../../../architec
 **OQ-135 — Does `send_signal SIGINT` owe the session's stop when the shell discards the signal?** *(REQ-TOOLS-110,
 REQ-TOOLS-128; OQ-10 as ruled in [R-044](../../../product/requests.md#r-044). Raised 2026-09-29 under
 [R-067](../../../product/requests.md#r-067) by the verification of the repair of
-[`a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md`](../../../defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md),
+[`a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md`](../../defects/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md),
 for the exposure recorded open in
-[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../../../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
+[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../../defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
 ~~Open;~~ ruled 2026-10-06; numbered OQ-134 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** SIGINT must stop the session: R-044's "stops" binds the product past delivery. The narrow re-delivery is accepted as built, where the session's shell is `dash` on Linux, with the residue this entry states. [`PD-TOOLS-010`](../../../product/directives/pd-tools-010.md#pd-tools-010) states it and extends REQ-TOOLS-110 and REQ-TOOLS-128.
@@ -172,7 +172,7 @@ is left unread.
 "polls for more output after a soft pause"; REQ-TOOLS-097, whose no-output window bounds the command's own call and
 does not name a poll; REQ-TOOLS-098, whose empty-capture observation states "the elapsed no-output window". Raised
 2026-09-29 by the repair of live-run finding L2 under [R-067](../../../product/requests.md#r-067),
-[`an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`](../../../defects/fixed/an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md).
+[`an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`](../../defects/an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md).
 ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: a poll returns at once, and an empty one states the time since the previous observation, the time since the command last wrote, and that a poll does not wait for output.
@@ -201,7 +201,7 @@ session in the same gesture that writes the setting", and whose surface clause a
 a released session to state the release; REQ-ORCH-152, which offers the mode "both where a run is started in the
 desktop interface and in the settings interface"; REQ-CONFIG-320, whose selector "defers to Save like the rest of
 destination 1". Raised 2026-09-29 by the repair of
-[`the-run-start-setting-says-the-plan-gate-is-not-built.md`](../../../defects/fixed/the-run-start-setting-says-the-plan-gate-is-not-built.md)
+[`the-run-start-setting-says-the-plan-gate-is-not-built.md`](../../defects/the-run-start-setting-says-the-plan-gate-is-not-built.md)
 under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: choosing `plan` in the Settings Runtime category re-arms nothing, and its hint states the release and how to plan the next run again. [`PD-ORCH-003`](../../../product/directives/pd-orch-003.md#pd-orch-003) revision 3 names the run-start control as the composer's chip.
@@ -231,7 +231,7 @@ or every released session of the workspace.
 document's markers illustrative for human-readable messages and leaves "a string that is part of a machine-readable
 contract" unaffected; REQ-CHAT-166, which governs whether the tool row shows a tool's result. Raised 2026-09-29 by the
 repair of live-run finding L11 under [R-067](../../../product/requests.md#r-067),
-[`a-literal-plural-marker-is-rendered-in-sign-in-notices.md`](../../../defects/fixed/a-literal-plural-marker-is-rendered-in-sign-in-notices.md).
+[`a-literal-plural-marker-is-rendered-in-sign-in-notices.md`](../../defects/a-literal-plural-marker-is-rendered-in-sign-in-notices.md).
 ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built, the four strings treated as fixed contract text: REQ-TOOLS-110's, REQ-TOOLS-134's, REQ-LIBRARY-100's and REQ-LIBRARY-089's markers stay as spelt, wherever the tool row draws them. [`PD-SHELL-006`](../../../product/directives/pd-shell-006.md#pd-shell-006) narrows REQ-SHELL-044.
@@ -258,7 +258,7 @@ that REQ-SHELL-044's "anywhere" excepts a tool's result, or the tool row draws t
 *(REQ-TOOLS-135, which names `operation` as `write_file`'s selector; REQ-TOOLS-032, which requires three repairs before
 schema validation and refuses a payload that is still invalid after them. Raised 2026-09-29 by the partial repair of live-run
 finding WF1 under [R-067](../../../product/requests.md#r-067),
-[`write-files-first-use-refusal-recurred-under-duress.md`](../../../defects/fixed/write-files-first-use-refusal-recurred-under-duress.md).
+[`write-files-first-use-refusal-recurred-under-duress.md`](../../defects/write-files-first-use-refusal-recurred-under-duress.md).
 Open until 2026-10-06; ruled then, below.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** as recommended, a `write_file` call with a path

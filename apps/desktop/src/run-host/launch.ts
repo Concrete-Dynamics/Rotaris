@@ -45,7 +45,7 @@ export type ContinuationLeaseDeps = Pick<LaunchDeps, 'workspaceRoot' | 'attended
  * reads the cached verdict synchronously — comes after the verdict is settled, as in `launchSession`. Until 2026-10-20 it
  * read whatever a run start or a `confinement.status` request had settled, `null` before either, and a confinement mode
  * other than `off` was then refused as unavailable with no reason and no remediation, leasing nothing
- * (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
+ * (docs/archive/defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
  */
 export async function leaseForContinuation(workspaceRoot: string, deps: ContinuationLeaseDeps): Promise<ContinuationLease> {
   // Guarded, as in `launchSession`: with no service wired the gate reads a null verdict as unavailable, the fail-closed side.
@@ -62,7 +62,7 @@ export async function leaseForContinuation(workspaceRoot: string, deps: Continua
  * continuation requires the entry role's provider and says "before continuing this run"; a retrospective, which continues no run,
  * requires its own model's provider and names itself (`PD-LIBRARY-002` revision 5, OQ-300 ruled under R-072). Until 2026-10-14
  * both required the entry role's provider
- * (docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md).
+ * (docs/archive/defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md).
  */
 async function leaseOver(prepared: PreparedRun, required: string | null, deps: Pick<ContinuationLeaseDeps, 'leaseCredentials'>, refusalDetail: string): Promise<ContinuationLease> {
   const bearers = prepared.authProviders.length > 0
@@ -92,7 +92,7 @@ export type LeasedSetup =
  * `launchSession`'s order. The live scenario run at `ce5f952` (finding F2) found the retrospective's request sent with no
  * credential: it took the workspace's cached setup (`configuredFor`), completed before any lease over an empty bearer map, and
  * the lease published a new map that setup never read
- * (`docs/defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`).
+ * (`docs/archive/defects/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`).
  */
 export async function leasedSetup(workspaceRoot: string, deps: ContinuationLeaseDeps): Promise<LeasedSetup> {
   // Prepared as a retrospective's: an entry role with no usable model, or a `default_persona` naming no role this build knows,
@@ -107,7 +107,7 @@ export async function leasedSetup(workspaceRoot: string, deps: ContinuationLease
     /*
      * REQ-NOTIFY-254: a configuration that loaded and refused the pass is said with the reason that layer gave, never as one that
      * could not be loaded. Until 2026-10-15 every refusal but `no-model` became `unconfigured`
-     * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+     * (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
      *
      * Since PD-LIBRARY-002 revision 6 (OQ-363, 2026-10-20) no refusal of a loaded configuration reaches here: the two that did —
      * `default_persona` naming no role this build knows, and referential errors with no one present (REQ-CONFIG-246) — no longer

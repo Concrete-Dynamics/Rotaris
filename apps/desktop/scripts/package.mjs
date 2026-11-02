@@ -178,7 +178,7 @@ try {
    */
   step('the packaged bundle carries no scriptable seam', () => {
     // The two lists live in `lib/seam-check.mjs`, held to the source by its test (2026-10-14: main's dialog answers were
-    // missing from them, docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
+    // missing from them, docs/archive/defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
     const { missing, present, files, bytes } = seamCheck(join(APP, 'out', 'main'));
     if (missing.length) throw new Error(`the packaged bundle lost a seam the probe needs: ${missing.join(', ')}`);
     if (present.length) throw new Error(`the packaged bundle still carries scriptable seams: ${present.join(', ')}`);
@@ -284,7 +284,7 @@ appRun = await stepAsync('the packaged app opens a store and runs a terminal cal
      * OQ-312 (ruled 2026-10-14 under R-072, no directive): this configuration named the `scripted` provider until the ruling's
      * build, which reached the scripted model client and its fixed one-step script in the packaged build — the reason that client
      * shipped at all. A packaged build answers no such entry now, and this step proves the shipped model client instead
-     * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+     * (docs/archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
      */
     mkdirSync(join(ws, '.rotaris'), { recursive: true });
     writeFileSync(join(ws, '.rotaris', 'agents.yaml'), `models:\n  stub: { provider: openai, model_id: rule-4b-stub, base_url: "${stub.baseUrl}", api_key: rule-4b-placeholder-key }\nsmall_model: stub\nmedium_model: stub\nlarge_model: stub\nruntime:\n  permission_mode: autonomous\nrotaris:\n  delegation_strategy: single\n`);

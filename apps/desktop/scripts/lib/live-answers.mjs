@@ -4,12 +4,12 @@
  * A sampled model answers one prompt differently from run to run. A proof that asserts one fixed answer goes red on
  * the model's call and not on the product's. Against the registered self-hosted endpoint (`katalyst`), three of five
  * runs went red that way on 2026-10-03
- * (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`). What a requirement does fix
+ * (`docs/archive/defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`). What a requirement does fix
  * stays a red: the classifier's fallback for any reason but its bound (Part L; REQ-ORCH-007), a category outside the ones
  * the taxonomy's texts leave in reach of the prompt, and a run that never answers when it is given a second chance. A
  * fallback at REQ-ORCH-008's 12 s bound is the product's specified answer to a slow call, and since OQ-332's ruling
  * (2026-10-15, R-072) it gets the one extra ask an answer outside the set gets
- * (`docs/defects/fixed/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`).
+ * (`docs/archive/defects/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`).
  */
 
 /**
@@ -112,7 +112,7 @@ export function intentVerdict(log, intent) {
  * What scenario 3b does next for one prompt, from its verdicts so far (`intentVerdict`, one per launch): `done` with the
  * verdict that counts (and any `earlier` attempt), `again` to ask the prompt once more, or `red` with the problem.
  *
- * finacc3 A2-03 (`docs/defects/fixed/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md`): r1 classified the
+ * finacc3 A2-03 (`docs/archive/defects/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md`): r1 classified the
  * flag prompt `single_file_change (0.82)` and the lone re-run within the set at 0.95. One answer outside the set is the
  * sampled model's call, as one answerless run is (PD-ORCH-009): the prompt is asked once more, and a second answer outside
  * the set is the red, naming both. Since PD-ORCH-011 revision 2 (OQ-227, ruled 2026-10-13 under R-072) the classifier is
@@ -121,7 +121,7 @@ export function intentVerdict(log, intent) {
  * REQ-ORCH-006 gave the category no meaning the classifier could be held to.
  *
  * OQ-332 (ruled 2026-10-15 under R-072; F8 of fin46's final acceptance,
- * `docs/defects/fixed/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`): a fallback at
+ * `docs/archive/defects/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`): a fallback at
  * REQ-ORCH-008's bound (`timedOut`) is REQ-ORCH-007's specified answer to one slow call, so it gets the same one extra ask.
  * The two share it: the second problem of either kind is the red, naming both. Every other fallback (unparseable,
  * unmapped, empty, failed, setup) and a missing intent line are reds at once, first or second.

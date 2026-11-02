@@ -7,7 +7,7 @@ import type * as FsPromises from 'node:fs/promises';
 /**
  * How the snapshot walk reads a large directory (OQ-245; fin38's review). The status reads are counted through a wrapped
  * `node:fs/promises`, so the bound is measured in reads, not in milliseconds, and holds at any load on the host
- * (docs/defects/fixed/a-snapshot-reads-every-file-of-a-directory-before-it-checks-the-limit.md).
+ * (docs/archive/defects/a-snapshot-reads-every-file-of-a-directory-before-it-checks-the-limit.md).
  */
 const reads = vi.hoisted(() => ({ total: 0, inFlight: 0, maxInFlight: 0 }));
 vi.mock('node:fs/promises', async (importOriginal) => {

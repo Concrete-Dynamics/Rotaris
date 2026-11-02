@@ -41,7 +41,7 @@ const ms = (fn: () => void): number => { const t0 = performance.now(); fn(); ret
  * (`growth-readings.test-support.ts`) — seven readings a side after a warm-up each, the sides alternating. All full-size readings
  * used to come first and the half-size ones after them, so the half side ran hotter and the parse ratio read 3.04 to
  * 3.37 on an idle host against a work ratio of 2.14; and the sweep's full side was a single reading
- * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
+ * (`docs/archive/defects/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  */
 const msMin = (fn: () => void, runs = 3): { readonly minMs: number; readonly runsMs: readonly number[] } => {
   const all: number[] = [];
@@ -53,7 +53,7 @@ const msMin = (fn: () => void, runs = 3): { readonly minMs: number; readonly run
  * (`process.threadCpuUsage`, user plus system). The minimum of seven wall-clock readings screens out load only while
  * some round of each side runs uncontended; with more runnable work than CPUs none does, and the ratio left its band in
  * both directions at load averages of 9.9 to 20.6 on four CPUs
- * (`docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`). REQ-TRACE-088's
+ * (`docs/archive/defects/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`). REQ-TRACE-088's
  * reference conditions are one execution thread timing the pass alone, which is what the thread's CPU time counts.
  * The wall-clock readings stay in the record beside them, with the host's load average and CPU count; the absolute
  * "about one second" budgets above stay on the wall clock (`msMin`), and a red there above the CPU count is re-run
@@ -93,7 +93,7 @@ const dualClock = () => {
 
 /**
  * The sweep's growth pair has trees of its own, 2,000 files against 4,000 with ten sites a file, over the same store
- * (`docs/defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`). It used to share the
+ * (`docs/archive/defects/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`). It used to share the
  * parse pair's half tree, 500 files against the 10^3-file budget tree, and the 500-file side read 14 to 23 ms of thread
  * CPU on this host, below `growthVerdict`'s 25 ms floor, so REQ-TRACE-088's binding clause was recorded and never
  * asserted. At 10^3 files the side read 36 to 44 ms idle, and about 28 ms at the low end extrapolated from the loaded

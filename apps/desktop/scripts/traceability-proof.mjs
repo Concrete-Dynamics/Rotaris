@@ -62,7 +62,7 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
  * Reading the full tree first and the half tree afterwards had let the half side run hotter and read cheap, and the
  * parse went red at 3.04 to 3.37, twice in a row on an idle host. The verdict and its message are `growthVerdict`
  * (`lib/growth-verdict.mjs`), which prints each side's readings as that side's
- * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
+ * (`docs/archive/defects/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  *
  * 2026-10-02: the three ratios are read on the CPU time of the thread that ran each pass (`process.threadCpuUsage`),
  * the wall-clock readings and their ratio kept beside them with the host's load average and CPU count. With more
@@ -70,13 +70,13 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
  * its band both ways (parse 3.1 to 5.52, sweep 0.34 to 3.32, at load averages of 9.9 to 20.6 on four CPUs). The bounds
  * and the floor are unchanged. The two "about one second" budgets stay on the wall clock: a red there on a host loaded
  * above its CPU count is re-run alone
- * (`docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
+ * (`docs/archive/defects/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
  */
 /*
  * 2026-10-02 (fin7): the sweep's pair is read over trees of its own, 2,000 files against 4,000, so both sides clear the
  * floor, and the sweep's ratio is REQUIRED to be asserted (`mustAssert`): REQ-TRACE-088's linear clause is the binding one
  * (resolution 36), and over the old 500-file side it was recorded and never asserted on this host
- * (`docs/defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`). The floor and the
+ * (`docs/archive/defects/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`). The floor and the
  * ceiling are unchanged; a sweep pair that reads under the floor now goes red instead of printing a NOTE.
  */
 const growthLines = [];
@@ -307,7 +307,7 @@ app.whenReady().then(async () => {
     results.board = await board({ name: 'requirements.board' });
     // REQ-TRACE-512's busy refusal, with the first check held in flight for real: two checks over the 11-requirement
     // fixture raced, since a first that finished in ~8 ms before the service took the second off its channel left both
-    // answering ok (docs/defects/fixed/traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md).
+    // answering ok (docs/archive/defects/traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md).
     // The pair runs over the scale tree, opened as the workspace, whose check lasts long enough to cancel mid-pass above;
     // the second is posted only while the first is unanswered, the first is then cancelled, and both replies are timed.
     results.scaleOpened = await request({ kind: 'workspace.open', workspaceRoot: scaleRoot });

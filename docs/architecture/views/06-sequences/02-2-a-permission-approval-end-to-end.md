@@ -51,7 +51,7 @@ The parts that are easy to get wrong:
   answers nothing (`QuitState`, `main/exit.ts`). The quit's `shutdown` then withdraws the approval — at a rest,
   and during a plan cycle too, where the cycle's agents end rather than rest (PD-ORCH-005 clauses 9 and 15; OQ-108). The question
   dock's cancellation is held back at a quit the same way. *Until phase 7 the quit's close sent a Deny first, and the
-  agent stepped on it: `docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`.*
+  agent stepped on it: `docs/archive/defects/a-quit-denies-the-approval-it-should-withdraw.md`.*
 - **The quit's gap is not unattended.** Main revokes the last window's presenter as it closes, but sends `shutdown`
   only after `window-all-closed` has waited on the checkpoint operation (REQ-GIT-101). The revoke the quit causes
   carries `quitting` (from `QuitState`), and until a window registers again `PresenterRegistry.quitting` holds what is
@@ -59,7 +59,7 @@ The parts that are easy to get wrong:
   shown" waits too, a question is recorded pending, and no timer expires on any of them (`PendingApprovals`'
   and `PendingQuestions`' `held`). The shutdown then withdraws them by `quit` (PD-ORCH-005 clause 9; OQ-132). *Until
   2026-09-29 an ask in the gap met no presenter and was denied by the headless policy:
-  `docs/defects/fixed/an-approval-asked-after-the-last-window-closes-is-denied.md`.*
+  `docs/archive/defects/an-approval-asked-after-the-last-window-closes-is-denied.md`.*
 - Presentation order is **oldest first by the published sequence**, and that sequence orders presentation
   *across* windows, not within one.
 - A dialog that cannot be shown is not a hang: `approval.shown {ok: false}` comes back, the pending request is
@@ -71,7 +71,7 @@ The parts that are easy to get wrong:
   (`MainWindows`' `unshownApprovals`), which answers each `approval.shown {ok: false}`; during a quit it answers
   nothing, and the shutdown withdraws them. *Until the fourteenth review round of the merged revision 4 build, main acknowledged only
   what it showed, so a request queued behind a dialog left open for 10 s was denied unshown:
-  `docs/defects/fixed/a-queued-approval-is-denied-unshown-after-ten-seconds.md`.*
+  `docs/archive/defects/a-queued-approval-is-denied-unshown-after-ten-seconds.md`.*
 - Only an **answer, a cancellation or a withdrawal** releases the wait. A wait with no limit is still released —
   the explicit cancel cancels whatever is blocked on a person as its first act, and a rest (a pause, a stop, a quit)
   **withdraws** it: the call settles blocked and interrupted, `approval_withdrawn` (or `question_withdrawn` for a

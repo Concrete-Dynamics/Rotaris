@@ -43,7 +43,7 @@ this process continues on the same writer, and a relaunch reaps the dead pid's r
 in the proof. (c) `editQueuedPrompt` is REQ-MONITOR-004's "edit a queued prompt"; the queue has no reorder.
 (d) The stall-evaluation leg of REQ-MONITOR-135 waits on the stall detector. *2026-09-29: a delegated child's stall
 detector exists (`children/stall.ts`, REQ-ORCH-089), and the leg is still not built: nothing injects from a stall
-evaluation, and the root has no detector ([`a-stalled-child-is-never-shown-stalled.md`](../../../defects/fixed/a-stalled-child-is-never-shown-stalled.md)).*
+evaluation, and the root has no detector ([`a-stalled-child-is-never-shown-stalled.md`](../../../archive/defects/a-stalled-child-is-never-shown-stalled.md)).*
 *2026-09-30 (R-067, acceptance finding A6): the leg's first execution. The root has a watch too, and an evaluation that
 finds a steer pending for an agent waiting between its turns on its own children wakes it; the step it takes injects the
 steer before any child ends, and every delivered steer restarts the watch's silence. Within a turn nothing is injected by

@@ -16,7 +16,7 @@ Windows resolves to `%LOCALAPPDATA%\Rotaris\Rotaris`.
 > `ROTARIS_PREFERENCES_ROOT`, then on Linux `XDG_CONFIG_HOME/Rotaris/Rotaris` (else `~/.config/Rotaris/Rotaris`), on Windows
 > `%LOCALAPPDATA%\Rotaris\Rotaris` and on macOS `~/Library/Application Support/Rotaris/Rotaris`, the same platforms
 > `resolveUserDirs` honours the variable on
-> (`docs/defects/fixed/the-preference-root-honours-xdg-config-home-on-every-platform.md`).
+> (`docs/archive/defects/the-preference-root-honours-xdg-config-home-on-every-platform.md`).
 
 The theme write uses `replaceDocumentSync`, including the file flush and directory flush supplied by the
 atomic document primitive, before the command returns. Tests established that an unknown stored theme resolves

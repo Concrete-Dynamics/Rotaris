@@ -61,7 +61,7 @@ installer — and alongside it the installer turned assisted and the owner's ico
 - **consequence 14's unmeasured branch, the stub's half**: with the root refusing every write the artifact still
   started, from a placement in the transient-files storage that was gone afterwards, and that placement's marker named
   the root it could not prepare into. The application's half — the notice — **is not built**
-  (`../../../defects/fixed/a-portable-that-could-make-no-preparation-starts-without-the-notice-req-startup-165-c-requires.md`)
+  (`../../../archive/defects/a-portable-that-could-make-no-preparation-starts-without-the-notice-req-startup-165-c-requires.md`)
   *(built 2026-10-31, `main/preparation-notice.ts`: the marker read beside the image before the window, the warning raised
   from the post-show activation; run end to end with a real marker in a placed tree, not yet through the stub — see "How
   the application learns of it" in the decision)*;

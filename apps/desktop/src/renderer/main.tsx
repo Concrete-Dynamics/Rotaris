@@ -481,7 +481,7 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
  * closed 2026-09-11; the store built 2026-09-14 and its review lifecycle 2026-09-15): its review, edit and delete reach
  * the workspace service through the `improvements` command below. Until 2026-10-13 this comment still called that body a
  * placeholder awaiting OQ-45
- * (docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md).
+ * (docs/archive/defects/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md).
  */
 function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void }) {
   // REQ-LIBRARY-105: the query lives above the tabs, so a refresh replaces the lists and never the typed text.
@@ -574,7 +574,7 @@ function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: P
       // ADR-0051 decision 4: a link in the Preview requests an external open THROUGH THE COMMAND CHANNEL — the window's
       // shared `openLink` (`shell.openExternal`, acknowledged, a failure reported), as the transcript's links do. Without it
       // `Markdown` draws every link disabled, which is how they stood until 2026-10-13
-      // (docs/defects/fixed/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md).
+      // (docs/archive/defects/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md).
       <ArtifactInspector key={entry.id} id={entry.id} raised={entry.raised} onLoad={load} onSave={save} onOpenLink={openLink}
         onClose={(id) => setOpen((current) => current.filter((x) => x.id !== id))} />
     ))}
@@ -669,7 +669,7 @@ interface AppearanceProps {
 function useConfiguration(workspace: string | null) {
   const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null);
   // The saved and pending halves move in one update (`adoptSnapshot`), so a reload is rebased against the saved values the
-  // reload before it left, however close behind it arrives (REQ-CONFIG-419; `docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
+  // reload before it left, however close behind it arrives (REQ-CONFIG-419; `docs/archive/defects/two-quick-configuration-reloads-mark-settings-unsaved.md`).
   const [form, setForm] = useState<SettingsForm | null>(null);
   const saved = form?.saved ?? null;
   const pending = form?.pending ?? null;
@@ -1058,10 +1058,10 @@ function dispatchNoticeAction(action: NoticeAction): void {
       // application-wide, so this window may hold another one (a second window, or a switch since the notice was raised):
       // main reaches the named workspace — the window holding it surfaced, else one added for it, asking nothing
       // (PD-SHELL-001 revision 2, OQ-267 ruled 2026-10-13 under R-072) — and opens its review there. Until 2026-10-13 this case compared the name with this window's workspace and
-      // opened nothing on a mismatch (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md).
+      // opened nothing on a mismatch (docs/archive/defects/a-hook-review-notice-for-another-workspace-opens-nothing.md).
       // A refusal — "Open a workspace before reviewing its hooks", "This workspace declares no hooks" — is published as a
       // persistent notice in main's words (REQ-NOTIFY-254, REQ-NOTIFY-003). Until 2026-10-14 it reached the console alone
-      // (docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md).
+      // (docs/archive/defects/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md).
       void reportNoticeActionRefusal(bridge, 'open-hook-review', bridge.command({ kind: 'hooks.review', workspace: action.workspace }));
       return;
     case 'open-provider-sign-in':
@@ -1080,11 +1080,11 @@ function dispatchNoticeAction(action: NoticeAction): void {
       // else one added for it, asking nothing — and asks THAT window, on channel 16, to focus the session through its own load
       // (the `onSessionFocus` listener in `App`). This window focuses nothing itself unless it is the one reached. From
       // 2026-10-14 until this revision a press here for a session another workspace holds was not dispatched
-      // (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+      // (docs/archive/defects/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
       // A refusal — "The window holding the session closed before it could focus it", "No main window is open" — is published
       // as a persistent notice in main's words (REQ-NOTIFY-254, REQ-NOTIFY-003), a refused reach REQ-SHELL-019 already reported
       // only logged. Until 2026-10-15 it reached the console alone
-      // (docs/defects/fixed/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
+      // (docs/archive/defects/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
       void reportNoticeActionRefusal(bridge, 'focus-session', bridge.command({ kind: 'session.focusFromNotice', sessionId: action.sessionId, workspace: action.workspace }));
       return;
     case 'open-library':

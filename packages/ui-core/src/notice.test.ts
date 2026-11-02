@@ -6,7 +6,7 @@ import { createNoticeStore } from './notice.js';
  * ADR-0049 / PD-WORKSPACE-005 ("shown in every open main window"): a window learns the current notice from channel 4, and a
  * window opened after the publication learns it by asking main at boot (`notice.current`) and seeding its store from the
  * answer. Until 2026-10-14 nothing handed a new window the notice already current, so a main window added after the
- * publication showed none (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
+ * publication showed none (docs/archive/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
  */
 describe('the renderer\'s notice store is seeded with the notice current when its window boots', () => {
   const notice = (id: number, title: string) => ({ id, severity: 'error', title, message: '', detail: '', persistent: true, sessionId: '' });

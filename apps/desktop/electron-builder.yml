@@ -80,7 +80,7 @@ win:
   # (launcher/build.rs). `pnpm package` reads every image back out of the three executables (scripts/lib/pe-icons.mjs).
   icon: resources/icon.ico
   # no artifactName here: supplied by pnpm package from the declared version (see the header)
-# REQ-STARTUP-016/017 (docs/defects/fixed/the-windows-installer-is-one-click-with-no-pages-and-no-directory-choice.md): the
+# REQ-STARTUP-016/017 (docs/archive/defects/the-windows-installer-is-one-click-with-no-pages-and-no-directory-choice.md): the
 # ASSISTED per-user installer — Welcome → Directory → Install → Finish, the directory the user's to choose, strictly
 # per-user with no elevation. electron-builder alone remembers the directory as `HKCU\Software\<APP_GUID>\InstallLocation`;
 # the updater reads REQ-STARTUP-016's `HKCU\Software\Rotaris\InstallDir`, which the include writes beside it (it says

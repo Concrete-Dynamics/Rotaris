@@ -1,6 +1,6 @@
 /**
  * A red's evidence is kept where the next run does not remove it
- * (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`: the three reds of 2026-10-03
+ * (`docs/archive/defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`: the three reds of 2026-10-03
  * survived only because their logs were copied out by hand before `slice-proof` cleared its output directory).
  */
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

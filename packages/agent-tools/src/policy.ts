@@ -367,7 +367,7 @@ function pathScopeMatches(scope: PathScope, req: PermissionRequest, env: Evaluat
        * the join the fence and `resolvedPathSet` make — and then handed to the resolver for its real path. Until
        * 2026-09-28 the raw argument went to the resolver, and the run host's is `realPathOf`, relative to the PROCESS
        * directory: a workspace-relative read under `restricted` landed "outside" unless main happened to start inside
-       * the workspace (`docs/defects/fixed/path-scope-resolves-a-relative-path-against-the-process-directory.md`).
+       * the workspace (`docs/archive/defects/path-scope-resolves-a-relative-path-against-the-process-directory.md`).
        * The unit tests did not see it because they injected a resolver that joined the root itself.
        */
       real = env.resolvePath(resolveInWorkspace(env, p));
@@ -400,7 +400,7 @@ function commandMatches(m: CommandMatcher, facet: string | null, segments: () =>
  * it: a tool outside the registry carries no declaration and nothing is inferred from its name), so such a rule does
  * not fire for it and the preset's default decides. A server's own `read_file`, offered under that plain name to a
  * persona whose public set lacks one, was allowed by `ask:read-only-tool` wherever its arguments pointed until
- * 2026-09-28 (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`).
+ * 2026-09-28 (`docs/archive/defects/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`).
  */
 function toolSetHolds(tools: ReadonlySet<string>, req: PermissionRequest, env: Pick<EvaluationEnv, 'publicTool'>): boolean {
   if (!tools.has(req.toolName.toLowerCase()) && !tools.has(canonicalToolName(req.toolName).toLowerCase())) return false;

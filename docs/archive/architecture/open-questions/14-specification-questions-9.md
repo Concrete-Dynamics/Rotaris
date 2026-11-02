@@ -50,7 +50,7 @@ undecodable sequence standing as U+FFFD, and parsed.
 The question is live because one port serves both walks. `NODE_DISCOVERY_PORTS.readFile` reads instruction files for
 REQ-WORKSPACE-045's merge, `SKILL.md` files for REQ-WORKSPACE-053's walk, a force-loaded body for REQ-WORKSPACE-062,
 the disable manifest for REQ-WORKSPACE-052 and a `SKILL.md` loaded by hand for REQ-WORKSPACE-057/151, and until 2026-09-28 it decoded leniently, so the decoding half of
-REQ-WORKSPACE-045 was unmet (`docs/defects/fixed/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`).
+REQ-WORKSPACE-045 was unmet (`docs/archive/defects/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`).
 Making it strict for the instruction files makes it strict for the skill files in the same line.
 
 **What the build proceeds under.** A `SKILL.md` that cannot be decoded as UTF-8 is an unreadable file: it is skipped
@@ -70,7 +70,7 @@ the walk's skip arm stays for the I/O half, and the decode becomes lenient for `
 
 <a id="oq-80"></a>
 
-**OQ-80 — Does REQ-STARTUP-158's "every artifact … SHALL declare … that same version" reach the Windows installer's own version metadata?** *(REQ-STARTUP-158, REQ-STARTUP-018, REQ-STARTUP-027, REQ-STARTUP-031. Raised 2026-09-28 by repairing the prerelease naming defect, R-062; `docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md` Raised as OQ-76 on its branch; renumbered OQ-80 at the merge, because OQ-76 to OQ-79 were already on `main`.)*
+**OQ-80 — Does REQ-STARTUP-158's "every artifact … SHALL declare … that same version" reach the Windows installer's own version metadata?** *(REQ-STARTUP-158, REQ-STARTUP-018, REQ-STARTUP-027, REQ-STARTUP-031. Raised 2026-09-28 by repairing the prerelease naming defect, R-062; `docs/archive/defects/a-prerelease-version-reaches-the-installer-hyphenated.md` Raised as OQ-76 on its branch; renumbered OQ-80 at the merge, because OQ-76 to OQ-79 were already on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the normalised spelling is accepted in the installer's Windows metadata and recorded: `DisplayVersion`, `ProductVersion` and `VIProductVersion` carry electron-builder's normalised value (`0.1.0-rc1`, `0.1.0.0`) and are not declarations of the release's version in REQ-STARTUP-158's sense; the artifact's name and its run-time report carry the declared text, which the guard compares. Windows shows a prerelease as `0.1.0-rc1` in "Installed apps".
 

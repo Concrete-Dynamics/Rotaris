@@ -470,7 +470,7 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > compression is one replacement entry, so a resume reads from the last replacement forward. The transcript's rows are
 > written as before, and OQ-95 records how the build reads "the same record a session's transcript is drawn from".
 > Building it found that a crashed iteration's number was reused by the next run. That is
-> [`a-crashed-iteration-number-is-reused-by-the-next-run.md`](../../defects/fixed/a-crashed-iteration-number-is-reused-by-the-next-run.md),
+> [`a-crashed-iteration-number-is-reused-by-the-next-run.md`](../../archive/defects/a-crashed-iteration-number-is-reused-by-the-next-run.md),
 > repaired.
 >
 > **(2) The rest (clauses 2, 3 and 8 to 11).** A pause, a stop and a quit leave every unfinished agent `paused` with its
@@ -487,8 +487,8 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > directive does not name, and OQ-94 records it.
 >
 > Clause 3 also repaired two defects:
-> [`a-pause-settles-children-instead-of-holding-them.md`](../../defects/fixed/a-pause-settles-children-instead-of-holding-them.md)
-> and [`cancelling-one-child-does-not-stop-it.md`](../../defects/fixed/cancelling-one-child-does-not-stop-it.md).
+> [`a-pause-settles-children-instead-of-holding-them.md`](../../archive/defects/a-pause-settles-children-instead-of-holding-them.md)
+> and [`cancelling-one-child-does-not-stop-it.md`](../../archive/defects/cancelling-one-child-does-not-stop-it.md).
 >
 > **(3) The resume (clauses 4, 5, 7 and 10).** Every continue resumes the open iteration first. The root and each
 > paused agent carry on from their records under their identity. A call recorded as interrupted is handed back
@@ -505,26 +505,26 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > **What building it found against the build's own readings.** Both were found in the built app and repaired, and the
 > falsified readings are kept beside their replacements:
 > - Every confirmed "Cancel the run?" sent the stop, so the cancel was resumable. The composer's stop was itself
->   confirmed as a cancel. See [`every-run-cancel-surface-sends-the-stop.md`](../../defects/fixed/every-run-cancel-surface-sends-the-stop.md).
+>   confirmed as a cancel. See [`every-run-cancel-surface-sends-the-stop.md`](../../archive/defects/every-run-cancel-surface-sends-the-stop.md).
 >   OQ-96 now names the surface each control belongs to.
 > - A quit with an approval open recorded the call as denied, and the agent stepped on the denial, against clause 9.
 >   REQ-TOOLS-063's "closing the window answers Deny" fired as the main window took its dialog down. A quit with a
 >   question open was recorded as cancelled, through REQ-CHAT-101's cancellation on unload. A quit Electron starts
 >   itself (SIGTERM, a logout, `app.quit()`) closed the dialog even before the window's guard. See
->   [`a-quit-denies-the-approval-it-should-withdraw.md`](../../defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md).
+>   [`a-quit-denies-the-approval-it-should-withdraw.md`](../../archive/defects/a-quit-denies-the-approval-it-should-withdraw.md).
 >   Main now tells a quit apart (`QuitState`) and sends neither answer during one. OQ-96 records the departure from
 >   REQ-TOOLS-063 and REQ-CHAT-101.
 >
 > The build repaired two further defects:
-> - [`the-continuation-payload-says-no-artifact-is-recorded.md`](../../defects/fixed/the-continuation-payload-says-no-artifact-is-recorded.md),
+> - [`the-continuation-payload-says-no-artifact-is-recorded.md`](../../archive/defects/the-continuation-payload-says-no-artifact-is-recorded.md),
 >   with PD-ORCH-004 revision 3;
-> - [`a-stale-settled-childs-report-is-never-an-artifact.md`](../../defects/fixed/a-stale-settled-childs-report-is-never-an-artifact.md),
+> - [`a-stale-settled-childs-report-is-never-an-artifact.md`](../../archive/defects/a-stale-settled-childs-report-is-never-an-artifact.md),
 >   and the decline, which had the same gap.
 >
 > Two defects were read and left unrepaired:
-> - [`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md`](../../defects/fixed/a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md),
+> - [`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md`](../../archive/defects/a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md),
 >   which is still the corpus's contradiction; *settled 2026-09-29 by revision 5's clause 21 ([R-067](../requests.md#r-067))*;
-> - [`delegate-drops-session-id-and-suppress-auto-context.md`](../../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md),
+> - [`delegate-drops-session-id-and-suppress-auto-context.md`](../../archive/defects/delegate-drops-session-id-and-suppress-auto-context.md),
 >   because the resume gives `session_id` no meaning. *Revision 5's clause 22 gives it one (2026-09-29); the note stays open until
 >   it is built. Built and repaired the same day, recorded below.*
 >
@@ -536,7 +536,7 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > - two guards removed as redundant;
 > - the tool deadline's cancel at a run's exit, which is timer hygiene;
 > - `track`'s change, which no test could observe while
->   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../../defects/fixed/a-child-whose-execution-raises-before-its-turn-stays-running.md)
+>   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../../archive/defects/a-child-whose-execution-raises-before-its-turn-stays-running.md)
 >   stood. *(2026-09-29, R-067: the note is repaired and still no test observes it, for a new reason: `executeSettling`
 >   now settles a raise before `track` sees it, so an execution reaches `track` rejected only when that settle itself
 >   raises.)*
@@ -570,12 +570,12 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 >   one, recorded below revision 4's note.
 > - Only Linux under Xvfb was driven.
 > - The scripted model client restarts its script for every run
->   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../../defects/fixed/the-scripted-client-restarts-its-script-for-every-run.md)),
+>   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../../archive/defects/the-scripted-client-restarts-its-script-for-every-run.md)),
 >   so a driven agent's steps after a continue are the script's first steps again. Its record is what is resumed.
 >   *(2026-09-29, R-067: repaired. A resumed agent now takes the step after the ones its own record holds, in the same
 >   process or after a relaunch; `part-j-proof`'s steer-at-rest scenario pins it.)*
 > - The driver's own quit is an immediate exit that skips the shutdown
->   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../../defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md));
+>   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../../archive/defects/the-drivers-quit-skips-the-applications-shutdown.md));
 >   the quit above was a window close.
 >   *(2026-09-29, R-067: repaired. The driver's `quit` is now the application's quit unless it names the immediate exit,
 >   and `driver-proof` quits a live run through it and reads the session at rest.)*
@@ -598,21 +598,21 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 >   beside REQ-ORCH-139's vocabulary, and the fingerprint covers the whole system prompt, so a changed pre-flight playbook
 >   warns too; both are put to the owner.
 > - **Clause 15** ([OQ-108](../../architecture/open-questions.md)). The audit found it built, with one exception: a board run caught by the application's quit
->   rested by `stop` ([`a-board-run-caught-by-a-quit-rests-as-a-stop.md`](../../defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md),
+>   rested by `stop` ([`a-board-run-caught-by-a-quit-rests-as-a-stop.md`](../../archive/defects/a-board-run-caught-by-a-quit-rests-as-a-stop.md),
 >   repaired). A stop or a quit during a plan cycle now withdraws what waits on a person. `/stop` reads "Stop the active
 >   run".
 > - **Clause 16** ([OQ-101](../../architecture/open-questions.md)). `session.control`'s `cancelAgent` ends a paused child and its paused descendants `cancelled`
 >   while no run is behind the session, under the session's lock, with the live cancel's report and artifact, and the
 >   count drops. A child a crash left is cancelled from its stored state, and the crash is left for the next repair or
 >   continue. The first cut wrote the whole crash record
->   ([`cancelling-one-crash-left-child-records-the-whole-crash.md`](../../defects/fixed/cancelling-one-crash-left-child-records-the-whole-crash.md),
+>   ([`cancelling-one-crash-left-child-records-the-whole-crash.md`](../../archive/defects/cancelling-one-crash-left-child-records-the-whole-crash.md),
 >   repaired), and wrote against a failed store
->   ([`the-at-rest-cancel-writes-against-a-failed-store.md`](../../defects/fixed/the-at-rest-cancel-writes-against-a-failed-store.md), repaired).
+>   ([`the-at-rest-cancel-writes-against-a-failed-store.md`](../../archive/defects/the-at-rest-cancel-writes-against-a-failed-store.md), repaired).
 > - **Clause 17** ([OQ-102](../../architecture/open-questions.md)). The message is a task the resumed iteration holds: done when the iteration succeeds, pending
 >   on any other close and taken up by the next iteration. The Continue action, the decline and the message-limit
 >   resolution append no second task while the todo holds the last request unfinished. That reading reaches beyond the
 >   clause, into REQ-ORCH-004, and it repaired
->   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md).
+>   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../../archive/defects/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md).
 > - **Clause 18** ([OQ-103](../../architecture/open-questions.md)). A session a crash left offers both continues and the decline with the same count, and each
 >   records the crash first; a session a store failure left busy is refused, since it did not crash. On a crash-left
 >   session the two continues take the send pill's place as they do on a paused one.
@@ -647,7 +647,7 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > - The four repairs of the last review round were checked in the built app by the round that made them; the independent
 >   re-drive did not run, because the subagents' usage limit was reached.
 > - Persona windows cannot be addressed by the driver, so their state was read from screen captures
->   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../../defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)).
+>   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../../archive/defects/the-driver-cannot-address-persona-or-approval-windows.md)).
 >   *(2026-09-29, R-067: repaired. The driver names a persona window, the approval dialog and the terminal window by
 >   role, and `driver-proof` probes a persona window's state and answers an approval in its dialog.)*
 > - Clause 14's orchestrator-instructions and tool-change variants were not driven.
@@ -671,8 +671,8 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 >     result in its own record, read the file again and wrote its note (clause 4);
 >   - the iteration closed `succeeded`, and both notes were read back from disk.
 > - It found two launches that fail as root, each repaired
->   ([`the-live-run-cannot-launch-as-root.md`](../../defects/fixed/the-live-run-cannot-launch-as-root.md),
->   [`the-code-intelligence-server-dies-when-the-app-runs-as-root.md`](../../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md)). `main` had repaired both
+>   ([`the-live-run-cannot-launch-as-root.md`](../../archive/defects/the-live-run-cannot-launch-as-root.md),
+>   [`the-code-intelligence-server-dies-when-the-app-runs-as-root.md`](../../archive/defects/the-code-intelligence-server-dies-when-the-app-runs-as-root.md)). `main` had repaired both
 >   independently (OQ-82 for the code-intelligence child), and its repairs stand.
 >
 > The evidence packs are under `.live-run/runs/`, outside the repository.
@@ -712,7 +712,7 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > - a case pauses one held behind a model slot and continues it.
 >
 > The defect note is repaired:
-> [`delegate-drops-session-id-and-suppress-auto-context.md`](../../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md).
+> [`delegate-drops-session-id-and-suppress-auto-context.md`](../../archive/defects/delegate-drops-session-id-and-suppress-auto-context.md).
 >
 > **What was measured.** Fourteen cases in `children.test.ts` (twelve in the clause 22 describe, with the transition
 > table's case and the writer's) and two in `agent-tools`' `delegation.test.ts`. The two tool cases and the first seven
@@ -736,7 +736,7 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > hold keeps an approval asked before the quit from timing out into a denial while the checkpoint operation runs.
 > [OQ-132](../../architecture/open-questions.md) states the reading against REQ-TOOLS-064, REQ-TOOLS-058, REQ-EVENTS-049 and
 > REQ-CHAT-094. The note is repaired:
-> [`an-approval-asked-after-the-last-window-closes-is-denied.md`](../../defects/fixed/an-approval-asked-after-the-last-window-closes-is-denied.md).
+> [`an-approval-asked-after-the-last-window-closes-is-denied.md`](../../archive/defects/an-approval-asked-after-the-last-window-closes-is-denied.md).
 > **What was measured.** Eight unit cases across `gate.test.ts`, `questions.test.ts`, the run host's `tools.test.ts` and
 > `dispatch.test.ts`; the first was red on the code before the repair, and each limb's cases were red with it removed.
 > **What was not measured.** No built-app quit with a checkpoint operation in flight and an ask made during it was
@@ -815,7 +815,7 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > **Clause 9's crash half for a question, first executed 2026-10-13 (fin41, `fin41-restore-and-session`).** A crash withdrew
 > the approvals its record could read from the store and no question, because no question was stored: the prompts lived in
 > each tool port's registry, and the record of a crash is written later, from the store alone
-> ([`../../defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md`](../../defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md)).
+> ([`../../archive/defects/a-crash-with-a-question-pending-records-no-withdrawal.md`](../../archive/defects/a-crash-with-a-question-pending-records-no-withdrawal.md)).
 > The run host now mirrors the session's pending prompts to `sessions.pending_questions` (v35) each time one is put or
 > ends, as the session's whole list, and `recordCrash` writes one `question_withdrawn` entry per prompt it lists — "The
 > ask_questions call was withdrawn by a crash before the user answered; it was not run.", `{tool, persona, interruption:
@@ -829,7 +829,7 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > **Reported in place 2026-10-14 (fin43, `fin43-notices-and-config`):** the approvals half now has the same shape. Each port
 > wrote its own registry's list to `pending_approvals`, so two agents waiting at once overwrote each other and a crash then
 > withdrew only the last writer's
-> ([`../../defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`](../../defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md));
+> ([`../../archive/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`](../../archive/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md));
 > the gate now writes the run's list over every port (`Run.pendingApprovals`). Measured by the run host's `tools.test.ts`
 > with two real ports, red before, and the engine's `children.test.ts` (a root and two children, every port handed all
 > three approvals, red with the gathering or its wiring removed); not driven in the built app.

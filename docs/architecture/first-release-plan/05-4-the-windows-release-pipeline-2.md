@@ -39,7 +39,7 @@ so that the next release can add the updater without stranding anyone.
 >
 > **Found beside it:** the built application's runtime opens `CONNECT redirector.gvt1.com:443` on its own — Chromium's
 > component updater — which REQ-STARTUP-160's disclosure cannot name
-> ([note](../../defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md)). *Repaired 2026-09-28
+> ([note](../../archive/defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md)). *Repaired 2026-09-28
 > (R-062), and the cause corrected:* it was Electron's spellchecker fetching a Hunspell dictionary, not the component
 > updater; each session now has no dictionary and no spellchecker (`main/runtime-requests.ts`), and `pnpm updater-proof`
 > asserts zero connections from launch to first paint and quit (9 checks). OQ-93 raised (spell-checking a text field; OQ-91 on its branch, renumbered at the merge).
@@ -70,7 +70,7 @@ so that the next release can add the updater without stranding anyone.
 > 2026-09-28 (R-062):* the pass is two steps, offer then acknowledgement within the hand-over interval, and only then
 > the rewrite. A successor that stopped waiting leaves the record intact and fails the restart
 > (ADR-0055's *Amended 2026-09-28*;
-> [note](../../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md)). The restart between two real
+> [note](../../archive/defects/the-record-can-pass-to-a-successor-that-stopped-waiting.md)). The restart between two real
 > processes on Windows is still owed to the next package (IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*).
 >
 > **Repaired the same day: the artifact variables stay with their launch.** `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT`

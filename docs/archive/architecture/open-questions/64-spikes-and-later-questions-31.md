@@ -12,7 +12,7 @@ the child's payload; REQ-ORCH-028, the routing table; OQ-212, which keeps every 
 `can_publish_artifacts` false; [OQ-250](54-spikes-and-later-questions-21.md#oq-250)'s limb "any brief offering a command or tool its target lacks", stated for a duress
 run; [OQ-256](55-spikes-and-later-questions-22.md#oq-256), whose duress run held the same false belief at request 98; [OQ-257](55-spikes-and-later-questions-22.md#oq-257). Raised 2026-10-15 from
 finding F10 of fin46's final acceptance (round 2 at `3c03287`), recorded in
-[`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../../../defects/fixed/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md);
+[`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../../defects/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md);
 written at the number the consortium's ruling names. **Ruled 2026-10-15.**)*
 
 **What is open.** In the default live run's `delegation` scenario at `3c03287` (pack `2026-10-15T03-10-08-908Z`, session
@@ -155,7 +155,7 @@ refuse either one that is not the artifact's. Pinned by `build-hooks.test.ts` (P
 old `checkRuntime`) and `target.test.ts`; read over the real Windows `python.exe` of both architectures, and the bundle built on
 Linux by the full key ([first-executions](../../../architecture/first-executions.md), the row of 2026-10-15 "The bundle's target architecture and the
 packaging guard";
-[`../../../defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`](../../../defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md)).
+[`../../defects/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`](../../defects/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md)).
 (a) and (b) in the record: the arm64 rows of 2026-10-15 in `first-executions.md` and the pointers they left on the rows of
 2026-09-16 and 2026-10-06 amended in place, each struck reading kept; `spikes/native-load-proof.md`'s ARM64 section; ADR-0035,
 ADR-0054 and IC-7, dated notes. **Owed:** the first `pnpm package` on the Windows ARM64 host, which shows whether the emulated uv

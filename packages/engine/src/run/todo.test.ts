@@ -131,7 +131,7 @@ describe('Todo.settleStranded — an iteration\'s own task its closed iteration 
 /**
  * REQ-CHAT-040 / REQ-ORCH-071: a queued prompt becomes a task NAMED "Queued Prompt: <first 8 characters of the prompt id>"
  * carrying the prompt text as its CONTENT — so a task has a name beside its content, as REQ-TOOLS-144's agent task does.
- * Acceptance finding A28: docs/defects/fixed/a-queued-prompts-task-is-not-named-queued-prompt.md.
+ * Acceptance finding A28: docs/archive/defects/a-queued-prompts-task-is-not-named-queued-prompt.md.
  */
 describe('Todo — a task named beside its content (REQ-CHAT-040, REQ-ORCH-071)', () => {
   it('appendTask keeps the name beside the text, and the stored document carries both', () => {

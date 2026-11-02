@@ -13,7 +13,7 @@ for a packaged build, else `apps/desktop/resources/` — in `apps/desktop/src/ma
 change would land them. `shell.openThirdPartyLicenses` answers `licenses.absent` until then. *2026-09-27: the notices
 file now has a generator (below), and the reader's name was corrected to `THIRD-PARTY-LICENSES.txt` in the same change —
 it had looked for the name in lower case, which only a case-insensitive filesystem forgives
-(`../../../defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Carrying the two assets
+(`../../../archive/defects/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Carrying the two assets
 into the artifact is `first-release-plan.md` §4.4.* *2026-09-27, later: §4.4 is built — see "The two bundled assets"
 below. Nothing in this section changes: the readers and both absent branches stand as written, and the proof now
 measures the present branch of each.*

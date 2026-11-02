@@ -1,7 +1,7 @@
 /**
  * The opening credential report `slice-proof` reads, pinned against the run host's own writer (REQ-PROVIDER-067,
  * REQ-PROVIDER-068). `slice-proof`'s step 3 asserted `credentials: 1 provider(s) authenticated`, which no product code
- * writes (`docs/defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`); the lines here are
+ * writes (`docs/archive/defects/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`); the lines here are
  * `LeaseReportLog`'s real output, written the way main's log carries the run host's lines, so a change to that line
  * that the reader does not follow is a red here and not a failure at the end of a paid run.
  */
@@ -62,7 +62,7 @@ describe('the run host\'s opening credential report, as slice-proof reads it (RE
   it('slice-proof\'s step 3 asserts the priming through this reader, and no longer the line nothing writes', () => {
     const text = readFileSync(resolve(import.meta.dirname, '..', 'slice-proof.mjs'), 'utf8');
     // Since 2026-10-04 step 3 reads each attempt's log through `runLogRequests(log)`, so a re-run after an answerless
-    // completion is held to the same priming check (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
+    // completion is held to the same priming check (`docs/archive/defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
     const step = text.slice(text.indexOf('// 3. One real run'), text.indexOf('let requests ='));
     expect(step).toMatch(/function runLogRequests\(log\) \{[\s\S]*primingProblem\(log, PROVIDER_ID\)/);
     expect(text).toMatch(/let requests = runLogRequests\(log3\);/);

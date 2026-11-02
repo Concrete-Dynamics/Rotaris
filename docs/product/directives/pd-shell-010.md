@@ -40,10 +40,10 @@ only each window's `confirm` and `close`. First written, and no longer true: "Th
 
 **Why, and what it costs.** OQ-297 (the consortium's HR1), ruled 2026-10-14 under the owner's delegation (R-072). Before it, a
 renderer that was alive but hung held a person's close of its window and the application's quit — a SIGTERM's included — with no
-answer and no bound ([`a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../../defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md)).
+answer and no bound ([`a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`](../../archive/defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md)).
 A bound on the guard's question itself would answer for a person deciding; a bound on a question that needs no person does not.
 The gone case was built by fin43 on 2026-10-14 without a directive
-([`a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](../../defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md));
+([`a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`](../../archive/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md));
 this directive is its record home. What it costs: a renderer busy for more than 5 s on its main thread while its window is being
 closed — a long synchronous task, not a person deciding — loses its guard, so unsaved settings in it are not offered for saving;
 and an answering renderer with unsaved settings still holds a quit from outside any window on a person's answer

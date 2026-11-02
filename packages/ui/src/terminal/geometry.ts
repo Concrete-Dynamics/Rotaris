@@ -74,7 +74,7 @@ export interface RemeasurePorts {
  * the layout effect React runs for the theme change, and React renders that change in a task of its own. When a frame
  * falls between the root's style change and that task (always, for a change made in the frame's own callbacks; often,
  * under load) the observer ran first, measured the shrunk host against the OLD cell and reported it: `118×25` between
- * `118×26` and `89×19` (`docs/defects/fixed/a-font-change-under-load-reports-an-intermediate-terminal-geometry.md`).
+ * `118×26` and `89×19` (`docs/archive/defects/a-font-change-under-load-reports-an-intermediate-terminal-geometry.md`).
  * Every observation now compares the face the theme names with the face the library was given. A difference applies the
  * new face there and then and measures once, in the frame after, whichever path saw the change first.
  */

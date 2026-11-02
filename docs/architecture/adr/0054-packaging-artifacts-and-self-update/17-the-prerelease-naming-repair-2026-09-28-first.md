@@ -5,7 +5,7 @@ Part 17 of 22 of [ADR-0054](../0054-packaging-artifacts-and-self-update.md), whi
 ## The prerelease naming repair — 2026-09-28, first execution (R-062; first-release plan §4.1/§4.2/§4.5)
 
 *Reported in place under the standing policy; row in `../first-executions.md`. The note is
-`../../../defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`.* The decision above says the artifact names
+`../../../archive/defects/a-prerelease-version-reaches-the-installer-hyphenated.md`.* The decision above says the artifact names
 are one module shared by the build configuration and the updater, "with per-target `artifactName` templates producing their
 exact names". The templates were `Rotaris-${version}-windows-x64-setup.${ext}`, and `${version}` is not the declared text:
 electron-builder normalises the manifest's version through loose SemVer when it reads it, and renders the normalised value

@@ -151,9 +151,9 @@ question RC1, from revision 7's first execution). Revision 4 ruled under the sam
 > `760394c` that check runs no longer in those two scenarios but once, at the run's end, over every session the run keeps
 > (`checkToolRecord` in `apps/desktop/scripts/live-run.mjs`, over `runWideReadings`), naming each finding by its session
 > and ordinal:
-> [`the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`](../../defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md).
+> [`the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`](../../archive/defects/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md).
 > The note is repaired:
-> [`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../../defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
+> [`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../../archive/defects/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **First live execution, 2026-10-07 (the final default live run at `a68f121`, pack `2026-10-07T06-48-50-123Z`):** the case
@@ -222,7 +222,7 @@ question RC1, from revision 7's first execution). Revision 4 ruled under the sam
 > ended, should store the delegated items COMPLETED with no correction and no "items not done" `system` row; a `replace` sending
 > COMPLETED for a held item or the coordinator's own active item should name it and be followed by an `update`. The harness's
 > `heldItemReading` counts `restoredOverClose` (target 0) and `namedRestores` (a NOTE). The note is repaired:
-> [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+> [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../../archive/defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
 > **A known limit, written down by fin38 (fin37's review):** the served set has the held set's scope, this iteration's ledger
 > (`IterationChildren.servedTodoItems` reads `ChildLedger.all()`, the children of the current iteration). After a REQ-ORCH-075
 > re-queue or in a resumed session, an item an earlier iteration's child served is not served, so a `replace` sending it
@@ -244,7 +244,7 @@ question RC1, from revision 7's first execution). Revision 4 ruled under the sam
 > - *Since fin41 (item N65) the default run asks for it:* the `edit` scenario's prompt tells its coordinator to close the plan with
 >   ONE `replace` sending both tasks COMPLETED once both children have reported, `heldItemReading` counts the closes asked
 >   (`closes`), and a run with none prints a NOTE that revision 3 was unasked instead of the PASS `0bc3eee` printed over nothing
->   ([`the-live-runs-closing-replace-check-passes-with-no-closing-replace.md`](../../defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md)).
+>   ([`the-live-runs-closing-replace-check-passes-with-no-closing-replace.md`](../../archive/defects/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md)).
 >
 > Evidence:
 > [`live-552d346-default-autopsy.md`](../../architecture/live-runs/live-552d346-default-autopsy.md),

@@ -212,7 +212,7 @@ export class RunFailurePublisher {
    * action (REQ-NOTIFY-030), exactly as a held failure class arrives under REQ-NOTIFY-032; a later ending supersedes it
    * (`ended`). The notice slot holds one notice, so the two about this ending are never on screen at once. Until
    * 2026-10-02 nothing was held, and the limit reached the user only as a plain ending
-   * (docs/defects/fixed/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md).
+   * (docs/archive/defects/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md).
    */
   endedOtherwise(sessionId: string, notice: ReportInput, executionStatus: string, quota?: string, workspace?: string): void {
     if (this.deps.isFocused(sessionId)) { this.deps.report(notice); return; }
@@ -235,7 +235,7 @@ export class RunFailurePublisher {
       // REQ-NOTIFY-058: the restart is a run of the session starting, so it clears the session's notice — REQ-NOTIFY-032's
       // warning, where the failure was held while the session was not on screen — and the acknowledgement and the prompt of
       // REQ-NOTIFY-070/071 are the failure's only report. Until 2026-10-06 the warning stayed beside the prompt: two notices
-      // about one failure (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+      // about one failure (docs/archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
       this.deps.clearForRunStart(sessionId);
       return;
     }

@@ -22,7 +22,7 @@ argument turns a compiler error into a silent no-op, and this one hid a missing 
 *Reached in the built application 2026-10-13 (fin42).* The repair was measured by a real-PTY unit test only
 (`terminal.test.ts`, `commandTimeoutS: 1`): the live run's wedge prints nothing, so it soft-paused 70 s before the
 default 100 s cap on every run and could never reach it
-([`the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`](../../../defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md)).
+([`the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`](../../../archive/defects/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md)).
 `pnpm tool-shapes-proof`'s `hard-cap` launch saves `runtime.shell_command_timeout: 4` and sends a call with no `timeout`
 that prints every 0.5 s: it ended at 4 s (4,232 ms at load 5.2), exit 124, `timeout_seconds` 4, `session_reset`, the
 printed lines kept, a `terminal_timeout` issue filed. The live run asks the default 100 s cap since then with its `steady`
@@ -76,7 +76,7 @@ proposed:**
   > session's state kept**, on both shells; `exit 3` on one line or two still ends the shell (`execution_error`,
   > `session_reset`, about 1.5 s), so OQ-144's path is unchanged; a plain call costs about 30 ms more (62 to 93 ms under
   > pwsh) for the decode and the second parse
-  > ([`a-single-line-powershell-command-that-throws-loses-its-end-frame.md`](../../../defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md)).
+  > ([`a-single-line-powershell-command-that-throws-loses-its-end-frame.md`](../../../archive/defects/a-single-line-powershell-command-that-throws-loses-its-end-frame.md)).
   > Left: 5.1 renders an error raised in the payload with the script block's text and the wrapper's line as its
   > position, the nonce included ([`windows-powershell-5-1s-error-text-quotes-the-terminals-wrapper.md`](../../../defects/windows-powershell-5-1s-error-text-quotes-the-terminals-wrapper.md),
   > recorded); pwsh's concise view does not.
@@ -116,7 +116,7 @@ own status, so the exit-status expression is unchanged and consequence 1's forge
 single-line path keeps today's wrapper byte for byte.
 
 *Reported back 2026-09-29 (R-067), from the live runs' first POSIX terminal against a model
-([`a-posix-command-that-fails-to-expand-loses-its-end-marker`](../../../defects/fixed/a-posix-command-that-fails-to-expand-loses-its-end-marker.md),
+([`a-posix-command-that-fails-to-expand-loses-its-end-marker`](../../../archive/defects/a-posix-command-that-fails-to-expand-loses-its-end-marker.md),
 live-run finding L1): **the reading that neither path needed a guard is FALSIFIED, and kept here beside its
 replacement.** "The single-line path keeps today's wrapper byte for byte" left the command UNGUARDED:
 `printf <start>; <command>; printf <end>`. An interactive `sh` that meets an error in the line it is running
@@ -125,7 +125,7 @@ abandons the rest of that line. The errors seen were an expansion it cannot perf
 trailing `# note` comments the end frame out as well. The end frame then never printed, and a command that
 finished in 0.1 s read as a soft pause with exit −1 after 30 s — twice in one run, and once more under duress.
 The same abandoned line put the echoed wrapper, marker included, into what the model read
-([`a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker`](../../../defects/fixed/a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker.md)).
+([`a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker`](../../../archive/defects/a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker.md)).
 `eval` is no guard: an error inside a special built-in abandons the line the same way, measured under dash and
 under bash in POSIX mode. **`command eval` is the guard.** POSIX's `command` removes a special built-in's special
 properties, so the error becomes that utility's own nonzero status (2 under dash) and the shell goes on to the end
@@ -136,7 +136,7 @@ shell the host runs — `/bin/sh`, a POSIX shell that may not be bash — where 
 Pinned by "REQ-TOOLS-097/098/179 (live-run L1): …" in `terminal.test.ts`, red on the unguarded wrapper.*
 
 *Reported back 2026-10-06, from the final default live run at `c2a9444`
-([`a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole`](../../../defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md),
+([`a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole`](../../../archive/defects/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md),
 live-run finding M1): **"carried across as ONE physical line" is FALSIFIED for a long command, and kept here beside its
 replacement.** The shell runs with its line editor off, so it reads the wrapper through the PTY's canonical-mode line
 discipline, and that discipline caps a line: on Linux it keeps 4,095 characters and discards the rest up to the line end
@@ -184,7 +184,7 @@ and PowerShell's line; and `pnpm terminal-proof`'s `live.longCommandReachesTheSh
 *Shown live, 2026-10-06 and 2026-10-07: the staged carrier held against a real model, first in the terminal-only live run
 at `a74887d` (4,667 bytes, exit 0 in 90 ms) and then twice in the final default pack at `a68f121` (`#6` and `#32`, exit 0 in
 146 ms and 107 ms, printing `4648`). Nothing found against this passage; the account is in
-[`a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole`](../../../defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md).*
+[`a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole`](../../../archive/defects/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md).*
 
 **A second defect, from the same first execution, in the CLEANING rather than the wrapper.** `cleanLines`
 found the start of the captured region by looking for a row that was **exactly** the marker. The marker's row
@@ -205,7 +205,7 @@ background session's start/query/list/kill and its cap, and state persisting acr
 two defects.
 
 *Reported back 2026-09-29 (R-067), from the first live run's `terminal` scenario
-([`an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed`](../../../defects/fixed/an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md),
+([`an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed`](../../../archive/defects/an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md),
 live-run finding L2): "the soft pause and its poll" held as a mechanism, and **what the poll SAID was wrong**. An empty
 poll returns at once, and its empty answer repeated the soft pause's sentence, "No output for 30 seconds", after under
 a millisecond. The model counted thirty seconds a poll and polled five times in 21.6 s. The poll now states what it
@@ -214,7 +214,7 @@ last wrote anything, and that a poll does not wait. How long a poll should wait 
 [OQ-136](../../open-questions.md), raised with this reading built.*
 
 *Reported back 2026-09-29 (R-067), from acceptance finding A10
-([`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output`](../../../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md)):
+([`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output`](../../../archive/defects/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md)):
 the wrapper assumed it was the whole of the line the shell reads, and **keystrokes can stand in front of it**. An
 agent's `is_input` or a control surface's send-keys with no Enter waits in the shell's input as a partial line under a
 command that does not read it, and the next wrapped line was appended: `xyprintf: not found`, no start marker, the
@@ -253,10 +253,10 @@ with nothing of the later calls in its poll, which is red on the first repair to
 verification — `C-c` then `seq 1 20000`, a 300-character next call on both roads, and two pure cases over
 `pausedShare` and the echo's removal. ~~A poll made after the `C-c` but before any next call still reads "still running"; that is
 recorded, not repaired~~ (repaired 2026-10-01, the report-back below)
-([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).*
+([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../../archive/defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).*
 
 *Reported back 2026-10-01, the repair of
-[`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md):
+[`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../../archive/defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md):
 **the marker protocol has no frame for a line the shell abandoned, so a poll alone cannot see it end.** After `C-c` an
 interactive `sh` drops the rest of the paused line, and the next call's printed start marker was the only boundary the
 session could read; every poll before that call read −1, `soft_pause`, "The process may still be running", over a process

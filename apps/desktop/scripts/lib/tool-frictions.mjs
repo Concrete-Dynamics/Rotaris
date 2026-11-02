@@ -5,15 +5,15 @@
  *
  * - **PD-TOOLS-007 (OQ-139).** A `write_file` call with a path and content and no `operation`, for a file that does not
  *   exist, is read as a create and says so. The duress runs refused 1 to 4 children's first write this way, each then
- *   resending its whole file (`docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md`). Such a call
+ *   resending its whole file (`docs/archive/defects/write-files-first-use-refusal-recurred-under-duress.md`). Such a call
  *   refused now is the old shape; a refusal of the same shape that says its file already exists is the directive's own.
  * - **PD-TOOLS-008 (OQ-163).** A `todo` `replace` whose own list marks two tasks `IN_PROGRESS` while none is active is
  *   refused saying so. Before, the refusal named an "Active task" under an id the rejected list minted, and the agent's
- *   `update` of it was refused "Unknown task id" (`docs/defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md`).
+ *   `update` of it was refused "Unknown task id" (`docs/archive/defects/a-rejected-todo-replace-names-an-active-task-it-never-stored.md`).
  *
  * Both are read over EVERY session the run preserved (`runWideReadings`), not only `frictions` and `duress`: until fin23 the
  * NOTEs said a shape "was not asked this run" while the requirements and resume sessions held both
- * (`docs/defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`).
+ * (`docs/archive/defects/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`).
  *
  * Nothing here is product code. It runs only from the live run.
  */
@@ -111,7 +111,7 @@ function prefixFields(text) {
  * edit's and anything else is no boolean; `path` and `file_path` each absent or a string, the target `path ?? file_path`
  * not empty; `content` a string; any other key let through, the schema stripping it. Until fin25 this kept to path,
  * file_path and content alone and took an empty path
- * (docs/defects/fixed/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
+ * (docs/archive/defects/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
  *
  * Read from the object, or from its cut string, where the reading stops short of the product's in one way it cannot help:
  * a key the cut took away is not seen, so a call whose `old_string` came after its content is still called create-shaped.
@@ -183,7 +183,7 @@ export function todoActiveReadings(calls) {
  * fenced to its worktree under `<workspace>/.rotaris/requirements/worktrees/…`, not to the workspace: the c2a9444 pack's
  * requirements session refused its ordinal 66 "Path '…' is outside workspace root '<that worktree>'". Until fin25 the live run
  * judged every session by the sandbox's workspace
- * (docs/defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
+ * (docs/archive/defects/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
  */
 export function fenceRootOf({ workspace_root: workspaceRoot, worktree }) {
   if (typeof worktree === 'string' && worktree !== '') {

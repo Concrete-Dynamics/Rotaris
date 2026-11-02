@@ -7,7 +7,7 @@ Part 14 of 14 of [ADR-0012](../0012-the-delegated-child-scheduler.md), which ind
 *The first execution of the stall watchdog above left three things unbuilt: its callback reached no host, so no badge drew;
 the root was not watched; and REQ-MONITOR-135's stall-evaluation leg (ADR-0010 reading (d)) had nothing to hang on.
 Acceptance round 1 found them together (finding A6,
-[`a-stalled-child-is-never-shown-stalled.md`](../../../defects/fixed/a-stalled-child-is-never-shown-stalled.md)), and their
+[`a-stalled-child-is-never-shown-stalled.md`](../../../archive/defects/a-stalled-child-is-never-shown-stalled.md)), and their
 first execution reports here, under R-067.*
 
 **What was built.** Every evaluation hands the host the agent's silence while it is stalled, else null; it is kept beside

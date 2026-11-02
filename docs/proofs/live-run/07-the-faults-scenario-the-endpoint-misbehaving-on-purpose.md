@@ -21,7 +21,7 @@ The proxy is in the path, so it can also be told to misbehave on a **named call*
   thresholds. It asks the question of L2 at `c2fdd6a` and N1 at `c2a9444`: is any agent reported stalled while it streams
   a tool call's arguments (`lib/paced-arguments.mjs`, `stallsWhileStreaming`)? A paced span shorter than the threshold and
   one evaluation is no evidence, and fails as such
-  (`docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). Unlike the other two it names no call:
+  (`docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). Unlike the other two it names no call:
   the rule acts on every call of its path and fires on each that carried a piece. **First executed 2026-10-07 against
   `katalyst`:** red on the product before the repair (three `stall` issues inside paced spans, pack
   `2026-10-07T00-21-02-195Z`), green on the repaired head (220 pieces over 26.4 s, no `stall` issue, pack
@@ -44,7 +44,7 @@ eighty-second defect's repair holds.
 
 Two things about the scenario itself were wrong and are repaired: the stalled call was **absent from the pack**
 (its record was written only when the proxy let the socket go, and the product recovered first —
-`docs/defects/fixed/the-stalled-call-was-the-one-call-missing-from-the-pack.md`), and
+`docs/archive/defects/the-stalled-call-was-the-one-call-missing-from-the-pack.md`), and
 `stop_reason !== 'user_cancelled'` is a check that **cannot fail**, since a run that met no fault ends
 `tasks_complete` too. It now carries a positive half: the product's own `issues` row must show it noticed, and
 what it classified must not be fatal. `LIVE_RUN_STALL_HOLD_MS` must outlast the product's `llm_response_timeout`

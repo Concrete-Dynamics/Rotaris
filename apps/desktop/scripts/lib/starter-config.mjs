@@ -8,12 +8,12 @@
  * `live-run`'s sign-in scenario used to check only that the file existed. Initialization recorded into a missing
  * workspace file before anyone signed in, creating it with `initialization:` alone, so that check passed over a workspace
  * that never received the starter (acceptance F1 and F3, 2026-10-03;
- * `docs/defects/fixed/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`).
+ * `docs/archive/defects/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`).
  * Since F1's repair the workspace's open writes the starter before initialization records, and initialization's writer
  * asks for it first (REQ-WORKSPACE-040); the reader still refuses the file F1 left.
  *
  * `slice-proof`'s first-launch scenario read only the `default_persona` line; it asks this reader too (2026-10-03,
- * `docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
+ * `docs/archive/defects/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
  *
  * Nothing here is product code. It runs only from the live run, the slice proof and its test; the test holds it to the
  * product's own `starterDocument`, so the two cannot drift apart unseen.
@@ -23,7 +23,7 @@
  * The starter's comment header, REQ-WORKSPACE-038's three lines as the product words them (`starterDocument` in
  * `packages/config/src/writers.ts`; the test holds the two equal). Read whole, since a header that merely starts with
  * `#` passed over one lacking the requirement's clauses (2026-10-03,
- * `docs/defects/fixed/the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md`).
+ * `docs/archive/defects/the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md`).
  */
 export const STARTER_HEADER = Object.freeze([
   '# A minimal starting configuration for this scope; anything left null or absent is inherited from the layer below.',
@@ -39,7 +39,7 @@ export const STARTER_PERSONA = 'orchestrator';
  * reader requires each and names any other top-level key stated as an explicit null. Until 2026-10-06 the product's
  * starter also wrote the retrospective slot and its companion (`retrospective_model`, `retrospective_model_thinking`,
  * PD-LIBRARY-002, a directive naming neither requirement) as nulls and this reader did not object to more
- * (`docs/defects/fixed/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md`).
+ * (`docs/archive/defects/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md`).
  * A value a sign-in or a slot edit writes over one of the twelve is no null and is not read; nothing else the proofs run
  * before this reader writes a top-level null.
  */

@@ -51,7 +51,7 @@ export interface TaskContext {
  * The workspace an applicability predicate is asked about. REQ-WORKSPACE-013/102: each window resolves initialization for
  * its own workspace, and with two main windows open (PD-SHELL-001) two workspaces are resolved by one registry, so the
  * predicate is told which one rather than reading a "current" workspace
- * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
+ * (`docs/archive/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
  */
 export interface ApplicabilityContext {
   readonly workspaceRoot: string;

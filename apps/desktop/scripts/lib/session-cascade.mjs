@@ -7,7 +7,7 @@
  * `agent_fingerprints` (PD-ORCH-005 clause 12: "the conversation record belongs to its session and is deleted with it").
  * The proof pinned the COUNT of the cascading tables, twice, and each migration that added one broke the proof before
  * anything after the pin was measured
- * (`docs/defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`). What the delete
+ * (`docs/archive/defects/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`). What the delete
  * relies on is not a count but a shape, and that is what is checked here, whatever the count:
  *
  * - every table whose foreign key names `sessions` names it FROM its `session_id` column, TO the session id, with

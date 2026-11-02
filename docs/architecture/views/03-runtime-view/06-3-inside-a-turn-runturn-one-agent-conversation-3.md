@@ -16,11 +16,11 @@ reported name to the session's shared connection under the entry's allowance, 30
 map, with every carried server's fate — `grantEvidence`; a server whose tool discovery failed stays in the surface, so the
 prompt lists it bare, and is recorded `dropped` for `discovery-failed` with nothing granted under it, REQ-MCP-114 with
 REQ-MCP-042 — it was recorded `connected` until 2026-10-03,
-`docs/defects/fixed/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md`), which a child's execution records on its row before its first
+`docs/archive/defects/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md`), which a child's execution records on its row before its first
 model step (`ChildLedger.recordGrant` → `SessionWriter.recordChildGrant`; REQ-MCP-065 with REQ-TOOLS-006) — started beside
 the first turn, never ahead of it, so the payload reaches the conversation record while readiness is pending. Until
 2026-10-01 the spawn recorded the persona's declared tools and its MCP surface before any control instead
-(`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`). Under `restricted` or `read_only` the MCP
+(`docs/archive/defects/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`). Under `restricted` or `read_only` the MCP
 tools are withheld from the surface (ADR-0016's reading), and while the plan gate holds every server executor is withheld by identity — `withheldUnderPlanGate(name, false)` — rather than by the registry's answer for its name, which a server's tool offered under a free public name such as `read_file` would otherwise borrow (REQ-ORCH-153; the gate refuses the same call on dispatch through its `publicTool` predicate and the port's withheld set). The prompt section and the grant are drawn from the surface narrowed to the tools that joined the callable map, so a tool withheld at the plan gate or dropped for colliding with a native name is neither printed nor granted (REQ-MCP-062; until 2026-10-01 the section was rendered from the unnarrowed surface and printed it). A port's readiness resolves once, under the hold it was built with; approval launches a new run, whose ports are built with the gate released. The session's connections open on first demand under a keyed
 single-flight (one process per server per session, shared by every child), a per-call failure is that call's (no retry,
 no reconnect; the next call re-establishes; one `mcp_config` warning per server per session), a `tools/list_changed`

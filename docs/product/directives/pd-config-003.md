@@ -164,7 +164,7 @@ typing changes nothing, and the stored value survives all of them. Revisions 1 t
 > is a whole number within 10–600 or the field loses focus (`improvementTimeoutEdit`). The same fault in the category's other
 > number fields was recorded, not repaired, then; since fin34 (2026-10-13) every Runtime number field, the per-agent timeout
 > included, holds the same draft (`ClampedNumberField`, `clampedNumberEdit`)
-> ([`a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`](../../defects/fixed/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md)).
+> ([`a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`](../../archive/defects/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md)).
 > **As built.** `DESKTOP_SAVE_RUNTIME_KEYS` and the closed `DesktopSaveSchema.runtime` (`packages/contracts/src/config.ts`),
 > `DesktopSave.runtime` typed from it (`packages/config/src/writers.ts`), `improvement_collector_timeout` in
 > `TIER_B_RUNTIME_KEYS` (`packages/config/src/tiers.ts`), the helpers in `packages/ui/src/settings/config-state.ts`, the
@@ -196,7 +196,7 @@ typing changes nothing, and the stored value survives all of them. Revisions 1 t
 > hyphen. The tag now takes a line of its own under the state (row 50 px, the persona 112 px and one line; the state cell
 > 78 px, the card 910 of 910 px) and the control's path is kept on one line (213 px). The same squeeze under the stalled badge,
 > which shares the slot, is recorded, not repaired
-> ([`the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md`](../../defects/fixed/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md));
+> ([`the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md`](../../archive/defects/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md));
 > repaired 2026-10-13 (fin35) the same way, the stalled tag on a line of its own.
 > The limit is written "<N> seconds" except that one second reads "1 second", the way "1 minute" does — since revision 4
 > (2026-10-13, [OQ-253](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-253)) the directive's own text. **As built.**
@@ -220,7 +220,7 @@ typing changes nothing, and the stored value survives all of them. Revisions 1 t
 > `packages/ui/src/agent-timeout.test.ts` pins `timeoutLimitText(1)` as "1 second" beside "1 minute" and the plural forms; that
 > file was run again on this branch, green. **What was not measured.** A cut-off at a one-second limit in the built app
 > (`pnpm mission-proof` item 1d drives a 3 s limit). Repairs
-> [`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../../defects/fixed/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
+> [`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../../archive/defects/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 >
 > **The control set through Settings before a run, in the built app, and the live scenario written, 2026-10-13 (fin42, the
@@ -232,7 +232,7 @@ typing changes nothing, and the stored value survives all of them. Revisions 1 t
 > Workspace sidebar's tag as it appears ("Cut off at its per-agent timeout of 3 seconds while making progress. …"), the reading
 > the live scenario takes. **Found:** a value typed over a selection that already shows the same digits is no change to the
 > field, so a stored 3 s shown clamped as `1` and overtyped `1` stayed 3 s with the bar clean; recorded, not repaired
-> ([`a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`](../../defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md)).
+> ([`a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`](../../archive/defects/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md)).
 > *Repaired 2026-10-14 (fin43), reported here in place:* every clamped Runtime field now commits a typed value from the
 > native input event rather than React's change event, which skips a value equal to the one the input holds, so the
 > overtyped `1` is "a user's entry" stored as 60 seconds like any other (this directive's own words; the field's text was
@@ -254,7 +254,7 @@ typing changes nothing, and the stored value survives all of them. Revisions 1 t
 > answers: the run's empty artifact notes "collector timed out after 10 seconds" and the notice reads "Improvement analysis
 > complete — no proposals" with "The review of this run reached its 10-second limit before it proposed anything. Settings ›
 > Runtime › Improvement analysis timeout allows it longer." That launch found
-> [`a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md)
+> [`a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../../archive/defects/a-post-run-analysis-after-a-retrospective-is-never-captured.md)
 > (repaired; PD-LIBRARY-002's record above). The live `ask` scenario sets the control to `LIVE_RUN_ANALYST_TIMEOUT_S` (default
 > 300) the same way before its run. **Not measured:** that live run, the orchestrator's.
 

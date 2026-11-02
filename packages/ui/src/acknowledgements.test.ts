@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /*
- * docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md: the acknowledgement stack
+ * docs/archive/defects/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md: the acknowledgement stack
  * (REQ-NOTIFY-012, the window's bottom-right corner, drawn over everything) stands where the artifact inspector's footer
  * stands, and each acknowledgement took the pointer over its whole box, so a press meant for Save landed on its text.
  * REQ-NOTIFY-020: only the close control accepts interaction (and PD-WORKSPACE-001's one action, which extends

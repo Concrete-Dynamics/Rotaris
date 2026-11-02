@@ -2,7 +2,7 @@
  * The live run's reading of a session's `summary.md` (REQ-SESSION-140), the file the product writes beside the session's
  * log and `preserveRun` copies into the pack (`apps/desktop/scripts/live-run.mjs`). Until fin23 the pack carried no
  * `summary.md` and nothing read it, so fin22's repair of the file had no live evidence
- * (`docs/defects/fixed/the-live-runs-pack-carries-no-summary-md.md`).
+ * (`docs/archive/defects/the-live-runs-pack-carries-no-summary-md.md`).
  *
  * The requirement's order: a `# Session <id>` heading; status, workspace, created and updated; the task; the stop reason
  * only where one is recorded; Metrics; Warnings (the kinds it names, the permission audit named beside the denials);
@@ -10,7 +10,7 @@
  * read here. The mostly-elided artifacts line carries a count from the timeline's context_selection entries, never `n/a`
  * (PD-SESSION-002), and the tool outcomes carry no `mcp` or `fetch` bucket (OQ-208 as ruled). Beside the order, one
  * agreement the file owes itself: the Warnings line's tool errors are the Issues line's
- * `tool_error` entries (REQ-SESSION-136; `docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
+ * `tool_error` entries (REQ-SESSION-136; `docs/archive/defects/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
  *
  * Nothing here is product code. It runs only from the live run.
  */
@@ -85,7 +85,7 @@ export function summaryReading(md, { sessionId, stopReason }) {
  * Whatever stops the step, the scenario's summary check is recorded once: a failed one where no file was written, where
  * one could not be kept, or where the judge threw before its own check. Until fin25 a throw after the no-file branch was
  * only pushed to the pack's `failed` list, and that scenario's check vanished from `results.json`
- * (`docs/defects/fixed/a-summary-check-that-throws-leaves-no-check-in-the-live-runs-results.md`).
+ * (`docs/archive/defects/a-summary-check-that-throws-leaves-no-check-in-the-live-runs-results.md`).
  */
 export function preserveSummary({ name, sessionId, read, keep, judge, check }) {
   const what = `${name}: the session's summary.md carries REQ-SESSION-140's sections, in its order`;

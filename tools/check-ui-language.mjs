@@ -21,7 +21,7 @@ const raw = [];
  * tag-<kind>` and names the tone by `kind` alone, so a tone spelled in the class sits beside the one `kind` gives — the
  * default `neutral` included — and which one paints is the stylesheet's order, not the caller's choice. Until 2026-10-01
  * a class REPLACED the foundation, every caller spelled it by hand, and one spelled `tag-failure`, which the language does
- * not define (docs/defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md).
+ * not define (docs/archive/defects/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md).
  */
 const tagTones = [];
 const TAG_COMPONENTS = new Set(['Tag', 'DesignTag']);

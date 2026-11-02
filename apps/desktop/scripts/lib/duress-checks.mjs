@@ -78,7 +78,7 @@ export function commandsReading(children, calls, reportOf) {
  * The token counts one recorded call's streamed usage chunk carries; each is null where the record holds none. The usage
  * the recorder kept from the whole body (`record.usage`, since 2026-10-03) comes first, because the recorded body is cut at
  * its cap and a long response's usage chunk, which comes last, went with the cut (finding U6:
- * `docs/defects/fixed/the-traffic-recorders-body-cap-drops-a-responses-usage-and-two-duress-figures-disagree-with-the-store.md`);
+ * `docs/archive/defects/the-traffic-recorders-body-cap-drops-a-responses-usage-and-two-duress-figures-disagree-with-the-store.md`);
  * an older record is read from its body as before.
  */
 export function usageOf(record) {
@@ -176,7 +176,7 @@ export function waitsOnChildren(call) {
  * then — their requests, their tools, or nothing. Until 2026-10-06 every call was an interval, so the coordinator's
  * `wait_for_tasks`, open for nearly the whole duress run at 27a5127, filed each gap between its children's steps as "tools"
  * (18 s tools and 2 s product printed, 12.1 s and 7.9 s once it is left out;
- * `docs/defects/fixed/the-duress-time-split-counts-a-parents-wait-on-its-children-as-tools.md`, finding H7).
+ * `docs/archive/defects/the-duress-time-split-counts-a-parents-wait-on-its-children-as-tools.md`, finding H7).
  */
 export function toolIntervals(calls) {
   return calls
@@ -275,7 +275,7 @@ export function deadlineReading({ timedOut, attribution: a, budgetMs, traffic, u
  * empty record from a launch it did record still means no request was made; `raise` names the variable that widens this
  * launch's wait. The duress run took this reading first (finding H-h); the `delegation-swarm` launch takes it since a swarm
  * coordinator that invented work for itself ran out its wait with the product clean (acceptance finding L8 at b9e3005,
- * `docs/defects/fixed/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md`).
+ * `docs/archive/defects/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md`).
  */
 /** Whether an application log holds a line at `info` (PD-MONITOR-002's level field, `[main <at>] info    …`). */
 export const hasInfoLine = (log) => /^\[main [^\]]*\] info\b/m.test(String(log ?? ''));
@@ -296,7 +296,7 @@ export function overrunReading({ log, startedAt, endedAt, records, calls, budget
    * Both lines are `info` (`probe.ts`'s `host.log`). A log that holds no `info` line at all was written at a threshold above
    * it (`--app-log-level=warning` or `error`, which `live-run.mjs` refuses since 2026-10-20, `lib/app-log-level.mjs`), so
    * neither line could be there whatever the launch did: that is `unread`, never `ended`
-   * (`docs/defects/fixed/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`).
+   * (`docs/archive/defects/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`).
    */
   if (!timedOut && !hasInfoLine(text)) {
     return { outcome: 'unread', detail: 'the launch\'s application log holds no info line, so its threshold was above info (--app-log-level=warning or error) and the capture\'s wait lines were never recorded: the deadline cannot be read' };

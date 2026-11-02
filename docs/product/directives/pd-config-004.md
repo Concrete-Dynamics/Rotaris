@@ -36,7 +36,7 @@ heading's three-control sentence. The change that builds it owes this paragraph 
 
 > **The live re-render notification across windows, 2026-10-14 (fin43), reported here in place:** "wired … to the live
 > re-render notification" held for the window that moved the switch only; a persona window already open kept the value it
-> booted with ([`an-open-persona-window-keeps-the-display-preferences-it-booted-with`](../../defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md)).
+> booted with ([`an-open-persona-window-keeps-the-display-preferences-it-booted-with`](../../archive/defects/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md)).
 > Main now announces each of the three switches' preferences it stores to every live window on channel 14,
 > `display:changed`, and every window folds it into its display store. `palette-proof`'s stage 7
 > (`persona-follows-display`) read a persona window's reasoning row `aria-expanded="false"` before the main window's

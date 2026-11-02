@@ -49,7 +49,7 @@ absent-is-not-an-error, and survive-a-restart.
 *Reconciled with the code, 2026-09-29 (R-067):* the product resolved (1) on Windows as
 `%LOCALAPPDATA%\rotaris\config\` until this date, and the process view spelled that answer; both now spell
 `REQ-CONFIG-001`'s `%LOCALAPPDATA%\rotaris\rotaris\`, and (2) stays the sibling `%LOCALAPPDATA%\rotaris\data\`
-([the note](../../../defects/fixed/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md)).
+([the note](../../../archive/defects/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md)).
 On Windows that directory is also the one the preference store's platform-standard `Rotaris\Rotaris` root names, the
 filesystem folding case. What this assumption separates is keys and files — `REQ-SHELL-006` leaves the store's path
 free — so the two share a directory and no file, and neither reads what the other writes.

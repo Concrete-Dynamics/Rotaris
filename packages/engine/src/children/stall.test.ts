@@ -102,7 +102,7 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     expect(w.watch.quietFor()).toBe(0);
   });
 
-  it('REQ-ORCH-089 / REQ-NOTIFY-112: a piece of a tool call\'s streamed arguments is a model event and output — a long `write_file` is neither a stall nor silence (docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md)', () => {
+  it('REQ-ORCH-089 / REQ-NOTIFY-112: a piece of a tool call\'s streamed arguments is a model event and output — a long `write_file` is neither a stall nor silence (docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md)', () => {
     const w = watched(90_000);
     w.watch.start();
     w.watch.modelEvent('text');

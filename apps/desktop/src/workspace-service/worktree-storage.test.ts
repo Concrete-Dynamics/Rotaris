@@ -8,7 +8,7 @@ import { REQUIREMENT_WORKTREES_SUBPATH, requirementWorktreePath, sessionWorktree
  * (REQ-GIT-073) whose session trees would land in the requirement checkout directory REQ-GIT-137 fixes, and the workspace
  * service places both kinds of tree. config sits below workspace and cannot import its constant, so this composition root —
  * which imports both — pins that the load-time check and the placement agree, value by value
- * (docs/defects/fixed/a-worktree-storage-subpath-inside-the-requirement-checkout-directory-is-not-rejected-at-load.md).
+ * (docs/archive/defects/a-worktree-storage-subpath-inside-the-requirement-checkout-directory-is-not-rejected-at-load.md).
  */
 describe('REQ-GIT-138: the load-time check and the worktree placement agree', () => {
   const ws = resolve('/work/ws');

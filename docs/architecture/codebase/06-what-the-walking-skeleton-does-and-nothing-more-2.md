@@ -84,7 +84,7 @@ Part 6 of 22 of [the codebase record](../codebase.md), which indexes every part.
    input block and would pass through a disabled window, which is recorded in ADR-0048 beside the reading that a
    disabled window can still be raised to the foreground. That host-input half runs on Windows only. Since 2026-09-28
    the proof states it not applicable elsewhere and asserts the application's own reading there
-   ([note](../../defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md)). **Found — one defect:** binding Ctrl+L and Ctrl+Return through
+   ([note](../../archive/defects/palette-proof-reads-the-win32-host-input-on-every-platform.md)). **Found — one defect:** binding Ctrl+L and Ctrl+Return through
    the registry deferred both by two animation frames, so a keystroke immediately after Ctrl+L reached whatever held
    focus before; the product's own prompt seam types at that speed and stopped submitting, which is how it surfaced.
 
@@ -236,12 +236,12 @@ renderer errors, then writes its result table under `.proof/theme-proof/`. Since
 only from its on-screen part: its box cut by the window and by every ancestor that clips it. A text with less than one
 em on screen is reported as skipped, with its size, and is not measured (`apps/desktop/scripts/lib/text-sample.mjs`).
 Before that, a status-strip item scrolled 1.2 px onto the screen was read as a glyph's edge
-(`../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`). Since 2026-10-01 the contrast
+(`../../archive/defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`). Since 2026-10-01 the contrast
 verdict is bounded by what it measured (`apps/desktop/scripts/lib/contrast-coverage.mjs`): every capture needs at least
 one measured text inside its own surface (the view's root, or the Settings view's) and at most 25% of that surface's
 texts skipped, and the run at most 10% of all its texts skipped; the skips are counted by reason. Before, a surface whose
 own text was gone passed on the shell around it
-(`../../defects/fixed/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`). Three counterfactual commands
+(`../../archive/defects/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`). Three counterfactual commands
 lower text or focus contrast, or push the Workspace view off the screen, and must exit non-zero. The first execution and its coverage boundary are
 `spikes/theme-proof.md`.
 

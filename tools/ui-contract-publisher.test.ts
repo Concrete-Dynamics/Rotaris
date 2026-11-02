@@ -3,7 +3,7 @@
  *
  * `pnpm lint` (`tools/check-ui-language.mjs`) runs this over `packages/ui/src` and the renderer root; what is
  * pinned here is the verdict, including the window controls' original hand-written object, which killed every
- * `ui-audit` (docs/defects/fixed/the-window-controls-contract-is-an-object-and-kills-every-ui-audit.md).
+ * `ui-audit` (docs/archive/defects/the-window-controls-contract-is-an-object-and-kills-every-ui-audit.md).
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the tools directory is plain ESM, run by node without a build step.

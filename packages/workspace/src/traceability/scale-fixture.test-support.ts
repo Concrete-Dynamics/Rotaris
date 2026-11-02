@@ -10,7 +10,7 @@ import { join } from 'node:path';
  * Test support, and named so (`*.test-support.ts`, which `vitest.config.ts` does not collect; `scale-fixture.ts` until
  * 2026-10-15): nothing in the product imports it and the package entry does not reach it, which
  * `tools/test-support-naming/test-support-naming.test.ts` pins
- * (`docs/defects/fixed/workspace-traceability-test-support-is-named-as-product-modules.md`).
+ * (`docs/archive/defects/workspace-traceability-test-support-is-named-as-product-modules.md`).
  */
 export interface ScaleOptions {
   readonly blocks: number;

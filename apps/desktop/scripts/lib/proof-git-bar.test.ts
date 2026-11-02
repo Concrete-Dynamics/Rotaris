@@ -1,6 +1,6 @@
 /**
  * No proof workspace under the checkout's `.proof/` reads the enclosing repository
- * (`docs/defects/fixed/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`). The product's
+ * (`docs/archive/defects/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`). The product's
  * own repository read is asked here, as the app's Git view and status strip ask it, so what is pinned is what a proof's
  * evidence shows of git — not a stand-in for it.
  */

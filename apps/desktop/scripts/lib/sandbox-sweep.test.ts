@@ -1,6 +1,6 @@
 /**
  * The live run's startup sweep, told a leftover from a concurrent live run
- * (`docs/defects/fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`).
+ * (`docs/archive/defects/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`).
  *
  * The sweep used to delete every directory under `$TMPDIR/rotaris-live-run/` not marked `KEPT`, so a run that started
  * second deleted a running sibling's workspace, store and key. The first case below is that sibling; it fails on the

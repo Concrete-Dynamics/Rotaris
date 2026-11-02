@@ -171,7 +171,7 @@ const log3 = await launch('consent', s3, {
     // beside it passed on that. A box that exists and cannot be seen is UIR-014's class.
     // The reading marks the document once taken, and the Escape below waits for that mark, so the dialog is read
     // before it is answered rather than in whichever order two matches of one selector fall (a harness order, no
-    // assertion changed: `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+    // assertion changed: `docs/archive/defects/the-setup-dialog-takes-a-background-run-as-its-own.md`).
     // It waits for the composer as well as the dialog: under load the dialog matched before the composer had mounted,
     // and `send` read null (a harness order, no assertion changed; 2026-10-01).
     '(()=>{const r=JSON.stringify({probe:"dialog",headline:document.querySelector(\'[data-testid="project-setup-headline"]\')?.textContent??null,intro:document.querySelector(\'[data-testid="project-setup-intro"]\')?.textContent??null,word:document.querySelector(\'[data-setup-task-word]\')?.textContent??null,visible:(()=>{const d=document.querySelector(\'[data-testid="project-setup-dialog"]\');if(!d)return null;const r=d.getBoundingClientRect();return r.width>0&&r.height>0&&r.top<window.innerHeight&&r.bottom>0&&r.left<window.innerWidth&&r.right>0&&document.elementFromPoint(r.left+r.width/2,r.top+8)!==null&&d.contains(document.elementFromPoint(r.left+r.width/2,r.top+8));})(),chrome:(()=>{const d=document.querySelector(\'[data-testid="project-setup-dialog"]\');return [...document.querySelectorAll(\'.title-bar button, .notice-slot button\')].filter((b)=>{const r=b.getBoundingClientRect();if(r.width===0||r.height===0)return false;const at=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return at!==null&&d.contains(at);}).map((b)=>b.getAttribute(\'aria-label\')||b.textContent.trim());})(),chromeCount:document.querySelectorAll(\'.title-bar button, .notice-slot button\').length,send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null,reason:document.querySelector(\'[data-testid="composer-send"]\')?.title??document.querySelector(\'.composer__refusal\')?.textContent??null});document.documentElement.setAttribute(\'data-proof-shot\',\'dialog\');setTimeout(()=>document.documentElement.setAttribute(\'data-proof-read\',\'dialog\'),2000);return r;})()>>body:has([data-testid="project-setup-dialog"]):has([data-testid="composer-send"])@~15000',
@@ -192,7 +192,7 @@ if (dialog3.visible !== true) throw new Error(`the dialog is in the DOM but not 
 if (dialog3.send !== true) throw new Error('the composer Send control was not disabled while the prompt was unanswered (REQ-WORKSPACE-112)');
 // REQ-WORKSPACE-106 / ADR-0048: the rest stays navigable — no title-bar control (Sessions, Minimize, Maximize, Close window) and
 // no notice answer has the dialog at its centre. Until 2026-10-02 the dialog was fixed at the window's corner over all of them
-// (`docs/defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`).
+// (`docs/archive/defects/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`).
 if (!(dialog3.chromeCount >= 4)) throw new Error(`the title bar and the notice slot drew ${dialog3.chromeCount} controls; the reading found none to test`);
 if (dialog3.chrome.length !== 0) throw new Error(`the setup dialog lies over the window chrome: ${JSON.stringify(dialog3.chrome)} (REQ-WORKSPACE-106)`);
 if (!existsSync(join(output, 'consent-dialog.png'))) throw new Error('no picture of the setup dialog was taken (consent-dialog.png)');
@@ -204,7 +204,7 @@ if (!/verification-consent/.test(ws3)) throw new Error(`Escape did not record th
 // REQ-WORKSPACE-083/084/088: the background task starts by itself whenever the prompt is answered, so Escape skips the
 // consent task only. The dialog can open from the window's mount read before the resolution 800 ms after the workspace
 // opens; a skip answered first performs that resolution first (OQ-122). On Linux the Escape used to come first and skip
-// both (`docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+// both (`docs/archive/defects/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
 if (!/initialization: running code-intelligence-setup[^\n]*\(background\)/.test(log3)) throw new Error('the background task did not start by itself beside the consent prompt (REQ-WORKSPACE-083)');
 if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws3)) throw new Error(withSetupFailure(`the background task beside the consent prompt was not recorded completed (REQ-WORKSPACE-088):\n${ws3}`, log3));
 const log3b = await launch('consent-reopen', s3, {

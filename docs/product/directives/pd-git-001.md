@@ -48,7 +48,7 @@ logged as [R-072](../requests.md#r-072).*
 > fin28's repair round 1 made deliberate (`32ac0c0`), now kept falsified beside its replacement in PD-SHELL-009's first
 > execution, ADR-0013's sixth execution and the process view; and REQ-GIT-120's refusal to continue a base-tree session was
 > not built at all
-> ([`a-base-tree-session-continues-beside-another-run-in-its-workspace.md`](../../defects/fixed/a-base-tree-session-continues-beside-another-run-in-its-workspace.md)).
+> ([`a-base-tree-session-continues-beside-another-run-in-its-workspace.md`](../../archive/defects/a-base-tree-session-continues-beside-another-run-in-its-workspace.md)).
 > **As built.** `Sessions.activeRunsSharing` and `treesOverlap`, and `baseTreeBusy` with `BASE_TREE_BUSY_REFUSAL` at the four
 > paths that start a further run of a session (`packages/engine/src/sessions.ts`); `runs.active`'s `scope: 'sharing'`
 > (`packages/contracts/src/process-protocol.ts`, `apps/desktop/src/run-host/dispatch.ts`); `session.newId`'s

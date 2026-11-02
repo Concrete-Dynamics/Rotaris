@@ -4,7 +4,7 @@
  * single `Event<WebContentsConsoleMessageEventParams>` argument and marks the positional `(event, level, message, line,
  * sourceId)` form deprecated; a listener declaring more than one parameter logs "'console-message' arguments are
  * deprecated and will be removed", and the relay would stop when they are
- * (`docs/defects/fixed/the-captures-console-relay-listens-with-the-deprecated-console-message-arguments.md`).
+ * (`docs/archive/defects/the-captures-console-relay-listens-with-the-deprecated-console-message-arguments.md`).
  */
 
 /** The fields of the details event this relay reads. */

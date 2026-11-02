@@ -1,6 +1,6 @@
 /**
  * Live-run finding D8 of the duress run at `a68f121`
- * (`docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`): the renderer threw React
+ * (`docs/archive/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`): the renderer threw React
  * error 185 ("Maximum update depth exceeded") seven times while two children streamed, each relayed by the capture as
  * `capture: renderer console: <message> (<source>:<line>)` (`src/main/capture/index.ts`), and the harness read those lines at
  * `info` and passed. The note asked for a count of them in the live run's NOTE lines; this is the reader.
@@ -43,7 +43,7 @@ export function updateDepthVerdict(name, log) {
 /**
  * The replica's run-start decline (`packages/ui-core/src/replica.ts`, `onDiagnostic`, relayed by the shell as
  * `console.warn('[replica] …')`): REQ-SESSION-161's own recovery, read from the code and left as a diagnostic on purpose
- * (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
+ * (docs/archive/defects/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
  * start"). The replica declines the increment, reconciles from a whole-session read and draws every row; nothing on screen is
  * wrong. Matched whole, numbers and all, so no other `[replica]` line passes for it.
  */
@@ -51,7 +51,7 @@ const REPLICA_RUN_START_DECLINE = /\[replica\] declined increment on [^:]+: earl
 
 /**
  * The relayed renderer console lines a proof fails on: every one but the replica's run-start decline above, which a launch
- * meets at a run's start under load and which is no fault (docs/defects/fixed/palette-proof-fails-on-the-replicas-documented-run-start-decline.md).
+ * meets at a run's start under load and which is no fault (docs/archive/defects/palette-proof-fails-on-the-replicas-documented-run-start-decline.md).
  * `mission-proof` and `palette-proof` share it; `replicaRunStartDeclines` counts what it let through, for a proof's `results.json`.
  * @param {string[]} errors the launch's `renderer console:` lines
  */

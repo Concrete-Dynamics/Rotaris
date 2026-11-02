@@ -11,7 +11,7 @@ import type { ToolContext } from './types.js';
  * Undoing a create whose file cannot be removed (REQ-TOOLS-132, REQ-TOOLS-135). On Windows, the primary platform, `unlink`
  * refuses with EBUSY or EPERM while another process holds the file open; that cannot be produced on demand here, so
  * `unlinkSync` is made to refuse for the calls this test arms. The undo answers the error, leaves the file in place, and puts
- * its entry back, so the create stays undoable (docs/defects/fixed/undoing-a-create-leaves-an-empty-file.md). `vi.mock` is
+ * its entry back, so the create stays undoable (docs/archive/defects/undoing-a-create-leaves-an-empty-file.md). `vi.mock` is
  * hoisted over the whole file, which is why this case is not in tools.test.ts beside the rest of the describe.
  */
 const refuse = { armed: false };

@@ -12,7 +12,7 @@ import { rowLabel } from './workspace-label.js';
  *
  * Until 2026-10-03 both were ordinary items cut at their end by CSS, so a deep workspace path kept its head and lost the
  * folder name that tells workspaces apart
- * (`docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`).
+ * (`docs/archive/defects/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`).
  *
  * How the width is had without a loop. The item asks the row for its whole label (`flex-basis` = the full label's
  * measured width plus what the box spends beside it, `rowLabel`) and may be shrunk below that, to nothing (the

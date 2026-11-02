@@ -12,7 +12,7 @@
  *
  * `slice-proof` asserted `credentials: 1 provider(s) authenticated`, a line nothing in the product writes, so its
  * step 3 failed on every build that reached it
- * (`docs/defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`). This reader is pinned by
+ * (`docs/archive/defects/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`). This reader is pinned by
  * `priming-report.test.ts` against `LeaseReportLog`'s own output, so the proof cannot drift from the product again
  * without a red.
  */

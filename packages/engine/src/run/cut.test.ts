@@ -61,7 +61,7 @@ describe('cutArguments (REQ-SESSION-136, REQ-SESSION-194)', () => {
    * tool that gains a key holding identifiers, paths or timestamps under a name whose last word does not say so belongs in
    * WHOLE_KEYS (`cut.ts`), and here (the seams view, "A tool"). Until fin28 `delegate`'s `inherited_context` (sibling task
    * ids) and `attach_artifacts` (artifact ids or slugs, REQ-TOOLS-152) read as free text
-   * (docs/defects/fixed/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md).
+   * (docs/archive/defects/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md).
    */
   it('classifies every argument key of every built-in tool (PD-SESSION-003)', () => {
     const table: Record<string, Record<string, 'whole' | 'free' | 'value'>> = {

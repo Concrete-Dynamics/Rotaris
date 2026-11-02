@@ -1,6 +1,6 @@
 /**
  * What `slice-proof` accepts from a live model, pinned against the evidence of its three reds of 2026-10-03
- * (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`): run 4's `explicit_trivial (0.99)`
+ * (`docs/archive/defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`): run 4's `explicit_trivial (0.99)`
  * for the README question, run 5's classification that hit the 12 s bound, and run 2's run that completed with no
  * answer. Each line below is the log line those runs wrote. A fallback, a category the taxonomy's texts leave out of
  * reach, and a missing intent line stay reds (REQ-ORCH-006, REQ-ORCH-007, REQ-ORCH-021; Part L), except that a fallback at
@@ -88,7 +88,7 @@ describe('the intent scenario accepts what REQ-ORCH-006 and REQ-ORCH-021 leave i
 });
 
 /*
- * finacc3 A2-03 (docs/defects/fixed/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md): r1 classified the flag
+ * finacc3 A2-03 (docs/archive/defects/slice-proof-reds-on-one-intent-answer-outside-the-accepted-set.md): r1 classified the flag
  * prompt `single_file_change (0.82)` and the re-run `moderate_feature`-range at 0.95. One answer outside the set is the
  * sampled model's call, as one answerless run is: the prompt is asked once more, and a second answer outside the set is the
  * red, naming both. A missing line, or a fallback for any reason but the 12 s bound (below), is a red at once: those are

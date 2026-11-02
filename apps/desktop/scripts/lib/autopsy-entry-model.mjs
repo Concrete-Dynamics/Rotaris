@@ -4,7 +4,7 @@
  * which this mirrors line for line: the script reads the store with `better-sqlite3` and cannot import the engine's
  * TypeScript.
  *
- * Live-run finding a71-13 (`docs/defects/fixed/the-autopsy-reader-attributes-the-roots-calls-to-its-childrens-model-key.md`):
+ * Live-run finding a71-13 (`docs/archive/defects/the-autopsy-reader-attributes-the-roots-calls-to-its-childrens-model-key.md`):
  * the store records a model key for each child and none in the children record for the root, and the reader used to
  * give the root its children's key whenever they shared one. The root's key is read instead from what the store records
  * of the root itself — the launch audit's configuration snapshot (REQ-SESSION-138), each continuation's own snapshot

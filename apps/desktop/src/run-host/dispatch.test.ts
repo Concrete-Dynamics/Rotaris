@@ -68,7 +68,7 @@ describe('session.continue carries the decline to the engine (PD-ORCH-005 clause
 
 /**
  * REQ-NOTIFY-045 with REQ-PROVIDER-066 (OQ-178's reading, confirmed 2026-10-06 by R-071; the repair of
- * `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`): the run host's hop of the
+ * `docs/archive/defects/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`): the run host's hop of the
  * retry. A retry launches a run as a prompt does, so the continuation lease is refreshed before the engine is asked, and a
  * lease refusal comes back without the engine ever hearing of it; the engine's refusals reach main with their codes and
  * their words, the confinement gate's under a start's headline (REQ-NOTIFY-061). Pinned after fin8's verifier found no test
@@ -170,7 +170,7 @@ describe('shutdown ends the code-intelligence setup before the run host exits (R
 
 /**
  * REQ-MCP-034/050 (live-run finding D1 at 1763f7f, repaired in
- * `docs/defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`): the discovery
+ * `docs/archive/defects/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`): the discovery
  * `session.start` runs ahead of the run launches what the run will, against the tree it executes in. Before the repair it
  * was handed the workspace's configuration and the workspace's root; `injection-proof`'s isolated launch read the result
  * in the built app, and this case pins the hop without a build.
@@ -287,7 +287,7 @@ describe('runs.active counts the workspace it names, and runs.stopWorkspace stop
 /**
  * PD-LIBRARY-002 (ADR-0065 decision 5) with ADR-0030: a retrospective authenticates exactly as a run does — the providers its
  * configuration names leased from main, then the setup completed over THOSE bearers. The live scenario run at `ce5f952` (F2,
- * `docs/defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`) sent the
+ * `docs/archive/defects/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`) sent the
  * retrospective's request with no credential: the capture took the workspace's cached setup (`configuredFor`), completed
  * before any lease over an empty bearer map, and the analysis reused it, so a launch with no run before it got a 401.
  */
@@ -332,7 +332,7 @@ describe('a retrospective authenticates as a run does: leased first, its setup c
    * PD-LIBRARY-002: "A workspace with no resolvable retrospective model captures no pass" — `leasedSetup` answers `no-model` only
    * when neither the entry role's model nor the retrospective's resolves, and that is said as the missing analyst, never as an
    * unloadable configuration or an expired job
-   * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
+   * (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
    */
   it('no resolvable model is answered as the missing analyst at the capture and at the analysis', async () => {
     const host = { ...(hostFor([]) as unknown as Record<string, unknown>), retrospectiveSetup: async () => ({ kind: 'no-model', reason: 'No usable model is configured for the entry role, so the run was refused before it started: role coding-agent names no model.' }) } as unknown as RunHost;
@@ -341,7 +341,7 @@ describe('a retrospective authenticates as a run does: leased first, its setup c
   });
 
   /*
-   * REQ-NOTIFY-254 (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md):
+   * REQ-NOTIFY-254 (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md):
    * a configuration that did not load is said as one with the loader's own reason at the capture, and at the analysis as the
    * same — never as "The captured improvement job is no longer available", which the analysis answered until the repair.
    */
@@ -376,7 +376,7 @@ describe('a retrospective authenticates as a run does: leased first, its setup c
 });
 
 /**
- * REQ-NOTIFY-044 with PD-SHELL-001 (`docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md`):
+ * REQ-NOTIFY-044 with PD-SHELL-001 (`docs/archive/defects/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md`):
  * a resume the engine refuses changes nothing in the run host. A `focus-session` notice pressed in a window holding another
  * workspace asks for a session that window's store does not hold; until 2026-10-14 the run host recorded the session under the
  * asking workspace's root before the refusal, so a session live in the other workspace took its continuation lease against
@@ -434,7 +434,7 @@ describe('the restore\'s controls acknowledge a workspace the run host holds no 
 /**
  * REQ-CONFIG-111 at ADR-0037's Tier B handover: a live state the load's schema rejects is refused and the state held before
  * stays, so the next run start never meets the value in a scope file's name
- * (docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
+ * (docs/archive/defects/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
  */
 describe('config.liveState installs only a live state the load\'s schema accepts (REQ-CONFIG-111, REQ-CONFIG-478)', () => {
   const hostFor = (lines: string[]) => ({ log: (m: string) => { lines.push(m); }, liveState: { runtime: { max_depth: 3 } } }) as unknown as RunHost & { liveState: unknown };
@@ -459,7 +459,7 @@ describe('config.liveState installs only a live state the load\'s schema accepts
 
 /**
  * REQ-SANDBOX-097 with REQ-SANDBOX-095/071 and REQ-SANDBOX-067/068 for the CONTINUATION paths
- * (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md): a
+ * (docs/archive/defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md): a
  * continuation launches a run, so the availability decision is settled before the engine's per-run `configure` reads the
  * cached verdict. Until 2026-10-20 only a run start (`launchSession`) and a `confinement.status` request settled it, and a
  * continuation reached first — after an application restart, the window's own read still in flight — read `peek()` as null
@@ -538,7 +538,7 @@ describe('a continuation settles the confinement verdict before the engine confi
 
 /**
  * OQ-386 point 1 (ruled 2026-10-21; the repair of
- * `docs/defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`): the run
+ * `docs/archive/defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`): the run
  * host answers `workspace.opened` before it warms the skill catalogue, and the warm-up never holds its loop. Until the repair
  * the warm-up was a `queueMicrotask` that ran the synchronous walk before the reaction `index.ts` attaches to post the reply.
  * The tree here is a map behind both kinds of port, each call recorded, and the asynchronous `readFile` can be held open —

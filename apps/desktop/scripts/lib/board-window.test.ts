@@ -45,7 +45,7 @@ describe('the long tasks requirements-proof counts against a board put on screen
 });
 
 /*
- * docs/defects/fixed/requirements-proofs-drop-stage-reads-a-revealed-cards-focus-two-frames-after-asking-for-it.md: the
+ * docs/archive/defects/requirements-proofs-drop-stage-reads-a-revealed-cards-focus-two-frames-after-asking-for-it.md: the
  * drop stage read the focus exactly two frames after asking the board to reveal a card, and the board takes the focus
  * through React's scheduler and one more frame, so on a loaded host the stage read `focused: false` for a card focused a
  * moment later. It now waits frame by frame up to a bound; the focus is still required.

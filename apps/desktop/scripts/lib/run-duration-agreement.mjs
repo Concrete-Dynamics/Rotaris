@@ -2,7 +2,7 @@
  * REQ-CHAT-158, REQ-MONITOR-107 (acceptance K1 of the default live run at `c2fdd6a`): at a run's end the run header and
  * the inspector's run-level row read one interval, `runStartedAt` to `updatedAt`, and must read it as one figure. They
  * did not: the header floored it and the row rounded it, so `edit` read "Completed 2:13" beside "2m 14s"
- * (`docs/defects/fixed/the-run-header-and-the-inspectors-run-level-row-read-one-run-duration-a-second-apart.md`).
+ * (`docs/archive/defects/the-run-header-and-the-inspectors-run-level-row-read-one-run-duration-a-second-apart.md`).
  *
  * The live run probes `[data-testid="run-timing"]`, `[data-testid="inspector-name"]` and `[data-testid="inspector-meta"]`
  * at its capture, and this reads the three back from the launch log: the header's whole seconds from its `data-seconds`
@@ -47,7 +47,7 @@ export function runDurationReading(log, entryPersona) {
 
 /**
  * Whether the live run asserts the reading, notes it, or fails it (acceptance L4,
- * `docs/defects/fixed/the-k1-duration-check-is-asserted-on-a-run-that-never-reached-a-terminal-state.md`). The two figures
+ * `docs/archive/defects/the-k1-duration-check-is-asserted-on-a-run-that-never-reached-a-terminal-state.md`). The two figures
  * agree by design only once the run is terminal: while it is live the header counts the model call in flight, restarting
  * at each call (REQ-CHAT-158), and the run-level row counts from spawn (REQ-MONITOR-107). So the agreement is asserted only
  * when the header says it is frozen (`data-frozen` `1`); a header that is live, or carries no mark, is a NOTE with

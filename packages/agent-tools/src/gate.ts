@@ -248,7 +248,7 @@ function hasIssueAt(issues: readonly { readonly path: readonly PropertyKey[] }[]
  * Until 2026-10-06 `repairPayload` wrapped the five fields unconditionally, before the schema was consulted. No public tool
  * names one of them as anything but an array, but an MCP tool may: a server whose `items` is an object received an array it
  * never asked for, and once its call was checked against its advertised schema the wrapped value was refused on every
- * re-issue (docs/defects/fixed/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md).
+ * re-issue (docs/archive/defects/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md).
  */
 export function repairArrayFields(payload: Record<string, unknown>, schema: z.ZodType): Record<string, unknown> {
   const fields = ARRAY_FIELDS.filter((f) => { const v = payload[f]; return v !== null && typeof v === 'object' && !Array.isArray(v); });
@@ -381,7 +381,7 @@ export class Gate {
      * same `outcomeIssues` an executor's observation takes. REQ-TOOLS-032 makes the call recoverable and unexecuted; it
      * does not except it from the issue record. Before this every refusal here returned before `outcomeIssues`, and the
      * duress run's two schema-invalid `write_file` calls were the only failures no issue referenced (live-run a71-6,
-     * docs/defects/fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md). The gate's other
+     * docs/archive/defects/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md). The gate's other
      * refusals — the plan gate, a write scope, a deny, a hook's stop, a withdrawn approval — settle `blocked`, not
      * `failed`, and file no `tool_error` (a deny files its own `permission_denied`).
      */

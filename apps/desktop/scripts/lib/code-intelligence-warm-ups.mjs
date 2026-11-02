@@ -6,7 +6,7 @@
  * product sends first (the READ tier's referencing-symbol search) and the arguments the two share, which the product copies
  * from the warmed call. The pinned runtime answers a rename before its language server has loaded the project, so the first
  * rename of a server session renamed the declaring file alone; the search waits for that loading
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ * (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  *
  * The warm-up rests on the runtime's internals, so the check is strict: a capability that is no capability of the tiers, a
  * tool the server does not list, or an argument either tool's listed input schema lacks refuses generation, and an upstream
@@ -58,7 +58,7 @@ export function warmUpRefusals(warmUps, tiers, server) {
  * In a workspace no `tsconfig.json` or `jsconfig.json` covers, the TypeScript language server holds the files open in it alone, the
  * pinned runtime opens the declaring file alone, and a rename stayed in that file after clause 2's search; the product places a
  * `jsconfig.json` of its own at the project root for the call
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ * (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  *
  * The clause rests on the runtime's language names, so the check is as strict as the warm-up's: a capability that is no capability of
  * the tiers, a language the runtime does not name, or one it names with no extension refuses generation, and so does an entry that

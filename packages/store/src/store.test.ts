@@ -41,7 +41,7 @@ const UNDO_V23 = `${UNDO_V24} ALTER TABLE children DROP COLUMN interruption; ALT
 const M = mintMachineId('0000000000000000000000000000000a') as MachineId;
 /**
  * The archiver the product's backup uses (`backup.ts`, `tarBin`): a bare `tar` launched from Git Bash is Git's GNU tar, which
- * reads `C:` as a remote host (docs/defects/fixed/two-store-cases-pack-their-artifact-with-whichever-tar-path-finds-first.md).
+ * reads `C:` as a remote host (docs/archive/defects/two-store-cases-pack-their-artifact-with-whichever-tar-path-finds-first.md).
  */
 const TAR = process.platform === 'win32' ? 'C:\\Windows\\System32\\tar.exe' : 'tar';
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -204,7 +204,7 @@ describe('store — OQ-281 (ruled 2026-10-14 under R-072): a first store is made
     const sibling = firstStoreSibling(root, id);
     // Two characters shorter than the place, so the sibling's database never crosses D11's limit first; it was
     // `.<id>.new`, five longer, until 2026-10-15
-    // (docs/defects/fixed/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md).
+    // (docs/archive/defects/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md).
     expect(sibling).toBe(join(root, `.${id.slice('v1-'.length)}`));
     expect(sibling.length - join(root, id).length).toBe(-2);
     mkdirSync(join(sibling, 'sessions'), { recursive: true });
@@ -533,7 +533,7 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
       expect(r.reversal?.ok).toBe(true);
       expect(r.leftovers).toContain(stage);
       // Step 9's code is the host's own for a rename onto a store that exists: ENOTEMPTY on POSIX, EPERM on Windows
-      // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+      // (`docs/archive/defects/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
       const installCode = process.platform === 'win32' ? 'EPERM' : 'ENOTEMPTY';
       expect(r.error).toBe(`restore failed at step 9 (${installCode}); the previous store was put back. A working copy of the backup could not be removed and is at ${stage}; it holds nothing the backup file does not, and it can be deleted.`);
       expect(staged()).toEqual([`${id}.restoring-1`]);

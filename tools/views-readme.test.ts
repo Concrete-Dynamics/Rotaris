@@ -2,7 +2,7 @@
  * `docs/architecture/views/README.md` is the router consulted before every change, so it stays a page: what each change
  * did to the views is written at the top of `reconciliation-log.md`, and only the "Last reconciled with the code" date
  * moves in the README. From 2026-09-16 to 2026-10-13 every change wrote its entry under that heading instead, until the
- * README was 2,658 lines (`docs/defects/fixed/the-views-reconciliation-entries-pile-up-in-the-readme-the-log-was-split-from.md`);
+ * README was 2,658 lines (`docs/archive/defects/the-views-reconciliation-entries-pile-up-in-the-readme-the-log-was-split-from.md`);
  * the move then dropped the maintenance rule's sentence that a view disagreeing with the code is the change's defect,
  * which `AGENTS.md` states too. This holds both.
  */

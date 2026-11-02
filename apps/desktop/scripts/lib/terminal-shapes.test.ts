@@ -81,7 +81,7 @@ describe('the terminal shapes the live run replays', () => {
       });
 
       /*
-       * `docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`: the silent wedge soft-pauses
+       * `docs/archive/defects/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`: the silent wedge soft-pauses
        * at 30 s, 70 s before REQ-CONFIG-116's 100 s cap, so the cap was never reached. `steady` prints more often than the
        * no-output window, so the soft pause never fires, and for longer than the cap, so the cap is the bound that ends it.
        */
@@ -306,7 +306,7 @@ describe('the shell replacement the replaces-shell shape replays (acceptance A9,
 
 describe('the shell exit the ends-shell shape replays (OQ-144\'s sibling case)', () => {
   /*
-   * `docs/defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md`: `exit 3` read as a soft pause after
+   * `docs/archive/defects/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md`: `exit 3` read as a soft pause after
    * the whole no-output window (3,007 ms against a 3 s window, measured when it was recorded). The repaired product ends
    * such a call at once as an `execution_error` with no exit code, and respawns the shell.
    */
@@ -321,14 +321,14 @@ describe('the shell exit the ends-shell shape replays (OQ-144\'s sibling case)',
     expect(endedShellReading(restarted, 30_000).kind).toBe('paused');
     expect(endedShellReading(ownExit, 12)).toMatchObject({ kind: 'other', exit: 3 });
     // The replaced shell's words are not this shape's: an `exit 3` told it replaced the shell read the exiting shell's `/proc`
-    // entry as another program's (docs/defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md).
+    // entry as another program's (docs/archive/defects/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md).
     expect(endedShellReading(restarted.replaceAll('ended the session', 'replaced the session'), 31).kind).toBe('replaced');
   });
 });
 
 describe('the command issued behind a soft-paused one (OQ-164)', () => {
   /*
-   * `docs/defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`: in the autopsy's run the
+   * `docs/archive/defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`: in the autopsy's run the
    * command issued behind the wedge said only "The command exited with code 0." The repaired product names the paused
    * command and its end in the detail.
    */
@@ -349,7 +349,7 @@ describe('the command issued behind a soft-paused one (OQ-164)', () => {
 
 describe('the poll after the interrupt shape (OQ-147)', () => {
   /*
-   * `docs/defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`: before the repair the poll
+   * `docs/archive/defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`: before the repair the poll
    * after `C-c` read a soft pause over a process the interrupt had ended. The repaired product reports OQ-147's reading, confirmed 2026-10-06 by R-071.
    */
   const diagnostic = (fields: Record<string, unknown>) => `[terminal_diagnostic] ${JSON.stringify({ backend: 'single-session', command: '', timeout: false, timeout_seconds: 100, warnings: [], ...fields })}`;
@@ -367,11 +367,11 @@ describe('the poll after the interrupt shape (OQ-147)', () => {
 
 describe('the steady shape and its hard-cap reading (REQ-TOOLS-097, REQ-CONFIG-116)', () => {
   /*
-   * `docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`. Run for real for a few
+   * `docs/archive/defects/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`. Run for real for a few
    * seconds, so the line it prints is measured rather than assumed; it is ended long before its 130 s. The budget
    * covers the chain's two cold starts, `powershell.exe` then `node`: quiet on this host tick-1 arrives at 2.2 s and
    * tick-2 at 4.2 s, and 1.5 s of room redded a landing under the full gate's load
-   * (`docs/defects/fixed/the-steady-shapes-case-is-too-tight-for-a-loaded-host.md`).
+   * (`docs/archive/defects/the-steady-shapes-case-is-too-tight-for-a-loaded-host.md`).
    */
   it('prints one tick line per interval, run for real', () => {
     const command = terminalShapes().find((s: Shape) => s.id === 'steady')!.command;
@@ -446,7 +446,7 @@ describe('the long-output reading', () => {
   });
 });
 
-describe('how the terminal run ended (docs/defects/fixed/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md)', () => {
+describe('how the terminal run ended (docs/archive/defects/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md)', () => {
   it('a run that ended failed before any terminal call is a failure, not a green run of NOTEs', () => {
     // the 2026-10-01 pack: two calls, neither terminal, the endpoint's 400 ended the run, and live-run printed PASSED
     expect(terminalRunEndReading({ execution_status: 'failed', stop_reason: 'agent_session_aborted' }, 0)).toEqual({ kind: 'died-early', detail: 'failed (agent_session_aborted) after 0 terminal call(s)' });
@@ -464,7 +464,7 @@ describe('how the terminal run ended (docs/defects/fixed/a-tool-call-whose-argum
   });
 });
 
-describe('which send of a shape the scenario reads (docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md)', () => {
+describe('which send of a shape the scenario reads (docs/archive/defects/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md)', () => {
   const shapes: Shape[] = terminalShapes('linux');
   const shape = (id: string): Shape => shapes.find((s) => s.id === id)!;
   const awk = shape('long-output').command;
@@ -511,7 +511,7 @@ describe('which send of a shape the scenario reads (docs/defects/fixed/the-live-
   });
 });
 
-// docs/defects/fixed/the-live-runs-terminal-reader-counts-a-send-the-gate-refused-for-another-reason-as-reached.md (fin40's
+// docs/archive/defects/the-live-runs-terminal-reader-counts-a-send-the-gate-refused-for-another-reason-as-reached.md (fin40's
 // reviewer, item N92): every refusal the tool gate settles before a call runs leaves the shape's question unasked, not only
 // the todo gate's and the schema check's.
 describe('the gate refusals that leave a shape unasked, all of them (N92)', () => {

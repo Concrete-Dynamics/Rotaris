@@ -8,7 +8,7 @@
  * (`pnpm code-intel:bundle`, git-ignored) its `create` exits 127 and the product publishes "Project setup did not finish"
  * (REQ-WORKSPACE-103). Exactly one notice is current (REQ-NOTIFY-024), so that notice then stands in the slot a proof
  * reads, and the proof reports it as a failure of its own subject
- * (`docs/defects/fixed/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`).
+ * (`docs/archive/defects/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`).
  *
  * `skipped` rather than `completed`: nothing was set up, and a skipped task is not pending, so reopening never starts it
  * (REQ-WORKSPACE-081, last sentence). Nothing here is a test seam — it is the product's own persisted state.

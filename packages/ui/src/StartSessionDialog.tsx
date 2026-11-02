@@ -61,7 +61,7 @@ export const ISOLATION_REQUIRED_TOOLTIP = 'Required while another run is active.
  * the same count `session.start` forces a worktree on. Only an explicit `isolationRequired: false` leaves it unlocked: an
  * answer that does not say (a count that could not be read) locks it, as the start would force it. Until 2026-10-07 the
  * renderer decided this itself from its own workspace's session list, while main forced on another count
- * (`docs/defects/fixed/the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md`).
+ * (`docs/archive/defects/the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md`).
  */
 export function isolationRequiredOf(newId: unknown): boolean {
   return !(typeof newId === 'object' && newId !== null && (newId as { isolationRequired?: unknown }).isolationRequired === false);

@@ -174,7 +174,7 @@ await launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PR
 // its control and the composer's settled send, the text and the dialog's Steer follow that deadline, and a step the log
 // does not show pressed fails by name. Until 2026-10-01 the presses were fixed appointments (1900, 2300, 2600 ms) that a
 // run starting late misses, and the proof then read "the steer was not submitted and injected", a red about the proof
-// (docs/defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md). The second
+// (docs/archive/defects/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md). The second
 // step is held 5 s, so the run is still at it when the steer is submitted at the latest, and injects it at the step after.
 const s2 = scenario('steer', []);
 const steerLog = await launch('steer', s2, { ROTARIS_SCRIPT: 'read,wait:5000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: STEER_CLICKS, ROTARIS_CAPTURE_TYPE: STEER_TYPE, ROTARIS_CAPTURE_AFTER_MS: '11000' });
@@ -260,7 +260,7 @@ await launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_
 // that step: the pause lets the read finish and stops the root before the step that would have injected the steer. The
 // schedule is `lib/steer-rest.mjs`'s: the Steer waits for its control, and the Pause waits, from after the dialog's Steer,
 // for the steer dialog to close on the steer's acceptance, so the pause follows the steer (it raced it before 2026-10-01,
-// docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md), and the store must say the
+// docs/archive/defects/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md), and the store must say the
 // steer was pending when the pause was asked for, or the launch exercised a plain pause and is read as such. The
 // rest delivers it into the root's record, marked injected once by the pause, and the Continue's resumed root reads it
 // as the last message of its first request, whose answer follows it in the record. That answer is the script's third

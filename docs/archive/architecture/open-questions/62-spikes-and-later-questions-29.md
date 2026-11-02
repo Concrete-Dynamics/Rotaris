@@ -9,7 +9,7 @@ provider?** *(ADR-0056 rule 4 (b), whose packaged launch runs a session against 
 REQ-CONFIG-478 and the provider rules of ADR-0029/0030, under which a run's model is the configured model, authenticated as
 configured; the specification names no `scripted` provider anywhere. Raised 2026-10-14 by fin45 (`fin45-seams-ui-and-live`) while
 repairing
-[`a-packaged-build-still-answers-the-scripted-model-clients-variables.md`](../../../defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md),
+[`a-packaged-build-still-answers-the-scripted-model-clients-variables.md`](../../defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md),
 which left "whether that configuration path is product or verification, and so whether the client itself may ship" to the
 repair; the plan's range OQ-311 to OQ-330. Raised as OQ-311, its first number, and renumbered OQ-312 at landing: a sibling
 bundle, `fin45-supervision-and-quit`, landed its own OQ-311 first.)*
@@ -54,9 +54,9 @@ served a tools request and sent its `git status` call; `scripted model call:` in
 by a `ROTARIS_BUILD=package` build and rule 4 (b)'s launch shape against it under `xvfb-run` on Linux (ADR-0056's report-back); the
 Windows `pnpm package` run of the re-based step is owed to the next Windows package (a Windows x64 host, deferred with the release
 pipeline under R-071; IC-3 binds Linux and macOS artifacts)
-([`../../../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](../../../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).
+([`../../defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](../../defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).
 Recorded beside it, outside the ruling's repair:
-[`../../../defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md`](../../../defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md) (repaired 2026-10-15, fin47).
+[`../../defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md`](../../defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md) (repaired 2026-10-15, fin47).
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
 lens, change-behaviour): "a shipped build never answers a model with the scripted client … ADR-0056 rule 4 (b) proves its terminal
@@ -134,7 +134,7 @@ being chosen. `slice-proof` asks a prompt once more after its first timed-out fa
 after a second timeout, an answer outside the set after it, or any other kind of fallback.
 
 *Built 2026-10-15 (fin47):* the harness half (F8) by `c005066`,
-[`../../../defects/fixed/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`](../../../defects/fixed/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md)
+[`../../defects/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`](../../defects/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md)
 (`intentVerdict`'s `timedOut`, `intentOutcome`'s shared extra ask, slice-proof's `intents-<n>.attempt-1.log` listed under earlier with
 its reason; `live-answers.test.ts`'s four "OQ-332 (F8)" and "scenario 3b asks once more" cases, red on the code before); the reading
 half by `reasoningTail` in `apps/desktop/scripts/lib/intent-reading.mjs`, which the live run's classifier NOTE prints for every cut
@@ -216,8 +216,8 @@ of `waitForTasks` (`packages/engine/src/children/orchestration.ts`); the live ru
 `closeLatencies` (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Pinned by `tools.test.ts`, `run-host/tools.test.ts`,
 `children.test.ts`, `notify.test.ts`, `todo-item.test.ts` and `coordinator-todo.test.ts`, red on the code before but for the case
 that pins the limit. Recorded beside it, outside the ruling's repair:
-[`../../../defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`](../../../defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md)
+[`../../defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`](../../defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md)
 (repaired 2026-10-15 by fin47, finding A6).
 The row is in [`first-executions.md`](../../../architecture/first-executions.md).
 
-*Noted 2026-10-20:* fin47's bundle `fin47-accept1-6` settled the A6 note's open choice ("mint, or refuse the call") as mint, citing REQ-TOOLS-144's "auto-generated" ids and `add_task`'s existing behaviour, in the Outcome of `docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`; no ruling was needed and none is made here.
+*Noted 2026-10-20:* fin47's bundle `fin47-accept1-6` settled the A6 note's open choice ("mint, or refuse the call") as mint, citing REQ-TOOLS-144's "auto-generated" ids and `add_task`'s existing behaviour, in the Outcome of `docs/archive/defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md`; no ruling was needed and none is made here.

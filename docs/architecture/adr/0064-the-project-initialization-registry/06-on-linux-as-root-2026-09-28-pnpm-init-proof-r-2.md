@@ -30,7 +30,7 @@ refuses this task's own retryable failure; a start it never answers was left to 
 request rejects on its 15 s bound, as for a run queued behind a setup whose run host was lost (the eleventh round's
 scenario 8d), and the rejection escaped `run`, so `executeTasks` reported REQ-WORKSPACE-084's generic "Code intelligence
 project setup ended without reporting an outcome: Error: no reply to mcp.setup within 15000 ms" with its generic summary
-(`../../../defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`). The runner now
+(`../../../archive/defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`). The runner now
 catches it: a retryable failure in REQ-WORKSPACE-093's summary, under the build's reason for a setup that began no stage
 (OQ-167), its detail the build's "the run host did not answer the setup's start" with the request's own error
 (`SETUP_START_UNANSWERED_DETAIL`; OQ-169 records the reading). The task's status read for applicability was not changed:
@@ -45,7 +45,7 @@ not run on a build of the code before; the note records what it read there on th
 step's detail and left the others the run host's: a creation the marker skipped ("the project already exists (its marker
 file is present); …"), the two `skipped-no-code` stages ("skipped: the workspace contains no file the runtime indexes")
 and a non-zero exit ("exited with code N; its last output: …"), all the MCP category's sentences
-(`../../../defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`). The ninth round's choice
+(`../../../archive/defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`). The ninth round's choice
 holds: the run host's status carries facts beside its own `detail` — `McpSetupStep.skipped` (`marker-present`, `no-code`),
 `output` (the trimmed tail of a step whose command ran, without the prose) and `startError` (a launch that failed) — and the
 runner's `stepDetail` writes REQ-WORKSPACE-091's fixed sentences and REQ-WORKSPACE-092's last 400 bytes of the output, cut
@@ -58,7 +58,7 @@ and the error, the run host's log lines keeping its own words (50 passed, 0 fail
 `--skip-build` after `pnpm build`, load average about 6 from other agents). Not run on a build of the code before.
 **Found besides:** in a documentation-only project carrying the marker every step ends without waiting, and the follow
 never saw that setup finish — its run still under way 30 s later, as it would be until the 2235 s bound
-(`../../../defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`, recorded, not repaired;
+(`../../../archive/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`, recorded, not repaired;
 8g's marker project holds a source file so that its steps wait).
 
 **Sixteenth round (2026-10-02): a setup that finishes before its start is answered.** The eleventh round's "pushed, not
@@ -66,7 +66,7 @@ polled" assumed the sink is installed before the first push it must take. It is 
 answers, and a setup whose every step ends without waiting (a documentation-only project carrying the runtime's marker)
 runs to its end inside the run host's start: its three step pushes and its `finished` push reach main ahead of the
 answer, which still reads `running` with every step ended. All four were dropped, and the follow waited until the 2235 s
-bound (`../../../defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`). The
+bound (`../../../archive/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`). The
 coordinator now keeps the latest status pushed while its own start is in flight (`setupEarly`) and drains it after the
 answer, and either is taken only when it is this setup's by `startedAt`. Where the drained status has every step ended
 and still reads `running`, it asks the run host's status once, the one poll this record admits, for the one status that
@@ -81,7 +81,7 @@ steps and the non-code summary (51 passed, 0 failed, 2 skipped; as root under Xv
 initialization state write the minimal bootstrap first when no `agents.yaml` exists, and no code cited it. The per-field
 writer never bootstraps (REQ-CONFIG-030), so on a first run whose code-intelligence setup succeeded before any sign-in,
 the first recording created the workspace file holding `initialization:` alone, and the starter of REQ-CONFIG-025 never
-came (`../../../defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`). The workspace service's
+came (`../../../archive/defects/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`). The workspace service's
 `workspace.open` now writes the starter before it answers, which main awaits before `open` here; and main's marker writer
 (`serviceMarkerWriter`) asks `config.bootstrap` before each `config.setField`, so a file removed while the workspace is
 open gets the starter before the record. A bootstrap that fails does not stop the record. REQ-WORKSPACE-085's one writer

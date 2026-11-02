@@ -5,7 +5,7 @@ Part 13 of 16 of [ADR-0041](../0041-the-delivery-store.md), which indexes every 
 ## Repair — 2026-10-02: an automatic queue resumes at a workspace open
 
 *Reported back in place, under CLAUDE.md's standing policy, by the repair of
-[`an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`](../../../defects/fixed/an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md).*
+[`an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`](../../../archive/defects/an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md).*
 
 **The clause "Nothing dispatches when the application launches, so the pick-up waits for the first kick" (the second
 round of the repair of a card resting in `ready`) is replaced, and kept above as written.** It described the build and

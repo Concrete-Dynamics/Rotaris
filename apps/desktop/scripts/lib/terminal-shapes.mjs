@@ -23,7 +23,7 @@ export const LONG_OUTPUT_LINES = 40;
 /**
  * The input line the long-command shape must outgrow: Linux's canonical-mode line discipline keeps 4,095 characters of
  * one line (termios(3)), and live-run finding M1's 4,304-byte wrapper reached the shell cut there
- * (`docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md`). A command
+ * (`docs/archive/defects/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md`). A command
  * this long is longer than its own one-line wrapper could ever be under the cap, whatever the wrapper adds.
  */
 export const PTY_INPUT_LINE_BYTES = 4_096;
@@ -69,7 +69,7 @@ export function terminalWaitMs(runWaitMs) {
  * The `steady` shape's command: one `tick-<n>` line every `STEADY_INTERVAL_MS` for `STEADY_TICKS` lines (130 s), issued with
  * no `timeout`. It never goes quiet for the no-output window, so REQ-TOOLS-098's soft pause never fires, and it runs past
  * the default hard cap, so the cap is the bound that ends it. The `wedge` prints nothing and soft-pauses 70 s before the cap
- * (`docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`). No `$`, so PowerShell's
+ * (`docs/archive/defects/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`). No `$`, so PowerShell's
  * double quotes expand nothing in it; no `setTimeout`, `sleep` or `LINE-`, so no other shape's pattern reads it.
  */
 function steadyCommand() {
@@ -96,13 +96,13 @@ export function terminalShapes(platform = process.platform) {
     // output for 30 seconds", and the model counted thirty seconds a poll. `prompt` is how the list names it, since the
     // command itself is empty; the scenario reads the first empty-command call after the wedge.
     { id: 'poll', match: /^$/, command: '', prompt: 'an empty command (command "") — one poll of the command above, at once' },
-    // `docs/defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md` (OQ-147): REQ-TOOLS-098's
+    // `docs/archive/defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md` (OQ-147): REQ-TOOLS-098's
     // other advice, the interrupt. An interactive shell that takes it abandons the rest of the wrapper's line, so the end
     // frame never prints, and every poll before the agent's next command read "still running" over a process that had
     // died. `prompt` asks for the poll after it too, which the scenario reads as the first empty-command call after the
     // keystroke: a second empty-command shape would match the `poll` shape's command.
     { id: 'interrupt', match: /^C-c$/, command: 'C-c', prompt: 'the keystroke C-c with is_input=true (command "C-c") — interrupt the command above; then one more empty command (command "") to poll it' },
-    // `docs/defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md` (live-run finding a71-8,
+    // `docs/archive/defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md` (live-run finding a71-8,
     // OQ-164): the third move after a soft pause, a new command, which the shell queues behind the paused one. In the
     // autopsy's run the next command waited 5.9 s behind the wedge and said only "exited with code 0", and the wedge's own
     // end was never reported. A second wedge, 45 s so it soft-pauses at 30 s and is still running when the next command
@@ -151,7 +151,7 @@ export function terminalShapes(platform = process.platform) {
       // once read as a soft pause, exit −1, after 30 s. POSIX only: PowerShell has no such expansion, and its wrapper's `try` is the
       // guard this one was modelled on.
       { id: 'unexpandable', match: /PIPESTATUS/, command: `printf '%s\\n' ran; echo "EXIT=\${PIPESTATUS[0]}"` },
-      // `docs/defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md` (OQ-144's sibling case): a
+      // `docs/archive/defects/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md` (OQ-144's sibling case): a
       // command that ENDS the session's shell never prints the end frame, because the shell that would print it is gone, so
       // it read as a soft pause after 30 s and the next call ran in a fresh shell reporting `session_reinitialized` false.
       // The shape after it (the wedge) is the next call, which must say the session was reinitialized. POSIX only here:
@@ -171,7 +171,7 @@ export function terminalShapes(platform = process.platform) {
  * (`write_scope_claimed`; it fences `write_file` and `haet_edit` alone, so it never meets a terminal call, and is listed so the
  * set is the gate's whole list) and a `pre_tool` hook's block (`hook_blocked`). The terminal scenario sets up no plan gate and no
  * hook, so the last three cannot fire as it stands; a shape read from one would carry the refusal's text as its answer
- * (docs/defects/fixed/the-live-runs-terminal-reader-counts-a-send-the-gate-refused-for-another-reason-as-reached.md).
+ * (docs/archive/defects/the-live-runs-terminal-reader-counts-a-send-the-gate-refused-for-another-reason-as-reached.md).
  * `interrupted` is not in the set: it is also the kind of a call the run cut WHILE it ran (PD-TOOLS-013 revision 2, status
  * `failed`), which did run; only the approval withdrawn before the call ran (PD-ORCH-005 clause 9, status `blocked`) is a
  * refusal, and `reachedShape` reads the pair. A permission block is NOT a refusal here: `pipe-to-shell` is measured by its block
@@ -184,7 +184,7 @@ export const GATE_REFUSALS = new Set(['todo_list_owed', 'invalid_request', 'plan
  * Whether a recorded terminal call reached the question its shape asks, rather than a gate refusal before it ran. The
  * confirming live run at 0bc3eee read `long-output` from the send the todo gate refused, whose result is the refusal's
  * text, and failed "all 40 lines" on 0 markers while the same command, sent again after the list, had returned all 40
- * (`docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`). An `interrupted`
+ * (`docs/archive/defects/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`). An `interrupted`
  * call reached it unless it settled `blocked` (an approval withdrawn before it ran, `GATE_REFUSALS` above).
  */
 export const reachedShape = (call) => !GATE_REFUSALS.has(call.failureKind ?? '') && !(call.failureKind === 'interrupted' && call.status === 'blocked');
@@ -269,7 +269,7 @@ export function outputOf(result) {
  * Whether BOTH lines of the here-string shape came back — read from what the command printed, never from the whole
  * result. The shape's command carries `alpha-one` and `beta-two` itself, and the diagnostic block repeats the command,
  * so a check over the whole result passed for an observation whose output was `(no output)`; it passed that way on the
- * live run of 2026-09-22 and proved nothing (`docs/defects/fixed/the-here-string-check-reads-its-own-command-back.md`).
+ * live run of 2026-09-22 and proved nothing (`docs/archive/defects/the-here-string-check-reads-its-own-command-back.md`).
  * An observation with no output section answers false: nothing came back.
  */
 export function hereStringLinesReturned(result) {
@@ -329,7 +329,7 @@ export function replacedShellReading(result, elapsedMs) {
  * - `paused`: the call soft-paused, or returned exit −1, or took the whole no-output window — the defect's signature, a FAIL.
  * - `replaced`: it says the command REPLACED the shell, as an `exec` does — an `exit 3` read through the exiting shell's
  *   `/proc` entry, its executable still readable and its argument vector already gone; a FAIL
- *   (`docs/defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`).
+ *   (`docs/archive/defects/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`).
  * - `other`: none of those (an exit code of its own: the shell was not ended) — a NOTE.
  */
 export function endedShellReading(result, elapsedMs) {
@@ -457,7 +457,7 @@ export function longOutputReading(result) {
  *   2026-10-01 pack printed `live-run PASSED` over exactly this: the endpoint refused a replayed tool call (HTTP 400)
  *   and the run ended after two calls, none of them terminal, while the only run-level check asked whether the run
  *   reached a result, which a failed run does
- *   (`docs/defects/fixed/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md`).
+ *   (`docs/archive/defects/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md`).
  * - `failed-later`: the run ended `failed` after at least one terminal call — a NOTE: the shapes it reached are asserted.
  * - `ended-early`: the run ended otherwise than `completed` or `failed` (stopped, interrupted, still running) before any
  *   terminal call — a NOTE: nothing was refused, but no shape was asked, so the run says nothing about the terminal.

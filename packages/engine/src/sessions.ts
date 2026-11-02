@@ -814,7 +814,7 @@ export interface LastPrompt {
  * retry (`Sessions.retry`), the continue, the plan decision and the authentication restarts share; null only where no
  * prompt was ever submitted. Until 2026-10-02 each of them searched `residentRows` and, once the prompt had been released,
  * fell back to the session id as the prompt's text (the continue, the plan decision) or to '' (the restarts), and the
- * renderer's retry searched its replica's window (`docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`).
+ * renderer's retry searched its replica's window (`docs/archive/defects/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`).
  */
 export function lastSubmittedPrompt(dal: StoreDal, sessionId: SessionId): LastPrompt | null {
   const row = dal.lastPromptRow(sessionId);
@@ -1139,7 +1139,7 @@ export function resolveQueueOwnership(addressedSessionId: string | null, snapsho
 /**
  * REQ-ORCH-014: the audit payload whose `run_intent` is the intent in effect — the newest continuation's
  * (`run_continuation_intent`, written by every continue's pre-flight, OQ-162), else the launch audit's, else null. The
- * repair of the header half of `docs/defects/fixed/continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`:
+ * repair of the header half of `docs/archive/defects/continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`:
  * the status read the launch audit alone, so after a continue it went on showing an intent the resumed run no longer used.
  */
 export function intentPayloadOf(dal: Pick<StoreDal, 'getLaunchAudit' | 'latestTimelineEntry'>, sessionId: SessionId): string | null {
@@ -1410,7 +1410,7 @@ export class Sessions {
    * the session id (REQ-SESSION-030's reader default). Until 2026-10-02 it was the oldest resident `user` row, read from
    * every listed session's transcript, so the cost grew with the transcripts and a session whose first prompt was released
    * past the resident window was listed under another name
-   * (docs/defects/fixed/the-session-list-reads-each-sessions-transcript-for-its-label.md).
+   * (docs/archive/defects/the-session-list-reads-each-sessions-transcript-for-its-label.md).
    */
   list(dal: StoreDal, workspaceRoot: string): SessionListItem[] {
     const now = Number(this.deps.clocks.wall.instant());
@@ -1435,7 +1435,7 @@ export class Sessions {
         detail: row.workspace_root,
         // REQ-SESSION-031: awaiting input while an approval OR a question is pending. The questions are the run host's mirror
         // (v35), since a prompt lives in the live run; until it, a run waiting on a question was listed without the tag
-        // (docs/defects/fixed/the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md).
+        // (docs/archive/defects/the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md).
         awaitingInput: parsePending(row.pending_approvals).length > 0 || pendingQuestionCount(row.pending_questions) > 0,
         stale: isActiveStatus(row.execution_status) && !live,
         tokens: row.tokens_input + row.tokens_output,
@@ -1663,8 +1663,8 @@ export class Sessions {
    * the retry, naming it, rather than resubmitting less than was sent; REQ-CHAT-171's gate, the live-run refusal and the
    * rest are `prompt`'s, against the model the retry runs on. Refused as having nothing to retry only where no prompt was
    * ever submitted. Until 2026-10-02 the retry was the renderer's: it searched its replica's resident window and re-sent
-   * the text alone (`docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
-   * `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md`).
+   * the text alone (`docs/archive/defects/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
+   * `docs/archive/defects/the-retry-action-resubmits-a-prompt-without-its-images.md`).
    */
   retry(sessionId: SessionId): Result<TranscriptRow, { code: string; reason: string }> {
     const s = this.live.get(sessionId);
@@ -2748,7 +2748,7 @@ export class Sessions {
    * REQ-MONITOR-194: the configured model keys the session holds out of quota, for the record's `excludedModels` — the run's
    * own reading while one of this process exists, else the resting read's (`restingReadOf`), so a selector annotates them
    * after a restart too. Until 2026-10-02 (fin10) they reached the record only inside `wait`
-   * (`docs/defects/fixed/the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md`).
+   * (`docs/archive/defects/the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md`).
    */
   private excludedModelsFor(sessionId: SessionId): string[] {
     const s = this.live.get(sessionId);
@@ -2932,7 +2932,7 @@ export class Sessions {
    * that `ResilienceMemory.rehydrate` replays. The key is resolved against the workspace's catalogue through the
    * side-effect-free `restingCatalogue` port, never a run start's `configure`. Until 2026-10-02 (fin10) the chip wrote the
    * configuration alone and the exclusion stood
-   * (`docs/defects/fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`).
+   * (`docs/archive/defects/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`).
    */
   chooseNextModel(sessionId: SessionId, modelKey: string): Result<{ readonly cleared: boolean }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
@@ -3414,7 +3414,7 @@ export class Sessions {
    * `stopActiveIn` stops by, so the box that close asks never counts a run its Yes cannot stop. `activeRunCount` also
    * counts a run whose end is written but which has not finished ending (the teardown's terminal status, the plan gate's
    * park, the message-limit pause, with the drain and the `session_end` hooks still awaited): that run accepts no stop and
-   * ends on its own (`docs/defects/fixed/the-window-close-box-counts-runs-its-yes-cannot-stop.md`).
+   * ends on its own (`docs/archive/defects/the-window-close-box-counts-runs-its-yes-cannot-stop.md`).
    */
   stoppableRunCount(workspaceRoot: string): number {
     let n = 0;
@@ -3445,7 +3445,7 @@ export class Sessions {
    * another run shares its workspace's tree — refused with the requirement's words at every path that starts a further run
    * of it (a message to it at rest, the retry through it, Continue, the plan gate's relaunch); loading it stays allowed
    * (PD-SHELL-002). Built 2026-10-07: until then nothing refused it
-   * (`docs/defects/fixed/a-base-tree-session-continues-beside-another-run-in-its-workspace.md`).
+   * (`docs/archive/defects/a-base-tree-session-continues-beside-another-run-in-its-workspace.md`).
    */
   private baseTreeBusy(row: SessionRow): { readonly code: string; readonly reason: string } | null {
     if (parseBinding(row.worktree) !== null) return null;

@@ -187,14 +187,14 @@ export interface SocketPlacement {
  *
  * Until OQ-248's ruling (R-072, 2026-10-13) the fallback was one predictable `rotaris-<uid>` directory, made before the
  * claim and never removed: another local user who made that name first denied every launch the fallback
- * (`docs/defects/fixed/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md`), and a launch that was handed
- * over could leave it behind (`docs/defects/fixed/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md`).
+ * (`docs/archive/defects/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md`), and a launch that was handed
+ * over could leave it behind (`docs/archive/defects/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md`).
  *
  * Until fin30 the claim took `XDG_RUNTIME_DIR` with `??`, so a set-but-empty value addressed the socket relative to the
- * working directory (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`),
+ * working directory (`docs/archive/defects/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`),
  * and with no runtime directory it listened under the data directory whatever that directory's length, so a home of
  * about fifty characters made the listen fail with `EINVAL` and the launch end with no window
- * (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`).
+ * (`docs/archive/defects/a-deep-data-directory-leaves-the-launch-windowless.md`).
  */
 export function socketDirectoryCandidates(p: SocketPlacement): SocketCandidate[] {
   const limit = socketPathLimit(p.platform);
@@ -308,7 +308,7 @@ function isAck(line: string): boolean {
  * gone, holds no record, or names another claim. A read that merely failed shows nothing, and the instance answers. Until 2026-10-31 nothing
  * re-read it: a primary suspended past REQ-STARTUP-164's interval and resumed answered the hand-over queued on its pipe
  * and surfaced its window beside the instance that had reclaimed the record
- * (`docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). It now answers `DECLINED_LINE`
+ * (`docs/archive/defects/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). It now answers `DECLINED_LINE`
  * and acts on nothing, and the launch, if it is still waiting, resolves to the process the record names (`claimInstance`
  * (3)/(4)). A successor's announcement is the record pass's own (`passRecord`), which reads the record itself.
  */
@@ -498,7 +498,7 @@ function removeOwnDirectory(own: string | undefined): void {
  * socket a crash or a force-quit left, and the per-attempt private directory it sat in once that is empty. Only what is
  * plainly that process's endpoint: a socket, owned by this user, named `instance-<recorded pid>-<8 hex>.sock`. Until then
  * every crash left a socket nothing would read again
- * (`docs/defects/fixed/a-reclaim-leaves-the-dead-instances-socket-behind.md`).
+ * (`docs/archive/defects/a-reclaim-leaves-the-dead-instances-socket-behind.md`).
  */
 function removeDeadEndpoint(dead: InstanceRecord, platform: NodeJS.Platform): void {
   if (platform === 'win32' || !posix.isAbsolute(dead.endpoint)) return;
@@ -519,7 +519,7 @@ function removeDeadEndpoint(dead: InstanceRecord, platform: NodeJS.Platform): vo
  * endpoint it names must find it accepting: one that cannot connect treats the instance as one that does not answer and,
  * by REQ-STARTUP-164 (3), reclaims, so a record written first named an address nothing served yet and two launches started
  * within one `listen` of each other could both become the instance (REQ-STARTUP-161). Repaired by fin34
- * (`docs/defects/fixed/the-instance-record-is-written-before-its-endpoint-listens.md`); until then the record was taken
+ * (`docs/archive/defects/the-instance-record-is-written-before-its-endpoint-listens.md`); until then the record was taken
  * first and given back when the listen failed. A listen that fails — no directory could hold the socket — now writes no
  * record at all: the claim is refused with the reason, which main logs before it ends the launch (REQ-STARTUP-164's bounded
  * end), and the next launch finds no record to wait on.
@@ -721,7 +721,7 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
    * re-reads nothing into a further hand-over: three attempts and two reclaims are the whole bound, and a launch that becomes
    * the instance beside a live holder that never answered is the brief second process REQ-STARTUP-164 admits, protected by
    * the session locks. Until 2026-11-01 this launch ended `refused`, exit code 2, with no window of its own and none surfaced
-   * (`docs/defects/fixed/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`).
+   * (`docs/archive/defects/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`).
    */
   if (holder && !holderLive) removeDeadEndpoint(holder, platform);
   rmSync(deps.recordFile, { force: true });

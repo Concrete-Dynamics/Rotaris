@@ -180,7 +180,7 @@ Library in `renderer/main.tsx`, the persona window in `renderer/windows.tsx`) pa
 still carried note 4's "No such command exists yet … Recorded as owed" comment. Both now pass the window's `openLink`;
 pinned by `apps/desktop/src/renderer/artifact-inspector-links-wiring.test.ts` (red on the mounts before) and by
 `pnpm artifacts-proof` launch 4, which presses a Preview link in the built app and reads its `shell.openExternal` request
-(`docs/defects/fixed/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md`).
+(`docs/archive/defects/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md`).
 
 **Two decisions of this record held and were measured; one thing this record did not decide was wrong in the code
 that met it.**

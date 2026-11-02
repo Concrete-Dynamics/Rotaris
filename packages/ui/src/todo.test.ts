@@ -13,7 +13,7 @@ describe('todo pane labels (REQ-CHAT-085, REQ-CHAT-168)', () => {
 });
 
 /**
- * Live-run finding G5 (`docs/defects/fixed/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md`):
+ * Live-run finding G5 (`docs/archive/defects/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md`):
  * the count drawn beside the header's "Completed" is the coordinator's own plan as the engine projects it (REQ-CHAT-088's
  * agent source, `projectSessionTodos`), every item counted, so a run the record calls completed reads every task done only
  * when that plan is. The engine pins the projection (`coordinator-plan.test.ts`); this pins what the pane draws from it.

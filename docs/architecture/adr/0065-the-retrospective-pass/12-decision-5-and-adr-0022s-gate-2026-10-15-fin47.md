@@ -17,4 +17,4 @@ refusals answer `retrospective.configuration` with their own reason, and whether
 [OQ-363](../../../archive/architecture/open-questions/65-spikes-and-later-questions-32.md#oq-363). *(Ruled 2026-10-20 under R-072, (b) refined: neither refuses the pass — `PD-LIBRARY-002`
 revision 6; built the same day, the next section.)* Pinned by `launch.test.ts`'s seven cases and a `dispatch.test.ts` case, and by
 `retrospective-proof` launch 12 (`confinement-requested`), red on three checks on the base `7c9182c` and green after
-([`../../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](../../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)).
+([`../../../archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](../../../archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)).

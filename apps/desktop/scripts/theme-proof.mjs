@@ -11,7 +11,7 @@
  * was 1.42% and 1.51% (`rotaris-dim` at 150 %, then `high-contrast` at 175 %, status-strip slivers), the largest inside
  * one surface 9.5% (`settings-03` at 125 %, 4 of 42 rows cut by their pane), and the fewest measured texts inside a
  * surface 7 (`view-1`, every cell). Before the bound, a surface whose own text was all skipped or gone passed on the
- * shell's texts around it (`docs/defects/fixed/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`);
+ * shell's texts around it (`docs/archive/defects/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`);
  * `--counterfactual=offscreen` pushes the Workspace view's text off the screen and must exit non-zero.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -128,7 +128,7 @@ for (const theme of selectedThemes) {
       /**
        * The document measured and the photograph taken must be of the same moment. Since 2026-09-29 the driver's
        * `screenshot` waits four of the renderer's frames before it captures (a capture straight after a change used to
-       * return the frame before it: `docs/defects/fixed/the-drivers-shot-can-return-a-stale-frame.md`), and a surface
+       * return the frame before it: `docs/archive/defects/the-drivers-shot-can-return-a-stale-frame.md`), and a surface
        * that mounts in those frames moved every text below it: the startup notice "No model provider is authenticated
        * yet", mounting after the settle, put the Workspace view's texts some ninety pixels lower in the picture than in
        * the metadata, and four runs read ratios of 1:1 for texts that were there. So the metadata is read on both sides

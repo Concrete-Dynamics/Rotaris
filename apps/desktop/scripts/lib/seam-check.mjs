@@ -8,7 +8,7 @@
  * variable main, the run host or the workspace service reads behind `__ROTARIS_SEAMS__` is named here) and the check run
  * on a seam-free `out/main/` without packaging (`node apps/desktop/scripts/lib/seam-check.mjs [out/main]`). Until then
  * the list named none of main's dialog answers, and a packaged build kept them
- * (docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
+ * (docs/archive/defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -22,7 +22,7 @@ export const KEPT = ['ROTARIS_CAPTURE_PNG', 'ROTARIS_CAPTURE_PROMPT', 'ROTARIS_C
  * every scripted model call's system text to a file it names, the other points the machine-wide instruction base at any
  * directory. The scripted client's standing ledger (2026-10-01) is a file the run host writes under the same flag. The
  * approval dialog's scripted answer (2026-10-13) clicks Approve in a permission dialog
- * (docs/defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md). Main's dialog answers, choosers'
+ * (docs/archive/defects/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md). Main's dialog answers, choosers'
  * paths, provider fill, external-link swallow, stale question, subscription delay and hold, theme, scale and network log
  * (2026-10-14) shipped behind the run-time `capturing` test alone until then.
  */
@@ -44,14 +44,14 @@ export const FORBIDDEN = [
   // fin44: the packaged probe's neighbours it does not use (`package.mjs` sets its three alone) — the wait, whose `js:` form
   // evaluates an expression in the renderer as `_EVAL_AT` does, the last view, the probes and the prompt's delay — and the
   // children's two home seams, which redirected a shipped build's skill and instruction discovery. Each is read behind
-  // `__ROTARIS_SEAMS__` since 2026-10-14 (docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
+  // `__ROTARIS_SEAMS__` since 2026-10-14 (docs/archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
   // `ROTARIS_CAPTURE_PROMPT_MS` is named whole: `ROTARIS_CAPTURE_PROMPT` is the probe's own and stays.
   'ROTARIS_CAPTURE_WAIT', 'ROTARIS_CAPTURE_END_VIEW', 'ROTARIS_CAPTURE_PROBE', 'ROTARIS_CAPTURE_PROMPT_MS',
   'ROTARIS_CAPTURE_SKILLS_HOME', 'ROTARIS_CAPTURE_INSTRUCTIONS_HOME',
   // fin45: the scripted model client's variables — the dialect switch, which answered every model of every run with the
   // stand-in and asked for no credential, and the scripts, which chose the tool calls it made and their arguments. Each is read
   // behind `__ROTARIS_SEAMS__` since 2026-10-14, and a packaged build's scripted provider takes a fixed script
-  // (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md). `ROTARIS_SCRIPT` covers its
+  // (docs/archive/defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md). `ROTARIS_SCRIPT` covers its
   // `_SCRIPT_*_ARGS` and `_SCRIPT_QUESTIONS` family.
   'ROTARIS_MODEL_DIALECT', 'ROTARIS_SCRIPT', 'ROTARIS_CHILD_SCRIPT', 'ROTARIS_LOOP_SCRIPT', 'ROTARIS_INTENT_SCRIPT',
   'ROTARIS_COMPRESSOR_SCRIPT', 'ROTARIS_IMPROVEMENT_SCRIPT',
@@ -60,7 +60,7 @@ export const FORBIDDEN = [
   'ROTARIS_ADOPTION_SCRIPT',
   // fin46 (OQ-312, ruled 2026-10-14 under R-072): the scripted client itself, by the log line only it writes. A packaged build
   // answers no `provider: scripted` entry, so the client is compiled out with the seams and its module is not emitted
-  // (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+  // (docs/archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
   'scripted model call:',
 ];
 

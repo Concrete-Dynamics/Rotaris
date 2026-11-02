@@ -533,7 +533,7 @@ personas:
  * entry with no `base_url` is a provider this build knows no endpoint for (REQ-EVENTS-021/019), and one with a `base_url` is an
  * OpenAI-compatible provider name authenticated as configured. Until the repair the provider was tested bare, and a shipped build
  * answered it with the scripted client's fixed script and no credential
- * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+ * (docs/archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
  */
 describe('a packaged build answers no provider: scripted entry (OQ-312, REQ-EVENTS-021, REQ-CONFIG-478)', () => {
   afterEach(() => { vi.unstubAllGlobals(); });

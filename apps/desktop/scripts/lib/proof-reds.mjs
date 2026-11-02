@@ -6,7 +6,7 @@ import { join } from 'node:path';
  * The evidence of a red, kept where the next run does not remove it. A proof that starts by clearing its output
  * directory loses each red's logs and screenshots to the run after it, so on 2026-10-03 the evidence of
  * `slice-proof`'s three reds survived only because they were copied out by hand
- * (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
+ * (`docs/archive/defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
  */
 
 /** The host's load averages (1, 5 and 15 minutes), two decimals: a timing red is judged beside the load it ran under. */

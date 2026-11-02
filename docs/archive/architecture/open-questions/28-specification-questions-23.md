@@ -8,7 +8,7 @@ The ruled, closed, resolved and withdrawn entries of [part 28](../../../architec
 `PD-TOOLS-006` revision 3, which rule OQ-66's open part; REQ-TOOLS-152, REQ-TOOLS-153, REQ-TOOLS-155, REQ-MONITOR-300,
 REQ-ORCH-046, REQ-ORCH-048, REQ-ORCH-050, REQ-ORCH-088, REQ-ORCH-108, REQ-ORCH-139, REQ-LIBRARY-092. Raised 2026-09-29 by
 building clause 22 under [R-067](../../../product/requests.md#r-067), the repair of
-[`delegate-drops-session-id-and-suppress-auto-context.md`](../../../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-130 on its branch and renumbered OQ-131 at the merge, OQ-130 having been taken on `main` meanwhile.)*
+[`delegate-drops-session-id-and-suppress-auto-context.md`](../../defects/delegate-drops-session-id-and-suppress-auto-context.md). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-130 on its branch and renumbered OQ-131 at the merge, OQ-130 having been taken on `main` meanwhile.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** every reading built is ratified, and `PD-ORCH-005` revision 6 states them in clause 37 — the retry and the user's cancel among them: a follow-up resumes into `queued` under the cap and the limit, reads only `task`, may follow up a child the user cancelled, gives a child that never started its payload, waits for an execution winding down, replaces the report, and its REQ-ORCH-088 retry starts from the child's payload.
 
@@ -60,7 +60,7 @@ becomes of the call's other fields, or what a child with no recorded conversatio
   `child.complete` event.
 - **The timeline entry is `child_resumed`**, with `follow_up: true` and the state it left. It is not a word of
   REQ-ORCH-139's vocabulary, as the rest's own use of it is not
-  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../../../defects/fixed/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
+  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
 - **REQ-ORCH-088's fallback retry of a follow-up starts from the child's payload**, as a resumed child's retry does
   (`PD-ORCH-005`'s first execution). The retry therefore carries neither the conversation nor the follow-up's `task`.
   Whether the retry should carry the follow-up is put to the owner.
@@ -75,7 +75,7 @@ straight into `running`, as a resumed child does, would take it out of REQ-ORCH-
 **OQ-132 — What is asked of a person in the quit's gap — after the last window closes, before the shutdown?** *(`PD-ORCH-005`
 clauses 9 and 15, `PD-CHAT-002` revision 2; REQ-TOOLS-052, REQ-TOOLS-054, REQ-TOOLS-058, REQ-TOOLS-061, REQ-TOOLS-064,
 REQ-EVENTS-049, REQ-CHAT-094, REQ-GIT-101, which the directive does not name. Raised 2026-09-29 by the repair of
-[`an-approval-asked-after-the-last-window-closes-is-denied.md`](../../../defects/fixed/an-approval-asked-after-the-last-window-closes-is-denied.md)
+[`an-approval-asked-after-the-last-window-closes-is-denied.md`](../../defects/an-approval-asked-after-the-last-window-closes-is-denied.md)
 under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built, and `PD-ORCH-005` revision 6 states it in clause 38: the quit's gap is part of the quit's rest for clause 9, so an ask made in it is held unshown and withdrawn by the quit, and REQ-TOOLS-064, REQ-TOOLS-058 and REQ-CHAT-094 yield to it there and join the directive's Narrows list; the `timeout_seconds` a held request announced is not the bound it waits under.
@@ -113,7 +113,7 @@ not be held to. A ruling that REQ-TOOLS-064 governs the gap would restore the de
 **OQ-133 — Which status does a background session take when its process dies of a signal?** *(REQ-TOOLS-109,
 REQ-TOOLS-110, REQ-TOOLS-112, REQ-TOOLS-128, REQ-TOOLS-179; OQ-10 as ruled in [R-044](../../../product/requests.md#r-044).
 Raised 2026-09-29 by the repair of live-run finding L4 under [R-067](../../../product/requests.md#r-067),
-[`a-background-session-ended-by-a-signal-reads-failed.md`](../../../defects/fixed/a-background-session-ended-by-a-signal-reads-failed.md).
+[`a-background-session-ended-by-a-signal-reads-failed.md`](../../defects/a-background-session-ended-by-a-signal-reads-failed.md).
 ~~Open;~~ ruled 2026-10-06; numbered OQ-132 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: a death by a signal the product delivered is `killed`, exit −1, at `warning`; a death by a signal it never sent is `failed` with `128 + n`; an exit code always wins; and Windows is unchanged under OQ-10.
@@ -146,7 +146,7 @@ the second reading. A ruling that every one is `failed` would need a code other 
 
 **OQ-134 — Which shell state does a hard-timeout reset restore when a command completed that the product never saw
 complete?** *(`PD-TOOLS-001`, which narrows REQ-TOOLS-099; REQ-TOOLS-097, REQ-TOOLS-098. Raised 2026-09-29 by the
-repair of [`a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md`](../../../defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md)
+repair of [`a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md`](../../defects/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md)
 under [R-067](../../../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-133 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: a hard-timeout reset restores the snapshot of the last command the product saw complete, so what a soft-paused command that finished unseen changed is not restored.

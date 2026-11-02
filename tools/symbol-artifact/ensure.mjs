@@ -4,7 +4,7 @@
 //
 // `packages/kernel/src/index.ts` re-exports `./generated/requirements.js`, which is git-ignored, so a tree that neither
 // the gate nor a test session has touched had no artifact and `electron-vite build` stopped at rollup naming the module
-// and not the command that writes it (docs/defects/fixed/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md).
+// and not the command that writes it (docs/archive/defects/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md).
 //
 // The shape ADR-0056 asks for: the build runs the SAME generator the test session runs (`generate.mjs`, a child
 // process exactly as `global-setup.ts` starts it), so there is still one generator and nothing to drift. The build

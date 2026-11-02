@@ -8,7 +8,7 @@ The ruled, closed, resolved and withdrawn entries of [part 53](../../../architec
 "a launch SHALL write nothing but the record itself while resolving it"; REQ-STARTUP-161, REQ-STARTUP-162; ADR-0055, "The
 endpoint is listening before the record is written, not after" and "A launch that is handed over writes nothing";
 `packages/platform/src/instance.ts`, `claimInstance`'s `attempt`, `openEndpoint`, `closeEndpoint`, `socketDirectoryFor`. Raised
-2026-10-13 by fin34's review of the repair of `docs/defects/fixed/the-instance-record-is-written-before-its-endpoint-listens.md`,
+2026-10-13 by fin34's review of the repair of `docs/archive/defects/the-instance-record-is-written-before-its-endpoint-listens.md`,
 with fin30's optional finding #13 folded in. Raised as OQ-241 and renumbered OQ-248 at the landing, after OQ-247.)*
 
 ADR-0055 decides two things that the code, once it keeps both, shows cannot both hold on a platform whose endpoint is a file.
@@ -56,9 +56,9 @@ that crashes leaves its endpoint until the next reclaim removes it; a launch kil
 and its `closeEndpoint` while it is losing the claim leaves its private directory (and socket), which no record names, so no
 reclaim removes it; a reclaim leaves the endpoint of a recorded process that is running but unresponsive, whose own closer
 removes it. Settles
-[`another-local-user-can-deny-the-instance-sockets-temporary-fallback`](../../../defects/fixed/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md),
-[`a-handed-over-launch-can-leave-the-private-socket-directory-behind`](../../../defects/fixed/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md)
-and [`a-reclaim-leaves-the-dead-instances-socket-behind`](../../../defects/fixed/a-reclaim-leaves-the-dead-instances-socket-behind.md)
+[`another-local-user-can-deny-the-instance-sockets-temporary-fallback`](../../defects/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md),
+[`a-handed-over-launch-can-leave-the-private-socket-directory-behind`](../../defects/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md)
+and [`a-reclaim-leaves-the-dead-instances-socket-behind`](../../defects/a-reclaim-leaves-the-dead-instances-socket-behind.md)
 once built.
 **Built 2026-10-13 (fin36):** `placeSocket`, `removeOwnDirectory` and `removeDeadEndpoint` in
 `packages/platform/src/instance.ts`, `closeEndpoint` shared by the closers; pinned by cases in `instance.test.ts` and
@@ -73,7 +73,7 @@ task may be `IN_PROGRESS` at a time"; REQ-TOOLS-146, `replace`'s protection of t
 run's primary progress display; REQ-ORCH-029, a list the coordinator "keeps current"; REQ-ORCH-028 with `PD-TOOLS-006`
 revision 6's `todo_item`; REQ-CHAT-086, IN_PROGRESS drawn active and PENDING open. Raised 2026-10-07 from the final live runs:
 finding P3 of the default autopsy at `a68f121` and its recurrence D7 in the duress autopsy, recorded in
-[`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../../../defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md);
+[`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../../defects/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md);
 the consortium's question P3. The round assigned it OQ-227, which fin30 took on main for `single_file_change` (PD-ORCH-011
 revision 2) before this landed; raised as OQ-240 and renumbered OQ-249 before the landing, since origin/main moved to OQ-248
 past a block (OQ-240 to OQ-244) another plan may still hold, so it takes the next free number after main's highest.
@@ -137,7 +137,7 @@ and `PD-TOOLS-006` revision 7.* `todoTool`'s `TodoToolOptions` (`held`, `delegat
 `ToolPortContext.heldTodoItems` (`packages/engine`); `TODO_LIST_OWED_TEXT` (OQ-213's entry quotes the text it replaced); the
 scripted `done` step closing each item with `update`; the live run's `heldItemReading`
 (`apps/desktop/scripts/lib/coordinator-todo.mjs`). Shown in the built app by `pnpm mission-proof` item 1e. The note is repaired:
-[`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../../../defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
+[`a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md`](../../defects/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
 
 *Revised 2026-10-15 by [OQ-333](62-spikes-and-later-questions-29.md#oq-333)'s ruling (R-072), the bound above kept as it was ruled:* the count leaves out every task
 a child of the list's owner **serves** as its `todo_item`, terminal children included, not only the held ones, so an item whose
@@ -153,7 +153,7 @@ delegation vocabulary; REQ-ORCH-034, the unknown-role rejection "listing the kno
 as `<alias>-><target>`"; REQ-ORCH-038, an unknown role rejected with no spawn; `PD-TOOLS-006` revision 4, "every persona that
 agent can delegate to". Raised 2026-10-07 from the final live runs: finding P5 of the default autopsy at `a68f121` (pack
 `2026-10-07T06-48-50-123Z`, all ten sessions; 71 of 71 coordinator requests), recorded in
-[`delegate-offers-and-admits-personas-that-are-not-delegation-targets.md`](../../../defects/fixed/delegate-offers-and-admits-personas-that-are-not-delegation-targets.md);
+[`delegate-offers-and-admits-personas-that-are-not-delegation-targets.md`](../../defects/delegate-offers-and-admits-personas-that-are-not-delegation-targets.md);
 the consortium's question P5, numbered OQ-228 as the round assigned. **Ruled 2026-10-07.**)*
 
 `delegate`'s catalogue lists every persona the configuration holds: in the default live run at `a68f121` every coordinator
@@ -219,7 +219,7 @@ referential error with no one present refuses the run; REQ-CONFIG-464; REQ-ORCH-
 REQ-ORCH-034, REQ-ORCH-038; REQ-TOOLS-005 and REQ-TOOLS-006, an absent narrowing narrowing nothing; `PD-TOOLS-006` revision 4.
 Raised 2026-10-07 by OQ-228's ruling, which set it aside, from the final live runs' finding P5 (the default autopsy at `a68f121`);
 recorded in
-[`a-personas-delegates-to-never-narrows-its-delegations.md`](../../../defects/fixed/a-personas-delegates-to-never-narrows-its-delegations.md);
+[`a-personas-delegates-to-never-narrows-its-delegations.md`](../../defects/a-personas-delegates-to-never-narrows-its-delegations.md);
 the consortium's question DT1, numbered OQ-229 as the round assigned. **Ruled 2026-10-07.**)*
 
 The loader parses, canonicalises and validates `delegates_to`, reports an entry that names no role and any cycle through the

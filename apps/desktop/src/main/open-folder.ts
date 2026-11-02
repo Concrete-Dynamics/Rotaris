@@ -15,7 +15,7 @@ export type OpenFolderOutcome = { readonly ok: true } | { readonly ok: false; re
  * The same bounded opening for any path the platform's opener is handed, naming in the reason who did not answer. A file
  * opens through that opener too — REQ-SESSION-191's Open log and REQ-SHELL-142's third-party licence bundle — and met the
  * same unsettled promise unbounded until 2026-10-31
- * (`docs/defects/fixed/open-log-waits-on-the-platform-opener-without-a-bound.md`).
+ * (`docs/archive/defects/open-log-waits-on-the-platform-opener-without-a-bound.md`).
  */
 export function openBounded(path: string, open: (path: string) => Promise<string>, timers: Timers, opener: string, bound: Millis = OPEN_FOLDER_BOUND): Promise<OpenFolderOutcome> {
   return new Promise((done) => {

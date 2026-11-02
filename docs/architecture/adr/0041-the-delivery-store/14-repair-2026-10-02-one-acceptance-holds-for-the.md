@@ -5,7 +5,7 @@ Part 14 of 16 of [ADR-0041](../0041-the-delivery-store.md), which indexes every 
 ## Repair — 2026-10-02: one acceptance holds for the rest of the launch
 
 *Reported back in place, under CLAUDE.md's standing policy, by the repair of
-[`accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`](../../../defects/fixed/accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md).*
+[`accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`](../../../archive/defects/accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md).*
 
 Part AP's second execution built REQ-TRACE-472's disclosure with **two** desktop preferences and **one** reading of a
 launch nobody disclosed — `due`, `suppressed` (accepted permanently) or `off` — and the repairs above stamped that value

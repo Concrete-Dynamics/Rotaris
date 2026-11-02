@@ -2,7 +2,7 @@
  * The directory a driven launch runs in (`startApp`'s `cwd`). A launch with no workspace argument opens it
  * (REQ-SHELL-010 (c)), and until plan `loc1` every driven launch ran in `apps/desktop`, so `workspace-proof`'s `cold` and
  * `gone` launches and `updater-proof`'s first stage opened the checkout
- * (`docs/defects/fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
+ * (`docs/archive/defects/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
  *
  * Pinned against a REAL child process: `spawn` is wrapped so the launch starts Node in place of Electron, with the
  * options `startApp` chose, and that child writes the working directory it really started in beside the endpoint file

@@ -66,10 +66,10 @@ refusal).*
 > **Found:** the probe the ruling asked for — a `PD-TOOLS-016` window edit can land on the file's own bytes beside a success:
 > `one \ntwo` → `one\ntwo` on `one\r\ntwo\r\nthree\r\n` answers "(+0 -0). Match level: 2. new_string was written with the file's
 > CRLF line endings." with the file unchanged and an undo entry pushed, recorded as
-> [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../../defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md)
+> [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../../archive/defects/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md)
 > and raised as [OQ-260](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-260); and `insert` writes LF lines into a CRLF file
 > (`a\r\nb\r\n` with `X` at line 1 gives `a\r\nX\nb\r\n`), recorded as
-> [`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../../defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md) and
+> [`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../../archive/defects/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md) and
 > raised as [OQ-259](../../archive/architecture/open-questions/55-spikes-and-later-questions-22.md#oq-259). A `replace_all` whose `old_string` is empty is outside the case
 > and keeps its build. **Found in review (fin38):** `crlfLines` walked every line of the file for each question, and a `replace_all` asks once
 > per occurrence, so carrying one grew with the square of the file's length — 2,852 ms for 50,000 CRLF lines with a token on each
@@ -79,7 +79,7 @@ refusal).*
 > **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six
 > autopsies records an edit on a CRLF file; no proof script drives `write_file` or `haet_edit` in the built app, and the
 > executors run unchanged inside the run host. Repairs
-> [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
+> [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../../archive/defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **In the built app, 2026-10-13 (fin42, N52):** `pnpm edits-proof` drove this directive through the run host on a CRLF, tab-indented fixture it generates (`apps/desktop/scripts/lib/crlf-fixture.mjs`), the scripted coordinator's calls sent by the new step `tool:<key>`; load average 6.8 to 12.2 on four CPUs beside a sibling plan. **Held as written.** `exact`: a one-line anchor replaced by two LF lines at level 1 landed CRLF with clause 4's sentence and no match level named; `replace-all`: `alpha` replaced by two LF lines at both occurrences landed CRLF with the sentence; `noop-endings`: an exact `old_string` with CRLF and `new_string` the same with LF was refused in clause 3's words; `retry` (`haet_edit`) placed the sentence before ` content_hash:` (clause 4). **What was not measured.** No live run. The live run's `crlf` scenario (`apps/desktop/scripts/lib/crlf-scenario.mjs`, default set) is written and unit-tested and is the orchestrator's to run; what it reads depends on the shapes the model chooses. The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).

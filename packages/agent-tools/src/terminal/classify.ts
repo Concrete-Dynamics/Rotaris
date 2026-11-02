@@ -163,7 +163,7 @@ export function renderAction(a: { command: string; timeout?: number | undefined;
  * row, a hard line end, a move back to that row's last column, that column's character again, and the rest — measured on
  * Windows 11 at 33 columns as `…_e:\r\n<ESC>[49;33H:0`. Stripped of escapes that reads `…_e:` and `:0` on two lines, so
  * below 34 columns no end frame (34 characters) ever matched and every PowerShell call ran to its hard cap
- * (docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md). Only that shape is rejoined —
+ * (docs/archive/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md). Only that shape is rejoined —
  * a character, the line end, a cursor move, and the same character again, control sequences allowed between (a colour,
  * and under Windows PowerShell 5.1 the cursor hidden, `<ESC>[?25l`, before the line end) — and the repainted character
  * is kept once. Any other line end stands.

@@ -3,8 +3,8 @@
  * landed may be shown, and whether the notice a decision left still belongs to what is on screen.
  *
  * fin34 found two ways the pane could draw a payload other than the one the person's decision belonged to
- * (`docs/defects/fixed/the-review-pane-once-drew-a-refusal-payload-under-the-users-own-accept-notice.md`,
- * `docs/defects/fixed/a-review-read-for-one-requirement-lands-in-the-pane-retargeted-to-another.md`):
+ * (`docs/archive/defects/the-review-pane-once-drew-a-refusal-payload-under-the-users-own-accept-notice.md`,
+ * `docs/archive/defects/a-review-read-for-one-requirement-lands-in-the-pane-retargeted-to-another.md`):
  *
  * - the decision's notice was the pane's local state and outlived a FRESH read — the detail's Review control pressed again
  *   while the pane stood open after a decision read the requirement anew, and the refusal REQ-TRACE-424 names for a card the
@@ -30,7 +30,7 @@ export interface ReviewReads {
    *
    * The reason, kept beside it: until fin36 the discarded read left a retargeted pane with no payload and no read, and the
    * person had to close the pane and press Review again
-   * (docs/defects/fixed/a-review-pane-retargeted-while-a-read-was-outstanding-is-left-with-nothing-to-show.md).
+   * (docs/archive/defects/a-review-pane-retargeted-while-a-read-was-outstanding-is-left-with-nothing-to-show.md).
    */
   owed(target: string | null): string | null;
 }

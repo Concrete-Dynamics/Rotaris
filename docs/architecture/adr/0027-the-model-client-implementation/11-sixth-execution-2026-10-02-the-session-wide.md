@@ -4,7 +4,7 @@ Part 11 of 18 of [ADR-0027](../0027-the-model-client-implementation.md), which i
 
 ## Sixth execution — 2026-10-02, the session-wide override taken by a second writer (REQ-NOTIFY-070, REQ-SESSION-026)
 
-*The 401 note's part A ([`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
+*The 401 note's part A ([`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../../archive/defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
 Found nothing wrong with the mechanism; it gained a writer and a way to take a pin back.*
 
 The third execution's session-wide memory (`ResilienceMemory`, persisted as `model_override` timeline entries and replayed

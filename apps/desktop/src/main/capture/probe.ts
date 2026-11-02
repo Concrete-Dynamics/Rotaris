@@ -53,7 +53,7 @@ function enterEvents(modifiers?: readonly ('shift' | 'control')[]): TypedEvent[]
  * Shift+Enter, which a textarea takes as a newline and REQ-CHAT-001 makes the composer's newline, never its submit. A `\r`
  * is dropped. Until 2026-09-30 the three other sites sent a `\n` as a `char` (or as a `keyDown` whose key code was
  * `\n`), which is the shape that dropped the duress prompt's line breaks (live-run finding H-e;
- * `docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`).
+ * `docs/archive/defects/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`).
  */
 export function textEvents(text: string, per: 'char' | 'key'): TypedEvent[] {
   const events: TypedEvent[] = [];
@@ -119,7 +119,7 @@ const COMPOSER_TEXT = "document.querySelector('textarea.composer__input')?.value
  * a long text was lost where a reading needs it most: PD-LIBRARY-005's failure warning names its artifact at the end of its
  * detail, and the default live run at b9e3005 probed a parse failure's detail (the validator's issues quoted as JSON) as
  * "… impart_47kGY2xb holds no proposa", failing a notice the product drew correctly
- * (`docs/defects/fixed/the-capture-probe-cuts-a-notice-before-the-artifact-its-failure-warning-names.md`). The head keeps the
+ * (`docs/archive/defects/the-capture-probe-cuts-a-notice-before-the-artifact-its-failure-warning-names.md`). The head keeps the
  * first 400 characters every earlier reading took, and the bound still keeps one probe line from carrying a whole transcript.
  */
 export const PROBE_TEXT = "(t) => (t.length <= 2000 ? t : t.slice(0, 1600) + ' \\u2026 ' + t.slice(-400))";
@@ -148,7 +148,7 @@ export const PROBE_TEXT = "(t) => (t.length <= 2000 ? t : t.slice(0, 1600) + ' \
  * (`host.quit`) instead: what it waited for — a run's result, as a rule — has not happened, so a run may still be live,
  * and the immediate exit left it as a crash leaves it, `running` with no stop reason and its last usage unwritten
  * (the duress live run of 2026-09-29, session `379f1490`;
- * `docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). The quit brings it to rest as a
+ * `docs/archive/defects/the-drivers-quit-skips-the-applications-shutdown.md`). The quit brings it to rest as a
  * person's quit at that moment would (PD-ORCH-005 clause 3).
  *
  * When the wait starts. With a typed prompt (`typing`), the bound counts from the moment the prompt was SUBMITTED — the
@@ -162,7 +162,7 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
   const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
   // The wait, the last view and the probes are verification seams the packaged probe does not use (`package.mjs` sets its
   // three alone): each is read behind the build-time flag, so a packaged build carries none of them
-  // (docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
+  // (docs/archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
   const wait = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_WAIT'] : undefined;
   const waitBound = Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_WAIT_MS'] : undefined) ?? 600_000);
   const endView = Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW'] : undefined) ?? 0);

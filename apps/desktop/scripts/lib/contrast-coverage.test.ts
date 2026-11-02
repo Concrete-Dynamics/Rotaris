@@ -1,6 +1,6 @@
 /**
  * `theme-proof`'s contrast coverage (REQ-SHELL-145, REQ-SHELL-160): the verdict is not given over texts the proof did not
- * measure (`docs/defects/fixed/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`). Before the bound,
+ * measure (`docs/archive/defects/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`). Before the bound,
  * a run whose one surface had all of its own text skipped or gone passed on the shell's texts around it.
  */
 import { readFileSync } from 'node:fs';

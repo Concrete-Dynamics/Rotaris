@@ -345,7 +345,7 @@ const results = {};
   // Acceptance A20 (REQ-MONITOR-044/052): the meta line's count is the run-level agent's own while its turn runs — at least
   // one call per tool its chips mark used or active. It read `running · 8s · 0 tool calls` beside the used chips, because
   // the root's calls join the session total only when its turn returns
-  // (docs/defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md).
+  // (docs/archive/defects/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md).
   const meta = probe(r.log, INSPECTOR_META, 10000)[0]?.text ?? '';
   const metaCalls = /· (\d+) tool calls?\b/.exec(meta);
   const marked = chips.filter((c) => c.endsWith(':used') || c.endsWith(':active')).length;
@@ -442,7 +442,7 @@ let edited = null;
       // ADR-0051 decision 4: the Preview's link opens through the command channel. Pressed BEFORE the save, so the
       // acknowledgement it raises ("Opened in your browser", 4200 ms) stands over the inspector's footer when Save is pressed:
       // until fin43 the press on Save met the acknowledgement's text at Save's point, and the link was pressed last instead
-      // (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md).
+      // (docs/archive/defects/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md).
       `${PREVIEW_LINK_BUTTON}@14200`,
       '[data-testid="artifact-tab-markdown"]@14500',       // REQ-LIBRARY-132's second tab
       'textarea[data-testid="artifact-editor"]@15200',     // focus the editor
@@ -487,7 +487,7 @@ let edited = null;
   if (!existsSync(join(output, 'inspector-preview.png'))) throw new Error('the Preview was not captured (inspector-preview.png)');
   // ADR-0051 decision 4: the Preview's link is a control that requests an external open through `shell.openExternal`. Until
   // 2026-10-13 neither inspector mount passed an opener, so `Markdown` drew it disabled and a press reached nothing
-  // (docs/defects/fixed/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md).
+  // (docs/archive/defects/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md).
   const previewLinks = probe(r.log, PREVIEW_LINK_BUTTON, 14000);
   if (previewLinks.length !== 1 || previewLinks[0].data['data-href'] !== PREVIEW_LINK) throw new Error(`the Preview did not draw the body's link as one control: ${JSON.stringify(previewLinks)}`);
   const linkMissed = unpressedClicks(r.log, [PREVIEW_LINK_BUTTON, '[data-testid="artifact-save"]']);
@@ -495,11 +495,11 @@ let edited = null;
   if (!r.log.includes(`capture: open-external ${PREVIEW_LINK}`)) throw new Error(`pressing the Preview's link did not request ${PREVIEW_LINK} through shell.openExternal (a disabled link reaches nothing)`);
   if (dirty !== 'yes') throw new Error(`the editor did not take the typed characters (dirty=${dirty})`);
   if (status !== 'Saved.') throw new Error(`the footer did not read "Saved.": ${status}`);
-  // REQ-NOTIFY-020 (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md): the
+  // REQ-NOTIFY-020 (docs/archive/defects/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md): the
   // acknowledgement is showing when Save is pressed, and the press reached Save. Until fin44 the inspector stood at the
   // window's bottom-right corner, under the stack, and the press went through the acknowledgement's text; its close control
   // still stood over Save's top-right corner, 1319,916 (12x17) over 1270,923 (57x32)
-  // (docs/defects/fixed/an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md). Centred,
+  // (docs/archive/defects/an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md). Centred,
   // the inspector keeps Save clear of the close control entirely, which is what is held here.
   const ackAt = inspectedAt(r.log, '[data-testid="acknowledgement"]', 16900);
   const ackCloseAt = inspectedAt(r.log, '.ack__close', 16900);
@@ -513,14 +513,14 @@ let edited = null;
   if (overlaps(ackCloseAt[0].rect, saveAt[0].rect)) throw new Error(`the acknowledgement's close control stands over part of Save, where a press closes the acknowledgement instead: ${JSON.stringify({ close: ackCloseAt[0].rect, save: saveAt[0].rect })}`);
   results.ackOverSave = { ack: ackAt[0].rect, close: ackCloseAt[0].rect, save: saveAt[0].rect, ackOverlapsSave: Boolean(overlaps(ackAt[0].rect, saveAt[0].rect)), closeOverlapsSave: false, saved: true };
   // REQ-NOTIFY-020's "Only the close control accepts interaction", read by the window's hit test now that the press on Save
-  // no longer goes through the acknowledgement (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md):
+  // no longer goes through the acknowledgement (docs/archive/defects/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md):
   // a press at the text's centre reaches what the acknowledgement is drawn over, a press at the close control the control.
   const hit = readEval(parseEvals(r.log), 16900, ACK_HIT);
   if (!hit || typeof hit !== 'object' || !hit.text || !hit.close) throw new Error(`the hit test through the acknowledgement was not read: ${JSON.stringify(hit)}`);
   if (hit.text.inAck) throw new Error(`a press on the acknowledgement's text is taken by the acknowledgement, not by what it is drawn over (REQ-NOTIFY-020): ${JSON.stringify(hit)}`);
   if (!hit.close.isClose) throw new Error(`a press on the acknowledgement's close control does not reach it (REQ-NOTIFY-020): ${JSON.stringify(hit)}`);
   results.ackHitTest = hit;
-  // REQ-LIBRARY-132 (docs/defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md): the
+  // REQ-LIBRARY-132 (docs/archive/defects/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md): the
   // adopted `textarea.input` rule outranked the editor's own class, and the editor drew in the dialog's proportional face
   // with a vertical resize grip while the read-only block above it was mono.
   const face = readEval(parseEvals(r.log), 16900, EDITOR_FACE);

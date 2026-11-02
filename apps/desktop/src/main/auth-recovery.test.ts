@@ -35,7 +35,7 @@ function harness(answers: (req: Parameters<AuthRecoveryDeps['request']>[0]) => P
 
 describe('main/auth-recovery — the recovery dialog\'s coordinator (REQ-NOTIFY-069/072/074/080)', () => {
   it('REQ-NOTIFY-058: a restart the dialog asks for clears the session\'s notice once the run host restarted it, and only then', async () => {
-    // docs/defects/fixed/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md
+    // docs/archive/defects/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md
     let restart: ProcessReply = { kind: 'session.authRestarted', sessionId: 'S1', pinned: null };
     const h = harness((req) => req.kind === 'session.authRecovery' ? facts() : restart);
     await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');

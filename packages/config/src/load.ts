@@ -488,7 +488,7 @@ export function replacedPrefixLength(below: PlainMap, doc: PlainMap | null, path
  * the value wholesale at a prefix of the path (`replacedPrefixLength`) takes it whatever an earlier file states beneath
  * that prefix, since the merge discarded the earlier value there: a field missing from a models entry the later file
  * replaced whole is the later file's, not an earlier file's that states it
- * (docs/defects/fixed/a-fault-inside-a-wholesale-replaced-value-is-attributed-to-an-earlier-file-that-states-the-deeper-path.md).
+ * (docs/archive/defects/a-fault-inside-a-wholesale-replaced-value-is-attributed-to-an-earlier-file-that-states-the-deeper-path.md).
  * Each `agents.yaml` is read with its legacy role names canonicalised, as it was merged (REQ-CONFIG-062), and each
  * `models.yml` for its `models:` key alone (REQ-CONFIG-004). The answer's `path` is the fault's path spelled as that file
  * states it (`spelledAsStated`): a role the file holds under its legacy name is named by that name, so the key the report

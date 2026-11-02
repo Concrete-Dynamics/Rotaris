@@ -51,4 +51,4 @@ Part 4 of 11 of [ADR-0036](../0036-configuration-loading.md), which indexes ever
    `packages/config/src/sections/requirements.ts`: `execution.worktree_subpath` since Part AP, and `delivery.store_subpath`
    since fin47 (`WITHDRAWN_STORE_SUBPATH`; until then the opaque `delivery` block carried it unread, so it was neither
    rejected nor reported:
-   [`../../../defects/fixed/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md`](../../../defects/fixed/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md)).
+   [`../../../archive/defects/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md`](../../../archive/defects/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md)).

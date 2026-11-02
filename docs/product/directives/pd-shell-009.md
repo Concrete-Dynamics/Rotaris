@@ -126,7 +126,7 @@ return to a window that never held the run. PD-SHELL-002 has each project's runs
 this directive makes the box true at every close that shows it. What it costs: a window can no longer be closed with its
 run left going — a person who wants the run to carry on minimizes the window instead; a logout warns about nothing (on
 Windows Electron emits no `before-quit` at a logout or shutdown at all,
-[`a-windows-logout-skips-the-orderly-shutdown.md`](../../defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md)); and macOS
+[`a-windows-logout-skips-the-orderly-shutdown.md`](../../archive/defects/a-windows-logout-skips-the-orderly-shutdown.md)); and macOS
 Dock Quit is a person's quit outside any window, which asks nothing — to be reopened when a macOS release is authorized
 (IC-3, PD-STARTUP-001).
 
@@ -193,7 +193,7 @@ the same delegation, 2026-10-14, the ruling of [OQ-298](../../archive/architectu
 > exercised by no test or proof; a Windows host (IC-3 — *corrected 2026-10-14: a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*). The row is in
 > [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 >
-> **Follow-up, 2026-10-20, on Windows (the Windows ARM64 session's C5).** **Still not measured:** the pair stage on Windows. `part-j-proof` reached it on one run of five and stopped there, on the proof's own window name (a forward-slash suffix that never matches a Windows path: [the note](../../defects/part-j-proofs-two-window-launch-names-a-window-by-a-forward-slash-suffix-that-never-matches-on-windows.md)); the other four stopped earlier, at `pause`, on a first store refused with EPERM ([the note](../../defects/a-first-store-on-windows-is-refused-with-eperm-on-its-sibling-and-the-workspace-does-not-open.md)). So the idle window's close, the running window's one question, the PD-SHELL-009 log line, `approval_withdrawn` against `approval_denied` and the held-back notice were not read on Windows. What was read: a simulated logoff over an open approval dialog withdrew it (`approval_withdrawn`, no `approval_denied`) and paused the session with its iteration open by `quit` (`docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`, stage A).
+> **Follow-up, 2026-10-20, on Windows (the Windows ARM64 session's C5).** **Still not measured:** the pair stage on Windows. `part-j-proof` reached it on one run of five and stopped there, on the proof's own window name (a forward-slash suffix that never matches a Windows path: [the note](../../defects/part-j-proofs-two-window-launch-names-a-window-by-a-forward-slash-suffix-that-never-matches-on-windows.md)); the other four stopped earlier, at `pause`, on a first store refused with EPERM ([the note](../../defects/a-first-store-on-windows-is-refused-with-eperm-on-its-sibling-and-the-workspace-does-not-open.md)). So the idle window's close, the running window's one question, the PD-SHELL-009 log line, `approval_withdrawn` against `approval_denied` and the held-back notice were not read on Windows. What was read: a simulated logoff over an open approval dialog withdrew it (`approval_withdrawn`, no `approval_denied`) and paused the session with its iteration open by `quit` (`docs/archive/defects/a-windows-logout-skips-the-orderly-shutdown.md`, stage A).
 >
 > **Follow-up, 2026-10-07, fin29 (fin28 reviewers' findings on the landed build, 2631eaf).** Four claims of the first
 > execution were short of the directive, each recorded and repaired: **the hold followed statuses, not the run** — a run
@@ -201,18 +201,18 @@ the same delegation, 2026-10-14, the ruling of [OQ-298](../../archive/architectu
 > `cancelling`, a session never continued kept its notices held for as long as main ran, and the stopped run's own outcome
 > notice (raised by main from `run.result`) was never held at all; `QuitState` now holds a stopped session until its run's
 > `run.result`, holds that outcome, and ends there
-> ([`a-window-close-registers-a-stopped-session-by-the-status-main-last-saw.md`](../../defects/fixed/a-window-close-registers-a-stopped-session-by-the-status-main-last-saw.md),
-> [`a-stopped-session-that-is-never-continued-keeps-its-notices-held.md`](../../defects/fixed/a-stopped-session-that-is-never-continued-keeps-its-notices-held.md));
+> ([`a-window-close-registers-a-stopped-session-by-the-status-main-last-saw.md`](../../archive/defects/a-window-close-registers-a-stopped-session-by-the-status-main-last-saw.md),
+> [`a-stopped-session-that-is-never-continued-keeps-its-notices-held.md`](../../archive/defects/a-stopped-session-that-is-never-continued-keeps-its-notices-held.md));
 > **the box counted runs its Yes could not stop** (a run still ending is `isRunActive` and takes no stop), so the close now
 > asks `runs.active` with `scope: 'stoppable'`, the stop's own predicate
-> ([`the-window-close-box-counts-runs-its-yes-cannot-stop.md`](../../defects/fixed/the-window-close-box-counts-runs-its-yes-cannot-stop.md));
+> ([`the-window-close-box-counts-runs-its-yes-cannot-stop.md`](../../archive/defects/the-window-close-box-counts-runs-its-yes-cannot-stop.md));
 > and **what was not measured above is now measured**: `run.test.ts` pins the workspace stop's withdrawal of a pending wait and
 > its end of a background session (clauses 9 and 10), REQ-SHELL-021 carries a cross-reference to this directive by way of
 > REQ-SHELL-122, and `part-j-proof`'s two-window launch closes A while its run waits on an approval dialog — the store
 > records `approval_withdrawn` and no `approval_denied`, and the stopped run's outcome is held back from B
-> ([`pd-shell-009s-withdrawal-and-hold-paths-are-pinned-by-no-engine-case-or-proof.md`](../../defects/fixed/pd-shell-009s-withdrawal-and-hold-paths-are-pinned-by-no-engine-case-or-proof.md)).
+> ([`pd-shell-009s-withdrawal-and-hold-paths-are-pinned-by-no-engine-case-or-proof.md`](../../archive/defects/pd-shell-009s-withdrawal-and-hold-paths-are-pinned-by-no-engine-case-or-proof.md)).
 > The Windows logout recorded above now runs the orderly shutdown on a main window's `session-end`
-> ([`a-windows-logout-skips-the-orderly-shutdown.md`](../../defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md)); the
+> ([`a-windows-logout-skips-the-orderly-shutdown.md`](../../archive/defects/a-windows-logout-skips-the-orderly-shutdown.md)); the
 > Windows run that shows it is owed. **Still not measured:** the unshown-approval report in the built app (no proof queues a
 > second approval behind an open dialog); a Windows host.
 
@@ -247,8 +247,8 @@ the same delegation, 2026-10-14, the ruling of [OQ-298](../../archive/architectu
 > guard allows without a question, so no Save/Discard/Cancel or active-run box is shown, and unsaved settings, if any, stay unsaved
 > (OQ-298)"; clause 9's line is unchanged, and so is the behaviour. The handler is `QuitOutsideAnyWindow` (`exit.ts`) since the
 > same round
-> ([`the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`](../../defects/fixed/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md),
-> [`no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`](../../defects/fixed/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md)).
+> ([`the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`](../../archive/defects/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md),
+> [`no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`](../../archive/defects/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md)).
 
 > **First execution of revision 3, 2026-10-21 (plan loc1, `loc1-guard-2`; Windows 11 ARM64, Node 24.18.0 arm64, dev tree):**
 > built as ruled, **held over fakes and vacuous in the built app by construction**, because main still reads

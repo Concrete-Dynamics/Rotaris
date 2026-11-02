@@ -299,7 +299,7 @@ describe('createDeliveryService', () => {
    * OQ-279's ruling (2026-10-13, R-072) read with REQ-CONFIG-478: under a fatal load the configuration is UNLOADED — "the
    * load fails as a whole rather than falling back to a default" — and nothing starts on it. The reader kept the queue's
    * last values and armed the queue from them, so an automatic queue went on claiming after the file stopped loading
-   * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
+   * (docs/archive/defects/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
    */
   it('OQ-279 / REQ-CONFIG-478: a configuration that stops loading starts nothing from the queue, says why, and a corrected file starts it again', async () => {
     const { port, calls } = provisioningGit();
@@ -315,7 +315,7 @@ describe('createDeliveryService', () => {
     const preview = (await s.handle({ name: 'requirements.run.preview', workspace: 'x', id: 'REQ-101', action: 'release' }, SYSTEM, 'suppressed')).value as { startsNow: boolean; deferredReason?: string };
     expect(preview.startsNow).toBe(false);
     // The key is the global file's (`root` is the configuration directory), and the report names that file and scope (REQ-CONFIG-478;
-    // docs/defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
+    // docs/archive/defects/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
     expect(preview.deferredReason).toMatch(/^The workspace configuration did not load, so nothing starts from the queue until it is corrected: /);
     expect(preview.deferredReason).toContain(`${join(root, 'agents.yaml')} at requirements.no_such_key (global scope)`);
     const board = (await s.handle({ name: 'requirements.board', workspace: 'x' }, USER, 'suppressed')).value as BoardProjection;

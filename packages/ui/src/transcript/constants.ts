@@ -17,7 +17,7 @@
  * **Falsified 2026-10-01, kept beside its replacement: "At REQ-CHAT-057's 30 px minimum row height that is 144 slots,
  * which with the overscan is 154".** PD-CHAT-003 lifted the 30 px floor off the row's box, and a one-line system notice
  * inside a block drew 23.8 px in the built app, so a viewport of 3,430 px or more of such notices showed more rows than
- * 154 slots bind and left the rest blank (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+ * 154 slots bind and left the rest blank (docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
  *
  * **ADR-0045's "Revisit if" names the trigger this constant must be checked against:** if `H_MAX` is chosen at a
  * value a supported display can exceed, the one growth branch stops being unreachable and `REQ-UIBENCH-054`
@@ -45,7 +45,7 @@ export const ROW_MIN_HEIGHT = 30;
  * three figures from `shell.css` and holds this unit to them.
  *
  * For capacity a unit SHORTER than every row is the conservative one; the 30 px it replaced was taller than a row
- * PD-CHAT-003 draws (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+ * PD-CHAT-003 draws (docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
  */
 export const SHORTEST_ROW_HEIGHT = 20;
 

@@ -10,7 +10,7 @@ const HOST = mintMachineId('0000000000000000000000000000000b') as MachineId;
 
 /**
  * REQ-SESSION-136's error-path cut under REQ-SESSION-194's marker
- * (docs/defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md, live-run M3): on
+ * (docs/archive/defects/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md, live-run M3): on
  * error the record's arguments and result are cut to 2,000 characters, and a cut value ends with `...`, counted inside the
  * cap, so a reader can tell it from a whole one. Before the repair the cut was a bare `slice(0, 2000)`: three of the final
  * default live run's twelve error-path records were cut and none was marked.

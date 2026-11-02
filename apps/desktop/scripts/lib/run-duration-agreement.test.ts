@@ -34,7 +34,7 @@ describe('run-duration-agreement (K1): the header and the run-level row read one
     expect(runDurationReading('captured /x.png', 'orchestrator')).toMatchObject({ agree: false, header: null, meta: null });
   });
 
-  // Acceptance L4 (docs/defects/fixed/the-k1-duration-check-is-asserted-on-a-run-that-never-reached-a-terminal-state.md): the
+  // Acceptance L4 (docs/archive/defects/the-k1-duration-check-is-asserted-on-a-run-that-never-reached-a-terminal-state.md): the
   // probes of `terminal` in pack 2026-10-14T15-58-45-917Z, taken after the wait ran out, verbatim. A live header counts the
   // model call in flight (REQ-CHAT-158) and the row counts from spawn (REQ-MONITOR-107): two figures by design, so the
   // agreement is not read until the header is frozen at a terminal state.

@@ -10,7 +10,7 @@ import type { AppLogLevel } from './app-log.js';
  * `SIGSEGV` (exit 139) every time, and exits 0 with no child, with the child destroyed a moment before, or through
  * `app.quit()`. Destroying the child in the same tick as the exit is not enough; waiting for its `closed` event
  * and then exiting on the next turn is. Every live-run sign-in on Linux crashed this way, because the capture seam
- * exits over the still-open provider dialog (`docs/defects/fixed/the-app-segfaults-on-quit-after-adding-a-provider-on-headless-linux.md`).
+ * exits over the still-open provider dialog (`docs/archive/defects/the-app-segfaults-on-quit-after-adding-a-provider-on-headless-linux.md`).
  *
  * The user's own quit goes through `app.quit()` and never reached this. What does is every path that ends the
  * process at once: the capture seam and the driver's `quit`.
@@ -39,7 +39,7 @@ export interface ExitDeps {
  * for an approval dialog, REQ-CHAT-101's cancellation from the question dock — is the quit's, and is not sent: the run
  * host's `shutdown` withdraws the approval or the question instead, and a withdrawal is never recorded as an answer.
  * Before this, the last window's close denied the call first, and the agent took one more model step on the denial
- * (`docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`).
+ * (`docs/archive/defects/a-quit-denies-the-approval-it-should-withdraw.md`).
  */
 export class QuitState {
   #exiting = false;
@@ -76,7 +76,7 @@ export class QuitState {
    * stop took, since the stop takes only a run whose end is not yet written (`Sessions.stopActiveIn`). A published status
    * was read here before (fin28): a status names no run, so "inactive" could not tell the stop's rest from a run stopped
    * before it had saved its first status (one released from the plan gate, or continued), whose `cancelling` then ended
-   * the hold (`docs/defects/fixed/a-window-close-registers-a-stopped-session-by-the-status-main-last-saw.md`). A run whose
+   * the hold (`docs/archive/defects/a-window-close-registers-a-stopped-session-by-the-status-main-last-saw.md`). A run whose
    * end reached main between `asked` (`stopAsked`) and the reply has ended already, and nothing is held for it.
    */
   stoppedByClose(sessionIds: readonly string[], asked: number): void {
@@ -93,7 +93,7 @@ export class QuitState {
    * REQ-STARTUP-046's last sentence has it, and so is the stopped run's own outcome (`run.result`, whose notice main would
    * raise): that is the rest's own notice, and the hold ends with it, so a session never continued has its later notices
    * relayed again and a later run the person starts is its own
-   * (`docs/defects/fixed/a-stopped-session-that-is-never-continued-keeps-its-notices-held.md`). Answers whether main holds
+   * (`docs/archive/defects/a-stopped-session-that-is-never-continued-keeps-its-notices-held.md`). Answers whether main holds
    * the event's notice back rather than relays it; main still does everything else a `run.result` asks.
    */
   holdsBack(e: ProcessEvent): boolean {
@@ -176,11 +176,11 @@ export function quitGuardsOutsideAnyWindow(
  * down and quits again; that quit finds no main window open, is not held, and goes ahead.
  *
  * Until 2026-10-14 this was inline code in `index.ts`, reached by no unit test, only by `exit-trace-proof` after a build
- * (`docs/defects/fixed/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`).
+ * (`docs/archive/defects/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`).
  *
  * Its two lines agree: the windows close through their close guards (clause 9's line, kept as written), and each guard allows
  * without putting a question. Until 2026-10-14 the second said "no close guard is asked", which read as the first's opposite
- * (`docs/defects/fixed/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`).
+ * (`docs/archive/defects/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`).
  */
 export class QuitOutsideAnyWindow {
   #underWay = false;
@@ -226,7 +226,7 @@ export class QuitOutsideAnyWindow {
  * the session's end cannot be refused, as a quit outside any window asks nothing (PD-SHELL-009; since OQ-298 not even the
  * unsaved-settings guard, `quitGuardsOutsideAnyWindow`). Every main window
  * reports the event; the shutdown runs once
- * (`docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`).
+ * (`docs/archive/defects/a-windows-logout-skips-the-orderly-shutdown.md`).
  */
 export class SessionEndShutdown {
   #begun: Promise<void> | null = null;
@@ -297,7 +297,7 @@ export function watchChildExit(child: { once(event: 'exit', listener: (code: num
 
 /**
  * A child's `shutdown` at quit, raced against the child's own exit (PD-MONITOR-002; defect
- * `docs/defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`).
+ * `docs/archive/defects/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`).
  *
  * The run host answers `shutdown` and then exits on a 0 ms timer, and its reply is posted asynchronously, so the exit
  * sometimes arrives and the answer never does: measured 3 quits in 26. Waiting on the answer alone then stalled the quit
@@ -339,7 +339,7 @@ function unacknowledged(reply: ProcessReply): string {
 export const RUN_HOST_END_BOUND_MS = 2_000;
 
 /**
- * Main is gone only after the run host is (`docs/defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`).
+ * Main is gone only after the run host is (`docs/archive/defects/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`).
  *
  * The run host holds every session lock this instance holds, keyed on its own pid, and a lock is proved unheld only when
  * that pid probes dead (REQ-SESSION-047, REQ-SESSION-056). A run host that outlives main therefore keeps each session it
@@ -398,7 +398,7 @@ export interface ChildGone {
 
 /**
  * PD-MONITOR-002: a child process gone for any reason but `clean-exit` is a loss, written at `error` — except one main
- * ended itself (live-run finding L13, `docs/defects/fixed/an-orderly-quit-logs-the-run-host-gone-at-error.md`).
+ * ended itself (live-run finding L13, `docs/archive/defects/an-orderly-quit-logs-the-run-host-gone-at-error.md`).
  *
  * An immediate exit (the capture seam, the driver's `quit`) ends the run host at once through `endBeforeMain`, and one
  * whose `shutdown` went unanswered past the grace is ended the same way. Electron then reports the end `killed` — exit 15,

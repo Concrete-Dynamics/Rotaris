@@ -95,7 +95,7 @@ async function harness(paints: 'at-once' | 'never' = 'at-once', auxiliary: () =>
 /** Let the socket and the seam's promise chain run. */
 const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 20));
 
-describe("the driver's quit (docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md)", () => {
+describe("the driver's quit (docs/archive/defects/the-drivers-quit-skips-the-applications-shutdown.md)", () => {
   it("sends the application's quit by default — never the immediate exit — and leaves the seam up for will-quit to close", async () => {
     const h = await harness();
     const reply = await h.send('quit');
@@ -119,7 +119,7 @@ describe("the driver's quit (docs/defects/fixed/the-drivers-quit-skips-the-appli
   });
 });
 
-describe("the driver's shot (docs/defects/fixed/the-drivers-shot-can-return-a-stale-frame.md)", () => {
+describe("the driver's shot (docs/archive/defects/the-drivers-shot-can-return-a-stale-frame.md)", () => {
   it('waits for the renderer to present a frame before it captures, and says the paint was confirmed', async () => {
     const h = await harness('at-once');
     const path = join(h.dir, 'shot.png');
@@ -144,7 +144,7 @@ describe("the driver's shot (docs/defects/fixed/the-drivers-shot-can-return-a-st
   });
 });
 
-describe('the driver addresses persona, approval and terminal windows (docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)', () => {
+describe('the driver addresses persona, approval and terminal windows (docs/archive/defects/the-driver-cannot-address-persona-or-approval-windows.md)', () => {
   function auxiliaryWindows() {
     const persona = fakeWindow('at-once', 21);
     const approval = fakeWindow('at-once', 22);
@@ -227,7 +227,7 @@ describe('the driver addresses persona, approval and terminal windows (docs/defe
   });
 });
 
-describe("the driver's type (REQ-CHAT-001; docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md)", () => {
+describe("the driver's type (REQ-CHAT-001; docs/archive/defects/the-driver-and-the-type-seams-type-a-newline-as-a-character.md)", () => {
   const key = (ch: string) => [{ type: 'keyDown', keyCode: ch }, { type: 'char', keyCode: ch }, { type: 'keyUp', keyCode: ch }];
   const shiftEnter = ['keyDown', 'char', 'keyUp'].map((type) => ({ type, keyCode: 'Return', modifiers: ['shift'] }));
   const enter = ['keyDown', 'char', 'keyUp'].map((type) => ({ type, keyCode: 'Return' }));
@@ -247,7 +247,7 @@ describe("the driver's type (REQ-CHAT-001; docs/defects/fixed/the-driver-and-the
   });
 });
 
-describe("the driver's settled click (docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md)", () => {
+describe("the driver's settled click (docs/archive/defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md)", () => {
   const box = (y: number) => ({ x: 1312, y, width: 61, height: 24, text: 'Pop out' });
   /** The window as driver-proof's 13c met it: each settle measurement answered in turn, then what the press landed on. */
   function window13c(settles: unknown[], landing: unknown = { landed: true, hit: 'button.btn "Pop out"' }) {

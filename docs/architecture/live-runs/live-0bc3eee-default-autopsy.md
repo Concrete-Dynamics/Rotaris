@@ -8,7 +8,7 @@
 - **Pack:** `/home/user/Rotaris-crw-wt-live/.live-run/runs/2026-10-13T12-18-40-282Z/`, copied to the session scratchpad and
   read only there (the store opened `mode=ro`). The run took 12:18:41 to 12:40:37 UTC (`results.json`) and ended `live-run
   FAILED` on one check, "all 40 lines of output reached the agent", a harness defect repaired since
-  ([`the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`](../../defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md));
+  ([`the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`](../../archive/defects/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md));
   180 PASS, 1 FAIL and 18 NOTE lines; the product failed none.
 - **Code:** built at `0bc3eee`, the first live run of everything landed after `552d346`: OQ-258's keys sentence on the
   classifier's strict rung (`489a392`), `PD-TOOLS-006` revision 9, `PD-TOOLS-008` revision 3, and the Q1 and Q3 wording repairs.

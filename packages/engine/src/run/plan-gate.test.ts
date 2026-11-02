@@ -144,7 +144,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
   });
 
   /**
-   * The repair of `docs/defects/fixed/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`
+   * The repair of `docs/archive/defects/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`
    * (finacc3 F05, found by its first verifier): the park writes `awaiting_plan_decision` and then forwards it and runs the
    * `session_end` hooks before the run has ended. A stop or a root cancel accepted in that window saved `cancelling` over
    * the hold, which nothing wrote again, so the record claimed a stop in flight with the gate open. Both are refused there;

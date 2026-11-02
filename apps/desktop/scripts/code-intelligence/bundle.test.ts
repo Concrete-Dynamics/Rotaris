@@ -1,6 +1,6 @@
 /**
  * `bundle.mjs`'s `uv python install` writes nothing outside the tree
- * (`docs/defects/fixed/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md`; ADR-0035). A
+ * (`docs/archive/defects/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md`; ADR-0035). A
  * static scan, as `lib/launch-sites.test.ts` holds the proofs' launches: `bundle.mjs` runs at import, and running the step
  * would download an interpreter.
  */
@@ -55,7 +55,7 @@ describe('uvCalls — the scan the assertions below read through', () => {
   });
 });
 
-// docs/defects/fixed/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md: `--install-dir`
+// docs/archive/defects/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md: `--install-dir`
 // moves where uv keeps the interpreter, not its executable links, so without `--no-bin` the step also wrote a
 // `python3.13` into the user's `~/.local/bin`, on PATH, outside the tree — on the Linux host one was left dangling once
 // its worktree was removed (2026-10-31). `--no-registry` keeps the same call from registering the interpreter in the

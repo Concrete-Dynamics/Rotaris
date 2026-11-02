@@ -22,7 +22,7 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
   });
   it('REQ-CONFIG-001: the Windows global configuration directory is spelled %LOCALAPPDATA%\\rotaris\\rotaris\\, and it is not the data directory (D-04)', () => {
     // Until 2026-09-29 the `win32` case answered `<LOCALAPPDATA>\rotaris\config`, a name the requirement never spells
-    // (`docs/defects/fixed/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
+    // (`docs/archive/defects/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
     const d = resolveUserDirs({ platform: 'win32', env: { LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local' }, home: 'C:\\Users\\me' });
     expect(d.config).toBe('C:\\Users\\me\\AppData\\Local\\rotaris\\rotaris');
     expect(d.data).toBe('C:\\Users\\me\\AppData\\Local\\rotaris\\data');
@@ -42,7 +42,7 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
   it('on Linux an empty XDG variable takes its default, as the XDG Base Directory Specification says (REQ-CONFIG-001, REQ-STARTUP-145)', () => {
     // Until finacc3 the variables were read with `??`, so `XDG_CONFIG_HOME=` answered `join('', 'rotaris')`: the relative
     // path `rotaris`, resolved against whatever the working directory was, while the preference root (`||`) fell back to
-    // `~/.config`, so the two parted (docs/defects/fixed/an-empty-xdg-config-home-puts-the-configuration-directory-at-a-relative-path.md).
+    // `~/.config`, so the two parted (docs/archive/defects/an-empty-xdg-config-home-puts-the-configuration-directory-at-a-relative-path.md).
     const home = '/home/me';
     const d = resolveUserDirs({ platform: 'linux', env: { XDG_CONFIG_HOME: '', XDG_DATA_HOME: '' }, home });
     expect(d.config).toBe('/home/me/.config/rotaris');
@@ -63,7 +63,7 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
     // "All paths set in these environment variables must be absolute. If an implementation encounters a relative path in
     // any of these variables it should consider the path invalid and ignore it." Until fin30 `xdgBaseDirectory` passed a
     // relative value through, so the per-user directories landed under whatever the working directory was
-    // (docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md). A Windows spelling is
+    // (docs/archive/defects/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md). A Windows spelling is
     // relative to a POSIX machine too: it names no directory a Linux launch can resolve.
     const home = '/home/me';
     for (const value of ['rotaris-config', './cfg', '../cfg', 'D:/cfg', 'D:\\cfg']) {
@@ -80,7 +80,7 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
   it('on Windows an empty or relative LOCALAPPDATA takes <home>\\AppData\\Local, for the directories and the preference store alike (REQ-CONFIG-001, REQ-STARTUP-145)', () => {
     // Until fin30 both read `LOCALAPPDATA` with `??`, so `set LOCALAPPDATA=` answered `rotaris\rotaris`, `rotaris\data` and
     // `Rotaris\Rotaris`, every one relative to the working directory
-    // (docs/defects/fixed/an-empty-localappdata-puts-the-per-user-directories-at-a-relative-path.md). Decided here off
+    // (docs/archive/defects/an-empty-localappdata-puts-the-per-user-directories-at-a-relative-path.md). Decided here off
     // Windows because the platform is a parameter; `C:rel` is relative to drive C's current directory, not absolute.
     const home = 'C:\\Users\\me';
     for (const value of ['', 'rel', 'C:rel']) {
@@ -134,7 +134,7 @@ describe('platform — the atomic document primitive (ADR-0004)', () => {
     expect((await replaceDocument(f, 'x', { createParent: true })).ok).toBe(true);
     expect(readFileSync(f, 'utf8')).toBe('x');
   });
-  // docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md: the synchronous form called
+  // docs/archive/defects/replace-document-sync-throws-when-the-parent-cannot-be-created.md: the synchronous form called
   // `mkdirSync` outside its `try`, so a parent that could not be created threw out of a function whose contract is a
   // `Result`. Both forms answer the same refusal; the file standing in the parent's place is left as it was.
   it.each([
@@ -163,7 +163,7 @@ describe('platform — the atomic document primitive (ADR-0004)', () => {
       chmodSync(join(dir, 'locked'), 0o700);
     }
   });
-  // docs/defects/fixed/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md:
+  // docs/archive/defects/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md:
   // with a regular file `f` and the target `f/doc`, the replace forms' staging cleanup threw ENOTDIR over the failure it
   // followed (no parent creation asked for), and exclusive create's `mkdirSync` stood before its `try` and threw EEXIST.
   // All three answer a `Result`, and the file standing in the parent's place is left as it was (ADR-0004, REQ-TRACE-061).
@@ -183,7 +183,7 @@ describe('platform — the atomic document primitive (ADR-0004)', () => {
       if (r && !r.ok) {
         expect(r.error.code).toBe(code);
         // Windows answers an open below a regular file with ENOENT where POSIX says ENOTDIR
-        // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+        // (`docs/archive/defects/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
         expect(r.error.detail).toMatch(process.platform === 'win32' ? /EEXIST|ENOTDIR|ENOENT/ : /EEXIST|ENOTDIR/);
       }
     }
@@ -429,7 +429,7 @@ describe('platform — desktop preferences (ADR-0042)', () => {
   /**
    * REQ-CONFIG-405 / REQ-SHELL-006 register the tool-grouping switch as `display/groupToolCalls` (default true); the build
    * stored it as `display/groupTools`, a key neither registers
-   * (docs/defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md).
+   * (docs/archive/defects/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md).
    */
   it('stores the tool-grouping switch under the registered `display/groupToolCalls`, default on, and no longer knows `display/groupTools`', async () => {
     const store = new PreferenceStore(join(dir, 'preferences'));

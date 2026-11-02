@@ -22,7 +22,7 @@
  * LF break, `PD-TOOLS-016`'s CRLF sentence; any other level-4
  * landing stays a note. A `haet_edit` near miss at level 3 whose LF `old_string` met the CRLF file must name the line endings
  * (`PD-TOOLS-014` revision 3). Until the ruling the level-4 one-tab-shallow landing was a note naming OQ-280
- * (`docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`).
+ * (`docs/archive/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`).
  *
  * `ctx` is what `live-run.mjs` owns (`approvalContext()`); the readings below are pure and tested beside this file.
  */
@@ -157,7 +157,7 @@ export async function runCrlfScenario(ctx) {
   /*
    * The bytes the run left are the measurement, so they are kept in the pack whether or not the launch ended cleanly: until
    * 2026-10-20 the copy followed the awaited launch, and a launch that overran threw past it, so the fixture was removed
-   * unread (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`).
+   * unread (`docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`).
    */
   let kept = false;
   const keepBytes = () => {

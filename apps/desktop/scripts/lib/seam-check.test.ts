@@ -1,5 +1,5 @@
 /**
- * The seam check's lists, held to the source (docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
+ * The seam check's lists, held to the source (docs/archive/defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
  * Until 2026-10-14 `package.mjs`'s forbidden list named none of main's dialog answers, so a packaged build passed with them
  * inside. Every variable main, the run host or the workspace service reads behind `__ROTARIS_SEAMS__` on the read's own line
  * must be named by the list, so a seam added under the flag and left off the list fails here, before any package is built.
@@ -76,7 +76,7 @@ interface EnvRead { variable: string; line: number; flagged: boolean }
  * `packages/<name>/src`, whose code is bundled into `out/main` as well (fin46's review, accept1-23).
  *
  * Until 2026-10-15 the three rules below found the bracket form alone, so a seam read in any other form passed them
- * (docs/defects/fixed/the-seam-checks-source-test-reads-only-the-bracket-form-of-a-variable-read.md).
+ * (docs/archive/defects/the-seam-checks-source-test-reads-only-the-bracket-form-of-a-variable-read.md).
  */
 function envReads(text: string, constants: Map<string, Set<string>>): EnvRead[] {
   const lines = text.split('\n');
@@ -149,7 +149,7 @@ function unflaggedReads(): Map<string, string> {
 
 describe('a packaged build answers no capture variable beyond the probe\'s three (ADR-0056)', () => {
   /*
-   * docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md: `probe.ts` read
+   * docs/archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md: `probe.ts` read
    * `_WAIT` (whose `js:` form evaluates an expression the environment supplies), `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`,
    * `_PROBE` and `_PROMPT_MS` with no flag, and the run host and the workspace service read `_SKILLS_HOME` and
    * `_INSTRUCTIONS_HOME` with no test at all, so a packaged build kept all eight while the seam check passed.
@@ -193,7 +193,7 @@ describe('a packaged build answers no capture variable beyond the probe\'s three
 const PRODUCT = new Set(['ROTARIS_CIRCUIT_BREAKER', 'ROTARIS_APP_LOG_LEVEL', 'ROTARIS_CONFIG_DIR', 'ROTARIS_PREFERENCES_ROOT',
   'ROTARIS_CLAUDE_SETTINGS_PATH', 'ROTARIS_SEARCH_API_KEY', 'ROTARIS_PORTABLE_ARTIFACT']);
 
-/** The scripted model client's variables, the note's list (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md). */
+/** The scripted model client's variables, the note's list (docs/archive/defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md). */
 const SCRIPTED = ['ROTARIS_MODEL_DIALECT', 'ROTARIS_SCRIPT', 'ROTARIS_CHILD_SCRIPT', 'ROTARIS_LOOP_SCRIPT', 'ROTARIS_INTENT_SCRIPT',
   'ROTARIS_COMPRESSOR_SCRIPT', 'ROTARIS_IMPROVEMENT_SCRIPT', 'ROTARIS_SCRIPT_QUESTIONS', 'ROTARIS_SCRIPT_ARTIFACT_ARGS',
   'ROTARIS_SCRIPT_DELEGATE_ARGS', 'ROTARIS_SCRIPT_MCP_ARGS', 'ROTARIS_SCRIPT_TERMINAL_ARGS', 'ROTARIS_SCRIPT_TOOL_ARGS'];
@@ -231,7 +231,7 @@ function blockCommentsNaming(): string[] {
 
 describe('a packaged build answers none of the scripted model client\'s variables (ADR-0056, REQ-CONFIG-478)', () => {
   /*
-   * docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md: the run host read
+   * docs/archive/defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md: the run host read
    * `ROTARIS_MODEL_DIALECT` (every model of every run answered by the scripted client, no credential asked) and the client's
    * script variables (which tool calls it makes, and with what arguments) with no flag, and the seam check named none of them.
    */
@@ -262,7 +262,7 @@ describe('a packaged build answers none of the scripted model client\'s variable
 });
 
 /*
- * docs/defects/fixed/the-seam-checks-source-test-reads-only-the-bracket-form-of-a-variable-read.md: the three rules above found a
+ * docs/archive/defects/the-seam-checks-source-test-reads-only-the-bracket-form-of-a-variable-read.md: the three rules above found a
  * read only as `env['ROTARIS_X']`, so a seam read off the flag as `process.env.ROTARIS_X`, through a constant or by
  * destructuring passed them, and the bundle-level check would have been the first to refuse it, at packaging.
  */
@@ -309,7 +309,7 @@ describe('the rules read a variable in every form a read takes (ADR-0056)', () =
  * client itself does not ship and rule 4 (b) runs against a loopback stub reached through the product's own model client. Until
  * the ruling's build `package.mjs`'s launch configured `provider: scripted`, and the seam check named nothing of the client, so a
  * packaged `run-host.js` carrying it passed
- * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+ * (docs/archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
  */
 describe('a packaged build carries no scripted model client (OQ-312, ADR-0056)', () => {
   let dir: string | undefined;

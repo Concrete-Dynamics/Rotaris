@@ -228,7 +228,7 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
  * is rebased against the saved values the form holds at that moment — the result of the reload before it, however close
  * behind that one arrives. The hook used to read the previous saved values from a ref an effect refreshed after render,
  * so a second `config:changed` landing before that effect ran was rebased against the values from before the first and
- * read the first's new values as edits (REQ-CONFIG-419; `docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
+ * read the first's new values as edits (REQ-CONFIG-419; `docs/archive/defects/two-quick-configuration-reloads-mark-settings-unsaved.md`).
  */
 export interface SettingsForm {
   readonly saved: PendingSettings;
@@ -452,7 +452,7 @@ export const ITERATION_CAP_RANGE: NumberRange = { min: 1, max: 500 };
  * so an out-of-range value stays unreachable (REQ-CONFIG-322, REQ-CONFIG-325), until the field loses focus, when
  * `clampedNumberCommit` clamps it. Until fin34 only the improvement analysis timeout held a draft; the other fields clamped
  * every keystroke, so a value whose first digit lies below the minimum could not be typed — "70" into Compression threshold
- * became 50, then 95 (`docs/defects/fixed/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`).
+ * became 50, then 95 (`docs/archive/defects/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`).
  */
 export function clampedNumberEdit(raw: string, range: NumberRange): { readonly commit: number } | { readonly draft: string } {
   const n = Number(raw);
@@ -498,7 +498,7 @@ export function timeoutSecondsFromInput(value: number): number {
  * `stored` is the saved configuration's value (the snapshot's), never the form's pending one, which is not stored until
  * Save (REQ-CONFIG-419). Until 2026-10-15 both this line and the field's description read the pending value, so an unsaved
  * edit was described as stored
- * (`docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
+ * (`docs/archive/defects/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
  */
 export function storedTimeoutNote(stored: number, pending: number = stored): string | null {
   return pending !== stored || timeoutMinutesForDisplay(stored) * 60 === stored ? null : storedSecondsLine(stored);

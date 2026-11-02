@@ -44,7 +44,7 @@ here rather than an oversight. A second trap was closed on the way: this script 
 build, and every `*-proof` launches `out/main/index.js` expecting the seams, so it now says on exit that `pnpm build`
 must come before the next proof. *Since 2026-09-27 it says so only when the build ran: a run refused before
 `electron-vite build` had left `out/` as it was and said otherwise
-(`docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`).*
+(`docs/archive/defects/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`).*
 
 > **2026-10-13, plan fin42 — the list above was not the whole surface.** "Rollup then removes every branch behind it …
 > the scripted clicks" held for the seams behind the flag, but one scripted click in main was never put behind it: the
@@ -52,9 +52,9 @@ must come before the next proof. *Since 2026-09-27 it says so only when the buil
 > which can press "Approve for this session" in a permission dialog. A `ROTARIS_BUILD=package` build of `6de2a67` carried the
 > name in `out/main/index.js`, and the seam check passed because its `forbidden` list did not name it. The reads now sit
 > behind the flag and the check names them
-> ([`../../../defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md`](../../../defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md)).
+> ([`../../../archive/defects/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md`](../../../archive/defects/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md)).
 > The rest of main's dialog answers read behind `capturing` alone are recorded, not repaired:
-> [`../../../defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`](../../../defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
+> [`../../../archive/defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`](../../../archive/defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md).
 
 > **2026-10-14, plan fin43 — the rest of main's seams.** Twenty-two reads in main — the hook review's press, the pause
 > window's and every message box's answer, the backup, restore, export, directory and skill-file choosers' paths, the
@@ -66,7 +66,7 @@ must come before the next proof. *Since 2026-09-27 it says so only when the buil
 > (`main/capture/seam-reads.test.ts`, `scripts/lib/seam-check.test.ts`); the same build then carries none, and the check
 > passes over it. **Still owed:** the packaged probe answers more than its three variables, and the run host and the workspace
 > service read two home-directory seams with no guard
-> ([`../../../defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`](../../../defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md)).
+> ([`../../../archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`](../../../archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md)).
 >
 > **2026-10-14, plan fin44 — the owed rest.** Repaired: the packaged probe's six verification seams (`_WAIT`, `_WAIT_MS`,
 > `_END_VIEW`, `_END_VIEW_MS`, `_PROBE`, `_PROMPT_MS`) and the children's two home seams are read behind the flag, the seam check
@@ -79,7 +79,7 @@ must come before the next proof. *Since 2026-09-27 it says so only when the buil
 > **2026-10-14, plan fin45 — the scripted model client's variables.** The seam check named only capture variables, and the run
 > host read the dialect switch (`ROTARIS_MODEL_DIALECT`: every model of every run answered by the stand-in, no credential asked)
 > and twelve script variables with no flag, so a packaged build answered them all while the check passed
-> ([`../../../defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`](../../../defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md)).
+> ([`../../../archive/defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`](../../../archive/defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md)).
 > Each is read behind the flag now, the list names them, and `seam-check.test.ts` holds every `ROTARIS_*` read off the flag in a
 > module a packaged build keeps to the product's own seven and the probe's three. Rule 4 (b) keeps running on the scripted client:
 > its launch names the `scripted` provider in the scratch workspace's configuration, sets no model or script variable, and the
@@ -100,7 +100,7 @@ must come before the next proof. *Since 2026-09-27 it says so only when the buil
 > `git status` call. **The reason it ran on the scripted client, kept beside its replacement:** rule 4 (b) needed "a model that
 > makes one terminal call without a provider, a key or a network", and the stand-in was the one at hand; that reason held, but it
 > made the packaged build ship the stand-in and answer a person's `provider: scripted` entry with it
-> ([`../../../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](../../../defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).
+> ([`../../../archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`](../../../archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md)).
 > A loopback stub needs no provider, key or external network either, and it measures the client that ships. **First execution
 > (Linux, load 3 to 5):** a `ROTARIS_BUILD=package` build's `out/main` carries no `scripted model call:` and the seam check reads
 > PASS (the same build of the unrepaired source reads FAIL, `scripted model call: (run-host.js)`); rule 4 (b)'s launch shape run

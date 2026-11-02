@@ -3,7 +3,7 @@
  * follow from them. The generated artifact counts the same definitions, so this reads both: every row of the domain
  * table against the artifact's count for its prefix, and the status line's figures against the sums. REQ-TOOLS-193
  * (OQ-61, 2026-09-18) and REQ-MCP-118 (ESC-32, 2026-09-06) were minted and never counted, so the README read 4,398 where
- * the corpus defines 4,400 (`docs/defects/fixed/the-spec-readme-counts-4398-identifiers-where-the-corpus-defines-4400.md`).
+ * the corpus defines 4,400 (`docs/archive/defects/the-spec-readme-counts-4398-identifiers-where-the-corpus-defines-4400.md`).
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

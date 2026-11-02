@@ -102,7 +102,7 @@ export function cutVerdicts({ quitSent, calls, issues, summary }) {
  * Until 2026-10-14 the check read the satisfied line anywhere in the log and failed the a3be56c pack's cut, whose every other
  * check passed (live-run finding L1 of that pack; fin45); fin45's order reading then passed any result after the quit, a normal
  * completion included, and read the 3c3f447 pack's logged interrupted end as "no result" (acceptance finding C11; fin46,
- * `docs/defects/fixed/the-cut-checks-order-reading-passes-a-normal-completion-reached-after-the-quit.md`).
+ * `docs/archive/defects/the-cut-checks-order-reading-passes-a-normal-completion-reached-after-the-quit.md`).
  * @param {string} log
  * @returns {{ passed: boolean, detail: string }}
  */

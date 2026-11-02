@@ -31,11 +31,11 @@ group), and an overrun is a failure named by `overrunMessage` with the launch's 
 rather than throw. The packaged section's checks threw on its other early return — a launch that found no workspace store,
 which carried no `terminal` or `probe` field — and lost both launches' evidence until 2026-09-29; its checks are
 `packagedChecks`, which reads either field absent or `null` as absent evidence
-([note](../../defects/fixed/the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md)). Each `launch` became `async` and each call site awaits it (`transcript-proof`'s `appendRun`,
+([note](../../archive/defects/the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md)). Each `launch` became `async` and each call site awaits it (`transcript-proof`'s `appendRun`,
 `package.mjs`'s app step as `stepAsync`, and `terminal-proof/packaged.mjs`'s `packagedTerminalStreaming` with it).
 `lib/launch-sites.test.ts` fails a `spawnSync` launch of Electron anywhere under `scripts/` (its rule 4), and a launch
 with `ELECTRON_RUN_AS_NODE`, which starts no application, stays exempt
-([note](../../defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)). Three launches that were
+([note](../../archive/defects/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)). Three launches that were
 never `spawnSync`'s had bounds of their own that passed an overrun the same way or not at all, and are `spawnBounded`'s
 since 2026-09-30: `fetch-proof`'s (a bare `child.kill()` at 150 s, whose SIGTERM the application answers with exit
 status 0), `workspace-proof`'s hand-over launch (SIGTERM alone at 30 s, no log) and `mcp-console-spike`'s (no bound).
@@ -47,10 +47,10 @@ Since 2026-10-07 (finacc3 A2-19) a launch ends with its whole process group: `sp
 SIGKILL, each straggler named on standard error), a driven launch leads a group of its own as a bounded one does
 (`startApp`, `trackLaunch`), and a proof that exits or is signalled ends every live group. ~~`driver-proof`'s workspaces carry
 `GIT_CEILING_DIRECTORIES` at the evidence directory, so the app's git no longer climbs into the checkout they lie in~~
-([note](../../defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md)) — false: the product deletes that
+([note](../../archive/defects/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md)) — false: the product deletes that
 variable from every git invocation (REQ-GIT-031). Since fin34 the harness writes a `.git` file naming no repository at `.proof/`
 when it is loaded (`barEnclosingRepository`), so no proof workspace below it reads the enclosing checkout, whichever proof
-made it ([note](../../defects/fixed/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md)).
+made it ([note](../../archive/defects/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md)).
 
 **The driver.** `apps/desktop/src/main/driver.ts`, reached only when `ROTARIS_DRIVER` names an endpoint file at
 launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally
@@ -118,31 +118,31 @@ artifact.
 which `package.mjs` calls and which runs alone over a seam-free `out/main` (`node apps/desktop/scripts/lib/seam-check.mjs`).
 Until then its `forbidden` list named none of main's dialog answers — the hook review's press, the message boxes', the
 choosers' — which were read behind the run-time `capturing` test alone and shipped
-(`docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`). Two tests now hold the source and
+(`docs/archive/defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md`). Two tests now hold the source and
 the list together: `apps/desktop/src/main/capture/seam-reads.test.ts` (every capture read in main carries the flag on its line,
 the probe's own excepted, and so does every other `ROTARIS_*` read but ADR-0059's `ROTARIS_CIRCUIT_BREAKER`: the rows proof's
 `ROTARIS_ROWS_PROOF` and the initialization proof's `ROTARIS_INIT_TEST_TASK` were found unguarded at review) and `apps/desktop/scripts/lib/seam-check.test.ts` (every flagged read in main, the run host and the
 workspace service is named by the list). `vitest.config.ts` defines the flag `true`, as the ordinary build does. *Owed until 2026-10-14, then repaired by fin44:* the packaged probe's `_WAIT`, `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`, `_PROBE` and
 `_PROMPT_MS` and the children's `_SKILLS_HOME` and `_INSTRUCTIONS_HOME` now sit behind the flag too, the list names them, and
 `seam-check.test.ts` fails any capture variable read off the flag in a module a packaged build keeps, the probe's three aside
-(`docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`). *Repaired by fin45 the same day:* the
+(`docs/archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md`). *Repaired by fin45 the same day:* the
 scripted model client's variables — the dialect switch and the twelve script variables, read in the run host with no flag —
 are behind it too, the list names them, and `seam-check.test.ts` fails any `ROTARIS_*` read off the flag in a module a packaged
-build keeps unless it is a product variable or one of the probe's three (`docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`). *Since 2026-10-15 (fin46)* its rules read a variable in every form a read takes — the bracket and dot forms, a read keyed by a
+build keeps unless it is a product variable or one of the probe's three (`docs/archive/defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md`). *Since 2026-10-15 (fin46)* its rules read a variable in every form a read takes — the bracket and dot forms, a read keyed by a
 string constant of the app's or the packages' sources, and a destructured environment — where until then they read
-`env['ROTARIS_X']` alone (`docs/defects/fixed/the-seam-checks-source-test-reads-only-the-bracket-form-of-a-variable-read.md`).
+`env['ROTARIS_X']` alone (`docs/archive/defects/the-seam-checks-source-test-reads-only-the-bracket-form-of-a-variable-read.md`).
 *Built by fin46 the same day (OQ-312, ruled under R-072 with no directive):* the scripted client itself does not ship. `host.ts`
 builds it only behind the flag, so rollup leaves `scripted-client.ts` out of the packaged `run-host.js`; `isScriptedProvider` answers
 a `provider: scripted` entry with it only where the seams are compiled in; the list names the client's own log line
 (`scripted model call:`); and rule 4 (b)'s launch runs against a loopback OpenAI-compatible stub `package.mjs` starts itself
 (`scripts/lib/stub-model-endpoint.mjs`), reached through the shipped `AiSdkModelClient`. *(Until then a packaged build's scripted
 provider — rule 4 (b)'s launch — answered with a fixed `PACKAGED_SCRIPT`;
-`docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`.)*
+`docs/archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md`.)*
 
 **A trap closed on the way:** `pnpm package` leaves `out/` holding the seam-free build, and every `*-proof` script
 launches `out/main/index.js` and drives those seams — so the next proof run after a package would have failed for a
 reason nobody would have guessed from its output. The script now says so on exit — since 2026-09-27 only when the
-build ran (`docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`).
+build ran (`docs/archive/defects/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`).
 
 Verified on 2026-09-11: `pnpm package` (`ROTARIS_PACKAGE_DIR_ONLY=1`) **PASSED** in 277 s with the seam check as
 its fourth step — rule 1a and rule 4 holding as before, and the packaged app, built without the seams, opening a
@@ -226,8 +226,8 @@ both sides of the shot and retakes it until they agree, because a surface mounti
 notice) moved the picture away from the metadata. `driver.test.ts` and `capture/probe.test.ts` pin both; `driver-proof` adds a live run
 quit through the driver (the session at rest, `application_shutdown`) and shots straight after each navigation. The
 register row is in `first-executions.md`
-([`the-drivers-quit-skips-the-applications-shutdown.md`](../../defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md),
-[`the-drivers-shot-can-return-a-stale-frame.md`](../../defects/fixed/the-drivers-shot-can-return-a-stale-frame.md)).
+([`the-drivers-quit-skips-the-applications-shutdown.md`](../../archive/defects/the-drivers-quit-skips-the-applications-shutdown.md),
+[`the-drivers-shot-can-return-a-stale-frame.md`](../../archive/defects/the-drivers-shot-can-return-a-stale-frame.md)).
 
 **The windows beside a main window (2026-09-29, R-067).** A4 gave the driver main windows and nothing else, so the
 revision 4 drive read persona windows' `paused` state from X11 captures and answered approvals through
@@ -237,7 +237,7 @@ lists them, and a selector naming no open window is refused with what is open. T
 promised was read by no op until now; each op resolves `request.window ?? selected`. `pnpm app:drive` gains
 `useWindow` and `--window=`. `driver.test.ts` pins the resolution; `driver-proof`'s second launch answers both of its
 run's approvals with the dialog's own button and probes the child's persona window
-([`the-driver-cannot-address-persona-or-approval-windows.md`](../../defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)).
+([`the-driver-cannot-address-persona-or-approval-windows.md`](../../archive/defects/the-driver-cannot-address-persona-or-approval-windows.md)).
 
 **A click known to have landed (2026-10-06, acceptance finding A3).** `click` measured once and pressed at that box's
 centre, and nothing read what the press met: driver-proof's 13c lost its Pop out when the provider notice filled the
@@ -246,7 +246,7 @@ only once the box has held across two of the renderer's frames and the element a
 what a one-shot `mousedown` listener saw and refuses a press that met something else; `scripts/lib/driver.mjs`'s
 `clickLanded` presses again only after such a refusal; 13b and 13c open the persona window that way on the child's own
 row, and a press that landed and opened nothing fails as REQ-SHELL-072's. `driver.test.ts` and `scripts/lib/driver.test.ts`
-pin it ([`driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`](../../defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md)).
+pin it ([`driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`](../../archive/defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md)).
 
 **What is still owed.** No existing proof has been rewritten onto the driver — the protocol is proved by its own
 proof and not yet by a migrated one. And the strip covers **main only**: the renderer bundle still carries Part AA's

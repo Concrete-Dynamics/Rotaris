@@ -95,7 +95,7 @@ const created = { kind: 'worktree.created', path: `${WORKSPACE}/.rotaris/worktre
 
 /*
  * REQ-NOTIFY-060/061 with REQ-SANDBOX-120: the refused confinement mode's notice, for a start, a prompt and a continue.
- * Before the repair of `docs/defects/fixed/a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md` the
+ * Before the repair of `docs/archive/defects/a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md` the
  * refusal wording was only the copyable detail, the message was empty, no action was offered, and a prompt's refusal
  * raised no notice at all.
  */
@@ -278,7 +278,7 @@ describe('session.start, driven without a process behind it', () => {
   });
 
   /*
-   * REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-005: docs/defects/fixed/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md.
+   * REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-005: docs/archive/defects/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md.
    * Main sent the session target with no subpath, so the service placed every tree under `worktrees/` whatever the file said.
    */
   describe('REQ-GIT-073: the configured worktree_storage_subpath reaches worktree creation', () => {
@@ -332,7 +332,7 @@ describe('session.start, driven without a process behind it', () => {
 });
 
 /*
- * docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md:
+ * docs/archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md:
  * main learned that the window follows the session it started only at the renderer's `session.subscribe`, so a run failing
  * before it was read as another session's failure. The window now follows it from the moment the run host is asked.
  */
@@ -370,7 +370,7 @@ describe('REQ-NOTIFY-030/032: the window that starts a session follows it from t
  * REQ-NOTIFY-058 with REQ-NOTIFY-029: every command that launches a run of an existing session clears the standing notice
  * as a start does — a prompt, a retry, a continue that resumed, a plan decision that relaunched — and one the run host
  * refused, or that left the session at rest, clears nothing. Until 2026-10-06 only `session.start` did
- * (docs/defects/fixed/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md).
+ * (docs/archive/defects/a-prompt-or-retry-that-starts-a-run-does-not-clear-the-sessions-notice.md).
  */
 describe('REQ-NOTIFY-058: a run of an existing session starting clears its notice', () => {
   const refused = { kind: 'refused', code: 'session.run-active', headline: 'A run is already active.' } as const;
@@ -584,7 +584,7 @@ describe('session.release: the window stops following the session, and keeps its
  * session's workspace (`MainWindows.reach`) and asks THAT window to focus the session; a window the reach added holds the
  * request until its renderer is ready. The silence of 2026-10-14 (`fromNotice`) is withdrawn: a load's refusal is raised as the
  * ordinary error, whoever asked for the load
- * (docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+ * (docs/archive/defects/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
  */
 describe('session.focusFromNotice reaches the session where it lives (PD-SHELL-001 revision 3, REQ-NOTIFY-044)', () => {
   type Reach = Awaited<ReturnType<CommandContext['mainWindows']['reach']>>;
@@ -650,7 +650,7 @@ describe('session.focusFromNotice reaches the session where it lives (PD-SHELL-0
 /**
  * REQ-SESSION-089 / REQ-SESSION-202, OQ-281 (ruled 2026-10-14 under R-072): a start in a window whose store the open refused
  * says which store could not be opened and that nothing was started — never "open a workspace", which is false there — and
- * asks no one anything (`docs/defects/fixed/a-refused-store-is-reported-as-no-workspace-by-every-command-but-the-listing.md`).
+ * asks no one anything (`docs/archive/defects/a-refused-store-is-reported-as-no-workspace-by-every-command-but-the-listing.md`).
  */
 describe('session.start in a window holding a refused store (REQ-SESSION-089, OQ-281)', () => {
   const held = { code: 'workspace.store-missing', headline: 'The session store for this workspace is not where it is kept', detail: 'The place for this workspace\'s session store exists (/data/workspaces/v1-x) and the store is not in it.' };

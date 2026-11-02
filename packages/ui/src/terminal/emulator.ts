@@ -89,7 +89,7 @@ export function createStreamDisplay(frame: DisplayFrame, factory: EmulatorFactor
  * queued before the frame has parsed and the reset is next (an empty write ahead of the reset, which is itself queued),
  * so the screen read there is the last complete one; `parsed` once the frame's text has parsed. The subscription point
  * holds that screen for the previews between the two, and only then (`streams.ts`;
- * `docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
+ * `docs/archive/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
  */
 export interface ScreenFrameHooks {
   readonly resetReached?: () => void;

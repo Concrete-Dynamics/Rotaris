@@ -294,7 +294,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   });
 
   /*
-   * PD-ORCH-005 clause 9 after a crash, and REQ-SESSION-031 (`docs/defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md`):
+   * PD-ORCH-005 clause 9 after a crash, and REQ-SESSION-031 (`docs/archive/defects/a-crash-with-a-question-pending-records-no-withdrawal.md`):
    * a question waiting on the user is mirrored to `sessions.pending_questions` — the session's whole list, which the run hands
    * the port — so a crash's record, written from the store, can withdraw it, and the listing can flag the session. The
    * column empties once the prompt is answered.
@@ -319,7 +319,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   });
 
   /*
-   * REQ-SESSION-094 for the question mirror (`docs/defects/fixed/a-question-mirror-writes-pending-questions-after-its-port-closed.md`):
+   * REQ-SESSION-094 for the question mirror (`docs/archive/defects/a-question-mirror-writes-pending-questions-after-its-port-closed.md`):
    * like the approvals sink, the mirror drops its write once the port is closed, so a question a stop's grace detached
    * cannot write `pending_questions` into a session whose run has ended.
    */
@@ -341,7 +341,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   });
 
   /*
-   * PD-ORCH-005 clause 9 and REQ-SESSION-031 (`docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`):
+   * PD-ORCH-005 clause 9 and REQ-SESSION-031 (`docs/archive/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`):
    * each agent's port holds its own approvals, and the session has ONE `pending_approvals` column. Two agents of one run
    * waiting at once — two delegated children, each asking — must leave both in the column, and the one still waiting
    * after the other is answered. Before the repair each port wrote its own list: the second overwrote the first, and the
@@ -454,7 +454,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
    * An MCP tool offered under a public name is not that public tool (REQ-TOOLS-001 as ADR-0016 reads it): the surface
    * prefixes a server's tool only when its name is taken, so a server's `read_file` reaches a persona whose public set
    * lacks one under the plain name, and until 2026-09-28 the policy's class rules and the plan gate's two enforcement
-   * points knew it by that name alone (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`).
+   * points knew it by that name alone (`docs/archive/defects/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`).
    */
   it('a server\'s own read_file is withheld at the plan gate like any undeclared tool, and is not granted by ask:read-only-tool (REQ-ORCH-153, REQ-TOOLS-043)', async () => {
     const reads: unknown[] = [];
@@ -712,7 +712,7 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
 
   // REQ-TOOLS-006 (4) with REQ-MCP-065: an allowed-tool list naming only a server's tool leaves no native tool, and the port
   // reports that empty native grant — which the row records as a grant, not as none
-  // (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+  // (docs/archive/defects/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
   it('REQ-TOOLS-006 / REQ-MCP-065: a tool_restrictions list naming only a server tool leaves an empty native grant beside the server tool', async () => {
     const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async () => ({ text: 'ok', isError: false }));
     const only = port(coder('    tool_restrictions:\n      coding-agent: [lookup]\n'), 'coding-agent', { parentId: 'bg_0a1b2c3d', depth: 1 }, [serverTool]);
@@ -787,7 +787,7 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
 
   /*
    * OQ-212, ruled 2026-10-07 under R-072, and the repair of
-   * docs/defects/fixed/can-publish-artifacts-is-read-and-never-gates-artifact-write.md: REQ-CONFIG-106 and REQ-TOOLS-150 hand a
+   * docs/archive/defects/can-publish-artifacts-is-read-and-never-gates-artifact-write.md: REQ-CONFIG-106 and REQ-TOOLS-150 hand a
    * role `artifact_write` only while its `can_publish_artifacts` is true, and REQ-TOOLS-004 records the removal otherwise. The
    * tool port passed the artifact store's presence as the grant, so a declared tool was handed over whatever the flag said.
    */
@@ -945,7 +945,7 @@ ${orchestrator}runtime:
  * PD-TOOLS-006 revision 7 with PD-TOOLS-008 revision 2 (OQ-249, ruled 2026-10-07 under R-072): an admitted delegation marks its
  * PENDING item IN_PROGRESS in the caller's own plan and persists it, and the items the caller's non-terminal children hold are
  * outside REQ-TOOLS-145's count. The default live run at a68f121 (edit, #14) could not mark its second running child's item
- * (docs/defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
+ * (docs/archive/defects/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
  */
 describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item IN_PROGRESS', () => {
   let dir: string;
@@ -1059,7 +1059,7 @@ describe('PD-TOOLS-006 revision 7: an admitted delegation marks its PENDING item
    * PD-TOOLS-008 revision 3 (OQ-255, ruled 2026-10-13 under R-072): once both parallel children have ended, the coordinator's
    * usual close — one `replace` sending every item COMPLETED — stores the plan closed. Until then the two items the run had
    * marked stayed IN_PROGRESS under REQ-TOOLS-146 and the `replace` answered success
-   * (docs/defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+   * (docs/archive/defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
    */
   it('two parallel delegations marked, both children ended: one whole-list COMPLETED replace leaves the stored plan closed (PD-TOOLS-008 revision 3)', async () => {
     const held = new Set<string>();

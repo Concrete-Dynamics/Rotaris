@@ -125,7 +125,7 @@ adding to it.
 - **Discovery prices are not read.** Whether a price may come from a provider's model list is the first
   half of OQ-62 and stays open.
 - **Children must be counted.** A delegated child's requests are the run's requests. The repair of
-  [`a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`](../../defects/fixed/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md)
+  [`a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`](../../archive/defects/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md)
   is part of building this revision.
 
 > **Narrows:** REQ-MONITOR-166, REQ-PROVIDER-121

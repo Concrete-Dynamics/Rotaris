@@ -36,7 +36,7 @@ artifact". So a pass that never reached the model — the retrospective's 401 in
 twice unreadable — was told to the person as one that looked and found nothing ("The retrospective found nothing to propose",
 "Nothing was proposed in impart_dL3YK5Xd."), which REQ-NOTIFY-100's truthfulness and REQ-NOTIFY-254 ("No failure is reported by
 silence") read against ([OQ-285](../../archive/architecture/open-questions/60-spikes-and-later-questions-27.md#oq-285);
-[`a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing`](../../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md)).
+[`a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing`](../../archive/defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md)).
 The warning tells the person the review did not happen and why, the same notice a job with no artifact already earns; naming
 the artifact says where the notes are kept. A timeout is different in kind: the pass ran and was cut at a bound the person can
 read, so it keeps the info notice, with `PD-CONFIG-003` revision 2's precedent (OQ-223) extended to the retrospective without a
@@ -75,5 +75,5 @@ an empty artifact whose collector crashed or could not be parsed posts the zero-
 > no log line was written. **Found:** nothing beyond the defect the ruling repaired. **What was not measured.** The post-run
 > pass's warning in the built app (no proof drives a run whose analyst fails; the unit cases carry it), and a live run: the
 > orchestrator's `ask-retrospective` with the analyst's key withheld. Repairs
-> [`a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing`](../../defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).
+> [`a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing`](../../archive/defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).

@@ -52,7 +52,7 @@ hardware decision, and it is theirs.
 written above.
 
 **What ran.** `pnpm sandbox-proof` scenario 6 was added for this measurement
-([`the fixed note`](../../defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)). Each effect is
+([`the fixed note`](../../archive/defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)). Each effect is
 one `terminal` call from a scripted agent in an unattended run with `sandbox_mode: workspace-write`. That call goes
 through ADR-0022's enforcement point in the built application, exactly as a model's call would. Every verdict is read
 from the **host** side after the run: what exists on disk, and what a listener in a separate host process accepted.
@@ -81,7 +81,7 @@ creates it through the writable bind, so it lands on the host. The write under t
 hook cannot be planted. But the name now exists on the host, and REQ-SANDBOX-077 says in so many words that it must
 not. The renderer's comment says both options "leave nothing on the host". That reason is falsified and is kept where
 it stands until the repair replaces it:
-[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../../defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
+[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../../archive/defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
 ~~The proof stays red on a Linux host with `bwrap` until the defect is repaired.~~ *(Repaired 2026-09-29; see below.)*
 
 **What it could not show, stated so it is not read as shown.**

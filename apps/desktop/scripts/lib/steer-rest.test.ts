@@ -1,7 +1,7 @@
 /**
  * `part-j-proof`'s steer-rest launch (REQ-MONITOR-134, PD-ORCH-005 clause 4): its click schedule puts the pause AFTER the
  * steer, and the store reading it asserts says the steer was pending when the pause was asked for
- * (`docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`). The schedule is read
+ * (`docs/archive/defects/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`). The schedule is read
  * through the capture seam's own parser, so a step written in the waiting form is seen as one.
  */
 import { readFileSync } from 'node:fs';
@@ -71,7 +71,7 @@ describe('the steer was pending when the pause was asked for', () => {
 });
 
 describe("part-j-proof's steer schedule, scenario 2 (REQ-MONITOR-133, REQ-MONITOR-137)", () => {
-  // docs/defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md: the launch
+  // docs/archive/defects/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md: the launch
   // pressed Steer the run at a fixed 1900 ms, which a run starting later than that misses.
   const steps = parseSteps(STEER_CLICKS as string);
   const text = parseSteps(STEER_TYPE as string)[0]!;

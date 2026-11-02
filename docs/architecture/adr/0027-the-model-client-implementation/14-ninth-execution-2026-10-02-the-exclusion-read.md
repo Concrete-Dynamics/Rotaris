@@ -4,7 +4,7 @@ Part 14 of 18 of [ADR-0027](../0027-the-model-client-implementation.md), which i
 
 ## Ninth execution — 2026-10-02, the exclusion read before every call (REQ-MONITOR-194, REQ-ORCH-091 a-c)
 
-*The repair of [`an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md`](../../../defects/fixed/an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md)
+*The repair of [`an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md`](../../../archive/defects/an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md)
 (fin10). Found a defect in the third execution's mechanism.*
 
 The third execution's memory said a continuation "never returns to an exhausted model"; the ladder read the exclusion only

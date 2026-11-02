@@ -9,9 +9,9 @@ answered with the data directory, or `XDG_RUNTIME_DIR` when one was set (2026-09
 never priced followed from that. A unix socket's address holds 108 bytes on Linux and 104 on macOS, so a data directory below a
 home of about sixty characters could not hold one: the listen failed with `EINVAL`, nothing awaited the rejection, and the launch
 ended with no window and nothing said
-(`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`). And a set-but-empty `XDG_RUNTIME_DIR` addressed the
+(`docs/archive/defects/a-deep-data-directory-leaves-the-launch-windowless.md`). And a set-but-empty `XDG_RUNTIME_DIR` addressed the
 socket relative to the working directory, so the record named an endpoint only a launch from that same directory could reach
-(`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
+(`docs/archive/defects/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
 
 Since fin30 the socket goes in the first of `socketDirectoryCandidates` (`packages/platform/src/instance.ts`) that is absolute,
 leaves the whole path inside the platform's limit, and can hold a file: `XDG_RUNTIME_DIR`, the data directory beside the record,
@@ -35,7 +35,7 @@ back when the listen fails rather than reordering the claim. Recorded, not repai
 endpoint it opened (`closeEndpoint`), and a listen that fails writes no record at all, so there is nothing to give back. The
 property is pinned where a second launch stands: `packages/platform/src/instance-order.test.ts` connects to the endpoint the
 record names at the instant the record is written, and fails on the old order
-(`docs/defects/fixed/the-instance-record-is-written-before-its-endpoint-listens.md`). The interval in which two launches could
+(`docs/archive/defects/the-instance-record-is-written-before-its-endpoint-listens.md`). The interval in which two launches could
 both become the instance needed launches started within one `listen` of each other; it was read from the code, never
 measured, and is closed by construction rather than by a measured bound. The order has a cost this record did not price: a launch that loses
 the claim has opened, and then removes, an endpoint of its own, which on a platform whose endpoint is a file contradicts "a

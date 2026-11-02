@@ -1,6 +1,6 @@
 /**
  * A live run's launch that overruns or throws still leaves `results.json`, the manifest and the failed scenario's session in
- * the pack (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`, parts a and b).
+ * the pack (`docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`, parts a and b).
  * At `8080fbda` the `crlf` launch threw into the fatal handler, which deleted the sandbox and exited: the three earlier
  * scenarios' checks, computed in memory, were never written, and the failed scenario kept no autopsy or transcript. The
  * readings below drive the ending with a stub launch that throws, and hold `live-run.mjs` to routing every exit path

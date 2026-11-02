@@ -11,7 +11,7 @@ import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 
 /**
  * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
- * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ * (docs/archive/defects/unit-tests-leave-their-temporary-directories-behind.md).
  */
 const scratchDirs: string[] = [];
 function scratchDir(prefix: string): string {
@@ -24,7 +24,7 @@ afterEach(() => { for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursi
 /**
  * PD-SHELL-001 / REQ-WORKSPACE-013/105: every `initialization.*` command is answered for the workspace of the window that
  * sent it. Before, the coordinator answered with the workspace opened last, whichever window asked
- * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`); the first case
+ * (`docs/archive/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`); the first case
  * here failed on that code with the second window's `lastRun` (null) in place of the first's.
  */
 function workspace(): { root: string; agents: string } {

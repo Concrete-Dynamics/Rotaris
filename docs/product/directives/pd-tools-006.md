@@ -256,7 +256,7 @@ file to `codebase-analyst`, a persona that holds no file-writing tool, with that
 accepted, the child ran for 2 min 47 s and could only answer that it had no file-writing tool, its report still read
 `succeeded`, and a second child was commissioned for the same file. A refusal at the call moves that discovery to the
 moment the parent can still choose. And `session_id` was accepted and dropped
-([`delegate-drops-session-id-and-suppress-auto-context.md`](../../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md)),
+([`delegate-drops-session-id-and-suppress-auto-context.md`](../../archive/defects/delegate-drops-session-id-and-suppress-auto-context.md)),
 so a caller that set it was told nothing and got a fresh child. What it costs:
 - a parent can no longer give a read-only child a scope for coordination alone;
 - a persona whose only writing tools are ones the claim does not fence — the code-intelligence server's editing tools,
@@ -285,7 +285,7 @@ each caller's `tool_restrictions`. What it costs:
 and dropped the first overflowing attachment with every one after it; REQ-LIBRARY-098 set 48,000. The build used 48,000 with a
 skip-and-continue it took from neither, and its observation said "N artifacts were attached to its context", counting the
 references that resolved before any budget applied, so a caller could be told of an artifact its child never received
-([`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../../defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md)).
+([`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../../archive/defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md)).
 REQ-TOOLS-152 calls itself the whole `delegate` contract, REQ-ORCH-032 hands the oversized attachment to it, and domain 05's
 resolution 26 and limits inventory carry 100,000; REQ-LIBRARY-098's restatement is the one the reconciliation missed.
 Skip-and-continue keeps resolution 26's three reasons (deterministic, order-preserving, never partial) and never displaces an
@@ -298,7 +298,7 @@ earlier attachment, so the child always receives a superset of what the prefix r
 the coordinator to no two implementation delegations for one item outstanding at once, checkable from the run's records. OQ-213
 made the coordinator keep a list of its own; nothing in the build named which item a delegation served, so the per-item
 constraint stood on instruction text and no record could check it
-([`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../../defects/fixed/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md)).
+([`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../../archive/defects/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md)).
 Only the coordinator knows which item a delegation serves, so the call names it, where the run can still refuse before a child
 is paid for. What it costs:
 - a refusal that misfires costs the coordinator one model step (17.7 to 19.6 s measured), where a duplicate costs a whole
@@ -422,7 +422,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > `write_scope` for a known persona that cannot write files, straight after the scope's own validation, with status
 > `rejected`, no record and no task id. The reason names the catalogue's writers. The phrase "after REQ-TOOLS-006's
 > controls" met one gap in the build. The per-persona `tool_restrictions` map, the fourth control, narrows no agent's
-> grant today ([`a-personas-tool-restrictions-never-narrow-its-grant`](../../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md)).
+> grant today ([`a-personas-tool-restrictions-never-narrow-its-grant`](../../archive/defects/a-personas-tool-restrictions-never-narrow-its-grant.md)).
 > The check therefore reads the two controls a child's grant does meet, `coordinator_only` and `read_only`. The
 > clause's text is not wrong; the build lacks a control it names. *Closed 2026-09-29 under R-067 (acceptance finding
 > A4):* the map now narrows the grant as [OQ-145](../../architecture/open-questions.md) builds it — the entry the persona's
@@ -647,7 +647,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 >   *Falsified as a rule for a served-and-ended item, 2026-10-13, by [OQ-255](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-255)'s ruling
 >   (`PD-TOOLS-008` revision 3, under [R-072](../requests.md#r-072)):* the reason held of the code as built, but no live model is
 >   told it, and the restore it describes is the defect
->   [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+>   [`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../../archive/defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
 >   Since revision 3 a `replace` closes an item whose child has ended; an item a running child holds, and the agent's own
 >   active item, are still closed with `update`, and the `replace` that kept them says so.
 >
@@ -696,8 +696,8 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > write scope, so it does not discriminate. **What was not measured.** No live run: the next duress pack is the measure — 0
 > hand-off markers for answers under 100,000 characters, no hunting calls for a missing answer, at most one write-scope refusal for
 > a non-writer, re-routed by the next request. Repairs
-> [`an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters`](../../defects/fixed/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md)
-> and [`the-routing-sentence-did-not-stop-a-write-scope-for-architect`](../../defects/fixed/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md).
+> [`an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters`](../../archive/defects/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md)
+> and [`the-routing-sentence-did-not-stop-a-write-scope-for-architect`](../../archive/defects/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`** — revisions 5, 6, 7 and 9, whose
@@ -766,7 +766,7 @@ OQ-333 (finding F9 of fin46's final acceptance, the default live run at `3c03287
 > measured.** No live run: the next default pack is the measure — the sentence in every delegating request, every child's first
 > request carrying the payload sentence, 0 `artifact_write` calls by a child that does not hold it, 0 briefs asking a non-publisher
 > to publish, and no `child_report` artifact claiming publishing failed. Repairs
-> [`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../../defects/fixed/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md).
+> [`a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for`](../../archive/defects/a-coordinator-briefs-a-codebase-analyst-to-publish-an-artifact-it-holds-no-tool-for.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **First execution of revision 11 (the resume line, [OQ-333](../../archive/architecture/open-questions/62-spikes-and-later-questions-29.md#oq-333)), 2026-10-15, ruled under

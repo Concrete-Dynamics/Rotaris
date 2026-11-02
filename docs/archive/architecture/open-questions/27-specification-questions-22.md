@@ -4,7 +4,7 @@ The ruled, closed, resolved and withdrawn entries of [part 27](../../../architec
 
 <a id="oq-127"></a>
 
-**OQ-127 — What counts as "an outcome that produced no output within `child_stall_timeout`" when the stall watchdog never cancels, and what does the watchdog count, write and call?** *(REQ-NOTIFY-111, REQ-NOTIFY-112, REQ-NOTIFY-100, REQ-NOTIFY-105, REQ-ORCH-089, REQ-MONITOR-117 to REQ-MONITOR-120, REQ-MONITOR-285, REQ-CONFIG-108, REQ-CONFIG-113, REQ-ORCH-144, REQ-ORCH-139 and REQ-SESSION-133. Raised 2026-09-29 by building the watchdog and the corrective message under R-067, the repair of [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../../../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md). Raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered OQ-127 at the merge, OQ-126 having been taken on `main` meanwhile. Ruled 2026-10-06.)*
+**OQ-127 — What counts as "an outcome that produced no output within `child_stall_timeout`" when the stall watchdog never cancels, and what does the watchdog count, write and call?** *(REQ-NOTIFY-111, REQ-NOTIFY-112, REQ-NOTIFY-100, REQ-NOTIFY-105, REQ-ORCH-089, REQ-MONITOR-117 to REQ-MONITOR-120, REQ-MONITOR-285, REQ-CONFIG-108, REQ-CONFIG-113, REQ-ORCH-144, REQ-ORCH-139 and REQ-SESSION-133. Raised 2026-09-29 by building the watchdog and the corrective message under R-067, the repair of [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../../defects/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md). Raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered OQ-127 at the merge, OQ-126 having been taken on `main` meanwhile. Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** as recommended, with OQ-157 — the `stall` issue is written only with the throttled warning (revision 2 of [`PD-MONITOR-005`](../../../product/directives/pd-monitor-005.md#pd-monitor-005), which narrows REQ-MONITOR-119), and the three facts are timeline entries under the words OQ-157's ruling adds: `waiting_on_tools` (REQ-MONITOR-118), `stall_recovered` (REQ-MONITOR-120) and `corrective_message` (REQ-NOTIFY-111). A session-log line that records an intended state — the wait on tools, OQ-173's wait the run imposes, the recovery, and the children the user's own pause, stop or quit leaves paused (PD-ORCH-005 clause 2) — is written at `INFO`; REQ-MONITOR-119's stall warning, and the corrective-message line, which follows a failed step, stay at `WARNING` (`stallRecords` and `recordCorrectiveMessage` in `packages/engine/src/children/stall.ts`).
 
@@ -41,7 +41,7 @@ None of them says what ends a silent child's step so that there is an outcome to
   when it had been asked for no output in that time. REQ-NOTIFY-112's condition is that *it* produced none. The turn the
   run starts is now the fourth event (`children.test.ts`, "a child that waited on its own child past the window …"). The
   watch's own warnings and issues during such a wait are a separate question
-  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)),
+  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md)),
   since 2026-09-30 OQ-155's: the watch counts no silence between the child's turns.
 - **The outcomes that earn nothing, as a failed step carries them:**
   - `cancelled`: the child's own abort or the run's;
@@ -126,7 +126,7 @@ None of them says what ends a silent child's step so that there is an outcome to
   written at WARNING again, and a further case of the same level sits outside these three records —
   `iteration 1: 2 child(ren) left paused by pause (PD-ORCH-005)`, written through the run's `warn` when the user's own
   pause rests the children, as PD-ORCH-005 clause 2 says it does
-  ([`the-users-own-pause-is-logged-at-warning.md`](../../../defects/fixed/the-users-own-pause-is-logged-at-warning.md)). What the
+  ([`the-users-own-pause-is-logged-at-warning.md`](../../defects/the-users-own-pause-is-logged-at-warning.md)). What the
   build proceeds under: every one of these lines keeps its level until the owner rules; a ruling on the level of an
   intended state answers this case with the three.)*
 
@@ -138,9 +138,9 @@ None of them says what ends a silent child's step so that there is an outcome to
   untouched, and a line at a level that overstates it is a smaller departure than a name REQ-ORCH-139 forbids
   ("MUST NOT use any name outside those vocabularies"). The same closure is already crossed
   elsewhere in the engine
-  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../../../defects/fixed/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
+  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
 - ~~**The stall callback fires on every evaluation, and no host listens.** No badge, activity text or countdown is drawn
-  ([`a-stalled-child-is-never-shown-stalled.md`](../../../defects/fixed/a-stalled-child-is-never-shown-stalled.md)). The run's own root agent is not watched: REQ-MONITOR-117
+  ([`a-stalled-child-is-never-shown-stalled.md`](../../defects/a-stalled-child-is-never-shown-stalled.md)). The run's own root agent is not watched: REQ-MONITOR-117
   says "each agent", and REQ-ORCH-089's threshold is a child's. Whether the root is watched, and against which
   threshold, is left open in the same note.~~ *Corrected in place, 2026-09-30 (R-067, acceptance finding A6): the callback
   reaches the agent's record and every agent surface draws the stall, the root is watched, and a stall evaluation wakes an
@@ -148,7 +148,7 @@ None of them says what ends a silent child's step so that there is an outcome to
 - ~~**A child waiting on its own children reads as stalled.** It has no model step and no call in flight while it waits,
   and the requirements tell a wait from a stall only by active tool calls. The build reports it stalled; whether the
   wait pauses the watch or counts as waiting on N children is recorded in
-  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md).~~
+  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md).~~
   *Corrected in place, 2026-09-30, by the repair of acceptance finding A7:* the watch counts no silence between the
   child's turns, so a wait on its own children is neither a stall nor a wait on calls; the reading, and what a ruling
   decides, is OQ-155's.
@@ -159,7 +159,7 @@ None of them says what ends a silent child's step so that there is an outcome to
 prompt is pending until injected"; REQ-MONITOR-134, "all pending steering prompts for an agent are delivered into its
 conversation … marked injected exactly once"; REQ-MONITOR-136; REQ-ORCH-094; `PD-ORCH-005` clauses 2 and 4. Raised
 2026-09-29 by the repair of
-[`a-steering-prompt-pending-at-a-rest-is-lost.md`](../../../defects/fixed/a-steering-prompt-pending-at-a-rest-is-lost.md)
+[`a-steering-prompt-pending-at-a-rest-is-lost.md`](../../defects/a-steering-prompt-pending-at-a-rest-is-lost.md)
 under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-122, renumbered OQ-127 when main had
 taken OQ-122 to OQ-126, and renumbered OQ-128 at the merge, OQ-127 having been taken on `main` meanwhile.)*
 
@@ -222,7 +222,7 @@ rest should instead be accepted and kept for the resumed agent, rather than refu
 
 <a id="oq-129"></a>
 
-**OQ-129 — What is the optimistic cancel of one agent: which activity line, on which surfaces, and until when?** *(REQ-MONITOR-128, "optimistically shown as cancelled, with an activity line stating that the user cancelled them"; REQ-MONITOR-296, "eventually overwritten by the authoritative final read"; REQ-MONITOR-006(b); REQ-MONITOR-038; PD-ORCH-005 clause 16 and OQ-100/OQ-101, whose cascade counts paused descendants; the reading below departs from REQ-MONITOR-128's "each of its live descendants" by showing paused descendants cancelled too, as OQ-100 and OQ-101 depart from it. Raised 2026-09-29 by the repair of [`cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md`](../../../defects/fixed/cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md) under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-128 on its branch and renumbered OQ-129 at the merge, OQ-128 having been taken on `main` meanwhile.)*
+**OQ-129 — What is the optimistic cancel of one agent: which activity line, on which surfaces, and until when?** *(REQ-MONITOR-128, "optimistically shown as cancelled, with an activity line stating that the user cancelled them"; REQ-MONITOR-296, "eventually overwritten by the authoritative final read"; REQ-MONITOR-006(b); REQ-MONITOR-038; PD-ORCH-005 clause 16 and OQ-100/OQ-101, whose cascade counts paused descendants; the reading below departs from REQ-MONITOR-128's "each of its live descendants" by showing paused descendants cancelled too, as OQ-100 and OQ-101 depart from it. Raised 2026-09-29 by the repair of [`cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md`](../../defects/cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md) under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06. Raised as OQ-128 on its branch and renumbered OQ-129 at the merge, OQ-128 having been taken on `main` meanwhile.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built, and `PD-ORCH-005` revision 6 states it in clause 35: the activity lines, the cascade's set (live and paused), the sending window alone, and the overlay held until the first whole-session update after the engine's acceptance. REQ-MONITOR-128 joins the directive's Narrows list.
 
@@ -259,7 +259,7 @@ engine's answer, or which windows show the state before the engine does.
 "Exactly one capture SHALL be attempted for each iteration that closes, at the moment it closes"; REQ-GIT-045;
 `PD-ORCH-005` clause 3 with OQ-103's last question, ruled under [R-067](../../../product/requests.md#r-067). Raised 2026-09-29 by
 the repair of
-[`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../../../defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md).
+[`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../../defects/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md).
 ~~Open.~~ Ruled 2026-10-06. Raised as OQ-129 on its branch and renumbered OQ-130 at the merge, OQ-129 having been taken on `main`
 meanwhile.)*
 

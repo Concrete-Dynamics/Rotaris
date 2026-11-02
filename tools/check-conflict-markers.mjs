@@ -3,7 +3,7 @@
 // JSON read as text, a YAML file or any other file the gate does not parse, nothing else reads it: the merge of
 // `origin/main` into `fin3-setup-words` (361f71c) committed one block in `docs/architecture/first-executions.md`
 // and the whole of `pnpm check` passed over it
-// (docs/defects/fixed/the-gate-passes-a-committed-merge-conflict-marker.md).
+// (docs/archive/defects/the-gate-passes-a-committed-merge-conflict-marker.md).
 //
 // What counts as a marker, as git writes one: a line that BEGINS with seven `<`, seven `|` or seven `>` followed by
 // a space or the end of the line, and a line that is exactly seven `=`. The last is also a legal Markdown setext

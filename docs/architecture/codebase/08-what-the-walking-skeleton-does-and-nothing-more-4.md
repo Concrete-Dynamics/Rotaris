@@ -26,7 +26,7 @@ defect's repair holds**; `git diff` exiting 1 read as `outcome success`, which i
 live** on the same machine whose unit test for it is red for an unrelated timeout. What was wrong was the
 harness, twice. The stalled call's record was written only on release and the product recovered first, so the
 one call the scenario exists for was the one call missing from the pack
-(`docs/defects/fixed/the-stalled-call-was-the-one-call-missing-from-the-pack.md`). And
+(`docs/archive/defects/the-stalled-call-was-the-one-call-missing-from-the-pack.md`). And
 `stop_reason !== 'user_cancelled'` passes just as well on a run that met no fault at all, so it now carries a
 positive half read from the product's own `issues` table — the stall must be shown to have been noticed, and
 what it was classified as must not be fatal. Two smaller ones: the wedge **soft-paused before the hard cap**,
@@ -246,7 +246,7 @@ icon, no tooltip, no accessible description. Ten launches run in all; the script
 `<label>. <name>` and its registry record (`docs/proofs/git-proof.md`) names every lettered one, both kept by
 `scripts/git-proof-index.test.ts`
 (finacc3: the row and the header had missed 6c,
-`docs/defects/fixed/agents-md-git-proof-row-omits-the-unborn-branch-launch.md`).
+`docs/archive/defects/agents-md-git-proof-row-omits-the-unborn-branch-launch.md`).
 Evidence under `.proof/git-proof/`.
 
 **What `pnpm checkpoint-proof` does.** It builds Electron and launches the app thirteen times against a scratch repository:
@@ -260,8 +260,8 @@ restore — land in `.proof/checkpoint-proof/results.json`. The Git proof's isol
 empty sentence: an isolated run records a checkpoint by REQ-GIT-044's default, which the merge found by failing that launch. The live
 run's lock is probed dead the moment that launch returns, so a lock that outlived its application fails there, naming
 REQ-SESSION-047/056, and not one launch later as a failed repair (2026-09-28, R-062;
-[the note](../../defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md)). The
+[the note](../../archive/defects/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md)). The
 thirteenth launch, `loaded-restore`, restores a session that stays loaded after its run released the lock, once a second
 holder naming another machine has taken it: the restore stops at gate 5 with the file untouched and that lock kept
 (ADR-0005, REQ-EVENTS-098; 2026-09-29, R-067, acceptance A14;
-[the note](../../defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md)).
+[the note](../../archive/defects/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md)).

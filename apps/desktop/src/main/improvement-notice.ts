@@ -19,7 +19,7 @@ import {
  * - Every other empty artifact keeps its pass's zero-proposal info notice and "Nothing was proposed in <id>.".
  *
  * Before PD-LIBRARY-005 a crashed or unparseable collector read as a pass that looked and found nothing
- * (`docs/defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`).
+ * (`docs/archive/defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`).
  */
 
 const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

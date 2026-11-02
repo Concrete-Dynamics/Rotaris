@@ -113,7 +113,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > `stall_timeout` were loaded and validated and reached no run; the progress rule is their first reader. Both are now
 > handed to the run, and the role's value substitutes for the run's on that role's children (REQ-CONFIG-108). The
 > stall recovery REQ-NOTIFY-111/112 describe for the same window is not built, and that is recorded in
-> [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md),
+> [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../../archive/defects/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md),
 > not changed. *(Built 2026-09-29 under R-067, with REQ-ORCH-089's watchdog over the same window; the readings are
 > OQ-127.)* **(2) How a parent names a continuation.** REQ-TOOLS-152's fields have none. `session_id` reuses a
 > delegation's session, and this directive asks for a new child and never a resume, so `delegate` takes one new
@@ -158,7 +158,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > lower-case name. What was not
 > measured: no built-app run exercised the mechanism. `pnpm resilience-proof`, the proof nearest this path, could not
 > launch the app as root and made no assertion
-> ([`resilience-proof-cannot-launch-the-app-as-root.md`](../../defects/fixed/resilience-proof-cannot-launch-the-app-as-root.md)).
+> ([`resilience-proof-cannot-launch-the-app-as-root.md`](../../archive/defects/resilience-proof-cannot-launch-the-app-as-root.md)).
 > No live run was made, so the offer's wording has not met a real model. The row is in
 > [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
@@ -182,7 +182,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > **(3) REQ-SESSION-115's "latest orchestrator artifact".** The built-in orchestrator publishes no artifact of its own.
 > The handoff therefore states the latest artifact of any kind that nothing supersedes, id first, cut to 6,000
 > characters without splitting a character. This replaces the placeholder that said none was recorded, repairing
-> [`the-continuation-payload-says-no-artifact-is-recorded.md`](../../defects/fixed/the-continuation-payload-says-no-artifact-is-recorded.md).
+> [`the-continuation-payload-says-no-artifact-is-recorded.md`](../../archive/defects/the-continuation-payload-says-no-artifact-is-recorded.md).
 > Two limits stand, each recorded:
 > - a report re-materialised under a reused canonical name keeps its first creation time;
 > - a document edited after publishing is stated as published.
@@ -254,7 +254,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > continued once and never chained". `verify-result-continue` succeeded. Nothing in the text was wrong. **What was not measured,
 > still:** an offer taken up by a later iteration's or a later run's root. The row is in
 > [`../architecture/first-executions.md`](../../architecture/first-executions.md)
-> ([`fixed/no-live-run-has-executed-on-merged-main.md`](../../defects/fixed/no-live-run-has-executed-on-merged-main.md)).
+> ([`fixed/no-live-run-has-executed-on-merged-main.md`](../../archive/defects/no-live-run-has-executed-on-merged-main.md)).
 
 
 > **First execution of revision 5, 2026-10-06, ruled by [R-071](../requests.md#r-071) and built on branch
@@ -331,7 +331,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > build of the unrepaired engine, the report's `edited_files` `[]`; green after, `["src/edit.ts"]`, in 64.9 s at a load of
 > about 12 on four CPUs).
 > **Not measured:** a live run since the repair. The note is
-> [`fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`](../../defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md);
+> [`fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`](../../archive/defects/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md);
 > the row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 >
 > **The literal reading for cross-file EDIT calls falsified, 2026-10-13, and its replacement, built by fin35 (ruled as
@@ -364,7 +364,7 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > whose reach cannot be walked, marked `unobserved` though it erred), each red on the code before;
 > `pnpm code-intel-proof`'s ninth launch (`child-across`) — see the row. **Not measured:** a rename through the built app,
 > which needs the TypeScript language server provisioned (IC-7); a live run. The note is
-> [`fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../../defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md);
+> [`fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md`](../../archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md);
 > the row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 >
 > **The rename through the built app, 2026-10-13 (fin42, the survey's N59):** the paragraph above's "Not measured: a rename
@@ -383,12 +383,12 @@ governs:* "> **Extends:** REQ-TOOLS-152 (revision 2)"
 > directive's reading: the pinned runtime waits for the language server's project loading before a references request and not
 > before a rename, so a rename that is a server session's first cross-file request reaches the declaring file alone (measured
 > also over the runtime's own stdio branch, a copy of the live run's `todo-app` fixture among four arrangements). Recorded as
-> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 > and raised as [OQ-273](../../archive/architecture/open-questions/58-spikes-and-later-questions-25.md#oq-273); launch 11 keeps the assertion and is red until it is repaired;
 > **launch 12** (`child-renamed-tool`) — the global configuration's `tool_name_map` offers the cross-file replacement as
 > `replace_across_project`, and a tester's call by that name lists both files it changed in its report and artifact, with the
 > evidence's `renamed` map `{"replace_across_project":"replace_in_files"}` (41.5 s): fin38's repair of
-> [`a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write`](../../defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md)
+> [`a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write`](../../archive/defects/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md)
 > in the built app, which only a doctored entry reaches, since the shipped entry renames nothing (no live run can). **Not
 > measured:** a live run. The opt-in `rename` scenario (`live-run.mjs --only=rename`) is written and is the orchestrator's: a
 > coding-agent renames the fixture's `remaining` to `countRemaining` with `rename_symbol`; it should show the rename row `ok`,

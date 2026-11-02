@@ -69,15 +69,15 @@ repository card — therefore arrives while no workspace exists yet. Those reads
 Overview. The readiness they wait on is pending from `MainWindows.build` and settles when the window's first open settles
 (or the window is forgotten), so the wait also covers a read that arrives between the window's load and its open; and a
 notice action's `reach` that meets a window still opening the workspace it names waits on the same readiness before acting
-on it (2026-10-14, `../../../defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md`). After
+on it (2026-10-14, `../../../archive/defects/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md`). After
 that wait only a window that is gone is refused; one that stands with no workspace open (its store refused, OQ-281) is
 reached, and the action's surface answers in it (2026-10-14,
-`../../../defects/fixed/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md`).
+`../../../archive/defects/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md`).
 
 **A reply that never comes ends no start-up.** `main()` awaits `MainWindows.launch`, so until 2026-10-20 a request of the open
 that got no reply within its bound rejected out of the launch and ended main's start-up as an unhandled rejection. The
 driver seam, the hand-overs and everything after the launch never ran (`compression-proof`'s `automatic` launch, 2026-10-16;
-`../../../defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md`). Now the run host's missed
+`../../../archive/defects/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md`). Now the run host's missed
 `workspace.opened` reply is a warning and an unacknowledged hand-off (`main/workspace-handoff.ts`). The window keeps its
 workspace, and the open's slot is not scheduled, as for any reply that is not `workspace.ack`. Any other rejection of the
 launch's open is logged, and the window stands with no workspace open, as a refused open leaves it. What else a missed reply
@@ -95,7 +95,7 @@ so the catalogue lands when the walk ends, Settings says it is being discovered 
 cached for the composer. Settings' asking ends when Settings unmounts (`readWhileMounted`). A request the saved configuration refuses (OQ-279) is refused before it waits, and a
 warm-up that a clear overtakes stops at its next read instead of finishing beside the next one. Until 2026-10-31 the warm-up was a microtask holding the synchronous walk, which ran before the reply was
 posted, so under load a slow discovery was a slow reply
-(`../../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`;
+(`../../../archive/defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md`;
 [OQ-386](../../../archive/architecture/open-questions/67-spikes-and-later-questions-34.md#oq-386)). The re-discovery after a session creation or
 a rescan is still synchronous, which the ruling left open.
 
@@ -114,9 +114,9 @@ attempts the claim a final time (`PD-STARTUP-009`, 2026-11-01): success makes th
 `warn` as `instance claimed after the final reclaim …` naming what the record held; a third lost claim ends it `refused`.
 Three claim attempts, two reclaims, two hand-over intervals as built (the directive's bound is three), no spin. Until that
 date such a launch ended `refused` with no window
-(`../../../defects/fixed/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`). Until that date a resumed primary
+(`../../../archive/defects/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md`). Until that date a resumed primary
 surfaced its window for a stale hand-over, and (4) did not exist
-(`../../../defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). What the stood-down process does
+(`../../../archive/defects/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). What the stood-down process does
 with its own windows is not decided
 (`../../../defects/a-stood-down-primary-keeps-its-windows-and-runs-on-with-no-end-the-specification-states.md`, open).
 

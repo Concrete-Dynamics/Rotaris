@@ -86,7 +86,7 @@ describe('scriptedClient — the step a call takes', () => {
   });
 
   /*
-   * PD-TOOLS-007 (`docs/defects/fixed/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md`): the shape
+   * PD-TOOLS-007 (`docs/archive/defects/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md`): the shape
    * the directive governs is a `write_file` that names a path and content and no operation, which `write` never sent.
    */
   it('`writeinfer` writes a file with a path and content and no operation; `write` names its operation', async () => {

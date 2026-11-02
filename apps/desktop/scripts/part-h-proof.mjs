@@ -137,7 +137,7 @@ const rawCases = [
   { name: 'raw-count-same', script: 'reads4:same,answer', activations: 1 },
   // REQ-CONFIG-467 / REQ-NOTIFY-106 (fin35): the key raised to 30 s is an upper bound only, so the held classification is still
   // cut within what remains of the 2 s activation budget and the activation lands inside the 12 s capture window. Uncapped, the timer ran 30 s
-  // and the window closed with no activation (`docs/defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`).
+  // and the window closed with no activation (`docs/archive/defects/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`).
   { name: 'raw-count-long-bound', script: 'reads4:same,answer', activations: 1, runtime: ['  loop_classification_timeout: 30'] },
 ];
 const rawObserved = {};

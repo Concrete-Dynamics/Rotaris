@@ -84,7 +84,7 @@ export function improvementsCommands(
      * workspace's alone, by the per-window rule a publication follows; a window holding no workspace is told none is pending.
      * The push main sends a window that has just opened a workspace (`workspaceOpened`) can reach a renderer that has not
      * subscribed yet, and is then lost; this read is what a new window draws its first state from
-     * (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+     * (docs/archive/defects/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
      */
     'improvements.activity': async (_req, { w, awaitWorkspace }) => {
       await awaitWorkspace();

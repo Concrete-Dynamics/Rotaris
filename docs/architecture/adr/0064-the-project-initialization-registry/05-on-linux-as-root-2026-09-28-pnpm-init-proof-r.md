@@ -12,7 +12,7 @@ slot). `init-proof`'s Escape, pressed as soon as the dialog exists, landed about
 run measured, the sweep's and this reproduction's. The skip recorded both listed ids, the resolution found nothing
 pending, and `code-intelligence-setup` never started: against REQ-WORKSPACE-083's "an immediate-start list regardless
 of whether a prompt is also due" and REQ-WORKSPACE-088's "starts by itself when the workspace opens". Scenario 3b caught
-it at the sidebar hint (`../../../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+it at the sidebar hint (`../../../archive/defects/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
 
 **A first repair, withdrawn before it merged, read the specification against its text.** It kept the open's pending
 background task out of the skip until the resolution had started it. That is not finding (2)'s reading moved one step
@@ -51,7 +51,7 @@ skip performed the open's resolution first, the dialog switched to "Running" ben
 skip answered. When the resolution came first, the dialog was already running when Escape arrived, ignored it, and
 recorded no decision. That is against REQ-WORKSPACE-103 ("nothing renders their progress live") and REQ-WORKSPACE-107
 (Escape "SHALL resolve as a skip"). The window also lifted the composer gate for any run in progress
-(`../../../defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`). Main cannot order a push behind a
+(`../../../archive/defects/the-setup-dialog-takes-a-background-run-as-its-own.md`). Main cannot order a push behind a
 command's reply, so the repair is in what the window draws, not in holding main's publishes. The state carries
 `backgroundRun` beside the report, and REQ-WORKSPACE-105's nine values are unchanged. The dialog draws that run only
 once Initialize is pressed (REQ-WORKSPACE-110's flip). A background run neither withdraws the setup prompt nor lifts the
@@ -67,7 +67,7 @@ verification-consent`, and `code-intelligence-setup → success` followed 1.7 to
 yet: Verification consent task." **Not shown:** the Windows orders; a live background run
 flipped by Initialize in the built app (REQ-WORKSPACE-110 is pinned by unit cases only); and a skip naming a task
 completed a moment earlier. That last one was first recorded, not repaired, and is repaired in the next section
-(`../../../defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`).
+(`../../../archive/defects/a-skip-can-move-a-completed-task-into-skipped.md`).
 
 **Third round (2026-09-29): the second round made a completed task skippable.** The fix round's verifier found that
 the second round opened the path its own note had called a few milliseconds wide. The dialog now stays in its prompt
@@ -146,7 +146,7 @@ cancels a background run still under way in a switch's outgoing window, on REQ-W
 nothing for it. The coordinator had `close` for it from the start, and nothing called it: main's workspace-open path
 called only `open` and `resolve(true)`, so a switch left the outgoing run going, its outcome was still recorded, and a
 return to the same root found that entry's automatic resolution spent, against REQ-WORKSPACE-102
-(`../../../defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`). `MainWindows` now reports a
+(`../../../archive/defects/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`). `MainWindows` now reports a
 workspace once no live main window holds it (`workspaceClosed`), and main calls `close`. `close` marks the entry closed
 before it aborts the run: the run's recordings are refused inside their turn of the marker queue, so a task under way
 that ends in success after the switch records nothing either — REQ-WORKSPACE-013's "nothing SHALL be recorded for the
@@ -160,7 +160,7 @@ a local launch" — and a return to the first project started nothing. With the 
 process gone 201 ms after the switch answered, and the proof's 39 checks passed. **Found by the execution:** the
 replacement's refused start. The run host holds one setup at a time, and a replacement opened while the outgoing setup
 is still ending can be refused; the next round serialises the coordinator's setups
-(`../../../defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). **A reading, not a
+(`../../../archive/defects/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). **A reading, not a
 clause:** `workspaceClosed` fires whenever no live main window holds a workspace any more, which also covers a plain
 close of one of several windows (PD-SHELL-001), a replacement closed after a veto, and a run the user started;
 REQ-WORKSPACE-013 names none of the three, and the build applies its rule to all of them. That reading is raised as
@@ -183,7 +183,7 @@ one step sink for all its runs, which a run's `finally` cleared unconditionally.
 coordinator's runs could overlap across a switch: the replacement's start was refused while the outgoing setup was still
 ending, or its follow took the outgoing setup's cancelled finish as its own; and the outgoing run's end cleared the
 replacement's sink, so its steps were never reported and its run never ended (REQ-WORKSPACE-109, REQ-WORKSPACE-084;
-`../../../defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). The coordinator's
+`../../../archive/defects/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). The coordinator's
 setups are now one at a time (`setupTurn`): a run's `code-intelligence-setup` starts once the setup before it has ended,
 and a sink is cleared only by the follow that set it. The wait is the task's, inside the run, so the replacement's
 resolution still returns at once (REQ-WORKSPACE-013); a run cancelled while it waits starts nothing and fails
@@ -200,7 +200,7 @@ REQ-WORKSPACE-084/109. Reachable by PD-SHELL-001's two windows, or by a switch w
 replacement's 800 ms resolution. The follow now removes its abort listener when its setup finishes, so a run's abort
 reaches the run host only while that run's own setup is live; two cases in `initialization.test.ts` ("leaves the next
 workspace's setup running when …", on a close and on a Cancel) fail without it. **Not shown:** a setup the MCP settings category starts beside a background run, which is not one of the
-coordinator's and is still refused (`../../../defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`, where the refusal was reported as "not a local launch" — its reporting repaired 2026-10-01 in the eighth round); the
+coordinator's and is still refused (`../../../archive/defects/a-refused-setup-start-is-reported-as-not-a-local-launch.md`, where the refusal was reported as "not a local launch" — its reporting repaired 2026-10-01 in the eighth round); the
 Windows orders.
 
 **Eighth round (2026-10-01, R-067): a refused start is not "not a local launch".** "Why the task delegates rather than
@@ -228,20 +228,20 @@ terminated; …"), which are the MCP category's. The run host's status now says 
 the "{reason}: {detail}" error; `detail` itself stays the run host's, so the category reads as before. The fact is carried
 rather than read out of the prose because the budget case cannot be told from a non-zero exit by the outcome alone. A run
 cancelled before its setup started keeps the build's sentence, under OQ-167
-(`../../../defects/fixed/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`). **Measured** by
+(`../../../archive/defects/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`). **Measured** by
 `workspace-proof`'s scenario 8c, which now reads the outcome of its Cancel: on the build before this round, "… could not
 create this project's configuration: cancelled while running; the child was terminated"; with it, "… configuration: Setup
 was stopped before this step finished.", in 8b's outgoing run too (41 passed, 0 failed, 2 skipped; as root under Xvfb,
 Node 24, `--skip-build` after `pnpm build`). **Not shown in the built app:** the budget sentence, which needs a step held for
 its whole budget; the unit cases pin it. **Found besides:** the other step details are not this domain's words either
-(`../../../defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`, recorded, not repaired here; repaired in the fifteenth round).
+(`../../../archive/defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`, recorded, not repaired here; repaired in the fifteenth round).
 
 **Tenth round (2026-10-01, R-067): a closed workspace's failed resolution is no window's.** The sixth round's rule — nothing
 of a workspace no window holds is published or bannered (REQ-WORKSPACE-013, OQ-141) — was honoured by `publish` and by the
 run's two banners, but not by the resolution's own: `resolution()`'s `catch` raised REQ-WORKSPACE-102's "Project setup
 could not be checked" on channel 12, to every live window, for a resolution that failed after its workspace closed (the
 silent `last_run` stamp's write in flight, for one). It now says so in the log at info level and raises nothing
-(`../../../defects/fixed/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`). **Measured** by two
+(`../../../archive/defects/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`). **Measured** by two
 unit cases only, the closed one red on the code before: no proof can hold the stamp's write across a switch.
 `workspace-proof` passed on the repair (41 passed, 0 failed, 2 skipped; as root under Xvfb, Node 24, `--skip-build` after
 `pnpm build`), no launch logging a resolution failure.
@@ -250,7 +250,7 @@ unit cases only, the closed one red on the code before: no proof can hold the st
 condition it left open: the task ended only on the run host's `finished` status, and the seventh round made every later
 setup wait for that end. Main never forks the run host again, so with the run host lost that status could never come,
 and a lost push had the same effect — the run never ended and every later setup waited behind it for the life of the
-process (`../../../defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`). Main now
+process (`../../../archive/defects/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`). Main now
 tells the coordinator when the run host exits (`onRunHostExit`), and a follow is bounded at every stage budget plus
 REQ-WORKSPACE-092's 5 s each, 2235 s (`SETUP_FOLLOW_BOUND_MS`); either ends it as REQ-WORKSPACE-093's retryable failure,
 under the stage that was running, in the build's detail (OQ-169), and the next setup's turn comes. **Measured** by
@@ -260,7 +260,7 @@ with it the first ended 101 ms after it ("… could not create this project's co
 setup finished.") and the queued run was attempted (42 passed, 0 failed, 2 skipped; as root under Xvfb, Node 24,
 `--skip-build` after `pnpm build`). The bound is the unit cases' alone: no proof holds a setup for 37 minutes. **Found
 besides:** the queued run's start, sent to the run host that is gone, ends 15 s later as a task with no outcome rather
-than in REQ-WORKSPACE-093's words (`../../../defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`,
+than in REQ-WORKSPACE-093's words (`../../../archive/defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`,
 recorded, not repaired here; repaired in the fourteenth round).
 
 
@@ -270,7 +270,7 @@ answered every window with it. Channel 12 went to every live window, and main's 
 focused window's workspace. With two main windows open (PD-SHELL-001), the first window's surfaces showed the second
 workspace once it had opened. A Skip or a Cancel pressed in the first acted on the second, and a run's setup could be
 started against the focused window's configuration and root
-(`../../../defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`). Now every method
+(`../../../archive/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`). Now every method
 names the root it is asked for, and the commands pass the sender's window's root. The state is published to the windows
 holding that root (`MainWindows.holding`). The setup port is addressed by the run's own workspace identifier, which
 `open` now takes. The registry's predicate is told which workspace it is judged for (`ApplicabilityContext`).

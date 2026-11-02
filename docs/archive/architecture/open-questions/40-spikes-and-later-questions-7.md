@@ -10,7 +10,7 @@ force-killed"; REQ-WORKSPACE-109, "Closing the application while a run is under 
 complete within 5000 ms, the run being stopped by force if it has not ended by then"; REQ-WORKSPACE-092, "when the
 application is closed while setup is running, nothing the step launched SHALL still be running 5 s later". Raised
 2026-10-01 by the repair of
-[`an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`](../../../defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md),
+[`an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`](../../defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md),
 on its verifier's finding; raised as OQ-171 on its branch and renumbered at the merge, OQ-170 having been taken on `main`
 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
@@ -69,7 +69,7 @@ backoffs; REQ-NOTIFY-083 to REQ-NOTIFY-087, the suspended wait's own notice; REQ
 ADR-0060, the automatic compression and the condensation on a rejection; OQ-153; OQ-155; REQ-NOTIFY-112 and OQ-127,
 whose no-output window the wait's end also restarts. Raised 2026-10-01 by the
 repair of
-[`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../../../defects/fixed/a-provider-wait-or-a-compression-is-counted-as-a-stall.md).
+[`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../../defects/a-provider-wait-or-a-compression-is-counted-as-a-stall.md).
 ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current behaviour is accepted: a wait the run imposes on an agent (a retry backoff, a suspended wait on a provider limit) and a compression's own model call are outside the agent's stall watch, logged in the manner REQ-MONITOR-118 logs a wait on tools and with no timeline word, and the wait's end restarts the silence. The provider library's own short internal retries inside one model step stay counted as ordinary silence of that step. Read literally REQ-MONITOR-119 makes each of those waits a stall, so the ruling is carried, with OQ-155's, by [`PD-MONITOR-005`](../../../product/directives/pd-monitor-005.md#pd-monitor-005), which narrows REQ-MONITOR-118 and REQ-MONITOR-119 to the silence of a model step the agent has in flight.
@@ -116,10 +116,10 @@ update "SHALL only ever narrow" the callable set, the withdrawn name "ceases to 
 NOT … re-render the prompt"; REQ-MCP-114, the inspector's per-server list "sourced from the run's own recorded evidence,
 so it reads the same for a finished run as for a running one"; REQ-MCP-100, the persona window's line per server from the
 same evidence; REQ-MONITOR-060, the inspector's chips. Raised 2026-10-01 for
-[`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../../../defects/fixed/a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md)
+[`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../../defects/a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md)
 by the second triage of open defect notes, which judged it the owner's. ~~Open.~~ Ruled 2026-10-06.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current behaviour is accepted, and the recorded grant is defined as what the child was given when it started (its tool port's readiness). A tool a mid-run list update withdraws stays in the row's `granted_mcp`, unmarked, and every surface that reads the record lists it as granted; it is no longer callable, and a call to it is refused (REQ-MCP-062). REQ-MCP-065's "granted" is that grant, so this ruling settles it; [`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../../../defects/fixed/a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md) closes with it.
+**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current behaviour is accepted, and the recorded grant is defined as what the child was given when it started (its tool port's readiness). A tool a mid-run list update withdraws stays in the row's `granted_mcp`, unmarked, and every surface that reads the record lists it as granted; it is no longer callable, and a call to it is refused (REQ-MCP-062). REQ-MCP-065's "granted" is that grant, so this ruling settles it; [`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../../defects/a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md) closes with it.
 
 A child's row records its MCP grant once, when its tool port is ready (`ChildLedger.recordGrant` →
 `SessionWriter.recordChildGrant`, once per execution). When a carried server then publishes a changed tool list,
@@ -148,7 +148,7 @@ nothing to give?** *(REQ-WORKSPACE-092, "every other step's detail SHALL be the 
 output and standard error"; REQ-WORKSPACE-091, "where a stage's subcommand is unavailable, that stage SHALL fail and be
 reported under REQ-WORKSPACE-093 as any other stage failure is"; REQ-WORKSPACE-093, "{reason}: {detail}"; REQ-MCP-099 and
 REQ-MCP-112, whose words for the same steps stay the MCP category's. Raised 2026-10-01 by the repair of
-[`the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`](../../../defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md),
+[`the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`](../../defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md),
 as OQ-174, and renumbered OQ-175 at its merge because `origin/main` had taken OQ-174 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current behaviour is accepted, the trim included: a step not attempted and a step that wrote nothing have an empty detail, a step whose command could not be started reads in the launch's own error text, a failed stage with an empty detail takes the setup's final sentence as its `{detail}`, and the last 400 bytes are taken of the output once it is trimmed of its leading and trailing blank space. [`PD-WORKSPACE-006`](../../../product/directives/pd-workspace-006.md#pd-workspace-006) narrows REQ-WORKSPACE-092 and REQ-WORKSPACE-093.
@@ -186,7 +186,7 @@ the two differ for output that ends in blank lines, and for a tail whose first c
 echo latency "within the 100 ms gesture budget of REQ-SHELL-150, measured from the key press to the frame that shows it";
 REQ-SHELL-150, whose "sustained load" is a burst of changes in the shell, "a build that misses any of the three under
 sustained load fails this requirement". Raised 2026-10-01 while repairing (measured that day; first committed 2026-10-02)
-[`terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`](../../../defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md)
+[`terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`](../../defects/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md)
 under R-062. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the specification is amended: REQ-SHELL-166's 100 ms echo applies on a machine whose CPUs other programs do not oversubscribe, a load average at or below the CPU count; a red taken above it is run again with the host quiet, and a red on a quiet host is the product's. The bound itself is not relaxed. [`PD-SHELL-007`](../../../product/directives/pd-shell-007.md#pd-shell-007) narrows REQ-SHELL-166.
@@ -216,7 +216,7 @@ on a stated reference host and load.
 fallback "tried once per child by rebuilding the agent and transparently re-running"; REQ-ORCH-091 (b), "at most one
 same-tier automatic model fallback per child", and (d), a manual model change "persists the override in session state for
 the rest of the session"; REQ-MONITOR-194, a pair chosen explicitly is "eligible again". Raised 2026-10-02 by the repair of
-[`an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`](../../../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md),
+[`an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`](../../defects/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md),
 as OQ-176, and renumbered OQ-177 at its merge because `origin/main` had taken OQ-176 meanwhile. Open until 2026-10-06; ruled that day by the owner, and built.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** every explicit switch wins — a switch of the
@@ -250,7 +250,7 @@ rest of the session: the entry agent runs on Y from the next iteration." The ite
 it had: the root's ladder is read once per root turn, so a root resumed after its children in the same iteration is not
 moved by a switch made meanwhile. The exclusion of an exhausted pair is not touched by a switch (whether an explicit choice
 clears it is REQ-MONITOR-194's, recorded in
-[`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../../../defects/fixed/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md); *since 2026-10-02 an explicit choice clears it, on a switch and in a quota wait, where the waiting pair itself may be chosen*).
+[`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../../defects/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md); *since 2026-10-02 an explicit choice clears it, on a switch and in a quota wait, where the waiting pair itself may be chosen*).
 
 **What a ruling decides.** Whether a switch onto the configured key ends a ladder move (as built) or leaves it in force —
 and, if it leaves it, what the row says; whether a later switch onto a pair an override moved supersedes that override for
@@ -261,5 +261,5 @@ user explicitly chose is not what runs, and only the row says so. The wait path 
 readings stand side by side: a choice made on a wait surface (REQ-MONITOR-303's "change model now … resolves the wait as a
 retry on the chosen model") takes back any override an earlier choice set from the pair chosen, so the agent resumes on it
 as the wait's row says (`Run.takeBackOverrideOf`, since 2026-10-02, the third round of
-[`a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md`](../../../defects/fixed/a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md));
+[`a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md`](../../defects/a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md));
 a ruling that a switch also supersedes the override would make the header and inspector path match it.

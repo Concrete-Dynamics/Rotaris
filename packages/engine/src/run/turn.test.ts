@@ -128,7 +128,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
 
   it('REQ-TOOLS-032: a call whose arguments are a JSON string (encoded twice) is refused recoverably, its replay carries a mapping, and the run continues', async () => {
     /*
-     * The 2026-10-01 live run (docs/defects/fixed/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md):
+     * The 2026-10-01 live run (docs/archive/defects/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md):
      * the model's `arguments` text was a JSON string literal holding the object. The client stands where the run host
      * puts it, the AI SDK adapter, against an endpoint that refuses a request whose replayed arguments are not a mapping
      * (HTTP 400, as that endpoint's chat template did). The port answers as the gate does for an unreadable payload.
@@ -236,7 +236,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
   });
 
   /**
-   * `docs/defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md` (fin21, OQ-165's build): the stop
+   * `docs/archive/defects/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md` (fin21, OQ-165's build): the stop
    * saved `cancelling` when it was accepted, but the run's next save on the way to rest wrote `running` again, so every window
    * read `running` for the rest of the graceful stop. The stop's `cancelling` is held as the explicit cancel's is.
    */
@@ -259,7 +259,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
   });
 
   /**
-   * `docs/defects/fixed/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md` (finacc3 F05): a
+   * `docs/archive/defects/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md` (finacc3 F05): a
    * stop accepted after the teardown wrote the run's end, while it forwarded the terminal pair or ran the hooks advisory, was
    * answered `ok` and saved `cancelling` over the terminal status, which nothing wrote again. It is refused, as the explicit
    * cancel is, and no later save of the run writes a non-terminal status over its end.

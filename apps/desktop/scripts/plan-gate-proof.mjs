@@ -42,7 +42,7 @@ import { codeIntelligenceDiscovered } from './lib/code-intelligence-discovery.mj
  *     the MCP fixture server `alpha`; every model request of the held cycle (launch 1, captured by the scripted client)
  *     lists the server with no tool under it, and the approved run's requests (launch 4) print and offer its tools. Until
  *     2026-10-01 the held cycle's prompt printed tools the agent could not call
- *     (docs/defects/fixed/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md).
+ *     (docs/archive/defects/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md).
  *
  * Every assertion reads the store, the workspace or the app's own log. The PNGs are read back so a launch
  * that painted nothing cannot pass.
@@ -70,7 +70,7 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
  * costs about 4.5 s of each one (ADR-0035's note, finding 6) — 11 s on the Linux sweep of 2026-09-28, beside the
  * workspace's background project setup. The entry is the `mcp_servers:` one: until 2026-09-28 this fixture wrote a
  * top-level `code_intelligence:` key, which no section reads, so every run discovered the server anyway
- * (docs/defects/fixed/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md). Launch 1 now
+ * (docs/archive/defects/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md). Launch 1 now
  * asserts the server was not discovered, so the fixture cannot silently stop meaning what it says again.
  */
 const GLOBAL = [
@@ -126,7 +126,7 @@ async function launch(name, extra, timeoutMs = 120_000) {
   // A relaunch refused because the previous instance's run host still held the session is the product defect
   // repaired by `459e7c8` (main exits only after its run host). Named here, so it cannot read as a gate that
   // did not survive the restart.
-  if (/is held by another run in this application/.test(log)) throw new Error(`${name}: the session was refused as held by another run — the previous launch's run host outlived it (docs/defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md); see ${name}.log`);
+  if (/is held by another run in this application/.test(log)) throw new Error(`${name}: the session was refused as held by another run — the previous launch's run host outlived it (docs/archive/defects/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md); see ${name}.log`);
   return log;
 }
 
@@ -293,7 +293,7 @@ results.twoStates = {
  * (`unfocusedFailureNotice`). The notice slot stands above the view, so its height comes off the gate's row. Every part
  * of the gate but the plan kept its content height, and the whole loss fell on the plan: 41 px against the todo's 56 on
  * the first pass of this reading, 18 px against 56 in finacc2's acceptance (A2) with the re-authentication bar as well
- * (docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
+ * (docs/archive/defects/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
  * Repaired the same day: the plan has a floor above the todo's cap, every other part keeps its content height
  * (PD-ORCH-002 revision 2), and below the floor the gate scrolls with its answers pinned, so the three answers are asserted
  * hit here too (REQ-SHELL-048). The reading is taken in both modes: the edit field's floor is the adopted
@@ -585,7 +585,7 @@ results.reArmed = {
  * 7. REQ-MONITOR-060 with REQ-ORCH-153: at a gate no iteration precedes, the run-level agent's chips are marked from the
  * plan cycle's root's calls. A fresh session's root calls a tool and parks; reopened by the next launch, the inspector
  * draws the run-level agent from the store's history alone. Before the repair of
- * docs/defects/fixed/the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md (acceptance A21,
+ * docs/archive/defects/the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md (acceptance A21,
  * R-067) that history was read under the latest iteration's root, and a plan cycle has no iteration, so every chip read
  * `not used` while the user reviewed the plan.
  */
@@ -631,7 +631,7 @@ results.toolsAtGate = { rootCalls, inspector: shown7, chips: chips7 };
  * fresh session runs one iteration as `orchestrator` in `auto` mode, its root reading the README. Then the configuration
  * chooses `plan` and switches the entry persona to `reviewer` before the next prompt, whose plan cycle root runs fresh under
  * it, lists the files and parks. Reopened by the next launch, the run-level agent's chips are read from the store's history
- * alone. Before the repair of docs/defects/fixed/a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md
+ * alone. Before the repair of docs/archive/defects/a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md
  * that history was read under the latest iteration root's persona whenever an iteration existed, so the plan cycle root's
  * `glob` read `not used` and the iteration root's `read_file` `used`.
  */
@@ -705,7 +705,7 @@ if (chips8.includes(`${iterationTool}:used`)) throw new Error(`at the gate after
 // The run-level agent is drawn as the latest root, whose calls mark its chips: named `reviewer`, with reviewer's declared
 // tools standing in (REQ-MONITOR-060). Until 2026-10-01 it was named, and its chips drawn, from the first root's persona,
 // `orchestrator`'s fourteen tools with `reviewer`'s glob marked used
-// (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
+// (docs/archive/defects/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
 if (shown8 !== 'reviewer') throw new Error(`at the gate after a persona switch the run-level agent is not drawn as the latest root's persona, reviewer: ${JSON.stringify(shown8)}`);
 const tools8 = chips8.map((c) => c.slice(0, c.indexOf(':')));
 if (JSON.stringify(tools8) !== JSON.stringify(['glob', 'read_file', 'todo'])) throw new Error(`at the gate after a persona switch the chips are not reviewer's declared tools glob, read_file and todo: ${JSON.stringify(chips8)}`);

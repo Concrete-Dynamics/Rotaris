@@ -41,9 +41,9 @@ part that takes REQ-SESSION-025.
 > `pendingQuestionsOfSession`). Its first reader is a crash's record, which can only withdraw what the store holds:
 > `withdrawStoredQuestions` (`packages/engine/src/run/crash.ts`) writes one `question_withdrawn` entry per prompt, in the
 > words and fields the gate writes for a live withdrawal, and empties the column — before it, a crash with a question
-> waiting recorded no withdrawal (`docs/defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md`). Its
+> waiting recorded no withdrawal (`docs/archive/defects/a-crash-with-a-question-pending-records-no-withdrawal.md`). Its
 > second is the listing: REQ-SESSION-031's `awaiting_input` is pending approvals **or** pending questions, and the listing
-> read approvals alone (`docs/defects/fixed/the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md`).
+> read approvals alone (`docs/archive/defects/the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md`).
 > Channel 2 is unchanged: the publication still republishes the derived list, and the column is never read back as
 > pending. Pinned by `crash.test.ts` ("clause 9 after a crash"), `sessions.test.ts` (REQ-SESSION-031), the run host's
 > `tools.test.ts` (the mirror as the session's list, emptied on the answer) and `store.test.ts` (v34 → v35); each of the

@@ -6,7 +6,7 @@
  * Until 2026-10-07 the Pause was pressed at the first running agent row. In the final default live run at `a68f121`
  * (session `be52b2b7`) that was 86 ms after OQ-213 refused the second delegation, so the pause held one child where
  * `c2a9444`'s held two, and the clauses the scenario exists for were measured on one (live-run finding P7;
- * `docs/defects/fixed/the-resume-scenarios-pause-can-land-on-one-running-child.md`).
+ * `docs/archive/defects/the-resume-scenarios-pause-can-land-on-one-running-child.md`).
  *
  * The press now waits for TWO running children, bounded: an eval step armed when the first child starts marks `<body>`
  * `TWO_RUNNING_WAIT_MS` later, and from then one running child is enough, so a coordinator that never runs two at once

@@ -110,7 +110,7 @@ file as the text (OQ-75). Both now wait on a maintainer's review (O-11), as `pro
 only: every dependency below `serena-agent` was resolved on the day of the build, and the release run 39948115668
 (`build (windows-x64)`, `v0.1.0rc1`) refused notices validation on `certifi` 2026.10.23 — the third `certifi` the same
 commit had built on three hosts — and on `clr_loader` 0.3.1, a Windows-only dependency no Linux bundle had carried
-([note](../../../defects/fixed/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md)). The closure is
+([note](../../../archive/defects/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md)). The closure is
 now committed beside `pins.json`: `closure.lock`, 84 distributions resolved once for every target
 (`uv pip compile --universal`), each at one version with the sha256 of every file the index offers, and
 `closure-build.lock`, the setuptools that builds `proxy-tools` (the one distribution that publishes no wheel).
@@ -211,7 +211,7 @@ unreachable now that the sentinel precedes `workspaceFromArgv`; removed, not com
 `--no-sandbox`: a cloud container, the development entry driven as root. The reserved token's launch was the executable
 with the token and `--` only, so the child — a fresh Chromium — inherited nothing and died with SIGTRAP before the
 sentinel ran; the project setup's `create` step failed, `index` and `memory` were not attempted
-(`../../../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`). None of REQ-MCP-033,
+(`../../../archive/defects/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`). None of REQ-MCP-033,
 REQ-STARTUP-002 and REQ-STARTUP-015 says whether the launch carries the parent's switches: raised as **OQ-82**, built
 as "exactly the sandbox switch the parent was started with, immediately before the token, nothing else". Measured on
 the repaired build, driven as root under Xvfb against a scratch workspace holding one TypeScript file: the launch line
@@ -241,23 +241,23 @@ through a raw JSON-RPC client, and that client resolved a request only when its 
 without answering left section 1 waiting for ever (twice, 8 and 12 minutes, killed). The client is now
 `apps/desktop/scripts/lib/line-rpc-client.mjs`, which rejects every pending request on the child's exit, failure or
 guard kill with the exit status and standard error's tail (`line-rpc-client.test.ts`, 12 cases over a fake child;
-`../../../defects/fixed/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`). Its first execution
+`../../../archive/defects/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`). Its first execution
 against the built branch, as root under Xvfb on Linux, drove the token-first launch to the sentinel's exit **127** in
 192 ms with the sentinel's "not present" line in the rejection. It also found that the proof launches the token in the
 order this ADR's correction retired — `--no-sandbox` ahead of the token — so as root the proof starts the application,
-not the branch, and section 1 fails at the guard (`../../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
+not the branch, and section 1 fails at the guard (`../../../archive/defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
 recorded, not repaired). Not shown: section 1 passing, which waits for that note and for a tree with the bundle.
 
 **The proof on Linux as root — 2026-09-28 (R-062).** The note above was reproduced, then repaired in the proof: `branch()`
 and `exitStatus()` launch the token first and the switch between it and `--`, this ADR's corrected order, and
 `lib/launch-sites.test.ts` now fails any token launch that puts something other than the entry ahead of the token
-(`../../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`). Section 1 then
+(`../../../archive/defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`). Section 1 then
 **passed**: `tools/list` at 2,065–2,400 ms on the development entry across the three passing runs, 22 tools under a project (`list_memories` present,
 no project switching or configuration introspection), nothing on standard output before the first `{`, exit 0 on
 standard input's end, an unknown subcommand exiting the runtime's 2. The first full run went on to find a second
 harness defect. Every launch rewrote the workspace file without an `initialization:` section, so ADR-0064's background
 `code-intelligence-setup` started at each open. Section 5's click met it and was refused "already running", correctly
-(`../../../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md`). The proof's
+(`../../../archive/defects/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md`). The proof's
 workspace file now records that task as skipped. Then the whole proof passed **three runs in a row** (521 s, 522 s and 521 s, as root under Xvfb, Node 24, `--skip-build`), with
 nothing else running on the host: the discovery grant of 12 and the memories block, both launch lines carrying
 `--project`, `get_symbols_overview` naming `Greeter`, `greet` and `Counter` after provisioning TypeScript 5.9.3 and

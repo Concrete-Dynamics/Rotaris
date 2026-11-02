@@ -34,7 +34,7 @@ directory sits beside the checkout, never inside it.
 shares one stash (`refs/stash` sits in the common git directory), so a `pop` takes whatever
 entry is on top, and that can be another agent's: on 2026-10-03 two builders in sibling
 worktrees each received the other's uncommitted edits that way
-([the note](../defects/fixed/parallel-worktree-agents-swap-uncommitted-edits-through-the-shared-git-stash.md)).
+([the note](../archive/defects/parallel-worktree-agents-swap-uncommitted-edits-through-the-shared-git-stash.md)).
 To set a change aside, write it to a patch file outside the checkout and restore the files
 (`git diff -- <files> > <patch>`, `git checkout -- <files>`, and `git apply <patch>` after),
 or read the base in a throwaway detached worktree (`git worktree add --detach <path> main`,
@@ -104,7 +104,7 @@ scratch repository by `tools/worktree/`'s tests: real git, only the pnpm steps s
   line of exactly seven `=` between an opening and a closing marker (alone, that line is a
   Markdown heading underline and passes). It names the file and the line. Markdown and JSON
   read as text are where it matters: a marker there broke nothing else the gate runs
-  ([the note](../defects/fixed/the-gate-passes-a-committed-merge-conflict-marker.md)).
+  ([the note](../archive/defects/the-gate-passes-a-committed-merge-conflict-marker.md)).
   Text means the content, not an attribute: `pnpm-lock.yaml` (`-diff` in `.gitattributes`)
   is read too, though until 2026-10-02's third correction it was not. `pnpm` itself
   rewrites a conflicted lockfile on disk when it runs (`pnpm lint` prints "Merge conflict

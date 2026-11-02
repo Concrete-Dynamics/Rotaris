@@ -17,7 +17,7 @@ the run host's `retrospectiveSetup` calls it at the capture and again at the ana
 (`configure` stays a run start's). Pinned by `dispatch.test.ts`'s three cases (the analysis sends the leased bearer, the capture
 reads its collector from the leased setup, a lease refusal returns before either; the first two red on the code before) and
 `launch.test.ts`'s two `leasedSetup` cases.
-([`../../../defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`](../../../defects/fixed/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md).)
+([`../../../archive/defects/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md`](../../../archive/defects/a-retrospective-sends-its-model-request-with-no-credential-when-no-run-has-leased-one.md).)
 **Not measured:** the live `ask-retrospective` scenario since the change — it should show the request carrying a credential and
 an artifact with no "collector crashed" note; the built app's proofs run the scripted provider, which takes no credential.
 
@@ -26,4 +26,4 @@ an artifact with no "collector crashed" note; the built app's proofs run the scr
 > request goes to its own model (`retrospective_model`, then `medium_model`), so a retrospective was refused when only the entry
 > role's provider was signed out and passed its lease when its own was, failing at its model call. `leasedSetup` now requires the
 > retrospective model's sign-in provider (`PreparedRun.retrospectiveAuthProvider`), a continuation still the entry role's
-> ([`../../../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../../../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md)).
+> ([`../../../archive/defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../../../archive/defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md)).

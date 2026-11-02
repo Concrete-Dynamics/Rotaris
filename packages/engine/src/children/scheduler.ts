@@ -74,7 +74,7 @@ export class Scheduler {
    * later (one given up on at the stop's grace, or any whose `.finally` lands after the run's end) finds `pass` returning at
    * once, so it cannot outlive the store it reads, which the run host closes while it lives (`workspace.closeStore` before a
    * backup or a restore, `workspace.closing`). Every waiter is released. Idempotent. Until 2026-10-03 nothing stopped that
-   * pass (docs/defects/fixed/a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it.md).
+   * pass (docs/archive/defects/a-childs-closing-scheduler-pass-can-outlive-the-run-that-awaited-it.md).
    */
   close(): void {
     this.closed = true;

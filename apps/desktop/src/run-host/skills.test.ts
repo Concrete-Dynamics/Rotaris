@@ -254,7 +254,7 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
      * isolation is decided on any host. The platform is pinned so the machine-wide base is consulted on Windows too.
      * The skill search's own machine-wide root, `/etc/codex/skills`, is asked about the same way: its listing is a
      * `readDir`, so those are recorded too, and it must land under the scratch directory and nowhere under the real one
-     * (`docs/defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
+     * (`docs/archive/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
      */
     const t = tree();
     try {
@@ -301,7 +301,7 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
    * lines, a blank line and `## MCP servers` — nothing said where the file ended, and two of eight agents read the MCP
    * section as the file's own. The prompt is assembled here with the product's own three steps (the unit list, the
    * role's prompt with its units, the MCP section after them), so what is asserted is the text an agent receives
-   * (`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
+   * (`docs/archive/defects/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
    */
   it('REQ-WORKSPACE-043 with REQ-MCP-101: the instruction files are closed before the MCP section, so its heading is not read as the last file\'s', () => {
     const base = mkdtempSync(join(tmpdir(), 'rotaris-skills-'));
@@ -480,7 +480,7 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
  * discovered at the WORKSPACE ROOT, and no file under the global, home-relative or machine-wide bases. Before the
  * revision the capture was handed `instructionFiles` whole — the set injection reads — so a user-global or machine-wide
  * file reached an analysis the directive's reach clause keeps inside the workspace
- * (`docs/defects/fixed/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`).
+ * (`docs/archive/defects/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`).
  */
 describe("the retrospective's instruction files (PD-LIBRARY-002 revision 2, OQ-235)", () => {
   /** An `AGENTS.md` at every base beyond the root — the global directory, the three home-relative ones, the machine-wide one — and, unless told not to, the root pair. */
@@ -628,7 +628,7 @@ describe('the /skills listing is one saved system row (REQ-CHAT-162)', () => {
  * OQ-279 (ruled 2026-10-13 under R-072) read with REQ-CONFIG-478: a fatal load leaves the configuration UNLOADED, never
  * defaulted. The two readers answered `SKILLS_DEFAULTS` and the instruction defaults (injection on) instead, so the
  * inventory, a force-load and every agent built afterwards proceeded on a policy the files did not state
- * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md). Each case below goes
+ * (docs/archive/defects/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md). Each case below goes
  * red when the reader's answer is the defaults again (`asBefore`).
  */
 describe('the skill host on a configuration that does not load (OQ-279, REQ-CONFIG-478)', () => {
@@ -662,7 +662,7 @@ describe('the skill host on a configuration that does not load (OQ-279, REQ-CONF
   });
 
   /*
-   * docs/defects/fixed/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md: the file loads at
+   * docs/archive/defects/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md: the file loads at
    * the request's first read (`skillsUnloaded`) and not at the next — saved with a fault in between. The request answers OQ-279's
    * refusal from the read that found it, never a throw, and a force-load is never answered as a skill not found.
    */

@@ -27,7 +27,7 @@
  * Until 2026-10-15 the launches drove the scripted model (`ROTARIS_MODEL_DIALECT=scripted`, `ROTARIS_SCRIPT=git`) and read the
  * renderer through `ROTARIS_CAPTURE_EVAL_AT` (the Workspace toolbar's `data-total`, REQ-SHELL-108, and the live preview blocks),
  * all of which a packaged build compiles out since fin43 to fin46, so the section measured nothing on any package `pnpm package`
- * could produce (docs/defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md). The
+ * could produce (docs/archive/defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md). The
  * toolbar's total and the preview blocks are read in the development build by `terminal-stream-proof`'s Electron half; a
  * packaged build's renderer has no reading but its photograph, which is kept.
  *
@@ -138,7 +138,7 @@ async function launch({ exe, args = [], scratchRoot, name, enabled, afterMs }) {
     // An overrun is this launch's failure, reported with its last words; the other launch's evidence is kept.
     if (r.overran) return { ...out, error: overrunMessage(name, r, log), surface: null, terminal: null };
     // The same two fields every other return carries, so the checks below read an absent store as absent evidence
-    // (`docs/defects/fixed/the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md`).
+    // (`docs/archive/defects/the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md`).
     if (stores.length !== 1) return { ...out, error: `expected one workspace store under this launch's own LOCALAPPDATA, found ${stores.length}`, surface: null, terminal: null };
     // A read that throws is reported, never thrown: one bad query must not lose the other launch's evidence.
     let sessions = [];

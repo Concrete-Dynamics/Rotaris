@@ -7,7 +7,7 @@
  * taken, no part on screen, less than a glyph on screen: `textSample` and the loop in `theme-proof.mjs`) were counted
  * and never bounded, so a regression that pushed one surface's text off screen, or left it animating at capture, passed
  * on the rail and the status strip alone
- * (`docs/defects/fixed/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`).
+ * (`docs/archive/defects/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`).
  *
  * The verdict now also needs, for every capture (a primary view or a Settings category):
  *  - at least one MEASURED text inside the surface's own root (the view's root element, or the Settings view's), so a

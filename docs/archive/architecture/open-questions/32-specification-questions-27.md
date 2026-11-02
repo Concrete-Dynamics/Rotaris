@@ -9,7 +9,7 @@ history recorded after the original request is compressed, and the summary it pr
 the findings reached, and the questions left open"; REQ-MONITOR-084; REQ-MONITOR-080, whose compressing model is "able
 to hold the context being compressed"; REQ-MONITOR-078; REQ-ORCH-110's 12,000 and 2,000 characters; ADR-0060 decision 4.
 Raised 2026-09-30 by the repair of acceptance finding A12,
-[`the-compressor-reads-only-the-head-of-what-it-compresses.md`](../../../defects/fixed/the-compressor-reads-only-the-head-of-what-it-compresses.md),
+[`the-compressor-reads-only-the-head-of-what-it-compresses.md`](../../defects/the-compressor-reads-only-the-head-of-what-it-compresses.md),
 under [R-067](../../../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-153 when it was raised, renumbered OQ-155 at
 the merge once origin/main's OQ-152 and OQ-153 had landed, and OQ-156 at the next merge once origin/main's OQ-154 had.)*
 

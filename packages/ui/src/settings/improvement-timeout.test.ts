@@ -10,7 +10,7 @@ import { adoptSnapshot, applyChange, IMPROVEMENT_TIMEOUT_SECONDS, improvementTim
  * analysis timeout" directly after the "Improvement loop" toggle — whole seconds with a "seconds" suffix, clamped 10–600 at
  * the widget, a stored value outside that range shown clamped with its seconds stated beneath and kept until the field
  * changes. Before, the control took any positive number, had no suffix, a hint naming "the collector", and wrote a key no
- * Settings list named (`docs/defects/fixed/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`).
+ * Settings list named (`docs/archive/defects/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`).
  */
 const runtime = (improvementTimeout: number): ConfigSnapshot['runtime'] => ({ max_depth: 3, max_active_children: 6, child_timeout: 1200, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: improvementTimeout, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [] });
 const snapshotWith = (improvementTimeout: number): ConfigSnapshot => ({
@@ -115,7 +115,7 @@ describe('the improvement analysis timeout control (PD-CONFIG-003 revision 2, RE
 
   it('states the stored seconds, not an unsaved edit, during an edit (REQ-CONFIG-446, REQ-CONFIG-419)', () => {
     // A stored 5 s, shown clamped as 10, overtyped with 300: the form holds 300 s until Save, the workspace file still 5 s
-    // (docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md). Until 2026-10-15 the
+    // (docs/archive/defects/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md). Until 2026-10-15 the
     // description read the pending 300.
     const card = policy(render(snapshotWith(5), improvementTimeoutFromInput(300)));
     expect(card).toMatch(/id="improvement-timeout"[^>]*value="300"/);

@@ -72,9 +72,9 @@ export interface ScriptedCallRecord {
  * provider included (OQ-312, ruled 2026-10-14 under R-072: such an entry is then refused as a provider the build knows no
  * endpoint for). Its script reads still sit behind the flag on their own lines, as the seam check holds every verification read.
  * Until 2026-10-14 a packaged build read its variables, and a variable chose which tools it called and with which arguments
- * (docs/defects/fixed/a-packaged-build-still-answers-the-scripted-model-clients-variables.md); after that repair it still
+ * (docs/archive/defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md); after that repair it still
  * answered a `scripted` entry with a fixed one-step script until OQ-312's build removed it
- * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+ * (docs/archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
  */
 
 /** A step that answers with no assistant message, so an agent's record never shows it: a failure, a hang, a wait prefix. */

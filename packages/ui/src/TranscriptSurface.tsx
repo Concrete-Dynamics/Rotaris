@@ -180,7 +180,7 @@ export const RUN_OWNED_KINDS = new Set(['user', 'system', 'question', 'approval'
  * its persona and for any of the session's roots (`roots`, `SessionRecord.entryRoots`: a root resumed as the entry role
  * keeps its own persona's name, PD-ORCH-005 clause 4 with OQ-97). **This is the requirement's one implementation.** The
  * projection held a second one that no surface ever reached and that kept three kinds of the five; it is gone
- * (docs/defects/fixed/the-in-projection-scope-filter-is-never-reached.md).
+ * (docs/archive/defects/the-in-projection-scope-filter-is-never-reached.md).
  */
 export function scopedRows(rows: readonly TranscriptRow[], agent: AgentRecord | null, roots: readonly EntryRoot[] = []): readonly TranscriptRow[] {
   if (!agent) return rows;
@@ -268,7 +268,7 @@ export function RowList({ rows, surface, acknowledge, trailers, displays: given,
     // `expansionKey` stays the single definition of the SHAPE part, which is what keeps a group's identity
     // apart from its members' — the two carry the same string under REQ-CHAT-059 and would otherwise open
     // together (recorded as
-    // docs/defects/fixed/expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md).
+    // docs/archive/defects/expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md).
     memberExpanded: (key) => expanded[expansionKey('row', key)] === true,
     toggleMember: (key) => toggle(expansionKey('row', key), false),
   }), [surface, expanded, toggle]);

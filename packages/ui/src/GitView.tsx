@@ -104,7 +104,7 @@ export function joinBindings(sessions: readonly SessionListItemPayload[]): Map<s
  *
  * The status is the member of REQ-NOTIFY-048 the persisted value presents as (REQ-NOTIFY-049), never the persisted word:
  * until 2026-10-04 a bound row drew it raw, `awaiting_plan_decision · ready` where every other surface reads `paused`
- * (docs/defects/fixed/the-git-views-state-cell-renders-the-raw-persisted-execution-status.md).
+ * (docs/archive/defects/the-git-views-state-cell-renders-the-raw-persisted-execution-status.md).
  */
 export const statePhrase = (b: RowBinding | undefined): { readonly status: PresentationStatus; readonly merge: string } => ({ status: b === undefined ? 'idle' : presentationStatus(b.status), merge: b?.mergeStatus ?? 'ready' });
 /**
@@ -112,7 +112,7 @@ export const statePhrase = (b: RowBinding | undefined): { readonly status: Prese
  * when nothing was measured (a renderer that lays nothing out reports zero), which leaves the column at its CSS floor.
  *
  * Until 2026-10-04 the column was a fixed `10ch`, sized for `idle · ready`; a bound row's `completed · ready` is wider and
- * ran on under the Ahead figure (`docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`). Both
+ * ran on under the Ahead figure (`docs/archive/defects/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`). Both
  * vocabularies are closed but their longest pairing (`awaiting_plan_decision · merge_failed`) would take a third of the
  * pane from every table, so the column is as wide as the phrases actually shown and no wider.
  */
@@ -126,7 +126,7 @@ export function stateColumnFit(phraseWidths: readonly number[], cellPadding: num
  * elides (the design material draws a name whole beside its tag, never a tag shortened or dropped), so this is what the
  * Branch column must keep at the minimum window. Until 2026-10-04 nothing kept it: at 1000x680 the base row's `base` and
  * `active` took the column's 9ch, `main` was given no pixel and `active` lay past the cell's edge
- * (docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
+ * (docs/archive/defects/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
  */
 export function branchLineFloor(nameFloor: number, tagWidths: readonly number[], gap: number): number {
   const finite = (w: number): number => (Number.isFinite(w) ? Math.max(0, w) : 0);
@@ -147,7 +147,7 @@ export function tableFit(stateFit: number | null, branchFit: number | null): CSS
  * the row's `tr` is keyed by its path: a moved worktree remounts its row, and an effect that did not run again would go on
  * measuring and observing the detached cells. Until 2026-10-04 neither key carried it, so a row whose path changed with
  * its branch, tags and phrase unchanged measured 0 (its name's floor `NaN`) and dropped out of the fit
- * (docs/defects/fixed/the-git-views-column-fits-measure-detached-cells-when-a-rows-path-changes.md).
+ * (docs/archive/defects/the-git-views-column-fits-measure-detached-cells-when-a-rows-path-changes.md).
  */
 export const stateFitKey = (rows: readonly GitWorktreeRow[], join: Map<string, RowBinding>): string =>
   rows.map((r) => { const p = statePhrase(join.get(pathKey(r.path))); return `${r.path}\u0000${p.status}\u0000${p.merge}`; }).join('\u0001');
@@ -189,7 +189,7 @@ export const WORKTREE_BRANCH_NOTE = 'It belongs to the isolated worktree the act
  * states follow REQ-GIT-161, where REQ-WORKSPACE-020 would render the item empty with no tooltip (OQ-193, ruled as built
  * 2026-10-06; PD-WORKSPACE-008). An unborn or unreadable branch is not among them and takes REQ-WORKSPACE-020's empty
  * item (state `empty`: no text, no icon, no tooltip, no description); until fin22 it was drawn as a branch named `—`
- * (docs/defects/fixed/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md).
+ * (docs/archive/defects/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md).
  *
  * REQ-WORKSPACE-020: a worktree branch is "rendered exactly as any other branch name is" — its ` ↑{n}` and its sentences are
  * the base checkout's, the count read against THAT branch's upstream (the snapshot row's `upstreamAhead`, never the base

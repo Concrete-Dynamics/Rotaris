@@ -105,7 +105,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
   });
 
-  it('clause 9 after a crash (docs/defects/fixed/a-crash-with-a-question-pending-records-no-withdrawal.md): a question the dead run left in pending_questions is withdrawn by the crash — the list emptied, the timeline naming it as the gate names a live withdrawal — and only once', () => {
+  it('clause 9 after a crash (docs/archive/defects/a-crash-with-a-question-pending-records-no-withdrawal.md): a question the dead run left in pending_questions is withdrawn by the crash — the list emptied, the timeline naming it as the gate names a live withdrawal — and only once', () => {
     const sid = 'S-question' as SessionId;
     const writer = created(sid);
     const prompt = { request_id: 'q-1', session_id: sid, conversation_id: 'root', agent_id: 'coding-agent', persona: 'coding-agent', steps: [{ id: 'a', title: 'Which one?', description: '', options: [], allow_freeform: true }] };
@@ -121,7 +121,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect(dal.timelineOf(sid).filter((t) => t.name === 'question_withdrawn')).toHaveLength(1);
   });
 
-  it('clauses 3 and 4 (found by phase 3\'s fourth review): a call that completed before the crash keeps what it returned, and only the call still running is answered as interrupted, its row settling (docs/defects/fixed/a-crash-leaves-its-tool-rows-running.md)', () => {
+  it('clauses 3 and 4 (found by phase 3\'s fourth review): a call that completed before the crash keeps what it returned, and only the call still running is answered as interrupted, its row settling (docs/archive/defects/a-crash-leaves-its-tool-rows-running.md)', () => {
     const sid = 'S-completed' as SessionId;
     const writer = created(sid);
     dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
@@ -257,7 +257,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
    * OQ-103's last question, ruled 2026-09-29 (R-067): clause 3's "those are never resumed" governs a run whose explicit
    * cancel was accepted and not carried out when its host died. The mark `Run.cancelAgent` writes when the cancel is
    * accepted is what tells it apart (store v27); the repair of
-   * docs/defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md.
+   * docs/archive/defects/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md.
    */
   describe('PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): an explicit cancel accepted and never carried out', () => {
     /** The residue of a host that died in iteration 2 after the explicit cancel was accepted, its todo task in progress. */
@@ -478,7 +478,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(personas).toEqual(['orchestrator', undefined]);
     });
 
-    it('clauses 3 and 4 with OQ-97: a root resumed as the entry role because its persona is no longer configured writes its rows under the persona its iteration was opened with, so a crash in its step still keeps the call that completed (docs/defects/fixed/a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md)', async () => {
+    it('clauses 3 and 4 with OQ-97: a root resumed as the entry role because its persona is no longer configured writes its rows under the persona its iteration was opened with, so a crash in its step still keeps the call that completed (docs/archive/defects/a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md)', async () => {
       const sid = await crashed();
       // The continue's run is set up as the entry role, `coding-agent`: 'orchestrator' is no longer configured (the run
       // host's `prepareRun` falls back so, OQ-97). Its step asks for two calls; the first completes, the second never returns.
@@ -666,7 +666,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
 
     /*
      * Found by the fourth review of the repair of a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record
-     * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md): the root's rows and calls carry the
+     * (docs/archive/defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md): the root's rows and calls carry the
      * persona its iteration was opened with, and the surfaces knew the run-level agent by the entry persona alone.
      */
     it('clause 4 with OQ-97 (REQ-MONITOR-060/061/071): the session names a root resumed as the entry role among its roots, and the run-level agent\'s tools are the calls it made under that name', async () => {
@@ -1345,7 +1345,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     /**
      * OQ-103's last question, ruled 2026-09-29 (R-067): the explicit cancel is made durable when it is accepted, and the next
      * repair or continue ends its agents `cancelled` and closes the iteration; clause 18's Continue resumes none of them.
-     * The repair of docs/defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md.
+     * The repair of docs/archive/defects/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md.
      */
     describe('PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): a run whose explicit cancel was accepted and never carried out', () => {
       /** A process whose root's first model call holds until `release`, then answers. */

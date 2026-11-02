@@ -60,7 +60,7 @@ describe('todo projection (REQ-CHAT-085..091)', () => {
 /**
  * REQ-CHAT-040 / REQ-ORCH-071: a queued prompt's task is NAMED "Queued Prompt: <id>" and carries the prompt as its content.
  * The pane draws the name, as it draws an agent task's name (REQ-TOOLS-144), and a line of the plan carries both.
- * Acceptance finding A28: docs/defects/fixed/a-queued-prompts-task-is-not-named-queued-prompt.md.
+ * Acceptance finding A28: docs/archive/defects/a-queued-prompts-task-is-not-named-queued-prompt.md.
  */
 describe('a named planner task (REQ-CHAT-040, REQ-ORCH-071)', () => {
   const planner = {

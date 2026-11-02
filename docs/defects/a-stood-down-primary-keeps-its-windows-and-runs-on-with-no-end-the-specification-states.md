@@ -1,7 +1,7 @@
 ## A stood-down primary keeps its windows and runs on, with no end the specification states
 
 Since 2026-10-31 a process the instance record was reclaimed from stops acting as the instance (ADR-0055 consequence 14;
-`docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). It no longer acknowledges a
+`docs/archive/defects/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). It no longer acknowledges a
 hand-over or surfaces a window for one, and its close leaves the new holder's record alone. Nothing else about it
 changes. Its main windows stay open and usable, its runs go on, its post-show activation (including the update check)
 still fires for any window it builds, and it ends only when its own windows are closed. So after a wedge longer than the

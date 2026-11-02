@@ -11,14 +11,14 @@ left before its run host, and Electron's teardown of the run host took up to 1.8
 claimed 0.22 s after main's exit, while the holder's pid still answered, so the listing read the session as live
 (REQ-GIT-093). A live session is not stale, and nothing was repaired. That window is the defect recorded and
 repaired in `459e7c8`: main is now gone only after its run host
-([`a-session-lock-outlives-…`](../../../defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md)).
+([`a-session-lock-outlives-…`](../../../archive/defects/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md)).
 On `main` the proof passed at once.
 
 What was wrong in this record's proof is that it named the wrong mechanism. Its header promised "a
 persisted-running session with a dead lock", but step (c) never checked that the lock was dead. Step (c) now probes
 the lock's pid the moment the `live` launch returns (`lib/lock-holder.mjs`). A holder still alive fails there,
 naming REQ-SESSION-047/056. Step (d)'s assertions are unchanged. Recorded and repaired in
-[`checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`](../../../defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md).
+[`checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`](../../../archive/defects/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md).
 
 In three consecutive runs on Linux as root under Xvfb, the pid was dead at the first probe each time, and the
 repair was logged 1.48 to 1.81 s after the previous main's exit. All twelve scenarios passed.

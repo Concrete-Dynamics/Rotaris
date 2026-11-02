@@ -113,7 +113,7 @@ describe('REQ-CONFIG-025..030 the bootstrap', () => {
     expect((starterDocument().match(/: null$/gm) ?? []).length).toBe(12);
   });
 
-  // docs/defects/fixed/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md: the
+  // docs/archive/defects/the-starter-agents-yaml-writes-fourteen-explicit-nulls-where-the-specification-names-twelve.md: the
   // starter also wrote PD-LIBRARY-002's `retrospective_model` and its companion as nulls, a directive that names neither
   // REQ-CONFIG-025 nor REQ-WORKSPACE-038.
   it('states default_persona then exactly REQ-WORKSPACE-038\'s twelve explicitly-null keys, in its order, and nothing else (REQ-WORKSPACE-038, REQ-CONFIG-025)', () => {
@@ -144,7 +144,7 @@ describe('REQ-CONFIG-025..030 the bootstrap', () => {
     }
   });
 
-  // docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md: a parent that cannot be created
+  // docs/archive/defects/replace-document-sync-throws-when-the-parent-cannot-be-created.md: a parent that cannot be created
   // threw out of the synchronous replace, so the bootstrap and the synchronous write threw rather than declining.
   it('declines with the path and the fault, never a throw, when a regular file stands where `.rotaris` would go (REQ-CONFIG-026, REQ-CONFIG-028)', async () => {
     const workspaceRoot = join(tmp(), 'ws');
@@ -437,7 +437,7 @@ describe('ADR-0037 Tier B — the live state over the merged document, resolved 
   /**
    * REQ-CONFIG-111 at the Tier B handover: the run host refuses a live state the load's schema rejects, so `resolveMerged`
    * never meets an overlay value at fault and never names a scope file for it
-   * (docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
+   * (docs/archive/defects/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
    */
   it('REQ-CONFIG-111: liveStateProblems is the load\'s schema over each value the overlay lays on, by the loader\'s path', () => {
     expect(liveStateProblems({})).toEqual([]);

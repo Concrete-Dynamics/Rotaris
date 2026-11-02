@@ -10,7 +10,7 @@ presented before anything is torn down", its text conveying "that closing the wi
 "with runs active, a user-initiated close asks 'Quit while a run is active?'"; REQ-STARTUP-161, several main windows in one
 instance; REQ-STARTUP-047 with REQ-SHELL-018, the switch's close; `PD-ORCH-005` clause 3, a quit leaves unfinished agents
 `paused`. Raised 2026-10-06 by the repair of
-[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../../../defects/fixed/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
+[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../../defects/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
 (fin22, bundle `fin22-window-strip-config`), which stayed open on it. Raised on that branch as OQ-205 and renumbered
 OQ-206 at its landing, OQ-205 being the `swarm` question `fin22-record-tidy` raised first on main. ~~Open.~~ **Ruled
 2026-10-07.**)*
@@ -39,10 +39,10 @@ REQ-STARTUP-046 and REQ-SHELL-119. **The ruling followed A**: B's own risks (a r
 its approvals opening over another project, the other window's switch refused about a run it never showed) are not the
 product working under PD-SHELL-002, and PD-ORCH-005 makes the stop resumable. From B it kept: no question at a quit outside
 any window, the corrected logout claim (on Windows, Electron emits no `before-quit` at a logout or shutdown —
-[`a-windows-logout-skips-the-orderly-shutdown.md`](../../../defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md), recorded, not
+[`a-windows-logout-skips-the-orderly-shutdown.md`](../../defects/a-windows-logout-skips-the-orderly-shutdown.md), recorded, not
 repaired by this ruling; built on a main window's `session-end` by fin29 the same day), a separate defect note for that, and the test of two windows closed in one gesture. macOS Dock Quit is a
 person's quit outside any window and is to be reopened when a macOS release is authorized (IC-3, PD-STARTUP-001).
-[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../../../defects/fixed/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
+[`closing-a-window-while-a-run-is-active-asks-no-confirmation.md`](../../defects/closing-a-window-while-a-run-is-active-asks-no-confirmation.md)
 closes with it.
 
 Both requirements were written when the instance held one main window and its close was the quit. Since REQ-STARTUP-161
@@ -74,9 +74,9 @@ started outside any window — the desktop's logout above all — asks it.
 Warnings section, which covers "stale-input drops, mostly-elided artifacts, report downgrades, permission denials …, tool
 errors, and terminal failures, suspicious successes and timeouts"; REQ-SESSION-139, REQ-SESSION-133. Raised 2026-10-06 by
 fin22 (bundle `fin22-summary-and-counts`) while repairing
-[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../../../defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md);
+[`summary-md-carries-none-of-the-sections-its-requirement-lists.md`](../../defects/summary-md-carries-none-of-the-sections-its-requirement-lists.md);
 the one gap it leaves stayed open in
-[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../../../defects/fixed/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
+[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../../defects/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
 until this was ruled. Raised on the branch as OQ-205 and renumbered twice as `origin/main` was merged in: OQ-206, since
 main's OQ-205 (a `swarm` run on a granted intent) took that number first, then OQ-207, since main's OQ-206 (which closes of a main
 window ask the active-run confirmation) took that one. ~~Open, the owner's.~~ Ruled 2026-10-07.)*
@@ -96,10 +96,10 @@ so B's `n/a` would hide a fact the store holds. A was corrected twice: the count
 ~~a REQ-ORCH-088 retry rebuilds a child's payload and writes a second entry~~ another execution of the same child (a resumed
 child's REQ-ORCH-088 retry in a later run, or a follow-up of a child that never started) assembles its payload again and writes
 a second entry, while a retry within one execution reuses the blocks it built (narrowed by fin30); and the conflict A noticed is wider than its wording,
-recorded in [`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../../../defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md).
+recorded in [`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../../defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md).
 "Mostly" here means "wholly", a cost the directive states. Built by fin28 (`elidedAttachmentsOf` and `warningLines` in
 `packages/engine/src/run/summary.ts`, `StoreDal.elidedAttachmentRowsOf`); the note
-[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../../../defects/fixed/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
+[`summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`](../../defects/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md)
 is repaired.
 
 Every other kind the Warnings section names has a definition and a record: a permission denial is an audit entry
@@ -128,7 +128,7 @@ which), which record counts it, and whether the warning is then built or withdra
 one, otherwise derived from `status` and `is_error` into rejected, tool-error, success or unknown"; REQ-TOOLS-112's
 `outcome_kind` vocabulary, which names terminal observations only. Raised 2026-10-06 by fin23 (bundle
 `fin23-summary-and-live-checks`) while repairing
-[`summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`](../../../defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md),
+[`summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`](../../defects/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md),
 at the orchestrator's question whether a bucket named `mcp` belongs among the tool outcomes. ~~Open, the owner's.~~ Ruled
 2026-10-07.)*
 
@@ -144,10 +144,10 @@ dropping `mcp` so the histogram stops hiding a failed MCP call (the c2a9444 dure
 `mcp 17`), with fetch recorded as a defect; advocate B (the system's lens) recommended the same for MCP, since one tool's
 failures landed in two buckets (a schema refusal in `tool_error`, a server failure in `mcp`), and ruling fetch with it.
 On fetch it followed B. The terminal-worded timeout issue an MCP or fetch timeout files is recorded separately, in
-[`an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md`](../../../defects/fixed/an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md)
+[`an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md`](../../defects/an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md)
 (repaired by fin30: the message names the call that ran out of time).
 Built by fin28 (`apps/desktop/src/run-host/mcp.ts`, `packages/agent-tools/src/tools/fetch.ts`); the fetch half is
-[`a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md`](../../../defects/fixed/a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md).
+[`a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md`](../../defects/a-fetch-calls-record-carries-its-tools-name-as-outcome-kind.md).
 *Beside this ruling since 2026-10-13 ([OQ-238](51-spikes-and-later-questions-18.md#oq-238), `PD-TOOLS-013` revision 2):* a fetch, an MCP call or any call its
 run cancels carries failure kind `interrupted`, and REQ-SESSION-139 derives such a record, which still carries no
 `outcome_kind`, into the bucket `interrupted` rather than `tool_error`. This ruling's reading of `outcome_kind` is unchanged:
@@ -193,7 +193,7 @@ are truncated to 2000 characters"; REQ-SESSION-194, which names "the truncated a
 record" among the cuts its marker governs and ends "Counts, identifiers, paths and timestamps are never truncated"; the
 domain's resolution 21. Raised 2026-10-06 by fin23 (bundle `fin23-terminal-and-records`) on its verifier's finding against
 the repair of
-[`an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md`](../../../defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md).
+[`an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md`](../../defects/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md).
 Raised on the branch as OQ-208 and renumbered OQ-209 when the branch was rebased onto `origin/main`, main's OQ-208 (an MCP
 call's `outcome_kind`) having taken that number first. ~~Open, the owner's.~~ Ruled 2026-10-07 under the owner's delegation
 ([R-072](../../../product/requests.md#r-072)).)*
@@ -204,7 +204,7 @@ error-path 2,000 characters measure the arguments' JSON text. The arguments keep
 cut, longest first, each ending with `...` inside its own length. A path, identifier, count or timestamp is never cut, and
 when those values alone pass 2,000 the record goes over the cap. The key name decides which values are kept whole, and this
 product's `delegate` keys `inherited_context` and `attach_artifacts` join the keys kept whole, repaired as a defect
-([`a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md`](../../../defects/fixed/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md)).
+([`a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md`](../../defects/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md)).
 The ruling weighed two recommendations and **followed both**, which agree: advocate A (the user's lens) recommended
 confirming the reading, a directive, the two keys and a first-executions row — a path or an id cut short gives a false account
 to the person reading the record after a failure; advocate B (the system's lens) recommended confirming the reading, a
@@ -244,7 +244,7 @@ and never holds inside itself"; REQ-LIBRARY-090, that document's rendering; REQ-
 submitted body unchanged, whose `key_findings` is that same body"; REQ-LIBRARY-094, REQ-LIBRARY-099 and REQ-LIBRARY-134, which
 read and write the one or the other; REQ-SESSION-002, the per-session files. Raised 2026-10-06 by finacc3's acceptance round 1
 (finding F16), repairing
-[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../../../defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
+[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../../defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
 the artifact store's first execution (Part U) said it raised this tension, in `packages/engine/src/artifacts/sidecar.ts` and in
 [ADR-0003](../../../architecture/adr/0003-files-are-the-system-of-record.md)'s execution note ("Open question, not a settled reading"), and no entry
 was ever written, so the owner was never asked. ~~Open, the owner's.~~ **Ruled 2026-10-07 under the owner's delegation.**)*
@@ -279,6 +279,6 @@ directive; advocate B (the system's lens) recommended confirming as built with a
 `body_markdown` clause, and repairing the re-render that overwrites an edit. The ruling **followed both**: B's directive and
 re-render repair, A's handoff, read-failure rule and indentation catch, and it added the Preview's start below the
 frontmatter; it left out A's optional notice on a section-filtered read. The defect both found,
-[`a-re-render-writes-over-a-persons-saved-artifact-edit.md`](../../../defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md),
+[`a-re-render-writes-over-a-persons-saved-artifact-edit.md`](../../defects/a-re-render-writes-over-a-persons-saved-artifact-edit.md),
 was repaired by bundle `fin28-artifacts` the same day (`ArtifactStore.rerender`, `latestArtifactText`, the inspector's
 `previewSource`).

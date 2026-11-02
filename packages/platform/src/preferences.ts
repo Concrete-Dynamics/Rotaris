@@ -198,7 +198,7 @@ export type PaneLayoutView = (typeof PANE_LAYOUT_VIEWS)[number];
  * (REQ-LIBRARY-106) and the Workspace's transcript/composer divider (REQ-CHAT-010). A view that gains a pane changes its
  * figure here, beside the component that draws it, so a layout written for the old count is refused rather than applied.
  * Until 2026-10-14 main read every view against a literal 2
- * (`docs/defects/fixed/the-pane-layout-read-assumes-two-panes-for-every-view.md`).
+ * (`docs/archive/defects/the-pane-layout-read-assumes-two-panes-for-every-view.md`).
  */
 export const PANE_LAYOUT_PANES: Readonly<Record<PaneLayoutView, number>> = { overview: 2, git: 2, library: 2, workspace: 2 };
 /** The schema-version stamp REQ-SHELL-069 fixes for every stored layout. */
@@ -225,7 +225,7 @@ export interface PreferenceRootEnv { readonly platform: NodeJS.Platform; readonl
  * store and the rest of the per-user state never part, and through the same reading (`xdgBaseDirectory`: an empty or relative
  * value takes the default; on Windows `localAppDataDirectory`, the same for `LOCALAPPDATA`; both are REQ-STARTUP-147's
  * platform-convention directory variables since its amendment of 2026-10-13, OQ-247). Until fin22 it was read before the platform branch, on every platform
- * (`docs/defects/fixed/the-preference-root-honours-xdg-config-home-on-every-platform.md`).
+ * (`docs/archive/defects/the-preference-root-honours-xdg-config-home-on-every-platform.md`).
  */
 export function resolvePreferenceRoot(e: PreferenceRootEnv = { platform: process.platform, env: process.env, home: homedir() }): string {
   // The platform is a PARAMETER, so the separator comes from IT and not from the host — the same rule
@@ -252,9 +252,9 @@ const serialise = (document: DocumentShape): string => `${JSON.stringify(Object.
  * table does not exist" — the carry-over is the one place the old name is spelled.
  */
 export const RENAMED_KEYS: Readonly<Record<string, PreferenceKey>> = {
-  // docs/defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md
+  // docs/archive/defects/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md
   'display/groupTools': 'display/groupToolCalls',
-  // docs/defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md
+  // docs/archive/defects/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md
   'interface/agentPopOut': 'interface/agentPopout',
   'terminal/autoOpen': 'interface/terminalPopout',
 };
@@ -283,7 +283,7 @@ function carryOverRenamedKeys(document: DocumentShape): { readonly document: Doc
     // stamp. So only an object at version 1 (read tolerantly, REQ-SHELL-069) is carried, and the stamp it sets is the integer 1:
     // an object at another version, or none, is dropped and decides no other view's layout. Until 2026-10-14 the first old
     // object's version became the stamp unchecked
-    // (docs/defects/fixed/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md).
+    // (docs/archive/defects/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md).
     if (stored !== null && typeof stored === 'object' && tolerantInteger(stored.version) === 1 && !(keys.state in next) && !(keys.panes in next)) {
       next[keys.state] = stored.sizes;
       next[keys.panes] = stored.panes;

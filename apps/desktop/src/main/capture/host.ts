@@ -93,7 +93,7 @@ export interface CaptureStep {
    * and could also be true before that step ran: `part-j-proof`'s steer-rest Pause, whose selector (no steer dialog
    * open) holds from the moment the run starts, and which must wait for the dialog the Steer opened to close again.
    * The `~ms` form pressed it as the run started, racing the Steer
-   * (`docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`).
+   * (`docs/archive/defects/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`).
    */
   readonly from?: number;
 }
@@ -243,7 +243,7 @@ export function categoryProbe(label: string): string {
  * The seam used to read the point once and press there once. A notice banner drawn above the view between the read and
  * the press moved the list down, and the press selected a category above the one named, with nothing in the log to say
  * so (`code-intel-proof`'s `setup-again`, 2026-09-29: Settings opened on Instructions instead of MCP Servers;
- * `docs/defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). A category already
+ * `docs/archive/defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). A category already
  * selected is not pressed at all. Time is read from the clock ports, like every wait in this file.
  */
 export async function pressCategory(host: CaptureHost, label: string, timeoutMs: number): Promise<boolean> {
@@ -290,7 +290,7 @@ export async function settleAt(host: CaptureHost, step: CaptureStep, read: (prob
  * text the control carries, so handing it to the match probe would wait for a `<select>` whose text is `deny`
  * and never find one. Until 2026-09-28 the select seam read only the instant and dropped the `~`, so a
  * `select>>value@~ms` fired at `ms` whether or not the control was drawn
- * (`docs/defects/fixed/the-select-seam-ignores-the-waiting-form.md`).
+ * (`docs/archive/defects/the-select-seam-ignores-the-waiting-form.md`).
  */
 export function selectWait(step: CaptureStep): CaptureStep {
   return { ...step, arg: null };

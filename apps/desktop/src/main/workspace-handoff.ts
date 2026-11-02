@@ -8,7 +8,7 @@ import type { ProcessReply, RunHostRequest } from '@rotaris/contracts';
  *
  * Until 2026-10-20 the request was awaited bare, so a reply missed within the bound rejected through the launch and ended
  * main's start-up as an unhandled rejection (`compression-proof`'s `automatic` launch, 2026-10-16;
- * docs/defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md). A missed reply is now logged as a
+ * docs/archive/defects/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md). A missed reply is now logged as a
  * warning for what it is, and the open goes on as it does for any reply that is not `workspace.ack`: the window keeps the
  * workspace the service opened, and the open's slot (REQ-WORKSPACE-141's initialization resolution, the board's queue,
  * the hook review and the configuration's load) is not scheduled. Whether a missed reply owes more than that (a notice,

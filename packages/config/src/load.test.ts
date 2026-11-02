@@ -390,7 +390,7 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
   /**
    * REQ-CONFIG-478: the report names the file that STATED the rejected key, by full path and scope — a fault found on the
    * merged document was attributed to the workspace `agents.yaml` whatever file declared it, naming a file that need not
-   * exist and the wrong scope (docs/defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
+   * exist and the wrong scope (docs/archive/defects/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
    */
   describe('REQ-CONFIG-478: a merged-document fault names the file and scope that stated it', () => {
     const fault = (s: { globalDir: string; workspaceRoot: string }) => { const r = loadConfiguration(s); if (r.ok) throw new Error('the load did not fail'); return r.error; };
@@ -419,7 +419,7 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
     /**
      * REQ-CONFIG-478's "full path within that file": the file is found through the canonicalised document (REQ-CONFIG-062),
      * and the path is then spelled as that file states it. Until fin46 it carried the canonical name, which the named file
-     * does not hold (docs/defects/fixed/a-fatal-report-names-a-legacy-role-by-a-name-its-file-does-not-hold.md).
+     * does not hold (docs/archive/defects/a-fatal-report-names-a-legacy-role-by-a-name-its-file-does-not-hold.md).
      */
     it('a role stated under its legacy name in the global file is found, and reported under the name the file states (REQ-CONFIG-062)', () => {
       const s = scopes('personas:\n  oracle:\n    purpose: "two\\nlines"\n', 'personas:\n  tester:\n    purpose: one line\n');
@@ -470,7 +470,7 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
     /**
      * A value the merge replaced wholesale (REQ-CONFIG-044/050: a models entry over a non-mapping, a list) is the later
      * file's in every part, so a fault on a value MISSING beneath it is that file's, even where an earlier file states the
-     * deeper path (docs/defects/fixed/a-fault-inside-a-wholesale-replaced-value-is-attributed-to-an-earlier-file-that-states-the-deeper-path.md).
+     * deeper path (docs/archive/defects/a-fault-inside-a-wholesale-replaced-value-is-attributed-to-an-earlier-file-that-states-the-deeper-path.md).
      */
     it('a field missing from a models entry the workspace file replaced wholesale is the workspace file\'s, not the global file that states it (REQ-CONFIG-044)', () => {
       const s = scopes('models:\n  m: { provider: openai, model_id: x }\n', 'models:\n  m: { model_id: y }\n', { globalModels: 'models:\n  m: oops\n' });
@@ -479,7 +479,7 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
     it('a fault beneath a list item names the file whose list the merge kept, not an earlier file whose item states the deeper path (REQ-CONFIG-050)', () => {
       const files = (scope: 'global' | 'workspace', dir: string): ScopeFiles => ({ scope, dir, agents: join(dir, 'agents.yaml'), models: join(dir, 'models.yml') });
       const both = { global: files('global', '/g'), workspace: files('workspace', '/w/.rotaris') };
-      // The files as the host's `join` built them (docs/defects/fixed/a-config-case-expects-posix-spelled-files-its-own-join-built.md).
+      // The files as the host's `join` built them (docs/archive/defects/a-config-case-expects-posix-spelled-files-its-own-join-built.md).
       const raw = (global: Record<string, unknown> | null, workspace: Record<string, unknown> | null) => ({ global: { agents: global, models: null }, workspace: { agents: workspace, models: null } });
       const lower = { runtime: { roots: [{ a: 1 }, { a: 2, b: 3 }] } };
       expect(statingFile('runtime.roots[1].b', both, raw(lower, { runtime: { roots: [{ a: 1 }, { a: 2 }] } }))).toEqual({ file: both.workspace.agents, scope: 'workspace', path: 'runtime.roots[1].b' });
@@ -513,7 +513,7 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
    * REQ-CONFIG-233: an unknown key inside a merged section warns "naming the key and the file", and REQ-CONFIG-183's
    * withdrawn key names the file "by its full path and by which scope it belongs to". The section readers raise their
    * warnings on the MERGED document, which until fin46 reached the load as `<path>: <message>` alone, naming no file
-   * (docs/defects/fixed/an-unknown-key-in-a-merged-section-is-reported-without-the-file-that-states-it.md).
+   * (docs/archive/defects/an-unknown-key-in-a-merged-section-is-reported-without-the-file-that-states-it.md).
    */
   describe('REQ-CONFIG-233: a merged-section warning names the file and scope that stated the key', () => {
     it('an unknown compressor key in the global file, with no workspace file, is the global file\'s', () => {
@@ -878,7 +878,7 @@ describe('REQ-GIT-070/071/072 the checkpoints section (Part P)', () => {
 });
 
 describe('REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-138: worktree_storage_subpath', () => {
-  // docs/defects/fixed/a-worktree-storage-subpath-inside-the-requirement-checkout-directory-is-not-rejected-at-load.md
+  // docs/archive/defects/a-worktree-storage-subpath-inside-the-requirement-checkout-directory-is-not-rejected-at-load.md
   it('defaults to worktrees and loads a stated value unchanged', () => {
     expect(loaded(null, null).worktreeStorageSubpath).toBe('worktrees');
     expect(loaded(null, 'worktree_storage_subpath: trees/sessions\n').worktreeStorageSubpath).toBe('trees/sessions');
@@ -901,7 +901,7 @@ describe('REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-138: worktree_storage_subpath',
 });
 
 describe('REQ-CONFIG-225: the unresolved-placeholder warning names the file the entry came from', () => {
-  // docs/defects/fixed/the-unresolved-placeholder-warning-names-no-configuration-file.md
+  // docs/archive/defects/the-unresolved-placeholder-warning-names-no-configuration-file.md
   const lineFor = (r: ReturnType<typeof loadConfiguration>, server: string): string => {
     if (!r.ok) throw new Error(`load failed: ${r.error.lines.join(' | ')}`);
     const line = r.value.mcp.diagnostics.find((d) => d.key.startsWith(`mcp.url-unresolved.${server}.`));

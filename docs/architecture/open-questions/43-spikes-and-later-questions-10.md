@@ -12,7 +12,7 @@ that already exist before it starts exploring the codebase" and "to write durabl
 memory-writing tools it holds"; REQ-MCP-099, project creation "SHALL be skipped when the runtime's per-project marker file is
 already present, and SHALL never overwrite an existing project"; OQ-161's reading, which keeps the marker's directory in the
 repository's own exclude file. Raised 2026-10-03 by the repair of
-[`fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`](../../defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)
+[`fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`](../../archive/defects/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md)
 (fin12). Open.)*
 
 **Deferred 2026-10-06 by the owner ([R-071](../../product/requests.md#r-071)).**

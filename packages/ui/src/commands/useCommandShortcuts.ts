@@ -18,7 +18,7 @@ import { commandForEvent, detectPlatform, type CommandContext, type KeyboardPlat
  *    surfaces registered in `shell-state` (`resolveWorkspaceEscape`): the slash popup and the compact drawers register
  *    theirs in `WorkspaceView.tsx`, and the transcript search panel registers its own while it is open
  *    (`TranscriptPane.tsx`, since 2026-10-14; until then it registered nothing and closed only from its own field,
- *    `docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md`). On the other six views Escape
+ *    `docs/archive/defects/window-level-escape-skips-the-open-transcript-search-panel.md`). On the other six views Escape
  *    does nothing. Escape is not a command.
  */
 export function useCommandShortcuts(ctx: CommandContext, platform: KeyboardPlatform = detectPlatform()): void {

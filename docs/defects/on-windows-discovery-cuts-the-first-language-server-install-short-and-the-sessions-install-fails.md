@@ -20,7 +20,7 @@ manager is not initialized … typescript: Command 'npm install --prefix ./ type
    above). The language server never started, and every symbol tool of that session failed.
 
 The same runtime started by itself on this host, with no discovery before it, provisioned the same two packages in about 20 s and
-answered (OQ-362's spike, `docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md`).
+answered (OQ-362's spike, `docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md`).
 With that provisioned `language_servers/static/TypeScriptLanguageServer/` copied into the proof's runtime home, the proof's
 re-run proceeded. A person meets the same order at the first run in a TypeScript workspace on a fresh Windows profile.
 

@@ -13,7 +13,7 @@ probe, the motion command and the throughput flood were PowerShell. There each o
 red with nothing measured: `live.processReportsGridSize`, `live.motionReallyMoved`,
 `live.throughputEqualWindowClosedOrOpen` and `live.floodPainted`. Three motion checks passed vacuously over a stream
 that never moved. The note is
-[`terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`](../../../defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md).
+[`terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`](../../../archive/defects/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md).
 Each command is now spelled in the shell the harness reports (`live.shell`), and the PowerShell spellings are the same
 literals as before. Every assertion is kept.
 

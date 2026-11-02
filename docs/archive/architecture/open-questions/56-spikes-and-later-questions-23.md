@@ -14,7 +14,7 @@ A window edit can land on the window's own bytes once `PD-TOOLS-016` has carried
 \ntwo` → `one\ntwo` matches at level 2, pairs `two` with the file's `two\r` and gives `one` the window's `\r`, so the file is
 rewritten unchanged beside `Edited n.txt: 2 lines replaced by 2 at line 1 (+0 -0). Match level: 2. new_string was written with
 the file's CRLF line endings.`, with an undo entry that restores the same content. Recorded as
-[`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../../../defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
+[`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../../defects/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
 The strings differ, so REQ-TOOLS-135's rejection of identical strings does not reach it, and `PD-TOOLS-016` does not decide it.
 
 **What the build proceeds under.** Applied as a success, as built.
@@ -61,7 +61,7 @@ the "PD-TOOLS-016 revision 3" cases in `tools.test.ts`, red on the code before. 
 rather than at machine setup or cache warm-up?** *(REQ-STARTUP-160 with REQ-STARTUP-058, REQ-STARTUP-064 and
 REQ-STARTUP-084; `PD-STARTUP-005`; OQ-73, deferred, which records that machine setup is not built. Raised
 2026-10-13 by fin41, building the disclosure the note
-[`the-about-page-carries-no-network-activity-disclosure`](../../../defects/fixed/the-about-page-carries-no-network-activity-disclosure.md)
+[`the-about-page-carries-no-network-activity-disclosure`](../../defects/the-about-page-carries-no-network-activity-disclosure.md)
 records. Ruled 2026-10-13 under R-072, below.)*
 
 REQ-STARTUP-160 has About & Legal state "that first-launch machine setup and cache warm-up may contact the pinned
@@ -109,7 +109,7 @@ artifacts — `task_run` artifacts other than the session's own, the five newest
 records the source session of each; REQ-LIBRARY-017, "Data from another run, another session, or another workspace MUST NOT
 inform it", beside "the bounded prior-artifact history of REQ-LIBRARY-034"; [`PD-LIBRARY-002`](../../../product/directives/pd-library-002.md#pd-library-002)
 revision 2 (a), a retrospective artifact stores `source_session_id` null and names the sessions it read. Raised 2026-10-13 by
-fin42 from [`a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../../../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md).
+fin42 from [`a-post-run-analysis-after-a-retrospective-is-never-captured.md`](../../defects/a-post-run-analysis-after-a-retrospective-is-never-captured.md).
 Ruled 2026-10-13 under R-072, below.)*
 
 A retrospective's artifact carries `source_run_type` `task_run` and no source session, so REQ-LIBRARY-034's filter, read by its
@@ -157,7 +157,7 @@ workspace this window does not hold?** *(REQ-NOTIFY-044, the action vocabulary; 
 the project; REQ-SHELL-115, "start project initialization; resolve project initialization"; REQ-CONFIG-404; ADR-0064, the
 initialization registry and its surface. Raised 2026-10-13 by fin41 while correcting the stale comment on the renderer's
 notice-action switch, recorded in
-[`code-comments-call-built-mechanisms-unbuilt-or-owed`](../../../defects/fixed/code-comments-call-built-mechanisms-unbuilt-or-owed.md).
+[`code-comments-call-built-mechanisms-unbuilt-or-owed`](../../defects/code-comments-call-built-mechanisms-unbuilt-or-owed.md).
 Ruled 2026-10-13 under R-072, below.)*
 
 REQ-NOTIFY-044 lists "open the project-initialization surface for a named workspace" among the actions a notice may carry,
@@ -201,7 +201,7 @@ surfaces the holder (`MainWindows.surfaceHolding`) and sends channel 15 (`projec
 acknowledgement in the asking window; `pnpm notice-proof` section 6c presses it from the window that does not hold the
 project. **Not repaired by this ruling, and not owed:** the ruling's brief asked for a note that `open-hook-review` "still does
 nothing outside its own window"; on this branch it does — `MainWindows.reach` surfaces or adds the holding window since
-2026-10-13 (fin41, N86; [`a-hook-review-notice-for-another-workspace-opens-nothing.md`](../../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md),
+2026-10-13 (fin41, N86; [`a-hook-review-notice-for-another-workspace-opens-nothing.md`](../../defects/a-hook-review-notice-for-another-workspace-opens-nothing.md),
 `notice-proof` sections 6 and 6b), so no note was written.
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
@@ -276,7 +276,7 @@ themselves. **The caveat**: the disjointness depends on session ids being UUIDs,
 **OQ-264 — Where in Settings does REQ-CHAT-167's reasoning-visibility switch live, when REQ-CONFIG-403 says the
 Display category "holds two transcript toggles"?** *(REQ-CHAT-167 with REQ-CONFIG-403 and REQ-CONFIG-472. Raised
 2026-10-13 by fin41, building the repair the note
-[`search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true`](../../../defects/fixed/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md)
+[`search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true`](../../defects/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md)
 records, as OQ-263; renumbered OQ-264 at landing, because origin/main had given OQ-263 to
 REQ-GIT-138's question. Ruled 2026-10-13 under the owner's delegation ([R-072](../../../product/requests.md#r-072)):
 confirmed as built and carried by [`PD-CONFIG-004`](../../../product/directives/pd-config-004.md#pd-config-004).)*

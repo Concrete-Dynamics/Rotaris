@@ -84,7 +84,7 @@ export interface McpGrantEvidence {
    * REQ-MCP-005: per server, each granted callable whose server-reported name differs (a `tool_name_map` rename, or the
    * collision prefix of REQ-MCP-057), mapped to that reported name; absent when none differs. The engine's readers of a
    * child's writes ask the binding manifest by the reported name (`editTierNamesOf`), so a renamed code-intelligence EDIT
-   * tool is still read as a write (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
+   * tool is still read as a write (docs/archive/defects/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md).
    */
   readonly renamed?: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly servers: readonly { readonly name: string; readonly transport: string; readonly origin: string; readonly fate: 'connected' | 'dropped'; readonly reason?: string }[];
@@ -96,7 +96,7 @@ export const EMPTY_MCP_EVIDENCE: McpGrantEvidence = Object.freeze({ granted: {},
  * after the controls, and its MCP evidence: the tools each carried server grants it after `read_only`, the `restricted`
  * preset, `tool_restrictions` and the plan gate, and every carried server's fate (REQ-MCP-114). A child's row records it
  * once its port is ready (`ToolPort.grant`). Until 2026-10-01 the row recorded, at spawn, the persona's declared tools and
- * its MCP surface before any control (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+ * its MCP surface before any control (`docs/archive/defects/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
  */
 export interface AgentGrant {
   readonly tools: readonly string[];
@@ -264,7 +264,7 @@ export const SWARM_PLAN_HELD_NOTE = 'While this run\'s plan awaits approval no c
  *
  * The reason this exists, kept beside it: until 2026-10-06 (finacc3, finding F07) no reader of the instructions read the
  * override, so a `swarm` run was the same run as an `orchestrator` one
- * (`docs/defects/fixed/the-swarm-run-override-changes-no-instruction-text.md`). The first repair placed the
+ * (`docs/archive/defects/the-swarm-run-override-changes-no-instruction-text.md`). The first repair placed the
  * text after the playbook but before the context units and the MCP section, and called that the final layer; it was not.
  *
  * On a run the mapping in force grants the direct-work bundle (built-in or a user's mapping file), `PD-ORCH-006` revision 3

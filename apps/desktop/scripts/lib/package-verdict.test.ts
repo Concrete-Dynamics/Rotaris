@@ -2,7 +2,7 @@
  * What `pnpm package` closes on (ADR-0056's evidence, IC-6; first-release-plan.md §4.4). Every line is a statement about
  * the run, so each is held to the steps that ran. The SEAM-FREE line is the regression: it printed after every run,
  * including a run refused before `electron-vite build` touched `out/`
- * (docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md).
+ * (docs/archive/defects/pnpm-package-announced-a-seam-free-build-it-had-not-made.md).
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — plain ESM beside the scripts that run it.

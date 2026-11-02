@@ -265,7 +265,7 @@
    appearing never narrows the rows. It appeared inside the measurement observer's synchronous render when a measured
    height first carried the pool past the viewport; every slot narrowed by the bar's 6 px in that delivery, the browser
    deferred their sizes ("ResizeObserver loop completed with undelivered notifications"), and every bound row was re-keyed
-   under the new width (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
+   under the new width (docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
    The track is transparent (`base.css`), so the held gutter draws nothing. */
 .transcript__scroll { position: relative; overflow: auto; scrollbar-gutter: stable; flex: 1 1 auto; min-height: 0; border: var(--rt-hairline-width) solid transparent; border-radius: var(--rt-radius-md, 6px); }
 .transcript__scroll.is-following { border-color: var(--rt-accent-tint-14); }
@@ -345,7 +345,7 @@
    `REQUIREMENTS-ENGINEER` to `REQUIREMENTS-EN…`, and an agent's name is the one fact REQ-CHAT-057's attribution
    exists to carry. The truncation half goes and the wrapping half stays, deliberately now: a name breaks at its
    hyphen, an unbroken one breaks anywhere rather than clipping mid-glyph, and `estimateHeight` models the second
-   line it costs (docs/defects/fixed/role-gutter-truncation-rule-is-inert.md). */
+   line it costs (docs/archive/defects/role-gutter-truncation-rule-is-inert.md). */
 .row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); overflow-wrap: anywhere; }
 /* REQ-CHAT-057: timestamps in the monospace stack at 8 pt — the requirement's own unit, not a token's. */
 .row__time { font-family: var(--rt-font-mono); font-size: 8pt; color: var(--rt-text-tertiary); }
@@ -482,7 +482,7 @@
 /*
  * `narrow` shortens "additionally": it keeps every `tight` rule and adds persona and model. The rules named `tight` alone
  * until 2026-09-27, so a narrow dock drew the four small values and the estimate again and scrolled the strip
- * (found by PD-ORCH-005 phase 5's review; `docs/defects/fixed/a-narrow-strip-draws-the-values-tight-hides.md`).
+ * (found by PD-ORCH-005 phase 5's review; `docs/archive/defects/a-narrow-strip-draws-the-values-tight-hides.md`).
  */
 .composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-reasoning'] .strip-btn__value,
 .composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-reasoning'] .strip-btn__caret,
@@ -606,7 +606,7 @@
 .ack--stacked { width: min(360px, calc(100vw - 2 * var(--rt-space-4, 16px))); }
 /* REQ-NOTIFY-020: only the close control (and PD-WORKSPACE-001's one action) accepts interaction, so the box takes no
    pointer and a press on its text reaches what it is drawn over — the artifact inspector's Save, for one, which shared this
-   corner until fin44 centred the inspector (docs/defects/fixed/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md). */
+   corner until fin44 centred the inspector (docs/archive/defects/an-acknowledgement-covers-the-artifact-inspectors-save-while-it-shows.md). */
 .ack {
   pointer-events: none;
   display: flex; align-items: flex-start; gap: var(--rt-space-2, 8px);
@@ -990,7 +990,7 @@
    It also has a FLOOR. Without one every other part kept its content height and the plan alone absorbed whatever the
    window lacked: at REQ-SHELL-022's minimum with a persistent notice on screen (about 97 px, REQ-NOTIFY-032's warning
    about another session among them) the plan stood 41 px beside the todo's 56, and 18 with the re-authentication bar as
-   well (docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
+   well (docs/archive/defects/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
    The floor is the todo's own cap and one step more (every box is `border-box`, `base.css`), so the plan always stands
    taller than the todo can, and taller than the heading and the answers' row. Every other part keeps its content height
    (PD-ORCH-002 revision 2), so below the floor the gate scrolls, its three answers pinned to its floor. */
@@ -1399,7 +1399,7 @@
 /* FALSIFIED IN PART, 2026-10-04, kept above its replacement: "State 59→10" held for `idle · ready` only. A row bound to a
    session draws its execution status there (REQ-GIT-109), and `completed · ready` measured 101.6px of text in a 76.3px
    column at 1440x900 — it ran on under the Ahead figure, which painted over it (`completed · r0ady`;
-   `docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`). A phrase is not a word: both
+   `docs/archive/defects/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`). A phrase is not a word: both
    vocabularies are closed, but their longest pairing would take a third of the pane from every table. So `10ch` stays the
    FLOOR, and the column is as wide as the widest phrase the table shows — measured by GitView (`stateColumnFit`) into
    `--git-state-fit`, the text plus the cell's padding — and the table's own minimum grows by what the column took beyond
@@ -1412,7 +1412,7 @@
 /* FALSIFIED IN PART, 2026-10-04 (fin16), kept above its replacement: "Branch keeps 9ch" held the HEADING and not the base
    row. At 1000x680 its two tags, `base` and `active`, never shrink, so they took the 9ch whole: `main` was given no pixel
    and no marker, and `active` lay past the cell's edge, hidden by its clip
-   (`docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md`). The design
+   (`docs/archive/defects/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md`). The design
    material draws a branch name whole beside its tag and never shortens or drops a tag, so the tags hold, the name elides
    to no less than its first character and the marker (`.git__branch-name`'s `2ch`, in its own monospace face), and the
    column budget moves: Branch keeps the larger of the heading's 9ch and the widest row's line at that floor, measured by
@@ -1570,7 +1570,7 @@
    column. The field is a `textarea.input`, and the adopted `textarea.input { font-family: inherit }`
    (`docs/design/system/components.css`, specificity 0,1,1) outranks a single class (0,1,0): written as
    `.checkpoint-dialog__preview` beside `.mono`, the face lost to it and the preview drew in the dialog's proportional face
-   (docs/defects/fixed/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md). Two classes (0,2,0)
+   (docs/archive/defects/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md). Two classes (0,2,0)
    outrank it, the shape the artifact inspector's editor took. */
 .checkpoint-dialog .checkpoint-dialog__preview { width: 100%; resize: vertical; white-space: pre; overflow: auto; font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-sm, 13px); line-height: 1.5; }
 .checkpoint-dialog__warning { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border: 1px solid var(--rt-warn); border-radius: var(--rt-radius-md); }
@@ -1855,7 +1855,7 @@
    centred in its window, as the design language's dialogs do (`.dialog-backdrop`, `place-items: center`), not at the
    bottom-right corner REQ-NOTIFY-012 gives the acknowledgement stack: anchored there with the stack's own insets, an
    acknowledgement's close control (which takes the pointer, REQ-NOTIFY-020) stood over Save's top-right corner, and a press
-   there closed the acknowledgement (docs/defects/fixed/an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md).
+   there closed the acknowledgement (docs/archive/defects/an-acknowledgements-close-control-still-covers-a-corner-of-the-artifact-inspectors-save.md).
    A window narrower than the dialog and its gutters gives up the width, and the gutter (`--rt-space-12` a side) keeps Save
    left of the close control's column at every width down to a persona window's 560 px minimum. */
 .artifact-inspector { position: fixed; inset: 0; margin: auto; width: 720px; height: 560px; max-width: calc(100vw - 2 * var(--rt-space-12)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); box-shadow: var(--rt-shadow-lg); z-index: 40; overflow: hidden; }
@@ -1872,7 +1872,7 @@
    (`docs/design/system/components.css`, specificity 0,1,1) outranks a single class (0,1,0): written as
    `.artifact-inspector__editor` alone, as `.mono` is, the face and the grip below lost to it and the editor drew in the
    dialog's proportional face with a vertical resize grip
-   (docs/defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md). Two classes (0,2,0)
+   (docs/archive/defects/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md). Two classes (0,2,0)
    outrank it. */
 .artifact-inspector .artifact-inspector__editor { width: 100%; height: 100%; box-sizing: border-box; resize: none; font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs, 12px); line-height: var(--rt-leading-body, 1.5); tab-size: 2; }
 /* PD-LIBRARY-003 revision 2 (f): the Markdown tab stacks the record's frontmatter, read-only and bounded, above the editor,
@@ -2402,7 +2402,7 @@
    that font are what the width was chosen to hold. The ordinary delivery labels are the one-word ones, the longest seven
    letters, and each sits on one line; "Needs Update" is the heading too long for the rail and wraps at its space onto two.
    Drawn with the kicker's uppercase and tracking (docs/design/README.md §1.4), which make a word wider than the font's
-   characters, it read "BLOCKE / D" (docs/defects/fixed/the-folded-blocked-rail-breaks-its-label-inside-the-word.md).
+   characters, it read "BLOCKE / D" (docs/archive/defects/the-folded-blocked-rail-breaks-its-label-inside-the-word.md).
    The open column keeps the kicker paint; the text is the same string (REQ-TRACE-308). */
 .req-rail__heading { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-weight: var(--rt-weight-medium); line-height: var(--rt-leading-tight); max-width: 100%; }
 .req-rail__count { font-size: var(--rt-text-2xs); }

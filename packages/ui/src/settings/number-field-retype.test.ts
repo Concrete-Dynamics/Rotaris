@@ -10,7 +10,7 @@ import type { PendingChange } from './config-state.js';
  * rewritten until the user changes the field"), REQ-CONFIG-322 / REQ-CONFIG-325. Until 2026-10-14 a Runtime number field
  * committed a typed value from React's `onChange`, which React does not raise for a value equal to the one the input holds:
  * a stored 3 s shown clamped as `1` minute and overtyped `1` committed nothing, measured in the built app by
- * `continuation-proof` (`docs/defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`).
+ * `continuation-proof` (`docs/archive/defects/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`).
  * A static render reaches no event, so the design-system input is replaced by one that records the props the field hands it,
  * and the field's own handler is called with the text the overtyped input holds.
  */

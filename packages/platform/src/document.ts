@@ -50,7 +50,7 @@ function stagePath(target: string): string {
 /**
  * Best-effort removal of a file this primitive made (REQ-TRACE-061: "removed on a best-effort basis"). `force` forgives a
  * missing path only, so under a regular-file parent `rmSync` itself threw `ENOTDIR` over the failure it was cleaning up
- * after, until 2026-10-04 (`docs/defects/fixed/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
+ * after, until 2026-10-04 (`docs/archive/defects/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
  * The failure being reported is the one the caller sees; the cleanup's own refusal never replaces it.
  */
 function discard(path: string): void {
@@ -128,7 +128,7 @@ export function replaceDocumentSync(target: string, content: string | Uint8Array
    * The parent that cannot be created answers the asynchronous form's refusal, for the same reason. Until 2026-10-04 this
    * `mkdirSync` stood outside any `try` and threw EEXIST/ENOTDIR/EACCES out of the `Result`, reaching the configuration
    * bootstrap and its synchronous writes and the preference store's theme save
-   * (`docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
+   * (`docs/archive/defects/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
    */
   if (opts.createParent) {
     try { mkdirSync(dirname(target), { recursive: true }); }

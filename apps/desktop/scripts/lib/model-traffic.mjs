@@ -48,7 +48,7 @@ const cap = (buffers) => {
  * or null when it carries none. Read from the WHOLE body, before `cap` cuts it: a streamed completion's usage chunk comes
  * last, so a response over the cap lost it with the cut, and the duress figures read from the record fell short of the
  * store — two calls and 20,787 output tokens in the run at 1763f7f
- * (`docs/defects/fixed/the-traffic-recorders-body-cap-drops-a-responses-usage-and-two-duress-figures-disagree-with-the-store.md`).
+ * (`docs/archive/defects/the-traffic-recorders-body-cap-drops-a-responses-usage-and-two-duress-figures-disagree-with-the-store.md`).
  * An escaped name inside a model's own text (`\"prompt_tokens\"`) does not match.
  */
 export function usageIn(text) {
@@ -251,7 +251,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
          * streamed arguments on an OpenAI-shaped endpoint) reaches the client `delayMs` after the event before it; every
          * other event passes as soon as its turn comes. Nothing is dropped and nothing reordered: the endpoint answers at
          * its own speed and the client reads one slow tool call, the shape of the duress live runs' 97 s `write_file`
-         * (`docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). The record carries `paced`:
+         * (`docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). The record carries `paced`:
          * how many events were held back, and the instants the first and the last of them were written.
          */
         const pace = rule?.kind === 'pace' ? { decoder: new StringDecoder('utf8'), pending: '', chain: Promise.resolve(), events: 0, firstAt: null, lastAt: null } : null;
@@ -285,7 +285,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
           const after = rule?.afterChunks ?? 1;
           /*
            * `stall`: the bytes stop but the connection stays OPEN. This is the shape of
-           * `docs/defects/fixed/single-retry-stream-stall-aborted-a-76-minute-run.md` and the one the product cannot
+           * `docs/archive/defects/single-retry-stream-stall-aborted-a-76-minute-run.md` and the one the product cannot
            * distinguish from a slow model without an idle bound — which is why it is worth inducing at all.
            * Nothing is closed: the run must be the thing that decides the stream is dead.
            */

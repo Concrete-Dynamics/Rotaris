@@ -2,7 +2,7 @@
  * OQ-302's ruling places three things in `docs/spec/12-desktop-shell-windows.md` by line: the sentence that makes REQ-SHELL-006's
  * preference table closed (quoted), the `display/showReasoning` row, and the row of the `requirements/` elevation keys. It quoted
  * the sentence "from line 402", which is the table's header row; the sentence stands two lines above it
- * (`docs/defects/fixed/oq-302-cites-the-preference-tables-closing-sentence-at-line-402-where-it-stands-at-line-400.md`).
+ * (`docs/archive/defects/oq-302-cites-the-preference-tables-closing-sentence-at-line-402-where-it-stands-at-line-400.md`).
  *
  * The ruling's line numbers date from its writing, and the specification gains lines above the table whenever a directive adds a
  * back-pointer, so an absolute line is not pinned here: that would turn red on another change's back-pointer and ask a ruling's

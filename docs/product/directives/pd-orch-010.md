@@ -20,7 +20,7 @@ run-level agent. A root's name is its persona, which no ledger chooses.
 **As built.** `ChildLedger.spawn` (`packages/engine/src/children/ledger.ts`) counts as taken, beside the parent's
 children's names, its root's canonical name and persona and every recorded root's two names (`recordedRootNames`,
 `packages/engine/src/children/naming.ts`). The accepted case is recorded in
-[`fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../defects/fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md).
+[`fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../archive/defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md).
 
 **Why, and what it costs.** OQ-158: a transcript row, a tool call and an artifact know their agent by a name alone, so a
 child whose canonical name a root carries is drawn as both agents. REQ-ORCH-044 renames only a name "reused" under the

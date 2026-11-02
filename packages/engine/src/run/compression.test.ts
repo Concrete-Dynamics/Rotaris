@@ -584,7 +584,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
 
   it("REQ-MONITOR-086: the session record carries the run-wide count, a root's own compressions included", async () => {
     /*
-     * docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the
+     * docs/archive/defects/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the
      * surfaces took the run-wide count to be the sum over `SessionRecord.agents`, which holds the children alone, so a root
      * that compressed — the only agent of this run — was counted nowhere. The record carries the maintained aggregate.
      */

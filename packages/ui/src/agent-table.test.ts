@@ -5,7 +5,7 @@ import { DEFAULT_CONTEXT_CAPACITY, type AgentRecord } from '@rotaris/contracts';
 import { AgentTable } from './AgentTable.js';
 
 /**
- * REQ-MONITOR-281 / REQ-MONITOR-086 (docs/defects/fixed/the-mission-table-says-the-record-carries-no-compression-count.md):
+ * REQ-MONITOR-281 / REQ-MONITOR-086 (docs/archive/defects/the-mission-table-says-the-record-carries-no-compression-count.md):
  * the Mission view's agent table displays per-agent metrics, so each row conveys the agent's compression count, labelled
  * with its unit. The cell read `not recorded`, titled "The record carries no compression count in this build", while
  * `AgentRecord.compressions` has carried the count since Part AH.
@@ -32,7 +32,7 @@ describe('REQ-MONITOR-281: the Mission table conveys each agent\'s compression c
 });
 
 describe('REQ-MONITOR-274: the persona cell carries the whole name as its title', () => {
-  // The cell is cut with an ellipsis past its bound (docs/defects/fixed/a-long-persona-name-widens-the-mission-table-past-its-card.md),
+  // The cell is cut with an ellipsis past its bound (docs/archive/defects/a-long-persona-name-widens-the-mission-table-past-its-card.md),
   // so the full name stays readable on hover.
   it('titles the persona cell with the persona', () => {
     const html = table([agent({ persona: 'a-very-long-configured-persona-name' })]);

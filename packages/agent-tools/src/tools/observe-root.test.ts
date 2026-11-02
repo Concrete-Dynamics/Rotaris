@@ -35,7 +35,7 @@ afterEach(() => {
 
 describe('observeReach takes its root in the spelling the native writes are noted in (OQ-245, fin36\'s review)', () => {
   it('a workspace whose two resolutions differ is walked, and a sibling\'s noted write is left out', async () => {
-    // docs/defects/fixed/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md:
+    // docs/archive/defects/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md:
     // resolved with the JavaScript `realpathSync`, the alias was walked as given and nothing was observed.
     const alias = `${root}-alias`;
     symlinkSync(root, alias, process.platform === 'win32' ? 'junction' : 'dir');

@@ -18,7 +18,7 @@ export function initializationCommands(
      * window's own workspace, and the coordinator publishes it on channel 12 besides, to the windows holding that workspace
      * and no other, so a window that did not ask still catches up. With two main windows open (PD-SHELL-001) each acts on
      * its own workspace (REQ-WORKSPACE-013;
-     * `docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
+     * `docs/archive/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
      */
     'initialization.read': async (_req, { w }) => {
       return { ok: true, value: await initialization.read(rootOf(w)) };

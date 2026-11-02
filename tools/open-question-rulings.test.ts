@@ -5,7 +5,7 @@
  * A question is ruled no earlier than it is raised. Seven consortium rulings of 2026-10-14 were dated 2026-10-13 — a day
  * before their questions were raised — while the same sittings' other rulings were dated 2026-10-14, so the record
  * disagreed with itself on which day a ruling was made (acceptance finding C1 of fin46,
- * `docs/defects/fixed/consortium-rulings-of-2026-10-14-are-dated-2026-10-13-before-their-questions-were-raised.md`).
+ * `docs/archive/defects/consortium-rulings-of-2026-10-14-are-dated-2026-10-13-before-their-questions-were-raised.md`).
  * The date a ruling is made is the consortium's ruling record's, outside the repository; what the record can be held to
  * is that no "Ruled <date>" in an entry falls before the date the entry was raised.
  *
@@ -70,7 +70,7 @@ function ruledBeforeRaised(text: string): string[] {
  * (the system's lens) each named, or the two recorded as agreeing ("both advocates followed", "both recommendations
  * followed"). "Both of its recommendations" does not count: OQ-298 used it of the ruling's own two record changes while its
  * advocates' recommendations went unnamed (acceptance finding C2 of fin46,
- * `docs/defects/fixed/oq-298s-ruling-does-not-name-the-recommendations-it-weighed.md`).
+ * `docs/archive/defects/oq-298s-ruling-does-not-name-the-recommendations-it-weighed.md`).
  */
 function namesItsRecommendations(text: string): boolean {
   const a = /\b[Aa]dvocate A\b|\bA \(the user|\buser's lens\b/.test(text);
@@ -86,7 +86,7 @@ function ruledUnderR072(text: string): Entry[] {
 /**
  * Entries ruled under R-072 that name neither advocate. Twenty-two were listed here until fin47 wrote both advocates'
  * recommendations into each from the consortium's ruling record
- * (`docs/defects/fixed/r-072-rulings-that-do-not-name-what-the-advocates-recommended.md`); none is left, and a new one fails.
+ * (`docs/archive/defects/r-072-rulings-that-do-not-name-what-the-advocates-recommended.md`); none is left, and a new one fails.
  */
 const UNNAMED_RECOMMENDATIONS: number[] = [];
 
@@ -99,7 +99,7 @@ const REQUESTS = readFileSync(join(import.meta.dirname, '..', 'docs', 'product',
  * made ("**Ruled 2026-10-14, built 2026-10-14 by fin44 …:**", "**Also ruled under it on 2026-10-13 …:**"). Each question
  * such a clause cites must carry a "Ruled <that day>" in its own entry: ten rulings of 2026-10-14 were headed 2026-10-13
  * there after their entries were corrected (acceptance finding C1 of fin46,
- * `docs/defects/fixed/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`).
+ * `docs/archive/defects/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`).
  * Returns `OQ-<n>: row <date>, entry <dates>` for each that disagrees.
  */
 function rowDatesAgainstEntries(requests: string, record: string): string[] {

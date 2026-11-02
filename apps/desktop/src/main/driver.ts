@@ -31,7 +31,7 @@ import { inputEvent, submitEvents, textEvents } from './capture/probe.js';
 
 /**
  * A window the driver can address that is not a main window
- * (`docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md`): a persona window (ADR-0048,
+ * (`docs/archive/defects/the-driver-cannot-address-persona-or-approval-windows.md`): a persona window (ADR-0048,
  * REQ-SHELL-072), the approval dialog a main window holds open (REQ-TOOLS-063), its terminal window (ADR-0047), or the
  * authentication recovery dialog presented over it (REQ-NOTIFY-072).
  */
@@ -106,7 +106,7 @@ interface Request {
   enter?: boolean;
   /**
    * `click` only: click once the match has held still and is the element at its own centre, then confirm that the press
-   * landed on it, and fail when it did not (`docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
+   * landed on it, and fail when it did not (`docs/archive/defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
    */
   settle?: boolean;
   width?: number;
@@ -182,7 +182,7 @@ const DESCRIBE_ELEMENT = `(el) => el ? (el.tagName.toLowerCase() + (typeof el.cl
  * moved under it. Driver-proof's 13c met exactly that on 2026-10-06: the Mission table's Pop out stood at y=199 for the
  * first frames after Ctrl+3 and at y=274, then y=296, once the provider notice filled the notice slot, so a press
  * measured before the notice opened no persona window and reported success
- * (`docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
+ * (`docs/archive/defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
  *
  * So this measures the match, lets `SETTLE_FRAMES` frames begin, and measures again; it answers `settled` only when the
  * box is the same and the element at its centre is the match or inside it (what a pointer there would press). When it
@@ -433,7 +433,7 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         // `keyDown` + `char` + `keyUp` per character: a chord alone moves no caret and inserts nothing, and the
         // renderer needs the `char` event — the same lesson the type-at seam carries. A line break is Shift+Enter, never
         // a character (`textEvents`; REQ-CHAT-001's newline, so a multi-line text neither loses its breaks nor submits
-        // early — `docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`).
+        // early — `docs/archive/defects/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`).
         const text = request.text ?? '';
         for (const event of request.enter === true ? submitEvents(text, 'key') : textEvents(text, 'key')) wc.sendInputEvent(inputEvent(event));
         return { typed: (request.text ?? '').length, enter: request.enter === true };
@@ -461,7 +461,7 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
       case 'screenshot': {
         if (!request.path) throw new Error('screenshot needs a path');
         /**
-         * A fresh frame first (`docs/defects/fixed/the-drivers-shot-can-return-a-stale-frame.md`). `capturePage()` copies
+         * A fresh frame first (`docs/archive/defects/the-drivers-shot-can-return-a-stale-frame.md`). `capturePage()` copies
          * the frame last presented, and a shot taken right after a click, a navigation or a dialog's close returned the
          * frame from BEFORE the change: byte-identical to the previous shot while `eval` in the same step read the new
          * document (measured again 2026-09-29 on the build before this repair: the first navigation of thirty-nine,
@@ -535,7 +535,7 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
       case 'quit':
         /**
          * The application's quit unless the immediate exit is asked for
-         * (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). This op used to be the immediate
+         * (`docs/archive/defects/the-drivers-quit-skips-the-applications-shutdown.md`). This op used to be the immediate
          * exit alone, which skips `window-all-closed`, where main asks the run host to `shutdown`: a driven quit was a
          * crash to a live run, and the session stayed `running` with no stop reason (measured 2026-09-29 on the build
          * before this repair). Now it is `app.quit()`, the application's orderly quit — a quit from outside any window, which

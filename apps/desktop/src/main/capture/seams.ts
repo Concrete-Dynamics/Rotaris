@@ -96,7 +96,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       // PD-CHAT-001 replaced the always-drawn segmented row with a press-revealed popover, so the three presets are
       // reached in two clicks now: the chip, then the option. The option's own text is label + hint, so the click
       // lands on `.chip-menu__label`, whose text is the preset alone. (This seam still read `.seg-opt` until Part AT;
-      // `docs/defects/fixed/the-config-proof-clicks-a-control-that-became-a-popover.md`.)
+      // `docs/archive/defects/the-config-proof-clicks-a-control-that-became-a-popover.md`.)
       // BOTH trigger classes, because `PopoverMenu` has two: `.chip-menu` when it is drawn as a chip, and
       // `.strip-btn` once PD-CHAT-001's revisions docked the composer controls into a strip. Naming only
       // the first made this seam miss again on 2026-09-22, in the same way and for the same reason as the
@@ -526,7 +526,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
    * reloaded snapshot as it announces every write; the window's `config:changed` deliveries are held while the two writes
    * run and then handed over in one synchronous loop — two announcements in one tick, the arrival two quick writes (or a
    * write and a sign-in's reload) can produce and a timed click never does. The snapshots are the real ones, in their real
-   * order; only their delivery is bunched (REQ-CONFIG-419, `docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`).
+   * order; only their delivery is bunched (REQ-CONFIG-419, `docs/archive/defects/two-quick-configuration-reloads-mark-settings-unsaved.md`).
    */
   for (const step of steps(process.env['ROTARIS_CAPTURE_CONFIG_PAIR_AT'])) {
     clocks.timers.after(millis(step.at), async () => {
@@ -578,7 +578,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // measurement reads), bounded at 5 s like that measurement, and when it had to wait it says how long, so the instant a
   // reading was really taken is in the log. Until 2026-10-02 it read whatever was there at the instant: mission-proof item 8
   // read `[]` at 6.5 s from a window a loaded host created 1.6 s after the click and painted after the probe
-  // (docs/defects/fixed/mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md). The paint
+  // (docs/archive/defects/mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md). The paint
   // check and the reading are one evaluation, so a window already painted is read at its instant, as before.
   const personaRead = (probe: string): Promise<unknown> => { const e = firstPersona(); return e ? e.win.webContents.executeJavaScript(probe) : Promise.resolve(false); };
   const PERSONA_PAINT_BOUND_MS = 5_000;

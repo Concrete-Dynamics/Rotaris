@@ -7,7 +7,7 @@ import { PANE_LAYOUT_PREFERENCE_KEYS } from './commands.js';
  * and, per registered view, `panels/{view-key}/state` and `panels/{view-key}/panes`. A `panels/` name this file's comments
  * give otherwise is a retired one (the `panels/<view>` record of before 2026-10-14), and is kept only when the sentence
  * marks it as history — written in the present tense beside the key list, it reads as the key a layout is stored under
- * (docs/defects/fixed/the-commands-contract-comment-names-the-workspace-divider-by-its-retired-key.md).
+ * (docs/archive/defects/the-commands-contract-comment-names-the-workspace-divider-by-its-retired-key.md).
  */
 describe('commands.ts names no retired pane-layout key as current (REQ-SHELL-069)', () => {
   const registered = new Set<string>([

@@ -258,7 +258,7 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
   });
 
   /*
-   * docs/defects/fixed/the-live-runs-held-item-check-holds-a-followed-up-child-across-the-gap-between-its-runs.md (finding L2):
+   * docs/archive/defects/the-live-runs-held-item-check-holds-a-followed-up-child-across-the-gap-between-its-runs.md (finding L2):
    * the 3c3f447 terminal session 7fce100f. The tester ended (child_end 16:17:34.521), the root closed its item (#15, 16:17:42),
    * and a `session_id` follow-up resumed it (child_resumed 16:17:52.370); the quit then paused it, so `completed_at` is null.
    * Its holding window is each run of it, from the timeline, not spawn to completion.
@@ -324,7 +324,7 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
     });
   });
 
-  // docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md (item N65): the 0bc3eee edit
+  // docs/archive/defects/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md (item N65): the 0bc3eee edit
   // session's shape — the root's only `replace` the opening write, every close an `update` — asks nothing of revision 3.
   it('a session that opens with a replace and closes with updates leaves revision 3 unasked: no closes, and nothing restored', () => {
     const open = { operation: 'replace', phases: [{ name: 'main', tasks: [{ id: '0000000a', name: 'Implement it', state: 'PENDING' }, { id: '0000000b', name: 'Test it', state: 'PENDING' }] }] };
@@ -340,7 +340,7 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
   });
 
   /*
-   * Acceptance finding A7 (docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md): the
+   * Acceptance finding A7 (docs/archive/defects/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md): the
    * delegation-swarm session 3e4b7210 at 3c03287 stored its tasks under the ids its model chose (`impl101`, `test101`, …), and
    * `todoStates` matched `([0-9a-f]{8})` alone, so every task of that session was invisible and `heldPending`, `closedWhileHeld`
    * and `restoredOverClose` passed having read nothing of it. The reader takes whatever id the rendering carries, and a held
@@ -401,7 +401,7 @@ describe('heldItemReading (PD-TOOLS-008 revision 2, OQ-249)', () => {
    * for is now looked up by its exact rendered suffix, ` (<id>)` at the line's end or before its ` — `, and one still unread
    * says why: `not shown` (no line of the Todo state carries it) or `not parsed` (a line carries it in a shape the reader does
    * not take, a reader gap).
-   * docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md
+   * docs/archive/defects/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md
    */
   describe('an item the reader gave no state for is looked up by its rendered suffix, and an unread one says why', () => {
     const legacy = [

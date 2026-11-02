@@ -52,7 +52,7 @@ export function storeFile(workspacesRoot: string, id: WorkspaceId): string {
  * FALSIFIED, kept beside its replacement (the Windows ARM64 session, 2026-10-15): "`.<identifier>.new`, five characters longer
  * than the identifier's name". At a live path of 247 to 251 characters, which D11 admits, the sibling's database crossed 251,
  * the engine refused it, and no first store could be made for that workspace on Windows
- * (docs/defects/fixed/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md).
+ * (docs/archive/defects/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md).
  */
 export function firstStoreSibling(workspacesRoot: string, id: WorkspaceId): string {
   return join(workspacesRoot, `.${id.slice(id.indexOf('-') + 1)}`);

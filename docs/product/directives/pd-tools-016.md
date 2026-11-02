@@ -110,11 +110,11 @@ added to the edit's success).*
 > `write_file`, `haet_edit` and diff case is unchanged. **Found:** the walk's tie rule chooses a later copy of a repeated
 > line (`p q q r` → `P q R` pairs the second `q`), as the directive states; and level 1 is not covered: an exact match writes
 > `new_string`'s LF lines into a CRLF file through both tools and `replace_all`, recorded as
-> [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md)
+> [`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../../archive/defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md)
 > and raised as [OQ-254](../../archive/architecture/open-questions/54-spikes-and-later-questions-21.md#oq-254) for a ruling. **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six
 > autopsies records a level-2 `write_file` edit; no proof script drives `write_file` in the built app, and the executor runs
 > unchanged inside the run host. Repairs
-> [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../../defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
+> [`a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones`](../../archive/defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **Revision 3's first execution, 2026-10-13, built under [R-072](../requests.md#r-072) (fin39):** clause 4 held as written.
@@ -133,10 +133,10 @@ added to the edit's success).*
 > *Corrected 2026-10-13 (fin40):* the build cut only the window's last line, so a window wholly in that empty element (`' '` →
 > `''` on `foo\n`, level 2 at element 1) still named "(line 2)" for a one-line file (fin39's reviewer); `windowNoOpMessage` now
 > cuts the first line too and it reads "line 1", pinned beside the case above
-> ([`a-window-no-op-refusal-names-a-line-after-the-files-last-line`](../../defects/fixed/a-window-no-op-refusal-names-a-line-after-the-files-last-line.md)).
+> ([`a-window-no-op-refusal-names-a-line-after-the-files-last-line`](../../archive/defects/a-window-no-op-refusal-names-a-line-after-the-files-last-line.md)).
 > **What was not measured.** No live run: the live-run fixtures are LF files on Linux, and none of the six autopsies records a
 > window edit that lands on the file's own bytes; no proof script drives `write_file` in the built app. Repairs
-> [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../../defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
+> [`a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success`](../../archive/defects/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **Reported back 2026-10-13 (fin41), from the live packs at `552d346` (default and duress) and `0bc3eee`**: **NOT REACHED** in any

@@ -29,7 +29,7 @@
  * 2026-10-13) level 3 compared a window's lines exactly once the prefix was moved, so a file line's `\r` kept an LF `old_string`
  * from level 3 and the edit fell to level 4, outside `PD-TOOLS-015`: on fin42's runs it applied at "Match level: 4 (similarity
  * 0.91)" and wrote the block one tab too shallow beside a success, recorded here as observed
- * (`docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`). Level 3 now sets a line's
+ * (`docs/archive/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`). Level 3 now sets a line's
  * trailing `\r` aside, and `shift-lf`, `near-lf` and `retry-lf` are asserted: level 3, the shift sentence then the CRLF sentence,
  * the exact bytes; the near miss naming the line endings; its quote applying. Until `PD-TOOLS-020` (OQ-295, ruled 2026-10-14) a
  * blank line took part in level 3's shift, so `blank-lf`'s block, which holds one, matched nothing on the CRLF file; it is

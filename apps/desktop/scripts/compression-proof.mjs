@@ -212,7 +212,7 @@ const s4 = scenario('twice-only', ['  threshold_percentage: 60', '  preserve_rec
 }
 
 // 5. A child's compression count in the Mission table (REQ-MONITOR-281/086;
-// docs/defects/fixed/the-mission-table-says-the-record-carries-no-compression-count.md): the table's cell read `not recorded`
+// docs/archive/defects/the-mission-table-says-the-record-carries-no-compression-count.md): the table's cell read `not recorded`
 // whatever the record held. The child crosses the threshold once; its row reads 1 under the column that names the unit.
 const s5 = scenario('child-count', ['  threshold_percentage: 60', '  preserve_recent_turns: 1'], { delegates: true });
 {
@@ -240,7 +240,7 @@ const s5 = scenario('child-count', ['  threshold_percentage: 60', '  preserve_re
 }
 
 // 6. The run-wide count on the inspector and the persona window (REQ-MONITOR-086/281;
-// docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md): neither drew
+// docs/archive/defects/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md): neither drew
 // a compression count, and the run-level agent's summed the children's alone, so the root's own compression was counted
 // nowhere. The root compresses before it delegates, the child once; the run-level agent reads 2 across the run on both. The
 // run-level agent is popped out of the inspector as soon as it is shown — the root holds its delegating call 3 s
@@ -314,7 +314,7 @@ const s7 = scenario('after-a-move', ['  threshold_percentage: 60', '  preserve_r
 }
 
 // 8. REQ-MONITOR-194 with REQ-MONITOR-080 (the repair round of 2026-10-03 on
-// docs/defects/fixed/an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md): the root's cell is
+// docs/archive/defects/an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md): the root's cell is
 // settled before its compression check. The root delegates on alpha (1,000 tokens: a 600-token trigger), then holds its next
 // call 3 s (`wait:3000`); the child's call, held 1 s, meets insufficient quota on alpha, which excludes it session-wide. The
 // root's held call — sent before the exclusion — reports 900 tokens. At the root's next step its cell is on an excluded pair:

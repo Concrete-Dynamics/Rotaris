@@ -39,7 +39,7 @@ message.
   had the next iteration take the resumed iteration's own task instead (found by the iteration lane's second review).*
 - **Taking it up sends it.** An iteration's first message is the launch content, whose latest request is whatever
   launched the run
-  ([`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)),
+  ([`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)),
   so a message taken up by a later run's iteration, or by the iteration after a continue by a second message, would be
   selected and marked done without ever being sent as the request, and the newer request worked in its place and again
   under its own task. So a task that is a continue's message (`message`, set when it is appended and kept for good, in
@@ -81,10 +81,10 @@ message.
   unheld, so a Continue action after the death appended it beside the task the run then returned to pending, and the run
   worked it twice (found by the iteration lane's fifth review).* *The second build counted any task in progress, which
   ended such a continue `no_pending_tasks` (found by the iteration lane's third review); the stranded task itself was
-  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../../../defects/fixed/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md),
+  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../../defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md),
   repaired 2026-09-29.*
   This repairs
-  [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../../../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
+  [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../../defects/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
   which the clause had widened: a message left pending is the last user row, so a Continue action appended it beside its
   own task and the run worked it twice. *The first build closed only "continue without them" on an iteration that holds
   a message, and left the Continue action undecided (found by the iteration lane's second review).* *Until the iteration
@@ -103,7 +103,7 @@ message.
   and an iteration's own task such a death left in progress with it — as the latest row naming it closed: `succeeded`
   complete, `partial` requeued, `failed` or `abandoned` abandoned, `cancelled` pending (`Todo.settleStranded`; the repair
   of
-  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../../../defects/fixed/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md)).
+  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../../defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md)).
   *Until then only a held message was settled, and the save came after the capture and the hooks.*
 
 **What a ruling decides.** Whether a `partial` resumed iteration should close the message as done, since the root

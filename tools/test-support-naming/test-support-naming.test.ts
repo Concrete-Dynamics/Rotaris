@@ -8,10 +8,10 @@ import { describe, expect, it } from 'vitest';
  * tests import, and that the package's own entries never reach, is named `<unit>.test-support.ts`, so a reader of `src/`
  * does not take it for product code; and no product module imports one. The cascade reading the two CSS tests share sat at
  * `packages/ui/src/css-cascade.ts`, beside the components, as if the renderer ran it
- * (docs/defects/fixed/the-css-cascade-reading-is-test-support-named-as-a-product-module.md), and the guard then pinned
+ * (docs/archive/defects/the-css-cascade-reading-is-test-support-named-as-a-product-module.md), and the guard then pinned
  * `@rotaris/ui` alone, from `packages/ui/src/test-support.test.ts`; the traceability proof's scale fixture and growth
  * readings sat the same way in `@rotaris/workspace`
- * (docs/defects/fixed/workspace-traceability-test-support-is-named-as-product-modules.md), so since 2026-10-15 the guard
+ * (docs/archive/defects/workspace-traceability-test-support-is-named-as-product-modules.md), so since 2026-10-15 the guard
  * lives here and walks every package.
  *
  * The walk reads relative `import`/`export … from` specifiers only, which is how every module in a package reaches another;

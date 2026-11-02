@@ -11,7 +11,7 @@ import { ProjectSettingsStore } from '../project-settings.js';
 /**
  * REQ-PROVIDER-152 / REQ-PROVIDER-018: the busy refusal is for a lock that exists and is held past the 5 s bound.
  * A lock file that cannot be created at all is reported as what it is, at once, and never as a store being updated
- * (docs/defects/fixed/the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md).
+ * (docs/archive/defects/the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md).
  */
 vi.mock('@rotaris/platform', async (importOriginal) => {
   const real = await importOriginal<typeof platform>();
@@ -121,7 +121,7 @@ describe('a lock file that cannot be created is not a busy store (REQ-PROVIDER-1
 });
 
 describe('a lock file that cannot be removed is reported, never thrown (REQ-PROVIDER-152, REQ-PROVIDER-018, ADR-0044)', () => {
-  // docs/defects/fixed/the-credential-lock-throws-when-a-lock-file-cannot-be-removed.md
+  // docs/archive/defects/the-credential-lock-throws-when-a-lock-file-cannot-be-removed.md
   it('a dead holder\'s lock the reclaim cannot remove: refused at once as a value naming the lock and the cause', async () => {
     const lock = join(dir, 'd.lock');
     writeFileSync(lock, JSON.stringify({ pid: process.pid + 1, started_at: 'then' }));

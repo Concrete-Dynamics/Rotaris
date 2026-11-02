@@ -9,7 +9,7 @@
  * each with the exit status and the tail of the child's standard error in the message. A request sent after any of
  * those rejects at once. So a branch that dies, or never becomes the server, fails the proof in seconds with its own
  * reason instead of leaving `await send('initialize', …)` pending for ever
- * (`docs/defects/fixed/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`).
+ * (`docs/archive/defects/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`).
  *
  * It also records what the proof asserts about standard output: the bytes before the first `{` (Electron's CR LF is
  * the one tolerated preamble), the lines that are not JSON, and when the first byte arrived. `exited` resolves with the

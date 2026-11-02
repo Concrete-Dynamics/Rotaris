@@ -4,7 +4,7 @@ Part 11 of 11 of [ADR-0060](../0060-context-compression-over-a-replaceable-conve
 
 ## The compressing model follows the agent's cell — 2026-10-02 (fin10)
 
-*The repair of [`the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves.md`](../../../defects/fixed/the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves.md).
+*The repair of [`the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves.md`](../../../archive/defects/the-root-compresses-on-the-model-its-turn-started-on-after-its-cell-moves.md).
 Found a defect in the first execution's mechanism.*
 
 The first execution resolved the trigger "for the model THIS agent calls" and took the compressing model from the agent's

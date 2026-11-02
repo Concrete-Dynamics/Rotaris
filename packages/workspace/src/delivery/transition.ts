@@ -208,7 +208,7 @@ export function decide(state: DeliveryState, now: RequirementNow, action: BoardA
       // The write into the requirement source is the service's (`beforeCommit`, `requirements.source.write`'s units), made
       // between this admission and the commit, so a refused write records nothing (REQ-TRACE-432). Until 2026-10-13 this
       // arm refused, naming OQ-45's improvement store — a question closed on 2026-09-11 and a store this write never needed
-      // (docs/defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md).
+      // (docs/archive/defects/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md).
       if (from !== 'review') return refuse(`${id} is not awaiting a review decision: it is in ${from}, and a proposed technical requirement is accepted on the review of the run that put it forward.`);
       const proposal = (opts.payload?.['proposal'] ?? '').trim();
       if (proposal === '') return refuse(`Accepting a proposed technical requirement on ${id} needs the proposal to accept; none was named, so nothing was written.`);

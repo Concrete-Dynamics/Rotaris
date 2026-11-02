@@ -146,7 +146,7 @@
  *                 choose another tool. Whether the child searched for references first is noted; a cold rename that left the
  *                 importing files behind or had them mended by hand is a FINDING against PD-MCP-004, whose run-host search
  *                 before every rename must make it reach them (OQ-273, ruled 2026-10-13;
- *                 docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+ *                 docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
  *                 It failed at `3c03287`: the fixture has no `tsconfig.json` or `jsconfig.json`, and there the search finds
  *                 nothing to load (the note, reopened 2026-10-15). Since PD-MCP-004 revision 2 (OQ-362, ruled 2026-10-20) the run
  *                 host places a `jsconfig.json` of the product's own at the root for the search and the rename and removes it when
@@ -332,7 +332,7 @@ const SESSION_LOG_LEVEL = value('session-log-level', 'INFO');
  * would show as a run that quietly did not ask. Since 2026-10-20 only `debug` and `info` are taken: above `info` the log
  * drops the `info` lines every scenario reads (the capture's wait, click and probe lines among them), and each reading took
  * their absence for an outcome (`lib/app-log-level.mjs`,
- * `docs/defects/fixed/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`).
+ * `docs/archive/defects/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`).
  */
 const APP_LOG_LEVEL = value('app-log-level', null);
 const appLogRefusal = appLogLevelRefusal(APP_LOG_LEVEL);
@@ -660,7 +660,7 @@ if (key === null || key === '') { console.error(`No key for "${endpoint.name}". 
  * The bundled code-intelligence runtime is a precondition, as it is `init-proof`'s: without it every launch's setup and
  * discovery fail, and the run judges a tree in which code intelligence never ran. The duress run at 1763f7f did exactly
  * that on a `--skip-build` tree with no bundle and passed all 18 checks in silence
- * (`docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`). With
+ * (`docs/archive/defects/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`). With
  * `--skip-build` an absent or stale tree refuses here, before a pack or a sandbox exists; without it the bundle is built
  * beside the desktop build. Every launch then states whether its code-intelligence discovery succeeded (`launch`).
  */
@@ -724,7 +724,7 @@ function cleanup(keep) {
   dropCredentials(sandbox);
   // A transient Windows lock — an antivirus reading the store, a process still closing — can outlast the retries;
   // a throw here would run through the fatal handler's second cleanup and end the process at Node's exit 7
-  // (docs/defects/fixed/the-live-runs-cleanup-crashes-the-fatal-handler-on-a-transient-windows-file-lock.md).
+  // (docs/archive/defects/the-live-runs-cleanup-crashes-the-fatal-handler-on-a-transient-windows-file-lock.md).
   try {
     if (keep) writeFileSync(join(sandbox, KEPT_FILE), `kept by --keep at ${new Date().toISOString()}; its credential store was deleted.\n`);
     else rmSync(sandbox, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
@@ -735,7 +735,7 @@ function cleanup(keep) {
 // Whatever a previous run left behind loses its credentials now, and loses everything unless it was kept on purpose.
 // A sandbox whose `OWNER` is a live process is a concurrent live run's, and is left alone with its key: the sweep
 // used to take every directory here for a leftover, and a run that started second deleted a running sibling's
-// workspace, store and key (`docs/defects/fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`; the rule is
+// workspace, store and key (`docs/archive/defects/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`; the rule is
 // `lib/sandbox-sweep.mjs`'s). A locked handle (measured 2026-09-19: a Serena language server kept the prior sandbox's
 // workspace open past process exit, so `rmSync` threw EPERM out of the sweep and the run died before starting) must
 // never kill the run: the sweep reports the leftover and continues, and the startup of THIS run re-sweeps it next time.
@@ -754,7 +754,7 @@ mkdirSync(local, { recursive: true });
 // exists (`runEnding`, set beside `finish` below) it may not cost the pack its results either. Until 2026-10-20 a launch
 // that overran threw into these handlers, which deleted the sandbox and exited: the checks every earlier scenario had
 // computed were never written, and the failed scenario's session went with the sandbox
-// (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`; `lib/run-ending.mjs`).
+// (`docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`; `lib/run-ending.mjs`).
 // A signal also ends the launch in flight, which `timeout`'s SIGTERM to this process alone would otherwise leave running;
 // before its `let` is reached that read throws, and is caught.
 let runEnding = null;
@@ -876,7 +876,7 @@ function assertNoCredential(what, text) {
  * The wait ends at the launch's own bound, never at whatever still holds its pipes (`lib/settle-launch.mjs`): it settles on
  * the main process's `exit` and drains the pipes for a few seconds, where it used to wait for `close`. On Windows the bound's
  * SIGKILL ends main alone, and at `8080fbda` two processes of the killed main kept its pipes for eight hours, so the run's
- * wait on the `crlf` launch did too (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`).
+ * wait on the `crlf` launch did too (`docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`).
  */
 function runElectron(args, { timeout, env }) {
   const child = spawn(electron, args, { cwd: app, windowsHide: !GUI, env });
@@ -949,7 +949,7 @@ async function launch(name, extra, timeoutMs = 180_000) {
   // failure). A duplicate of another fact passes.
   const restated = restatedFacts(log);
   check(restated.length === 0, `${name}: none of the ${KNOWN_RESTATEMENTS} known restatements reaches the application log`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
-  // Live-run finding D8 (docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md): the
+  // Live-run finding D8 (docs/archive/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md): the
   // relayed renderer console lines naming React's update-depth error (React error 185) are counted for every launch (`results.json`
   // `scenarioEvidence.<name>.reactUpdateDepthErrors`). Since OQ-278's ruling (2026-10-13, R-072) a launch with any is a FAILURE
   // naming each line, its time beside the children's streams to be read in the autopsy; until then it was a NOTE, the cause
@@ -1095,7 +1095,7 @@ function readSupervision(sessionId) {
  * requirements run's worktree, any other session's workspace root, the sandbox's workspace where the row names neither.
  * Until fin25 every session was judged by the workspace, and a requirements session's create-shaped call naming a
  * workspace path outside its worktree read as the old shape
- * (`docs/defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md`).
+ * (`docs/archive/defects/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md`).
  */
 function readFenceRoot(sessionId) {
   const Database = require('better-sqlite3');
@@ -1121,7 +1121,7 @@ function readFenceRoot(sessionId) {
  *
  * Until fin23 these read the `frictions` and `duress` sessions alone and their NOTEs spoke for the whole run, while the
  * requirements session held a refusal and the resume session the first inferred create
- * (`docs/defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`).
+ * (`docs/archive/defects/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`).
  * A shape no session held asked nothing, which is a NOTE naming the sessions read.
  */
 function checkToolRecord() {
@@ -1200,8 +1200,8 @@ function checkCoordinatorTodo() {
   check(items.overlaps.length === 0, 'no two implementation children of one plan held one todo item at once (REQ-ORCH-028, REQ-ORCH-029)', items.overlaps.length === 0 ? `${items.read.length} session(s) read` : items.overlaps.map((o) => `${o.scenario}: ${o.children.join(' and ')} on ${o.item}`).join('; '));
   check(items.stale.length === 0, 'every todo item a child served is one its plan still holds (PD-TOOLS-006 revision 6)', items.stale.length === 0 ? `${items.named.length} named item(s)` : items.stale.map((c) => `${child(c)} on ${c.item}`).join(', '));
   // REQ-TOOLS-144 (fin47's reviewers' finding on A6, bundle `fin47-accept1-6`;
-  // docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md,
-  // docs/defects/fixed/the-live-run-never-checks-that-a-stored-plan-id-is-eight-hex.md): every id of a coordinating session's stored
+  // docs/archive/defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md,
+  // docs/archive/defects/the-live-run-never-checks-that-a-stored-plan-id-is-eight-hex.md): every id of a coordinating session's stored
   // plans, the root's and each child's own, is the tool's eight-hex one, so a recurrence of A6 fails the run rather than waiting
   // on an autopsy. A run whose coordinators stored no plan id asked nothing: a NOTE, never a PASS.
   if (planIds.ids === 0) noted('no coordinating session stored a plan id: REQ-TOOLS-144\'s eight-hex ids are unasked', `${planIds.coordinating.length} coordinating session(s): ${planIds.coordinating.join(', ') || 'none'}`);
@@ -1211,11 +1211,11 @@ function checkCoordinatorTodo() {
   // PD-TOOLS-008 revision 2 and PD-TOOLS-006 revision 7 (OQ-249): a running child's item reads IN_PROGRESS in its coordinator's
   // plan, and no item is closed while an implementation child still holds it; single-active refusals are a NOTE (target 0).
   const heldAt = (h) => `${h.scenario} #${h.ordinal}: ${h.child} on ${h.item}`;
-  // Finding A7 (docs/defects/fixed/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md): the three checks below read
+  // Finding A7 (docs/archive/defects/the-live-runs-todo-state-reader-reads-only-eight-hex-task-ids.md): the three checks below read
   // each item in the Todo state its coordinator's call carried. One they could not find there was passed over until fin47 (every
   // model-chosen id of the 3c03287 swarm session), so a held or closed item left unread fails here rather than passing on nothing.
   // An unread item says why (`todoItemState`; fin47's reviewers' finding,
-  // docs/defects/fixed/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md): `not shown` is the plan's
+  // docs/archive/defects/the-live-runs-todo-state-reader-calls-an-item-it-was-not-shown-unparsed.md): `not shown` is the plan's
   // (the coordinator removed a held item, or never had it), `not parsed` the reader's own gap.
   const unreadAs = (why, says) => {
     const of = held.unread.filter((u) => u.why === why);
@@ -1237,7 +1237,7 @@ function checkCoordinatorTodo() {
   // PD-TOOLS-008 revision 3 (OQ-255): a `replace` closing an item whose children have all ended closes it; a task a `replace` kept
   // over a different state is named in its observation, a NOTE (the next call should be an `update` for it).
   // A run in which no coordinator closed a served-and-ended item with a `replace` asked nothing of revision 3: a NOTE, never a
-  // PASS (docs/defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md; at 0bc3eee every close was an
+  // PASS (docs/archive/defects/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md; at 0bc3eee every close was an
   // `update`). The edit scenario's prompt asks for one closing `replace` so a default run can ask it.
   if (held.closes.length === 0) noted('no coordinator closed a delegated item with a todo replace once its children had ended: PD-TOOLS-008 revision 3\'s close is unasked (OQ-255)', `${held.coordinating.length} coordinating session(s): ${held.coordinating.join(', ') || 'none'}; every close was an update, or none came`);
   else check(held.restoredOverClose.length === 0, 'no closing todo replace left an item IN_PROGRESS once every child serving it had ended (PD-TOOLS-008 revision 3, OQ-255)', held.restoredOverClose.length === 0 ? `${held.closes.length} close(s) by replace, each stored as sent: ${held.closes.map((h) => `${h.scenario} #${h.ordinal} ${h.item} ${h.stored}`).join(', ')}` : held.restoredOverClose.map((h) => `${h.scenario} #${h.ordinal} on ${h.item}`).join(', '));
@@ -1428,7 +1428,7 @@ function preserveRun(name, sessionId) {
   } catch (cause) { failed.push(`session.log (${cause instanceof Error ? cause.message : String(cause)})`); }
   {
     // The product's human-readable summary (REQ-SESSION-140), written beside the log and deleted with the sandbox until
-    // fin23 copied it (docs/defects/fixed/the-live-runs-pack-carries-no-summary-md.md). Kept, then checked; a step that
+    // fin23 copied it (docs/archive/defects/the-live-runs-pack-carries-no-summary-md.md). Kept, then checked; a step that
     // throws records a failed check since fin25 (`preserveSummary` in `lib/summary-sections.mjs`).
     const summary = join(dirname(db), 'sessions', sessionId, 'summary.md');
     const step = preserveSummary({
@@ -1619,7 +1619,7 @@ check(snapshot.includes(`  ${PROVIDER_ID}:`) && snapshot.includes('    authentic
 check(!/access_token|sk-[a-z-]*[a-z0-9]{16,}/.test(snapshot), 'the snapshot carries no credential');
 // REQ-CONFIG-025 / REQ-WORKSPACE-038: the starter's CONTENT, not the file's existence. Initialization records into a missing
 // workspace file before the sign-in, so a file holding `initialization:` alone exists and is no starter (acceptance F3;
-// `docs/defects/fixed/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`).
+// `docs/archive/defects/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md`).
 const starterLacks = existsSync(agentsFile) ? starterMissing(readFileSync(agentsFile, 'utf8')) : ['the file'];
 check(starterLacks.length === 0, 'the starter agents.yaml was bootstrapped', starterLacks.length === 0 ? agentsFile : `it lacks ${starterLacks.join(', ')}`);
 const inCatalogue = snapshot.includes(`      - id: ${QUALIFIED}\n`);
@@ -2240,7 +2240,7 @@ if (wanted.includes('shell')) {
   check(sessions.length >= expectedSessions, 'Overview lists the sessions the runs left', `${sessions.length} session row(s)`);
   // The repository card reads the attached session, and a run that left none — `--only=shell` alone — paints no
   // card; that is the surface's design, not a red.
-  // docs/defects/fixed/the-live-runs-shell-scenario-reds-on-a-run-that-left-no-session.md
+  // docs/archive/defects/the-live-runs-shell-scenario-reds-on-a-run-that-left-no-session.md
   if (expectedSessions === 0 && sessions.length === 0) noted('the repository card reads the branch', 'no session was attached, so the Overview paints no repository card');
   else check(branch.length > 0 && /main/.test(branch[0]?.text ?? ''), 'the repository card reads the branch', branch[0]?.text ?? 'absent');
   results.scenarios.shell = { sessions: sessions.map((row) => row.text), branch: branch[0]?.text ?? null, toolChips: (probe('[data-testid="overview-tool-chips"] .tag') ?? []).map((tag) => tag.text) };
@@ -2250,8 +2250,8 @@ if (wanted.includes('shell')) {
 /**
  * One real run engineered to trip the inducible run-autopsy frictions, read back from the STORE rather than
  * from the model's report: a first-use `write_file` create (nine refusals across three fresh children in run
- * `7bd9c19d`; `docs/defects/fixed/a-first-use-schema-guess-failed-without-an-example.md`) and a SIGINT stop of a
- * pipe session on win32 (`docs/defects/fixed/win32-terminal-edge-cases-bounced-to-the-agent.md`).
+ * `7bd9c19d`; `docs/archive/defects/a-first-use-schema-guess-failed-without-an-example.md`) and a SIGINT stop of a
+ * pipe session on win32 (`docs/archive/defects/win32-terminal-edge-cases-bounced-to-the-agent.md`).
  *
  * Red by design until the fixes land: each check below fails while its friction reproduces and passes once
  * the product absorbs it, which is what makes this scenario the fixes' verification. Two recorded frictions
@@ -2262,7 +2262,7 @@ if (wanted.includes('frictions')) {
   const log = await launch('frictions', {
     // PD-TOOLS-007: the write is asked with only `path` and `content`, the shape the directive reads as a create; worded only
     // "Create a file …", a model that reads the schema names the operation and the shape is never asked
-    // (docs/defects/fixed/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md).
+    // (docs/archive/defects/the-live-runs-frictions-prompt-never-asks-pd-tools-007s-inferred-create.md).
     ROTARIS_CAPTURE_PROMPT: 'Create a file called friction-probe.txt in the workspace root containing exactly one line with the text probe-ok: call write_file with only the two arguments path and content, and leave out operation. Then run `node -e "setTimeout(() => {}, 20000)"` in the terminal and stop it by sending SIGINT to its session. Reply DONE when both are finished.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000', ROTARIS_CAPTURE_PROBE: DURATION_PROBES.join(';;'),
   }, RUN_WAIT_MS + 90_000);
@@ -2312,7 +2312,7 @@ if (wanted.includes('frictions')) {
   if (signalDeath.length === 0 && readKilled.length === 0) noted("no background session's end was read back after the agent's signal", signalled ? 'the model did not query the session after send_signal, so the status of its signal death was not observed' : 'no send_signal in the record');
   else check(signalDeath.length === 0, "no background session read failed (exit -1) after the agent's signal", signalDeath.length === 0 ? `${readKilled.length} observation(s) read killed (exit -1)` : `ordinal ${signalDeath[0].ordinal} (${signalDeath[0].agent_name})`);
   /*
-   * K3 of the default live run at c2fdd6a (docs/defects/fixed/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md):
+   * K3 of the default live run at c2fdd6a (docs/archive/defects/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md):
    * the root's playbook told the coordinator "the coordinator routed it to you", here beside the direct-work statement
    * (PD-ORCH-006). The root's requests are the ones whose instructions carry that statement, which no child is given.
    * The two ROUTE strings are coupled to the built-in `ROUTE.entry` and `ROUTE.routed` wording in
@@ -2330,15 +2330,15 @@ if (wanted.includes('frictions')) {
     check(existsSync(join(workspace, 'friction-probe.txt')), 'the probe file landed in the workspace', 'friction-probe.txt');
     rmSync(join(workspace, 'friction-probe.txt'), { force: true });
   }
-  noted('the stream-stall abort is not covered here', 'the `faults` scenario induces it through the recording proxy; the observed shape is recorded in docs/defects/fixed/single-retry-stream-stall-aborted-a-76-minute-run.md');
+  noted('the stream-stall abort is not covered here', 'the `faults` scenario induces it through the recording proxy; the observed shape is recorded in docs/archive/defects/single-retry-stream-stall-aborted-a-76-minute-run.md');
   // The exit trace's crash handlers are not induced here: no live launch crashes a process. They are fired in the built app
   // by `pnpm exit-trace-proof` (the run host killed, the renderer crashed; PD-MONITOR-002), which reads main's GONE lines
-  // (docs/defects/fixed/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md).
+  // (docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md).
   results.scenarios.frictions = { status: read?.session.execution_status, tools: names, writeOpRefusals: writeOp.map((call) => call.ordinal), inferredCreates: inferredHere.map((call) => call.ordinal), sigintRefusals: sigint.map((call) => call.ordinal) };
   if (read) preserveRun('frictions', read.session.session_id);
   await budgetGate();
   /*
-   * Live-run finding M3 (docs/defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md):
+   * Live-run finding M3 (docs/archive/defects/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md):
    * one command that fails on purpose with about 5,000 characters of output, so its record is an error-path record whose
    * result REQ-SESSION-136 cuts to 2,000 characters and REQ-SESSION-194 marks with a closing `...` (before fin23, the bare
    * 2,000-character head). Its own launch, `frictions-cut`: asked as a third step of the probe above (2026-10-06, run
@@ -2499,7 +2499,7 @@ if (wanted.includes('faults')) {
        * PD-MONITOR-005 revision 2 (OQ-127's ruling, 2026-10-06): the `stall` issue is written with its warning only — at
        * entry, then no more often than REQ-MONITOR-120's throttle (the threshold, or 30 s, whichever is longer). Before it,
        * one was written at every evaluation (every 5 s at 90 s), and the check above passed that too (finacc3's finding F14,
-       * `docs/defects/fixed/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md`). Every agent's `stall`
+       * `docs/archive/defects/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md`). Every agent's `stall`
        * issues are read, a stall at a time: a repeat sooner than the throttle after the one before it fails. Here the root's
        * stall should leave one, at 90 s, before the 120 s idle bound gives the call up.
        */
@@ -2519,7 +2519,7 @@ if (wanted.includes('faults')) {
      * a child warned "appears stalled: no model event or token for 94 seconds" while the endpoint streamed the 3,011
      * argument pieces of its 502-line `write_file` at full speed: the adapter forwarded none of the pieces, so every layer
      * above it heard silence until the call was complete
-     * (`docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). That depended on a model choosing
+     * (`docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md`). That depended on a model choosing
      * to write a long file in a long run. Here the recording proxy holds each piece of every tool call's arguments
      * `ARGS_PACE_MS` behind the one before it (its `pace` rule), and the stall threshold is lowered to `ARGS_STALL_S` for
      * this launch alone, so a few hundred pieces stream for several thresholds. The question: was any `stall` issue
@@ -2674,7 +2674,7 @@ if (wanted.includes('terminal')) {
     check(d?.timeout !== true && d?.exit_code === 0, 'the here-string terminated rather than hanging on a lost delimiter', `exit ${d?.exit_code ?? 'none'}${d?.timeout ? ', timed out' : ''}`);
     // Read from the OUTPUT section alone (`hereStringLinesReturned`): the diagnostic repeats the command, which carries
     // both words, so the whole result matched whether or not the shell printed anything — the 2026-09-22 pass was not
-    // evidence (`docs/defects/fixed/the-here-string-check-reads-its-own-command-back.md`).
+    // evidence (`docs/archive/defects/the-here-string-check-reads-its-own-command-back.md`).
     const printedLines = outputOf(hereString.result) ?? '';
     check(hereStringLinesReturned(hereString.result), 'both lines of the here-string came back, in the output the shell printed', `alpha-one ${/alpha-one/.test(printedLines) ? 'present' : 'absent'}, beta-two ${/beta-two/.test(printedLines) ? 'present' : 'absent'} in the output section`);
   }
@@ -2807,7 +2807,7 @@ if (wanted.includes('terminal')) {
   // REQ-TOOLS-097's default-path hard cap (`hardMs` = REQ-CONFIG-116's `runtime.shell_command_timeout`, 100 s unset): a call
   // that names no `timeout` and keeps printing is ended by the cap, never by the soft pause (it is never quiet for the window)
   // and never by its own end (130 s). The silent wedge above could never ask it
-  // (`docs/defects/fixed/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`).
+  // (`docs/archive/defects/the-live-runs-terminal-wedge-can-never-reach-the-default-hard-cap.md`).
   const steady = attempted('steady')[0];
   if (steady === undefined) unread('steady', 'the steady printer was not attempted', 'no terminal call carried it; the default hard cap is unasked', 'the default hard cap is unasked');
   else {
@@ -3229,7 +3229,7 @@ if (wanted.includes('delegation')) {
    * The run's length is the model's, not what this launch measures (PD-ORCH-006 revision 3 is read from the first root
    * request below). At b9e3005 the coordinator invented a README loss and then a user ask to move persistence to Dexie, and
    * ran out the 840 s wait doing that work with the product clean (acceptance finding L8,
-   * docs/defects/fixed/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md). So an overrun takes the duress
+   * docs/archive/defects/a-swarm-run-the-model-kept-working-past-its-wait-fails-the-live-run.md). So an overrun takes the duress
    * run's reading (`overrunReading`, finding H-h): still progressing with the product holding at most a tenth of the wait is
    * the window's bound, a NOTE; a run that stopped moving, or a product that held more, still FAILS.
    */
@@ -3266,7 +3266,7 @@ if (wanted.includes('delegation')) {
  * the session's summary names the files is a NOTE. A run with no `rename_symbol` call is a NOTE, "not reached": a live model may
  * choose another tool, and the questions above are then unasked. Whether the child searched for the symbol's references before its
  * first rename is recorded beside the reading: a rename with nothing before it renamed the declaring file alone in the pinned
- * runtime (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md),
+ * runtime (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md),
  * and since PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072) the run host sends the reference search itself before every rename,
  * writing no row for it, so a cold rename whose importing files were left behind, or mended by another tool afterwards, is a
  * finding against that directive. Until the ruling it was a NOTE naming OQ-273. At `3c03287` it failed on the fixture's shape,
@@ -3324,7 +3324,7 @@ if (wanted.includes('rename')) {
         check(r.first.status === 'ok', 'rename: the first rename_symbol call is ok', `${r.agent}: ${r.first.status} — ${JSON.stringify(r.first.result)}`);
         noted(`rename: ${r.agent} ${r.searchedFirst ? 'searched for the symbol\'s references before its first rename' : 'renamed with no reference search of its own before it (a cold rename; PD-MCP-004\'s search is the run host\'s and writes no row)'}`, `${r.renames} rename call(s); the first said ${JSON.stringify(r.first.result)}`);
         const projectFiles = ['tsconfig.json', 'jsconfig.json'].filter((f) => existsSync(join(workspace, f)));
-        if (r.cold) check(!r.coldLeftBehind, 'rename: the cold rename reached the importing files on its own (PD-MCP-004)', `left behind: ${r.leftBehind.join(', ') || 'none'}; written by another tool after it: ${r.mendedAfter.join(', ') || 'none'} — the run host's reference search before the rename, and the product's own jsconfig.json for it where no project file covers the files (PD-MCP-004 revision 2, OQ-362, ruled 2026-10-20), did not make it reach them; the workspace root holds ${projectFiles.join(' and ') || 'no tsconfig.json or jsconfig.json'} after the run (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)`);
+        if (r.cold) check(!r.coldLeftBehind, 'rename: the cold rename reached the importing files on its own (PD-MCP-004)', `left behind: ${r.leftBehind.join(', ') || 'none'}; written by another tool after it: ${r.mendedAfter.join(', ') || 'none'} — the run host's reference search before the rename, and the product's own jsconfig.json for it where no project file covers the files (PD-MCP-004 revision 2, OQ-362, ruled 2026-10-20), did not make it reach them; the workspace root holds ${projectFiles.join(' and ') || 'no tsconfig.json or jsconfig.json'} after the run (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)`);
         // PD-MCP-004 revision 2 (OQ-362): the fixture has no project file, so the run host placed a jsconfig.json of the product's
         // own at the root for each rename's search and rename, and removed it when the rename had answered; none may be left.
         const placements = log.split('\n').filter((l) => /mcp: (placed|adopted) the product's project file /.test(l)).length;
@@ -3529,7 +3529,7 @@ if (wanted.includes('empty-answer')) {
  * and 8k above), and no default run reaches any of them. What only they ask — PD-ORCH-009 revisions 3 to 5 (`empty-answer`),
  * PD-ORCH-015 (`plan-open`), PD-MCP-004's cold rename (`rename`), PD-CONFIG-003's cut-off child (`cutoff`) and the long run
  * here — is measured by a run that names them, never by a default one (acceptance finding L9 at b9e3005,
- * docs/defects/fixed/the-live-runs-duress-section-calls-itself-its-only-opt-in-scenario.md).
+ * docs/archive/defects/the-live-runs-duress-section-calls-itself-its-only-opt-in-scenario.md).
  *
  * `codebase.md` names the gap this exists to enter: "`pnpm live-run` runs short tasks against an unmetered
  * endpoint, so it holds **no generation near the model timeout, no multi-line command, and no re-spawn**. Every

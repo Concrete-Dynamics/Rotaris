@@ -18,7 +18,7 @@ its continuation wave3b did the same after #382 (#380, #385, #386, `awk … inde
 about 14 extra steps and about 63 s, all inside the two children the 1200 s ceiling cut off, and seven `tool_error` issues
 (7 to 12 and 18). The build already knew: `matchEdit` (`packages/agent-tools/src/tools/files.ts`) runs every level, and the
 miss branch discards a level-2 or level-3 match (`if (!m || m.level !== 1)`). Recorded as
-[`haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md`](../../../defects/fixed/haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md).
+[`haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md`](../../defects/haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md).
 
 **Replayed before the build (fin32, 2026-10-07).** `docs/verification.md` was rebuilt from the pack's store — wave3's
 `write_file` #289, then every successful `haet_edit` and code-intelligence `replace_content` in ordinal order, each
@@ -93,7 +93,7 @@ answer's "Remains" (row 766) relays that `docs/overview.md` claims everything gi
 wave3's `edit_memory` #311 wrote into the project memory `todo-app/docs-pair` that both are present and "absence must be
 checked with `ls`". The false absence claim was written by docs-writer c, which holds no terminal: the file tools hid the
 directories, so it inferred absence. Recorded as
-[`the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md`](../../../defects/fixed/the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md).
+[`the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md`](../../defects/the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md).
 
 **What the build proceeds under.** OQ-161's and OQ-215's rulings as built: the directories hidden from the file tools, shown
 by a terminal, and no agent told what they are.
@@ -218,7 +218,7 @@ reports). Each row read `failed` and nothing else. "Child timed out after 1200s"
 the timeline, and no screen shows any of them; `AgentRecord` carries no end cause; the report artifact copies only the status
 and the summary, so the one cause a person could read was the summariser's text (finding D9). The control that moves the limit
 lives in Settings › Runtime, in minutes. Recorded as
-[`a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md`](../../../defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
+[`a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md`](../../defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
 What the specification does not settle is whether a surface that shows the agent ends with the limit and a pointer to its
 control, and which surfaces those are.
 
@@ -253,7 +253,7 @@ Settings renders. Found while drawing it: the tag beside the state squeezed the 
 scrolled the Mission card sideways, so it takes a line of its own under the state; recorded in PD-CONFIG-003's first execution
 of revision 3. Pinned by `cut-off.test.ts`, `activity.test.ts`, `children.test.ts` and `agent-timeout.test.ts` (red on
 `b90d27f`); shown by `pnpm mission-proof` item 1d. Repaired note:
-[`a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md`](../../../defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
+[`a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md`](../../defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md).
 **For the live run:** at D2's 45-minute duress launch, a child cut off reads "Cut off at its per-agent timeout of 45 minutes
 while making progress. …" in the inspector and its persona window, and its rows carry the tag; the record carries
 `timedOut: { limitSeconds: 2700, makingProgress: true }`. Not reached until a live run cuts a child off.

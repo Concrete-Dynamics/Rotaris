@@ -222,10 +222,10 @@ each root no row records that published — a plan cycle's from before v30 — b
 `artifacts_by_created` per snapshot); then the live run's current root (`entryRootsOf`, `Run.currentRoot`). The session
 lets go of a run once `start()` settles, a park at the plan gate included; *until v30 a plan cycle's root that published
 nothing was therefore named only while its run was live, and what it read was no agent's received link at the gate
-(`docs/defects/fixed/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`, repaired under
+(`docs/archive/defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`, repaired under
 R-067).* The surfaces know the run-level
 agent by the entry persona and by these: it owns a named row carrying either (`ownRow`, which `rowsOf`, `scopedRows` and
 `followedAgent` share; never by a named row's persona, which a child of the entry persona shares), and its artifact
 links match either or a root's canonical name, which its publishes and reads record (REQ-LIBRARY-093). Before this, a
 root whose name was not the entry persona fell outside it
-(`docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md`).
+(`docs/archive/defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md`).

@@ -44,7 +44,7 @@ describe('session.list over a store the open refused (REQ-SESSION-202, REQ-SESSI
  * REQ-SESSION-191's Open log, with REQ-SHELL-040's sibling rule that neither failure of the opener is silent: the platform's
  * opener can leave its promise unsettled where the handler cannot be launched (measured 2026-10-02 on a Linux host with no
  * `xdg-open`), and until 2026-10-31 the command waited on it for good
- * (`docs/defects/fixed/open-log-waits-on-the-platform-opener-without-a-bound.md`). The run host and the window are plain objects.
+ * (`docs/archive/defects/open-log-waits-on-the-platform-opener-without-a-bound.md`). The run host and the window are plain objects.
  */
 describe('session.openLog over an opener that never answers (REQ-SESSION-191, REQ-SHELL-040)', () => {
   const log = '/work/a/.rotaris/sessions/s-1/session.log';

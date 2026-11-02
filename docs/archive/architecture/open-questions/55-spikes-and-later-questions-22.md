@@ -10,7 +10,7 @@ the inherited-context block; REQ-ORCH-047, the prior-agent-context block; REQ-OR
 message's report block; REQ-TOOLS-153, the observation's warnings; `PD-TOOLS-006` revision 8, whose routing sentence sends an
 answer through either channel, and revision 5, the 100,000-character attachment budget. Raised 2026-10-13 from finding V1 of the
 duress live-run autopsy at `552d346` (session `18a9d22d`), recorded in
-[`an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters`](../../../defects/fixed/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md);
+[`an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters`](../../defects/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md);
 the consortium's question V1. **Ruled 2026-10-13.**)*
 
 The inherited-context block rendered each sibling with REQ-ORCH-060's report block, so a long answer reached the child as 4,000
@@ -74,7 +74,7 @@ persona that writes no files; revision 4, the catalogue; revision 8, the routing
 OQ-216's target of zero; [OQ-250](54-spikes-and-later-questions-21.md#oq-250)'s reopening condition, whose first limb is "any `write_scope` refused for a
 non-writer". Raised 2026-10-13 from finding V2 and the D3 verdict of the duress live-run autopsy at `552d346` (session
 `18a9d22d`, #92), recorded in
-[`the-routing-sentence-did-not-stop-a-write-scope-for-architect`](../../../defects/fixed/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md);
+[`the-routing-sentence-did-not-stop-a-write-scope-for-architect`](../../defects/the-routing-sentence-did-not-stop-a-write-scope-for-architect.md);
 the consortium's question V2. **Ruled 2026-10-13.**)*
 
 With the routing sentence in 41 of 41 coordinator requests, req 59 still gave `architect` a `write_scope` for
@@ -137,7 +137,7 @@ ladder, rung 2's keys and example fixed and rung 1's wording open; REQ-ORCH-007 
 bound, kept by OQ-114's ruling under R-071; REQ-ORCH-011, the result's fields; ADR-0026's third execution, "the schema
 was meant to be the instruction"; `PD-ORCH-011` revision 2. Raised 2026-10-13 from finding V3 of the duress live-run autopsy and
 finding Q2 of the default autopsy at `552d346`, recorded in
-[`the-intent-classifiers-strict-rung-never-names-the-objects-keys`](../../../defects/fixed/the-intent-classifiers-strict-rung-never-names-the-objects-keys.md);
+[`the-intent-classifiers-strict-rung-never-names-the-objects-keys`](../../defects/the-intent-classifiers-strict-rung-never-names-the-objects-keys.md);
 the consortium's question V3. **Ruled 2026-10-13.**)*
 
 Every classifier request went out at `json_schema` with user text ending "Reply with the classification object only.", naming no
@@ -224,7 +224,7 @@ unmeasured at `0bc3eee`. The first limb is sharpened above; the row is in [`firs
 `write_file`'s `insert` joins the file's lines and the content's lines with `\n`. The file's lines keep their `\r` and the
 inserted ones have none unless the caller sent it: `a\r\nb\r\n` with `content` `X` at `insert_line` 1 leaves `a\r\nX\nb\r\n`,
 beside "Inserted 1 line into … at line 1.". Recorded as
-[`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../../../defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
+[`a-write-file-insert-writes-lf-lines-into-a-crlf-file`](../../defects/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
 No requirement's text is contradicted: REQ-TOOLS-135 names `insert_line` and its bounds and says nothing of line endings.
 
 **What the build proceeds under.** The inserted lines written as given.

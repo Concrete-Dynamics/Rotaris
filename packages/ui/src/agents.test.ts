@@ -50,7 +50,7 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
     expect(runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)?.toolCalls).toBe(3);
   });
   /*
-   * docs/defects/fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md: the run-level
+   * docs/archive/defects/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md: the run-level
    * agent's Model was the entry role's (the configured key, or the override in force), so with alpha held out of quota and the
    * root moved to beta before its first call, the inspector read "alpha" while every call went to beta.
    */
@@ -68,7 +68,7 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
     expect(runLevelModel(session({ entryModelKey: 'beta' }), 'gamma', false)).toBe('gamma');
   });
   /*
-   * docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the
+   * docs/archive/defects/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the
    * run-level agent's compression count summed `session.agents`, which holds the children alone, so a root's own
    * compressions were counted nowhere. It is the run-wide count the session carries (REQ-MONITOR-086, OQ-159's reading, confirmed 2026-10-06 by R-071).
    */
@@ -116,7 +116,7 @@ describe('agents — the inspector follows the latest author (REQ-MONITOR-053/05
   });
   /*
    * Found by the fourth review of the repair of a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record
-   * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md): a root resumed as the entry role keeps
+   * (docs/archive/defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md): a root resumed as the entry role keeps
    * its own persona's name on its rows, so matching them by the entry persona alone dropped every one of them.
    */
   it('PD-ORCH-005 clause 4 with OQ-97: a root resumed as the entry role keeps its own persona\'s name on its rows, and the run-level agent still owns them (REQ-MONITOR-071) and is the agent they are followed to (REQ-MONITOR-053); a child of the entry persona stays its own', () => {
@@ -139,7 +139,7 @@ describe('agents — the inspector follows the latest author (REQ-MONITOR-053/05
 });
 
 /*
- * REQ-MONITOR-060/069 with PD-ORCH-003 (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md):
+ * REQ-MONITOR-060/069 with PD-ORCH-003 (docs/archive/defects/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md):
  * the entry persona can change between runs, and the run-level agent's chips are marked from the latest root's history
  * (`entryToolsOf`). Its name, its model and reasoning and the declared tools that stand in for its grant come from that
  * same root's persona, not the first root's. Until 2026-10-01 they came from the transcript's first root row, so after an
@@ -217,7 +217,7 @@ describe('agents — chips, enablement, cascade, pause (REQ-MONITOR-060/062/063/
     expect(resolvedTools(agent({ grantedTools: ['x'] }), ['a'])).toEqual(['x']);
   });
   /*
-   * REQ-MONITOR-049/060 with REQ-TOOLS-006 (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md):
+   * REQ-MONITOR-049/060 with REQ-TOOLS-006 (docs/archive/defects/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md):
    * a grant the controls left empty of native tools is a recorded grant, and the declared tools do not stand in for it.
    * Until 2026-10-01 an empty list read as "no grant recorded", so the inspector listed every tool the controls removed.
    */

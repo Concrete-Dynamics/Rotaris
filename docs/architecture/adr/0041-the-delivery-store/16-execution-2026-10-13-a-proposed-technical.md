@@ -5,7 +5,7 @@ Part 16 of 16 of [ADR-0041](../0041-the-delivery-store.md), which indexes every 
 ## Execution — 2026-10-13: a proposed technical requirement is accepted from the review
 
 *Reported back in place, under CLAUDE.md's standing policy, by the repair of
-[`accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md`](../../../defects/fixed/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md)
+[`accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md`](../../../archive/defects/accept-proposal-and-accept-change-work-refuse-citing-oq-45-which-closed-on-2026-09-11.md)
 (fin41).*
 
 **What the record said and what was true.** Both actions were refused with "needs the improvement store, which has no

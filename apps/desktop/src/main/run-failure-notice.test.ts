@@ -247,7 +247,7 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
 });
 
 /*
- * docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md:
+ * docs/archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md:
  * resilience-proof's auth-fallback-plan left REQ-NOTIFY-032's warning on screen beside the prompt of REQ-NOTIFY-071, because
  * the held class's publication was the restart, which reports nothing and cleared nothing. Driven here through the one
  * notice store main has, so what is checked is the notice on screen.

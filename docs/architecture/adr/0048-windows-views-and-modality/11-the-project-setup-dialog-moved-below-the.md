@@ -4,7 +4,7 @@ Part 11 of 13 of [ADR-0048](../0048-windows-views-and-modality.md), which indexe
 
 ## The project-setup dialog moved below the window's chrome — reported back 2026-10-02
 
-*[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../../../defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md);
+*[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../../../archive/defects/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md);
 REQ-WORKSPACE-106. Found the first surface of this level placed against the decision, as the second's first placement was.*
 
 The Context's first non-modal window-level surface was built `fixed` at the window's corner, and measured in the built app

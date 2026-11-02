@@ -20,7 +20,7 @@ ConPTY, pwsh 7.6.6 and 5.1, three runs a shell, and held as ruled — nothing wr
 interrupt ends the program at once and the call still runs out its cap. OQ-168's entry carries the detail.)*
 
 *Reported back 2026-10-01, the repair of
-[`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../../defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
+[`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../../archive/defects/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
 (reasoned when it was recorded, measured now with a PTY double): **the soft pause handed its call over across an await.**
 `execute` removed the call's listener, awaited the emulator's write of what it held, and only then opened the paused call
 `onData` feeds, so a chunk delivered inside that write reached neither: no poll returned it, and its end frame resolved the
@@ -30,7 +30,7 @@ call is now opened in the same turn as the pause, before the listener goes and t
 `terminal.test.ts`, red on the old order in both its halves.*
 
 *Reported back 2026-10-01, the partial repair of
-[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced`](../../../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md)
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced`](../../../archive/defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md)
 (live-run finding a71-8, [OQ-164](../../open-questions.md)): **the queue of one held one paused call, and a second pause
 replaced it.** A call issued while a command is soft-paused is queued by the shell behind it. The session treated the
 paused call as the poll's alone: the new call reported only its own exit, and a soft pause of the new call disposed of
@@ -73,7 +73,7 @@ reported in the never-ran form now, naming the reset (`reset-before`). Both case
 red before it and are green on it, with dash through a real PTY.*
 
 *Reported back 2026-10-01, the repair of
-[`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../../../defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md)
+[`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../../../archive/defects/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md)
 (OQ-144's sibling case): **the marker protocol also assumed that the shell outlives the command.** A command that ends
 the shell (`exit 3`, `kill -9 $$`) loses the end frame as a replacement does, because the shell that would print it is
 gone. The PTY's exit only made the session forget the PTY, so the call soft-paused after the whole window, and the next
@@ -88,7 +88,7 @@ unrepaired code. Unlike the replacement watch it needs no `/proc`, so it holds o
 it.*
 
 *Reported back 2026-09-30 (R-067), from the verifier's live run of the `fix-terminal-output` branch
-([`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../../../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),
+([`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../../../archive/defects/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),
 acceptance finding A9): **the marker protocol's premise — that the shell which printed the start frame is the one left
 to print the end frame — does not hold for a command that replaces the shell.** `exec bash` keeps the pid and never
 returns to the rest of the wrapped line; the call soft-paused after 30,027 ms and every later call ran under bash. It
@@ -112,12 +112,12 @@ window ended the call as `replaced` before the shell's exit reached it, so an `e
 call waiting behind it that it had replaced the shell (measured on Linux: in 122 of 300 exits read in a tight loop, the
 first reading not the process's own was that pair). An empty argument vector now reads as no identity, as a process that
 has gone does, so the watch keeps waiting and the exit reaches the call as OQ-144's shell-exit case
-([`a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load`](../../../defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md);
+([`a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load`](../../../archive/defects/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md);
 `terminal.test.ts`, "OQ-144 / OQ-164: a process on its way out reads no identity, never another program's"). The same
 rule reads as no identity a program in the shell's place that runs with an empty argument vector of its own (an `execve`
 with argc 0) on a Linux kernel before 5.18, which therefore goes unwatched; from 5.18 the kernel gives such an `execve` one
 empty argument, which reads as an identity (measured on 6.18; fin46, 2026-10-14,
-[`processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched`](../../../defects/fixed/processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched.md)).*
+[`processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched`](../../../archive/defects/processidentitys-comment-does-not-say-an-exec-with-an-empty-argument-vector-goes-unwatched.md)).*
 
 **Found — defect C: the agent's capture was VT-STRIPPED where every other surface was EMULATED.** Deleting a
 control sequence is not applying it. Measured against the real shell at the session's own 240×50: ConPTY

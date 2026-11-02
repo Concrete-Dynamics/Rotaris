@@ -10,9 +10,9 @@ source, writes `apps/desktop/.rotaris` and `apps/desktop/.serena`, and shows the
 The script already refuses a `--workspace` inside the checkout, with the reason "a driven app writes into its workspace;
 use a path outside the repository" (the run of 2026-09-18 left `.rotaris`/`.serena` residue that way). The launch with no
 `--workspace` reaches the same place by the other door. It is the class of the repaired
-[`workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`](fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md)
+[`workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`](../archive/defects/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md)
 and
-[`settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`](fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md),
+[`settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`](../archive/defects/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md),
 in the debugging driver rather than a proof.
 
 Noticed by reading, while repairing the first of those notes (plan `loc1`, 2026-10-20); not launched, and not repaired: it

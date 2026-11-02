@@ -105,7 +105,7 @@ What it costs:
 > both files renamed, report and artifact listing both, no reference-search row; red with the warm-up switched off. **What was
 > not measured.** A live run: the opt-in `rename` scenario now reads a cold rename that leaves a referencing file behind as a
 > finding against this directive, and is the orchestrator's to run. Repairs
-> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **Corrected 2026-10-14 (fin44, `fin44-optional-findings`):** clause 3 was not held for one failure. The search went through
@@ -113,7 +113,7 @@ What it costs:
 > lost during the search was announced by the search even when the rename then reconnected and succeeded. The search is now
 > sent quietly (`SessionConnections.call`'s `quiet`): a lost transport is released and logged as before, and only the rename
 > may warn. Repairs
-> [`a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice`](../../defects/fixed/a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice.md).
+> [`a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice`](../../archive/defects/a-rename-warm-up-that-loses-its-connection-raises-the-servers-unreachable-notice.md).
 
 > **First live execution, 2026-10-15, reported back by fin47 (`fin47-rename-and-optionals`): the rule held as written, and its
 > reason is falsified for a workspace with no project file.** The opt-in live `rename` scenario at `3c03287` (pack
@@ -128,7 +128,7 @@ What it costs:
 > file; an empty `jsconfig.json`, or the importers held open, made it reach all three).* What to do there is
 > [OQ-362](../../archive/architecture/open-questions/65-spikes-and-later-questions-32.md#oq-362), open; `code-intel-proof` launch 13 (`child-rename-cold-js`) pins it red in the
 > built app. Reopens
-> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **First execution of revision 2, 2026-10-20, built under [R-072](../requests.md#r-072) (loc1, `loc1-rename`): the rule held as
@@ -172,5 +172,5 @@ What it costs:
 > `rename` scenario: its launch (`timeout 3600 node C:/dev/Rotaris-crw-wt-loc1-rename/apps/desktop/scripts/live-run.mjs --confirm
 > --skip-build --only=rename`) was refused by the session's permission classifier and is the orchestrator's; it now also fails
 > when a `jsconfig.json` stands at the workspace root afterwards. Off Windows nothing of revision 2 was run. Repairs
-> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+> [`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 > again. The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).

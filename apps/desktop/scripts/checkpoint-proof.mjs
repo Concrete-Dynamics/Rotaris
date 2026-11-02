@@ -238,7 +238,7 @@ const restored = await launch('restore', workspace, local, preferences, {
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-checkpoint-row"][data-sequence="1"]@3500;;[data-testid="git-restore"]@4200;;[data-testid="checkpoint-overwrite"]@9500;;[data-testid="checkpoint-restore-confirm"]@10200',
   ROTARIS_CAPTURE_SHOT: `${dialogPng}@9000`,
   // REQ-GIT-097 / REQ-GIT-152: the face the preview field is drawn in, read where the cascade settles it — in the renderer, while
-  // the dialog is up (docs/defects/fixed/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md).
+  // the dialog is up (docs/archive/defects/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md).
   ROTARIS_CAPTURE_EVAL_AT: `${PREVIEW_FACE}@9000`,
   ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '17000',
 });
@@ -352,7 +352,7 @@ const live = await launch('live', workspace, local, preferences, {
   // The lock names this launch's run host. Since `endBeforeMain`, main is gone only after the run host, so the pid
   // must already probe dead. Before that repair, the holder outlived main by up to 1.8 s. (d) then read the session
   // as live (REQ-GIT-093), made no repair, and this proof blamed REQ-GIT-094
-  // (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).
+  // (`docs/archive/defects/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).
   const db = openDb();
   const lock = db.prepare('SELECT pid, host FROM session_locks WHERE session_id = ?').get(sid);
   db.close();
@@ -450,7 +450,7 @@ const disabled = await launch('disabled', workspace, local, preferences, {
 }
 
 // 9. A restore of a session loaded here after its run ended (ADR-0005, REQ-EVENTS-098; the repair of
-// `docs/defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`, R-067). The run's
+// `docs/archive/defects/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`, R-067). The run's
 // teardown releases the lock while the session stays loaded in the run host, so the restore's two writes — the safety
 // checkpoint's row and the outcome — go through the loaded writer. Once the run has ended, this script plants a lock
 // naming another machine (a second instance on the same store), and the restore is driven after it: the safety

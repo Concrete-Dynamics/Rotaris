@@ -330,7 +330,7 @@ describe('engine/artifacts — the session artifact store', () => {
   /**
    * REQ-LIBRARY-092 as amended 2026-09-29 (OQ-113, R-067): the canonical name keys a materialisation only for a record that
    * carries no task id, so two children with different task ids never share or overwrite one artifact. The repair of
-   * docs/defects/fixed/a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md.
+   * docs/archive/defects/a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md.
    */
   it('REQ-LIBRARY-092 (OQ-113): a later child that reuses an earlier child\'s canonical name materialises its own artifact, and the earlier report is left as it was', () => {
     const store = storeFor();
@@ -452,7 +452,7 @@ describe('engine/artifacts — the session artifact store', () => {
   /**
    * PD-TOOLS-006 revision 5 (OQ-221, ruled 2026-10-07 under R-072): REQ-TOOLS-152's 100,000-character section, each body
    * whole or not at all, an overflowing one left out and every later one still tried — the repair of
-   * `docs/defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`.
+   * `docs/archive/defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`.
    */
   describe('PD-TOOLS-006 revision 5: the attached-artifact section is 100,000 characters, skip-and-continue', () => {
     /** Three published records whose bodies the cases set, so each section's length is the test's to choose. */
@@ -537,7 +537,7 @@ describe('engine/artifacts — the session artifact store', () => {
   /**
    * PD-LIBRARY-003 (OQ-210, ruled 2026-10-07 under R-072): a person's saved edit survives every later re-render, which
    * rewrites only the document's leading frontmatter. The repair of
-   * docs/defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md: `rerender` wrote `renderSidecar(record)`
+   * docs/archive/defects/a-re-render-writes-over-a-persons-saved-artifact-edit.md: `rerender` wrote `renderSidecar(record)`
    * over the whole document on supersession and re-materialisation while `edited_at` and ` · edited` stayed.
    */
   describe('PD-LIBRARY-003 — a re-render keeps a person\'s edit', () => {
@@ -612,7 +612,7 @@ describe('engine/artifacts — the session artifact store', () => {
     });
 
     it('a title holding U+2028 or U+2029 writes a frontmatter the splitter reads as a block, so re-renders of the edit stack none', () => {
-      // docs/defects/fixed/a-title-holding-a-unicode-line-separator-writes-a-frontmatter-the-splitter-does-not-read.md:
+      // docs/archive/defects/a-title-holding-a-unicode-line-separator-writes-a-frontmatter-the-splitter-does-not-read.md:
       // `JSON.stringify` left both characters raw and `FRONTMATTER_LINE`'s `.` matched neither, so each re-render found no
       // block and wrote one more above the person's text.
       const store = storeFor();

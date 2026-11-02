@@ -29,7 +29,7 @@ describe('the review pane\'s reads — REQ-TRACE-425, REQ-TRACE-426', () => {
   });
 
   it('the read refused while another was outstanding is owed once that one lands, if the pane still shows its requirement (fin36)', () => {
-    // docs/defects/fixed/a-review-pane-retargeted-while-a-read-was-outstanding-is-left-with-nothing-to-show.md
+    // docs/archive/defects/a-review-pane-retargeted-while-a-read-was-outstanding-is-left-with-nothing-to-show.md
     const reads = reviewReads();
     expect(reads.ask('REQ-101')).toEqual({ start: 1 });
     expect(reads.ask('REQ-102')).toEqual({ busy: true });

@@ -1,7 +1,7 @@
 /**
  * The live run's resume scenario presses Pause on two running children, bounded, and reports what the press found and
  * what the pause held (live-run finding P7 at a68f121;
- * `docs/defects/fixed/the-resume-scenarios-pause-can-land-on-one-running-child.md`). The schedule is read through the
+ * `docs/archive/defects/the-resume-scenarios-pause-can-land-on-one-running-child.md`). The schedule is read through the
  * capture seam's own parser, so a step that parses as something else is seen as such.
  */
 import { describe, expect, it } from 'vitest';

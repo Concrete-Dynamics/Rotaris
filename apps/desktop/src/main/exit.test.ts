@@ -360,7 +360,7 @@ describe('OQ-298: a quit from outside any window asks no unsaved-settings guard 
 
   /*
    * `QuitOutsideAnyWindow` is `before-quit` as `index.ts` wires it: until 2026-10-14 that handler was inline in the composition
-   * root and only `exit-trace-proof` reached it (`docs/defects/fixed/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`).
+   * root and only `exit-trace-proof` reached it (`docs/archive/defects/no-unit-test-pins-the-before-quit-wiring-of-a-quit-outside-any-window.md`).
    */
   function quitHandler(windows: readonly (GuardedWindow & { readonly closeGuard: ReturnType<typeof guardClose> })[], log: string[]) {
     const closing = new Set<number>();
@@ -398,7 +398,7 @@ describe('OQ-298: a quit from outside any window asks no unsaved-settings guard 
     handler.beforeQuit();
     expect(lines[0]).toMatch(/^quit: closing 1 main window\(s\) through their close guards first/);
     // Before 2026-10-14 the second line said "no close guard is asked" beside the first's "through their close guards"
-    // (`docs/defects/fixed/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`).
+    // (`docs/archive/defects/the-quit-log-says-it-closes-through-close-guards-beside-saying-none-is-asked.md`).
     expect(lines.join('\n')).not.toMatch(/no close guard/);
     expect(lines[1]).toMatch(/each close guard allows without a question/);
   });

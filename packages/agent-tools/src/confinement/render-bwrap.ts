@@ -51,7 +51,7 @@ export function bwrapTokens(spec: ConfinementSpec): readonly BwrapToken[] {
       // host, and so an empty `.git` stayed on the host after the command ended. No mount can hide
       // a name that does not exist without a mountpoint at that name, so the requirement's own
       // fallback applies (recorded as
-      // `docs/defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`).
+      // `docs/archive/defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`).
       case 'absent': break;
     }
   }

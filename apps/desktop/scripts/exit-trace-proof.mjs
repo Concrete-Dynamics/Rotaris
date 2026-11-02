@@ -4,9 +4,9 @@
  *
  * `apps/desktop/src/main/index.ts` writes why the process goes away: `before-quit` and `quit` for an orderly close,
  * `render-process-gone` for a renderer lost, `child-process-gone` for a utility child lost, and `process.on('exit')` last
- * (`docs/defects/fixed/process-exit-left-no-diagnosable-trace.md`). The orderly half was measured when it landed; the crash
+ * (`docs/archive/defects/process-exit-left-no-diagnosable-trace.md`). The orderly half was measured when it landed; the crash
  * handlers were "argued, not measured", and no proof or live launch killed a process until this one
- * (`docs/defects/fixed/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Six driven launches:
+ * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Six driven launches:
  *
  *   1. orderly — launched and quit through the driver: the log carries `quit: exiting with status 0` and
  *                `main process exiting with status 0`, and NO `error` line for a renderer or a child gone. The control for
@@ -20,7 +20,7 @@
  *                close guard at all (`quitGuardsOutsideAnyWindow`, `exit.ts`), the window closes, and the orderly shutdown
  *                runs to `quit: exiting with status 0` and `main process exiting with status 0`, exit 0. Until 2026-10-14
  *                the dead renderer's guard was asked and its question never answered, and the quit was held for good
- *                (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`); from
+ *                (`docs/archive/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`); from
  *                then until OQ-298 a guard that could not answer allowed. Should the quit be held again the check fails,
  *                and the immediate exit ends the launch for its trace.
  *
@@ -28,7 +28,7 @@
  *                OQ-298 (2026-10-14, R-072) the quit asks no close guard, so it waits for no renderer: main writes the
  *                OQ-298 line, no PD-SHELL-010 `warn` line, and exits 0 well under `RENDERER_LIVENESS_BOUND_MS` (5 s).
  *                Under PD-SHELL-010 alone (fin44) the same quit asked the guard and was released by the liveness probe
- *                after about 5.6 s (`docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`).
+ *                after about 5.6 s (`docs/archive/defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`).
  *   4. hang-close — the same hang, then the host's close of the window (the driver's `closeWindow`,
  *                `BrowserWindow.close()`): a person's close, which still asks the renderer's guard (REQ-SHELL-119 guard (1))
  *                and is released by the liveness probe (PD-SHELL-010's built-app measure), ending the application with its
@@ -47,7 +47,7 @@
  * `ps` on macOS, CIM on Windows). Only Linux was run when this was written (2026-10-13); the other two are written, not run.
  * *Windows was run 2026-10-20 (the Windows ARM64 session's C4) and met every product reading, but the proof's signals were
  * Linux's: Node on Windows sends only SIGINT, SIGTERM, SIGKILL and 0, each of the last three `TerminateProcess` with exit 1
- * (`docs/defects/fixed/exit-trace-proof-expects-posix-signal-semantics-on-windows.md`).* So on Windows a kill from outside is
+ * (`docs/archive/defects/exit-trace-proof-expects-posix-signal-semantics-on-windows.md`).* So on Windows a kill from outside is
  * expected as exit 1 (`KILL_EXIT`), the renderer's crash is `TerminateProcess` (`process.kill(pid)`), the hang is the process
  * suspended with `NtSuspendProcess` (what Sysinternals' `pssuspend` does) and resumed after, and `unsaved-sigterm` measures
  * what Windows does with the signal — the process terminated, not quit — since no signal there reaches a quit path. macOS
@@ -176,7 +176,7 @@ const results = {};
   /*
    * The application's quit after the crash. Measured 2026-10-13 (fin42): it was HELD — the renderer's close guard was asked
    * through `executeJavaScript` on a frame that is gone, which never settles, and nothing bounded the wait. Repaired
-   * 2026-10-14 (docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md): a renderer
+   * 2026-10-14 (docs/archive/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md): a renderer
    * that is gone cannot answer, so its guard allows. The quit must now end the process through the orderly shutdown; if
    * it is held, the check fails and the immediate exit (the driver's `quit` with `immediate`, `app.exit`) ends the launch.
    */
@@ -205,7 +205,7 @@ const results = {};
 /*
  * PD-SHELL-010 (OQ-297, the consortium's HR1). A renderer that is alive but hung is not gone: until 2026-10-14 its close
  * guard's question was waited for with no bound, and it held the application's quit and a person's close of its window
- * (docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md). Main now asks a liveness probe of
+ * (docs/archive/defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md). Main now asks a liveness probe of
  * its own beside the guard's question; unanswered within RENDERER_LIVENESS_BOUND_MS (5 s) the renderer cannot answer, its
  * guard allows, and main says so at `warn`. SIGSTOP is the hang: the renderer's process is alive and answers nothing.
  *

@@ -8,7 +8,7 @@
  * also calls, as it did before the move. Other bounds in the engine cut differently and are not this one (the intent
  * classifier's and a child report's).
  * FALSIFIED, kept beside its replacement (live-run M3,
- * docs/defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md): "the tool log's
+ * docs/archive/defects/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md): "the tool log's
  * 2,000-character cut … cut[s] differently and [is] not this one". REQ-SESSION-194 names that cut among those its marker
  * governs, and the writer's bare `slice` left a cut value that no reader could tell from a whole one. `cap` characters
  * at most, the last three an ellipsis, and never between the two halves of a surrogate pair (found by phase 6's
@@ -29,14 +29,14 @@ const WHOLE_WORDS = new Set(['path', 'paths', 'file', 'files', 'filename', 'dir'
  * Keys of this product's own tools whose values are identifiers or path patterns though their last word does not say so
  * (PD-SESSION-003 (d)). `delegate`'s `inherited_context` (sibling task ids) and `attach_artifacts` (artifact ids or slugs,
  * REQ-TOOLS-152) joined on 2026-10-07: until then a failed delegate call's id lists were cut as free text
- * (docs/defects/fixed/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md).
+ * (docs/archive/defects/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md).
  */
 const WHOLE_KEYS = new Set(['persona', 'supersedes', 'depends_on', 'continuation_of', 'write_scope', 'inherited_context', 'attach_artifacts']);
 
 /**
  * REQ-SESSION-136's error-path cut of a tool record's ARGUMENTS under REQ-SESSION-194 whole, its last sentence included:
  * "Counts, identifiers, paths and timestamps are never truncated." (the fin23 verifier's finding, 2026-10-06, on the first
- * repair of live-run M3, docs/defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md).
+ * repair of live-run M3, docs/archive/defects/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md).
  * FALSIFIED, kept beside its replacement: the first repair stored arguments that do not fit as "the head of their JSON
  * text, marked". A head keeps whatever the model serialised first, so `{content: <1,990 characters>, path: '/ws/x.ts'}` lost
  * its path whole, and a path that began near character 1,997 was cut through.

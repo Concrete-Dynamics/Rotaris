@@ -13,7 +13,7 @@ outside any window asks no close guard; [`PD-SHELL-009`](../../../product/direct
 one of several main windows to that window's own project and left guard (2) as written; REQ-GIT-083 and REQ-GIT-125 to REQ-GIT-135,
 worktree integration itself, deferred from the first release. Raised 2026-10-15 by fin47 (`fin47-guard-and-support`) while building
 the guard
-([`the-integration-in-progress-close-guard-has-no-code.md`](../../../defects/fixed/the-integration-in-progress-close-guard-has-no-code.md));
+([`the-integration-in-progress-close-guard-has-no-code.md`](../../defects/the-integration-in-progress-close-guard-has-no-code.md));
 the plan's range OQ-361 to OQ-380, its first number — renumbered at landing if a sibling took it first. **Ruled 2026-10-20.**)*
 
 **What is open.** The guard is built in its place in both fixed orders (`apps/desktop/src/main/integration-guard.ts`): a person's close

@@ -40,7 +40,7 @@
 # which is an argument for writing that separator as a `\u0000` escape in the
 # source one day." That day came: `mergeSecrets` writes the separator as the
 # escape `\u0000`, the file holds no NUL byte, and git reads it as text
-# (docs/defects/fixed/the-secret-merge-keys-carry-literal-nul-bytes-so-git-treats-their-file-as-binary.md).
+# (docs/archive/defects/the-secret-merge-keys-carry-literal-nul-bytes-so-git-treats-their-file-as-binary.md).
 # The file's own line `packages/config/src/mcp/environment.ts text eol=lf` is
 # dropped: `*.ts text eol=lf` above already gives it the same attributes.
 

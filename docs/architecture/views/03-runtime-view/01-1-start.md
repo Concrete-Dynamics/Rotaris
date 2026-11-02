@@ -68,7 +68,7 @@ the merged output and its total limit. Each file therefore runs from its source 
 that line, and whatever follows is not read as the last file's own: the skill catalog, or `runTurn`'s MCP section
 (`withMcpSection`, REQ-MCP-101), which is appended after them. Until 2026-10-06 nothing closed the files, and in the duress
 live run at `27a5127` agents read `## MCP servers` as part of `AGENTS.md`
-(`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
+(`docs/archive/defects/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
 The always-active units are five since `PD-TOOLS-012` revision 2 (OQ-230): after REQ-WORKSPACE-060's four (workspace context,
 skill catalog, force-loaded bodies, the persona-memory slot), `contextUnits` pushes `PRODUCT_DIRECTORIES_UNIT`
 (`config/src/product-directories.ts`) on every call — with no instruction file, no skill and injection off too — so the entry
@@ -185,7 +185,7 @@ its default height (102 px). Every other part keeps its content height (PD-ORCH-
 shorter than the gate's parts, as at REQ-SHELL-022's minimum with a persistent notice on screen, the plan stands at its
 floor and the gate scrolls with its three answers pinned to its floor. Until 2026-10-06 the plan alone took the loss:
 41 px beside the todo's 56 under a 97 px notice
-(`docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`).
+(`docs/archive/defects/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`).
 Since 2026-10-07 every part but the plan is bounded below its floor (PD-ORCH-002 revision 3, OQ-204 ruled under R-072): a
 later cycle's "You asked for" line (`.plan-gate__prior`) takes the todo's cap, scrolls inside itself and wraps an unbroken
 run, so the plan stays the largest part the product sizes; a revision field the user drags taller keeps the user's height
@@ -238,4 +238,4 @@ before it prepares, a cached read), then the engine, whose `configure` meets ADR
 mode then carries the backend's reason and remediation under `session.confinement`. Until then only a run start and a
 `confinement.status` read settled it, and a continuation reached first read `null` and was refused "No OS-level confinement can be
 used on this host." even where confinement was available
-([the note](../../../defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md)).
+([the note](../../../archive/defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md)).

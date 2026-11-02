@@ -4,9 +4,9 @@
  * or more printed as a retry. Until 2026-10-03 the key was the command's first 120 characters alone, so a long
  * `cd <worktree> && ` prefix collapsed different commands into one line and a `send_signal` and a `query` of one background
  * session, both carrying the command `true`, read as one command retried
- * (`docs/defects/fixed/the-autopsy-reader-counts-different-commands-as-one-retried-command.md`, finding D6 of the default
+ * (`docs/archive/defects/the-autopsy-reader-counts-different-commands-as-one-retried-command.md`, finding D6 of the default
  * live run at 1763f7f). Until 2026-10-06 the key carried no agent, so two agents each running the suite once read as one
- * command "retried 2×" (`docs/defects/fixed/the-autopsy-reader-reads-two-agents-each-running-a-command-once-as-one-command-retried.md`,
+ * command "retried 2×" (`docs/archive/defects/the-autopsy-reader-reads-two-agents-each-running-a-command-once-as-one-command-retried.md`,
  * finding H8 of the duress live run at 27a5127). `packages/engine/src/autopsy.ts` keys the same way.
  */
 

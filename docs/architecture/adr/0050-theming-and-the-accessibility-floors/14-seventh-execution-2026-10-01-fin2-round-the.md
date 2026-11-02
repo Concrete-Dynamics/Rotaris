@@ -8,7 +8,7 @@ The sixth execution made every admitted text counted, measured or skipped, and i
 skip hides. Nothing read the skips as a failure: the contrast item passed with no text below its floor, one text
 measured in the whole cell and no incoherent capture. A regression that pushed one surface's text off the screen, or left
 it animating at capture, passed on the rail and the status strip, which every capture shows
-(`../../../defects/fixed/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`). Repaired in the proof:
+(`../../../archive/defects/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`). Repaired in the proof:
 - The probe marks each admitted text `inSurface` when it sits inside the capture's own surface: the primary view's root
   element (`.overview`, `.workspace`, `.mission`, `.req`, `.git`, `.library`), or the Settings view's (`.settings`).
 - `apps/desktop/scripts/lib/contrast-coverage.mjs` fails a capture with no measured text inside its surface, a capture

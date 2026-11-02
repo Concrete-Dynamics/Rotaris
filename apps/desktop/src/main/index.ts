@@ -282,13 +282,13 @@ async function main(): Promise<void> {
    * Whether this launch is a capture. A packaged build still answers it (the packaged probe, `capture/probe.ts`), so it decides
    * nothing scriptable on its own: every seam main reads beside it — the dialogs' answers, the choosers' paths, the theme, the
    * scale — is read behind `__ROTARIS_SEAMS__` on the same line, which a packaged build compiles out with its variable's name
-   * (docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md; `capture/seam-reads.test.ts`).
+   * (docs/archive/defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md; `capture/seam-reads.test.ts`).
    */
   const capturing = Boolean(process.env['ROTARIS_CAPTURE_PNG']);
   /*
    * Verification seam: the approval dialog answered with a real click or Escape (`capture/approval-answers.ts`). Read behind
    * the build-time flag, so a packaged build compiles the reads out; behind `capturing` alone it shipped
-   * (docs/defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md).
+   * (docs/archive/defects/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md).
    */
   const scriptedApprovals = __ROTARIS_SEAMS__ && capturing ? approvalAnswerer(process.env['ROTARIS_CAPTURE_APPROVAL']) : null;
   const scriptedApprovalMs = __ROTARIS_SEAMS__ ? Number(process.env['ROTARIS_CAPTURE_APPROVAL_MS'] ?? 700) : 700;
@@ -1068,7 +1068,7 @@ async function main(): Promise<void> {
    * without asking anything (PD-SHELL-001 revision 2, OQ-267 ruled 2026-10-13 under R-072), and the dialog is parented to
    * that window and decides for that workspace. Until
    * 2026-10-13 a notice naming another workspace opened nothing
-   * (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md). Without it, the asking window's own.
+   * (docs/archive/defects/a-hook-review-notice-for-another-workspace-opens-nothing.md). Without it, the asking window's own.
    */
   const openHookReview = async (asking: MainWindowState | undefined, workspace?: string): Promise<CommandOutcome> => {
     let target = asking;
@@ -1300,7 +1300,7 @@ async function main(): Promise<void> {
       const publication = runEndingPublication(e.sessionId, e.result);
       if (heldBackByClose) {
         // REQ-STARTUP-046's last sentence under PD-SHELL-009: the outcome of a run its window's close stopped is the rest's
-        // own notice, and it does not appear on the window that stays (`docs/defects/fixed/a-stopped-session-that-is-never-continued-keeps-its-notices-held.md`).
+        // own notice, and it does not appear on the window that stays (`docs/archive/defects/a-stopped-session-that-is-never-continued-keeps-its-notices-held.md`).
         log(`run ${e.sessionId}: its outcome "${e.result.summary}" held back: its window's close stopped the run (REQ-STARTUP-046, PD-SHELL-009)`);
       } else if (publication.kind === 'reported') {
         log(`run ${e.sessionId}: completion unconfirmed, last durable event ordinal ${e.result.persistence?.last_event_ordinal} — the recording-failure notice already carries it (REQ-EVENTS-088)`);
@@ -1328,7 +1328,7 @@ async function main(): Promise<void> {
    * import the other (REQ-WORKSPACE-085; `eslint.config.js`). Channel 12 carries a workspace's nine values of
    * REQ-WORKSPACE-105 to the main windows holding that workspace, whichever view each is showing, and to no other.
    * The setup port addresses the run host by the run's own workspace, never by the focused window's (PD-SHELL-001;
-   * `docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
+   * `docs/archive/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
    */
   const initialization = new InitializationCoordinator({
     clocks,
@@ -2021,7 +2021,7 @@ async function main(): Promise<void> {
   /*
    * PD-ORCH-005 clause 9: a quit Electron starts on its own account — SIGTERM, the desktop's logout where Electron emits
    * `before-quit` (on Windows it emits none at a logout or shutdown; a main window's `session-end` starts the orderly shutdown
-   * there, `SessionEndShutdown`: `docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`), `app.quit()` —
+   * there, `SessionEndShutdown`: `docs/archive/defects/a-windows-logout-skips-the-orderly-shutdown.md`), `app.quit()` —
    * closes every window at once, an approval dialog before its main window's close guard has answered, and the dialog's
    * close would be sent as the person's Deny. Such a quit is turned into the main windows' close, all or none
    * (`closeThroughGuards`): every close is confirmed, and only then does any window close, so a dialog only ever closes once

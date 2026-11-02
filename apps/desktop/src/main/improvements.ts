@@ -43,7 +43,7 @@ export interface ImprovementCoordinator {
    * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): the activity as it stands, what the next publication with no job would
    * carry — sent to a main window when it opens a workspace, so a window opened while a retrospective of its workspace is
    * pending draws the gesture unavailable at once rather than at the next publication
-   * (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+   * (docs/archive/defects/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
    */
   current(): ImprovementActivity;
 }

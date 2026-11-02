@@ -39,65 +39,65 @@ Part 1 of 8 of [the first-release plan](../first-release-plan.md), which indexes
   note is not moved; the CPU-profile round of 2026-09-29 named the loaded side's extra script by function — the
   transcript's own passes over every displayed row — and repaired them, after which twelve consecutive runs passed and sixteen of seventeen in all, the one red on a saturated host (a series on a host that stays quiet is still owed),
   so the append comparison is green again on Linux and the note is moved
-  ([note](../../defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md), repaired; OQ-89 — OQ-76 on its branch, renumbered at the merge — holds the
+  ([note](../../archive/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md), repaired; OQ-89 — OQ-76 on its branch, renumbered at the merge — holds the
   reading under a burst, with the round's evidence).* *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
   ~~`slash-proof` at its first catalogue assertion since ADR-0063
-  ([note](../../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
-  launch on Linux only ([note](../../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).~~
+  ([note](../../archive/defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
+  launch on Linux only ([note](../../archive/defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).~~
   **Both repaired 2026-09-28 under R-062, in the proofs and not the product** — the badge assertion reads ADR-0063's
   set (`action` for the built-ins and mirrors, `skill` for `/skill` and `/skills`), and every proof takes the global
   configuration directory from `configDirFor`; `skills-proof` passed 10 checks over 9 launches as root on Linux
-  ([fixed](../../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md),
-  [fixed](../../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)). ~~`slash-proof` is not
+  ([fixed](../../archive/defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md),
+  [fixed](../../archive/defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)). ~~`slash-proof` is not
   green for it.~~ **`slash-proof` is green again 2026-09-29 (R-067).** It moved from one red to another: it ~~now stops at the model chip's eval~~
-  stopped at the model chip's eval ([fixed](../../defects/fixed/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md),
+  stopped at the model chip's eval ([fixed](../../archive/defects/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md),
   repaired 2026-09-28 in the proof with the chip's close and the ground it measures on), and ~~now stops~~ then stopped at a **product**
   red: REQ-CHAT-027's partial shade at 4.06:1 on the ground the composer dock paints, every other check passing in a
-  diagnostic run ([fixed](../../defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md);
+  diagnostic run ([fixed](../../archive/defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md);
   ADR-0050's fourth execution) — repaired in the product by deriving the four on the dock's `--rt-surface`
   (`COMPOSER_GROUND`), every role at 4.50:1 or more on all three palettes (ADR-0050's fifth execution). On Linux as
   root, ~~`resilience-proof`,~~ `notice-proof` and `init-proof` are red for their recorded notes
-  ([override select](../../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md), and
-  [code intelligence as root](../../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
+  ([override select](../../archive/defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md), and
+  [code intelligence as root](../../archive/defects/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
   two). **`resilience-proof` repaired 2026-09-28 under R-062, in the proof and not the product:** scenario 4 chooses the
   model through the driver and every launch is bounded, and all ten scenario blocks (eleven launches) pass as root on Linux. The overrun it
   showed was a product loop, not an ignored signal: a quit whose standard output has been closed never ends
-  ([note](../../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), repaired 2026-09-29 under R-067; REQ-MONITOR-131's
-  backstop). `sandbox-proof` reads the host's own verdict since 2026-09-28 ([Windows verdict, fixed](../../defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)).
+  ([note](../../archive/defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), repaired 2026-09-29 under R-067; REQ-MONITOR-131's
+  backstop). `sandbox-proof` reads the host's own verdict since 2026-09-28 ([Windows verdict, fixed](../../archive/defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)).
   It is green on Linux without `bwrap`. On Linux with `bwrap` it was red on a **product** defect that IC-8's first Linux
-  execution found ([absent-subpath residue](../../defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)).
+  execution found ([absent-subpath residue](../../archive/defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)).
   That defect was repaired 2026-09-29 under R-067: the renderer now refuses the command. The proof is green there too,
   and OQ-140 carries the cost of that repair on Linux. On Windows it was re-run on 2026-10-21 (the Windows ARM64 session's D3) and
   passed on the outside path, which leaves IC-8 where it was.
   Measured red there on 2026-09-29, beside REQ-CHAT-055's CPU-profile round: ~~`terminal-proof` (112 of 116; its
   live section's commands are PowerShell's,
-  [note](../../defects/fixed/terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md))~~ *(measured at `fa377e6`, before `ef1540e`'s repair of the same defect on `main`)* and
+  [note](../../archive/defects/terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md))~~ *(measured at `fa377e6`, before `ef1540e`'s repair of the same defect on `main`)* and
   ~~`chat-controls-proof` in a checkout without the bundled code-intelligence runtime~~
-  ([note](../../defects/fixed/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md)) *(repaired
+  ([note](../../archive/defects/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md)) *(repaired
   2026-09-29 under R-067: the proof's workspaces now carry an answered project setup and a launch that starts one anyway
   fails by name; green without the bundle. `notice-proof` goes red the same way —
-  [note](../../defects/fixed/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md), ~~open~~ **repaired
+  [note](../../archive/defects/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md), ~~open~~ **repaired
   2026-10-01 (fin2) the same way, green without the bundle**)*.
   **2026-09-28, R-062:** `init-proof`'s later red was a product race, a skip answered before the open's
-  resolution swallowing the background task ([fixed](../../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md)),
+  resolution swallowing the background task ([fixed](../../archive/defects/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md)),
   and behind it the setup dialog drawing that background run as its own and refusing Escape
-  ([fixed](../../defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md); OQ-123), whose repair let a skip move
+  ([fixed](../../archive/defects/the-setup-dialog-takes-a-background-run-as-its-own.md); OQ-123), whose repair let a skip move
   a task completed during it into skipped until the skip stopped reading after the resolution, and let a skip and
   the run's recording erase each other until both went through one marker-write queue
-  ([fixed](../../defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md)),
+  ([fixed](../../archive/defects/a-skip-can-move-a-completed-task-into-skipped.md)),
   and `code-intel-proof`'s were three harness defects
-  ([token order](../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md),
-  [setup collision](../../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md),
-  and, found in the fix round, [fixed-offset presses](../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md)).
+  ([token order](../../archive/defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md),
+  [setup collision](../../archive/defects/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md),
+  and, found in the fix round, [fixed-offset presses](../../archive/defects/code-intel-proofs-setup-launches-press-at-fixed-offsets.md)).
   A fourth, the shared capture seam's Settings press, which a notice could deflect, was repaired 2026-09-30 under R-067
-  ([fixed](../../defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md)): the seam now presses
+  ([fixed](../../archive/defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md)): the seam now presses
   again until the category is selected, and logs when it never is. *(This line read "One more stays open … the nine
   proofs that use the seam are exposed to it until it is repaired" until then.)* `code-intel-proof`
   no longer uses that seam (its setup launches open Settings by chord and press only after the notice), after the fix
   round's verifier found its first correction too late for `setup-cancel` (three reds in seven runs). As measured after the last repairs, `init-proof` passes
   three runs in a row as root on Linux and `code-intel-proof` passes four section-5 runs and then three whole runs in a row.
   **2026-10-01 (fin2):** in a checkout without the bundled code-intelligence runtime `init-proof` still went red as "the
-  background task recorded nothing" ([fixed](../../defects/fixed/init-proof-reads-a-missing-code-intelligence-bundle-as-a-task-that-recorded-nothing.md)):
+  background task recorded nothing" ([fixed](../../archive/defects/init-proof-reads-a-missing-code-intelligence-bundle-as-a-task-that-recorded-nothing.md)):
   it now builds the bundle when it builds, refuses under `--skip-build` naming `pnpm code-intel:bundle`, and quotes the app
   log's setup failure; green as root on Linux built from nothing and again with `--skip-build`.
 - The unbuilt directives `PD-TOOLS-003` (**built 2026-09-27**, R-055), `PD-TOOLS-004` (**built 2026-09-27**, R-057), `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` (**built 2026-09-27**, R-057) and `PD-MONITOR-002` (**built 2026-09-27**, R-055). *Annotated 2026-10-13: all five are built; their first executions are in `../product/directives.md`.*

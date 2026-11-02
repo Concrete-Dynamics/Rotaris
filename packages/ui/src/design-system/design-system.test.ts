@@ -152,7 +152,7 @@ describe('production design-system layer', () => {
   });
 
   /*
-   * The repair of docs/defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md
+   * The repair of docs/archive/defects/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md
    * (acceptance A40): half the Tag's kinds named classes the adopted sheet does not define, a className replaced the
    * foundation, and the StatusDot's kind was read by no stylesheet. The kinds and states are the design components'
    * own (`docs/design/system/components/core/Tag.d.ts`, `StatusDot.d.ts`), and each must paint.

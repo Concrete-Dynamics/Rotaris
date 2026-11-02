@@ -120,7 +120,7 @@ a surface in each case and erases a distinction one of them draws on purpose.
   workspace, adding one is ~~the build's reading and not a ruling~~ the ruled reading since 2026-10-13: [OQ-267](../open-questions/57-spikes-and-later-questions-24.md#oq-267),
   ruled under [R-072](../../../product/requests.md#r-072) as [`PD-SHELL-001`](../../../product/directives/pd-shell-001.md#pd-shell-001) revision 2. `pnpm notice-proof`'s
   `review-other` launch drives it; before the repair it logged "… which is not the open workspace" and opened nothing
-  ([`../../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../../../defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md)).
+  ([`../../defects/a-hook-review-notice-for-another-workspace-opens-nothing.md`](../../defects/a-hook-review-notice-for-another-workspace-opens-nothing.md)).
   The provider-named sign-in branch stays a logged no-op: no notice names a provider, so nothing reaches it.
 - The count is unchanged: no identifier was minted or withdrawn.
 

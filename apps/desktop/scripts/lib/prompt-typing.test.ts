@@ -1,6 +1,6 @@
 /**
  * The live run's kill limit for a launch leaves room for typing its prompt, because the capture's own bound counts from the
- * prompt's submission (live-run finding P6 at a68f121; `docs/defects/fixed/a-captures-wait-starts-before-its-prompt-is-typed.md`).
+ * prompt's submission (live-run finding P6 at a68f121; `docs/archive/defects/a-captures-wait-starts-before-its-prompt-is-typed.md`).
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the helper is plain ESM beside the live run that uses it.

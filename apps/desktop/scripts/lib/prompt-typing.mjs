@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * How much longer the live run's own kill limit for a launch stands, because the capture seam's wait now counts from the
- * prompt's submission (live-run finding P6 at `a68f121`; `docs/defects/fixed/a-captures-wait-starts-before-its-prompt-is-typed.md`).
+ * prompt's submission (live-run finding P6 at `a68f121`; `docs/archive/defects/a-captures-wait-starts-before-its-prompt-is-typed.md`).
  *
  * The capture's bound (`ROTARIS_CAPTURE_WAIT_MS`) counts from the moment the typed prompt is submitted, but the harness's
  * kill limit for the launch (`RUN_WAIT_MS` plus a margin) counts from the spawn. Before this allowance the typing time —

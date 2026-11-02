@@ -7,7 +7,7 @@ Part 13 of 14 of [ADR-0012](../0012-the-delegated-child-scheduler.md), which ind
 *The first execution above lists "REQ-ORCH-098's teardown entries" under the child's execution, and the cascade and the
 finalize sweep under the scheduler. A child the scheduler settles has no execution to end, so it was never torn down.
 Acceptance round 1 found it (finding A16,
-[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md)),
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../../archive/defects/a-child-that-never-started-gets-no-teardown-timeline-entries.md)),
 and its repair reports here, under R-067.*
 
 **What the execution found.** Two cases through `Sessions` over a real store: a child blocked by its dependency's failure,
@@ -22,7 +22,7 @@ the three entries for every settle. The reading, that a child that never started
 
 **What was not measured.** No built app or live run: none reliably blocks a child or cancels one held on its slot. The
 cancel paths outside the scheduler and the execution still write no teardown, and are a note
-([`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../../defects/fixed/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md),
+([`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../../archive/defects/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md),
 repaired 2026-10-01, below).
 The row is in [`../first-executions.md`](../../first-executions.md).
 

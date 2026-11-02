@@ -365,7 +365,7 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
   });
 
   /**
-   * The repair of `docs/defects/fixed/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`
+   * The repair of `docs/archive/defects/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`
    * (finacc3 F05, found by its first verifier): the message-limit pause writes the run's rest and then forwards it and runs
    * the `session_end` hooks before the run has ended. A stop, a root cancel or a pause accepted in that window saved
    * `cancelling` or `pausing` over `paused_message_limit`, and nothing wrote the rest again. Each is refused there, as at

@@ -40,7 +40,7 @@ describe('the approval dialog\'s scripted answers (verification only)', () => {
   });
 
   /*
-   * docs/defects/fixed/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md: main reads the seam's three variables
+   * docs/archive/defects/the-approval-dialogs-scripted-answer-survives-a-packaged-build.md: main reads the seam's three variables
    * behind the build-time flag, so a packaged build (`__ROTARIS_SEAMS__` false) compiles the reads out. Until 2026-10-13 they
    * sat behind the run-time `capturing` test alone, which a packaged build keeps. `scripts/package.mjs` refuses the artifact;
    * this reads the source, where the guard is written.

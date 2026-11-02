@@ -86,7 +86,7 @@ const workspace = join(root, 'workspace');
 const local = join(root, 'local');
 // By the platform that reads it (`configDirFor`), never the Windows spelling alone: off Windows the product reads
 // `<XDG_CONFIG_HOME>/rotaris`, so a file written at `<local>/rotaris/config` was never opened and launch 1 failed on
-// the shipped grant (`docs/defects/fixed/mcp-proof-writes-its-global-configuration-where-posix-never-reads-it.md`).
+// the shipped grant (`docs/archive/defects/mcp-proof-writes-its-global-configuration-where-posix-never-reads-it.md`).
 const configDir = configDirFor(local);
 const preferences = join(root, 'preferences');
 const pids = join(output, 'pids');
@@ -96,7 +96,7 @@ mkdirSync(pids, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# MCP proof workspace\n');
 // The workspace is a repository of its own, as a project is: the skill catalog's project walk stops at the nearest `.git`
 // (REQ-WORKSPACE-051), and without one it climbed to this checkout's root and listed the repository's own skills
-// (docs/defects/fixed/the-mcp-proofs-runs-list-the-repositorys-own-skills-in-their-catalog.md).
+// (docs/archive/defects/the-mcp-proofs-runs-list-the-repositorys-own-skills-in-their-catalog.md).
 if (!existsSync(join(workspace, '.git'))) {
   const init = spawnSync('git', ['init', '-q'], { cwd: workspace, encoding: 'utf8', timeout: 30_000 });
   if (init.status !== 0) throw new Error(`git init in the proof's workspace exited ${init.status ?? init.signal}: ${init.stderr}`);
@@ -195,7 +195,7 @@ const results = {};
  * load, and on a loaded host the drop-rules launch clicked a toggle that was not on screen yet and read `[]` at
  * 3,200 ms, then — on another run — probed the relaunch's row at 2,500 ms before it was drawn: two reds about
  * REQ-MCP-115 the product had not earned
- * (`docs/defects/fixed/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md`). The assertions are the same ones.
+ * (`docs/archive/defects/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md`). The assertions are the same ones.
  *
  * Each step is recorded in `<name>.steps.json` beside the launch's log — when it began (`at`), how long it took (`ms`)
  * and what it answered — so a red names the step that did not happen. The launch is bounded (`boundMs`) and ended by
@@ -350,7 +350,7 @@ const ROUND_OVER = `(() => {
    * The workspace is a repository of its own (`git init` above), so the skill catalog's project
    * walk (REQ-WORKSPACE-051) stops there; until 2026-10-06 it walked up to this checkout's root and every run's prompt listed
    * the repository's own development skills (`build-ui`, …) between the two
-   * (docs/defects/fixed/the-mcp-proofs-runs-list-the-repositorys-own-skills-in-their-catalog.md).
+   * (docs/archive/defects/the-mcp-proofs-runs-list-the-repositorys-own-skills-in-their-catalog.md).
    */
   const END = '<!-- end of instruction files: nothing below this line is part of them -->';
   const boundary = system.slice(fileEnd, fileEnd + END.length + 4);
@@ -429,7 +429,7 @@ const ROUND_OVER = `(() => {
  * `inputSchema`, and a call that fails it is refused at the gate as `invalid_request` with a `tool_error` issue and never
  * sent; a valid call reaches the server exactly as written. Until 2026-10-06 the gate checked an MCP call against a
  * permissive record and `{}` for `echo` (whose schema requires `text`) was sent
- * (docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). The fixture's
+ * (docs/archive/defects/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). The fixture's
  * `--call-file` writes every `tools/call` it receives, so "never sent" and "unchanged" are read at the server.
  */
 {
@@ -607,7 +607,7 @@ function cancelReading(name, r) {
  * REQ-MONITOR-049/060 with REQ-TOOLS-006 and REQ-MCP-065: a child whose `tool_restrictions` list names only `echo` keeps no
  * native tool. Its row records that empty grant (marked `recorded`), and the inspector, with the child selected, lists no
  * native tool and `echo` under alpha. Until 2026-10-01 the empty list read as "no grant recorded" and the inspector listed
- * the persona's declared tools as granted (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+ * the persona's declared tools as granted (docs/archive/defects/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
  * Driven, as 6 is: the selection and every read wait for their condition.
  */
 {
@@ -677,7 +677,7 @@ function cancelReading(name, r) {
 {
   // `broken` launches and exits before it answers `initialize`, two lines on its standard error: its tool discovery fails
   // (REQ-MCP-042/048), and REQ-MCP-114 records it dropped for that reason — until 2026-10-03 it was recorded and drawn
-  // "connected" (`docs/defects/fixed/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md`).
+  // "connected" (`docs/archive/defects/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md`).
   const brokenServer = `  broken: { command: ${y(node)}, args: ${y(['-e', "process.stderr.write('broken: first stderr line\\nbroken: second stderr line\\n'); process.exit(3)"])} }`;
   const global6 = globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha, beta, nope, ghost, off, broken] }' } })
     .replace('  orchestrator: { mcp_servers: [alpha, beta, gamma], mcp_tools: { beta: [echo, nothing, extra] } }', '  orchestrator: { mcp_servers: [alpha, beta, nope, ghost, off, broken] }')

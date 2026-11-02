@@ -141,7 +141,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
    * A row that grew by one token is within a line of the height it had a moment ago; an estimate recomputed from
    * scratch is not. Falling back to the estimate on every chunk is what made the rows below a streaming message
    * jump twice per chunk — estimate, paint, observe, paint — and made two producing agents flicker against each
-   * other (docs/defects/fixed/live-rows-are-never-measured.md).
+   * other (docs/archive/defects/live-rows-are-never-measured.md).
    */
   const [lastByIdentity] = useState(() => createMeasurementCache((identity) => markMeasured(ledger, identity)));
   const [renderings] = useState(createRenderCache<ReactElement>);
@@ -311,7 +311,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     // The row's block start rides to the estimate because the first row of a block is drawn 12 px below the row
     // above rather than 4 px (PD-CHAT-003): a new row at the tail is positioned by its estimate until its first
     // measurement, and an estimate short of what it draws puts it through the row beneath it for those frames
-    // (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
+    // (docs/archive/defects/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
     (d, at) => readHeight(d, at, viewport.width, expanded, places, measurements, lastByIdentity),
   ),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `measuredVersion` is the observer's "the cache changed" signal
@@ -402,13 +402,13 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
       // the row draws. **Falsified 2026-10-01, kept beside its replacement: `if (changed) setMeasuredVersion((v) => v + 1)`.**
       // That is a default-lane update, rendered after the frame was painted, so the row that grew was drawn through the row
       // beneath it for that frame
-      // (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
+      // (docs/archive/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
       //
       // The render is held to the span of rows the pool last committed (`bindRange`): slots are bound by position, and a
       // corrected height above the viewport moved the span, so the delivery's render rebound every slot and changed its
       // size at the depth just delivered, which the browser defers and reports as "ResizeObserver loop completed with
       // undelivered notifications" — at the end of `transcript-proof`'s append runs, after the first repair
-      // (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). The
+      // (docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). The
       // span is released by an ordinary update, rendered after this frame, outside any delivery, which rebinds what the
       // delivery held back.
       if (changed) {
@@ -434,13 +434,13 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     // next render, and that render could be the delivery's own `flushSync` above: a displayed change was committed, the
     // delivery came in the same frame, and this effect disconnected the very observer delivering and observed every slot
     // again at the depth just delivered. The browser defers such observations to the next frame and reports "ResizeObserver
-    // loop completed with undelivered notifications" (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
+    // loop completed with undelivered notifications" (docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
     // A slot that a displayed change rebinds, or that a capacity growth adds, is observed by the layout effect below.
   }, [measurements, lastByIdentity, ledger, slotNodes, observedKeys]);
 
   // ADR-0045 (heights are measured): every commit, a slot bound under a measurement key it was not observed under is
   // observed again, so the row it now holds is measured rather than left at its estimate
-  // (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
+  // (docs/archive/defects/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
   // It walks the pool's slots, not the transcript's rows, so its cost is bounded by the viewport (REQ-CHAT-055).
   useLayoutEffect(() => {
     const observer = observerRef.current;
@@ -456,7 +456,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   // draws now — first bound, or its content changed — is read here, and when it draws other than the height that placed
   // it the pane renders again inside this commit (`measureAtCommit`). The observer's delivery comes after layout and its
   // render a frame later, so a row that GREW was painted through the row beneath it for that frame
-  // (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md). It reads layout
+  // (docs/archive/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md). It reads layout
   // only for slots whose key is unmeasured, and walks the pool's slots, not the transcript's rows (REQ-CHAT-055).
   // The slot has no padding or border, so its border box is the content box the observer reports. It runs after EVERY
   // commit, as the re-observing effect does, because any render may bind a slot to a row or change what a row draws; it

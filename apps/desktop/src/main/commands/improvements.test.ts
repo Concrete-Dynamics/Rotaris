@@ -115,7 +115,7 @@ describe('improvements.retrospective — the lease\'s authentication refusal (PD
  * PD-LIBRARY-002 revision 2, clause (e) (OQ-236), fin38's review: a main window reads the activity as it mounts, after it has
  * subscribed. The push main sends a window that has just opened a workspace can reach a renderer that has not subscribed yet
  * (the window has loaded, but its root subscribes only after its boot's own reads and first render), and is then lost
- * (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+ * (docs/archive/defects/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
  */
 describe('improvements.activity — the activity as it stands, for the asking window\'s own workspace (PD-LIBRARY-002 revision 2 (e))', () => {
   const activity = { workspace_id: 'ws-2', active: true, queued: 1, source_session_id: null, pass: 'retrospective' as const, retrospective_pending: false };

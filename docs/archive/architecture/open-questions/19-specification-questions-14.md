@@ -64,7 +64,7 @@ only with a run behind it. The clause does not say:
   reading or claiming the lock throws, where no other process is involved. Every other refusal states none, and the
   renderer's fallback is REQ-MONITOR-128's "no longer cancellable" ("That agent is no longer cancellable." since
   2026-09-29 under R-067, with the repair of
-  [`cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md`](../../../defects/fixed/cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md);
+  [`cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md`](../../defects/cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md);
   *until then "That agent is not cancellable (unknown, or already finished)."*). **This departs from REQ-MONITOR-128**, whose refusal sentence — "an error message states that the agent
   is no longer cancellable" — clause 16 does not govern: the directive names REQ-MONITOR-128 for the confirmation only.
   The build reads the requirement's sentence as written for an agent the run no longer has, and states the engine's
@@ -92,7 +92,7 @@ only with a run behind it. The clause does not say:
   `running`). A cancelled crash-left agent keeps a NULL `interruption` and `resume_state`. *The first build recorded the
   whole crash record first, at the cancel — a departure from clauses 3 and 8 taken as the cross-lane contract of R-065's
   build; the merged build's review found that a reading departing from nothing was available, and it replaced it
-  ([`cancelling-one-crash-left-child-records-the-whole-crash.md`](../../../defects/fixed/cancelling-one-crash-left-child-records-the-whole-crash.md)).*
+  ([`cancelling-one-crash-left-child-records-the-whole-crash.md`](../../defects/cancelling-one-crash-left-child-records-the-whole-crash.md)).*
 - **What it cancels.** The child and every `paused` descendant at any depth, including one below a descendant that had
   already finished; a finished descendant is left as it is, and a crash-left one is cancelled as above. Each moves
   `paused` → `cancelled` by the cancellation path, keeps its `interruption` and `resume_state` (as the decline does),
@@ -119,7 +119,7 @@ only with a run behind it. The clause does not say:
   view's own confirmation names the agent and its persona and then states the paused child's cancel in the shared words
   (`missionCancelBody`, from `pausedCancelWith` and `PAUSED_CANCEL_ALONE`: "Cancellation cannot be undone: the agent will
   not resume, …") since 2026-09-29 under R-067, with the repair of
-  [`the-mission-views-paused-child-confirmation-omits-that-it-cannot-be-undone.md`](../../../defects/fixed/the-mission-views-paused-child-confirmation-omits-that-it-cannot-be-undone.md);
+  [`the-mission-views-paused-child-confirmation-omits-that-it-cannot-be-undone.md`](../../defects/the-mission-views-paused-child-confirmation-omits-that-it-cannot-be-undone.md);
   *until then it only added "and will not resume" to its own sentence, and never said the cancel cannot be undone*. It
   takes its title and both buttons from the same `cancelConfirmation` (`missionConfirmation`). The confirmation describes the session as it was
   when Cancel was pressed: a continue confirmed in another window before this one is answered sends the cancel to the
@@ -133,7 +133,7 @@ only with a run behind it. The clause does not say:
   cancelled, as clause 16 says, and the confirmation's "the other paused agents resume when the session continues" is
   literally what happens to it: the Continue action resumes it (`child_resumed`), and the resumed run's first scheduler
   pass blocks it (REQ-ORCH-048). It does no work, and it gets no report
-  ([`a-child-blocked-by-its-dependency-gets-no-report.md`](../../../defects/fixed/a-child-blocked-by-its-dependency-gets-no-report.md),
+  ([`a-child-blocked-by-its-dependency-gets-no-report.md`](../../defects/a-child-blocked-by-its-dependency-gets-no-report.md),
   which a live cascade reaches too). *Corrected 2026-09-29 (R-067): "it gets no report" held until then. The cascade now
   stores its `blocked` report, naming the dependency and how it ended, with its `child_report` artifact, before the
   root is told; pinned in `children.test.ts` ("a dependent of the cancelled child (OQ-101) is blocked by the resumed

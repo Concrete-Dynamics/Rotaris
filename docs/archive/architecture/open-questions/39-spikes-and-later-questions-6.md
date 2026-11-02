@@ -9,7 +9,7 @@ The ruled, closed, resolved and withdrawn entries of [part 39](../../../architec
 REQ-WORKSPACE-092, whose fixed details are a stopped **step's**; REQ-WORKSPACE-094, whose non-retryable words are for an
 entry that is not a local launch and nothing else; REQ-WORKSPACE-103; REQ-MCP-112, "SHALL refuse to start a second
 concurrent run". Raised 2026-10-01 under [R-067](../../../product/requests.md#r-067) by the repair of
-[`a-refused-setup-start-is-reported-as-not-a-local-launch.md`](../../../defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md).
+[`a-refused-setup-start-is-reported-as-not-a-local-launch.md`](../../defects/a-refused-setup-start-is-reported-as-not-a-local-launch.md).
 ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current wording and the immediate retryable failure are the rule: a setup that began no stage fails retryably with REQ-WORKSPACE-093's summary, under the reason "Code intelligence could not complete this project's setup", its detail the run host's own refusal or "the setup was cancelled before it started.", and a refused start, the run host's one slot taken by another setup included, fails straight away rather than waiting. [`PD-WORKSPACE-006`](../../../product/directives/pd-workspace-006.md#pd-workspace-006) narrows REQ-WORKSPACE-092 and REQ-WORKSPACE-093.
@@ -46,7 +46,7 @@ poll a soft-paused command with an empty `command` or to interrupt it with `C-c`
 "while its process keeps running"; REQ-TOOLS-179, −1 for a soft pause in the foreground; OQ-147, what the paused call reports
 once a poll hands it over; OQ-144, whose handshake already writes one no-op line of the product's own to a fresh shell.
 Raised 2026-10-01 by the repair of
-[`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](../../../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md),
+[`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](../../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md),
 as OQ-167, and renumbered OQ-168 at its merge because `origin/main` had taken OQ-167 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the Linux behaviour stays — the product's own
@@ -139,7 +139,7 @@ status push lost?** *(REQ-WORKSPACE-109, "A run SHALL end in exactly one of thre
 ends without reporting any of those three outcomes SHALL be treated as a failure and SHALL be reported with an error
 message describing what went wrong"; REQ-WORKSPACE-091's three stage budgets, 300 / 1800 / 120 s; REQ-WORKSPACE-092's
 5 s; REQ-WORKSPACE-093. Raised 2026-10-01 under [R-067](../../../product/requests.md#r-067) by the repair of
-[`nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`](../../../defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md),
+[`nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`](../../defects/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md),
 as OQ-168, and renumbered OQ-169 at its merge because `origin/main` had taken OQ-168 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current behaviour is the ruling, its wording and its fallback limit included: a setup whose finished status never arrives ends as a retryable failure with REQ-WORKSPACE-093's summary, the running stage's reason (OQ-167's where none ran) and the detail "the run host exited before the setup finished.", or, once 2235 s (about 37 minutes) have passed since the follow began, "no outcome arrived within the setup's time budgets."; a start the run host never answers reads "the run host did not answer the setup's start" with the request's own error. No cancellation follows either, the coordinator does not ask the run host for the setup's status when the bound passes, and nothing in main ends a lost run host's step processes. [`PD-WORKSPACE-006`](../../../product/directives/pd-workspace-006.md#pd-workspace-006) carries the words.
@@ -162,7 +162,7 @@ own budgets already end every stage. Nothing in main ends a step's processes whe
 killed by signal; whether they outlive it was not measured, and `workspace-proof`'s scenario 8d ends its stand-in itself.
 
 *Extended 2026-10-01 by the repair of
-[`a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`](../../../defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md):*
+[`a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`](../../defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md):*
 a setup whose **start** the run host never answers — main's `mcp.setup` request rejecting on its 15 s bound, as for a
 run queued behind a setup whose run host was lost (scenario 8d) — ends the same way, before any stage: a retryable failure
 with REQ-WORKSPACE-093's summary, under OQ-167's reason, its detail the build's "the run host did not answer the setup's
@@ -175,7 +175,7 @@ applicable, and the build does that. A ruling on this question also decides whet
 specification's own, and whether it should be followed by a cancellation.
 
 *Extended 2026-10-02 by the repair of
-[`a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`](../../../defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md):*
+[`a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`](../../defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md):*
 one case that reached the bound was not a lost status but one main dropped. The run host pushed every step and the
 `finished` status before the start was answered, and the coordinator had no sink yet. The build now keeps a status
 pushed while its own start is in flight, and asks the run host's status once where the answer has every step ended
@@ -194,7 +194,7 @@ park?** *(REQ-MONITOR-105, "a running tool renders as a pulsing in-progress row"
 no row may still render as in progress"; REQ-SESSION-129, a call that was under way and produced no result is a failure;
 REQ-ORCH-153 and REQ-ORCH-087, the plan gate and the message-limit pause, neither a termination; ADR-0024, the ring.
 Raised 2026-10-01 under [R-067](../../../product/requests.md#r-067) by the repair of residual 2 of
-[`a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`](../../../defects/fixed/a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md).
+[`a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`](../../defects/a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md).
 Open until 2026-10-06; ruled that day by the owner, and built.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** when a run parks at the plan gate or the
@@ -242,7 +242,7 @@ opened them, through an appended store migration, so a crash record settles exac
 "A failed background run SHALL reach an error banner \"Project setup did not finish\""; REQ-WORKSPACE-102's "Project setup
 could not be checked" error surface; REQ-WORKSPACE-013, "The replacement window SHALL resolve initialization for its own
 workspace independently"; PD-SHELL-001's two main windows, one per project. Raised 2026-10-01 by the repair of
-[`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`](../../../defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md);
+[`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`](../../defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md);
 raised as OQ-170 on its branch and renumbered at the merge, OQ-170 having been taken on `main` meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the banners stay the application's, shown in

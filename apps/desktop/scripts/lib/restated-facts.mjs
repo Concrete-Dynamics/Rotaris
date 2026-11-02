@@ -1,6 +1,6 @@
 /**
  * One fact, one emitter (PD-MONITOR-002; live-run finding a71-9,
- * `docs/defects/fixed/the-repository-git-view-and-setup-step-lines-are-each-logged-twice.md`).
+ * `docs/archive/defects/the-repository-git-view-and-setup-step-lines-are-each-logged-twice.md`).
  *
  * The application log is main's standard output: main's own lines and the lines each child forwards, the child named as
  * the line's source (`[main <instant>] <level> <source>: <message>`, `src/main/app-log.ts`). Four facts reached it
@@ -13,7 +13,7 @@
  *   a setup step's outcome the run host's step reporter (`mcp setup: <id> succeeded (N ms)`), not `runSetupSteps`.
  *
  * A fifth, of the same class, was found by the duress live run at 1763f7f (finding U4,
- * `docs/defects/fixed/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`):
+ * `docs/archive/defects/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`):
  *
  *   an MCP tool discovery's failure  `ToolDiscovery`'s REQ-MCP-048 warning (`mcp <name>: tool discovery failed in N ms (…)`),
  *                                    not the run host's `McpHost.prepare` (`mcp: discovery of '<name>' … failed (…)`), which

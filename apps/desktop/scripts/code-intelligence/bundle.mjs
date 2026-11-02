@@ -17,7 +17,7 @@
  *
  * The closure is frozen in `closure.lock` (2026-10-23): a release built the same commit's tree with three `certifi`s on three
  * hosts, and REQ-STARTUP-143's reviewed-exceptions table, which names exact versions, cannot cover a tree resolved on the day
- * (`docs/defects/fixed/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md`). `--lock` rewrites the
+ * (`docs/archive/defects/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md`). `--lock` rewrites the
  * lock from the pins with `uv pip compile --universal` (one resolution for every target) — a reviewed change, since every
  * version it moves is a version the notices step reads anew.
  *
@@ -233,7 +233,7 @@ try {
   // interpreter in the user's registry, an entry that outlives the install directory. A build step writes nothing onto
   // the user's PATH and registers nothing with the host, and the bundle needs neither: the runtime is moved out of the
   // install directory below
-  // (docs/defects/fixed/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md).
+  // (docs/archive/defects/the-bundle-steps-python-install-tries-to-place-an-interpreter-on-the-users-path.md).
   run(uv, ['python', 'install', pythonKey, '--install-dir', install, '--no-bin', '--no-registry'], { stdio: ['ignore', 'inherit', 'inherit'] });
   const dirs = readdirSync(install, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.isSymbolicLink() && e.name.startsWith(`cpython-${PINS.python}-`)).map((e) => e.name);
   if (dirs.length !== 1) throw new Error(`expected one cpython-${PINS.python}-* directory under ${install}, found [${dirs.join(', ')}]`);

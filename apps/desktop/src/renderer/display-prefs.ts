@@ -10,7 +10,7 @@ import type { CommandOutcome, CommandRequest } from '@rotaris/contracts';
  * The boot read applies only the fields no announcement or write has set since it began: its three `prefs.get` replies are
  * applied together after all three have answered, and a change that landed at main between them reached this window first,
  * so applying the stale answer over it would keep the value the person just changed away from
- * (`docs/defects/fixed/a-windows-boot-read-of-the-display-preferences-can-overwrite-a-newer-announcement.md`).
+ * (`docs/archive/defects/a-windows-boot-read-of-the-display-preferences-can-overwrite-a-newer-announcement.md`).
  */
 export type DisplayPrefKey = 'display/autoCollapseTools' | 'display/groupToolCalls' | 'display/showReasoning';
 export interface DisplayPrefsState { readonly showReasoning: boolean; readonly autoCollapseTools: boolean; readonly groupTools: boolean }

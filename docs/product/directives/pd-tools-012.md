@@ -76,7 +76,7 @@ logged as [R-072](../requests.md#r-072).* *Revision 2 raised under the owner's d
 > one set already fed both the scan's walker and `read_file`'s directory listing (`listing`, `files.ts`). **Found:** the parent
 > listing of a missing path read the directory unfiltered, so it listed every ignore component, `.rotaris` included; it now
 > reads the same set
-> ([`a-missing-paths-parent-listing-shows-the-ignore-components.md`](../../defects/fixed/a-missing-paths-parent-listing-shows-the-ignore-components.md)).
+> ([`a-missing-paths-parent-listing-shows-the-ignore-components.md`](../../archive/defects/a-missing-paths-parent-listing-shows-the-ignore-components.md)).
 > **What was measured.** The case "the code-intelligence marker directory is a hard-coded ignore component, named by the
 > manifest" in `packages/agent-tools/src/tools/tools.test.ts`, red on `d12f1f2` (glob `**/*` listed
 > `.serena/memories/m.md` and `.serena/project.yml`): glob, grep, the root listing and a missing path's parent listing
@@ -113,7 +113,7 @@ logged as [R-072](../requests.md#r-072).* *Revision 2 raised under the owner's d
 > 599 characters, nearer 150 tokens a request than the ruling's estimate of about 80 (*corrected by the bundle's review,
 > 2026-10-07:* that statement left out point (b)'s last words, that elsewhere version control may list the marker's directory
 > as untracked; with them it is 662 characters, nearer 165 tokens —
-> [`the-product-statement-leaves-out-that-the-marker-directory-may-show-as-untracked`](../../defects/fixed/the-product-statement-leaves-out-that-the-marker-directory-may-show-as-untracked.md)); and a session started with no `configure`
+> [`the-product-statement-leaves-out-that-the-marker-directory-may-show-as-untracked`](../../archive/defects/the-product-statement-leaves-out-that-the-marker-directory-may-show-as-untracked.md)); and a session started with no `configure`
 > (a process-wide model, which only tests and scripts use) receives no units at all, the statement included. **What was not
 > measured.** No live run: the next default and duress runs are the measurement — no delivered file, answer or memory naming
 > either directory, calls and rows naming them well below 21 and 32, and in the default run no priming. The row is in

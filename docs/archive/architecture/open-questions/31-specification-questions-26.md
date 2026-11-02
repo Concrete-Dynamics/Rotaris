@@ -8,7 +8,7 @@ The ruled, closed, resolved and withdrawn entries of [part 31](../../../architec
 *(REQ-TOOLS-098, whose advice is to interrupt a paused command with `C-c` and `is_input=true`; REQ-TOOLS-179, which
 names −1 for a soft pause in the foreground and for a kill in the background, and otherwise the command's real outcome.
 Raised 2026-09-30 by the verification of acceptance finding A10,
-[`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../../../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
+[`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../../defects/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
 under [R-067](../../../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-144 on its branch, renumbered OQ-147 at the merge,
 OQ-143 to OQ-145 having been taken on `main`.)*
 
@@ -46,7 +46,7 @@ the merge: the interrupt marks every open paused call.)*
 the product recovers from the shell (which would need the wrapper to carry the previous `$?`, on both backends); or a
 dedicated value. ~~A poll made after the `C-c` but before any next call still reads "still running", because nothing in
 the stream says the line is done; that is recorded as a defect, not this question~~
-([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
+([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
 *(Repaired 2026-10-01: a poll after an interrupt submits one no-op line once the shell holds its terminal again, and that
 line's printed start marker closes the paused call as a next call's does, so the poll hands it over with this reading;
 whether the product may write that line is OQ-168, raised with it built.)*
@@ -57,7 +57,7 @@ whether the product may write that line is OQ-168, raised with it built.)*
 *(REQ-ORCH-047, "prepend exactly once (never re-prefixed on later state hops …)"; REQ-TOOLS-154, which places the block
 ahead of item (1) of the payload; REQ-ORCH-088's fallback retry; PD-ORCH-005 clause 4. Raised 2026-09-30 by the repair of
 acceptance finding A25,
-[`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`](../../../defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md),
+[`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`](../../defects/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md),
 under [R-067](../../../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-148 when it was raised, renumbered OQ-151 at merge
 once origin/main's OQ-148 to OQ-150 had landed.)*
 
@@ -87,7 +87,7 @@ as it stood at the first payload or as it stands at the retry.
 state a child reaches, and whether or not its execution raised, that child MUST be fully torn down: its conversation is
 closed, a `child_conversation_closed` timeline event is emitted for it, …"; REQ-ORCH-048, whose cascade settles a child
 `blocked` before it starts; REQ-ORCH-052's finalize sweep. Raised 2026-09-30 by the repair of acceptance finding A16,
-[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md),
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../defects/a-child-that-never-started-gets-no-teardown-timeline-entries.md),
 under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: every terminal child is torn down alike, a child that never started included, whose `child_conversation_closed` records that it will have none.
@@ -96,7 +96,7 @@ A child the cascade blocks, or one the finalize sweep cancels while it waits on 
 model slot, reaches a terminal state without its execution ever starting, so it never had a conversation. The build
 first read that as nothing to close, and wrote no `child_end`, `child_result` or `child_conversation_closed` for it; that
 reading was stated only on the fixed note
-[`a-child-blocked-by-its-dependency-gets-no-report.md`](../../../defects/fixed/a-child-blocked-by-its-dependency-gets-no-report.md).
+[`a-child-blocked-by-its-dependency-gets-no-report.md`](../../defects/a-child-blocked-by-its-dependency-gets-no-report.md).
 The requirement's "whatever terminal state" does not except a child that never started, and it does not say what closing a
 conversation that was never opened means.
 
@@ -109,7 +109,7 @@ that never started, `child_conversation_closed` records that it will have none; 
 Since 2026-10-01 the same holds on every path that settles a child `cancelled` outside its execution. These are the
 user's cancel, the cancel at rest, "continue without them", the crash record of an accepted cancel and the stale-child
 settle (`writeCancelledTeardown`; `writeTeardown` now lives in `children/ledger.ts`). That change is the repair of
-[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../../defects/fixed/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md).
+[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md).
 
 **What a ruling decides.** Whether a child that never started is torn down as built, or is excepted from the clause (its
 `child_end` and `child_result` kept, its `child_conversation_closed` dropped, or all three dropped), and whether the words
@@ -122,7 +122,7 @@ of its `child_conversation_closed` should then say it never had one.
 REQ-MONITOR-117, "each agent is evaluated for a stall"; REQ-MONITOR-118 to REQ-MONITOR-122; REQ-MONITOR-135, injection
 "opportunistically from stall evaluations … while a conversation is running"; REQ-MONITOR-047; ADR-0010 reading (d);
 OQ-127. Raised 2026-09-30 by the repair of acceptance finding A6,
-[`a-stalled-child-is-never-shown-stalled.md`](../../../defects/fixed/a-stalled-child-is-never-shown-stalled.md), under
+[`a-stalled-child-is-never-shown-stalled.md`](../../defects/a-stalled-child-is-never-shown-stalled.md), under
 [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: the stall badge (`stalled Ns`, `tag-wait`) on the agent trees, the Mission table, the persona window and the inspector; the recovery notified by the republished record alone; the root watched against the one stall timeout; and an evaluation waking an agent that waits between its turns on its own children to inject a pending steer. Whether the recovery also gets a timeline word is the timeline vocabulary's ruling (OQ-127, OQ-157), not this one's.
@@ -188,11 +188,11 @@ leg means waking a waiting agent, as built, or something a step in flight could 
 whose order is `session_start`, `child_completed`, …, `session_end` "matching where each occurs"; REQ-HOOKS-080, which runs
 lifecycle hooks in line with the run loop; `PD-ORCH-005` clauses 3 and 16. Raised 2026-09-30 by the repair of acceptance
 finding A15,
-[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md),
+[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../defects/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md),
 under [R-067](../../../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-151 when it was raised, then OQ-152, and renumbered OQ-154
 at merge once origin/main's OQ-151 to OQ-153 had landed.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the build's behaviour is accepted, and the specification now says so: `child_completed` fires only while a run's lifecycle hooks are live, after its `session_start` and before its `session_end` begins. None of the five paths above fires it, then or later, and no later run owes it; on the fifth path the cancel of the paused child is still accepted and the child ends `cancelled` with its report and teardown. [`PD-HOOKS-001`](../../../product/directives/pd-hooks-001.md#pd-hooks-001) narrows REQ-HOOKS-003. The note of the fifth path, [`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../../../defects/fixed/a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md), closes with this ruling.
+**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the build's behaviour is accepted, and the specification now says so: `child_completed` fires only while a run's lifecycle hooks are live, after its `session_start` and before its `session_end` begins. None of the five paths above fires it, then or later, and no later run owes it; on the fifth path the cancel of the paused child is still accepted and the child ends `cancelled` with its report and teardown. [`PD-HOOKS-001`](../../../product/directives/pd-hooks-001.md#pd-hooks-001) narrows REQ-HOOKS-003. The note of the fifth path, [`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../../defects/a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md), closes with this ruling.
 
 A run's hooks are resolved at its start and live until its teardown (ADR-0015; `Sessions` builds one hook port per run),
 and every lifecycle event the specification orders falls between that run's `session_start` and its `session_end`. Three
@@ -225,7 +225,7 @@ resumable iteration (`PD-ORCH-005` clause 6, after the continuing run's `session
 `session_start`; or fire none, as built.
 
 **A fifth path** *(added 2026-10-01 by the repair of
-[`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../../../defects/fixed/a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md),
+[`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../../defects/a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md),
 under [R-067](../../../product/requests.md#r-067))*: the user's cancel of one paused child (REQ-ORCH-133) that lands while the
 run's own `session_end` hooks run, or after them and before the run has ended. `Run.cancelAgent` accepts it until then, the
 port is still held, and the run has announced its end; until this repair its `child_completed` fired after `session_end`.
@@ -242,7 +242,7 @@ cancelled at rest (clause 16, the first path) instead.
 calls exist, the condition is reported at informational level as waiting on N active tool calls instead of as a stall";
 REQ-MONITOR-117 to REQ-MONITOR-120, "each agent is evaluated for a stall"; REQ-NOTIFY-112; OQ-127. Raised 2026-09-30 by
 the repair of acceptance finding A7,
-[`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md),
+[`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md),
 under [R-067](../../../product/requests.md#r-067). ~~Open;~~ ruled 2026-10-06; numbered OQ-152 when it was raised, renumbered OQ-154 at
 the merge once origin/main's OQ-152 and OQ-153 had landed, and OQ-155 at the next merge once origin/main's OQ-154 had.)*
 

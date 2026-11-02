@@ -279,7 +279,7 @@ function injectSteering(deps: TurnDeps, conversation: Conversation): number {
  * (`withRunOverrideLayer`). An empty section
  * (no MCP surface at all) adds nothing. The unit before it closes itself where it needs to: the instruction files end with
  * `INSTRUCTION_FILES_END_COMMENT`, so this heading is never read as the last file's own
- * (`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
+ * (`docs/archive/defects/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
  */
 export function withMcpSection(systemPrompt: string, section: string): string {
   return section === '' ? systemPrompt : `${systemPrompt}\n\n${section}`;
@@ -624,7 +624,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
       // REQ-CHAT-164: a tool call under way, or complete, is output of the call too, so it clears the live row's stalled
       // mark and re-arms its ten seconds; text and reasoning do so in their own callbacks. Until 2026-10-07 a step that
       // wrote a line and then streamed a long `write_file` marked its row "not producing output" ten seconds into the
-      // arguments (docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md).
+      // arguments (docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md).
       if ((kind === 'tool-input' || kind === 'tool-call') && !detached()) outputArrived();
     },
     // OQ-110: a retry the dispatch layer absorbed is written where a person diagnosing the run reads (REQ-SESSION-142).

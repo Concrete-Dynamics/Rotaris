@@ -14,7 +14,7 @@ import { join } from 'node:path';
  * neither read, moved nor deleted: the product adopts no directory it did not create in its own place (REQ-STARTUP-145),
  * and in a development launch the old path is `Electron`, which every unpackaged Electron application shares.
  *
- * Until fin34 main placed none of it (`docs/defects/fixed/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
+ * Until fin34 main placed none of it (`docs/archive/defects/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
  */
 export interface ProfilePaths {
   setPath(name: 'userData' | 'sessionData' | 'crashDumps', path: string): void;

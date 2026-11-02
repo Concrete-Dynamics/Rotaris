@@ -29,7 +29,7 @@
  * Windows package. Nothing here fakes a Windows run.
  *
  * A second launch measures the other half of the same two variables (REQ-STARTUP-147; the defect note
- * `docs/defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md`): each is true of the one launch whose artifact
+ * `docs/archive/defects/the-artifact-variables-reach-the-products-own-child-processes.md`): each is true of the one launch whose artifact
  * runtime set it and of no process that launch starts, so main takes both out of its own environment before it forks
  * anything. The launch starts with both set, a scripted run in `autonomous` mode issues one `terminal` call that writes
  * the shell's environment to a file, and the file must carry neither variable — while still carrying the launch's
@@ -43,7 +43,7 @@
  * The first launch carries no workspace, so it opens the directory it runs in (REQ-SHELL-010 (c)): a directory of the
  * proof's own, emptied before it and in no repository (`lib/working-directory.mjs`), which it is asserted to have opened.
  * Until plan `loc1` it ran in `apps/desktop`, opened the checkout and set up code intelligence in the product's source
- * (`docs/defects/fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
+ * (`docs/archive/defects/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
  *
  *   node apps/desktop/scripts/updater-proof.mjs [--skip-build]
  *

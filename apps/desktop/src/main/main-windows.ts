@@ -142,7 +142,7 @@ interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TD
   /**
    * Settles once the window's workspace open has settled. Pending from `build` — every path that builds a window opens its
    * workspace next or destroys it — so a reach meeting a window still opening its workspace waits for that open rather than
-   * answering with no workspace id (docs/defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md).
+   * answering with no workspace id (docs/archive/defects/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md).
    */
   workspaceReady: Promise<unknown>;
   /** Settles the readiness `build` set; called when the first open settles and when the window is forgotten. */
@@ -318,7 +318,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
    * follows every session it starts (`session-actions.ts`), but its `session.subscribe` reaches main only after the start has
    * answered, and until 2026-10-06 a run that failed in between — 30 ms after the start in resilience-proof's
    * `auth-fallback-plan` — was read as another session's failure and raised REQ-NOTIFY-032's warning about the session on
-   * screen (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+   * screen (docs/archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
    * Until the window's subscription arrives (`setFollowedSession`), it stops following the session
    * (`clearFollowedSession`) or the start is refused (`endStart`), `showingSession` names it for that session whatever the
    * session's subscribers.
@@ -459,7 +459,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     const built = await this.build({ workspace: startup.workspace, origin });
     // Main's start-up awaits this launch, so an open that rejects (a request to a child process that got no reply within its
     // bound) would end the start-up as an unhandled rejection, with nothing after the launch run
-    // (docs/defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md). It is logged, and the window stands
+    // (docs/archive/defects/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md). It is logged, and the window stands
     // with no workspace open, as one whose open was refused does (OQ-386 asks what else a missed reply owes).
     await this.open(built.wcId, startup.workspace).catch((cause: unknown) => {
       this.dependencies.log(`the workspace open of ${startup.workspace} failed: ${String(cause)}; the window stands with no workspace open`);
@@ -573,7 +573,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
          * first press added is still loading. The action acts on the workspace (REQ-NOTIFY-044), so it waits, bounded, for the
          * open rather than answering with no workspace id. Until 2026-10-14 it answered at once, and the hook review said
          * "Open a workspace before reviewing its hooks"
-         * (docs/defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md).
+         * (docs/archive/defects/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md).
          *
          * After the wait, only a window that is GONE is refused: an open that failed in a window `reach` itself added destroyed
          * it, and `#addWindow` reported the failure under REQ-SHELL-019. A window that stands with no workspace id — the
@@ -581,7 +581,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
          * place) — is reached like any holder, and the caller opens the action's surface in it, which says what it can act on.
          * Until 2026-10-14 that window was refused too, in REQ-SHELL-019's words though nothing was reported, and the
          * project-setup action never opened Settings › Project there
-         * (docs/defects/fixed/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md).
+         * (docs/archive/defects/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md).
          */
         this.dependencies.log(`notice action reached ${target}: window ${holder.wcId} is still opening it; waiting for the open`);
         await this.awaitWorkspace(holder.wcId);
@@ -1040,11 +1040,11 @@ export interface RendererGuardDependencies {
  * - **gone** — at once when the renderer has crashed or its contents are destroyed, and the moment either happens while the
  *   question is out. Electron's `executeJavaScript` on a renderer that is gone neither resolves nor rejects, so until
  *   2026-10-14 the question asked of a crashed renderer never answered
- *   (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`);
+ *   (`docs/archive/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`);
  * - **unresponsive** — main's liveness probe, a trivial question sent beside the guard's and again each time
  *   `RENDERER_LIVENESS_BOUND_MS` elapses with the last one answered, is still unanswered at its bound; or Chromium emits
  *   `unresponsive` for the contents. A renderer that was alive but hung held its window's close and the application's quit
- *   with no bound until 2026-10-14 (`docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`).
+ *   with no bound until 2026-10-14 (`docs/archive/defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`).
  *
  * A renderer that answers its probes is waited for without a bound of its own: its guard may be a person deciding. Every
  * listener and timer is removed once the question settles, whichever way, and an answer or a signal after that is ignored.

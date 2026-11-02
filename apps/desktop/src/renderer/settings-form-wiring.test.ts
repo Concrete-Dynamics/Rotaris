@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
- * REQ-CONFIG-419 — the repair of `docs/defects/fixed/two-quick-configuration-reloads-mark-settings-unsaved.md`. The Settings
+ * REQ-CONFIG-419 — the repair of `docs/archive/defects/two-quick-configuration-reloads-mark-settings-unsaved.md`. The Settings
  * hook mounts under Electron, with a preload no `node` test environment reaches, so what pins it is its source: every
  * adoption of a snapshot is one functional update of the form that holds the saved and pending halves together, folded
  * through `adoptSnapshot` (whose rebasing `config-state.test.ts` pins). The unrepaired hook read the previous saved values

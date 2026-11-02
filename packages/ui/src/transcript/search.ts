@@ -88,7 +88,7 @@ export function step(current: number, total: number, direction: 1 | -1): number 
  * the `searchPanel` slot of `shell-state` while its panel is open, and null while it is closed so the window's Escape
  * walks on to the drawers. `close` is the pane's one close — the same one its field's Escape and its Close button run.
  * Until 2026-10-14 nothing registered the slot, so window-level Escape with focus outside the field skipped the open
- * panel and closed the drawers (`docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md`).
+ * panel and closed the drawers (`docs/archive/defects/window-level-escape-skips-the-open-transcript-search-panel.md`).
  */
 export function searchPanelCloser(open: boolean, close: () => void): (() => boolean) | null {
   if (!open) return null;

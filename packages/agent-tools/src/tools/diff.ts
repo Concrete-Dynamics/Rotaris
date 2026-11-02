@@ -22,7 +22,7 @@ type Op = '=' | '-' | '+';
  * when more than `bound` lines changed, or when the search would cost more than `budget` units of work: a line compared
  * or a diagonal stepped onto is one each. The edit-distance bound alone left the runs of matching lines it follows along
  * each diagonal unbounded, O((n+m)·D) in all, and a large region of repeated lines kept the tool call waiting more than a
- * second (docs/defects/fixed/the-edit-diffs-shortest-edit-search-has-no-bound-on-its-total-work.md). Exported for the tests.
+ * second (docs/archive/defects/the-edit-diffs-shortest-edit-search-has-no-bound-on-its-total-work.md). Exported for the tests.
  */
 export function shortestEdit(before: readonly string[], after: readonly string[], bound: number, budget: number): Op[] | null {
   const n = before.length;
@@ -130,7 +130,7 @@ function tableWalk(b: readonly string[], a: readonly string[]): Op[] | null {
  * share at the start and at the end are taken off first, so the table spans the changed region alone and a one-line edit
  * to a file of any length costs one cell. Until 2026-10-06 the table spanned the whole file, and past the bound (about
  * 2000 lines a side) every line read as removed and added: a one-line edit to a 2,001-line file drew `+2001 -2001` and
- * the file's first 50 lines (docs/defects/fixed/an-edit-diff-row-of-a-file-past-2000-lines-counts-every-line-as-added-and-removed.md).
+ * the file's first 50 lines (docs/archive/defects/an-edit-diff-row-of-a-file-past-2000-lines-counts-every-line-as-added-and-removed.md).
  * A changed region still past the table's bound (changes far apart in a large file) is diffed by the shortest edit
  * script instead, and only a region with more than `EDIT_DISTANCE_BOUND` changed lines, or whose search would compare
  * more lines than the table may hold cells plus one pass over the region, falls back to its own lines as removed and

@@ -11,7 +11,7 @@ import { NO_CONFINEMENT_DISCLOSURE, StartSessionDialog, unattendedAdvisory } fro
  * presenter registration from its creation (REQ-TOOLS-053, REQ-TOOLS-069, REQ-SANDBOX-101). Until the ruling the function
  * took the mode, the confinement and the permissive opt-in and discarded them, and its comment said the `ask`/`restricted`
  * behaviour was kept
- * (docs/defects/fixed/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md).
+ * (docs/archive/defects/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md).
  */
 const UNAVAILABLE: ConfinementVerdict = { available: false, backend: 'unavailable', reason: 'This host is native Windows.', remediation: 'Use WSL2.' };
 const AVAILABLE: ConfinementVerdict = { available: true, backend: 'bubblewrap', reason: '', remediation: '' };

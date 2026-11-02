@@ -268,7 +268,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
      * REQ-TRACE-467/468) is stopped without sitting out a budget that has no end. PD-ORCH-005 clauses 3 and 15: a quit
      * brings the run to rest by `quit`, as it does a session the user started by hand. The stop control's `cancel`
      * would rest it by `stop`, and since a stop request keeps its first reason, the run host's `shutdown` behind it
-     * could not correct that (`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The release itself
+     * could not correct that (`docs/archive/defects/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The release itself
      * is the engine's: at a rest, what waits on a person is withdrawn by the quit (clause 9), never answered, which is
      * REQ-TOOLS-055's "only an answer or a cancellation releases the wait" as clause 9 narrows it. What this branch
      * measures is the coordinator's half (`requirements-runs.test.ts`); what it does NOT offer is the button a person

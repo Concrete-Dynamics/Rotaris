@@ -10,7 +10,7 @@ describes it; [`PD-MCP-004`](../../../product/directives/pd-mcp-004.md#pd-mcp-00
 nothing else; [OQ-273](58-spikes-and-later-questions-25.md#oq-273), whose options (b) and (c) were rejected for the case it measured; REQ-MCP-011 and ADR-0035, the
 pinned runtime driven as it is; REQ-MCP-116, the binding manifest; [OQ-245](52-spikes-and-later-questions-19.md#oq-245), the reach observation. Raised 2026-10-15 by
 fin47 (`fin47-rename-and-optionals`) from the live `rename` scenario's failure at `3c03287`, reopening
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md);
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md);
 the plan's range OQ-361 to OQ-380, its second number (OQ-361 was taken on main by a sibling bundle) — renumbered at landing if
 another sibling took it first. **Ruled 2026-10-20.**)*
 
@@ -59,7 +59,7 @@ three files carry the new name with the rename's one row; under (e), the scenari
 
 *Confirmed release-blocking 2026-10-15:* fin47's acceptance round 1 at `cb6d1d5` read `code-intel-proof` launch 13 red twice
 (finding A1), and bundle `fin47-accept1-5` read it red again at `8baf9e4`, whose repair task waits on this ruling; the runs are in
-[the note](../../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Ruled
+[the note](../../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). Ruled
 2026-10-20, below.
 
 **Ruled 2026-10-20 under the owner's delegation ([R-072](../../../product/requests.md#r-072)).** The ruling is option (a), refined, of kind change-behaviour. It is recorded as [`PD-MCP-004`](../../../product/directives/pd-mcp-004.md#pd-mcp-004) **revision 2**: clause 5, "the project file", and the sentence after it. Revision 2 extends REQ-MCP-116 and REQ-MCP-015 further, and both back-pointers are amended in place.
@@ -167,7 +167,7 @@ and 8 to 15; the seventh needs a packaged tree). **Owed:** the live `rename` sce
 launch by the session's permission classifier and the orchestrator's to run; and the noticed defect of the model's own search and
 safe deletion in such a workspace, measured (the deletion removed a symbol two files import) and raised as [OQ-378](68-spikes-and-later-questions-35.md#oq-378). The
 directive's report-back is "First execution of revision 2" under [`PD-MCP-004`](../../../product/directives/pd-mcp-004.md#pd-mcp-004); the note is in
-[`fixed/`](../../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+[`fixed/`](../../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 
 <a id="oq-363"></a>
 
@@ -176,7 +176,7 @@ referential errors while no presenter is live — refuse a retrospective?** *(`P
 retrospective as an analysis pass on its own model; REQ-CONFIG-245/246, referential errors fatal "for a run no person is watching";
 the entry role's resolution, which a run's first request needs; REQ-NOTIFY-254. Raised 2026-10-15 by fin47 (`fin47-accept1-4`) while
 repairing
-[`a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested`](../../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md),
+[`a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested`](../../defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md),
 which asked it; the plan's range OQ-361 to OQ-380, its third number (OQ-361 and OQ-362 were taken on main) — renumbered at landing
 if a sibling took it first. **Ruled 2026-10-20.**)*
 

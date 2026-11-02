@@ -8,7 +8,7 @@ import { serviceMarkerWriter, type MarkerServiceRequest } from './initialization
 
 /**
  * REQ-WORKSPACE-040: "when no `agents.yaml` exists, the minimal bootstrap file SHALL be written first" — for the writer of
- * the persisted initialization state. `docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`:
+ * the persisted initialization state. `docs/archive/defects/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`:
  * main's marker writer went straight to the per-field path (`config.setField`), which never bootstraps (REQ-CONFIG-030),
  * so a first record created the file without the starter. The service here answers the two requests the way the
  * workspace service does, over the real writers.

@@ -6,7 +6,7 @@ Part 12 of 15 of [ADR-0020](../0020-terminal-execution.md), which indexes every 
 
 Every real-PTY case above was measured where `/bin/sh` is `dash`. Another author's Linux machine ran the file on an
 unmodified `main` and two cases failed there, alone and in the full suite
-([the note](../../../defects/fixed/two-terminal-pty-tests-fail-on-main-in-this-environment.md)). Varied one at a time on
+([the note](../../../archive/defects/two-terminal-pty-tests-fail-on-main-in-this-environment.md)). Varied one at a time on
 this host, through a real PTY, at load averages 0.6 to 3.6 on four CPUs: `dash` at 240, 80 and 1,000 columns, with
 `LANG=C.UTF-8`, with an `$ENV` startup file that sets `PS1` and `set -o emacs`, and under six CPU burners, passed both;
 a `sh` link to `/usr/bin/bash` 5.2 (POSIX mode) failed both, at 240 and 80 columns and with `LANG=C.UTF-8`, as did
@@ -58,7 +58,7 @@ no echo" (real PTY, the host's shell) and "under bash as `/bin/sh` with its line
 lets the echo of a next call reach the paused call's poll" (real PTY at 20, 40 and 240 columns), both red without it.
 Found on the way and recorded, not repaired here: PD-TOOLS-001's snapshot reads its `__rot_b64__:` rows one screen row
 at a time, so below 76 columns it decodes a corrupted environment
-([the note](../../../defects/fixed/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md)).
+([the note](../../../archive/defects/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md)).
 
 *Reported back 2026-10-06 (finacc2's acceptance finding A4), when that note was repaired:* the third first execution's
 snapshot is now read across the screen's row breaks. The capture's rows are joined with nothing between them, as the
@@ -69,7 +69,7 @@ fold, so the 64 holds on every host. Measured under `dash` through a real PTY be
 20 and 10 columns lost `PATH` or the directory or parsed to nothing, and a reset at 20 columns said its restore failed;
 after it, every width from 10 to 240 read the 240-column capture, and a reset at 20 and 40 columns restored the
 directory and the variables whole. The PowerShell capture is left as it was, its wrap recorded open
-([the PowerShell note](../../../defects/fixed/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md)).
+([the PowerShell note](../../../archive/defects/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md)).
 
 *Reported back 2026-10-06 (fin21, bundle `fin21-leftover-notes`), when the PowerShell note was repaired:* the PowerShell
 capture now prints the same encoded rows, spelled in PowerShell — a `__rot_ps__` tag field, the directory and every
@@ -91,7 +91,7 @@ The capture took 139 to 220 ms of its 15 s; the restore line was 3,009 to 3,165 
 unmeasured line cap. **Not reached below 34 columns:** there no PowerShell call ends at all. ConPTY writes a wrapped row as
 a hard `\r\n`, a cursor move back to the row it left and that column's character again, and the frame match over the
 VT-stripped stream (`${end}:(-?\d+)`) never meets a 34-character frame split that way
-([`below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md`](../../../defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md),
+([`below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md`](../../../archive/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md),
 recorded, not repaired). *(Repaired the same day on the owner's ruling: ConPTY's wrapped rows are rejoined in the text the
 frame match reads (`rejoinConptyWraps`), and the sweep now restores byte for byte at 20 and 33 columns too, under both
 shells. The live tap's own raw scan is not rejoined and is unmeasured at those widths.)* And a restore line whose `Set-Item` fails still exits 0, so a partial restore reads "were

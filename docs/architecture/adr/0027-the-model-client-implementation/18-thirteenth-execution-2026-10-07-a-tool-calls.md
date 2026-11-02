@@ -4,7 +4,7 @@ Part 18 of 18 of [ADR-0027](../0027-the-model-client-implementation.md), which i
 
 ## Thirteenth execution — 2026-10-07, a tool call's streamed arguments reach the run (REQ-ORCH-089, REQ-ORCH-090, REQ-CHAT-164)
 
-*The repair of [`a-child-streaming-a-long-tool-call-is-reported-stalled.md`](../../../defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md)
+*The repair of [`a-child-streaming-a-long-tool-call-is-reported-stalled.md`](../../../archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md)
 (finacc3, task F02). Found by the duress live runs at `c2fdd6a` and `c2a9444`, not by a test.*
 
 **Found — the third execution's reason for "a tool-call-only step" was true of the call and silent about its arguments.**

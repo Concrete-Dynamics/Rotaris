@@ -50,7 +50,7 @@ are not recorded, and cannot be recovered afterwards.
 > REQ-HOOKS-102 oblige no line, they constrain text, which a threshold can only drop. REQ-HOOKS-138's hook lines in
 > this log are `info` and `warning`, but the hook engine's own sink — documented "the application log only" — is wired
 > to the per-session log at `INFO`, where the default `WARNING` drops it; that is recorded as
-> [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../../defects/fixed/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
+> [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../../archive/defects/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
 > and not changed here, because it is a question of which log, not of this one's threshold. Three proof readers
 > matched the old shape and two proofs read `debug` lines; the readers were updated and those two launches set the
 > variable. Measured on a driven launch in a Linux container as root, without the bundled runtime, so the 141 stderr
@@ -64,7 +64,7 @@ are not recorded, and cannot be recovered afterwards.
 > `error   CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 15)` after "run host exited (0)" and "quit: exiting
 > with status 0" — main kills the run host itself and logs Electron's report of the kill at `error`. One such exit writing
 > nothing was the race going the other way. Recorded as
-> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../../defects/fixed/an-orderly-quit-logs-the-run-host-gone-at-error.md)
+> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../../archive/defects/an-orderly-quit-logs-the-run-host-gone-at-error.md)
 > (live-run finding L13); the last-window close's 24 clean quits are not contradicted. Repaired the same day under
 > [R-067](../requests.md#r-067): main records the run host it ends itself (`ChildrenEndedByMain`, `main/exit.ts`), and
 > Electron's `killed` report of that end is written at `info`, saying main ended it — so "a child process gone for any
@@ -73,7 +73,7 @@ are not recorded, and cannot be recovered afterwards.
 > launches through the immediate exit with that line at `info` and no `error` line of main's.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
 > orderly quits (3 in 26, each waiting out the 30 s bound), because a child's answer can lose the race with its own
 > exit; the quit now races each `shutdown` against the child's exit, recorded as
-> [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../../defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).
+> [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../../archive/defects/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).
 > A loss still writes its `error`, driven against this build at `warning`: a run host killed with SIGKILL and then the
 > last window closed wrote exactly `run host exited (9)` and
 > `CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 9)` and quit in about 60 ms; one stopped with SIGSTOP
@@ -90,7 +90,7 @@ are not recorded, and cannot be recovered afterwards.
 > `log`, which said nothing about which log it meant, is documented as the per-session log, because its root already
 > writes every checkpoint line to this log through a channel of its own. Measured by unit tests against the store, not on
 > a driven run with a failing hook. The note is moved to
-> [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../../defects/fixed/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
+> [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../../archive/defects/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
 > and the row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 >
 > **Driven in the built app, 2026-10-13 (fin42, whats-next N61).** Two hook-fault paths now run on the built app. A global hook
@@ -109,7 +109,7 @@ are not recorded, and cannot be recovered afterwards.
 > waits, bounded, for the run host's EXIT before it is gone (`endBeforeMain`, `main/exit.ts`; ADR-0014's "Main is gone
 > only after the run host"). The race answered "the answer can be lost to the exit"; it did not make main leave before
 > the exit, and a run host left behind kept every session it held refused to the next launch until its pid stopped
-> answering ([note](../../defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md)).
+> answering ([note](../../archive/defects/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md)).
 > The levels are this directive's: a run host ended at quit reports exit 0 and writes its `info` line; one still running
 > past the bound after it was ended is a loss, written at `error`. A driven close at the default level wrote no
 > `warning` or `error` line from the close onwards, and main was gone 103 ms after it.
@@ -121,5 +121,5 @@ are not recorded, and cannot be recovered afterwards.
 > writes nothing more after it, and standard error gets the same listener. Measured on the built app by closing the
 > pipes of a running launch and sending SIGTERM: it exited in about 60 ms, where the writer put back to `console.log`
 > spun at full CPU until SIGKILL. The note is moved to
-> [`a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`](../../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md)
+> [`a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`](../../archive/defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md)
 > and the row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).

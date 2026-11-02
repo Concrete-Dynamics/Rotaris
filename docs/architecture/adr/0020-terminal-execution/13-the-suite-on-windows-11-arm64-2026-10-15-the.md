@@ -11,7 +11,7 @@ times ([first-executions](../../first-executions.md), the row of that date). It 
 its MSIX package, reached through an App Execution Alias on `PATH`. `findShell` accepts a candidate only when
 `existsSync(f) && statSync(f).isFile()`; on the alias Node answers `EACCES` and `false`, though spawning it runs pwsh. So
 `findShell` passed over it and every real-PTY case of the first two runs ran under Windows PowerShell 5.1:
-[`the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md`](../../../defects/fixed/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md),
+[`the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md`](../../../archive/defects/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md),
 recorded, not repaired. "`pwsh` else `powershell`, presence-only availability" (the first execution above) holds only for a
 pwsh that is a plain file on `PATH`. *(Repaired the same day on the owner's ruling: `findShell` and `findExecutable` take a
 candidate through `presentExecutable` (`@rotaris/platform`), which accepts an alias — `stat` refused with `EACCES`, `lstat`
@@ -20,7 +20,7 @@ reading a link — and a real call through the MSIX pwsh's alias answered `Core`
 **Under pwsh 7.6.6 arm64 (a zip install, first on `PATH`), `terminal.test.ts` passed 64 and skipped 45, `streams.test.ts`
 15 and 6, `background.test.ts` 8 and 13**, every skip POSIX-only (`it.skipIf(PS)`, a `dash` or `bash` `/bin/sh`) or a proof
 directory not given. Two cases were spelled for one host and were repaired in that change
-([`seven-unit-cases-…`](../../../defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md),
+([`seven-unit-cases-…`](../../../archive/defects/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md),
 item 7): the pure M1 case matched the staged script's path with `/`, and "the capture is the emulated screen" pinned pwsh 7's
 `Format-List` padding, which 5.1 prints narrower. **Under 5.1, one more case went red: "a real diff-with-differences reads
 success".** Its command is `git diff --no-index -- a b || true; git diff --no-index -- a b`; 5.1 cannot parse `||`, and the

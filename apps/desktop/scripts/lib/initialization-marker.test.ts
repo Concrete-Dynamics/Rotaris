@@ -3,7 +3,7 @@
  *
  * `chat-controls-proof`'s first scenario read "Project setup did not finish" as the compress pass's notice in any
  * checkout without the bundled code-intelligence runtime
- * (`docs/defects/fixed/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`): the
+ * (`docs/archive/defects/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`): the
  * workspace had never been initialized, so the one registered task started in the background at open
  * (REQ-WORKSPACE-083), failed, and its notice took the one slot (REQ-NOTIFY-024). What is decided here is that the
  * section `lib/initialization-marker.mjs` states leaves that task neither pending nor background under the product's
@@ -72,9 +72,9 @@ describe('the answered project-setup section a proof writes (REQ-WORKSPACE-081, 
 /**
  * Each proof that reads the notice slot without project setup as its subject, with the line its `launch()` ends before.
  * `notice-proof` read "Project setup did not finish" in place of REQ-NOTIFY-224's hook-review notice
- * (`docs/defects/fixed/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md`), and
+ * (`docs/archive/defects/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md`), and
  * `resilience-proof`'s `cancel` in place of REQ-NOTIFY-063's limit notice, while its `fatal` passed on it
- * (`docs/defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`).
+ * (`docs/archive/defects/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`).
  */
 const SLOT_READERS = [
   { proof: 'chat-controls-proof', ids: 'REQ-CHAT-080, REQ-NOTIFY-024', launchEnd: 'const match =' },

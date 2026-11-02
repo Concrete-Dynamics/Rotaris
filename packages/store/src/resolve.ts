@@ -150,7 +150,7 @@ function installFirstStore(workspacesRoot: string, id: WorkspaceId, workspaceRoo
   } catch (e) {
     // A failed create leaves nothing it can remove: the place stays absent. The removal never replaces the failure it follows:
     // on Windows a failed open can still hold the sibling's file, the removal is refused (`EPERM`), and that refusal was what
-    // the caller read instead of the engine's (docs/defects/fixed/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md);
+    // the caller read instead of the engine's (docs/archive/defects/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md);
     // what it leaves is removed at the next open.
     try { rmSync(sibling, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* the cause below is the caller's */ }
     throw e;

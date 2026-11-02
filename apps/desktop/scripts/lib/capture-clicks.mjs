@@ -9,7 +9,7 @@
  * have caused can therefore pass or fail for a gesture nobody made. `config-proof`'s Discard scenario did that on the
  * Linux sweep of 2026-09-28: Settings stayed on Models, both steps logged `no … control on screen`, and nothing read
  * those lines
- * (`docs/defects/fixed/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md`).
+ * (`docs/archive/defects/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md`).
  *
  * Nothing here is product code. It runs only from the proofs.
  */

@@ -2,7 +2,7 @@
  * REQ-WORKSPACE-149 rule 2's measuring half: the DOM side of `elideMiddle` (`workspace-label.ts`), shared by every surface
  * that draws a workspace path or a branch name — the title-bar chip (`WorkspaceChip.tsx`) and the status strip's path link
  * and branch item (`StatusStripItem.tsx`). It lived inside `WorkspaceChip` until the strip needed it too (2026-10-03,
- * `docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`); written once so the two
+ * `docs/archive/defects/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`); written once so the two
  * surfaces cannot measure differently.
  *
  * One canvas per window measures every candidate label. Measuring on a canvas rather than in the document is what keeps

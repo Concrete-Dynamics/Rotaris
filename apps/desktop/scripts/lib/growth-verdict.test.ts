@@ -1,7 +1,7 @@
 /**
  * `traceability-proof`'s verdict on a linear-growth pair (REQ-TRACE-501, REQ-TRACE-088), against the readings of the
  * red that exposed the defect: parse `[140.7, 138.8, 148.5]` full against `[50.6, 43.9, 44.1]` half, ratio 3.16, work
- * ratio 2.14 (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
+ * ratio 2.14 (`docs/archive/defects/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the proof library is plain ESM beside the scripts that run it.

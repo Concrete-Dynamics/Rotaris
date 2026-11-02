@@ -91,7 +91,7 @@ export type StreamPart =
    * A tool call under way: its start, or one piece of its arguments as the provider streams them. Activity only — the
    * call itself, its arguments whole, still arrives once as `tool-call`. It exists so a step that streams a long call is
    * not silent to the layers above the adapter: REQ-ORCH-089's stall watch, REQ-ORCH-090's first-event watchdog and
-   * REQ-CHAT-164's row indicator (docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md).
+   * REQ-CHAT-164's row indicator (docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md).
    */
   | { readonly kind: 'tool-input'; readonly callId: string }
   | { readonly kind: 'finish'; readonly reason: FinishReason }

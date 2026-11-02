@@ -275,7 +275,7 @@ export class TerminalStreams {
     if (!s.control.kill) return { ok: false, error: 'no-kill-capability' };
     // FALSIFIED, kept beside its replacement (the Windows ARM64 session's B7, 2026-10-15): "the control acted, so the kill
     // answers ok". The foreground control dropped `killActive`'s false, so a kill of a soft-paused command that terminated
-    // nothing answered ok (docs/defects/fixed/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md).
+    // nothing answered ok (docs/archive/defects/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md).
     if ((await s.control.kill()) === false) return { ok: false, error: 'ended' };
     return { ok: true, value: undefined };
   }

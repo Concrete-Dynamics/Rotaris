@@ -9,7 +9,7 @@ import { z } from 'zod';
  * executor's `schema` and nothing else, so an executor that advertises a JSON Schema must hand the gate a zod schema that
  * checks THAT schema; until 2026-10-06 the MCP executor handed it `z.record(z.string(), z.unknown())`, every object passed,
  * and a call missing three required properties was sent to the server (live-run finding G3,
- * docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md).
+ * docs/archive/defects/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md).
  *
  * **The validator is ajv 8, the JSON Schema engine the MCP SDK itself bundles and validates with.** ADR-0033 leaves schema
  * validation to the SDK; `@modelcontextprotocol/client` (2.3.0 since R-081) carries ajv 8 inside its own bundle (its
@@ -47,7 +47,7 @@ import { z } from 'zod';
  * the server's schema ignores it; honoured, ajv compiled an asynchronous validator whose Promise the refinement read as a
  * pass and whose rejection for an invalid call nothing handled, so every call was sent and the run host was left a stray
  * rejection (the fin18 verifier's probe,
- * docs/defects/fixed/an-advertised-schema-marked-async-compiles-a-check-that-never-refuses.md).
+ * docs/archive/defects/an-advertised-schema-marked-async-compiles-a-check-that-never-refuses.md).
  *
  * **A schema that cannot be compiled leaves the tool callable.** The MCP requirements drop a discovered tool for an empty
  * or non-string name only (REQ-MCP-052), and a persona's callable set is every granted tool that survives

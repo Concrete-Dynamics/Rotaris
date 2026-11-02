@@ -190,7 +190,7 @@ describe('MainWindows', () => {
 
   // PD-LIBRARY-002 revision 2 (e): a window that opens a workspace is handed to main once its workspace id is set, after it
   // has loaded, on every path — so main can send it the improvement activity it would otherwise learn only at the next
-  // publication (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+  // publication (docs/archive/defects/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
   it('tells main each time a window has opened a workspace, after its load and with its workspace id, and never on a failed open', async () => {
     const h = harness();
     const first = await h.mainWindows.launch('C:/a');
@@ -328,7 +328,7 @@ describe('MainWindows', () => {
     expect(empty.actions).toContain('build:C:/startup:hand-over');
   });
 
-  // ESC-34 / REQ-NOTIFY-044 (docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md): a notice action
+  // ESC-34 / REQ-NOTIFY-044 (docs/archive/defects/a-hook-review-notice-for-another-workspace-opens-nothing.md): a notice action
   // naming a workspace reaches that workspace, from whichever window it was activated in, without asking anything.
   it('reaches a named workspace: surfaces the window holding it, else adds one for it with no gate, and closes nothing', async () => {
     const h = harness({ runsIn: () => 1 });
@@ -418,7 +418,7 @@ describe('MainWindows', () => {
     });
   });
 
-  // docs/defects/fixed/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md: a second press while the window
+  // docs/archive/defects/a-notice-action-reaching-a-window-still-opening-its-workspace-is-refused.md: a second press while the window
   // the first press added is still opening its workspace reaches that window, and is answered once the workspace is open —
   // with its workspace id — rather than at once with none, which the hook review read as "Open a workspace before reviewing
   // its hooks".
@@ -476,7 +476,7 @@ describe('MainWindows', () => {
     expect(h.actions.filter((action) => action.startsWith('build:'))).toEqual(['build:C:/a:launch', 'build:C:/c:open-request']);
   });
 
-  // docs/defects/fixed/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md: a window whose
+  // docs/archive/defects/a-notice-action-reaching-a-window-whose-store-was-refused-answers-an-unreported-failure.md: a window whose
   // open settled with no workspace id and that stands (the launch's, whose store the workspace service refused — OQ-281 keeps
   // it so Settings › Project can resolve the place) is reached, not refused: the caller opens the action's surface in it.
   it('answers a reach of a live window whose open settled with no workspace id with that window, and builds nothing', async () => {
@@ -492,7 +492,7 @@ describe('MainWindows', () => {
     expect(h.notices).toEqual([]);
   });
 
-  // docs/defects/fixed/no-unit-case-pins-a-notice-reach-of-a-window-still-opening-after-the-30-second-bound.md: the wait for a
+  // docs/archive/defects/no-unit-case-pins-a-notice-reach-of-a-window-still-opening-after-the-30-second-bound.md: the wait for a
   // holder still opening is bounded at 30,000 ms, and when the bound elapses with the open still pending the holder is alive, so
   // it is reached like any standing holder — answered with that window and no workspace id, never refused in REQ-SHELL-019's
   // words and never left hanging. Red if the bound never fires (the reach never answers) or if it refuses a live window.
@@ -644,7 +644,7 @@ describe('MainWindows', () => {
 
   /**
    * REQ-WORKSPACE-013: the outgoing window of a switch hands its workspace back, so main can cancel that workspace's
-   * initialization run; nothing did before (`docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`).
+   * initialization run; nothing did before (`docs/archive/defects/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`).
    * A workspace still held by another window is not handed back, and neither is the sentinel.
    */
   it('reports a workspace no window holds any more once its last window closes, on a switch and on a vetoed replacement (REQ-WORKSPACE-013, REQ-WORKSPACE-102)', async () => {
@@ -731,7 +731,7 @@ describe('MainWindows', () => {
   });
 
   /*
-   * docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md:
+   * docs/archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md:
    * a run that failed before the starting window's `session.subscribe` reached main was read as another session's failure.
    */
   it('REQ-NOTIFY-030/032: the window starting a session shows it before it subscribes, until it subscribes, stops following it or the start is refused', async () => {
@@ -766,7 +766,7 @@ describe('MainWindows', () => {
     expect(h.mainWindows.showingSession('S7', [])).toBeUndefined();
   });
 
-  // docs/defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md: the launch's open is awaited by main's
+  // docs/archive/defects/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md: the launch's open is awaited by main's
   // start-up itself, so an open that rejects (a request to the workspace service or the run host that got no reply within its
   // bound) ended `main()` as an unhandled rejection: the driver seam, the hand-overs and everything after the launch never ran.
   // The launch logs it and the window stands with no workspace open, as one whose open was refused does (OQ-386).
@@ -952,7 +952,7 @@ function clock() {
 
 describe('a main window whose renderer is gone cannot hold its close or the application\'s quit (REQ-SHELL-119, PD-ORCH-005 clause 9)', () => {
   /*
-   * docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md: Electron's
+   * docs/archive/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md: Electron's
    * `executeJavaScript` on a renderer that is gone neither resolves nor rejects, so the guard asked through it never
    * answered and the quit waited on it with no bound. The fake keeps that shape: its `executeJavaScript` never settles.
    */
@@ -1074,7 +1074,7 @@ describe('a main window whose renderer is gone cannot hold its close or the appl
   /*
    * PD-SHELL-010 (OQ-297, the consortium's HR1): a renderer that is alive but hung — its main thread looping or stopped — is
    * not gone, so until 2026-10-14 its guard's question was waited for with no bound and held a person's close and the
-   * application's quit (docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md). Main now
+   * application's quit (docs/archive/defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md). Main now
    * asks a liveness probe of its own beside the guard's question, every RENDERER_LIVENESS_BOUND_MS while it is out; a probe
    * unanswered at its bound, or Chromium's `unresponsive`, means the renderer cannot answer, and a guard that cannot answer
    * allows. A renderer that answers its probes is still waited for without bound: its guard may be a person deciding.

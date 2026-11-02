@@ -42,7 +42,7 @@ for the guard to check; it was made a reader. `OpenOptions.clientVersion`, and t
 run host's composition root, which reads it from `import.meta.dirname` — `out/main/`, the directory main's bundle sits
 in too — so one file answers both processes. Measured on the built app: with the manifest temporarily declaring
 `0.2.0rc1`, both of alpha's handshakes in `mcp-proof`'s discovery launch named `rotaris 0.2.0rc1`; the old literal
-would have said `0.1.0`. The note is `../../../defects/fixed/the-mcp-client-reports-a-literal-product-version.md`.
+would have said `0.1.0`. The note is `../../../archive/defects/the-mcp-client-reports-a-literal-product-version.md`.
 
 **What the version half found: the running app did not report the declared version.** `shell.hello` answered with
 `app.getVersion()`, and Electron answers that with **its own** version for a runtime started with a file. That is the
@@ -51,7 +51,7 @@ was right only because `app.asar` is a package. Repaired in the same change: mai
 `out/main/../../package.json`, which is the same place the guard reads in both entries, and answers `dev` when that
 file declares nothing. `REQ-STARTUP-007` says `dev` there and `REQ-STARTUP-004` says `0+unknown`; the two disagree,
 and `dev` is **OQ-71**'s reading. `settings-proof` now requires the exact `v0.1.0`, and it was measured failing on the
-old build. The note is `../../../defects/fixed/the-unpacked-build-reports-electrons-version-as-the-products.md`.
+old build. The note is `../../../archive/defects/the-unpacked-build-reports-electrons-version-as-the-products.md`.
 
 **What it found about prereleases, not repaired here.** electron-builder 26.15.3 rewrites `0.1.0rc1` to `0.1.0-rc1`
 when it normalises the package metadata (loose SemVer, measured). So a prerelease built from this configuration would

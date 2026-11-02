@@ -27,7 +27,7 @@ a signal, never as a clean exit, and whose wait settles on the main process's ex
 (`lib/settle-launch.mjs`), so a process of a killed main that keeps them open cannot hold the run past its bound. A
 live-run launch that overruns or exits non-zero is a failed check of its scenario, its session preserved, and the run
 ends through `lib/run-ending.mjs`, which writes `results.json` and the manifest whatever ends it
-([note](../defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)). Any other bare
+([note](../archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)). Any other bare
 `spawn` of Electron fails that test. At its bound the
 application is sent SIGTERM with its pipes still open, and it answers: its quit path runs and it exits within a
 fraction of a second. SIGKILL follows a grace only if it does not. The proof then fails with the launch's last log
@@ -35,7 +35,7 @@ lines. `lib/launch-sites.test.ts` refuses a `spawnSync` launch of Electron: its 
 so the quit path's lines are lost, and it reports the overrun as exit status 0 with only `error.code` `ETIMEDOUT` to
 show it, which a check of the status passes as a clean exit. (Before the application's EPIPE loop was repaired on
 2026-09-29 it did not return at all.)
-([note](../defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)).
+([note](../archive/defects/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)).
 
 A launch ends with its whole process group, not with its main process alone. Since 2026-10-07 a driven launch leads a
 process group of its own as a `spawnBounded` one does, and both drain it once the main process has exited
@@ -45,10 +45,10 @@ drain also reaches a child the app puts in a process group of its own (a project
 on Linux, by an `XDG_DATA_HOME` the launch was given in its environment (since `3c54f02` never one it inherited from the
 proof's own shell, so a launch given none is not swept this way): it is given REQ-WORKSPACE-092's 5 s and a second's margin to
 end by itself, then ended with SIGKILL and named as `bounded-launch: … in group(s) of their own outlived …`
-([note](../defects/fixed/a-proof-can-exit-while-a-setup-step-the-app-started-in-its-own-process-group-is-still-ending.md)). A proof that exits or is
+([note](../archive/defects/a-proof-can-exit-while-a-setup-step-the-app-started-in-its-own-process-group-is-still-ending.md)). A proof that exits or is
 signalled takes every live group with it. Before that, `layout-proof`, `driver-proof` and `workspace-proof` exited beside
 their own zygotes and a Git view's `git diff`
-([note](../defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md)).
+([note](../archive/defects/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md)).
 
 ## The run
 

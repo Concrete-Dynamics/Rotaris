@@ -8,7 +8,7 @@
  *
  * The duress run of 2026-10-01 (pack `.live-run/runs/2026-10-01T03-15-27-194Z`, session `57095770`) held two such
  * calls, ordinals 126 and 244, and no issue named either (live-run finding a71-6,
- * `docs/defects/fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md`).
+ * `docs/archive/defects/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md`).
  *
  * Nothing here is product code. It runs only from the live run.
  */

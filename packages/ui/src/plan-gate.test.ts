@@ -145,7 +145,7 @@ describe('PlanGate — the plan stays the largest part when the window is short 
   it('gives the preview a floor above the todo\'s cap', () => {
     // Until 2026-10-06 the plan was `flex: 1 1 auto; min-height: 0` and every other part kept its content height, so at
     // 1000x680 with a 97 px notice the plan stood 41 px beside the todo's 56 (finacc2's A2;
-    // docs/defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
+    // docs/archive/defects/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md).
     expect(base).toMatch(/\*,\s*\*::before,\s*\*::after\s*\{\s*box-sizing:\s*border-box/);
     const preview = rule('.plan-gate__preview-wrap');
     const todo = rule('.plan-gate__todo');

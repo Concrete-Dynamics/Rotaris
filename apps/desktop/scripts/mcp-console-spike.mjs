@@ -57,7 +57,7 @@ const env = { ...process.env };
 for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
 const launchedAt = new Date();
 // `spawnBounded`'s since 2026-09-30: the launch had no bound at all, so a packaged application that never quit held the
-// spike open (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). The sampler below
+// spike open (`docs/archive/defects/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). The sampler below
 // runs while it is awaited.
 const launched = spawnBounded(exe, [...hostSwitches, workspace], {
   timeoutMs: 180_000, cwd: dirname(exe), windowsHide: true,

@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /*
- * docs/defects/fixed/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md: main read a set of verification
+ * docs/archive/defects/a-packaged-build-keeps-capture-seams-that-answer-mains-dialogs.md: main read a set of verification
  * seams — the hook review's press, the pause window's answer, every message box's answer, the backup, restore, export,
  * directory and skill-file choosers' paths, the provider dialog's fill, the external-link swallow, the stale question
  * answer, the subscription's delay and hold, the theme, the scale and the network log — behind the run-time `capturing`
@@ -20,7 +20,7 @@ const MAIN = join(import.meta.dirname, '..');
  * Files main reaches only through the dynamic import inside `if (__ROTARIS_SEAMS__)` (`capture/index.ts`), whose reads a
  * packaged build never emits. The packaged probe (`capture/probe.ts`) was outside the rule as well until 2026-10-14, as
  * though every read in it shipped on purpose; six of its reads were verification seams it does not use, and a packaged build
- * kept them (docs/defects/fixed/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md). It is inside
+ * kept them (docs/archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md). It is inside
  * the rule now: only its three variables below are read off the flag.
  */
 const OUTSIDE_THIS_RULE = new Set(['capture/seams.ts', 'capture/theme-proof.ts']);

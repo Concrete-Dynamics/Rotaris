@@ -8,10 +8,10 @@ The ruled, closed, resolved and withdrawn entries of [part 44](../../../architec
 indicator counts "the time spent inside the model call currently in flight" and restarts "each time the run moves on to
 the next model call within the same run"; REQ-ORCH-095 and the delegated children whose calls run beside the root's;
 REQ-CHAT-063, the live-refresh rules the tick follows. Raised 2026-10-06 by
-[`the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md`](../../../defects/fixed/the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md)
+[`the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md`](../../defects/the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md)
 (fin18, bundle `fin18-rail-label-and-observations`). ~~Open, the owner's.~~ Ruled 2026-10-06.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed at the reading the build proceeds under: while a run is active the run timer counts from the newest transcript row the run produced, the unsettled one first, so a call that writes no row does not restart it, and no call boundary is published on the record. It was raised on 2026-10-06, after the overview the owner answered, and is confirmed under the same instruction at the reading this entry says the build proceeds under. [`PD-CHAT-008`](../../../product/directives/pd-chat-008.md#pd-chat-008) narrows REQ-CHAT-158. Since no call boundary is owed, [`the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md`](../../../defects/fixed/the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md) closes with this ruling.
+**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed at the reading the build proceeds under: while a run is active the run timer counts from the newest transcript row the run produced, the unsettled one first, so a call that writes no row does not restart it, and no call boundary is published on the record. It was raised on 2026-10-06, after the overview the owner answered, and is confirmed under the same instruction at the reading this entry says the build proceeds under. [`PD-CHAT-008`](../../../product/directives/pd-chat-008.md#pd-chat-008) narrows REQ-CHAT-158. Since no call boundary is owed, [`the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md`](../../defects/the-run-timer-counts-from-the-newest-row-not-from-the-model-call-in-flight.md) closes with this ruling.
 
 The default live run at `27a5127` captured the run header at a moment when the one call in flight was the transcript
 summariser's, 5.5 s in, and the header read 0:09, counted from the newest transcript row. A run can have several calls out
@@ -36,10 +36,10 @@ repository card states "how many files were touched and how many changes are unc
 uncommitted-path count includes untracked paths so that it and the cleanliness gates of REQ-GIT-014 never disagree;
 REQ-GIT-107, a worktree row's "files-touched" figure; REQ-GIT-003, the `.rotaris/` exclusion of every working-tree read
 the Git domain performs. Raised 2026-10-06 by
-[`the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md`](../../../defects/fixed/the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md)
+[`the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md`](../../defects/the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md)
 (fin18, bundle `fin18-rail-label-and-observations`). ~~Open, the owner's.~~ Ruled 2026-10-06.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed at the reading the build proceeds under: the repository card's "touched" counts every path `git status` lists, untracked ones included, and its "uncommitted" the tracked paths with a staged or unstaged change, with no `.rotaris/` exclusion; the Git view keeps REQ-GIT-105's count under REQ-GIT-003's exclusion, so the two may differ for one tree. It was raised on 2026-10-06, after the overview the owner answered, and is confirmed under the same instruction at the reading this entry says the build proceeds under. REQ-MONITOR-168 defines neither word, and REQ-GIT-003's consequences name the Git view's figures, not the card's, so this ruling settles it; [`the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md`](../../../defects/fixed/the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md) closes with it.
+**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed at the reading the build proceeds under: the repository card's "touched" counts every path `git status` lists, untracked ones included, and its "uncommitted" the tracked paths with a staged or unstaged change, with no `.rotaris/` exclusion; the Git view keeps REQ-GIT-105's count under REQ-GIT-003's exclusion, so the two may differ for one tree. It was raised on 2026-10-06, after the overview the owner answered, and is confirmed under the same instruction at the reading this entry says the build proceeds under. REQ-MONITOR-168 defines neither word, and REQ-GIT-003's consequences name the Git view's figures, not the card's, so this ruling settles it; [`the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md`](../../defects/the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md) closes with it.
 
 In one launch of the default live run at `27a5127` the Overview's repository card read "4 files touched · 2 uncommitted"
 and the Git view counted 4 uncommitted paths in the same tree. The card counts an untracked path as touched and not as
@@ -127,7 +127,7 @@ was merged in). ~~Open, the owner's.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed at the reading the build proceeds under: a task answers for every open item of the plan that was not already open when it was first taken up (its plan cycle, else its first iteration), a record kept with the task, and for no other; a person's own addition to the plan during the task is held against it, and a `PENDING` item re-listed in the id-less shape is the re-listing task's. It was raised on 2026-10-06, after the overview the owner answered, and is confirmed under the same instruction at the reading this entry says the build proceeds under. [`PD-ORCH-012`](../../../product/directives/pd-orch-012.md#pd-orch-012) narrows REQ-ORCH-075, and [`PD-ORCH-006`](../../../product/directives/pd-orch-006.md#pd-orch-006) revision 2 reads REQ-ORCH-029's todo clause the same way.
 
-The repair of `docs/defects/fixed/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` returns a
+The repair of `docs/archive/defects/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` returns a
 task to the pending queue when its root answers `succeeded` with an item of its plan open (REQ-ORCH-075). The plan is the
 session's, not the task's: it outlives the task, the run and every iteration. An item a task was given up on with
 (REQ-ORCH-077), or one an earlier run of the session left open, is therefore still `PENDING` or `IN_PROGRESS` when the next
@@ -176,7 +176,7 @@ whether such a re-listed item is the new task's (it re-wrote it) or still the ea
 *(PD-ORCH-002 revision 2, over REQ-ORCH-153: expanded, the plan's own text "SHALL be the largest element of the surface and
 the only element that grows with it: every other part of the gate is sized by its own content"; REQ-SHELL-022, the
 1000x680 minimum; REQ-SHELL-048, every action reachable. Raised 2026-10-06 by
-[`the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`](../../../defects/fixed/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md)
+[`the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md`](../../defects/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md)
 (finacc2, bundle `finacc2-accept1-6`). First committed as OQ-202 on the bundle's branch; origin/main had already taken
 OQ-202 and OQ-203 (`ef1e6d9`, `6998e3f`), so it takes the next free number, OQ-204. ~~Open, the owner's.~~ **Ruled
 2026-10-07.**)*
@@ -241,7 +241,7 @@ grant the entry role the direct-work bundle … a `swarm` override is not an inp
 [`PD-ORCH-006`](../../../product/directives/pd-orch-006.md#pd-orch-006), which narrows REQ-ORCH-029 alone and tells the entry role a run
 granted the bundle does the work itself. Raised 2026-10-06 by the repair of fin22's bundle `fin22-record-tidy`, from its
 verifier's finding, beside
-[`the-swarm-run-override-changes-no-instruction-text.md`](../../../defects/fixed/the-swarm-run-override-changes-no-instruction-text.md).
+[`the-swarm-run-override-changes-no-instruction-text.md`](../../defects/the-swarm-run-override-changes-no-instruction-text.md).
 ~~Open.~~ Ruled 2026-10-07, confirmed as built.)*
 
 The two requirements meet on one run: a `swarm` override on an `explicit_trivial` or `single_file_change` intent (with

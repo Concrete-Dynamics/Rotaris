@@ -6,7 +6,7 @@ import { answerUnderHeldRefusal } from './store-notice.js';
  * OQ-281 (ruled 2026-10-14 under R-072), REQ-SESSION-202 / REQ-SESSION-089: every workspace-scoped refusal in a window whose
  * store the open refused states the held condition. The gates answer `workspace.none` from the window's missing identifier;
  * `runCommand` (`index.ts`) passes every answer through this before it leaves main
- * (`docs/defects/fixed/a-refused-store-is-reported-as-no-workspace-by-every-command-but-the-listing.md`).
+ * (`docs/archive/defects/a-refused-store-is-reported-as-no-workspace-by-every-command-but-the-listing.md`).
  */
 const held = { code: 'workspace.store-missing', headline: 'The session store for this workspace is not where it is kept', detail: 'The place … exists and the store is not in it.' };
 const none = (headline: string): CommandOutcome => ({ ok: false, code: 'workspace.none', headline });

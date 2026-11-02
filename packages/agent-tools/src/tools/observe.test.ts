@@ -8,7 +8,7 @@ import { errorObservation, observation } from './types.js';
 
 /**
  * OQ-245 (XE1, ruled 2026-10-13 under R-072): the files a cross-file code-intelligence EDIT call changed are learned by
- * looking at what it can reach before and after it (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+ * looking at what it can reach before and after it (docs/archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
  */
 let root: string;
 beforeEach(() => {
@@ -63,7 +63,7 @@ describe('snapshotTree and snapshotChanges (OQ-245)', () => {
 
   // The walk is asynchronous, so the run host's event loop moves while it runs: a callback queued before it starts runs before
   // it ends. With the synchronous walk it ran after, whatever the tree held
-  // (docs/defects/fixed/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md).
+  // (docs/archive/defects/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md).
   it('the walk yields to the event loop while it reads the tree', async () => {
     let yielded = false;
     setImmediate(() => { yielded = true; });
@@ -97,7 +97,7 @@ describe('observeReach (OQ-245)', () => {
   });
 
   it('a sibling\'s write noted against the real path is left out when the root is given through a symbolic link (fin36)', async () => {
-    // docs/defects/fixed/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md:
+    // docs/archive/defects/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md:
     // the native tools note against `realPathOf(root)`, the MCP executor passed the root unresolved.
     const link = `${root}-link`;
     symlinkSync(root, link, process.platform === 'win32' ? 'junction' : 'dir');

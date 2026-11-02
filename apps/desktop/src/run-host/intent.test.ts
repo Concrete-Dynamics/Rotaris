@@ -45,7 +45,7 @@ describe('run-host/intent — the pre-flight', () => {
     expect(p.intent).toMatchObject({ category: 'moderate_feature', fallback: true });
   });
   /*
-   * K3 of the default live run at c2fdd6a (`docs/defects/fixed/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md`):
+   * K3 of the default live run at c2fdd6a (`docs/archive/defects/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md`):
    * the root's playbook told the coordinator "the coordinator routed it to you", on a direct-work run too (PD-ORCH-006).
    */
   it('REQ-ORCH-019/027: the root is given the entry role\'s ROUTE wording and the audit records it; a delegated child keeps `routed`', async () => {

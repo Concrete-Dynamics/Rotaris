@@ -90,12 +90,12 @@ execution root.
 > The global base is the profile's own configuration directory. The machine-wide base uses a second new seam,
 > `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, which is also compiled out. Without it, the only way to place a file at
 > `/etc/codex` was to write into the machine's own `/etc`. The same gap had left the unit tests reading the host's
-> real `/etc/codex`: [`the-instruction-discovery-tests-read-the-machines-own-etc-codex.md`](../../defects/fixed/the-instruction-discovery-tests-read-the-machines-own-etc-codex.md).
+> real `/etc/codex`: [`the-instruction-discovery-tests-read-the-machines-own-etc-codex.md`](../../archive/defects/the-instruction-discovery-tests-read-the-machines-own-etc-codex.md).
 > The first repair of that note missed the catalog cases' `host()` helper, and the gate's verification found it; it is
 > now repaired, with a case that decides the isolation on any host. On POSIX the proof also sets `HOME` to its scratch
 > home, after the gate traced a launch reading the operator's `~/.agents/prompts`. **One root of the operator's machine
 > was still read**: the skill search's `/etc/codex/skills`, which had no seam
-> ([`three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`](../../defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md));
+> ([`three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`](../../archive/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md));
 > closed 2026-09-28, below.
 >
 > **Four launches.**
@@ -118,7 +118,7 @@ execution root.
 > (`packages/engine/src/children/orchestration.ts`), which is an argument, not an observation. The recorded calls are
 > the classifier, the entry agent (the only one carrying context) and the post-run analyst, which rightly carries none. Two defects in the same requirements were
 > noticed by the gate and recorded, not repaired there:
-> [`an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`](../../defects/fixed/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md)
+> [`an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`](../../archive/defects/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md)
 > (REQ-WORKSPACE-045's decoding half) and the `/etc/codex/skills` read above.
 >
 > **Both repaired 2026-09-28 (R-062; first-executions row 2026-09-28).** The port every discovery reads through
@@ -133,7 +133,7 @@ execution root.
 > instruction seam, and the catalog tests decide the isolation of both roots on any host by recording every probe.
 > **What the repair did not observe:** no proof lays an undecodable file down for the built app — the decoding half is
 > shown by the unit cases over the real port alone; and `skills-proof`'s launches after its policy launch did not run
-> on Linux, for the reason [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
+> on Linux, for the reason [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../../archive/defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
 > records, so the run launch's catalog naming the machine skill is asserted in the script and unproven on this host.
 >
 > **Observed in the built app 2026-10-13 (fin42, whats-next N61).** `injection-proof`'s launch 5, `undecodable`, lays the

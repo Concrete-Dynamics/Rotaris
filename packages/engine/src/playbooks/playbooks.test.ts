@@ -71,7 +71,7 @@ describe('REQ-ORCH-019..027 the playbook matrix', () => {
     expect(o.budgetCell).toEqual({ maxActive: 4, maxTotal: 12, maxDepth: 3 });
   });
   /*
-   * K3 of the default live run at c2fdd6a (docs/defects/fixed/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md):
+   * K3 of the default live run at c2fdd6a (docs/archive/defects/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md):
    * the entry role was rendered like a delegated specialist, so the coordinator read "the coordinator routed it to you",
    * on a direct-work run (PD-ORCH-006) too. Its ROUTE slot takes the catalogue's `entry` variant; a delegated child of the
    * same role still reads `routed`, and a cell marked not routed keeps its narrow text (REQ-ORCH-023).

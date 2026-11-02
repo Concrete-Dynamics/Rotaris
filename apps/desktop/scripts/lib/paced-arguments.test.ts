@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { conclusive, evaluationIntervalMs, pacedWindows, stallsWhileStreaming } from './paced-arguments.mjs';
 
-/** The live run's `faults-args` reading (docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md). */
+/** The live run's `faults-args` reading (docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md). */
 describe('the faults-args reading of paced tool-call arguments', () => {
   const T0 = Date.parse('2026-10-07T10:00:00.000Z');
   const records = [

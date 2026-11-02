@@ -12,7 +12,7 @@ Part 29 of 68 of the [open-questions record](../open-questions.md), which indexe
 *(REQ-SANDBOX-077: its case (c) renders `--tmpfs <p> --remount-ro <p>`, and its closing paragraph refuses, under
 REQ-SANDBOX-083, a carve-out that cannot be established without a host-visible directory. Also REQ-SANDBOX-061's
 backend parity, REQ-SANDBOX-127's first effect, and REQ-TOOLS-123. Raised 2026-09-29 by the repair of
-[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../../defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)
+[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../../archive/defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)
 under [R-067](../../product/requests.md#r-067). Open.)*
 
 **Deferred 2026-10-06 by the owner ([R-071](../../product/requests.md#r-071)).**

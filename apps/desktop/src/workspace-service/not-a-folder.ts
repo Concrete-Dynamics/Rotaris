@@ -11,7 +11,7 @@ import { join } from 'node:path';
  * written there, there are no recorded sessions, and there is no identifier to put back. (Windows answers that read ENOENT, so
  * there the open went on to mint an identifier under the file, and the mint's failure reached the log alone.) No requirement
  * names this case (REQ-STARTUP-163 speaks only of "a directory" a launch carries); these words say what was found and nothing
- * more (`docs/defects/fixed/a-workspace-path-that-is-not-a-directory-is-reported-as-an-unreadable-identifier.md`).
+ * more (`docs/archive/defects/a-workspace-path-that-is-not-a-directory-is-reported-as-an-unreadable-identifier.md`).
  *
  * Main holds and raises it as the identifier's refusal is (`main/store-notice.ts`, `WORKSPACE_REFUSALS`): no action, since
  * nothing in REQ-NOTIFY-044's vocabulary turns a file into a folder.

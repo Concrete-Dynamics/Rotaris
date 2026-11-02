@@ -40,7 +40,7 @@ export const NO_CONFINEMENT_DISCLOSURE = 'This host cannot confine anything: eve
  * here" would be untrue there; its own reason and remediation are what it owes (REQ-SANDBOX-119). A
  * verdict not yet taken states nothing. One predicate for both surfaces, so they cannot disagree
  * (REQ-SANDBOX-071); the launch dialog once used `available !== true` and did
- * (`docs/defects/fixed/the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md`).
+ * (`docs/archive/defects/the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md`).
  */
 export function owesNoConfinementDisclosure(verdict: ConfinementVerdict | null): boolean {
   return verdict !== null && verdict.backend === 'unavailable';

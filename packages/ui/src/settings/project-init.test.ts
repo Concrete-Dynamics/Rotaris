@@ -171,7 +171,7 @@ describe('the project setup dialog', () => {
 });
 
 /**
- * `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`: a run the resolution started for background
+ * `docs/archive/defects/the-setup-dialog-takes-a-background-run-as-its-own.md`: a run the resolution started for background
  * tasks is not the dialog's. Taking the one shared report whatever its run, the dialog switched to "running" under the
  * user's own Escape, or ignored Escape so no decision was recorded, and the window lifted the composer gate while the
  * consent task was unanswered.

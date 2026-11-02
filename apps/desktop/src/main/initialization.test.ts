@@ -13,7 +13,7 @@ import {
 
 /**
  * Each test's scratch directory below the temporary directory, removed after the test so a run leaves none behind
- * (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+ * (docs/archive/defects/unit-tests-leave-their-temporary-directories-behind.md).
  */
 const scratchDirs: string[] = [];
 function scratchDir(prefix: string): string {
@@ -286,7 +286,7 @@ describe('resolution on workspace open', () => {
   /**
    * REQ-WORKSPACE-095: the non-code summary, and REQ-WORKSPACE-091's skip token surviving into the step with its fixed
    * sentences — chosen by the step's stage — where the run host wrote its own
-   * (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
+   * (`docs/archive/defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
    */
   it('summarises a documentation-only workspace in its own words', async () => {
     const h = harness();
@@ -350,7 +350,7 @@ describe('resolution on workspace open', () => {
   /**
    * REQ-WORKSPACE-092/093: a step stopped before it finished reads in this domain's fixed sentences — in its own row and in
    * the "{reason}: {detail}" error — and not in the run host's, so it is told apart from a step that exited non-zero
-   * (`docs/defects/fixed/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`).
+   * (`docs/archive/defects/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`).
    */
   it.each([
     {
@@ -468,7 +468,7 @@ describe('resolution on workspace open', () => {
    * REQ-WORKSPACE-093/094/103: a start the run host refuses — its one setup slot taken by the MCP category's setup
    * (REQ-MCP-112), the workspace not open there, its configuration not loaded — is not REQ-WORKSPACE-094's "not a local
    * launch". It is a retryable failure in this domain's summary, its detail the refusal's own words, and the background
-   * banner carries that summary (`docs/defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`).
+   * banner carries that summary (`docs/archive/defects/a-refused-setup-start-is-reported-as-not-a-local-launch.md`).
    */
   it.each([
     RUNNING_REFUSAL,
@@ -529,7 +529,7 @@ describe('the skip path and the start refusals', () => {
   /**
    * REQ-WORKSPACE-083/084/086/102: the window can open the dialog from its mount read before main's 800 ms slot, and a
    * skip answered then recorded the background task as skipped before it had started, so the resolution started
-   * nothing (`init-proof` on Linux, `docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+   * nothing (`init-proof` on Linux, `docs/archive/defects/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
    * The skip now performs the open's one resolution first, which starts the task, and the attempted task is owed its
    * own outcome; the slot then finds the resolution made.
    */
@@ -587,7 +587,7 @@ describe('the skip path and the start refusals', () => {
   });
 
   /**
-   * `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`: the resolution a skip performs first
+   * `docs/archive/defects/the-setup-dialog-takes-a-background-run-as-its-own.md`: the resolution a skip performs first
    * publishes the background run while the skip is still in flight, and the dialog is still open. Main cannot order a
    * push behind the command's reply, so every view that shows that run must say it is a background run. That is what
    * the dialog reads to leave it undrawn (REQ-WORKSPACE-103) and what keeps the prompt due (OQ-123).
@@ -631,7 +631,7 @@ describe('the skip path and the start refusals', () => {
   });
 
   /**
-   * `docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`: with the open resolved and the background run
+   * `docs/archive/defects/a-skip-can-move-a-completed-task-into-skipped.md`: with the open resolved and the background run
    * live, the dialog stays in its prompt state and Skip is live. The skip used to recompute the view before filtering,
    * which is a run-host status read, and a run that ended inside that read had its completed id moved into `skipped`.
    * A skip after the resolution now reads nothing more before it records (REQ-WORKSPACE-084, REQ-WORKSPACE-086).
@@ -684,7 +684,7 @@ describe('the skip path and the start refusals', () => {
 
   /**
    * The verifier's two orderings of a skip against the background run's own recording, both reachable because Skip and
-   * Escape stay live for the whole background run (`docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+   * Escape stay live for the whole background run (`docs/archive/defects/the-setup-dialog-takes-a-background-run-as-its-own.md`).
    * Both patches replace the two lists whole (REQ-CONFIG-050), so whichever lands second erased the other unless it was
    * built from what the first left on disk. (A) The skip arrives while the run's completion write is in flight: it was
    * built from the in-memory state, which the write had not yet reached, and erased `completed` (REQ-WORKSPACE-084).
@@ -833,7 +833,7 @@ const cancelledSetup = (): McpSetupStatus => status({ state: 'finished', outcome
 /**
  * REQ-WORKSPACE-013: a workspace switch cancels the outgoing workspace's run on REQ-WORKSPACE-109's terms, records nothing
  * for it, and resolves the replacement independently; a later open of the same root is a new open (REQ-WORKSPACE-102).
- * `docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`.
+ * `docs/archive/defects/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`.
  */
 describe('closing a workspace', () => {
   it('cancels the closed workspace\'s live run, records nothing for it even when the task under way succeeds, and publishes nothing of it (REQ-WORKSPACE-013, REQ-WORKSPACE-109, REQ-WORKSPACE-092)', async () => {
@@ -873,7 +873,7 @@ describe('closing a workspace', () => {
    * At an orderly quit the run host's own shutdown ends the setup (`McpHost.endSetup`), and the close's cancellation can
    * arrive after the run host has closed its stores or exited. The live run at 71ad8e8 logged that as a warning — the only
    * one in its sign-in launch
-   * (`docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+   * (`docs/archive/defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
    */
   it('says an undelivered cancellation at a quit at info, and keeps warn for one lost while the application stays (REQ-WORKSPACE-092, REQ-WORKSPACE-109, PD-MONITOR-002)', async () => {
     const quitting = { current: true };
@@ -958,7 +958,7 @@ describe('closing a workspace', () => {
    * REQ-WORKSPACE-102's error surface is the failing window's; once its workspace is closed there is none, and channel 12's
    * banner reaches every live window. The silent stamp of a workspace with nothing applicable is the resolution's one write,
    * and main's marker request rejects when the service gives no reply within its bound; here the write is made to reject
-   * (`docs/defects/fixed/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`).
+   * (`docs/archive/defects/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`).
    */
   it('raises the resolution-failed banner when an open workspace\'s silent stamp throws (REQ-WORKSPACE-102)', async () => {
     const failing = Promise.reject(new Error('link closed'));
@@ -1008,7 +1008,7 @@ describe('closing a workspace', () => {
  * REQ-WORKSPACE-109/084: the run host holds one setup, and its status reaches the coordinator on one channel with no
  * workspace on it. A closed workspace's run that is still ending must neither take the replacement run's statuses nor
  * clear the step sink the replacement installed; the replacement's setup starts once the outgoing one has ended.
- * `docs/defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`.
+ * `docs/archive/defects/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`.
  */
 describe('one setup at a time across a workspace switch', () => {
   it('follows the replacement\'s run to its own recorded outcome while the closed workspace\'s setup is still ending (REQ-WORKSPACE-109, REQ-WORKSPACE-084, REQ-WORKSPACE-013)', async () => {
@@ -1215,7 +1215,7 @@ describe('one setup at a time across a workspace switch', () => {
 /**
  * REQ-WORKSPACE-084/093/103: main's `mcp.setup` requests reject when the run host gives no reply within their 15 s bound —
  * as when it has exited and is never forked again (`workspace-proof`'s scenario 8d)
- * (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
+ * (`docs/archive/defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
  */
 describe('a setup request the run host never answers', () => {
   const NO_REPLY = new Error('no reply to mcp.setup within 15000 ms');
@@ -1267,7 +1267,7 @@ describe('a setup request the run host never answers', () => {
  * REQ-WORKSPACE-109/084/093: a setup's follow ends only on a `finished` status, and every later setup waits for it
  * (`setupTurn`). When that status can never arrive — the run host exits mid-setup, and main never forks another — or a push
  * is lost, the follow must still end, as a retryable failure, and release its turn
- * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`).
+ * (`docs/archive/defects/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`).
  */
 describe('a setup whose finished status never arrives', () => {
   it('ends the follow as a retryable failure when the run host exits, and starts the setup queued behind it (REQ-WORKSPACE-109, REQ-WORKSPACE-084, REQ-WORKSPACE-093)', async () => {
@@ -1342,7 +1342,7 @@ describe('a setup whose finished status never arrives', () => {
 });
 
 /**
- * `docs/defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`: a documentation-only
+ * `docs/archive/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`: a documentation-only
  * workspace whose runtime marker is present skips every step without waiting, so the run host pushes the three steps and
  * the `finished` status before main's start request is answered. The coordinator installed its sink only once the start
  * answered, dropped every one of those pushes, drained the answer — every step done, its state still `running` — and
@@ -1424,7 +1424,7 @@ describe('a setup that finishes before its start is answered', () => {
  * every answer, recording, publication and setup-port call is that workspace's alone (REQ-WORKSPACE-013/102/105). Before,
  * the coordinator held one "active" root — the one opened last — and answered every window with it, published every state
  * to every window, and main addressed the setup port by the focused window's workspace
- * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
+ * (`docs/archive/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
  */
 describe('two workspaces open at once, one per window', () => {
   const consentTask = (id: string): InitializationTask => ({

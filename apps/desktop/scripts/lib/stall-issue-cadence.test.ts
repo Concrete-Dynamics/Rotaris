@@ -2,7 +2,7 @@
  * PD-MONITOR-005 revision 2 (OQ-127): the `faults-stall` scenario's reading of the root's `stall` issues, pinned against
  * the two shapes the build has written — one issue per throttled warning (revision 2) and one per evaluation (before it),
  * which the scenario's check passed alike until finacc3's finding F14
- * (`docs/defects/fixed/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md`).
+ * (`docs/archive/defects/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md`).
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the script that runs it.

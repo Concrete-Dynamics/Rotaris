@@ -92,7 +92,7 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   a candidate it cannot read, a `git grep` that fails inside a checkout and a checkout git refuses (another uid's,
   an unknown repository format), and skips only where git is not installed or no `.git` stands at or above the
   repository root. A typecheck catches a marker in TypeScript; nothing else read one in Markdown or JSON read as text
-  (since 2026-10-02, [the note](../../defects/fixed/the-gate-passes-a-committed-merge-conflict-marker.md)).
+  (since 2026-10-02, [the note](../../archive/defects/the-gate-passes-a-committed-merge-conflict-marker.md)).
 - **A design-equivalent control is written once** — `tools/check-ui-language.mjs` (in `pnpm lint`, beside
   `check-theme-colours.mjs`) fails on a raw `button`, `input`, `textarea`, `select` or `table` anywhere under
   `packages/ui/src` or `apps/desktop/src/renderer` except `design-system/` itself, which is where they live.

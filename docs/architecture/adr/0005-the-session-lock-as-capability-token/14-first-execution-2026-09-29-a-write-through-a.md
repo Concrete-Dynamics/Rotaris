@@ -5,7 +5,7 @@ Part 14 of 15 of [ADR-0005](../0005-the-session-lock-as-capability-token.md), wh
 ## First execution — 2026-09-29, a write through a loaded session outside a run
 
 *Recorded under R-067 (acceptance finding A14); the repair of
-`../../../defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`.*
+`../../../archive/defects/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`.*
 
 **Built and run:** the three writes the run host makes against a session's record from outside a run — the repair
 (`repairOne`: REQ-SESSION-060's browser Repair and REQ-GIT-094's open-time repair), the restore's safety checkpoint

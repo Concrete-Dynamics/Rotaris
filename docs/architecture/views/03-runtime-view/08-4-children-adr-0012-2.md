@@ -74,14 +74,14 @@ and status and its whole result text (final, else last, else key findings, else 
 100,000-character hand-off budget (OQ-256; `HAND_OFF_BUDGET`, `kernel`): an answer that does not fit is cut to the larger of the
 remainder and REQ-ORCH-060's 4,000 characters and ends in `handOffMarker`. Until revision 9 each sibling was REQ-ORCH-060's
 `reportBlock`, its answer cut to 4,000 characters
-(`docs/defects/fixed/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md`). REQ-ORCH-047's
+(`docs/archive/defects/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md`). REQ-ORCH-047's
 prior-agent-context block (`priorAgentContextParts`) shares the budget, floor and marker. The cuts travel back on
 `Spawned.inheritedCuts`, and `Orchestration.delegate` adds a forecast for each `depends_on` task already complete (the block is
 assembled when the child becomes ready); `DelegateOutcome.handOff` carries both, rendered beside the attachment warning by
 `handOffWarnings` (`agent-tools`). `ChildLedger.spawn` stores the rendered text with the child (`children.inherited_context_block`,
 **v28**), beside the call's `attach_artifacts` (`children.attach_artifacts`, v28). Until 2026-09-30 both were kept per task
 id in memory for the life of the run, so a child PD-ORCH-005 resumed in a later run lost both at REQ-ORCH-088's retry
-(`docs/defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`). `childPayload`'s sixth
+(`docs/archive/defects/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`). `childPayload`'s sixth
 argument places it as item (5), after the artifact blocks and immediately before the task; `execute` and `startingPayload`
 read it from the row. A resumed child's retry also carries REQ-ORCH-047's prior-agent-context block again, rendered from its
 dependencies' rows, as a retry within the first run does. The ids stay on `children.inherited_context` for the agent

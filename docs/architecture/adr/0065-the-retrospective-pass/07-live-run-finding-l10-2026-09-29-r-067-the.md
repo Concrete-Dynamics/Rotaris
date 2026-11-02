@@ -14,8 +14,8 @@ never reaches. Repaired in `ImprovementActivity.tsx` and `shell.css`: the label 
 it with an ellipsis. `pnpm retrospective-proof` now measures every word of the run-header label with a Range at
 1440 × 900 and at 1000 × 680. Before the repair it failed at both sizes ("cut: improvements…"). After it, 31 of 31
 checks pass. The live `ask` scenario shows the post-run label whole on two lines at 1440 px. Notes: the repaired
-`../../../defects/fixed/the-improvement-label-is-clipped-without-an-ellipsis.md`, and, recorded without a repair,
-`../../../defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md` (repaired
+`../../../archive/defects/the-improvement-label-is-clipped-without-an-ellipsis.md`, and, recorded without a repair,
+`../../../archive/defects/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md` (repaired
 2026-10-01, acceptance A40). Not shown: Windows or
 macOS (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 

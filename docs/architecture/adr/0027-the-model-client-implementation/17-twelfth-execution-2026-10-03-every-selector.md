@@ -4,7 +4,7 @@ Part 17 of 18 of [ADR-0027](../0027-the-model-client-implementation.md), which i
 
 ## Twelfth execution — 2026-10-03, every selector annotates a pair held out of quota (REQ-MONITOR-194, REQ-NOTIFY-074)
 
-*The repair of [`the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md`](../../../defects/fixed/the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md)
+*The repair of [`the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md`](../../../archive/defects/the-other-model-selectors-do-not-annotate-a-pair-held-out-of-quota.md)
 (fin10).*
 
 The exclusion reached a surface only inside the record's `wait`, so only the quota-wait chooser annotated it. The record now

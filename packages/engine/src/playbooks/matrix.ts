@@ -80,7 +80,7 @@ export function resolveCell(cell: Cell): Readonly<Record<PlaybookSlot, string>> 
  * REQ-ORCH-019/020: the cell the run's entry role is rendered with. A routed cell's ROUTE slot names the catalogue's
  * `entry` variant: `routed` tells a specialist that a coordinator delegated the task to it, and the entry role is the one
  * the user's request reached (K3 of the default live run at c2fdd6a,
- * `docs/defects/fixed/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md`). A cell marked not routed
+ * `docs/archive/defects/the-entry-roles-route-slot-says-the-coordinator-routed-the-task-to-it.md`). A cell marked not routed
  * keeps its narrow text (REQ-ORCH-023). Every other slot is the cell's own.
  */
 export function entryCell(cell: Readonly<Record<PlaybookSlot, string>>): Readonly<Record<PlaybookSlot, string>> {

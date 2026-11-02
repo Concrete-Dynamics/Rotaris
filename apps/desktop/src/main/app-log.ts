@@ -12,7 +12,7 @@ import type { ProcessEvent } from '@rotaris/contracts';
  *
  * Before this, a `debug` line and an `error` line reached the log identically and nothing could be left out of it:
  * a driven launch measured on 2026-09-16 held 195 lines, 141 of them one MCP server's `debug` stderr
- * (`docs/defects/fixed/the-application-log-keeps-every-level-because-nothing-reads-one.md`).
+ * (`docs/archive/defects/the-application-log-keeps-every-level-because-nothing-reads-one.md`).
  */
 
 /**
@@ -94,7 +94,7 @@ export interface StandardStream {
 
 /**
  * The writer onto one of main's standard streams, which stops at the stream's first failure
- * (`docs/defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`).
+ * (`docs/archive/defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`).
  *
  * When the reader of main's standard output has gone, a write fails with EPIPE. The stream here is a socket, so Node
  * reports it as an `error` event, and with no listener that event is an uncaught exception. Main's `uncaughtException`

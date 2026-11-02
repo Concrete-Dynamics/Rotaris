@@ -36,7 +36,7 @@ on `ENOENT`. Under Xvfb it now asserts the registry's reading: the persona windo
 disabled while it was open, enabled after Escape, and main logged the modality pair. The host-input readings are stated
 not applicable. **Not measured on Linux:** that a real X server click and real keystrokes are refused by the disabled
 window. That needs an XTEST driver, which this harness does not have
-([`palette-proof-reads-the-win32-host-input-on-every-platform.md`](../../../defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md)).
+([`palette-proof-reads-the-win32-host-input-on-every-platform.md`](../../../archive/defects/palette-proof-reads-the-win32-host-input-on-every-platform.md)).
 
 **Found — one defect, in this part's own code, before any of the above could be measured.** Binding `Ctrl+L` and
 `Ctrl+Return` through the registry made both wait two animation frames, so that the Workspace view would be mounted
@@ -62,7 +62,7 @@ this registry's normal form so that catalogue consumes this table rather than re
 (`REQ-SHELL-055`) resolves in the specified order over the slots that exist: the compact drawers register a closer, and
 the slash popup and the search panel register nothing because neither is built. *Corrected 2026-10-13:* the slash popup's slot was filled
 on 2026-09-09 (the next section); the search panel was built on 2026-09-07 and its slot is still empty — recorded as
-[`window-level-escape-skips-the-open-transcript-search-panel`](../../../defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md),
+[`window-level-escape-skips-the-open-transcript-search-panel`](../../../archive/defects/window-level-escape-skips-the-open-transcript-search-panel.md),
 not repaired. *Repaired 2026-10-14 (fin43):* the pane holds the `searchPanel` slot while its panel is open, with the one
 close its field's Escape and its Close button run, so the window's Escape closes the panel and refocuses the composer
 before the drawers (`resolveWorkspaceEscape`, `searchPanelCloser`); `transcript-proof`'s behaviour stage presses Escape

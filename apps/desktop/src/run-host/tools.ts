@@ -418,11 +418,11 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   /*
    * PD-ORCH-005 clause 9 after a crash, and REQ-SESSION-031: the session's whole list of pending prompts — the run's, every
    * port's, so two agents asking at once do not overwrite each other (the overwrite `pending_approvals` suffered until 2026-10-14,
-   * docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md) — mirrored to
+   * docs/archive/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md) — mirrored to
    * `pending_questions` each time one of this port's prompts is put or ends. A crash's record withdraws what it lists; the
    * listing flags the session as awaiting input. Never read back as pending (PD-ORCH-005 revision 3). Like the approvals
    * sink, it writes nothing once the run's end has closed this port (REQ-SESSION-094): a question a stop's grace detached
-   * ends into a session whose run is over (`docs/defects/fixed/a-question-mirror-writes-pending-questions-after-its-port-closed.md`).
+   * ends into a session whose run is over (`docs/archive/defects/a-question-mirror-writes-pending-questions-after-its-port-closed.md`).
    */
   const mirrorQuestions = (): void => {
     if (writes.closed()) return;
@@ -445,7 +445,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // store's presence: REQ-TOOLS-004 reserves `artifact_publish_not_granted` for a build that withholds publishing
   // separately, and no requirement in this part names such a grant — a persona that must not publish declares no
   // `artifact_write` (REQ-TOOLS-002). Recorded as a decision taken."~~
-  // (docs/defects/fixed/can-publish-artifacts-is-read-and-never-gates-artifact-write.md)
+  // (docs/archive/defects/can-publish-artifacts-is-read-and-never-gates-artifact-write.md)
   const prerequisites: Prerequisites = {
     // Part AC: `userPromptChannel` is attendedness (REQ-TOOLS-053/069) — an unattended run has no surface to put a
     // prompt in front of, so the registry removes `ask_questions` with `user_prompt_channel_absent`. It stood at a
@@ -518,7 +518,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     monotonic: deps.clocks.monotonic, wall: deps.clocks.wall, timers: deps.clocks.timers,
     // PD-ORCH-005 clause 9 / REQ-SESSION-031: the gate hands its own registry's list; the column takes the session's whole
     // list (`ctx.pendingApprovalsOfSession`, every port's), so a second agent's approval no longer overwrites the first's
-    // (docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md).
+    // (docs/archive/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md).
     sink: { ...writes.sink, pendingChanged: (pending) => writes.sink.pendingChanged(ctx.pendingApprovalsOfSession?.() ?? pending) }, nextSequence: deps.nextSequence,
     // REQ-SESSION-094: a call that returns after its run ended fires no `post_tool` hook — the run's hooks write into its
     // session, and the run has removed its own attachment (REQ-HOOKS-087).
@@ -615,7 +615,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
        * tools that joined the callable map, so what the loop above withheld — at the plan gate (REQ-ORCH-153), for a
        * collision with a native name — is neither printed nor granted. Until 2026-10-01 the section was rendered from
        * `surface`, which still held them, and printed names the agent could not call
-       * (`docs/defects/fixed/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`). The hold is read when the
+       * (`docs/archive/defects/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`). The hold is read when the
        * port is built and its readiness resolved once; approval launches a new run, whose ports are built with the gate
        * released, so the approved segment prints and calls the tool (traced in `run/plan-gate.test.ts`).
        */

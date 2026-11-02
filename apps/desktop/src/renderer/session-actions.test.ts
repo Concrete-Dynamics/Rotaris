@@ -235,9 +235,9 @@ describe('PD-ORCH-005 clauses 3 and 15: the stop comes to rest, and the confirme
 
 /*
  * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-178): the notice's retry, which had no target until the repair
- * of `docs/defects/fixed/the-retry-run-notice-action-has-no-target.md` — the window logged that and dispatched nothing.
- * Since the repair of `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md` and
- * `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md`, a blank draft is the engine's to retry
+ * of `docs/archive/defects/the-retry-run-notice-action-has-no-target.md` — the window logged that and dispatched nothing.
+ * Since the repair of `docs/archive/defects/the-retry-action-reads-the-last-prompt-from-the-resident-window.md` and
+ * `docs/archive/defects/the-retry-action-resubmits-a-prompt-without-its-images.md`, a blank draft is the engine's to retry
  * (`session.retry`, `Sessions.retry` in `packages/engine/src/last-prompt.test.ts`): the window no longer searches its replica.
  */
 describe('REQ-NOTIFY-045: a notice\'s retry resubmits the draft, or asks the engine for the session\'s last submitted prompt', () => {

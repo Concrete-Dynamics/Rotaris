@@ -7,7 +7,7 @@
  * the same conditions. The proof used to read every full-size sample first and every half-size sample afterwards, so
  * the half side ran on a hotter JIT and a settled heap and read cheap, and the quotient came out above the work ratio
  * on an idle host (3.04 to 3.37 against a work ratio of 2.14). For the sweep the full side was one reading against a
- * minimum of three. Recorded in `docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`.
+ * minimum of three. Recorded in `docs/archive/defects/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`.
  *
  * This module only ORDERS the readings and keeps them. Each reader times itself and returns milliseconds, so the
  * module needs no clock, and the sweep, which reports its own duration, uses it the same way as the parse.
@@ -16,14 +16,14 @@
  * own thread spent on it (`PassReading`), and the ratio is then the quotient of the CPU minima. On a host with more
  * runnable work than CPUs the minimum of seven wall-clock readings no longer screens the load out: a side can go a whole
  * round without one uncontended reading, and the parse ratio read 0.34 to 5.52 at load averages of 9.9 to 20.6 on four
- * CPUs (`docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`). REQ-TRACE-088's
+ * CPUs (`docs/archive/defects/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`). REQ-TRACE-088's
  * reference conditions are one execution thread timing the pass alone, which the thread's own CPU time measures and a
  * contended wall clock does not. The wall-clock readings are kept beside the CPU ones, and so is their ratio.
  *
  * Test support, and named so (`*.test-support.ts`, which `vitest.config.ts` does not collect; `growth-readings.ts` until
  * 2026-10-15, its own test keeping the name `growth-readings.test.ts`): only the proof and that test import it and the
  * package entry does not reach it, which `tools/test-support-naming/test-support-naming.test.ts` pins
- * (`docs/defects/fixed/workspace-traceability-test-support-is-named-as-product-modules.md`).
+ * (`docs/archive/defects/workspace-traceability-test-support-is-named-as-product-modules.md`).
  */
 export type GrowthSide = 'full' | 'half';
 

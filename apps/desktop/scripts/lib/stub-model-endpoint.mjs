@@ -7,7 +7,7 @@
  * client is compiled out with the other verification seams, and rule 4 (b) is re-based on this stub, which the packaging
  * script starts itself. Until then rule 4 (b) reached the scripted client through a `provider: scripted` configuration, which
  * kept the client, and a fixed one-step script, in every shipped build
- * (docs/defects/fixed/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
+ * (docs/archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).
  *
  * It answers `POST <base>/chat/completions` (`stream: true` as server-sent events, otherwise one JSON body) by what the request
  * carries, never by a script:

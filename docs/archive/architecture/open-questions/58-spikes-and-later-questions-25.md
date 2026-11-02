@@ -10,7 +10,7 @@ removed"; REQ-TOOLS-189, `haet_edit`'s exact match; [`PD-TOOLS-014`](../../../pr
 levels 2 and 3, [`PD-TOOLS-015`](../../../product/directives/pd-tools-015.md#pd-tools-015)'s level-3 shift, and
 [`PD-TOOLS-016`](../../../product/directives/pd-tools-016.md#pd-tools-016), each stating that REQ-TOOLS-136's levels are unchanged. Raised
 2026-10-13 by fin42 (N52) from
-[`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`](../../../defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md);
+[`on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`](../../defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md);
 numbered from the top of the plan's range, OQ-271 to OQ-280, to keep clear of its sibling bundles. Ruled 2026-10-13 under
 R-072, below.)*
 
@@ -65,7 +65,7 @@ warm it, change the runtime, or tell the model?** *(REQ-MCP-015, the EDIT tier's
 pinned runtime the product bundles and drives as it is; REQ-MCP-116, the binding manifest, the one place the runtime's
 identifiers are written; [OQ-245](52-spikes-and-later-questions-19.md#oq-245), the reach observation that records what the call changed. Raised 2026-10-13 by
 fin42 (N59) from
-[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+[`a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone`](../../defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
 fin42 held OQ-271 to OQ-280; raised as OQ-272 (OQ-271 was taken on main by another of the plan's bundles), renumbered
 OQ-273 at its landing, `origin/main` having taken OQ-272 meanwhile. Ruled 2026-10-13 under R-072, below; it read "Open." until then.)*
 
@@ -163,14 +163,14 @@ load generation, and clears it compare-and-clear on a clean load, so a fault tha
 `notice-proof` section 1b reads it on screen before the prompt (global scope) and section 1c (workspace scope) corrects the
 file within the launch and starts a run with no relaunch. The run refusal, the isolated-start refusal and the per-run reload
 are unchanged. **Noticed, not decided:** the skills, instructions and queue readers fall back to defaults on a fatal load —
-[`the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md`](../../../defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
+[`the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md`](../../defects/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
 **Repaired 2026-10-14 under this ruling (fin44, `fin44-hooks-and-config`):** read with REQ-CONFIG-478's "the load fails as a
 whole rather than falling back to a default", no reader answers an unloaded configuration with defaults. The run host's skills
 and instruction readers answer the report and its five `skills.*` requests refuse with it (Settings › Skills draws the report
 as Models does); an agent built meanwhile gets its run's own configured sections, or none; the requirements queue starts
 nothing until the file loads again, re-reading it at each claim, preview and run-starting action. Noticed beside it, not
 repaired: a merged-document fault in the global file is reported in the workspace file
-([`a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`](../../../defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md);
+([`a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md`](../../defects/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md);
 repaired 2026-10-14 by fin45, `fin45-config-and-terminal`: the report names the file and scope that stated the key).
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
@@ -184,7 +184,7 @@ hook-review and no-provider notices.
 <a id="oq-278"></a>
 
 **OQ-278 — May a defect note that cannot be reproduced be closed, with a standing monitor in place of a repair?**
-*([`the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`](../../../defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md),
+*([`the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`](../../defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md),
 live-run finding D8; `CLAUDE.md`, "Defects noticed along the way" — "When a noted defect is repaired, move its note to
 `docs/defects/fixed/`"; `docs/defects/README.md`. Raised 2026-10-13 by fin42 (`fin42-coverage-and-react`, whats-next item
 N49); numbered from the top of the plan's range, OQ-271 to OQ-280, to keep clear of its sibling bundles.)*
@@ -248,6 +248,6 @@ its install line reached duress/app.log through the console relay (D8 guard, OQ-
 install line at line 28 of `duress/app.log`), and its NOTE read 78,343 commits, the nested-update run's high 11 of React's 50 and
 0 update-depth errors; the per-launch check PASSED on both of its launches and on all 24 of the default pack
 `2026-10-14T04-30-51-088Z`, `reactUpdateDepthErrors` 0 on every one. The note moved to
-[`../../../defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`](../../../defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md)
+[`../../defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`](../../defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md)
 under "Outcome: not reproduced, not repaired; closed under a guard (OQ-278)"; the cause stays unidentified. Nothing the ruling
 assumed was falsified: the instrument installed, relayed and counted in a real-model run as it had in `update-depth-proof`.

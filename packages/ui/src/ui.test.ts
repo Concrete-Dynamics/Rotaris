@@ -185,7 +185,7 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     expect(statePhrase(undefined)).toEqual({ status: 'idle', merge: 'ready' });
     // The figures the unrepaired build painted at 1440x900: `idle · ready` 59.6 px, `completed · ready` 101.6 px, 8 px of
     // padding each side. The column must hold the wider one whole — 76.3 px (10ch) did not
-    // (docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md).
+    // (docs/archive/defects/the-git-views-worktree-state-cell-overruns-the-ahead-column.md).
     expect(stateColumnFit([59.6, 101.6, 59.6], 16)).toBe(118);
     // Nothing measured — a renderer that lays nothing out — leaves the column at its CSS floor rather than at zero.
     expect(stateColumnFit([0, 0], 16)).toBeNull();
@@ -195,7 +195,7 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
   it('REQ-NOTIFY-048/049, REQ-GIT-109: the State cell draws the presented status, never the persisted word, for every persisted value', () => {
     // REQ-NOTIFY-049's fourteen arms, each persisted value beside the member it presents as. The session listing carries the
     // persisted `execution_status` as is; until 2026-10-04 the row drew it raw (`awaiting_plan_decision · ready`)
-    // (docs/defects/fixed/the-git-views-state-cell-renders-the-raw-persisted-execution-status.md).
+    // (docs/archive/defects/the-git-views-state-cell-renders-the-raw-persisted-execution-status.md).
     const arms: ReadonlyArray<readonly [string, string]> = [
       ['idle', 'idle'], ['running', 'running'], ['paused', 'paused'], ['completed', 'completed'], ['failed', 'failed'],
       ['stopped', 'stopped'], ['starting', 'starting'], ['pausing', 'pausing'], ['cancelling', 'cancelling'],
@@ -219,7 +219,7 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
   it('REQ-GIT-077, UIR-002: the Branch column keeps the widest line with its name at its floor and its tags whole', () => {
     // The base row at 1000x680 as measured 2026-10-04: `base` 40.6 px and `active` 52.9 px wide, an 8 px gap before each, the
     // name's `2ch` floor 14.4 px — 123.9 px of line, where the column's 9ch (68.7 px) gave `main` nothing
-    // (docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
+    // (docs/archive/defects/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
     expect(branchLineFloor(14.4, [40.6, 52.9], 8)).toBeCloseTo(123.9, 5);
     expect(branchLineFloor(14.4, [], 8)).toBeCloseTo(14.4, 5);
     expect(branchLineFloor(Number.NaN, [40, Number.NaN], Number.NaN)).toBe(40);
@@ -237,7 +237,7 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     // Each worktree row's `tr` is keyed by its path, so a moved worktree remounts its row. Until 2026-10-04 the Branch and
     // State fits re-ran only on branch, tags and phrase, and went on measuring the detached cells (widths 0, the name's
     // floor NaN), the row dropping out of the fit
-    // (docs/defects/fixed/the-git-views-column-fits-measure-detached-cells-when-a-rows-path-changes.md).
+    // (docs/archive/defects/the-git-views-column-fits-measure-detached-cells-when-a-rows-path-changes.md).
     const before = [wt({}), wt({ path: 'D:/wt/feature', branch: 'feature/proof', isBase: false, isActive: false })];
     const moved = [before[0]!, { ...before[1]!, path: 'D:/elsewhere/feature' }];
     const join = joinBindings([row({ sessionId: 'B', status: 'completed', worktree: binding('D:/wt/feature') }), row({ sessionId: 'B2', status: 'completed', worktree: binding('D:/elsewhere/feature') })]);

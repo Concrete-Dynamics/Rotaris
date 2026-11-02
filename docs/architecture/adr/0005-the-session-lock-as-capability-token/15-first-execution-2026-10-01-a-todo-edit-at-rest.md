@@ -4,7 +4,7 @@ Part 15 of 15 of [ADR-0005](../0005-the-session-lock-as-capability-token.md), wh
 
 ## First execution — 2026-10-01, a todo edit at rest and the quit's terminal record
 
-*The repair of `../../../defects/fixed/a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`.*
+*The repair of `../../../archive/defects/a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`.*
 
 **Built and run:** the two remaining writes through a loaded session's writer from outside a run now claim the lock the
 way the three above do (`claimHold`). A todo edit while the session rests (REQ-CHAT-090, `editStoredTodo`) keeps a lock

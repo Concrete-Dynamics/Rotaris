@@ -140,7 +140,7 @@ The distribution's `RECORD` still lists the file it no longer carries in the art
 
 **What this found.** No defect in the mechanism the record decided. It found one false statement nearby: `package.mjs`
 said "`out/` now holds a SEAM-FREE build" after every run, including one refused before the build. That line now
-prints only when the build ran (`docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`; the
+prints only when the build ran (`docs/archive/defects/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`; the
 closing lines are `scripts/lib/package-verdict.mjs`'s, tested). With it, a refusal writes an `error:` line to stderr
 (REQ-STARTUP-149), and a counterfactual that ended before `electron-builder` is reported as not exercised. It also
 found one craft note on the About page, recorded in `docs/defects/`. **Nothing in this record's decision changes.**

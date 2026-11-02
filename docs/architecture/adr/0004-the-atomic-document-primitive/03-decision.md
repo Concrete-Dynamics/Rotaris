@@ -27,12 +27,12 @@ created it before the `try`… The failure is now reported as `document.parent`"
 any `try` and threw `EEXIST` for a file standing where the parent would go. Reached when the first-run starter repair
 put a regular file at `<workspace>/.rotaris` (`bootstrapConfigFile` threw, and the workspace service would have answered
 `request.failed` rather than the configuration refusal REQ-CONFIG-028 describes). Both forms now answer
-`document.parent` for it (`../../../defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
+`document.parent` for it (`../../../archive/defects/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
 **Measured** by `platform.test.ts` (both forms, one and two levels below the file, no staging file left), by
 `writers.test.ts` and `open-bootstrap.test.ts`, all red on the unrepaired form; the refused-permission case is written
 and skipped as root on this host. Found beside it and **not** repaired: the staged file's cleanup itself throws
 `ENOTDIR` under a file parent when no parent creation was asked for, and `exclusiveCreate` still creates its parent
-before its `try` (`../../../defects/fixed/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`;
+before its `try` (`../../../archive/defects/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`;
 repaired since, next paragraph).
 
 *Corrected a third time 2026-10-04, the first execution of the remaining failure paths (fin17).* ~~"remove the staged
@@ -53,7 +53,7 @@ file at `<workspace>/.rotaris` makes that read `unreadable` (ENOTDIR is not ENOE
 `REQ-GIT-128`'s integration lock has no implementation calling this primitive yet. The other callers (the machine
 identifier, the instance record, the credential and project-settings locks) put their file in a per-user directory, and
 a file at that directory's place now reaches each as its own refusal rather than an exception
-(`../../../defects/fixed/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
+(`../../../archive/defects/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
 
 **Write side — exclusive create.** Create the target with exclusive-create semantics; on success the caller
 minted it; on an already-exists failure **read what is there and use it**, which is not an error. This shape

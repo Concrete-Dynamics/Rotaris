@@ -260,7 +260,7 @@ result with its keys in another order than `pendingFrom`, and `isDirty` compared
 "tested" above held only because the test compared with `toEqual`, which ignores key order. The comparison is now
 structural (equal values are equal whatever their key order; an array's order is a value), and the rebase compares
 runtime keys by value rather than by reference
-([defect note](../../defects/fixed/a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md);
+([defect note](../../archive/defects/a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md);
 `config-state.test.ts`, settings-proof launch 11).
 
 **A second reading, on REQ-CONFIG-041 and the starter file:** REQ-CONFIG-025's starter `agents.yaml` states the

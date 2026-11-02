@@ -16,15 +16,15 @@
  * navigation opened: each of the seven views is shot straight after its click, and every shot must differ from the one
  * before it, and the second launch's first navigation to the Workspace — the heaviest first paint, where the frame
  * before it was returned in a fifth of launches or more — is shot the same way
- * (`docs/defects/fixed/the-drivers-shot-can-return-a-stale-frame.md`). And the driver's `quit` is the application's quit: a SECOND launch
+ * (`docs/archive/defects/the-drivers-shot-can-return-a-stale-frame.md`). And the driver's `quit` is the application's quit: a SECOND launch
  * starts a scripted run that holds its model call, quits through the driver while the run is live, and reads the store
  * afterwards — the session is at rest with the quit's stop reason, not `running`
- * (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`; before the repair it was `running` with no
+ * (`docs/archive/defects/the-drivers-quit-skips-the-applications-shutdown.md`; before the repair it was `running` with no
  * stop reason). And the driver reaches the windows beside a main window: in that second launch the run's approval
  * dialog is answered with its own button and a persona window is probed through a role selector
- * (`docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md`). Since 2026-10-07 a further launch
+ * (`docs/archive/defects/the-driver-cannot-address-persona-or-approval-windows.md`). Since 2026-10-07 a further launch
  * (13d) quits while a foreground `terminal` call runs and reads its record: PD-TOOLS-013's `interrupted`, no exit code, no
- * timeout and no issue (`docs/defects/fixed/a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md`).
+ * timeout and no issue (`docs/archive/defects/a-foreground-terminal-call-the-run-cancels-reads-as-a-timeout.md`).
  *
  * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `shots/`, `run-app.log`, `cut-app.log`, `results.json`.
  * `--skip-build` skips the build.
@@ -52,7 +52,7 @@ const workspace = join(output, 'workspace');
  * fin30 set `GIT_CEILING_DIRECTORIES` at the evidence directory here (`NO_ENCLOSING_REPOSITORY`), which never reached the
  * app's git: the product deletes that variable from every git invocation (REQ-GIT-031, `GIT_ENV_DENYLIST`). Since fin34 the harness bars discovery at
  * `.proof/` for every proof (`barEnclosingRepository`, `lib/harness.mjs`), so each workspace is what it is meant to be here:
- * not a repository (`docs/defects/fixed/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`).
+ * not a repository (`docs/archive/defects/proof-workspaces-under-the-checkouts-proof-directory-read-the-enclosing-repository.md`).
  */
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# driver proof\n');
@@ -74,7 +74,7 @@ const COMPOSER_FOCUSED = "document.activeElement?.classList.contains('composer__
  * after Ctrl+3, and nothing checked the press: in the acceptance run of that day the provider notice filled the notice
  * slot between the driver's measurement and its press, the table moved 75 px down under it, no `window.openPersona`
  * reached main, and 13c waited 15 s for a window nobody had asked for
- * (`docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`). Now the row is found by its persona
+ * (`docs/archive/defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`). Now the row is found by its persona
  * cell, the press is the driver's settled click — taken once the button holds still and is what its centre would press,
  * refused when it met something else, and pressed again only then — and a press that landed and opened no window within
  * 15 s is REQ-SHELL-072's to answer for, not the harness's.
@@ -212,7 +212,7 @@ try {
  * `permission_mode: ask` the child's `write_file` raises REQ-TOOLS-063's dialog, which is found by `windows`, probed,
  * photographed and answered with its own Approve once button through `window: 'approval'`; the child's persona window
  * (REQ-SHELL-072) is opened with the Mission view's Pop out and probed through `useWindow('persona:coding-agent')`
- * (`docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md`). Then the quit is sent while the root
+ * (`docs/archive/defects/the-driver-cannot-address-persona-or-approval-windows.md`). Then the quit is sent while the root
  * still waits; the store is read once the process is gone. PD-ORCH-005 clause 3: an application quit leaves the run at
  * rest — the stop reason is the quit's (`application_shutdown`), and the session is not left `running`, which is what a
  * crash leaves until repair.
@@ -309,7 +309,7 @@ try {
 
 /*
  * 13c — a persona or terminal window's commands answer for the main window that OWNS it (REQ-MONITOR-069, REQ-STARTUP-163,
- * ADR-0048 B; `docs/defects/fixed/a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md`). Two main
+ * ADR-0048 B; `docs/archive/defects/a-persona-windows-commands-answer-for-the-active-main-window-not-its-owner.md`). Two main
  * windows on two workspaces: the first runs a delegated child and pops out its persona window, then the second is added
  * and becomes the active window. The persona window's `config.read` (its model, declared tools and threshold come from it)
  * and the terminal window's `session.list`, each sent through the driver from the auxiliary window itself, must answer

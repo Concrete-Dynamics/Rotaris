@@ -33,4 +33,4 @@ Library is read when the Artifacts tab has loaded, in one waited-for probe of it
 leaves the Library before that reading's deadline (`apps/desktop/scripts/lib/library-refresh.mjs`, the capture grammar's
 `@from~ms`): its click, reading and leave had been appointments 400 to 600 ms apart, which a renderer answering 1.5 s
 late during startup put out of order
-([note](../../defects/fixed/artifacts-proofs-publish-launch-reads-the-empty-library-in-a-window-a-startup-stall-closes.md)).
+([note](../../archive/defects/artifacts-proofs-publish-launch-reads-the-empty-library-in-a-window-a-startup-stall-closes.md)).

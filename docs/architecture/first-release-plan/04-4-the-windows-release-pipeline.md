@@ -61,13 +61,13 @@ lives in `tools/release-naming`. What the build decided and found:
   `REQ-MCP-112`'s setup half, with `REQ-STARTUP-061`'s fingerprint — is not built and not in this plan; the notices
   generator ~~still reads `pins.json` and its file says the manifest pins no machine tools, which is now false of the tree
   (OQ-73 decides whose reader follows)~~ reads the shipped manifest since 2026-09-28 (R-062;
-  `../../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`) — Git and ripgrep listed with
+  `../../archive/defects/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`) — Git and ripgrep listed with
   their four fields and stated not yet downloaded by this build (OQ-73's reading), `@playwright/mcp` under a third
   sub-heading (REQ-STARTUP-152, OQ-92);
   `afterPack` does not yet assert the manifest inside `win-unpacked` (the next Windows package, IC-3 — *corrected 2026-10-13: a Windows x64 host, deferred with the pipeline under R-071; IC-3 binds Linux and macOS artifacts*).
 - **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
   `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
-  (`../../defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`). *Repaired 2026-09-28 (R-062; ADR-0054,
+  (`../../archive/defects/a-prerelease-version-reaches-the-installer-hyphenated.md`). *Repaired 2026-09-28 (R-062; ADR-0054,
   "The prerelease naming repair"): `pnpm package` renders the name from the declared text through `tools/release-naming`
   and writes it as a literal into the configuration electron-builder runs with (`release/electron-builder.package.yml`);
   `electron-builder.yml` carries no `artifactName`; `afterPack` refuses any other configured name and a new
@@ -152,7 +152,7 @@ release is published is the owner's choice (§6).
 - It fails the platform's job on each condition REQ-STARTUP-143 lists.
 
 While this is built, the About page's lowercase lookup has to be repaired
-(`../../defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Otherwise the first
+(`../../archive/defects/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Otherwise the first
 release carries the file and the About page still says it does not.
 
 *Built 2026-09-27, with the About repair; first execution reported into ADR-0035, ADR-0054 and IC-7.* `pnpm notices`

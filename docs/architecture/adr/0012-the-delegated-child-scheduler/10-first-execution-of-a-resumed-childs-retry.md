@@ -8,7 +8,7 @@ Part 10 of 14 of [ADR-0012](../0012-the-delegated-child-scheduler.md), which ind
 block, and the delegation kept item (4)'s attachment list, per task id in memory "for as long as the run lives". Since
 `PD-ORCH-005` a child outlives that run: a paused child is resumed by a later run, whose `IterationChildren` is new. The
 first execution of `REQ-ORCH-088`'s fallback retry for such a child reports here, under R-067
-(`docs/defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`, acceptance A25).*
+(`docs/archive/defects/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`, acceptance A25).*
 
 **What the execution found.** A case in `run/ladder.test.ts` drives it through `Sessions` over a real store and the
 session's artifact store: a `survey` child succeeds with its report stored; a `slow` child that depends on it, names it in

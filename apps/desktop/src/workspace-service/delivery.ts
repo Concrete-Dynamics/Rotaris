@@ -116,7 +116,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
    * queue therefore starts nothing while this holds the report: no candidate is `next` (`scheduleQueue`'s `unconfigured`),
    * the claim takes nothing, the launch preview defers, and a run-starting board action is refused with the report. It
    * kept the last values it read (or REQUIREMENTS_DEFAULTS) and armed the queue from them until 2026-10-14
-   * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md). The configuration is
+   * (docs/archive/defects/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md). The configuration is
    * read again at each claim, preview and run-starting action, so correcting the file and loading again is sufficient.
    */
   let configFault: string | undefined;

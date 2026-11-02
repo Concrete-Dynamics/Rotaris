@@ -42,7 +42,7 @@ its `rotaris-lanes-trap: installed` line did not reach `duress/app.log` through 
 NOTE. The first guarded duress pack is the D8 note's closing evidence under `docs/defects/README.md`'s rule for a note that was
 never reproduced: trap installed and relayed, and `reactUpdateDepthErrors` 0 on every launch. *That pack came on 2026-10-14 at
 `a3be56c` (duress `2026-10-14T05-15-42-589Z`: 78,343 commits, high 11 of 50, 0 errors; default `2026-10-14T04-30-51-088Z`: 0 on all
-24 launches), and the note closed under the guard (`docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`);
+24 launches), and the note closed under the guard (`docs/archive/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`);
 both checks stay, and a recurrence opens a new note.*
 
 **Its length comes from the work asked for, not from the fixture's weight** — ruled 2026-09-22, when a larger
@@ -62,7 +62,7 @@ reached execution (`shapeSends`, `reachedShape`): a send REQ-ORCH-029's todo gat
 (`todo_list_owed`, `invalid_request`) is counted beside the shape in the "what the model attempted" NOTE and never read, a
 shape whose every send was refused is a NOTE ("not reached: refused at the todo gate"), and a permission block is read, since
 `pipe-to-shell` is measured by it (fin40; the confirming run at 0bc3eee failed "all 40 lines" by reading the refused send,
-`docs/defects/fixed/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`).
+`docs/archive/defects/the-live-runs-terminal-shapes-read-a-call-the-todo-gate-refused-before-it-ran.md`).
 
 **`terminal` was executed against a real endpoint on 2026-09-22 and every check passed**: all six shapes were
 issued, the here-string terminated, forty distinct lines arrived with none concatenated and no escape sequence
@@ -149,4 +149,4 @@ the next run sweeps every unmarked leftover, and takes the credentials out of th
 **overlap** on one host: each writes `OWNER` (its pid and start) into its sandbox as it makes it, and the sweep leaves
 a sandbox whose owner is still running — its key included — and one with no `OWNER` for twelve hours
 (`apps/desktop/scripts/lib/sandbox-sweep.mjs`;
-[fixed](../../defects/fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)).
+[fixed](../../archive/defects/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)).

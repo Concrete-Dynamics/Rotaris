@@ -43,7 +43,7 @@ function tasksOf(document: AgentTodoDocument | null): readonly AgentTodoTask[] {
  * The open items of a plan, as "name (id)", and how to add one when none of them is the delegation's work; or a sentence
  * saying there are none and how to add one. PD-TOOLS-006 revision 6's "way forward": until fin38 the add was named only when
  * the plan held no open item, so a delegation whose work matched none of the listed items was offered only those
- * (docs/defects/fixed/the-no-todo-item-refusal-names-add-task-only-when-the-plan-holds-no-open-item.md).
+ * (docs/archive/defects/the-no-todo-item-refusal-names-add-task-only-when-the-plan-holds-no-open-item.md).
  */
 export function openItemsSentence(document: AgentTodoDocument | null): string {
   const open = tasksOf(document).filter((t) => !TERMINAL_ITEM.has(t.state));
@@ -113,7 +113,7 @@ export function admitTodoItem(req: TodoItemRequest): TodoItemAdmission {
       // (b) An implementation delegation serves an open item, so the plan never shows COMPLETED work still under way.
       if (TERMINAL_ITEM.has(task.state)) {
         // The add is `openItemsSentence`'s to offer, once; until fin39 this sentence offered it too, and offered to name an open
-        // item when the plan held none (docs/defects/fixed/the-terminal-item-refusal-offers-the-add-twice.md).
+        // item when the plan held none (docs/archive/defects/the-terminal-item-refusal-offers-the-add-twice.md).
         const reopen = tasks.some((t) => !TERMINAL_ITEM.has(t.state)) ? 'Reopen it with todo update, or name an open item.' : 'Reopen it with todo update.';
         return { ok: false, requirement: 'REQ-ORCH-028', reason: `todo_item '${task.id}' names '${task.name}', which is ${task.state}, and a delegation to '${req.persona}', which writes workspace files, serves an open item. ${reopen} ${openItemsSentence(req.plan.document)}` };
       }

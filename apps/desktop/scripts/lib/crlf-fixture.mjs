@@ -37,7 +37,7 @@ export const CHECK_LINES = [
 /**
  * A loop two levels deep, for the shape a model sends on Windows: an LF `old_string` one tab shallow. It matches at level 3 on an
  * LF copy and, since `PD-TOOLS-019`, on a CRLF file too; until then the lines' `\r` kept it from level 3 and it landed at level 4
- * (`docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`).
+ * (`docs/archive/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md`).
  */
 export const RENDER_LINES = [
   'function render(items) {',
@@ -54,7 +54,7 @@ export const RENDER_LINES = [
 /**
  * A loop body with a blank interior line, the commonest shape a multi-line edit carries. An LF `old_string` one tab shallow over
  * the body reaches level 3 since `PD-TOOLS-020` (OQ-295); until then a blank line took part in the shift and the block landed at
- * level 4, or matched nothing on a CRLF file (`docs/defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md`).
+ * level 4, or matched nothing on a CRLF file (`docs/archive/defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md`).
  */
 export const BLANK_LINES = [
   'function total(items) {',

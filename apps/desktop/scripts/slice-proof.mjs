@@ -183,7 +183,7 @@ console.error(`slice-proof: ${LABEL} (${endpoint.name}) at ${BASE_URL}, model ${
 
 // Every red from here on keeps its evidence where the next run does not remove it (`lib/proof-reds.mjs`): the run after
 // a red clears `.proof/slice-proof/`, and until 2026-10-04 took the red's logs and screenshots with it
-// (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
+// (`docs/archive/defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
 const reds = resolve(repo, '.proof', 'slice-proof-reds');
 /** The scenario under way, named in a red's directory and its `red.json`. */
 let scenario = 'first-launch';
@@ -268,7 +268,7 @@ if (!snapshot.includes(`      - id: ${QUALIFIED}\n`)) throw new Error(`the catal
 // REQ-CONFIG-025 / REQ-WORKSPACE-038: the whole starter (header, persona, the twelve nulls), written at the workspace's open
 // and found by the sign-in's bootstrap (REQ-WORKSPACE-135). Until 2026-10-03 initialization's record created the file
 // first and this check was red on every run whose code-intelligence setup succeeded before the sign-in
-// (`docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
+// (`docs/archive/defects/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`).
 const starterLacks = existsSync(agentsFile) ? starterMissing(readFileSync(agentsFile, 'utf8')) : ['the file itself'];
 if (starterLacks.length > 0) throw new Error(`the starter agents.yaml was not bootstrapped: it lacks ${starterLacks.join(', ')}`);
 // The starter runs in `ask` mode, which put the owner at the approval dialog for every tool call of every real run. This
@@ -282,7 +282,7 @@ scenario = 'slots';
 const log2 = replay('slots') ? readFileSync(join(output, 'slots.log'), 'utf8') : await launch('slots', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   // The slot's model control is the design system's SearchableSelect, not a native `<select>`: named by its label alone,
-  // the capture seam drives either kind (`docs/defects/fixed/slice-proof-names-the-model-slots-as-native-selects.md`).
+  // the capture seam drives either kind (`docs/archive/defects/slice-proof-names-the-model-slots-as-native-selects.md`).
   ROTARIS_CAPTURE_SELECT: `[aria-label="Model for small_model"]>>${QUALIFIED}@2200;;[aria-label="Model for medium_model"]>>${QUALIFIED}@2500;;[aria-label="Model for large_model"]>>${QUALIFIED}@2800`,
   ROTARIS_CAPTURE_CLICKS: '.save-bar .btn-primary>>Save@3600',
   ROTARIS_CAPTURE_AFTER_MS: '5200',
@@ -327,7 +327,7 @@ function runLogRequests(log) {
   // REQ-PROVIDER-067/068: the priming report is its opening line — the provider among the authenticated, in whatever
   // place the sorted list puts it, and nothing unresolved. That one check is the lease check too: the bearer was leased
   // exactly when the provider is named authenticated. No product code writes "credentials: 1 provider(s) authenticated",
-  // which this step asserted before (`docs/defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`).
+  // which this step asserted before (`docs/archive/defects/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`).
   const priming = primingProblem(log, PROVIDER_ID);
   if (priming !== null) throw new Error(`the run host did not report the priming: ${priming}`);
   const sent = (log.match(/model request POST (\S+)/g) ?? []).map((l) => l.replace('model request POST ', ''));
@@ -411,13 +411,13 @@ scenario = 'intents';
 // the fallback because the model answered the request instead of labelling it; each of these runs must classify, never
 // fall back, into a category REQ-ORCH-006 and REQ-ORCH-021 leave in reach of its prompt (`INTENTS`, each with its reason,
 // `lib/live-answers.mjs`). Until 2026-10-04 the README question accepted `question` alone and went red on the model's
-// `explicit_trivial (0.99)` (`docs/defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
+// `explicit_trivial (0.99)` (`docs/archive/defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`).
 // Since 2026-10-07 (finacc3 A2-03) one answer outside the accepted set asks the prompt once more, as an answerless run is
 // made once more: the first launch's log is kept as `intents-<n>.attempt-1.log`, and a second answer outside the set is
 // the red, naming both (`intentOutcome`). Since 2026-10-15 (OQ-332, F8 of fin46's final acceptance) a fallback at
 // REQ-ORCH-008's 12 s bound shares that one extra ask: it is REQ-ORCH-007's specified answer to one slow call on a
 // shared self-hosted endpoint, so it is reported as a NOTE with the bound and the time it took, kept, and asked once more
-// (`docs/defects/fixed/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`). The proof
+// (`docs/archive/defects/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`). The proof
 // records no model traffic, so the length of the cut reasoning is not in its evidence; the live run's intent NOTE reads
 // it. Any other fallback, a fallback to another category, and a missing intent line are reds at once.
 results.intents = [];
@@ -455,7 +455,7 @@ scenario = 'spike6';
 //    product stored from the owner's paste. The key reaches the harness through a variable named for it and is never
 //    printed; only the harness's figures are kept. With no key in hand (a paste replayed after its sign-out) it is skipped.
 //    `--reporter=verbose`: vitest's default reporter prints no test's console lines when every test passes, so the
-//    `[spike6]` figures never reached spike6.log (`docs/defects/fixed/slice-proof-keeps-no-spike6-figures.md`).
+//    `[spike6]` figures never reached spike6.log (`docs/archive/defects/slice-proof-keeps-no-spike6-figures.md`).
 const spikeKey = endpoint.key ?? storedToken;
 const spikeEnv = { ...cleanEnvironment(), ROTARIS_SPIKE6_BASE_URL: BASE_URL, ROTARIS_SPIKE6_MODEL: MODEL, ROTARIS_SPIKE6_API_KEY_ENV: 'ROTARIS_SLICE_PROOF_KEY', ROTARIS_SLICE_PROOF_KEY: spikeKey };
 const spikeSkipped = !replay('spike6') && spikeKey === '';
@@ -474,7 +474,7 @@ scenario = 'sign-out';
 const log5 = replay('sign-out') ? readFileSync(join(output, 'sign-out.log'), 'utf8') : await launch('sign-out', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   // The row's own "Sign out", then the confirmation's (REQ-PROVIDER's sign-out asks first); the settings panel the step
-  // opened before holds no Sign out (`docs/defects/fixed/slice-proof-signs-out-from-a-panel-that-no-longer-holds-sign-out.md`).
+  // opened before holds no Sign out (`docs/archive/defects/slice-proof-signs-out-from-a-panel-that-no-longer-holds-sign-out.md`).
   ROTARIS_CAPTURE_CLICKS: `[data-provider="${PROVIDER_ID}"] .provider-row__actions button>>Sign out@2200;;[role="dialog"] .dialog-actions button>>Sign out@3200`,
   ROTARIS_CAPTURE_AFTER_MS: '5000',
 });

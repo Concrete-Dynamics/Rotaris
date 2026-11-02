@@ -43,7 +43,7 @@ session's `context_selection` entries.
 > attachments that overflowed the 48,000-character budget, so a non-zero line has been seen in unit tests only. **Found on
 > the way:** the delegate tool's observation counts attachments before the budget applies, and REQ-TOOLS-152 budgets the
 > section at 100,000 characters where REQ-LIBRARY-098 and the build use 48,000
-> ([`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../../defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md),
+> ([`the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`](../../archive/defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md),
 > recorded, not repaired). The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
 > **Cross-reference, 2026-10-07 ([OQ-221](../../architecture/open-questions.md), under [R-072](../requests.md#r-072)):** no clause

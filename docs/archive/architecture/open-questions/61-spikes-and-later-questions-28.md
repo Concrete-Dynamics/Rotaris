@@ -48,7 +48,7 @@ answer without bound while the renderer answers its probe, is the falsified one.
 `unsaved-sigterm` launches.
 *Ruled 2026-10-14, as the consortium's ruling record dates its sitting (10:00 to 10:14 UTC); fin45's brief and
 [R-072](../../../product/requests.md#r-072)'s row said 2026-10-13, the row recorded apart in
-[`../../../defects/fixed/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](../../../defects/fixed/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md)
+[`../../defects/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md`](../../defects/the-r-072-row-dates-ten-rulings-of-2026-10-14-to-2026-10-13.md)
 (fin46, `fin46-accept1-12`).*
 
 **The recommendations it weighed** (both followed; both kinds change-behaviour). **Advocate A** (the user's lens) recommended that
@@ -160,7 +160,7 @@ REQ-WORKSPACE-152 to its Extends line with their back-pointers; nothing is repla
 `passFailureDetail` (`apps/desktop/src/main/improvement-notice.ts`) adds its closing period only to a reason that does not end in
 terminal punctuation. **What the ruling leaves open.** Nothing new; the lease checks the entry role's provider while the
 retrospective analyses on its own slot's, recorded apart as
-[`../../../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../../../defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md),
+[`../../defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`](../../defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md),
 which this ruling does not repair (*repaired 2026-10-14 by fin46, `fin46-accept1-11`: the retrospective's lease requires the
 sign-in provider of its own model, `retrospective_model` then `medium_model`, and a continuation still the entry role's*).
 *Dated 2026-10-13, a day before the question was raised, until fin46 (`fin46-accept1-12`) corrected it on 2026-10-14 from the
@@ -184,7 +184,7 @@ repair took is on record; the plan's range, its next free number on this branch.
 **What is open.** A Runtime field that cannot show its stored value draws it clamped and states the stored value beneath
 (`ClampedNumberField`). Whether a person who selects the text and types the very digits shown has changed the field — and so
 replaces the stored value with the shown one — is not said by either text.
-[`../../../defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`](../../../defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md)
+[`../../defects/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`](../../defects/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md)
 says so in its Specs section.
 
 **What the build proceeds under.** Since fin43: yes. The field commits from the native input event, so an overtype of the same
@@ -210,7 +210,7 @@ helper types over the selection as a person does. Written 2026-10-14 by fin45 (`
 and not `display/showReasoning`; REQ-SHELL-006, whose key table registers all three; REQ-CHAT-167, which stores
 `display/showReasoning` "under the registered key … written user-wide like every desktop preference (REQ-CONFIG-405)". Raised
 2026-10-14 by fin44 (`fin44-hooks-and-config`) while repairing
-[`the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md`](../../../defects/fixed/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md),
+[`the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md`](../../defects/the-tool-grouping-preference-is-stored-under-a-key-the-specification-does-not-register.md),
 which noticed it; the plan's range OQ-296 to OQ-310, raised as OQ-297 and renumbered OQ-302 at landing, where fin44's sibling bundles had taken OQ-297
 to OQ-301 first.)*
 
@@ -234,14 +234,14 @@ whose meaning and default REQ-CONFIG-405 itself owns; REQ-SHELL-006's per-user p
 complete registry (its ownership clause, `docs/spec/12-desktop-shell-windows.md` line 27, and the table that clause makes closed,
 from line 400: "every key the product may store is listed here, whatever document owns the behavior behind it"; *corrected
 2026-10-14: this read "from line 402", the table's header row, two lines below the sentence it quotes —
-[the note](../../../defects/fixed/oq-302-cites-the-preference-tables-closing-sentence-at-line-402-where-it-stands-at-line-400.md)*).
+[the note](../../defects/oq-302-cites-the-preference-tables-closing-sentence-at-line-402-where-it-stands-at-line-400.md)*).
 `display/showReasoning` stands as that table registers it (line 413) and REQ-CHAT-167 owns it: default off, written user-wide under
 REQ-CONFIG-405's write policy. REQ-CONFIG-405's list equals the set the table leaves to it — the three `requirements/` elevation
 keys its row assigns to REQ-CONFIG-405 by name (line 415), and the `interface/` and `display/` rows that name no other owner;
 `display/showReasoning`'s row names REQ-CHAT-167 — so the specification has no defect here. `packages/platform/src/preferences.ts`
 is confirmed as built (`display/showReasoning`, boolean, default `false`, owner REQ-CHAT-167). **The two recommendations
 weighed:** advocate A's and advocate B's, both confirm-as-built; the ruling follows both. The open note
-[`../../../defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md`](../../../defects/fixed/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md)
+[`../../defects/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md`](../../defects/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md)
 was not decided by this ruling; it was repaired apart, in the same plan, by moving each preference to the key the table
 registers. Written 2026-10-14 by fin45 (`fin45-retro-and-record`).
 
@@ -285,7 +285,7 @@ restart, is the falsified one.* **The two recommendations weighed:** quoted in t
 *until then this clause read: "the advocates' recommendations themselves were not handed to the building bundle, and the
 orchestrator's ruling record holds them"*); advocate B's report that no code implements
 REQ-SHELL-119 guard (2), "Integration in progress", anywhere in `apps/` or `packages/` was, and the builder confirmed it
-([`the-integration-in-progress-close-guard-has-no-code.md`](../../../defects/fixed/the-integration-in-progress-close-guard-has-no-code.md),
+([`the-integration-in-progress-close-guard-has-no-code.md`](../../defects/the-integration-in-progress-close-guard-has-no-code.md),
 outside this ruling's repair: worktree integration is deferred from the first release, so the guard is vacuous until it is built).
 **Built 2026-10-14 by fin46 (`fin46-accept1-9`):** `UpdaterDeps.confirmUnsaved` and the `UPDATE_DECLINED_UNSAVED` outcome
 (`apps/desktop/src/main/updater/updater.ts`), asked first in `restart()` and in the installer flavour's `install()`, and first in
@@ -298,7 +298,7 @@ asked, the first `false` stopping it, a renderer that cannot answer allowing und
 (`askUnsavedInTurn`) and `guard-question.test.ts`. A development host's built app is classified not updatable, so no launch
 reaches `update.restart`'s guards there: the built-app run is owed to the Windows package (a Windows x64 host, deferred with the release pipeline under R-071; IC-3 binds Linux and macOS artifacts), as
 [`docs/proofs/updater-proof.md`](../../../proofs/updater-proof.md) records
-([`../../../defects/fixed/an-update-restart-discards-a-windows-unsaved-settings-unasked.md`](../../../defects/fixed/an-update-restart-discards-a-windows-unsaved-settings-unasked.md)).
+([`../../defects/an-update-restart-discards-a-windows-unsaved-settings-unasked.md`](../../defects/an-update-restart-discards-a-windows-unsaved-settings-unasked.md)).
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
 lens, change-behaviour): "`Restart now`, and `Update now`/`Try again` on the installer flavour, are user-initiated closes. Each

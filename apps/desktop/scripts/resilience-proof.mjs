@@ -31,7 +31,7 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * capture seams drive by `spawnBounded`, the driven override launch by the driver's `stopApp` — and one that overruns
  * is ended (SIGTERM, a grace, SIGKILL) and reported as a failure with its log tail, where `spawnSync`'s timeout had left
  * the override launch alive 649 s after its 180 s
- * (`docs/defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`).
+ * (`docs/archive/defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`).
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -82,7 +82,7 @@ function scenario(name, agentsYaml, opts = {}) {
     // (REQ-WORKSPACE-090), and without the bundled runtime its background run fails and publishes "Project setup did not
     // finish" into the ONE notice slot `cancel` and `fatal` read (REQ-NOTIFY-024) — read by `cancel` in place of
     // REQ-NOTIFY-063's notice, and passed by `fatal` as "not a provider limit"
-    // (`docs/defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`).
+    // (`docs/archive/defects/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`).
     ...SETUP_ANSWERED, '',
   ].join('\n'));
   if (opts.snapshot) {
@@ -101,7 +101,7 @@ async function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
   // `hostSwitches`: Chromium refuses to start as root with its sandbox on, and this proof's first launch died with
-  // SIGTRAP before its first assertion (`docs/defects/fixed/resilience-proof-cannot-launch-the-app-as-root.md`).
+  // SIGTRAP before its first assertion (`docs/archive/defects/resilience-proof-cannot-launch-the-app-as-root.md`).
   const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
     cwd: app, timeoutMs: opts.timeout ?? 180_000, windowsHide: true,
     env: {
@@ -459,7 +459,7 @@ await scenarioRun('next-run-choice', async () => {
 // configured key from the run header while iteration 1 holds on beta, and queues a follow-up beside it. Iteration 1 finishes
 // on beta (the iteration in flight keeps its setting); iteration 2, the follow-up, runs on alpha, as the switch's row says.
 // Before the repair the root's cell was rebuilt only when the requested model changed, so iteration 2 ran on beta under a
-// row that said the switch applied (`docs/defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`).
+// row that said the switch applied (`docs/archive/defects/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`).
 const s3b = scenario('switch-back', [], { snapshot: true });
 await scenarioRun('switch-back', async () => {
   const r = await launch('switch-back', s3b, {
@@ -580,7 +580,7 @@ await scenarioRun('quota-retry', async () => {
 // one frame (a double-click, repair round 1: the second press once switched the entry model), and the retry on alpha answers:
 // the run completes on alpha with no override, one retry row and no `entry_model_switched`. Until 2026-10-06 Keep waiting said
 // "Still waiting." and sent nothing, so this run stayed parked
-// (`docs/defects/fixed/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`).
+// (`docs/archive/defects/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`).
 const s4d = scenario('keep-waiting', []);
 await scenarioRun('keep-waiting', async () => {
   const r = await drivenLaunch('keep-waiting', s4d, { ROTARIS_SCRIPT: 'fail:quota,answer' }, async (d, step, signal) => {
@@ -1191,7 +1191,7 @@ await scenarioRun('auth-fallback', async () => {
     // REQ-NOTIFY-032 is for "a run other than the focused one": the session this window started is the focused one, however
     // early its run fails, so its warning is never raised about it, and a restart (REQ-NOTIFY-058) leaves none standing. Until
     // 2026-10-06 a 401 arriving before the window's subscription raised it, and the check above let its words through
-    // (docs/defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
+    // (docs/archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
     expect(notice === undefined || !/Session \S+ failed|The session on screen is unaffected/.test(notice.text), `${v.name}: REQ-NOTIFY-032's warning about another session is on screen about the session this window started: ${JSON.stringify(notice)}`);
     expect(!/run failure: session \S+ is not focused/.test(r.log), `${v.name}: main read the failure of the session this window started as another session's (REQ-NOTIFY-032): see ${v.name}.log`);
     // REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the first failure with a usable fallback restarts and opens no recovery dialog.

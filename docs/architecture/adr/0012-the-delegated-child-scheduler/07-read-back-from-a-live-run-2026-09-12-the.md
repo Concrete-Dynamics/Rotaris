@@ -41,7 +41,7 @@ the permission gate or a pre-tool hook refused, or a `haet_edit` whose find text
 and still reached `edited_files`, the fallback's "Files touched" and, since OQ-111, the facts the pass is told never
 to deny. `editedFilesFrom` now skips a write call the record answers as refused, and the summariser's own list cannot
 name a path whose every write was so answered
-([`a-reports-edited-files-counts-refused-writes`](../../../defects/fixed/a-reports-edited-files-counts-refused-writes.md)).
+([`a-reports-edited-files-counts-refused-writes`](../../../archive/defects/a-reports-edited-files-counts-refused-writes.md)).
 A call no result answers — which the turn never leaves — is still listed. *Falsified by the repair's verification and
 kept beside its correction:* this correction first said a write call answered with any error (`isError`) was skipped,
 which took a call a rest, a stop or a crash cut off for a refusal. A call that was under way when it was cut off is

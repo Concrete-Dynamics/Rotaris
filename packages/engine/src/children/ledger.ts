@@ -47,8 +47,8 @@ export function userCancellation(t: Pick<ChildRow, 'task_id' | 'canonical_name' 
  * cascade (REQ-ORCH-048), the user's cancel, the settle of a child a previous run left (REQ-ORCH-053) and the decline of a
  * resumable iteration (PD-ORCH-005 clause 6) — so no caller can store a report without one, exactly as the
  * adjacent-duplicate rule lives beside its insert rather than in a caller. The cascade stored no report at all until
- * 2026-09-29 (`docs/defects/fixed/a-child-blocked-by-its-dependency-gets-no-report.md`). The last two wrote the report alone until 2026-09-27
- * (`docs/defects/fixed/a-stale-settled-childs-report-is-never-an-artifact.md`). The row names the artifact; without
+ * 2026-09-29 (`docs/archive/defects/a-child-blocked-by-its-dependency-gets-no-report.md`). The last two wrote the report alone until 2026-09-27
+ * (`docs/archive/defects/a-stale-settled-childs-report-is-never-an-artifact.md`). The row names the artifact; without
  * one, the report is stored and no artifact is made.
  */
 export function storeChildReport(deps: { readonly writer: SessionWriter; readonly artifacts?: ArtifactStore | undefined; readonly warn: (m: string) => void }, taskId: string, row: ChildRow | undefined, report: Record<string, unknown>): void {
@@ -339,7 +339,7 @@ export class ChildLedger {
      * (`recordedRootNames`). The surfaces know the run-level agent by those names (REQ-MONITOR-071, REQ-CHAT-069,
      * REQ-MONITOR-044), so a child carrying one was presented as the run-level agent too. Until 2026-10-01 only the
      * root's direct children were kept off its canonical name
-     * (`docs/defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`).
+     * (`docs/archive/defects/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`).
      */
     const siblingNames = new Set([...siblings.map((c) => c.canonical_name), ...recordedRootNames(this.deps.dal, this.deps.sessionId), this.root.canonicalName, this.root.persona]);
     const canonical = uniqueUnderParent(canonicaliseName(input.taskName), siblingNames);
@@ -358,7 +358,7 @@ export class ChildLedger {
        * tools REQ-TOOLS-006's controls leave and the MCP surface after them, `{ granted: {server: [tool…]}, servers: [{name,
        * transport, origin, fate, reason?}] }` — and `recordGrant` writes it once that port is ready. Until 2026-10-01 the
        * spawn wrote the persona's declared tools and its MCP surface before any control, so a tool a control removed was
-       * recorded as granted (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+       * recorded as granted (`docs/archive/defects/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
        * Until a port reports, REQ-MONITOR-049's stand-in (the declared tools) is the surface's, not the record's.
        */
       granted_tools: '[]',

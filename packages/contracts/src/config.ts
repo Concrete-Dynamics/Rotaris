@@ -71,7 +71,7 @@ export const RuntimeViewSchema = z.object({
    * REQ-SANDBOX-113 (Part AR): all SIX sandbox and egress settings, so that no YAML has to be edited
    * by hand. `sandbox_mode` was carried here alone, read for the launch dialog's preselection
    * (REQ-SHELL-125, REQ-TOOLS-114), while the surface told the user the six were "read from the file
-   * and not edited here" (`docs/defects/fixed/settings-surface-refuses-the-six-security-keys.md`).
+   * and not edited here" (`docs/archive/defects/settings-surface-refuses-the-six-security-keys.md`).
    * All six round-trip: REQ-SANDBOX-054 requires the configuration loaded after a save be the same
    * effective configuration that was saved, and a further save-and-load change nothing again.
    */
@@ -307,7 +307,7 @@ export type InstructionsSavePayload = z.infer<typeof InstructionsSaveSchema>;
  * timeout (PD-CONFIG-003), the improvement analysis timeout (PD-CONFIG-003 revision 2) and the six confinement and egress
  * fields (REQ-SANDBOX-113). `DesktopSaveSchema` refuses any other runtime key, and the settings screen's runtime keys equal
  * this list (`pendingFrom`); until 2026-10-07 the schema took any key, which is how a control over a key no list named got
- * through (`docs/defects/fixed/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`).
+ * through (`docs/archive/defects/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`).
  */
 export const DESKTOP_SAVE_RUNTIME_KEYS = [
   'max_depth', 'max_active_children', 'max_iterations', 'allow_outside_workspace', 'permission_mode', 'improvement_collector_enabled', 'keep_going', 'run_start_mode',

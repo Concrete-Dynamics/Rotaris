@@ -100,7 +100,7 @@ Run by `pnpm slice-proof` scenario 4 after the proof was retargeted to the live-
 ([R-068](../../product/requests.md#r-068)): `katalyst`, a self-hosted vLLM server (its base URL is the
 registry's, kept outside the repository), unmetered, with the key stored beside the registry. Since that run the harness
 runs under vitest's verbose reporter, so the `[spike6]` lines reach the pack on a green run as well
-([note](../../defects/fixed/slice-proof-keeps-no-spike6-figures.md)).
+([note](../../archive/defects/slice-proof-keeps-no-spike6-figures.md)).
 
 | Measurement | `responses` | `chat` |
 |---|---|---|

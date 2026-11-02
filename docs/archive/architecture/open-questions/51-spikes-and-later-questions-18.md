@@ -9,7 +9,7 @@ The ruled, closed, resolved and withdrawn entries of [part 51](../../../architec
 record, no user-global location", and its rule's "the workspace's own `AGENTS.md` or `AGENTS.override.md` as
 REQ-WORKSPACE-041 fixes discovery"; OQ-65's ruling under [R-071](../../../product/requests.md#r-071), "reads exactly the set
 injection reads"; `PD-WORKSPACE-002`'s discovery bases; REQ-WORKSPACE-048. Raised 2026-10-13 from
-[`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../../../defects/fixed/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md),
+[`pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md`](../../defects/pd-library-002-says-no-user-global-location-where-the-retrospective-reads-user-global-instruction-files.md),
 the R-072 consortium's question LG1, and ruled the same day.)*
 
 The run host served both readers of the instruction files from one computation (`SkillHost.instructionFiles`), and
@@ -55,7 +55,7 @@ four cases in `apps/desktop/src/run-host/skills.test.ts`, red before the change.
 while an analysis runs?** *(`PD-LIBRARY-002`'s disposition block; REQ-LIBRARY-011, REQ-LIBRARY-020, REQ-LIBRARY-109,
 REQ-LIBRARY-124, REQ-LIBRARY-125, REQ-LIBRARY-126, REQ-LIBRARY-128, REQ-LIBRARY-130, REQ-NOTIFY-250; REQ-LIBRARY-123's FIFO;
 ADR-0065 consequence 2 and decision 7; `docs/product/README.md`'s three verbs. Raised 2026-10-13 from
-[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../../../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
+[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
 the note OQ-222's ruling left for these reaches, as the R-072 consortium's question LR1, and ruled the same day.)*
 
 OQ-222 entered the four reaches the back-pointers already marked into `PD-LIBRARY-002`'s Extends line and left the rest:
@@ -100,9 +100,9 @@ ADR-0065.* The record half — the paragraph, the Narrows line, the two Extends 
 `back-pointers.test.ts`. The two behaviour repairs: `retrospective_pending` on `improvement:activity`, sent per main window
 from the coordinator's `retrospectivePending`, one `RetrospectiveGesture` on both surfaces, the handler's refusal with one
 info notice, and the Library's two texts. Notes moved to `docs/defects/fixed/`:
-[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../../../defects/fixed/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
-[`the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md`](../../../defects/fixed/the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md)
-and [`the-library-proposals-texts-name-only-the-per-run-collector.md`](../../../defects/fixed/the-library-proposals-texts-name-only-the-per-run-collector.md).
+[`pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md`](../../defects/pd-library-002-reaches-further-requirements-its-disposition-does-not-name.md),
+[`the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md`](../../defects/the-retrospective-start-gesture-is-disabled-while-any-analysis-runs.md)
+and [`the-library-proposals-texts-name-only-the-per-run-collector.md`](../../defects/the-library-proposals-texts-name-only-the-per-run-collector.md).
 
 <a id="oq-237"></a>
 
@@ -111,7 +111,7 @@ of an entry" and "The back-pointer, in place": the meaning of Narrows and Extend
 directive under one verb on one requirement, "precedence must be unambiguous"; `tools/symbol-artifact/generate.mjs`, the
 per-verb maps that hold one directive per requirement; acceptance finding F15, the shape repaired for `PD-ORCH-014`.
 Raised 2026-10-13 from
-[`a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md`](../../../defects/fixed/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md),
+[`a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md`](../../defects/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md),
 noticed 2026-10-07 by fin31's reviewer, and ruled the same day under the owner's delegation; the consortium's question GV1.)*
 
 The generator keeps `SUPERSEDED_BY`, `NARROWED_BY` and `EXTENDED_BY` as one directive per requirement each and refuses a
@@ -174,7 +174,7 @@ register still gave it in the present tense: beside the "lands here" sentences o
 this was built included (`PD-CONFIG-003` revision 3, `PD-LIBRARY-002` revision 2's seven narrowings and two extensions,
 `PD-ORCH-011` revision 2): none was bent by the one-per-verb rule, since each requirement they name under a verb carries no
 other directive under it, so nothing more is corrected. Outside the bound and recorded, not corrected:
-[`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../../../defects/fixed/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md).
+[`pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md`](../../defects/pd-library-001-extends-two-requirements-whose-closed-sets-it-changes.md).
 **Corrected the same day** (fin36, `fin36-last-notes-and-optionals`): on the same test `PD-LIBRARY-001` now narrows REQ-LIBRARY-088
 (a closed field inventory gaining `commands[]`) and REQ-LIBRARY-090 (a fixed section order gaining **Commands**), the disposition
 it replaces quoted beside it and the two back-pointers relabelled; no other directive reaches either, and no behaviour moves.
@@ -187,7 +187,7 @@ rest cut off "is recorded as interrupted"; `PD-TOOLS-013`, the terminal's cancel
 issues; REQ-TOOLS-092 and REQ-SANDBOX-025, fetch's closed vocabulary; REQ-SESSION-139, the histogram's four derived
 buckets; ADR-0023's reading of the run's abort mid-fetch as `network_error`; OQ-208, no `outcome_kind` on an MCP or fetch
 record. Raised 2026-10-13 from
-[`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../../../defects/fixed/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md),
+[`a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md`](../../defects/a-call-the-run-cancels-in-the-gate-or-in-fetch-files-a-tool-error-issue.md),
 noticed by the consortium while ruling OQ-226 and recorded by fin31, and ruled the same day under the owner's delegation;
 the consortium's question GC1.)*
 
@@ -234,7 +234,7 @@ application starts an unattended run"; REQ-TOOLS-192, "a run whose session will 
 "whenever the session being started would be unattended"; `PD-TOOLS-002`, which empties the advisory for `autonomous` and
 says that for `ask` and `restricted` it "behaves as today"; REQ-TOOLS-053, REQ-TOOLS-069, REQ-SANDBOX-101 and ADR-0019, what
 makes a run attended; REQ-SANDBOX-130, the disclosure shown "when that advisory is empty". Raised 2026-10-13 from
-[`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../../../defects/fixed/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
+[`the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md`](../../defects/the-unattended-advisory-is-empty-for-every-mode-where-pd-tools-002-keeps-it-for-ask-and-restricted.md),
 recorded 2026-10-07 at OQ-222's request, and ruled the same day under the owner's delegation; the consortium's question UA1.)*
 
 `unattendedAdvisory` (`packages/ui/src/StartSessionDialog.tsx`) took the permission mode, whether confinement was active and

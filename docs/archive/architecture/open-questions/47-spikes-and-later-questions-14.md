@@ -11,7 +11,7 @@ REQ-TOOLS-006, the controls that narrow a grant; REQ-TOOLS-152, `delegate`'s fie
 `system_prompt` replacing the built-in one; `PD-TOOLS-006` revision 3, which refuses a `write_scope` for a persona that holds
 no file-writing tool and names the ones that do. Raised 2026-10-07 from the final live runs' findings L4 (the `c2fdd6a`
 duress autopsy) and N3 with N2 (the `c2a9444` duress autopsy), recorded in
-[`the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md`](../../../defects/fixed/the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md),
+[`the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md`](../../defects/the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md),
 and ruled the same day under the owner's delegation; the consortium's question L4.)*
 
 In both duress runs of 2026-10-06 the orchestrator briefed `docs-writer` children, which hold no `terminal`, to "Run
@@ -33,7 +33,7 @@ relation, so a new directive extending REQ-ORCH-028 could not be built. *(No lon
 may repeat freely; the revision stays where it landed.)* Separately, the built routing table carries the two
 capability clauses REQ-ORCH-028 states for `codebase-analyst` and `librarian`; that repair is covered by REQ-ORCH-028 and
 needs no directive
-([`the-built-routing-table-drops-req-orch-028s-capability-clauses.md`](../../../defects/fixed/the-built-routing-table-drops-req-orch-028s-capability-clauses.md)).
+([`the-built-routing-table-drops-req-orch-028s-capability-clauses.md`](../../defects/the-built-routing-table-drops-req-orch-028s-capability-clauses.md)).
 
 The two recommendations weighed, and the ruling followed **both**:
 - **Advocate A (the user's lens)** recommended building `delegate`'s description per caller from the resolved catalogue,
@@ -92,7 +92,7 @@ REQ-ORCH-110, the pass's bounds and its fallback, silent on what the pass is giv
 to the terminal state; OQ-111, which gave the pass the run's deterministic facts; OQ-120, the facts' 12,000-character bound
 keeping its head; `PD-ORCH-004`, the cut-off statement. Raised 2026-10-07 from the final live runs' findings L5 (the
 `c2fdd6a` duress autopsy) and N5 (the `c2a9444` duress autopsy), recorded in
-[`a-timed-out-childs-report-summary-reads-as-success.md`](../../../defects/fixed/a-timed-out-childs-report-summary-reads-as-success.md),
+[`a-timed-out-childs-report-summary-reads-as-success.md`](../../defects/a-timed-out-childs-report-summary-reads-as-success.md),
 and ruled the same day under the owner's delegation; the consortium's question L5.)*
 
 Two of the five timed-out children of the two duress runs got summaries that read as success beneath status `failed`:
@@ -111,7 +111,7 @@ REQ-ORCH-110 states it, and no summarising pass can raise a status the runner se
 silence on the pass's inputs, as OQ-111 did, and needs no directive: REQ-ORCH-088, REQ-ORCH-108, REQ-ORCH-110,
 REQ-ORCH-112 and PD-ORCH-004 keep their text. The status guard brings the build into line with REQ-ORCH-088 and
 REQ-ORCH-112 as written
-([`the-summarising-pass-can-raise-a-failed-childs-report-status.md`](../../../defects/fixed/the-summarising-pass-can-raise-a-failed-childs-report-status.md)).
+([`the-summarising-pass-can-raise-a-failed-childs-report-status.md`](../../defects/the-summarising-pass-can-raise-a-failed-childs-report-status.md)).
 
 The two recommendations weighed, and the ruling followed **both**:
 - **Advocate A (the user's lens)** recommended giving the pass the run's status and recorded end reason as one more
@@ -152,7 +152,7 @@ cut-off statement; both stored summaries opened with the timeout and claimed no 
 "Edited files: (none)" over 11 `ok` edits through the code-intelligence EDIT tier, so its summary called the edits
 "attempted": the Outcome line was right and the fact it sat beside was false — PD-ORCH-004's changed-paths reading (finding
 D1), repaired by fin32
-([`a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`](../../../defects/fixed/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md)).
+([`a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md`](../../defects/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md)).
 (2) Both summaries opened "The run failed because the child [agent] timed out after 1200s …", and the timeline relayed them
 as "Child wave3-verify-all reported failed: The run failed because …" (entries 74 and 98) while the session completed
 `tasks_complete`: the sentence the ruling asked for read as the session failing (finding D9). **The repair, inside the
@@ -162,7 +162,7 @@ as what happened to the agent ("This agent was stopped at its time limit while �
 or "The session failed", since the session may continue and succeed. The reading taken in the first execution above,
 "'Outcome: failed' is written with the status the runner settled", is kept with its new head. Pinned by `report.test.ts`'s
 case "OQ-217's first sentence is the agent's own outcome …" and the updated line cases there and in `children.test.ts`, red
-on the wording before ([`a-timed-out-childs-summary-opens-as-if-the-run-failed.md`](../../../defects/fixed/a-timed-out-childs-summary-opens-as-if-the-run-failed.md)).
+on the wording before ([`a-timed-out-childs-summary-opens-as-if-the-run-failed.md`](../../defects/a-timed-out-childs-summary-opens-as-if-the-run-failed.md)).
 **Not measured:** a live run since the repair; it should show each failed child's summary opening with the agent and its own
 outcome, and no "The run failed" on the timeline of a session that completed. The row is in
 [`first-executions.md`](../../../architecture/first-executions.md).
@@ -201,7 +201,7 @@ continuations made since 2026-09-29, five succeeded; the three that failed all c
 1,087 s, 91 % of the ceiling. The children's time went largely to work other rulings own: d reasoned about a terminal it does
 not hold in 22 of its 66 requests at `c2fdd6a` and its successor in 23 of 35 at `c2a9444` (L4/N3), d2 named `.serena`,
 `.rotaris` or `.git` in 37 of its 45 requests (L3/N6, OQ-215), d-continuation met the empty file an undone create left (N2,
-repaired, [`undoing-a-create-leaves-an-empty-file.md`](../../../defects/fixed/undoing-a-create-leaves-an-empty-file.md)), and e had a
+repaired, [`undoing-a-create-leaves-an-empty-file.md`](../../defects/undoing-a-create-leaves-an-empty-file.md)), and e had a
 complete file by minute five.
 
 **What the build proceeds under.** `runtime.child_timeout`, default 1200 and minimum 1

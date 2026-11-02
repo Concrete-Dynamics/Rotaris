@@ -257,7 +257,7 @@ results.push({ launch: 'listing-reopen', session: listingSession, count: reread[
  * `%LOCALAPPDATA%/rotaris/rotaris`, off Windows `<XDG_CONFIG_HOME>/rotaris` — the proof points both at the scratch
  * tree, so this is that tree's own global scope and not the operator's. Spelled for Windows alone, the run host
  * never read it off Windows and this launch failed at the explicit baseline
- * (`docs/defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`).
+ * (`docs/archive/defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`).
  */
 const globalAgents = join(configDirFor(scratch.local), 'agents.yaml');
 write(globalAgents, 'skills:\n  overrides:\n    home-skill: on\n');

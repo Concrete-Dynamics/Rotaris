@@ -10,7 +10,7 @@ import { BUILD_ID_FILE } from '../../../../tools/build-id/build-id.mjs';
  * The About page's two bundled assets (REQ-SHELL-140, REQ-SHELL-142), read from `process.resourcesPath` the way a
  * packaged build reads them. The licence bundle's name is REQ-STARTUP-141's, case included: until 2026-09-27 the
  * reader looked for `third-party-licenses.txt`, which a case-insensitive filesystem answered for the upper-case file
- * and a Linux one did not (`docs/defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`).
+ * and a Linux one did not (`docs/archive/defects/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`).
  * The second case below fails on every platform against that name: on Linux the reader finds nothing, and elsewhere
  * it answers a path spelled differently from the file the generator wrote.
  */

@@ -123,7 +123,7 @@ export function setupDialogState(report: InitRunReport, stillPending = 0): Setup
  * in-progress state (REQ-WORKSPACE-110), and from then on the dialog draws that run as its own (`adopted`).
  * Taking the report whatever its run, the dialog switched to "running" under the user's own Escape, and in the other
  * order it ignored Escape, so no decision was recorded
- * (`docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+ * (`docs/archive/defects/the-setup-dialog-takes-a-background-run-as-its-own.md`).
  */
 export function dialogReport(state: InitializationStateView, adopted: boolean): InitRunReport {
   return state.backgroundRun && !adopted ? EMPTY_RUN_REPORT : state.report;

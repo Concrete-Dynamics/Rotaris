@@ -70,7 +70,7 @@ held as written, the reason it was not built held, and building it found one def
 - *The defect.* `/skills` is the second fixed catalogue command with the `skill` kind badge, and the registrar read
   any `skill`-kind holder as its own earlier work — so a skill named `skill` took `/skill <path>`'s name or lost its
   own, depending on which React effect ran first (REQ-SHELL-056, both halves). Repaired with it:
-  [`a-skill-named-skill-takes-the-skill-command.md`](../../defects/fixed/a-skill-named-skill-takes-the-skill-command.md).
+  [`a-skill-named-skill-takes-the-skill-command.md`](../../archive/defects/a-skill-named-skill-takes-the-skill-command.md).
 - *The question, since ruled.* [OQ-67](../open-questions.md) (ruled 2026-10-06 as built, [R-071](../../product/requests.md#r-071)): REQ-CHAT-162 wants the listing reachable from the settings
   surface, and REQ-WORKSPACE-067 fixes that tab's header actions at two, so no action was added — the tab's table
   already shows every fact the listing carries; and `/skills` from a window following no session has no transcript
@@ -81,12 +81,12 @@ held as written, the reason it was not built held, and building it found one def
   logged. Both sit before the policy launch, which fails on Linux before and after this change at "the baseline
   over a global override was not written explicitly"; on Linux the two new launches are therefore the last that
   pass, and the cause is recorded as
-  [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md).
+  [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../../archive/defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md).
   A temporary copy of the proof with that one path spelled for Linux passed all 10 checks over 9 launches with
   `/skills` built, so the later launches are unaffected by it; the copy was not committed.
   `rows-proof` passes unchanged. `slash-proof` stops at its first catalogue assertion with and without this change —
   it expects every built-in to carry the `action` badge, which `/skill` has not since ADR-0063 — recorded as
-  [`slash-proof-expects-every-built-in-to-carry-the-action-badge.md`](../../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md).
+  [`slash-proof-expects-every-built-in-to-carry-the-action-badge.md`](../../archive/defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md).
 - *Gate round 1 of the same change found two more defects, both repaired before it merged.* (1) Drawing the listing
   as its own block took the system row off `PlainText`, so a bare URL in a skill's description stopped being a link
   (REQ-CHAT-076). Every field is now drawn through `PlainText`; `rows.test.ts` renders a listing and reads the link,
@@ -94,7 +94,7 @@ held as written, the reason it was not built held, and building it found one def
   outside the target. `skills-proof` passes to the same Linux-only policy check as before, and `rows-proof` passes.
   (2) A prompt file named `skills.md` took `/skills` back from the listing on the first prompt re-read after mount
   (REQ-CHAT-160, REQ-CHAT-162): the collision repaired above held for the skill registrar only —
-  [`a-prompt-file-named-skills-takes-the-skills-command.md`](../../defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md).
+  [`a-prompt-file-named-skills-takes-the-skills-command.md`](../../archive/defects/a-prompt-file-named-skills-takes-the-skills-command.md).
 - *Readings stated here rather than left in code.* Search matches the row's text (REQ-CHAT-074), and the text's
   punctuation between fields (`- `, the brackets round the scope, ` triggers: `) is not drawn, so a match falling
   only there selects the row and paints nothing in it. `/skills` is sent from `renderer/main.tsx`'s slash host

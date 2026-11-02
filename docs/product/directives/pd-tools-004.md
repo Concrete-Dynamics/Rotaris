@@ -46,7 +46,7 @@ declare no path the policy can read, so for them a path-scoped match could only 
 > handed to the gate's real-path resolver. The path scope of REQ-TOOLS-018 skips the join and hands the resolver the
 > raw argument, which the run host resolves against its process directory, dropping a character when none of the
 > path exists there; that is recorded as
-> [`path-scope-resolves-a-relative-path-against-the-process-directory.md`](../../defects/fixed/path-scope-resolves-a-relative-path-against-the-process-directory.md)
+> [`path-scope-resolves-a-relative-path-against-the-process-directory.md`](../../archive/defects/path-scope-resolves-a-relative-path-against-the-process-directory.md)
 > and not changed here. **Which tool:** the name alone does not say it. A persona's MCP surface prefixes a server's
 > tool only when its name is already taken, so a server's own `write_file` reaches a persona whose public set lacks
 > one as plain `write_file`, and the first build, keyed on the name, scoped its approval by path against the
@@ -55,7 +55,7 @@ declare no path the policy can read, so for them a path-scoped match could only 
 > public `write_file` and `haet_edit` are scoped by path, on the grant and on the later call alike, so a public
 > `haet_edit` grant does not reach a server's `haet` through the alias. The policy's other readers still take such a
 > tool for the public one by name; that is recorded as
-> [`an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`](../../defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md)
+> [`an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`](../../archive/defects/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md)
 > and not changed here. **Readings taken where the text leaves room**, each the most literal one found: a call with
 > an unresolvable path never matches and does not fall back to the exact match, so an approval whose own path did
 > not resolve covers nothing, not even the identical call; a path key whose value is neither a string nor a list of

@@ -242,7 +242,7 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
    * explicit choice (`session.chooseNextModel`), which clears the pair's exclusion if the session holds it out of quota, as
    * every other model selector's choice does. A refusal of either is reported. Until 2026-10-02 (fin10) the configuration
    * write was all the chip did and the exclusion stood
-   * (`docs/defects/fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`).
+   * (`docs/archive/defects/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`).
    */
   async function setNextModel(entryPersona: string, model: string): Promise<{ ok: true } | { ok: false; reason: string }> {
     const written = await send({ kind: 'config.setField', patch: { personas: { [entryPersona]: { model } } } });
@@ -261,8 +261,8 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
    * this window follows and never another's, and a refusal carries the engine's words. With no session followed there is
    * no failed run to retry, so nothing is started. Until 2026-10-02 the blank-draft branch searched this window's replica,
    * which holds the resident window only, and re-sent the text alone
-   * (`docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
-   * `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md`).
+   * (`docs/archive/defects/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
+   * `docs/archive/defects/the-retry-action-resubmits-a-prompt-without-its-images.md`).
    */
   async function retryRun(draft: string): Promise<{ ok: true; resubmitted: 'draft' | 'last-prompt' } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;

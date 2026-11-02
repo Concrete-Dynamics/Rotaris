@@ -10,7 +10,7 @@ most once and persists"; REQ-LIBRARY-093, whose `created_by` names "the publishi
 than by its persona, so two instances sharing a persona stay distinguishable in every artifact listing"; REQ-MONITOR-044,
 REQ-MONITOR-052 and REQ-MONITOR-069, whose received-artifact links read the consumers. Raised 2026-10-06 by finacc3's
 acceptance round 1 (finding F16), repairing
-[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../../../defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
+[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../../defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
 `ArtifactStore.markConsumed`'s comment (`packages/engine/src/artifacts/store.ts`) said this was "raised as an open question
 rather than settled here", and no entry was ever written. ~~Open, the owner's.~~ **Ruled 2026-10-07 under the owner's
 delegation.**)*
@@ -21,7 +21,7 @@ agent instance.
 **What the build proceeds under** (`markConsumed`, and the artifact port's `artifact_read` in
 `packages/engine/src/artifacts/port.ts`). The consumer recorded is the reading agent's canonical instance name, the name
 REQ-LIBRARY-093 gives `created_by`: a child's canonical name, and a root's `root_canonical_name` (since the repair of
-[`a-roots-publish-names-its-persona-as-its-author.md`](../../../defects/fixed/a-roots-publish-names-its-persona-as-its-author.md),
+[`a-roots-publish-names-its-persona-as-its-author.md`](../../defects/a-roots-publish-names-its-persona-as-its-author.md),
 2026-09-29). REQ-LIBRARY-093's reason, that two instances of one persona stay distinguishable, applies as much to who read an
 artifact, and the persona can be recovered from the instance where the reverse cannot. The agent surfaces' received links
 (REQ-MONITOR-044/052/069) match an agent's consumer entries by that name. Two instances of one persona that read one artifact
@@ -52,7 +52,7 @@ declare, `artifact_write` among them; REQ-TOOLS-004, which removes `artifact_wri
 handed the tool; REQ-TOOLS-007; REQ-ORCH-016, whose direct-work bundle names `artifact_read` and `artifact_list` and not
 `artifact_write`; REQ-ORCH-028's role vocabulary, which names the built-in roles and not their tools; REQ-LIBRARY-097 and
 REQ-LIBRARY-101. Raised 2026-10-06 by finacc3's acceptance round 1 (finding F16), repairing
-[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../../../defects/fixed/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
+[`records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md`](../../defects/records-and-code-comments-describe-ruled-questions-as-open-and-cite-questions-never-raised.md):
 `packages/contracts/src/roles.ts` said "that no built-in persona does is recorded as an open question", and no entry was ever
 written. ~~Open, the owner's.~~ **Ruled 2026-10-07 under the owner's delegation.**)*
 
@@ -66,7 +66,7 @@ workspace's personas publish only where its configuration declares `artifact_wri
 for its orchestrator). `artifact_read` and `artifact_list` join every persona's read group. Whether that configuration also
 needs `can_publish_artifacts: true`, as REQ-CONFIG-106 and REQ-TOOLS-004 say, is not this question: the build hands the tool
 over whatever the flag says, recorded as a defect (repaired with this question's ruling, below),
-[`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../../../defects/fixed/can-publish-artifacts-is-read-and-never-gates-artifact-write.md).
+[`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../../defects/can-publish-artifacts-is-read-and-never-gates-artifact-write.md).
 
 **What a ruling decides.** Whether any built-in role (the orchestrator, the planner, the architect, the codebase analyst, the
 librarian or another) declares `artifact_write` and carries `can_publish_artifacts: true` by default, or publishing stays a grant
@@ -85,7 +85,7 @@ recommended confirming as built, since three requirements treat publishing as a 
 built-in publisher, which makes the gate repair a pure subtraction. The ruling **followed both**, taking the concrete steps
 from each. **Built by bundle `fin28-artifacts` the same day:** `Persona.canPublishArtifacts` (false for every built-in role),
 carried by `personaResolverFor` and read by `createToolPort` in place of the store's presence, repairing
-[`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../../../defects/fixed/can-publish-artifacts-is-read-and-never-gates-artifact-write.md);
+[`can-publish-artifacts-is-read-and-never-gates-artifact-write.md`](../../defects/can-publish-artifacts-is-read-and-never-gates-artifact-write.md);
 a pinning test that no built-in role declares the tool or carries the flag (`children/personas.test.ts`); and the artifacts
 proof's orchestrator granted with both keys, with a launch (3b) that declares the tool without the flag and finds the
 removal in the session log at warning and no artifact stored, which passed.
@@ -102,7 +102,7 @@ progress display"; REQ-ORCH-059, "Open-todo reminder lines are appended"; REQ-OR
 `c2a9444`): on 3 of the 6 multi-step runs (edit, resume, frictions) the coordinator delegated more than once and wrote no plan
 of its own, the task-plan strip read "Planner plan" with one row, the prompt itself, and the inspector read "todo not used";
 on the requirements and terminal runs it planned unasked. Recorded as
-[`the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md`](../../../defects/fixed/the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md),
+[`the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md`](../../defects/the-coordinator-keeps-no-todo-list-of-its-own-on-multi-step-work.md),
 repaired by fin27. Ruled the same day.)*
 
 **Ruled 2026-10-07 under the owner's delegation ([R-072](../../../product/requests.md#r-072)):** the todo list REQ-ORCH-029
@@ -187,7 +187,7 @@ keys, the Tier B overlay and destination 1, none naming it; REQ-CONFIG-113 and R
 seconds, 1200 by default; REQ-MONITOR-169, the Overview caps caption. Raised 2026-10-07 from the final live runs' findings —
 both duress autopsies (`c2fdd6a`: three of seven children cut off at 1200 s, 66 % of the run behind the ceiling; `c2a9444`:
 61.5 %) — as the consortium's question T1, and recorded here as OQ-218, the number the round assigned it.
-[`no-surface-presents-the-per-agent-timeout.md`](../../../defects/fixed/no-surface-presents-the-per-agent-timeout.md) records the
+[`no-surface-presents-the-per-agent-timeout.md`](../../defects/no-surface-presents-the-per-agent-timeout.md) records the
 gap. ~~Open.~~ **Ruled 2026-10-07.**)*
 
 No surface shows the per-agent timeout: Settings › Runtime › Delegation limits draws the depth cap and the fan-out limit,
@@ -215,7 +215,7 @@ directive, since REQ-CONFIG-322 and the three enumerations list the editable set
 REQ-MONITOR-286 names controls a user moves and initialises them from policy values, and the 1200 s ceiling the duress runs met
 is kept only because a user can raise it. From B it kept the exact seconds on screen where the field cannot show them, a hint
 saying the limit bounds delegated agents, and the defect note on the unlisted analysis-timeout control
-([`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../../../defects/fixed/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md),
+([`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../../defects/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md),
 recorded, not repaired). The 240-minute ceiling is a chosen figure, twelve times the default; a file can still state a longer
 value.
 
@@ -261,7 +261,7 @@ they are: it narrows REQ-TOOLS-152 and REQ-TOOLS-154 and extends REQ-ORCH-028. T
 REQ-ORCH-029 as written and needs no directive, following OQ-213's precedent; if a later round reads "a delegation made before
 the list serves no item" as a narrowing of REQ-ORCH-029, it lands as `PD-ORCH-006` revision 3, the one narrowing slot
 REQ-ORCH-029 admits. The build lacked any way to hold or read the per-item constraint, recorded as
-[`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../../../defects/fixed/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md).
+[`no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md`](../../defects/no-delegation-names-the-todo-item-it-serves-so-one-item-can-hold-two-implementation-delegations.md).
 
 **The two recommendations weighed, and the ruling followed both.** *Advocate A (the user's lens)* recommended that the
 coordinator names the item at the call: an optional `todo_item` stored on the child's record; once the coordinating entry role

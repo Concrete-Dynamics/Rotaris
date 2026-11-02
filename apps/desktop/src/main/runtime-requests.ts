@@ -9,7 +9,7 @@
  * dictionaries from the Chromium CDN"; macOS uses the OS spellchecker and downloads nothing). It was first taken for
  * Chromium's component updater; `--disable-component-update` was measured and changed nothing, so no switch is
  * appended for it — the note keeps the falsified reason beside this one
- * (`docs/defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`).
+ * (`docs/archive/defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md`).
  *
  * No Chromium command-line switch turns the download off, and neither does anything that runs after the session
  * exists: `webPreferences.spellcheck: false` on every window, and `setSpellCheckerEnabled(false)` after `whenReady`

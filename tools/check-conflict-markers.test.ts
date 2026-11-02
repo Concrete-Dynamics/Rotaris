@@ -154,7 +154,7 @@ describe('checkRepository — over the working copy and the index of a git check
   // Git for Windows refuses a colon in an index path by every route (`update-index --cacheinfo`, `mktree` then
   // `read-tree`, `core.protectNTFS=false` or not: `Invalid path '1:x.md'`, measured 2026-10-15 on Git 2.55.0.windows.3),
   // so no Windows repository can hold the entry this case reads; it is skipped there, not passed
-  // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+  // (`docs/archive/defects/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
   it.skipIf(process.platform === 'win32')('reads a staged path whose name begins with a digit and a colon as that path, not as an index stage', () => {
     // `:1:x.md` is stage 1 of `x.md`; the entry is made without a working file so the case holds where a colon cannot
     // stand in a file name.

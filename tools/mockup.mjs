@@ -19,7 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 /* Platform paths, as tools/check-directive-register.mjs builds its root. Until 2026-10-02 both were
  * `new URL(…).pathname.replace(/^\//, '')`: the strip made a Windows path usable (`/D:/…` → `D:/…`) and made a
  * Linux or macOS one relative (`/home/…` → `home/…`), so started from the repository every request answered
- * `not found: /` (docs/defects/fixed/pnpm-mockup-serves-not-found-on-linux-unless-started-from-the-root.md). */
+ * `not found: /` (docs/archive/defects/pnpm-mockup-serves-not-found-on-linux-unless-started-from-the-root.md). */
 export const design = fileURLToPath(new URL('../docs/design/', import.meta.url));
 export const icons = fileURLToPath(new URL('../node_modules/@phosphor-icons/web/src/', import.meta.url));
 const port = Number(process.env.MOCKUP_PORT ?? 8791);

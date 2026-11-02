@@ -294,7 +294,7 @@ false }`), and launch 1 fails if the server is discovered anyway. Launches 1 and
 edit on `@~` deadlines. Their captures wait for the plan and for the edit instead of for a clock. The surface
 assertion reads the inspection's matches. Any launch refused as held by another run fails naming the lock note.
 Recorded and repaired in
-[`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](../../defects/fixed/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md).
+[`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](../../archive/defects/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md).
 **Found beside it:** with the entry disabled, the workspace's `code-intelligence-setup` still runs, because
 applicability is REQ-MCP-037's availability and that rule does not read `enabled` (OQ-109, built as the letter).
 **What it could not show:** launches 3 to 6 keep their fixed offsets (the revise at 6,000 and 6,600 ms, the approve
@@ -307,7 +307,7 @@ were not moved. Windows and macOS were not run (IC-3 — *corrected 2026-10-14: 
 `orchestration.ts`'s `personaOf`, whose path for a run with no configured persona catalogue looked the name up in
 `BUILT_IN_PERSONAS` alone and never in `ROLE_ALIASES`, while `ChildLedger.spawn` resolves the same name through
 `resolveRole`, which honours the aliases (REQ-ORCH-034). Recorded as
-[`delegate-reads-no-alias-on-the-built-in-table.md`](../../defects/fixed/delegate-reads-no-alias-on-the-built-in-table.md),
+[`delegate-reads-no-alias-on-the-built-in-table.md`](../../archive/defects/delegate-reads-no-alias-on-the-built-in-table.md),
 acceptance finding A27.*
 
 **What the execution found.** A case in `children/children.test.ts` builds `IterationChildren` with no `personas` and a held

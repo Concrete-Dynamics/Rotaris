@@ -8,9 +8,9 @@ the 800 ms slot, landed at the same instant as the capture seam's fixed-time pre
 moved the list two rows, so Settings opened on Instructions and Start was never on screen. The setup launches now wait
 for what they press. Start is pressed once it is drawn enabled, Cancel once it is drawn, and `MCP Servers` is pressed
 again at 3 s and 6 s if it is not selected
-(`../../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`). The shared seam's press stays as
+(`../../../archive/defects/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`). The shared seam's press stays as
 it is, and its note stays open, since nine other proofs use it
-(`../../../defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). *(Reported back 2026-09-30 under R-067: the seam's press is now verified — read
+(`../../../archive/defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). *(Reported back 2026-09-30 under R-067: the seam's press is now verified — read
 again and pressed again until the category carries `is-selected`, or logged as never selected at 5 s — and the note is
 repaired.)* With the correction
 forced (the seam pointed at Instructions), section 5 passed. The whole proof then passed three runs in a row (522 s,
@@ -26,7 +26,7 @@ had already succeeded (about 1.8 s), and there was nothing left to cancel. The p
 setup launches now leave the shared seam alone. They open Settings with the `Ctrl+7` chord, and every press, the
 category's included, waits until the notice has been drawn (`body:has([data-testid="notice"])`), so no point is read
 before the launch's one layout shift. No assertion changed
-(`../../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`, reopened and repaired again; the
+(`../../../archive/defects/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`, reopened and repaired again; the
 seam's note stays open). **Measured** as root under Xvfb, Node 24, `--skip-build`: four `--steps=5` runs in a row
 passed (238 to 242 s). All 20 setup launches pressed Start 31 to 123 ms after the notice, and all four `setup-cancel`
 launches pressed Cancel while `create` ran and read `Cancelled`. Then three whole runs in a row passed (529 s, 528 s, 524 s), with another agent's proofs on the host for parts of
@@ -41,7 +41,7 @@ without a process group, so a process the step had started outlived its cancella
 reached the setup at all: the host exited with the step running, and the step and what it had started were orphaned.
 REQ-WORKSPACE-092 says nothing the step launched, "neither the command the step itself started nor anything descended
 from it", may still run 5 s after a cancellation or after the application closes
-(`../../../defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+(`../../../archive/defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
 
 Each step now leads a process group of its own (`processGroup`), and the ask and the force-kill go to the group. The
 grace ends when no member of the group still runs; a zombie that nobody reaps does not count, because a container's pid 1
@@ -73,7 +73,7 @@ later on the build before as well. ~~The runtime ends itself when its pipes clos
 showed the defect.~~ With the repair the quit took 473 ms and nothing was left.
 
 *Corrected 2026-10-15 (fin47, acceptance finding A5,
-[`settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`](../../../defects/fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md)):*
+[`settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`](../../../archive/defects/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md)):*
 the struck sentence is falsified for an index that pyright serves. Two `settings-proof` launches at `3c03287` ended
 through the capture seam's immediate exit, which kills the run host without its `shutdown`, while the runtime indexed
 `apps/desktop`. The serena `python3` process and `uv` / `pyright-langserver` were still running more than 6 s after the

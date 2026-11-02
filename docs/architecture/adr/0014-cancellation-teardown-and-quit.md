@@ -208,7 +208,7 @@ call already ignoring the abort ignored twice. The first execution above could n
 graceful stop is the abort of the stream"). For a child execution PD-ORCH-005's rest had since bounded the wait with the
 same 30 s and detached what outlived it, but the run still awaited its root's turn to its end, so a root call whose
 executor ignored its abort held the run, and the session's lock, until the process ended
-(`../../defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`).
+(`../../archive/defects/a-root-call-that-ignores-the-stop-holds-the-run-open.md`).
 
 **Built:** `Run.stopGraceSpent` settles `STOP_GRACE` after the first stop request, forced at its first activation or
 not, and `Run.turn` races the root's turn against it. Past it the root is detached as a child execution is: its turn's
@@ -230,7 +230,7 @@ first request) was reverted in turn and turned exactly its case red. Three more,
 at 29 s ends the stop at 30 s; under the explicit cancel a child step beside a root given up on writes nothing when it
 returns; and such a root still drains a background child. **Not executed:** a live provider or tool that
 ignores its abort; the straggling call's own tool gate, which is a separate path
-(`../../defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md`, repaired the same day: teardown closes
+(`../../archive/defects/a-detached-call-still-writes-through-its-tool-gate.md`, repaired the same day: teardown closes
 every tool port first, and a detached model step writes nothing). **Nothing in the decision changes;** its hard
 cancel now reaches the root.
 
@@ -241,7 +241,7 @@ REQ-SESSION-056, REQ-STARTUP-161; `PD-MONITOR-002`.* Rule 2 holds process exit "
 complete or the shared deadline expires" — that is, until the run host **answers**, not until it is gone. The two
 differed by up to 1.8 s on Linux, and in that interval the run host's pid still answers, so every session it held was
 refused to the next launch as "held by another run in this application" although no run held it
-(`../../defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`).
+(`../../archive/defects/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`).
 The immediate exits (the capture seam, the driver's `quit`) asked the run host nothing at all and left it to
 Electron's teardown: in three launches of nine the run host outlived main by 1.57–1.81 s.
 

@@ -54,7 +54,7 @@ export function findShell(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
         const f = join(d, exe);
         // `presentExecutable`, not `existsSync(f) && statSync(f).isFile()`: an App Execution Alias (an MSIX pwsh) answers
         // neither, and was passed over for Windows PowerShell 5.1 until 2026-10-15
-        // (docs/defects/fixed/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md).
+        // (docs/archive/defects/the-terminal-never-finds-a-pwsh-installed-as-an-app-execution-alias.md).
         if (presentExecutable(f)) return { kind: 'powershell', file: f };
       }
     }
@@ -497,7 +497,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
         // as REQ-TOOLS-099 does and, beside it, what PD-TOOLS-001's restore re-applied. Until 2026-10-20 it read "Terminal
         // execution failed before completion: the command was killed from the terminal window" and nothing more, while
         // nothing had been restored either
-        // (docs/defects/fixed/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md).
+        // (docs/archive/defects/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md).
         detail = `Terminal execution failed before completion: ${r.error}${r.killed === 'during' ? ', so it has no exit status of its own' : ''}; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${restoreNote}`;
       } else if (r.error) {
         detail = `Terminal execution failed before completion: ${r.error}`;
@@ -616,7 +616,7 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
       // only it reads `was killed.`: one that had already ended — completed, failed, timed out, killed, or never started
       // (OQ-143) — is left as it was, and the detail says so with the status and exit code its diagnostic block reports
       // (REQ-TOOLS-109), rather than claiming an end the status denies
-      // (docs/defects/fixed/a-kill-of-a-background-session-that-has-already-ended-says-it-was-killed.md).
+      // (docs/archive/defects/a-kill-of-a-background-session-that-has-already-ended-says-it-was-killed.md).
       if (s.status !== 'running') return finish(`Session ${s.id} had already ended; nothing was killed. It is ${s.status}${s.exitCode !== null ? ` (exit ${s.exitCode})` : ''}.`, s.readAll());
       return s.end('killed').then(() => finish(`Session ${s.id} was killed.`, s.readAll()));
     }

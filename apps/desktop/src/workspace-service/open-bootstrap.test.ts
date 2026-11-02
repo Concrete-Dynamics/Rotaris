@@ -7,7 +7,7 @@ import { nodeClocks } from '@rotaris/platform';
 import { bootstrapAtOpen } from './open-bootstrap.js';
 
 /**
- * `docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md` (REQ-CONFIG-025, REQ-CONFIG-028,
+ * `docs/archive/defects/a-first-run-workspace-never-gets-the-starter-agents-yaml.md` (REQ-CONFIG-025, REQ-CONFIG-028,
  * REQ-WORKSPACE-038). At the open, ADR-0064's initialization recorded its first outcome through the scoped per-field
  * writer into a workspace file that did not exist yet, and the only bootstrap, the one a sign-in asks for, then found
  * that file non-blank and wrote nothing.
@@ -115,7 +115,7 @@ describe('the starter agents.yaml at the open (REQ-CONFIG-025, REQ-CONFIG-028)',
     expect(bootstrapAtOpen(s.configDir, s.workspaceRoot, (m, level) => lines.push([m, level]))).toBe('refused');
     expect(lines).toHaveLength(1);
     // The refusal comes from the primitive itself, naming the file and the fault, with no catch around the bootstrap
-    // (`docs/defects/fixed/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
+    // (`docs/archive/defects/replace-document-sync-throws-when-the-parent-cannot-be-created.md`).
     expect(lines[0]?.[0]).toMatch(/^configuration bootstrap at the open of .* declined: .*agents\.yaml: .*EEXIST/);
     expect(lines[0]?.[1]).toBe('warn');
     expect(readFileSync(join(s.workspaceRoot, '.rotaris'), 'utf8')).toBe('not a directory\n');

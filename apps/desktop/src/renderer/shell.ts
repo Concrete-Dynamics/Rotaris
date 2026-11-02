@@ -161,7 +161,7 @@ const windowRole = new URLSearchParams(window.location.search).get('role') ?? 'm
 bridge.onNotice((p) => notices.getState().apply(p));
 // ADR-0049 / PD-WORKSPACE-005: the notice current before this window existed, which channel 4 will not repeat — asked once,
 // after the listener above, and applied only if no publication arrived first (`seed`). A window added after a publication
-// used to show none (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md). Only a main
+// used to show none (docs/archive/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md). Only a main
 // window draws the notice, so only a main window asks: a persona, terminal or dialog window boots without the request
 // (fin44's review of `fin44-notice-reach`; until 2026-10-14 every window importing this module sent it).
 if (windowRole === 'main') void bridge.command({ kind: 'notice.current' }).then((outcome) => { if (outcome.ok) notices.getState().seed(outcome.value); }, () => undefined);
@@ -273,7 +273,7 @@ export type { DisplayPrefKey } from './display-prefs.js';
  * Channel 14 — REQ-CHAT-167 / REQ-CONFIG-403: main announces every display preference it stores to every window, and this
  * window folds it in, so a persona window already open follows a change made in the main window (and the reverse) rather
  * than keeping the values it booted with. Subscribed at module load, before the role branch, so every window role that
- * draws transcript rows has it (`docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
+ * draws transcript rows has it (`docs/archive/defects/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
  */
 bridge.onDisplayChanged((payload) => { const patch = displayPreferencePatch(payload); if (patch !== null) display.fold(patch); });
 export const writeDisplayPref = display.write;

@@ -19,7 +19,7 @@
 // that state disjoint cases leave the requirement governing outside both, and two extensions displace
 // nothing. This held one directive per verb until 2026-10-13, and the builds that met it wrote a
 // narrowing under Extends, or left a requirement out, to get past it
-// (docs/defects/fixed/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md).
+// (docs/archive/defects/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md).
 //
 // Shared by the build (ensure.mjs, when the artifact is absent) and by vitest's globalSetup, so the two cannot drift.
 
@@ -162,7 +162,7 @@ for (const registerFile of registerFiles) {
     // An entry's text ends at any heading of level 1 to 3 that opens no directive: a section heading and the introduction
     // under it belong to no entry, so a mention there cannot satisfy the pair rule below (fin36; until then the last entry
     // before a section took the section's introduction,
-    // docs/defects/fixed/a-directives-entry-text-runs-past-a-section-heading-into-the-next-sections-introduction.md).
+    // docs/archive/defects/a-directives-entry-text-runs-past-a-section-heading-into-the-next-sections-introduction.md).
     if (/^#{1,3}\s/.test(line)) entryOpen = false;
     if (current && entryOpen) directives.get(current)?.text.push(line);
     const d = DISPOSITION.exec(line);

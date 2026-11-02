@@ -351,7 +351,7 @@ describe("PD-LIBRARY-002 revision 2 (e): a pending retrospective, per workspace"
   });
 
   // A window opening a workspace is sent this, so it does not wait for the next publication to learn a retrospective of its
-  // workspace is pending (docs/defects/fixed/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
+  // workspace is pending (docs/archive/defects/a-window-opened-while-a-retrospective-is-pending-shows-it-as-not-pending-until-the-next-publication.md).
   it("its current activity is the publication as it stands, with no job named", async () => {
     const { coordinator, waiting } = harness();
     expect(coordinator.current()).toMatchObject({ workspace_id: "", active: false, queued: 0, retrospective_pending: false });

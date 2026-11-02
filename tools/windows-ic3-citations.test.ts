@@ -2,7 +2,7 @@
  * IC-3 binds "any release artifact for Linux or macOS, and the store binding's acceptance on any platform"
  * (`docs/architecture/implementation-conditions.md`). A check owed to the next Windows package waits on a Windows x64 host
  * and on the release pipeline R-071 deferred, not on IC-3, yet the record tagged such checks "(IC-3)" as their reason
- * (`docs/defects/fixed/windows-packaging-checks-are-tagged-ic-3-which-binds-linux-and-macos.md`). The tags keep their words
+ * (`docs/archive/defects/windows-packaging-checks-are-tagged-ic-3-which-binds-linux-and-macos.md`). The tags keep their words
  * and carry the correction beside them; this reads the record for an IC-3 written right after a Windows package, a packaged
  * branch or `win-unpacked` with no such correction, unless the sentence is about a Linux or macOS artifact, which IC-3
  * does bind. History that is not the record's current word (the views' reconciliation log, the fixed defect notes) is
@@ -27,7 +27,7 @@ const files = [
   ...markdownUnder(join(root, 'docs', 'product', 'directives')),
   // The proof registry's records: `updater-proof`'s record tagged the check owed to the next Windows package "(IC-3)"
   // after both repairs, which read only the two above
-  // (docs/defects/fixed/agents-md-still-tags-the-updaters-windows-package-check-ic-3.md); the row moved from AGENTS.md's
+  // (docs/archive/defects/agents-md-still-tags-the-updaters-windows-package-check-ic-3.md); the row moved from AGENTS.md's
   // proof table into `docs/proofs/` with the registry (2026-10-18).
   ...markdownUnder(join(root, 'docs', 'proofs')),
 ];
@@ -56,7 +56,7 @@ function uncorrectedWindowsIc3(text: string, file: string): string[] {
 /**
  * The same shorthand on Windows checks that are not packaging checks ("anything on Windows (IC-3)", "Windows and macOS were
  * not run (IC-3)"): what such a check waits on is a Windows host, which this Linux container is not, and only a macOS half
- * beside it is IC-3's (`docs/defects/fixed/windows-checks-outside-packaging-still-name-ic-3-as-their-reason.md`). An IC-3
+ * beside it is IC-3's (`docs/archive/defects/windows-checks-outside-packaging-still-name-ic-3-as-their-reason.md`). An IC-3
  * whose own clause (the text after the last `.`, `;` or `)` before it) names Windows must carry "a Windows host" right after
  * it. Passed: a tag in a clause that names only macOS or Linux, the correction's own words, "Windows only (IC-3)" (the
  * package step runs on Windows because IC-3 bars the others) and "the one release target IC-3 leaves".

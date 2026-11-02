@@ -4,7 +4,7 @@ import { hostLoad, judgeWithRerun, loadRange, loadWords, overloadedLaunches, rer
 
 /**
  * REQ-CHAT-055's append comparison under host load
- * (`docs/defects/fixed/transcript-proofs-append-comparison-goes-red-under-host-load.md`): each launch carries the
+ * (`docs/archive/defects/transcript-proofs-append-comparison-goes-red-under-host-load.md`): each launch carries the
  * host's load at its start and end, and a red verdict with a launch above the CPU count is judged on one re-run.
  */
 const at = (one: number, cpus = 4) => ({ loadAverage: [one, one, one], cpus });

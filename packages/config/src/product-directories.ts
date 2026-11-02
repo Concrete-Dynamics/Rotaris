@@ -9,7 +9,7 @@ import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from './mcp/code-intelligence.js';
  * Why: the final duress run at `a68f121` (finding D4) found the file tools clean — both directories hidden (REQ-TOOLS-140,
  * PD-TOOLS-012) — and the terminal carrying them into the user's verification report, the answer and a project memory, while a
  * docs-writer, which holds no terminal, wrote that they were absent
- * (docs/defects/fixed/the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md).
+ * (docs/archive/defects/the-product-directories-reach-the-users-report-answer-and-memory-through-the-terminal.md).
  *
  * The two names come from their single sources — the workspace scope directory and the first segment of REQ-MCP-116's marker
  * path — and are never written here as literals. The statement carries the directive's four points: what the directories hold,

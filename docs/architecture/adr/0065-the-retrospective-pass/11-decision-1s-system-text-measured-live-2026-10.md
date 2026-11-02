@@ -15,4 +15,4 @@ unchanged. Pinned by `analyst.test.ts`'s four "the analyst is told the proposal'
 also hold the named keys equal to the strict schemas'. **Measured live** on the repaired build (`--only=ask`, 2026-10-14 from
 23:22 UTC): the retrospective's one request carried the shape and its answer, a `verifier_gate_update` with a valid block, was
 stored on the first attempt. One run of a nondeterministic model, so it shows the instruction followed once, not never broken
-([`../../../defects/fixed/the-improvement-analyst-is-never-told-the-verifier-sections-shape.md`](../../../defects/fixed/the-improvement-analyst-is-never-told-the-verifier-sections-shape.md)).
+([`../../../archive/defects/the-improvement-analyst-is-never-told-the-verifier-sections-shape.md`](../../../archive/defects/the-improvement-analyst-is-never-told-the-verifier-sections-shape.md)).

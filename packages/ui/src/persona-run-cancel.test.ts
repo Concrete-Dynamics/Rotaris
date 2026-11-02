@@ -71,7 +71,7 @@ describe('agentStateLabel: only the run\'s own live instance takes the run\'s `c
 });
 
 /**
- * The inspector's half (docs/defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md):
+ * The inspector's half (docs/archive/defects/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md):
  * its meta line read `presentationState` alone, so beside the run header's `Cancelling…` it read `running · …`.
  */
 const inspector = (shown: SessionRecord, selected: string) => {

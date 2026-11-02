@@ -8,7 +8,7 @@ import type * as Fs from 'node:fs';
  * ADR-0004: exclusive create answers a `Result` on every failure, including a write that fails after the create (a full
  * disk), and removes the partial file it minted best-effort (REQ-TRACE-061). A full disk cannot be produced on demand, so
  * `writeSync` is made to refuse with ENOSPC for the descriptors this test arms
- * (`docs/defects/fixed/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
+ * (`docs/archive/defects/the-document-primitive-still-throws-on-a-file-parent-without-parent-creation-and-in-exclusive-create.md`).
  */
 const refuse = { armed: false };
 vi.mock('node:fs', async (importOriginal) => {

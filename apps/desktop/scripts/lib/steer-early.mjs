@@ -5,7 +5,7 @@
  * attach's snapshot and the run's events draw "Steer the run" before that reply arrives. Until 2026-10-01 the composer
  * took the focus back when the reply landed, from under a dialog opened in between: the steer's text went into the
  * composer behind the modal, and the dialog's Steer refused an empty text
- * (`docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`).
+ * (`docs/archive/defects/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`).
  *
  * Left to itself the window is the app's and a few milliseconds wide: measured on 2026-10-01 at a load average of about
  * 12, a press as soon as the control was drawn landed after the send had settled in 3 of 3 runs, a press that waited

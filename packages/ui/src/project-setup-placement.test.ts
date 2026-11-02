@@ -7,7 +7,7 @@ import { AppShell } from './AppShell.js';
 /**
  * REQ-WORKSPACE-106 / ADR-0048 — the project setup dialog is a non-modal, window-level dialog and "the rest of the app stays
  * navigable". Fixed at the window's top corner it lay over the title bar's Sessions, Minimize, Maximize and Close window and
- * the notice banner's answers (`docs/defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`,
+ * the notice banner's answers (`docs/archive/defects/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`,
  * measured in the built app). It now stands in the rail-and-view region, AppShell's `windowDialog` slot, which begins below
  * the title bar and the notice slot at any notice height.
  */

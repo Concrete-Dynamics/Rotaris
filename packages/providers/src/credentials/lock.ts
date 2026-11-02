@@ -36,7 +36,7 @@ export const LOCK_BUSY = 'The credential store is being updated; try the action 
  * a folder standing at its own path, a folder the account may not write into, a full disk) is neither a store being
  * updated nor anything a retry "in a moment" cures, so it is reported at once as what it is, naming the lock file and
  * the cause. Until 2026-10-06 every such refusal answered `LOCK_BUSY` at once, without the bound
- * (docs/defects/fixed/the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md).
+ * (docs/archive/defects/the-credential-lock-reports-a-busy-store-when-the-lock-file-cannot-be-created.md).
  */
 export const lockUnavailable = (lockPath: string, cause: string): string =>
   `Nothing was changed: the lock file ${lockPath} could not be created. ${cause.replace(/\.?$/, '.')}`;
@@ -59,7 +59,7 @@ const RECLAIMED: Record<ReclaimedHolder, string> = {
  * open on Windows (`EPERM`, `EBUSY`), refuses the removal. That is reported as a value naming the lock file and the cause,
  * by the same reading as the create's refusal, never thrown out of `withLock` past the `Result` its four writers answer
  * (ADR-0044). Until 2026-10-06 it threw
- * (docs/defects/fixed/the-credential-lock-throws-when-a-lock-file-cannot-be-removed.md).
+ * (docs/archive/defects/the-credential-lock-throws-when-a-lock-file-cannot-be-removed.md).
  *
  * The headline names whose lock it is, since only one of the three is a process that is no longer running. A lock of
  * this instance's own that the account cannot remove refuses every credential update until it is removed, which the

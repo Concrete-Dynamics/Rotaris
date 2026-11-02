@@ -126,7 +126,7 @@ export function parseGitignore(text: string): IgnoreRule[] {
     // an ignored glob (`gen/*` then `!gen/keep/`) keeps its files, as git keeps them. The descendant
     // suffix every rule carried until 2026-10-07 matched `gen/keep/f.ts` by `gen/*` itself, where the
     // directory-only `!gen/keep/` is never asked about a file, and so dropped what git keeps
-    // (docs/defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md).
+    // (docs/archive/defects/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md).
     const pattern = anchored ? `^${body}$` : `(?:^|/)${body}$`;
     rules.push({ re: new RegExp(pattern), negated, dirOnly });
   }

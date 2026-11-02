@@ -8,7 +8,7 @@ Part 1 of 12 of [the live-run record](../live-run.md), which indexes every part.
 
 An owner's yes is not always enough in an agent session. On the Linux agent host, the harness's automatic permission
 classifier has refused some `live-run.mjs --confirm` launches as a real-world transaction even where the owner authorised
-the run (R-066, R-067; [`docs/defects/fixed/no-live-run-has-executed-on-merged-main.md`](../../defects/fixed/no-live-run-has-executed-on-merged-main.md)).
+the run (R-066, R-067; [`docs/archive/defects/no-live-run-has-executed-on-merged-main.md`](../../archive/defects/no-live-run-has-executed-on-merged-main.md)).
 On 2026-09-30 it refused the launch over the default scenarios and the long `duress` launch, while it admitted targeted
 `--only=ask` and `--only=ask,edit` runs on repair branches the same day. Which launches it admits is not established, so
 an agent does not predict it. An agent that meets that refusal stops, and it does not reach the run by another route,

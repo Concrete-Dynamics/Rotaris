@@ -115,7 +115,7 @@ export function followUpReading(delegates, children, timeline) {
  * gate rejected (status `failed`, "Task '…': rejected — …") queues no child and promises nothing whole, so it is counted in
  * `rejected` and never paired with the child an admitted retry of the same `task_name` made: until 2026-10-14 it was, and the
  * 3c3f447 acceptance run failed "#10: the observation gave 0 whole, the entry 1" over a rejected #10 and an admitted #11 (finding
- * L3; fin46, `docs/defects/fixed/the-live-attach-reading-pairs-a-rejected-delegation-with-the-admitted-child-of-its-name.md`).
+ * L3; fin46, `docs/archive/defects/the-live-attach-reading-pairs-a-rejected-delegation-with-the-admitted-child-of-its-name.md`).
  * `kind`: `attached` (at least one attachment was given whole and the entry agrees), `unresolved` (every one named nothing: a
  * NOTE naming them), `rejected` (every attaching delegation was rejected: nothing was given, a NOTE), `none-given`,
  * `not-asked`; `faults` lists an observation and an entry that disagree. `asked` counts the admitted ones.

@@ -62,7 +62,7 @@ export const MODEL_ENTRY_KEYS = [
  * explicit `null` (REQ-CONFIG-057); unstated, the cap is the number the provider's catalogue entry declares (`declared`,
  * the catalogue's `sharedQuotaCaps`, handed in by whoever can read the catalogue), and a provider declaring none leaves
  * the model unbounded. Until fin22 the two numbers were a list of provider names here (`defaultMaxParallel`,
- * `docs/defects/fixed/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md`).
+ * `docs/archive/defects/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md`).
  */
 export function modelCapInForce(entry: ModelEntry | undefined, declared: Readonly<Record<string, number>>): number | null {
   if (entry === undefined) return null;

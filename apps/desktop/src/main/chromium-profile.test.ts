@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { dataLayout, resolveUserDirs } from '@rotaris/platform';
 import { placeChromiumProfile } from './chromium-profile.js';
 
-/** REQ-STARTUP-145: Chromium's profile below the machine-local data directory (`docs/defects/fixed/electrons-own-profile-is-written-outside-the-per-user-directories.md`). */
+/** REQ-STARTUP-145: Chromium's profile below the machine-local data directory (`docs/archive/defects/electrons-own-profile-is-written-outside-the-per-user-directories.md`). */
 describe('Chromium\'s own profile — REQ-STARTUP-145', () => {
   const placedFor = (platform: NodeJS.Platform, env: Record<string, string | undefined>, home: string) => {
     const set: [string, string][] = [];
@@ -20,7 +20,7 @@ describe('Chromium\'s own profile — REQ-STARTUP-145', () => {
     expect(set['sessionData']).toBe(profile);
     // `Crashpad` is joined by the host's path module, as in production, where the profile is always the host's: asked for a
     // Linux profile on a Windows host it reads `…/chromium\Crashpad`, which a `${profile}/` prefix never matched
-    // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+    // (`docs/archive/defects/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
     expect(set['crashDumps']).toBe(join(profile, 'Crashpad'));
     // Every directory is made before it is named: `setPath` throws for one that does not exist.
     expect(made).toEqual([profile, profile, join(profile, 'Crashpad')]);

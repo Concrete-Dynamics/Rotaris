@@ -11,13 +11,13 @@ REQ-TOOLS-187, "a second foreground call against a session whose previous foregr
 it"; REQ-TOOLS-096, the empty-command poll; REQ-TOOLS-097, the no-output window and the hard timeout; REQ-TOOLS-179, the
 exit status a call reports; OQ-147, what the paused call reports once a poll hands it over. Raised 2026-10-01 from the
 live-run autopsy at 71ad8e8 finding a71-8,
-[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../../../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md).
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md).
 ~~Open.~~ Ruled 2026-10-06. Raised as OQ-163 on its branch and renumbered OQ-164 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
 
 *(Measured on PowerShell 2026-10-15, Windows 11 ARM64, pwsh 7.6.6 and 5.1, three runs each: the two real-PTY OQ-164 cases ran green in every run of the suite, and a paused command that ends behind the next call reports its own status, 1, its output and its error text handed over as earlier output; after C-c the next calls report the paused command's end once, with no status of its own. A line written in the same tick as a C-c is discarded by PowerShell — [recorded](../../../defects/on-windows-a-command-written-in-the-same-tick-as-a-c-c-is-swallowed.md).)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current behaviour is the rule. A foreground call made while an earlier command is soft-paused is neither refused nor made to interrupt it: its line is submitted at once and waits behind the paused command, and its no-output window and timeout run from its own start, the wait included. Its observation reports the paused command beside its own outcome, as the reading above states: that it waited, when and how that command ended, and what it wrote since it was last observed, outside the cap on the call's own output; a second soft pause no longer disposes of the first. The tool description tells agents the third move: "a new command issued meanwhile waits behind it, and its result reports how the paused one ended". REQ-TOOLS-187 does not reach a soft-paused call, which has returned, so this ruling settles it; [`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../../../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md) closes with it.
+**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current behaviour is the rule. A foreground call made while an earlier command is soft-paused is neither refused nor made to interrupt it: its line is submitted at once and waits behind the paused command, and its no-output window and timeout run from its own start, the wait included. Its observation reports the paused command beside its own outcome, as the reading above states: that it waited, when and how that command ended, and what it wrote since it was last observed, outside the cap on the call's own output; a second soft pause no longer disposes of the first. The tool description tells agents the third move: "a new command issued meanwhile waits behind it, and its result reports how the paused one ended". REQ-TOOLS-187 does not reach a soft-paused call, which has returned, so this ruling settles it; [`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md) closes with it.
 
 REQ-TOOLS-098 offers the agent two moves after a soft pause: poll, or interrupt. A third, issuing a new command, is
 always open, and no requirement says what it does. REQ-TOOLS-187 makes a second foreground call wait for a previous
@@ -41,7 +41,7 @@ ends at its own end frame or at the new call's start marker, and its end is kept
 `poll`). The code also shows a case the run did not reach. A later soft pause, including the new call's own when the
 paused command stays silent for its whole no-output window, replaces the kept call, and that call's end is never
 reported.~~ *(Superseded 2026-10-01 by the reading below. That reading was built by the partial repair of
-[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../../../defects/fixed/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md),
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md),
 which fixes only the loss and the silence. The question stays open, and none of its four points is ruled.)*
 
 **What the build proceeds under** (since 2026-10-01). The new call is still neither refused nor made to interrupt the paused
@@ -156,7 +156,7 @@ leaving it to a poll. *(Unchanged by the 2026-10-01 build: the report it carries
 asked for it"; REQ-MONITOR-126; `PD-ORCH-005` clauses 3 and 15, which make every confirmed "Cancel the run?" the explicit,
 final cancel; OQ-129, the same question for one agent's cancel. Raised 2026-10-01 under [R-067](../../../product/requests.md#r-067)
 by the repair of
-[`the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md`](../../../defects/fixed/the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md),
+[`the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md`](../../defects/the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md),
 acceptance finding A35. Raised on its branch as OQ-158 and renumbered OQ-165 at the merge, origin/main's OQ-158 keeping its
 number. ~~Open.~~ Ruled 2026-10-06.)*
 
@@ -169,7 +169,7 @@ restores the record's own status. The requirements leave the engine's write open
 day (`Run.cancelAgent` and `saveRunning`'s `cancelSaved` in `packages/engine/src/run/run.ts`; `witness` in
 `packages/ui/src/cancel-overlay.ts`; cases in `run/turn.test.ts` and `cancel-overlay.test.ts`). Found beside it: a stop's own
 saved `cancelling` reads `running` again at the run's next save
-([`a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`](../../../defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md)),
+([`a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`](../../defects/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md)),
 recorded and not repaired; repaired 2026-10-06 by fin22 on this ruling's reading: the stop's `cancelling` is saved through
 the run (`Run.stopAccepted`) and held by its later saves until it rests, as the explicit cancel's is.
 *In the built app, 2026-10-13 (fin42, whats-next N61):* `composer-proof`'s launch 4b presses the composer's own "Stop run"
@@ -203,7 +203,7 @@ end. Only the stop (`op: 'cancel'`) writes `cancelling`, and a stop is not a can
   inspector's meta line does not read it yet~~ *Reached 2026-10-01: the inspector's meta line starts with the same word
   (`metaLine` reads `agentStateLabel` over the shown session), so with the run-level agent shown it reads `cancelling · …`
   beside the run header's `Cancelling…`; its dot keeps the live `running` motion
-  ([`the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md`](../../../defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md)).
+  ([`the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md`](../../defects/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md)).
   The reading is the build's and the question stays open.*
 - **Until when.** From the confirmation, over every active record of the run it was confirmed against, answered or not,
   until the session's first record at rest taken after the confirmation; the overlay covers no record taken after that one,
@@ -243,7 +243,7 @@ it costs": "the recycled pool's capacity arithmetic (`ROW_MIN_HEIGHT` in `packag
 the 30 px figure as a conservative slot-size floor while real rows may be shorter"; REQ-CHAT-057's 30 px minimum row height,
 which the directive narrows off the row's box; REQ-CHAT-165; ADR-0045's capacity rule. Raised 2026-10-01 under
 [R-067](../../../product/requests.md#r-067) by the repair of
-[`the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`](../../../defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md),
+[`the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`](../../defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md),
 acceptance finding A38. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** [`PD-CHAT-003`](../../../product/directives/pd-chat-003.md#pd-chat-003) gains a short dated revision 2 whose cost paragraph names the capacity unit, the shortest row a slot can hold (20 px, `SHORTEST_ROW_HEIGHT`), with the 30 px figure the floor of a row's estimate before its first measurement; the sentence it replaces is quoted beside it. The code is left as it is.

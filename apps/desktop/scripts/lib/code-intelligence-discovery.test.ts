@@ -135,7 +135,7 @@ describe('every reader of a failed discovery reads its one form since 2026-10-03
 });
 
 describe('code-intel-proof\'s record of the discovery (REQ-MCP-053)', () => {
-  // docs/defects/fixed/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md: the proof's own
+  // docs/archive/defects/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md: the proof's own
   // patterns had no room for the line's ` (project …)`, so both values read NaN and results.json recorded null.
   it('reads the count and the time from the line with its project, and from an older line without one', () => {
     const log = [`${info}mcp: discovery of 'other' listed 3 tool(s) in 5 ms`, `${info}mcp: discovery of 'code_intelligence' (project ${ws}) listed 22 tool(s) in 2869 ms`, `${info}mcp: discovery of 'code_intelligence' (project ${ws}) listed 22 tool(s) in 12 ms`].join('\n');

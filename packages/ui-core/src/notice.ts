@@ -18,7 +18,7 @@ export interface NoticeState {
    * no publication will repeat (ADR-0049, PD-WORKSPACE-005 "shown in every open main window"). Applied only while no channel-4
    * publication has reached the store — every change after the answer is published on the channel, so a publication that
    * arrived first is never older than what it would overwrite. Until 2026-10-14 no window was handed the current notice at
-   * boot (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
+   * boot (docs/archive/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
    */
   seed(p: unknown): boolean;
 }

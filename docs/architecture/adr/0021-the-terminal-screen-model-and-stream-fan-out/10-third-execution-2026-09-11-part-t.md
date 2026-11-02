@@ -141,7 +141,7 @@ falsified for every package built since fin43 to fin46, and is kept here beside 
 verification seams out of a packaged build: `_EVAL_AT` since fin43, the dialect switch and `ROTARIS_SCRIPT` since fin45, and
 since fin46 the scripted model client itself (OQ-312). The section therefore drove a model and a reading a package no longer
 had, and measured nothing on any package `pnpm package` could produce
-([`terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out`](../../../defects/fixed/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md)).
+([`terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out`](../../../archive/defects/terminal-proofs-packaged-launch-drives-seams-a-packaged-build-compiles-out.md)).
 Each launch now names an OpenAI-compatible model at a loopback stub the section starts for it (`scripts/lib/stub-model-endpoint.mjs`,
 the one rule 4 (b) runs against since OQ-312), which the shipped model client reaches and which answers with the one `git status`
 call. The launch is given the packaged probe's three variables and nothing else of the product's own. The surface is read

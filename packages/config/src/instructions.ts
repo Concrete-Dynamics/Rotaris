@@ -164,7 +164,7 @@ export const instructionSourceComment = (path: string): string => `<!-- source: 
  * comment, so a file runs to the next source comment or to this line. REQ-WORKSPACE-043 marks a start and says nothing
  * of an end; without one the last file ran straight into whatever the prompt carried next (the skill catalog, or the
  * MCP section of REQ-MCP-101 with its `## MCP servers` heading), and agents read that heading as the file's own
- * (`docs/defects/fixed/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
+ * (`docs/archive/defects/nothing-marks-where-the-last-instruction-file-ends-so-agents-read-the-mcp-section-as-part-of-it.md`).
  */
 export const INSTRUCTION_FILES_END_COMMENT = '<!-- end of instruction files: nothing below this line is part of them -->' as const;
 

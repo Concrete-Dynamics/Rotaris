@@ -21,7 +21,7 @@
  * run in (REQ-SHELL-010 (c), REQ-WORKSPACE-007). Each runs in a directory of its own, emptied before it and in no
  * repository (`lib/working-directory.mjs`), and is asserted to have opened that directory. Until plan `loc1` they ran in
  * `apps/desktop`, opened the checkout and set up code intelligence in the product's source
- * (`docs/defects/fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`); the
+ * (`docs/archive/defects/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`); the
  * last check holds that the checkout's `apps/desktop` gained no `.rotaris` or `.serena` while the proof ran.
  *
  * A trap this file's own first execution fell into, recorded so the next harness does not: the driver's two
@@ -177,7 +177,7 @@ const INIT_FAILS = initProject('init-fails', { fails: true });
 /*
  * The marker's project holds a source file, so its other steps run. Its documentation-only twin carries the marker and
  * no source file: every step ends without waiting, inside the run host's start, and until 2026-10-02 the coordinator
- * never saw that setup finish (`docs/defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`).
+ * never saw that setup finish (`docs/archive/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`).
  */
 const INIT_MARKER = initProject('init-marker', { marker: true, code: true });
 const INIT_DOCS_MARKER = initProject('init-docs-marker', { marker: true });
@@ -235,7 +235,7 @@ let handOverSequence = 0;
  * Launch the same profile again and wait for the secondary process to hand its request to the owner. The launch is
  * `spawnBounded`'s since 2026-09-30: its own 30 s bound sent SIGTERM alone and rejected at once, so a secondary that
  * did not answer SIGTERM outlived the proof, and the failure carried none of its log
- * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`).
+ * (`docs/archive/defects/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`).
  */
 async function handOver(started, workspace, extra = {}) {
   const sequence = ++handOverSequence;
@@ -731,14 +731,14 @@ try {
      * This proof's data directory is far past a unix socket's 108 bytes, which is why the harness hands every launch a
      * short `XDG_RUNTIME_DIR`. Here it is taken away (unset) and then emptied, so the claim has to find a directory of its
      * own. Until fin30 the unset launch's listen failed with `EINVAL`, the rejection went unhandled in main and no window
-     * was ever built (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`); and the empty one put
+     * was ever built (`docs/archive/defects/a-deep-data-directory-leaves-the-launch-windowless.md`); and the empty one put
      * the socket in the working directory, this proof's `apps/desktop`, where it stayed after the launch ended
-     * (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
+     * (`docs/archive/defects/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
      *
      * Since OQ-248 (R-072, 2026-10-13) the fallback below the temporary directory is a private directory each claim attempt
      * makes (`rotaris-XXXXXX`) and removes with its socket: the handed-over launch must leave none of its own, and the ended
-     * instance must take its own with it (`docs/defects/fixed/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md`,
-     * `docs/defects/fixed/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md`).
+     * instance must take its own with it (`docs/archive/defects/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md`,
+     * `docs/archive/defects/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md`).
      */
     if (process.platform === 'win32') {
       skip('REQ-STARTUP-164: the hand-over socket from a profile too deep for one', 'Windows hands over through a named pipe, which has no directory and no length cap');
@@ -794,14 +794,14 @@ try {
     /*
      * Until fin30 `xdgBaseDirectory` passed a relative value through, so a launch with `XDG_DATA_HOME=rel-data` kept its
      * machine identifier, its instance record and its workspace stores under `<working directory>/rel-data/rotaris`, this
-     * proof's `apps/desktop` (`docs/defects/fixed/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
+     * proof's `apps/desktop` (`docs/archive/defects/a-relative-xdg-config-home-or-xdg-data-home-is-used-as-it-stands.md`).
      * Now both variables are ignored and the launch takes the defaults below the scratch HOME the harness gives it.
      *
      * What this asserts is the product's own per-user state (`resolveUserDirs`, `resolvePreferenceRoot`) and, since fin34,
      * Chromium's own profile too: until then main never placed it, so Chromium put it at `$XDG_CONFIG_HOME/<name>` taken as
      * it stands, `rel-config/Electron` here, and this scenario reported it without failing. Main now places it below the
      * data directory before `app` is ready (`placeChromiumProfile`), and the second check below fails a launch that writes
-     * it anywhere else (`docs/defects/fixed/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
+     * it anywhere else (`docs/archive/defects/electrons-own-profile-is-written-outside-the-per-user-directories.md`).
      */
     if (process.platform === 'win32' || process.platform === 'darwin') {
       skip('REQ-STARTUP-145: a relative XDG base directory is ignored', `${process.platform} reads no XDG base-directory variable`);
@@ -846,9 +846,9 @@ try {
     /*
      * Before the repair nothing in main cancelled the outgoing workspace's run: its setup went on for its whole 90 s, the
      * replacement's own setup was refused as already running, and a return to the first project resolved nothing
-     * (`docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`). And with the
+     * (`docs/archive/defects/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`). And with the
      * cancellation alone, the replacement's setup could still meet the outgoing one ending in the run host's one slot,
-     * whose statuses carry no workspace (`docs/defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`).
+     * whose statuses carry no workspace (`docs/archive/defects/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`).
      */
     const s = await launch('init-switch', { workspace: INIT_SLOW, folders: [INIT_QUICK, INIT_SLOW] });
     const startedFor = (name) => (logOf(s).match(new RegExp(`mcp setup: started for [^\\n]*${name}`, 'g')) ?? []).length;
@@ -908,7 +908,7 @@ try {
      * The coordinator's own setups are one at a time (8b), but the MCP settings category's setup (REQ-MCP-112) takes the
      * run host's one slot too, and a coordinator run starting beside it is refused `mcp.setup.running`. Before the repair
      * every refusal was reported as REQ-WORKSPACE-094's non-retryable "not a local launch", for an entry that is one
-     * (`docs/defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`). The order: the open's background
+     * (`docs/archive/defects/a-refused-setup-start-is-reported-as-not-a-local-launch.md`). The order: the open's background
      * run holds `create`; Cancel ends it; the category's setup starts and holds `create`; Initialize starts the task.
      * The Cancel is read for REQ-WORKSPACE-092's words on the step it stopped.
      */
@@ -930,7 +930,7 @@ try {
       await s.driver.command({ kind: 'initialization.cancel' });
       const cancelled = await waitUntil(() => outcomes().length === 1, 15_000);
       // The run host wrote its own sentence for the step it stopped; this domain reports REQ-WORKSPACE-092's
-      // (`docs/defects/fixed/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`).
+      // (`docs/archive/defects/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`).
       check('REQ-WORKSPACE-092 / REQ-WORKSPACE-093: a step stopped by Cancel is reported as "Setup was stopped before this step finished."',
         (outcomes()[0] ?? '').endsWith("→ failure — Code intelligence could not create this project's configuration: Setup was stopped before this step finished.")
           && /mcp setup: create failed — cancelled while running/.test(logOf(s)),
@@ -964,7 +964,7 @@ try {
      * The coordinator's setups are one at a time, and a follow ended only on the run host's `finished` status. Main never
      * forks the run host again, so with the run host gone that status could never come: the run under way never ended and
      * every later workspace's setup waited behind it for the life of the process
-     * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`). The run host is
+     * (`docs/archive/defects/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`). The run host is
      * found as the nearest Electron utility process above the stand-in's `project create`, and killed.
      */
     const s = await launch('init-host-lost', { workspace: INIT_LOST, folders: [INIT_QUEUED] });
@@ -1022,7 +1022,7 @@ try {
         `run host pid ${host} killed; the lost setup's run ${lostEnded ? `ended ${lostAfter} ms later: ${JSON.stringify(lost.slice(0, 260))}` : 'NEVER ended'}; the queued run ${queuedEnded ? `ended: ${JSON.stringify(next.slice(0, 260))}` : 'NEVER ended'}`);
       // The queued run's start goes unanswered: REQ-WORKSPACE-093's retryable failure in this task's own words, its summary
       // the banner's (REQ-WORKSPACE-103), never REQ-WORKSPACE-084's generic "ended without reporting an outcome"
-      // (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
+      // (`docs/archive/defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
       await s.driver.useWindow('init-queued');
       const queuedRead = await s.driver.command({ kind: 'initialization.read' });
       await s.driver.useWindow();
@@ -1044,7 +1044,7 @@ try {
     /*
      * The coordinator held one "active" root, the one opened last, and answered every window's `initialization.*` with it;
      * channel 12 reached every window; and main addressed the setup port by the focused window's workspace
-     * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`). Here the first
+     * (`docs/archive/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`). Here the first
      * window's setup holds `create`, the second window opens on another project, focused and opened last, and its setup
      * queues behind the first. The first window then reads its state and presses Cancel: before the repair the read
      * answered the second project's state, and the Cancel cancelled the second project's queued run while the first
@@ -1109,7 +1109,7 @@ try {
      * The run host's `shutdown` never reached the setup: the host exited with the step still running, and the step and
      * what it had launched outlived the application, while the close's cancellation, sent to a run host already going,
      * was logged as a warning
-     * (`docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+     * (`docs/archive/defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
      * Here the stand-in holds `create` and has started a process of its own, and both ignore the ask to terminate, so
      * only the shutdown's force-kill of the step's process group ends them. Measured with `dispatch`'s call to
      * `McpHost.endSetup` replaced by `Promise.resolve()`: the quit took 144 ms and both were still running 5 s after it.
@@ -1165,10 +1165,10 @@ try {
     /*
      * The coordinator passed the run host's own sentences through as the steps' details: "the project already exists (its
      * marker file is present); …", "skipped: the workspace contains no file the runtime indexes" and "exited with code N;
-     * its last output: …" (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
+     * its last output: …" (`docs/archive/defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
      * Four projects: one carrying the runtime's marker (and a source file, so its other steps run), its documentation-only
      * twin whose every step ends inside the run host's start (recorded as
-     * `docs/defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`), one
+     * `docs/archive/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`), one
      * holding documentation only whose stand-in creation reports itself, and one whose creation writes to both streams and exits 3.
      */
     const waitUntil = async (predicate, timeoutMs) => {

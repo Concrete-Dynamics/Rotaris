@@ -19,7 +19,7 @@
  *      packaged one — so the switch goes between the token and `--`, the product's own order
  *      (`src/run-host/code-intelligence-launch.ts`). Rule 2 admits the switch ahead of the token too, and
  *      `code-intel-proof` put it there: as root the application started instead of the server
- *      (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
+ *      (`docs/archive/defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
  *   4. **No launch of Electron goes through `spawnSync`.** At its `timeout` Node signals the child and closes its ends
  *      of the pipes at the same moment. Until the application's EPIPE loop was repaired (2026-09-29) that launch never
  *      exited, so an overrun hung its proof. Since then the application does quit, and `spawnSync` returns with
@@ -27,7 +27,7 @@
  *      2026-09-30), so an overrun passed a `launch`'s status check as a clean exit instead of failing it. Every launch
  *      is `spawnBounded`'s (`lib/bounded-launch.mjs`: SIGTERM with the
  *      pipes open, a grace, SIGKILL to the group, reported with the log tail) or the driver's
- *      (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). A launch with
+ *      (`docs/archive/defects/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). A launch with
  *      `ELECTRON_RUN_AS_NODE` starts no application and no quit path, and is exempt here as under rule 2. Every script
  *      that launches through `spawnBounded` names an overrun with `overrunMessage`, so the failure carries the log tail.
  *      The scan sees a launch only when its binary is named `electron` or `exe`, as every launch here is; a launch
@@ -162,7 +162,7 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     // `<local>/rotaris/data` is the Windows answer only: off Windows the data directory is `<XDG_DATA_HOME>/rotaris`.
     // `slice-proof` waited on, and checked the sign-out against, a credential file at that spelling the product never
     // wrote off Windows, and `code-intel-proof` kept a code-intelligence home the product never used there
-    // (`docs/defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
+    // (`docs/archive/defects/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
     // `dataDirFor`, `tokensDirFor`, `workspacesRootFor` and `machineIdFileFor` answer it by platform.
     const spelled = all.filter((f) => f !== HARNESS && /['"]rotaris['"]\s*,\s*['"]data['"]/.test(readFileSync(f, 'utf8')));
     expect(spelled.map((f) => relative(SCRIPTS, f))).toEqual([]);
@@ -215,7 +215,7 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
       // The live run: its timeout sends SIGKILL and reports `status` null with `signal` SIGKILL, never a clean exit,
       // and its fault scenarios act on the child in flight (`launchInFlight`). Since 2026-10-20 its wait settles on the
       // child's `exit` and a bounded drain of the pipes (`lib/settle-launch.mjs`), never on a `close` that a process of the
-      // killed main can hold off for hours (docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md).
+      // killed main can hold off for hours (docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md).
       'live-run.mjs': 'runElectron',
       // The portable on Windows (step 3′, ADR-0054 P4): its launcher stub EXITS once it has started the application, so a
       // bound on the spawned process ends at the stub. The launch is followed past it instead: the stub is killed and

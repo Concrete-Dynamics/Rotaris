@@ -47,7 +47,7 @@ describe('the path fence (REQ-TOOLS-129/130/132)', () => {
 
   it('realPathOf rebuilds the missing tail of a relative path whole — REQ-TOOLS-129 rests on it answering rightly for every input', () => {
     // Until 2026-09-28 the walk that reached `.` dropped the first character of the first segment: `specs/index.md`
-    // came back as `<cwd>/pecs/index.md` and `D:/ws` on POSIX as `<cwd>/:/ws` (docs/defects/fixed/realpathof-drops-a-character-from-a-relative-path.md).
+    // came back as `<cwd>/pecs/index.md` and `D:/ws` on POSIX as `<cwd>/:/ws` (docs/archive/defects/realpathof-drops-a-character-from-a-relative-path.md).
     const cwd = realpathSync.native(process.cwd());
     expect(realPathOf(join('zz-absent-9f3c', 'child', 'index.md'))).toBe(join(cwd, 'zz-absent-9f3c', 'child', 'index.md'));
     expect(realPathOf('zz-absent-9f3c')).toBe(join(cwd, 'zz-absent-9f3c'));
@@ -200,7 +200,7 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
     expect(big.split('\n').at(-1)).toBe('… +30 more lines, diff truncated');
   });
   it('REQ-CHAT-050: an edit to a file past 2000 lines draws the lines it changed, and its row agrees with its message', async () => {
-    // docs/defects/fixed/an-edit-diff-row-of-a-file-past-2000-lines-counts-every-line-as-added-and-removed.md: the row's
+    // docs/archive/defects/an-edit-diff-row-of-a-file-past-2000-lines-counts-every-line-as-added-and-removed.md: the row's
     // LCS spanned the whole file and, past its bound, drew `+2001 -2001` and the file's first 50 lines for a one-line edit.
     const w = writeFileTool(state, fence);
     const r = readFileTool(state, fence);
@@ -245,7 +245,7 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
       expect(kept(['x', ...after, 'y'], added)).toEqual(kept(['x', ...before, 'y'], removed));
     }
   });
-  // docs/defects/fixed/the-edit-diffs-shortest-edit-search-has-no-bound-on-its-total-work.md: the search past the table
+  // docs/archive/defects/the-edit-diffs-shortest-edit-search-has-no-bound-on-its-total-work.md: the search past the table
   // bounded its edit distance but not its line comparisons, O((n+m)·D) on the tool path. Many repeated lines with a few
   // hundred to two thousand changes keep every diagonal's run long: 13 million comparisons for the region below.
   const repeated = (n: number, p: number, seed: number): { before: string[]; after: string[] } => {
@@ -301,7 +301,7 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
 describe('line counts: a trailing newline ends the last line, it does not start another (REQ-TOOLS-134, REQ-TOOLS-135, REQ-CHAT-050)', () => {
   // Live run 2026-09-29 (L6): `probe-ok\n` was reported "2 line(s) created", its diff showed an empty line 2, and
   // read_file said total_lines: 2 — the model spent a terminal call on `wc` to check.
-  // docs/defects/fixed/a-trailing-newline-counts-as-a-line.md.
+  // docs/archive/defects/a-trailing-newline-counts-as-a-line.md.
   it('create, read, overwrite, undo and the diff count a newline-terminated file by its lines', async () => {
     const w = writeFileTool(state, fence);
     const c = await w.execute({ operation: 'create', path: 'probe.txt', content: 'probe-ok\n', replace_all: false }, ctx());
@@ -770,7 +770,7 @@ describe('PD-TOOLS-016: a window-match write_file edit keeps the file\'s line en
 
   it('haet_edit still refuses a window match; level 1 and replace_all are PD-TOOLS-017\'s', async () => {
     // Until PD-TOOLS-017 (OQ-254) this case pinned level 1 and replace_all writing new_string's LF lines into a CRLF file
-    // (docs/defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md); they keep the file's endings now.
+    // (docs/archive/defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md); they keep the file's endings now.
     await prepare('e.txt', 'one\r\ntwo\r\n');
     const exact = await edit('e.txt', 'one', 'ONE\nX');
     expect(read('e.txt')).toBe('ONE\r\nX\r\ntwo\r\n');
@@ -934,7 +934,7 @@ describe('PD-TOOLS-016 revision 3: a window edit whose carried result equals the
   // OQ-260 (R-072, 2026-10-13). A window edit at level 2, 3 or 4 that PD-TOOLS-016 carried onto the window's own bytes rewrote
   // the file unchanged beside a success ("+0 -0", and on a CRLF file "new_string was written with the file's CRLF line
   // endings."), with an undo entry that restored the same content
-  // (docs/defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
+  // (docs/archive/defects/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
   const prepare = async (rel: string, text: string) => {
     writeFileSync(join(root, rel), text);
     await readFileTool(state, fence).execute({ path: rel, offset: 1, limit: 2000, grep_context: 3 }, ctx());
@@ -966,7 +966,7 @@ describe('PD-TOOLS-016 revision 3: a window edit whose carried result equals the
     // A window that takes in the empty element after the final line break names only the line the file has.
     await refused('g.txt', 'foo\n', 'foo \n', 'foo\n', noop('g.txt', 2, 'line 1'));
     // A window wholly in that empty element is cut at the last line too: it read "(line 2)" for a one-line file
-    // (docs/defects/fixed/a-window-no-op-refusal-names-a-line-after-the-files-last-line.md).
+    // (docs/archive/defects/a-window-no-op-refusal-names-a-line-after-the-files-last-line.md).
     await refused('h.txt', 'foo\n', ' ', '', noop('h.txt', 2, 'line 1'));
   });
 
@@ -993,7 +993,7 @@ describe('PD-TOOLS-016 revision 3: a window edit whose carried result equals the
 describe('PD-TOOLS-018: a write_file insert keeps a CRLF file\'s line endings', () => {
   // OQ-259 (R-072, 2026-10-13). An insert joined the file's lines and content's lines with \n, so on a CRLF file the inserted
   // lines were LF among CRLF ones beside a clean success
-  // (docs/defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
+  // (docs/archive/defects/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
   const CRLF = " content was written with the file's CRLF line endings.";
   const prepare = async (rel: string, text: string) => {
     writeFileSync(join(root, rel), text);
@@ -1078,7 +1078,7 @@ describe('PD-TOOLS-018: a write_file insert keeps a CRLF file\'s line endings', 
 describe('PD-TOOLS-019: a match at level 3 compares each line without its carriage return', () => {
   // OQ-280 (R-072, 2026-10-13). On a CRLF file every line ends in \r and an old_string written in JSON almost never does, so an
   // LF old_string one uniform indent off never reached level 3: write_file applied it at level 4 one tab too shallow beside a
-  // success, and haet_edit gave the plain miss (docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
+  // success, and haet_edit gave the plain miss (docs/archive/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
   const CRLF = " new_string was written with the file's CRLF line endings.";
   const ENDINGS = "The line endings differ too: CRLF in the file and LF in old_string. The quoted text carries the file's line endings.";
   const crlf = (lines: readonly string[]) => `${lines.join('\r\n')}\r\n`;
@@ -1177,7 +1177,7 @@ describe('PD-TOOLS-020: level 3 matches blank lines by having no visible charact
   // OQ-295 (R-072, ruled 2026-10-14). Level 3 shifted a blank line of old_string like any other — the bare prefix in the deeper
   // direction, a failed startsWith in the shallower — while the file's blank line is empty, so a block with a blank interior line
   // never matched at level 3: on an LF file write_file applied it at level 4 unshifted beside "Verify the result.", and on a CRLF
-  // file nothing matched (docs/defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
+  // file nothing matched (docs/archive/defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
   const CRLF = " new_string was written with the file's CRLF line endings.";
   const FILE = ['a', '\t\tx = 1;', '', '\t\ty = 2;', 'z'];
   const asText = (lines: readonly string[], eol: '\n' | '\r\n') => `${lines.join(eol)}${eol}`;
@@ -1404,7 +1404,7 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
       // On a case-insensitive filesystem (NTFS, APFS by default) `A.ts` IS `a.ts`, and writing it replaced the file under
       // test, so the expectation below could not hold there. The filesystem is probed with a name of its own first, and
       // `A.ts` is written only where it is a second file
-      // (`docs/defects/fixed/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
+      // (`docs/archive/defects/seven-unit-cases-pin-a-posix-or-case-sensitive-host-and-go-red-on-windows.md`).
       writeFileSync(join(root, 'src', 'case-probe'), '');
       const caseSensitive = !existsSync(join(root, 'src', 'CASE-PROBE'));
       rmSync(join(root, 'src', 'case-probe'));
@@ -1450,7 +1450,7 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
     });
   });
 
-  /** docs/defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md: the search tools' walk. */
+  /** docs/archive/defects/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md: the search tools' walk. */
   it('a directory re-included under an ignored glob is searched, as git keeps it (REQ-TOOLS-139, REQ-WORKSPACE-100)', async () => {
     mkdirSync(join(root, 'gen', 'keep', 'sub'), { recursive: true });
     writeFileSync(join(root, 'gen', 'x.ts'), 'const x = 1;\n');
@@ -1537,7 +1537,7 @@ describe('todo (REQ-TOOLS-144..147)', () => {
    * PD-TOOLS-008 (OQ-163): the default live run's `frictions` orchestrator opened with a `replace` marking two tasks
    * IN_PROGRESS over an empty list, was told "Active task: 3c55ec35 (Create friction-probe.txt)" — an id the rejected list
    * minted and never stored — and its `update 3c55ec35` was refused "Unknown task id" (live-run finding a71-7,
-   * docs/defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
+   * docs/archive/defects/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
    */
   it('a replace whose own list marks two tasks IN_PROGRESS while none is active is refused, saying so and that nothing was saved (PD-TOOLS-008)', async () => {
     const list = new TodoList();
@@ -1564,7 +1564,7 @@ describe('todo (REQ-TOOLS-144..147)', () => {
    * PD-TOOLS-008 revision 2 (OQ-249, ruled 2026-10-07 under R-072): a task a non-terminal child of the list's owner holds as
    * its `todo_item` is outside REQ-TOOLS-145's count, and the bound is checked only on a write that marks a task IN_PROGRESS.
    * The default live run at a68f121 (edit, #14) was refused a mark of its second running child's item, and the plan recorded
-   * running work PENDING (docs/defects/fixed/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
+   * running work PENDING (docs/archive/defects/a-parallel-delegations-todo-item-cannot-be-marked-in-progress.md).
    */
   describe('a task a running delegation holds (PD-TOOLS-008 revision 2)', () => {
     const plan = async (held: Set<string>, delegates = false) => {
@@ -1739,7 +1739,7 @@ describe('todo (REQ-TOOLS-144..147)', () => {
    * PD-TOOLS-008 revision 3 (OQ-255, ruled 2026-10-13 under R-072): a `replace` closes a delegated item once its child has
    * ended, and names every task it restores over a different incoming state. Until then REQ-TOOLS-146 restored the delegated
    * item `PD-TOOLS-006` revision 7 had marked, over a closing `replace` that still answered only "Replaced the todo list…"
-   * (docs/defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
+   * (docs/archive/defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md).
    */
   describe('a replace after a delegated child has ended (PD-TOOLS-008 revision 3)', () => {
     /** impl and tests delegated (served, both IN_PROGRESS), own the agent's own active task, done finished, later open. */
@@ -1881,7 +1881,7 @@ describe('todo (REQ-TOOLS-144..147)', () => {
   });
 
   /*
-   * Acceptance finding A6 (docs/defects/fixed/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md): the default live run
+   * Acceptance finding A6 (docs/archive/defects/a-todo-replace-stores-the-id-a-model-sent-for-a-new-task.md): the default live run
    * at 3c03287 (delegation-swarm, session 3e4b7210, #6) sent four new tasks as `impl101`, `test101`, `doc101` and `verify101`,
    * and `replace` stored each under the id the model chose. REQ-TOOLS-144: ids are stable and auto-generated, and targeting is
    * by id, so an id the list does not hold is the tool's to give, and no two stored tasks share one.
@@ -1983,7 +1983,7 @@ describe('todo (REQ-TOOLS-144..147)', () => {
 /**
  * Live-run finding G6 (default run at 27a5127): a 4-line `old_string` replaced by 9 lines was reported "4 lines changed
  * at line 38" while the row's diff read `+5 -0`, and the model re-read the file to find out which was true
- * (docs/defects/fixed/an-edit-reports-the-old-strings-line-count-as-the-lines-it-changed.md). REQ-TOOLS-135's success message
+ * (docs/archive/defects/an-edit-reports-the-old-strings-line-count-as-the-lines-it-changed.md). REQ-TOOLS-135's success message
  * reports what the edit did: the lines it replaced, what replaced them, and the lines added and removed.
  */
 describe('REQ-TOOLS-135: an edit reports the lines it replaced and the lines it added and removed (write_file, haet_edit)', () => {
@@ -2087,7 +2087,7 @@ describe('REQ-TOOLS-135: an edit reports the lines it replaced and the lines it 
 
   /*
    * A replace-all reports lines too (the fin18 verifier's finding,
-   * docs/defects/fixed/a-replace-all-edit-reports-occurrences-and-no-lines-changed.md): until fin21 its message was
+   * docs/archive/defects/a-replace-all-edit-reports-occurrences-and-no-lines-changed.md): until fin21 its message was
    * "<n> occurrences replaced." and named no line.
    */
   const REPLACE_ALL = [
@@ -2153,7 +2153,7 @@ describe('REQ-TOOLS-135: an edit reports the lines it replaced and the lines it 
 /**
  * Finding N2 of the final duress live run at c2a9444: undoing a create wrote an empty file where there had been none and
  * answered "Restored <p> to its previous content (0 lines)", so a child with no terminal was left with a stray file it could
- * not remove (docs/defects/fixed/undoing-a-create-leaves-an-empty-file.md).
+ * not remove (docs/archive/defects/undoing-a-create-leaves-an-empty-file.md).
  */
 describe('undo puts the path back as it was before the write: a create is undone by removing the file (REQ-TOOLS-132, REQ-TOOLS-135, REQ-CHAT-050)', () => {
   const exists = (rel: string): boolean => existsSync(join(root, rel));

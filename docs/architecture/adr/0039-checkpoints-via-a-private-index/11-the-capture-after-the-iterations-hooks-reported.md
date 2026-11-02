@@ -4,7 +4,7 @@ Part 11 of 11 of [ADR-0039](../0039-checkpoints-via-a-private-index.md), which i
 
 ## The capture after the iteration's hooks — reported back 2026-10-13 (fin41, N68)
 
-*The defect note is [`an-iterations-checkpoint-is-captured-before-its-iteration-end-hooks-run`](../../../defects/fixed/an-iterations-checkpoint-is-captured-before-its-iteration-end-hooks-run.md); the proof is `pnpm checkpoint-proof`'s `hook-capture`
+*The defect note is [`an-iterations-checkpoint-is-captured-before-its-iteration-end-hooks-run`](../../../archive/defects/an-iterations-checkpoint-is-captured-before-its-iteration-end-hooks-run.md); the proof is `pnpm checkpoint-proof`'s `hook-capture`
 launch.*
 
 **What was falsified, and why it stood.** The first execution's "capture position" put the capture BEFORE the

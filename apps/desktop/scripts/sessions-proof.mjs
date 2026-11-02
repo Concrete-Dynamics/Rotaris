@@ -139,7 +139,7 @@ const latestSession = () => withDb((db) => db.prepare('SELECT * FROM sessions OR
 const countIn = (table, sid) => withDb((db) => db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid).c);
 const tablesWithSession = () => withDb((db) => db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE name = 'session_id')").all().map((t) => t.name));
 // The identifier where the product mints it on THIS platform (`dataLayout().machineId`), not the Windows spelling alone
-// (`docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
+// (`docs/archive/defects/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
 const machineId = () => readFileSync(machineIdFileFor(local), 'utf8').split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0 && !s.startsWith('#'));
 /** A session a dead process would have left: rows only. */
 const plantSession = (sid, status, opts = {}) => withDb((db) => {
@@ -169,7 +169,7 @@ const A = latestSession().session_id;
   expect(existsSync(join(files, 'summary.md')), `no summary.md under ${files}`);
   // REQ-SESSION-140: the file carries the requirement's sections in its order — until fin22 it carried none of the task
   // line, Metrics, Warnings, Agents, Slowest Tools or the inspection note
-  // (`docs/defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md`).
+  // (`docs/archive/defects/summary-md-carries-none-of-the-sections-its-requirement-lists.md`).
   const seedMd = readFileSync(join(files, 'summary.md'), 'utf8');
   writeFileSync(join(output, 'seed-summary.md'), seedMd);
   const order = [`# Session ${A}`, '- Status: completed', '- Workspace: ', '- Created: ', '- Updated: ', '- Task: Write the notes.', '## Metrics', '## Warnings', '## Agents', '## Slowest Tools', "_The rest of this session's record"];
@@ -184,7 +184,7 @@ const A = latestSession().session_id;
   // REQ-SESSION-136 on REQ-SESSION-140's Warnings: the refused terminal call (`badterm`) is a `tool_error` issue, and the Tool
   // errors line counts it although its record's outcome is `invalid_request`. Until fin23 the line read the histogram's
   // `tool_error` bucket and said 0 beside "Issues: 1 (tool_error 1)"
-  // (`docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
+  // (`docs/archive/defects/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
   const toolErrors = /^- Tool errors: (\d+) \(counted from the issues record/m.exec(seedMd)?.[1];
   const issuesLine = /^- Issues: .*$/m.exec(seedMd)?.[0] ?? '';
   expect(toolErrors === '1' && /\btool_error 1\b/.test(issuesLine) && /^- Tool outcomes: .*\binvalid_request 1\b/m.test(seedMd), `A's Tool errors line (${toolErrors}) against its Issues line ("${issuesLine}") and its outcomes:\n${seedMd}`);
@@ -214,7 +214,7 @@ const live = await launch('live', {
   expect(sessionRow(A) && countIn('session_locks', A) === 1, 'A has no dead lock');
   // "Dead" is checked, not assumed: the lock names this launch's run host, gone before main since `endBeforeMain`.
   // A holder still alive here would make launch 3 read A as live and repair nothing (REQ-SESSION-056)
-  // (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).
+  // (`docs/archive/defects/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).
   const lockRow = withDb((db) => db.prepare('SELECT pid FROM session_locks WHERE session_id = ?').get(A));
   if (!lockRow) throw new Error("the 'live' launch left no lock behind; the repair scenario needs a persisted-running session behind a dead lock");
   const lockPid = lockRow.pid;
@@ -235,7 +235,7 @@ const repairOne = await launch('repair-one', {
   expect(before?.data['data-stale'] === 'true' && /stale/.test(before.text), `A was not marked stale: ${JSON.stringify(before)}`);
   // REQ-SESSION-154 with REQ-SESSION-030/032: after the seed's run and the live run, relaunched, A's label is its newest
   // top-level task — the live run's prompt — read from the listing record's todo, not its first prompt from the transcript
-  // (`docs/defects/fixed/the-session-list-reads-each-sessions-transcript-for-its-label.md`).
+  // (`docs/archive/defects/the-session-list-reads-each-sessions-transcript-for-its-label.md`).
   expect(before.text.startsWith('Wait a while.') && !before.text.includes('Write the notes.'), `A's label after two runs and a relaunch: ${JSON.stringify(before.text.slice(0, 120))}`);
   results.labels = { [A]: 'Wait a while.' };
   const report = atText(repairOne, 4500, '[data-testid="session-report"]');
@@ -248,7 +248,7 @@ const repairOne = await launch('repair-one', {
   expect(countIn('session_locks', A) === 0, 'the orphaned lock was not released');
   // REQ-SESSION-062 names this entry `session.interrupted_recovered`. The first implementation invented
   // `session_marked_interrupted`, and OQ-46's audit corrected the product without correcting the proofs that assert
-  // the invented name (`docs/defects/fixed/the-proofs-assert-a-timeline-name-the-audit-corrected.md`).
+  // the invented name (`docs/archive/defects/the-proofs-assert-a-timeline-name-the-audit-corrected.md`).
   expect(withDb((db) => db.prepare("SELECT count(*) AS c FROM timeline WHERE session_id = ? AND name = 'session.interrupted_recovered'").get(A).c) === 1, 'no session.interrupted_recovered entry');
   // OQ-60 as ruled (R-071): the repaired session's summary.md is rebuilt, its Outcome block the correction entry — not the
   // seed run's `completed` outcome, which REQ-ORCH-082's columns still hold, and not the dead live run's last rebuild.
@@ -470,7 +470,7 @@ const tables = tablesWithSession();
 // here was the sixtieth defect: the ruling narrowed the premise in the store's own suite, and nothing carried it to
 // this proof until the merge-1 proof pass ran it. A second count pin, sixteen, stood here after v20 and broke the same way
 // when v23-v24 (PD-ORCH-005) added `iterations`, `agent_messages`, `agent_terminals` and `agent_fingerprints`
-// (`docs/defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`). The premise is now
+// (`docs/archive/defects/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`). The premise is now
 // the cascade's SHAPE, whatever the count: every reference to `sessions` is session_id → session_id ON DELETE CASCADE,
 // and `delivery_runs` is the one table carrying session_id as a fact (`lib/session-cascade.mjs`, pinned beside it).
 const { cascaded, facts, problems: cascadeProblems } = withDb((db) => sessionCascade(db));

@@ -94,7 +94,7 @@ export type ArtifactsStatePayload = z.infer<typeof ArtifactsStateSchema>;
  * inspector's Preview (ui), which renders the document from below the block.
  */
 // Only `\n` ends a line here: the value is `[^\n]*`, never `.`, which stops at U+2028 and U+2029 and made a block holding
-// either raw no block (docs/defects/fixed/a-title-holding-a-unicode-line-separator-writes-a-frontmatter-the-splitter-does-not-read.md).
+// either raw no block (docs/archive/defects/a-title-holding-a-unicode-line-separator-writes-a-frontmatter-the-splitter-does-not-read.md).
 const FRONTMATTER_LINE = /^[A-Za-z0-9_][A-Za-z0-9_.-]*:(?:[ \t][^\n]*)?$/;
 export function splitFrontmatter(text: string): { readonly frontmatter: string | null; readonly rest: string } {
   const first = /^---[ \t]*\r?\n/.exec(text);

@@ -90,7 +90,7 @@ third row state — *suppressed* — so that the screen stops disagreeing with t
 
 <a id="oq-65"></a>
 
-**OQ-65 — Do the instruction-file switches reach the retrospective, or only what agents are given?** *(`PD-LIBRARY-002` over REQ-WORKSPACE-041, since narrowed by `PD-WORKSPACE-002`; REQ-WORKSPACE-048. Raised 2026-09-22 by repairing [`the-retrospective-reads-instruction-files-the-user-switched-off.md`](../../../defects/fixed/the-retrospective-reads-instruction-files-the-user-switched-off.md).)*
+**OQ-65 — Do the instruction-file switches reach the retrospective, or only what agents are given?** *(`PD-LIBRARY-002` over REQ-WORKSPACE-041, since narrowed by `PD-WORKSPACE-002`; REQ-WORKSPACE-048. Raised 2026-09-22 by repairing [`the-retrospective-reads-instruction-files-the-user-switched-off.md`](../../defects/the-retrospective-reads-instruction-files-the-user-switched-off.md).)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: the instruction-file switches reach the retrospective as well as the agents, which reads exactly the set injection reads, master switch and per-file switches included. The retrospective does not state that a file was present and withheld.
 
@@ -178,7 +178,7 @@ the call's `task` appended as its next user message, and the child ends and repo
 task id. REQ-TOOLS-152 is narrowed by `PD-TOOLS-006`, the one directive that narrows it, and its back-pointer is amended
 in place; REQ-MONITOR-300's back-pointer from `PD-ORCH-005` names the one exit from a terminal state a follow-up takes.
 Nothing is built by this ruling: until
-[`delegate-drops-session-id-and-suppress-auto-context.md`](../../../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md)
+[`delegate-drops-session-id-and-suppress-auto-context.md`](../../defects/delegate-drops-session-id-and-suppress-auto-context.md)
 is repaired the field is accepted and dropped. The first limit named above, which agent may take up an offer after its
 iteration ended, was ruled by `PD-ORCH-004` revision 3; `session_id` keeps the direct-child test, so a later
 iteration's root cannot follow up an earlier iteration's child.
@@ -186,7 +186,7 @@ iteration's root cannot follow up an earlier iteration's child.
 **Built 2026-09-29 under [R-067](../../../product/requests.md#r-067).** `delegate` forwards `session_id`, and a follow-up resumes
 the named child as ruled. Its refusals are those ruled above. What the ruling left unstated, and the readings built, are
 OQ-131. The defect note is repaired:
-[`delegate-drops-session-id-and-suppress-auto-context.md`](../../../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md).
+[`delegate-drops-session-id-and-suppress-auto-context.md`](../../defects/delegate-drops-session-id-and-suppress-auto-context.md).
 
 <a id="oq-67"></a>
 
@@ -244,7 +244,7 @@ round 1 of the same change; each was stated only in a code comment or the plan's
   *(`clipSkillDescription`, `packages/contracts/src/skills.ts`.)*
 - **(f) Which badge the two fixed commands carry.** `skill`, as ADR-0063 chose for `/skill`; REQ-CHAT-025 names the
   set and does not say. `slash-proof` asserts the other reading, and has been red on it since ADR-0063
-  (`../../../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
+  (`../../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
 - **(g) Who else reads the row.** The row is a system row, and the improvement analyst takes every recent row's
   text as evidence (`packages/engine/src/improvements/capture.ts`), so a listing carries the names, descriptions
   and paths of skills set to "hidden" to that model. The agent path does not (it keeps user and agent rows only).

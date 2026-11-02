@@ -507,7 +507,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * gives ONE child turn more than 100 model steps (the former belt's bound) along a different route into the child's
    * execution, so a numeric cap on any of them ends that turn `partial` at step 101 with the belt's warning, and the child
    * settles `succeeded` with an empty `final_response` (the repair of
-   * `docs/defects/fixed/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md`).
+   * `docs/archive/defects/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md`).
    */
   describe('PD-ORCH-017 (REQ-ORCH-088, REQ-ORCH-112): no route into a child\'s turn carries a fixed model-step cap', () => {
     /** More than the former belt's 100: the turn under test takes `LONG` working steps and answers on the next. */
@@ -665,7 +665,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
 
   describe('REQ-MCP-015 (fin36): only the code-intelligence server\'s tools are its EDIT tier in a child\'s report', () => {
-    // docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md
+    // docs/archive/defects/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md
     const name = CODE_INTELLIGENCE_MANIFEST.tiers.edit.replaceInFile;
     const path = CODE_INTELLIGENCE_MANIFEST.editArguments.replaceInFile.path;
     const editedFor = async (server: string): Promise<string[]> => {
@@ -755,7 +755,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
      * stuck report. The run withdraws the stuck trigger that turn armed when it takes the parent into the wait, so the children's
      * reports are the only message the run adds for that turn. As found (revision 4 named it unchanged), the resumed request
      * ended [… report, "Pause and reassess the current task."], the classifier was asked once (`stuck`) and one stuck
-     * activation was written for the root (`docs/defects/fixed/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`).
+     * activation was written for the root (`docs/archive/defects/a-roots-stuck-corrective-follows-a-childs-report-after-an-empty-turn.md`).
      */
     it('PD-ORCH-009 r5 (OQ-296): a root silent while its background child runs is resumed with the report alone — no classification, no activation', async () => {
       const { asked, classifier } = supervised();
@@ -909,7 +909,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
 
   /**
    * REQ-ORCH-059's "Open-todo reminder lines are appended" (the repair of
-   * `docs/defects/fixed/the-completion-notification-carries-no-open-todo-reminder-lines.md`, found ruling OQ-213): the
+   * `docs/archive/defects/the-completion-notification-carries-no-open-todo-reminder-lines.md`, found ruling OQ-213): the
    * notification that tells the coordinator a background child finished names the items its own plan still holds open.
    */
   it('REQ-ORCH-059: the completion notification names the coordinator\'s open plan items', async () => {
@@ -966,7 +966,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
 
   /*
-   * REQ-MONITOR-049/060 with REQ-TOOLS-006 (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md):
+   * REQ-MONITOR-049/060 with REQ-TOOLS-006 (docs/archive/defects/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md):
    * a `tool_restrictions` list naming only a tool-server tool leaves the child no native tool. The row records that empty
    * grant, and the record says a grant was recorded, so the declared tools do not stand in for it on the surface. Until
    * 2026-10-01 the record could not tell it from the spawn's "no grant yet", and the inspector listed every tool removed.
@@ -1268,9 +1268,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * OQ-228 (ruled 2026-10-07 under R-072), REQ-MCP-014, REQ-ORCH-126, REQ-ORCH-034 and REQ-ORCH-038: a delegation names only a
    * delegation target. The three personas the product runs itself are refused first, with no record and no task id, by the
    * unknown-role message carrying the targets, the aliases and what the persona is run for (finding P5 at a68f121: 71 of 71
-   * coordinator requests offered `intent-classifier`, docs/defects/fixed/delegate-offers-and-admits-personas-that-are-not-delegation-targets.md).
+   * coordinator requests offered `intent-classifier`, docs/archive/defects/delegate-offers-and-admits-personas-that-are-not-delegation-targets.md).
    * OQ-229: a non-empty `delegates_to` narrows the caller's targets; an empty one narrows nothing
-   * (docs/defects/fixed/a-personas-delegates-to-never-narrows-its-delegations.md).
+   * (docs/archive/defects/a-personas-delegates-to-never-narrows-its-delegations.md).
    */
   describe('OQ-228 / OQ-229: a delegation names only a delegation target of its caller', () => {
     const textOfReq = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
@@ -1503,7 +1503,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   /**
    * PD-TOOLS-006 revision 5 (OQ-221, ruled 2026-10-07 under R-072): the delegate observation and the child's block read ONE
    * selection, so what the caller is told it was given is what the child receives — the repair of
-   * `docs/defects/fixed/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`.
+   * `docs/archive/defects/the-attached-artifact-budget-is-48000-characters-where-req-tools-152-sets-100000-and-drops-every-later-one.md`.
    */
   describe('PD-TOOLS-006 revision 5: the delegate observation names what the child is given of its attachments', () => {
     it('for a child started at once, the observation\'s left-out ids are the context_selection entry\'s, its given count the entry\'s, and the payload carries exactly those', async () => {
@@ -2108,7 +2108,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
 
   /*
-   * PD-ORCH-005 clause 9 / REQ-SESSION-031 (docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md):
+   * PD-ORCH-005 clause 9 / REQ-SESSION-031 (docs/archive/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md):
    * each agent's port holds its own approvals and the session has one `pending_approvals` column, so what every port is
    * handed to write there (`pendingApprovalsOfSession`) is the run's list over EVERY port — the root's and each child's —
    * not the asking port's alone. Until 2026-10-14 nothing gathered them, and two agents waiting at once overwrote each other.
@@ -2313,7 +2313,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     /*
      * The duress live runs' child (L2 at c2fdd6a, N1 at c2a9444): its last text token, then a `write_file` whose arguments
      * streamed for about 97 s. Each piece now reaches the run as a `tool-input` model event
-     * (docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md).
+     * (docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md).
      */
     it('REQ-ORCH-089 / REQ-NOTIFY-112 / REQ-CHAT-164: a child streaming a tool call\'s arguments for 95 s is not stalled, its row is not marked stalled, and a failure after it earns no corrective message', async () => {
       const increments: TranscriptIncrement[] = [];
@@ -5506,7 +5506,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const row = dal.childrenOf(sid)[0]!;
       // The target's tools reach the child through its port, which is built for the row's persona; the row records the grant
       // that port puts in force once ready (REQ-MCP-065), and none at spawn — until 2026-10-01 it recorded the target's
-      // declared tools here (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+      // declared tools here (`docs/archive/defects/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
       expect(row.persona).toBe('coding-agent');
       expect(JSON.parse(row.granted_tools)).toEqual([]);
       expect(row.model_key).toBe(MODEL.modelId);
@@ -5756,7 +5756,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * PD-ORCH-005 clause 15 (revision 4): "A forced stop is a stop: its agents come to rest as clause 3 says." The
    * graceful stop is covered above; these are the forced one, reached either way the stop control forces it, and the
    * application's quit, whose `quit` a stop request received first would displace (the first reason stands — the
-   * board-run defect, `docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`).
+   * board-run defect, `docs/archive/defects/a-board-run-caught-by-a-quit-rests-as-a-stop.md`).
    */
   describe('REQ-ORCH-052 / REQ-ORCH-108, the repair of a-child-whose-execution-raises-before-its-turn-stays-running: a raise outside the turn settles the child', () => {
     const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };

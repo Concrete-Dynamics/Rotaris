@@ -12,7 +12,7 @@ import type * as Document from './document.js';
  * ADR-0055: "the endpoint is listening before the record is written, not after" (REQ-STARTUP-161, REQ-STARTUP-164).
  * `exclusiveCreate` is wrapped so the test stands where a second launch stands: at the very moment the record is
  * written, it looks for the endpoint the record names and connects to it. Until fin34 the record came first and the
- * connection was refused (`docs/defects/fixed/the-instance-record-is-written-before-its-endpoint-listens.md`).
+ * connection was refused (`docs/archive/defects/the-instance-record-is-written-before-its-endpoint-listens.md`).
  */
 type Watcher = (target: string, content: string) => void;
 let atRecordWrite: Watcher | undefined;
@@ -73,7 +73,7 @@ describe('the claim\'s order — ADR-0055, REQ-STARTUP-161, REQ-STARTUP-164', ()
 
   // OQ-248 (R-072, 2026-10-13): what an attempt creates to hold its endpoint is the record's, and a launch that is handed over
   // leaves nothing behind — on the temporary-directory fallback too, where the directory below the temporary one was shared
-  // and never removed (docs/defects/fixed/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md).
+  // and never removed (docs/archive/defects/a-handed-over-launch-can-leave-the-private-socket-directory-behind.md).
   it.skipIf(process.platform === 'win32')('on the temporary-directory fallback a handed-over launch leaves nothing behind, and the instance takes its own directory with it when it closes', async () => {
     const temp = join(dir, 'tmp');
     mkdirSync(temp);

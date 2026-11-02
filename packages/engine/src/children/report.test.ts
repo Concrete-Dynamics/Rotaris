@@ -164,7 +164,7 @@ describe('engine/children/report — a code-intelligence EDIT-tier write is an e
 /**
  * REQ-MCP-015: the EDIT tier is the code-intelligence server's. A call's runtime name carries that server's prefix only on a
  * collision, so another server's tool called like the tier reached the readers unprefixed and its argument was listed as an
- * edit (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md). The
+ * edit (docs/archive/defects/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md). The
  * readers are given the callables the child's grant gives that server (`editTierNamesOf`), and only those are EDIT calls.
  */
 describe('engine/children/report — another server\'s tool named like the EDIT tier is no edit (REQ-MCP-015, REQ-ORCH-109)', () => {
@@ -207,7 +207,7 @@ describe('engine/children/report — another server\'s tool named like the EDIT 
  * REQ-MCP-005 with REQ-MCP-015: a `tool_name_map` on the code-intelligence entry offers an EDIT tool under another callable
  * name. The readers matched the callable against the manifest's names, so a renamed EDIT call was no write: its path was
  * missing from the report, its facts and the cut-off's changed paths
- * (docs/defects/fixed/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md). The grant evidence
+ * (docs/archive/defects/a-code-intelligence-edit-tool-renamed-by-tool-name-map-is-not-read-as-a-write.md). The grant evidence
  * now carries each renamed callable's reported name (`McpGrantEvidence.renamed`), and the readers ask by it.
  */
 describe('engine/children/report — a renamed code-intelligence EDIT tool is read as a write (REQ-MCP-005, REQ-MCP-015, REQ-ORCH-109)', () => {
@@ -237,7 +237,7 @@ describe('engine/children/report — a renamed code-intelligence EDIT tool is re
  * OQ-245 (XE1, ruled 2026-10-13 under R-072): a cross-file EDIT call — a symbol rename, a cross-file replacement — changes
  * files its arguments do not name. The run host observes what it can reach before and after it and puts what changed on its
  * result part (`observedPaths`); the report lists that, and where nothing was observed it says the call may have changed files
- * the record cannot name, never "(none)" (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+ * the record cannot name, never "(none)" (docs/archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
  */
 describe('engine/children/report — a cross-file EDIT call lists every file it changed (OQ-245, PD-ORCH-004, REQ-ORCH-108, REQ-ORCH-109)', () => {
   const edit = CODE_INTELLIGENCE_MANIFEST.tiers.edit;
@@ -705,8 +705,8 @@ describe('engine/children/report — OQ-111: the pass reads the start and the mo
  * OQ-217, ruled 2026-10-07 under the owner's delegation (R-072): the summarising pass is told how a failed child ended, and no
  * pass can raise a failed child's status. Until the ruling the pass was given no outcome, and 2 of the 5 timed-out children of
  * the duress runs at c2fdd6a and c2a9444 got summaries that read as success
- * (docs/defects/fixed/a-timed-out-childs-report-summary-reads-as-success.md,
- * docs/defects/fixed/the-summarising-pass-can-raise-a-failed-childs-report-status.md).
+ * (docs/archive/defects/a-timed-out-childs-report-summary-reads-as-success.md,
+ * docs/archive/defects/the-summarising-pass-can-raise-a-failed-childs-report-status.md).
  */
 describe('engine/children/report — OQ-217: the pass is told how a failed child ended (REQ-ORCH-088, REQ-ORCH-108, REQ-ORCH-110, REQ-ORCH-112)', () => {
   const STATEMENT = 'Cut off while making progress: this child completed a tool call within the final 90s before its 1200s limit expired.';

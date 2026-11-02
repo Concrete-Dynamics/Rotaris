@@ -172,7 +172,7 @@ last four tool events by `fingerprint` — the comparison REQ-ORCH-101's trigger
 Decision 4 bounded the classification by `runtime.loop_classification_timeout` as configured, so a workspace that set
 the key to 30 let one classification hold the agent for 30 s, where REQ-CONFIG-467 makes the key an upper bound only and
 REQ-NOTIFY-106 allows the call no more than what remains of the 2 s activation budget
-([`the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`](../../defects/fixed/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md),
+([`the-loop-classification-timer-is-not-capped-at-the-activation-budget.md`](../../archive/defects/the-loop-classification-timer-is-not-capped-at-the-activation-budget.md),
 noticed beside OQ-232's ruling). The bound is now the smaller of the key and `LOOP_ACTIVATION_BUDGET_MS` (2,000 ms), in the
 supervisor's timer and in the classifier's model request alike. The budget is read from the activation `check()` takes at
 the step boundary, as consequence 1 already reads the pause; the call is dispatched in the same synchronous stretch, so the
@@ -250,7 +250,7 @@ after) and `pnpm part-h-proof`'s `silent-wait` launch (0 stuck activations, 0 es
 Compared as emitted, the longest run of identical texts was 2; compared as values it was 5, twice. Decision 3's fingerprint
 compared the text, so the repetition trigger never fired, no `loop_supervisor_activation` was written, and the loop held the
 child 179 s of the scenario's 420 s wait
-([`fixed/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md`](../../defects/fixed/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md)).
+([`fixed/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md`](../../archive/defects/the-loop-supervisor-misses-identical-calls-whose-argument-key-order-varies.md)).
 The record already stored those arguments with sorted keys (`session-writer.ts`), so a reader saw five identical calls where
 the supervisor saw five different ones. The build also read a strict alternation of two key orders as a two-action cycle at
 the sixth call, so whether one failing edit counted as a loop depended on the pattern of its key orders.
@@ -286,7 +286,7 @@ completed inside its wait.
 deterministic message read "Pause and reassess haet_edit around \tconst", naming no file. The anchor was the first match of
 `(?:[A-Za-z]:[\\/]|\.{0,2}[\\/])[^"'\s,}]+|[^"'\s,}]+\.[A-Za-z0-9]{1,8}` in the serialised arguments, whose `\.{0,2}[\\/]`
 takes zero dots and a backslash, so the JSON escape `\t` of an `old_string` written ahead of `path` matched first
-([`fixed/the-loop-supervisors-deterministic-message-anchors-on-an-escaped-tab.md`](../../defects/fixed/the-loop-supervisors-deterministic-message-anchors-on-an-escaped-tab.md)).
+([`fixed/the-loop-supervisors-deterministic-message-anchors-on-an-escaped-tab.md`](../../archive/defects/the-loop-supervisors-deterministic-message-anchors-on-an-escaped-tab.md)).
 Two more readings of the same expression, found while repairing it: a Windows path anchored in its escaped form, and the
 second limb backtracked quadratically over a long run of path characters (200,000 held `check()` for 157 s).
 

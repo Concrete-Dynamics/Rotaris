@@ -94,7 +94,7 @@ export function decodeText(bytes: Buffer): { text: string; binary: boolean } {
  * A directory as `dirname` spells it. On Windows, Node 24's `mkdirSync(…, { recursive: true })` answers the first directory it
  * made in its namespaced form (`\\?\C:\…`, `\\?\UNC\server\share\…`), which no plain path ever equals: the undo of a create
  * compared the two, matched nothing and left every directory the create made (measured 2026-10-15 on Windows 11 ARM64, Node
- * 24.18.0; docs/defects/fixed/undoing-a-create-on-windows-leaves-the-directories-the-create-made.md).
+ * 24.18.0; docs/archive/defects/undoing-a-create-on-windows-leaves-the-directories-the-create-made.md).
  */
 function plainSpelling(dir: string | undefined): string | undefined {
   if (dir === undefined || process.platform !== 'win32' || !dir.startsWith('\\\\?\\')) return dir;
@@ -362,7 +362,7 @@ export function matchEdit(lines: readonly string[], oldText: string): EditMatch 
   const indent = (s: string) => /^\s*/.exec(s)?.[0] ?? '';
   // PD-TOOLS-019: a line's trailing `\r` is its line ending, not its text. Until OQ-280's ruling level 3 compared it, so on a
   // CRLF file an LF old_string one indent off fell to level 4 and landed unshifted beside a success
-  // (docs/defects/fixed/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
+  // (docs/archive/defects/on-a-crlf-file-an-lf-old-string-one-indent-off-skips-match-level-3.md).
   const body = (s: string) => (s.endsWith('\r') ? s.slice(0, -1) : s);
   const oldBodies = oldLines.map(body);
   /*
@@ -371,7 +371,7 @@ export function matchEdit(lines: readonly string[], oldText: string): EditMatch 
    * character; the prefix is measured on old_string's first line that holds one and the window's line at the same index
    * (PD-TOOLS-015's O and W), and added or removed on the visible lines only. An old_string with no visible character never
    * matches here. Until the ruling a blank line was shifted like any other, so a block with a blank interior line never
-   * reached level 3 (docs/defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
+   * reached level 3 (docs/archive/defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
    */
   const visible = (s: string) => /\S/.test(s);
   const o = oldBodies.findIndex(visible);
@@ -408,7 +408,7 @@ export function matchEdit(lines: readonly string[], oldText: string): EditMatch 
  * 2026-10-06 the message was "<k> lines changed at line <n>" with `k` the old string's line count alone: the live run at
  * 27a5127 was told "4 lines changed" for a 4-line block that became 9, beside a row reading `+5 -0`, and re-read the file
  * to see which was true (live-run finding G6,
- * docs/defects/fixed/an-edit-reports-the-old-strings-line-count-as-the-lines-it-changed.md).
+ * docs/archive/defects/an-edit-reports-the-old-strings-line-count-as-the-lines-it-changed.md).
  *
  * The replaced region is read from the file, not from the strings. It starts at the match's first line (every line before
  * it is untouched) and ends where the two texts' common trailing lines begin, but never before the last line the match
@@ -438,7 +438,7 @@ function replacementMessage(rel: string, before: string, after: string, oldText:
  * "every exact occurrence as plain text"): how many occurrences, the lines they touched, how many lines replaced those, and
  * the lines added and removed. Until fin21 it read "<n> occurrences replaced." and named no line at all, where the requirement
  * has success messages report lines changed (the fin18 verifier's finding,
- * docs/defects/fixed/a-replace-all-edit-reports-occurrences-and-no-lines-changed.md).
+ * docs/archive/defects/a-replace-all-edit-reports-occurrences-and-no-lines-changed.md).
  *
  * Counted region by region, as `replacementMessage` counts its one region, so a file past the diff table's bound is still
  * counted line by line: each occurrence's region is the whole lines it spans, running on to the end of the line the first
@@ -523,7 +523,7 @@ function levelOneLines(text: string, needle: string): number[] {
  * refused (REQ-TOOLS-189 matches at level 1 only); what changes is that the fact `matchEdit` already computed reaches the
  * caller — which lines, which level, what differs — and, for one window, the window's own text, so a retry needs neither a
  * read nor a shell probe. The final duress run at `a68f121` (finding D5) spent seven failed edits and their `cat -A` probes
- * on six such misses (docs/defects/fixed/haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md).
+ * on six such misses (docs/archive/defects/haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md).
  *
  * The quote is the file's lines joined by `\n` — a substring of the file — so sent back as `old_string` it matches at level 1.
  * It is JSON because the difference is whitespace nobody can see in a plain quote. The facts come before it, so the
@@ -538,7 +538,7 @@ function nearMissMessage(rel: string, lines: readonly string[], m: EditMatch, ol
   /*
    * Revision 2 (OQ-252, R-072, 2026-10-13): the window is whole lines but level 1 is a substring search, so a window's text
    * can occur again inside a longer line or across a line boundary, and sent back alone it would be refused "Found <n>
-   * occurrences" (docs/defects/fixed/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md). Such a
+   * occurrences" (docs/archive/defects/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md). Such a
    * reply names the occurrences and asks for one neighbouring line, unchanged, in both strings; the quote is never widened,
    * because a widened `old_string` would no longer line up with the `new_string` the caller wrote. A unique quote's reply is
    * revision 1's, word for word.
@@ -710,7 +710,7 @@ export function shiftNewString(newText: string, oldText: string, window: readonl
  * Until this directive the replacement was `new_string`'s lines as given: on a CRLF file an LF `old_string` matches only at
  * level 2, so the file was left with LF lines among CRLF ones and an unchanged line counted as changed, and a hard break the
  * caller repeated without its spaces was dropped
- * (docs/defects/fixed/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
+ * (docs/archive/defects/a-write-file-edit-at-match-level-2-on-a-crlf-file-writes-lf-lines-among-crlf-ones.md).
  */
 export function carryWindow(newText: string, oldText: string, fileLines: readonly string[], start: number, level: 2 | 3 | 4, givenNew: string = newText): { text: string; crlfAdded: boolean } {
   const oldLines = oldText.split('\n');
@@ -784,7 +784,7 @@ export function crlfLines(fileLines: readonly string[], first: number, last: num
  * the file's own `\r` with it (`PD-TOOLS-014`'s quote, `one\r\ntwo\r`, retried with `ONE\ntwo`) gives it back.
  *
  * Until this directive the replacement was `new_string` as given: `one\r\ntwo\r\n` edited `one` → `ONE\nX` left
- * `ONE\nX\r\ntwo\r\n` beside a clean success (docs/defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
+ * `ONE\nX\r\ntwo\r\n` beside a clean success (docs/archive/defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md).
  * Returns the file's new text, each occurrence's written replacement (a `\r` added after the span is counted in it) and
  * whether a `\r` was added.
  */
@@ -848,9 +848,9 @@ const CRLF_SENTENCE = " new_string was written with the file's CRLF line endings
  * replacement as carried is the window's own bytes. The window's lines are numbered from 1, and cut at the file's last line so
  * a window that takes in the empty element after a final line break names only lines the file has; the cut reaches the first
  * line too, so a window wholly in that element names the last line, never the one after it (`' '` → `''` on `foo\n` read
- * "(line 2)" until fin40, docs/defects/fixed/a-window-no-op-refusal-names-a-line-after-the-files-last-line.md). Until this clause the edit
+ * "(line 2)" until fin40, docs/archive/defects/a-window-no-op-refusal-names-a-line-after-the-files-last-line.md). Until this clause the edit
  * rewrote the file unchanged beside "(+0 -0)", with an undo entry that restored the same content
- * (docs/defects/fixed/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
+ * (docs/archive/defects/a-window-edit-that-lands-on-the-files-own-bytes-is-applied-as-a-success.md).
  */
 export function windowNoOpMessage(rel: string, level: number, start: number, k: number, fileLineCount: number): string {
   const first = Math.min(start + 1, Math.max(1, fileLineCount));
@@ -875,7 +875,7 @@ const INSERT_CRLF_SENTENCE = " content was written with the file's CRLF line end
  * No byte of the file's existing lines changes, and every other insertion is written as given.
  *
  * Until this directive the inserted lines were joined with `\n` alone, so `a\r\nb\r\n` with `X` at line 1 left `a\r\nX\nb\r\n`
- * beside a clean success (docs/defects/fixed/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
+ * beside a clean success (docs/archive/defects/a-write-file-insert-writes-lf-lines-into-a-crlf-file.md).
  */
 export function carryInsert(text: string, content: string, at: number): { after: string; inserted: number; crlfAdded: boolean } {
   const lines = splitLines(text);
@@ -938,7 +938,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * whole file: the schema they were sent names the field, but the sentence they acted on listed the
      * operations as verbs and never said they were the values of a required selector. REQ-TOOLS-135 names the
      * selector `operation` and nothing fixes this wording (recorded as
-     * docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
+     * docs/archive/defects/write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4
      * children omit the field; reading the selector from the call is the fourth repair PD-TOOLS-007 allows (`inferArguments`).
      */
     description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path} (undoing a create removes the file it made). Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it. An edit whose old_string matches only once its indentation is shifted moves new_string by the same shift when new_string shares old_string\'s indentation, writes it as given when it already has the file\'s, and otherwise is refused with the file\'s lines quoted. An edit or an insert keeps a CRLF file\'s line endings, and an edit at match level 2 keeps the exact bytes of every line new_string repeats unchanged from old_string.',
@@ -973,7 +973,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * its result says so. A file that exists is never inferred into: such a call is refused as REQ-TOOLS-032 says, and
      * `execute`'s create still refuses a file that appeared since, so no inference can overwrite. The duress runs refused
      * 1 to 4 children's first write this way, each then resending its whole file
-     * (docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md).
+     * (docs/archive/defects/write-files-first-use-refusal-recurred-under-duress.md).
      */
     inferArguments: (args) => {
       if (args['operation'] !== undefined) return null;
@@ -1008,7 +1008,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
             // and the read record cannot answer that: it is shared by every agent and run on the workspace root
             // (REQ-TOOLS-133, REQ-TOOLS-137), so a sibling's create read as the caller's own. Sibling collisions
             // are PD-TOOLS-006's write scopes to prevent. The history is in
-            // docs/defects/fixed/the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md.
+            // docs/archive/defects/the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md.
             return errorObservation(`File already exists: ${rel}. Use 'overwrite' or 'edit'.`);
           }
           const content = a.content ?? '';
@@ -1102,13 +1102,13 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
              * `previous ?? ''`: an empty file where there had been none, "Restored <p> to its previous content (0 lines)",
              * and a second undo with no history. The final duress run's continuation child (finding N2) was left with a
              * stray `.tmp-run-tests.sh` it had no tool to remove
-             * (docs/defects/fixed/undoing-a-create-leaves-an-empty-file.md). A file gone since is not written back.
+             * (docs/archive/defects/undoing-a-create-leaves-an-empty-file.md). A file gone since is not written back.
              */
             if (before === null) return observation(`${rel} did not exist before the create this undoes, and it does not exist now: nothing to remove.`, { diff: `${rel} +0 -0` });
             /*
              * Only the file the create made is the create's to remove. Until fin26 (2026-10-06) the undo removed whatever the
              * path held, so content a terminal command or another agent wrote over the created file was lost with it
-             * (docs/defects/fixed/undoing-a-create-removes-another-writers-content.md). The file's bytes are compared with the
+             * (docs/archive/defects/undoing-a-create-removes-another-writers-content.md). The file's bytes are compared with the
              * digest the create kept; a file that differs is left in place, the refusal names the path and quotes nothing (the
              * shape of REQ-TOOLS-189's changed-since refusal), and the entry goes back, since nothing changed.
              */
@@ -1203,7 +1203,7 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
       // old_string/new_string surface and says nothing either way, and reports its other outcomes "as REQ-TOOLS-136
       // reports them". Checked after the hash, as `write_file` checks it after its read gate. The live run of
       // 2026-09-29 (L5) applied a no-op here — an undo entry, a rewrite of the same bytes, a line "changed"
-      // (docs/defects/fixed/haet-edit-applies-an-edit-that-changes-nothing.md).
+      // (docs/archive/defects/haet-edit-applies-an-edit-that-changes-nothing.md).
       if (a.old_string === a.new_string) return errorObservation('old_string and new_string are identical; nothing to change.');
       const before = decodeText(bytes).text;
       const lines = before.split('\n');

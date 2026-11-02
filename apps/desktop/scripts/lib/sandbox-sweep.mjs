@@ -8,7 +8,7 @@
  * a leftover. When two live runs overlapped on one host — two worktrees, or two workflows — the one that started second
  * deleted the first one's workspace, store and key while that run's app was still using them; the first run spent its
  * tokens and died reading its store back (`expected one workspace database … found 0`), six times on 2026-09-29/30
- * (`docs/defects/fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`).
+ * (`docs/archive/defects/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`).
  *
  * The rule now: each run writes `OWNER` into its sandbox the moment it makes it — its pid and its start — and the sweep
  * reads it before touching anything.

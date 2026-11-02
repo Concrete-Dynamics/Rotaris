@@ -2,7 +2,7 @@
  * What `live-run.mjs` says about its opt-in scenarios agrees with `OPT_IN`, the list that decides which scenarios run only
  * when named. Section 9 called duress "the only scenario here that is" while `OPT_IN` named five, so a reader took a default
  * run for a measurement only `cutoff`, `rename`, `plan-open` and `empty-answer` make (acceptance finding L9 at b9e3005,
- * `docs/defects/fixed/the-live-runs-duress-section-calls-itself-its-only-opt-in-scenario.md`).
+ * `docs/archive/defects/the-live-runs-duress-section-calls-itself-its-only-opt-in-scenario.md`).
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

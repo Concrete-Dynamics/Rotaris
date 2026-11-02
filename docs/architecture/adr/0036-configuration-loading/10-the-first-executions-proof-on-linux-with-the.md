@@ -19,7 +19,7 @@ starts anyway. The byte check stands unweakened against that seed, and Discard's
 save-status probe ("All changes saved", REQ-CONFIG-280). The scenario's steps now wait for their controls and are
 each read back from the log. The sweep's first run had shown a launch whose Settings category stayed on Models,
 whose two clicks pressed nothing, and whose script carried on. Recorded and repaired in
-[`config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md`](../../../defects/fixed/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md).
+[`config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md`](../../../archive/defects/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md).
 **What it could not show:** whether a Settings save and the initialization record can interleave so that one
 overwrites the other. Both writers round-trip the whole document. This run saw them land a second apart, never
 together, and nothing here measures the overlap. The run was on Linux as root under Xvfb; Windows and macOS were

@@ -267,7 +267,7 @@ describe('the run\'s lifetime (REQ-TRACE-466/476/477)', () => {
     await h.runs.dispatch();
     await h.runs.quitAll('the window closed');
     // The quit, never the stop control's `cancel`: a stop request keeps its first reason, so a `cancel` sent ahead of the
-    // run host's `shutdown` would rest the run by `stop` (docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md).
+    // run host's `shutdown` would rest the run by `stop` (docs/archive/defects/a-board-run-caught-by-a-quit-rests-as-a-stop.md).
     expect(h.hostSent[h.hostSent.length - 1]).toEqual({ kind: 'session.control', request: { op: 'announceShutdown', sessionId: 'sess-1', args: {} } });
     expect(h.hostSent.some((r) => r.kind === 'session.control' && r.request.op === 'cancel')).toBe(false);
   });

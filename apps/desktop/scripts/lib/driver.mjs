@@ -129,7 +129,7 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
  * (or a remembered one that is gone) opens it (REQ-SHELL-010 (c), REQ-WORKSPACE-007), so such a launch names a directory
  * of its own, emptied and in no repository (`lib/working-directory.mjs`), and never runs here: here it opened the
  * checkout's `apps/desktop` and set up code intelligence in the product's source
- * (`docs/defects/fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
+ * (`docs/archive/defects/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
  */
 export async function startApp({ root, workspace, cwd = appDirectory, extra = {}, electronArgs = [], detached = false, dialect = 'scripted', timeoutMs = 60_000 }) {
   mkdirSync(root, { recursive: true });
@@ -145,7 +145,7 @@ export async function startApp({ root, workspace, cwd = appDirectory, extra = {}
   // On POSIX every launch leads its own process group, so the launch can be ended as a whole — what its main process
   // leaves running is drained at its end (`stopApp`, `drainGroup`) and SIGKILLed at the proof's exit or on a fatal signal
   // (`trackLaunch`). Until 2026-10-07 a proof's launch shared the proof's group and a proof exited beside its zygotes
-  // and a Git view's `git diff` (finacc3 A2-19, `docs/defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md`).
+  // and a Git view's `git diff` (finacc3 A2-19, `docs/archive/defects/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md`).
   const group = detached || POSIX;
   const env = {
     ...cleanEnvironment(),
@@ -268,7 +268,7 @@ export async function until(probe, accept, { timeoutMs = 15_000, intervalMs = 15
  * only when a press is refused for not landing, up to `attempts` presses in all. Any other refusal — nothing matched,
  * a match that never settled — is thrown at once. Resolves with the driver's reply and every press that missed, so a
  * proof can say a click needed a second press rather than hide it
- * (`docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
+ * (`docs/archive/defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
  */
 export async function clickLanded(driver, selector, { text, timeoutMs = 15_000, attempts = 3 } = {}) {
   const missed = [];

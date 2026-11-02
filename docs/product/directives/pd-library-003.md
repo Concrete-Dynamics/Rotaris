@@ -48,7 +48,7 @@ literally true of one stored thing ([OQ-210](../../architecture/open-questions.m
 the submitted body in `key_findings` and the Key Findings section, which REQ-LIBRARY-088, 093 and 087 together require; this
 directive records that departure from REQ-LIBRARY-093's text. Confirming it exposed a defect: a re-render wrote the rendering
 of the columns over a document a person had saved, while `edited_at` and ` · edited` stayed
-([the defect note](../../defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md)). If the document is the body,
+([the defect note](../../archive/defects/a-re-render-writes-over-a-persons-saved-artifact-edit.md)). If the document is the body,
 a re-render of an edited one refreshes only what the record owns, its frontmatter, and the person's correction is what the
 next agent is handed. What it costs: an agent reading a published artifact sees its first line twice (in Summary and in Key
 Findings) and a few hundred characters of frontmatter, which spend REQ-LIBRARY-098's budget a little faster; a large
@@ -77,7 +77,7 @@ the frontmatter shown read-only, and a save writing the record's frontmatter.
 
 > **First execution, 2026-10-07 (bundle `fin28-artifacts`).** Clause (d) found a defect, the one the ruling named: a re-render
 > wrote the whole rendering over an edited document
-> ([the note](../../defects/fixed/a-re-render-writes-over-a-persons-saved-artifact-edit.md)). `ArtifactStore.rerender`
+> ([the note](../../archive/defects/a-re-render-writes-over-a-persons-saved-artifact-edit.md)). `ArtifactStore.rerender`
 > (`packages/engine/src/artifacts/store.ts`) now rewrites only the frontmatter (`renderFrontmatter`, `splitFrontmatter` in
 > `packages/contracts/src/artifacts.ts`); `latestArtifactText` (`packages/engine/src/sessions.ts`) carries an edited document
 > marked `edited`; `renderSidecar`'s Key Findings section drops only blank lines; the inspector's Preview starts below the
@@ -132,5 +132,5 @@ the frontmatter shown read-only, and a save writing the record's frontmatter.
 > a document whose block an earlier edit broke, in the built app (the unit cases carry it). **Found along the way:** the editor is
 > drawn in the body's face, not the monospace one REQ-LIBRARY-132 asks for, because the adopted `textarea.input` rule outranks
 > the inspector's class
-> ([`the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face`](../../defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md),
+> ([`the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face`](../../archive/defects/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md),
 > recorded, not repaired; repaired 2026-10-14 by fin44). The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).

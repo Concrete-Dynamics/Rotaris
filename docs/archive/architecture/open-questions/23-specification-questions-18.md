@@ -73,7 +73,7 @@ from the launch content computed when the run began.
   to the run", built at the continue, and clause 20's "that nothing supersedes" holds of it then. A later iteration of
   the same run is not a new handoff: it is re-sent the launch content computed at the continue — the base of every
   iteration, which the repair of
-  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
   (2026-09-29) kept, adding only the iteration's own task after it — so **its artifact line can name an artifact
   superseded since, or another agent's where the resumed root published its first artifact after the continue**, as
   its todo and progress lines can be stale. The plan cycle held after a resumed iteration (`PD-ORCH-003` revision 2)
@@ -150,7 +150,7 @@ handoff it is re-sent, or whether a plan cycle's root is such a root.
   as the handoff's and the resumed root's, so a later reader recognises it.
 - **The re-sent handoff is left as it is.** A later iteration of a continuation run is re-sent the payload built at
   the continue, whose list can name an offer taken up since (OQ-106's "The handoff is read once", which the repair of
-  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
   kept; *until that repair this bullet called it the behaviour that defect records*). Those lines are not rewritten; an offer the payload already names is not named again, and one taken up since
   is refused at admission with "already continued by".
 - **A plan cycle is told none.** A plan cycle is not an iteration (REQ-ORCH-153) and its root takes up no offer
@@ -171,7 +171,7 @@ than left beside a fresh list.
 
 Most of what these rulings decide was already built under OQ-96 and OQ-98's readings. The audit found one behaviour the
 text contradicts: a board run caught by the application's quit came to rest by `stop`
-(`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). It also found two strings the rulings fix:
+(`docs/archive/defects/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). It also found two strings the rulings fix:
 `/stop`'s description and the paused continue's `Send`. What the text leaves open concerns a plan cycle's waits at a
 stop, the literal reach of "no other control stands outside the dock", REQ-TRACE-464's word "cancel", and a few names
 the build kept.
@@ -241,7 +241,7 @@ its own rather than a stop's `paused` and "came to rest".
 
 <a id="oq-109"></a>
 
-**OQ-109 — Does a `code_intelligence` entry configured `enabled: false` still make `code-intelligence-setup` applicable?** *(REQ-WORKSPACE-090, REQ-MCP-037, REQ-CONFIG-465, REQ-MCP-040, REQ-WORKSPACE-083. Raised 2026-09-28 by the repair of [`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](../../../defects/fixed/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md), under [R-062](../../../product/requests.md#r-062). Raised as OQ-94 on its branch and renumbered at the merge, OQ-94 to OQ-108 having been taken on `main`.)*
+**OQ-109 — Does a `code_intelligence` entry configured `enabled: false` still make `code-intelligence-setup` applicable?** *(REQ-WORKSPACE-090, REQ-MCP-037, REQ-CONFIG-465, REQ-MCP-040, REQ-WORKSPACE-083. Raised 2026-09-28 by the repair of [`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](../../defects/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md), under [R-062](../../../product/requests.md#r-062). Raised as OQ-94 on its branch and renumbered at the merge, OQ-94 to OQ-108 having been taken on `main`.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: `enabled: false` is not part of what "launchable" means for this task, so a disabled `code_intelligence` entry still makes `code-intelligence-setup` applicable, by availability alone.
 

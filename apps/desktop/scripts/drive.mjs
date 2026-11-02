@@ -125,7 +125,7 @@ switch (command) {
    * 9's order with no close guard asked (OQ-298: unsaved settings stay unsaved), then the run host and each workspace
    * service asked to `shutdown`, so a live run comes to rest (PD-ORCH-005 clause 3) — and waits for the process to end. `stop --crash` sends the immediate exit instead, which asks the run host
    * nothing and leaves a live run as a crash leaves it. Until 2026-09-29 `stop` sent the immediate exit and said
-   * nothing of it (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`).
+   * nothing of it (`docs/archive/defects/the-drivers-quit-skips-the-applications-shutdown.md`).
    *
    * Until OQ-298's ruling (2026-10-14) a close guard could keep the quit (a window with unsaved settings asked its
    * person); none is asked now. A launch still running at the bound — a shutdown that has not finished — is said so, and

@@ -366,7 +366,7 @@ app.whenReady().then(async () => {
     expect('theme.remeasureReportsOnce', resizes.length === reportsSoFar + 1 && reportsAfter === reportsBefore + 1 && resizes.at(-1).cols < resizes.at(-2).cols && s.stream.grid.cols === resizes.at(-1).cols, { resizes, reportsBefore, reportsAfter });
     // The same face change made inside the frame's own callbacks: the frame lays out the grown header and runs the resize
     // observer before React has rendered the theme change, which is the order load produced at random
-    // (`docs/defects/fixed/a-font-change-under-load-reports-an-intermediate-terminal-geometry.md`, `118×25` between
+    // (`docs/archive/defects/a-font-change-under-load-reports-an-intermediate-terminal-geometry.md`, `118×25` between
     // `118×26` and `89×19`). The check above leaves that order to chance; this one takes it every time.
     await exec(`window.__terminalProof.font(null)`);
     await pause(400);
@@ -469,7 +469,7 @@ app.whenReady().then(async () => {
     // REQ-TOOLS-104 sends Windows to PowerShell and every other host to a POSIX shell, and the harness says which one it
     // got. So each command below that is not the Node echo program is spelled in THAT shell. Until 2026-09-28 they were
     // PowerShell everywhere, and on Linux each one exited 127 and measured nothing
-    // (docs/defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md). The two spellings
+    // (docs/archive/defects/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md). The two spellings
     // produce the same output, so every check after them reads the same text on both shells.
     const PS = live.shell === 'powershell';
     const SH = {
@@ -618,7 +618,7 @@ app.whenReady().then(async () => {
     // ── REQ-TOOLS-096 (live-run M1): a command longer than the PTY's input line reaches the shell whole ──────────────
     // The POSIX wrapper was one physical line, and a canonical-mode PTY keeps 4,095 characters of a line on Linux: a
     // 3,700-character heredoc came back a soft pause with `>` for its output and never ran
-    // (docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md). This one is
+    // (docs/archive/defects/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md). This one is
     // longer than that, with quotes, a backslash, a `$` and a multi-byte character in it; it must end on its own status, at
     // once, with the byte count of what it wrote, and the window's grid must show that count and nothing of the carrier.
     const longBody = Array.from({ length: 100 }, (_, i) => `long ${String(i).padStart(3, '0')}: it's \\ "q" $HOME é ${'x'.repeat(16)}`).join('\n');
@@ -702,7 +702,7 @@ app.whenReady().then(async () => {
     await ask('deliver', { on: true });
     // REQ-SHELL-102, REQ-CHAT-063/076: from here the page samples both previews from each closing frame's arrival until
     // every surface has parsed it, at once and then on every task it gets; none may read empty
-    // (docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md).
+    // (docs/archive/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md).
     await exec(`window.__terminalProof.watchPreviews(${JSON.stringify(LIVE)})`);
     const openRun = run(flood);
     const open = await Promise.race([openRun.done, pause(60_000).then(() => null)]);
@@ -711,7 +711,7 @@ app.whenReady().then(async () => {
     // The read is taken once the closing frame has arrived (the meta says the command ended) and every surface has parsed
     // it: the closing `screen` frame resets each emulator and writes the final screen again, and a read between the two
     // saw the preview empty (1 of 20 loaded runs after the first repair; recorded in
-    // docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md, and the window
+    // docs/archive/defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md, and the window
     // itself is now sampled: `live.closingFrameNeverBlanksPreview` below).
     const floodFrom = Date.now();
     // The flood's last line appears only after its opening meta, so "ended" together with that line is this command's end,

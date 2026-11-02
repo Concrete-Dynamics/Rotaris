@@ -102,7 +102,7 @@ describe('engine — the run-level agent\'s tools and the session\'s artifact li
 });
 
 /**
- * docs/defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md (acceptance A20, R-067): the surfaces
+ * docs/archive/defects/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md (acceptance A20, R-067): the surfaces
  * derived the run-level agent's `{N} tool calls` (REQ-MONITOR-052, REQ-MONITOR-044) as the session's total less the
  * children's, and the root's calls joined that total only when its turn returned (REQ-ORCH-097's cadence, before OQ-116's
  * ruling), so while the root's turn ran it read 0 beside the tools it had used. The session record carries the run-level

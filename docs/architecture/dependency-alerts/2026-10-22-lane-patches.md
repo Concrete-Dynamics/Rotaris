@@ -90,7 +90,7 @@ then exited SIGTRAP at their first launch ("Missing X server or $DISPLAY"). That
 namespace. The suite above ran on a private Xvfb (`:111`), Ubuntu's own `xvfb` 21.1.12 package unpacked under `/tmp`
 and run inside an unprivileged user and mount namespace, because the host has no `xkbcomp` at the path Xvfb expects.
 The note, repaired on 2026-10-31, is
-[`pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md`](../../defects/fixed/pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md).
+[`pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md`](../../archive/defects/pnpm-preflight-passes-the-display-check-for-a-display-no-client-can-reach.md).
 
 **Not here, and why.** The gate (`pnpm check`) is run on this exact tree before the commit. Continuous integration's
 `gate` and `package` jobs run on the pushed head. Both results are in the pull request and the handoff, because no file can

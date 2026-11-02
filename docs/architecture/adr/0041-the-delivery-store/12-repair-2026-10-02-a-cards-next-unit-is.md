@@ -5,7 +5,7 @@ Part 12 of 16 of [ADR-0041](../0041-the-delivery-store.md), which indexes every 
 ## Repair — 2026-10-02: a card's next unit is provisioned at the claim
 
 *Reported back in place, under CLAUDE.md's standing policy, by the repair of
-[`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../../../defects/fixed/a-rejected-card-back-in-ready-can-never-start-its-next-unit.md).*
+[`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../../../archive/defects/a-rejected-card-back-in-ready-can-never-start-its-next-unit.md).*
 
 **One clause of the repair above is replaced, and kept above as written: "It never provisions: the queue's release
 writes no worktree row, and REQ-TRACE-464 forbids a second tree."** It held for the card that repair was about — a

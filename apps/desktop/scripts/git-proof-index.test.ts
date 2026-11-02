@@ -4,7 +4,7 @@
  * until that table moved into the registry, 2026-10-18). Launch 6c (`unborn-branch`, fin22) was added to the script
  * and to neither, so the index never said that git-proof shows REQ-WORKSPACE-020's empty item for an unborn branch
  * (REQ-WORKSPACE-029), and the header still said "six launches" where ten ran
- * (`docs/defects/fixed/agents-md-git-proof-row-omits-the-unborn-branch-launch.md`).
+ * (`docs/archive/defects/agents-md-git-proof-row-omits-the-unborn-branch-launch.md`).
  *
  * The scan reads the script's text: each launch section is headed `// <label>. ` at column zero (`1`, `3b`, `6c`), and
  * its launch is the first `launch('<name>'` after that heading. It asserts that the header lists every section as

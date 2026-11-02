@@ -2,7 +2,7 @@
  * What `todo-proof` reads to say every auto-generated task and phase id is minted in one form (REQ-CHAT-089,
  * REQ-TOOLS-144) — the engine's `mintTodoId` and the agent todo tool's `hexId` — against the sources as they are and
  * against each way the property could be lost
- * (`docs/defects/fixed/todo-proofs-stable-backend-ids-check-looks-for-an-id-minting-form-that-moved-out-of-run-ts.md`).
+ * (`docs/archive/defects/todo-proofs-stable-backend-ids-check-looks-for-an-id-minting-form-that-moved-out-of-run-ts.md`).
  */
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';

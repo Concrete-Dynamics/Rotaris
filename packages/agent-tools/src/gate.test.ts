@@ -1182,7 +1182,7 @@ describe('PD-TOOLS-005: after one unanswered approval, a run treats the user as 
 /**
  * PD-TOOLS-007 (OQ-139, ruled by the owner under R-071): a `write_file` call with a path and content and no `operation`, for
  * a file that does not exist, is read as a create and says so. The duress runs refused 1 to 4 children's first write this
- * way, and each resent its whole file (docs/defects/fixed/write-files-first-use-refusal-recurred-under-duress.md).
+ * way, and each resent its whole file (docs/archive/defects/write-files-first-use-refusal-recurred-under-duress.md).
  */
 describe('PD-TOOLS-007: a write_file call with no operation is read as a create when its file does not exist', () => {
   let dir: string;
@@ -1260,7 +1260,7 @@ describe('PD-TOOLS-007: a write_file call with no operation is read as a create 
 /**
  * Live-run finding G3 (default run at 27a5127): a tool whose parameters are a JSON Schema — an MCP tool, handed to the
  * model as its server's `inputSchema` — reached the gate with `anySchema`, so REQ-TOOLS-032's refusal never fired for it
- * (docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). `advertisedSchemaCheck`
+ * (docs/archive/defects/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md). `advertisedSchemaCheck`
  * gives the gate a schema that checks the advertised one; the refusal takes the built-in tool's shape and record.
  */
 describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCheck)', () => {
@@ -1307,7 +1307,7 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
   /*
    * `$async` is ajv's keyword, not JSON Schema's. Honoured, it compiled a validator returning a Promise, which the check
    * read as a pass, and whose rejection for an invalid call nothing handled (the fin18 verifier's probe;
-   * docs/defects/fixed/an-advertised-schema-marked-async-compiles-a-check-that-never-refuses.md).
+   * docs/archive/defects/an-advertised-schema-marked-async-compiles-a-check-that-never-refuses.md).
    */
   it('an `$async` schema is read as JSON Schema reads it: checked synchronously, an invalid call refused, no rejection left unhandled', async () => {
     const unhandled: unknown[] = [];
@@ -1369,8 +1369,8 @@ describe('REQ-TOOLS-032 for a tool advertised by JSON Schema (advertisedSchemaCh
  * The fin18 verifier's three probes of the advertised-schema check, each a call the server's own schema accepts that the
  * first repair refused, and none of which a re-issue could recover from: a Unicode property escape read without the `u`
  * flag (`\p{L}` as the text "p{L}"), an integer past 2^53, and an object `items` rewritten to an array by the gate before
- * the check saw it (docs/defects/fixed/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md,
- * docs/defects/fixed/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md).
+ * the check saw it (docs/archive/defects/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md,
+ * docs/archive/defects/the-gate-wraps-an-object-in-an-array-where-the-schema-does-not-expect-one.md).
  */
 describe('REQ-TOOLS-032: a call the advertised JSON Schema accepts is never refused', () => {
   function advertisedHarness(inputSchema: Record<string, unknown>) {

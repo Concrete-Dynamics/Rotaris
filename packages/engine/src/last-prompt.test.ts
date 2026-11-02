@@ -13,9 +13,9 @@ import { lastSubmittedPrompt } from './sessions.js';
  * REQ-NOTIFY-045 / REQ-NOTIFY-069 / REQ-SESSION-192 / REQ-CHAT-173: the session's last submitted prompt is read over every
  * row, resident or released, by one helper (`lastSubmittedPrompt`) that the retry, the continue, the plan decision and the
  * authentication restarts share; the retry resubmits it with its images, read back from the session's directory and
- * verified by digest. Before the repair of `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
- * `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md` and
- * `docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`, the
+ * verified by digest. Before the repair of `docs/archive/defects/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
+ * `docs/archive/defects/the-retry-action-resubmits-a-prompt-without-its-images.md` and
+ * `docs/archive/defects/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`, the
  * engine searched the resident rows only (falling back to the session id as the prompt's text) and the retry was the
  * renderer's, over its replica's window, re-sending the text alone.
  */

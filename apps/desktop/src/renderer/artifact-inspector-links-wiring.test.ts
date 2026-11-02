@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
  * artifact inspector has to hand it the window's shared `openLink` (`shell.ts`, which sends `shell.openExternal` and
  * acknowledges the outcome). The renderer roots mount under Electron, with a preload no `node` test environment reaches, so
  * their source is what pins it, as `agent-links-wiring.test.ts` pins its own; `pnpm artifacts-proof` launch 4 clicks a
- * Preview link in the built app (`docs/defects/fixed/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md`).
+ * Preview link in the built app (`docs/archive/defects/every-link-in-the-library-artifact-inspectors-preview-is-drawn-disabled.md`).
  */
 describe('every artifact inspector mount opens its Preview links (ADR-0051 decision 4)', () => {
   const source = (file: string): string => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');

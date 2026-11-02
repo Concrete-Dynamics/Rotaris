@@ -143,7 +143,7 @@ const NO_WORKSPACE_CODES: ReadonlySet<string> = new Set(['workspace.none', 'chec
  * holds one — so `runCommand` (`index.ts`) passes every answer through this before it leaves main: such a refusal in a window
  * with no identifier, while a refusal is held for its workspace, becomes that refusal in the workspace service's own words.
  * Anything else passes unchanged.
- * (`docs/defects/fixed/a-refused-store-is-reported-as-no-workspace-by-every-command-but-the-listing.md`.)
+ * (`docs/archive/defects/a-refused-store-is-reported-as-no-workspace-by-every-command-but-the-listing.md`.)
  */
 export function answerUnderHeldRefusal(outcome: CommandOutcome, w: { readonly workspaceId: string | undefined }, held: StoreRefusal | undefined): CommandOutcome {
   if (outcome.ok || !NO_WORKSPACE_CODES.has(outcome.code) || w.workspaceId !== undefined || held === undefined) return outcome;

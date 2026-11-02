@@ -37,7 +37,7 @@ import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SETUP_SHUTDOWN_GRA
  * view in which every server REQ-MCP-034's stage bound carries the working tree's root (`mcpConfigurationForExecutionRoot`).
  * The tool port's `ready()` and the discovery `session.start` runs ahead of the run both read it, so discovery and launch
  * agree (REQ-MCP-050). Until 2026-10-03 both handed on the loaded configuration, bound to the anchoring checkout
- * (`docs/defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`).
+ * (`docs/archive/defects/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`).
  */
 export function configurationForExecutionRoot(cfg: LoadedConfiguration, executionRoot: string): LoadedConfiguration {
   const mcp = mcpConfigurationForExecutionRoot(cfg.mcp, cfg.workspaceRoot, executionRoot);
@@ -112,7 +112,7 @@ function idleSetup(): McpSetupStatus {
  * decided"; REQ-WORKSPACE-091 then binds the indexing and memory stages to "a workspace classified
  * `non-code` (REQ-WORKSPACE-098)". So a workspace of `main.tf` and `deploy.sh` was indexed for 1800 s
  * under a set this domain does not own. Recorded as
- * `docs/defects/fixed/classification-decided-by-the-runtimes-extension-list.md`.
+ * `docs/archive/defects/classification-decided-by-the-runtimes-extension-list.md`.
  */
 export function workspaceContainsCode(root: string, agentsFile: string): boolean {
   return classifyWorkspaceRoot(root, agentsFile) === 'code';
@@ -267,7 +267,7 @@ export class McpHost {
       const r = await this.discovery.discover({ name: s.name, description: this.descriptionOf(s), workspaceRoot, context: project });
       // A success is this line's; a failure is `ToolDiscovery`'s one REQ-MCP-048 warning, which carries the project, the
       // detail and the time. Until 2026-10-03 this line said the failure again at info 1 ms after the warning, the child's whole standard
-      // error in both (`docs/defects/fixed/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`).
+      // error in both (`docs/archive/defects/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`).
       if (!r.memoised && !r.failed) this.deps.log(`mcp: discovery of '${s.name}'${project === '' ? '' : ` (${project})`} listed ${r.tools.length} tool(s) in ${r.elapsedMs.toFixed(0)} ms`);
     })).then(() => { this.deps.log(`mcp: discovery for ${servers.length} server(s) finished in ${(this.deps.clocks.monotonic.now() - started).toFixed(0)} ms`); });
     this.preparing.set(key, p);
@@ -389,11 +389,11 @@ export class McpHost {
            * cross-file replacement — changes files its arguments do not name, so the files it can reach are observed before
            * and after it, whatever it returned, and the observation rides on its result for the child's report
            * (`observeReach`, `codeIntelligenceEdit`). Until the ruling such a call was listed by its argument path alone
-           * (docs/defects/fixed/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
+           * (docs/archive/defects/a-cross-file-code-intelligence-edit-is-reported-by-its-argument-path-alone.md).
            * The tier is the code-intelligence server's (REQ-MCP-015), so only that server's tools are asked, by the name the
            * runtime reports; until fin36 every server's tool was asked by its callable name, and another server's tool named
            * like the tier was walked over its reach and read as an EDIT call
-           * (docs/defects/fixed/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
+           * (docs/archive/defects/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md).
            */
           execute: async (a, tctx) => observeReach({ root: workspaceRoot, reach: server.name === CODE_INTELLIGENCE_SERVER_NAME ? codeIntelligenceEdit(tool.reported, a as Record<string, unknown>)?.reach ?? null : null, journal: this.writes, agent: tctx.agentName }, async () => {
             const started = this.deps.clocks.monotonic.now();
@@ -408,7 +408,7 @@ export class McpHost {
                * PD-MCP-004 (OQ-273, ruled 2026-10-13 under R-072): the bundled server's symbol rename is preceded by its
                * referencing-symbol search of the same symbol and file, whose answer is discarded — the pinned runtime answered
                * a rename before its language server had loaded the project, and renamed the declaring file alone
-               * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
+               * (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md).
                * Asked by the reported name, so a `tool_name_map` rename (REQ-MCP-005) is still warmed, and of this server alone.
                * The search is the run host's own request, as REQ-MCP-070's and REQ-MCP-071's are: no grant applies to it, and it
                * writes no record, total or notice. The pair is held to the rename's one allowance, measured from `started`: the
@@ -660,7 +660,7 @@ export class McpHost {
    * the step started — has gone. Before, `shutdown` never reached the setup: the host exited with the step still running,
    * and at an orderly quit the step and what it had launched outlived the application (measured 2026-10-01 on the built
    * app: both still running 5 s after it exited;
-   * `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+   * `docs/archive/defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
    * The step is asked to terminate and force-killed after `SETUP_SHUTDOWN_GRACE_MS`, a cancellation already under way
    * included — 2 s, the grace every stop of a step gets under `PD-MCP-003` (OQ-172, ruled 2026-10-06; before the ruling
    * only a close cut REQ-MCP-099's 5 s to 2 s, the build's reading while it was open). `dispatch`'s `shutdown`
@@ -757,13 +757,13 @@ export class McpHost {
  * does not know of (the plan gate, a collision with a native name). Read from the surface its tool port resolved, after the
  * controls, so the record lists what the agent could call. Until 2026-10-01 this was `McpHost.evidenceFor`, resolved for the
  * spawn with no names reserved and before any control
- * (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+ * (`docs/archive/defects/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
  *
  * A server whose tool discovery failed stays among the surface's `active` servers, because the persona prompt still lists
  * it bare (REQ-MCP-048, REQ-MCP-101), but its fate here is `dropped` for `discovery-failed` with nothing granted under it:
  * REQ-MCP-114 names tool discovery having failed (REQ-MCP-042) among the drop reasons. Until 2026-10-03 every active server
  * was recorded `connected`, and a dead code-intelligence server read "connected / No tools granted" in the inspector
- * (`docs/defects/fixed/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md`).
+ * (`docs/archive/defects/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md`).
  */
 export function grantEvidence(surface: PersonaMcpSurface, granted: (server: string, callable: string) => boolean = () => true): McpGrantEvidence {
   const carried = surface.active.filter((a) => !a.discoveryFailed);

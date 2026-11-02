@@ -343,7 +343,7 @@ describe('rows — REQ-CHAT-068/069, delegation and scope', () => {
 
   it('REQ-CHAT-069: the kept kinds are the five the requirement names, another agent\'s question and approval included', () => {
     // The five, in the requirement's own order. The second implementation this replaced knew three of them
-    // (docs/defects/fixed/the-in-projection-scope-filter-is-never-reached.md), so the list is asserted whole.
+    // (docs/archive/defects/the-in-projection-scope-filter-is-never-reached.md), so the list is asserted whole.
     expect([...RUN_OWNED_KINDS]).toEqual(['user', 'system', 'question', 'approval', 'verifier']);
     const rows = [
       row({ index: 0, kind: 'question', name: 'other' }),
@@ -365,7 +365,7 @@ describe('rows — REQ-CHAT-068/069, delegation and scope', () => {
 
   it('REQ-CHAT-069 with PD-ORCH-005 clause 4 (OQ-97): "This task" for the run-level agent keeps every row a root of the session wrote, under whichever persona it was opened as, and no row of a child of the entry persona', () => {
     // The entry role is `coding-agent`; the session's root was opened as `orchestrator`, and a root resumed as the entry
-    // role keeps that name on its rows (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+    // role keeps that name on its rows (docs/archive/defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
     const runLevel: AgentRecord = { ...agent, id: RUN_AGENT_ID, name: 'coding-agent', persona: 'coding-agent' };
     const rows = [
       row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }),

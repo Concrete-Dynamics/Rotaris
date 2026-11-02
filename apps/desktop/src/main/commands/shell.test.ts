@@ -11,7 +11,7 @@ import type { CommandAt, CommandContext, MainWindowState } from './context.js';
  * Channel 14 — REQ-CHAT-167 ("changing it changes every reasoning row at once") and REQ-CONFIG-403 (each Display toggle
  * wired to the stored preference and "a live re-render notification"). Until 2026-10-14 `prefs.set` stored a display
  * preference and told no window, so a persona window already open kept the values it booted with
- * (`docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`). The windows are plain
+ * (`docs/archive/defects/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`). The windows are plain
  * objects standing where Electron's are; no Electron window is reached.
  */
 type Sent = { channel: string; payload: unknown };
@@ -89,7 +89,7 @@ describe('prefs.set announces a stored display preference to every window — RE
 /**
  * ADR-0049 / PD-WORKSPACE-005: `notice.current` answers the notice current in main's one store once every publication accepted
  * before it has been applied, so a window opened after a publication can show it
- * (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
+ * (docs/archive/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
  */
 describe('notice.current answers the notice a window opened after its publication should show', () => {
   it('waits for the store\'s chain, then answers its current notice in channel 4\'s shape', async () => {
@@ -110,13 +110,13 @@ describe('notice.current answers the notice a window opened after its publicatio
  * REQ-SHELL-069: "the stored pane count differs from the view's current pane count" restores the declared defaults. `prefs.get`
  * reads each view's layout against THAT view's count (`PANE_LAYOUT_PANES`); until 2026-10-14 it read every view against a literal
  * 2, so a view that gained a pane would have had every layout it wrote discarded and a two-pane layout applied to it
- * (`docs/defects/fixed/the-pane-layout-read-assumes-two-panes-for-every-view.md`). The store is a real `PreferenceStore` on disk.
+ * (`docs/archive/defects/the-pane-layout-read-assumes-two-panes-for-every-view.md`). The store is a real `PreferenceStore` on disk.
  */
 /**
  * REQ-SHELL-069: the components that WRITE each view's layout state its pane count as a literal (the renderer and `@rotaris/ui`
  * do not import `@rotaris/platform`), while `prefs.get` reads against `PANE_LAYOUT_PANES`. A view that gained a pane in one and not
  * the other would have every layout it writes discarded at the next read, silently (fin46's review, accept1-7; the fixed note
- * `docs/defects/fixed/the-pane-layout-read-assumes-two-panes-for-every-view.md` says the two must change together). This holds
+ * `docs/archive/defects/the-pane-layout-read-assumes-two-panes-for-every-view.md` says the two must change together). This holds
  * them together: each writer's `panes: N` is its view's figure in the table.
  */
 describe('each view\'s layout writer states the pane count PANE_LAYOUT_PANES declares — REQ-SHELL-069', () => {
@@ -182,7 +182,7 @@ describe('prefs.get reads a pane layout against its own view\'s pane count — R
 /**
  * REQ-SHELL-142: "a failed open shows 'Could not open the third-party license bundle.'" — and an opener that never answers is a
  * failed open (REQ-SHELL-040: neither failure of the opener is silent). Until 2026-10-31 the command waited on it for good, as
- * Open log did (`docs/defects/fixed/open-log-waits-on-the-platform-opener-without-a-bound.md`).
+ * Open log did (`docs/archive/defects/open-log-waits-on-the-platform-opener-without-a-bound.md`).
  */
 describe('shell.openThirdPartyLicenses over an opener that never answers (REQ-SHELL-142, REQ-SHELL-040)', () => {
   const bundle = '/opt/rotaris/resources/THIRD_PARTY_NOTICES.txt';

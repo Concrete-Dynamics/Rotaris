@@ -9,7 +9,7 @@
  * the moment the run starts, and so raced the Steer press it was meant to follow. Measured twice: on 2026-09-30 the
  * two presses landed a millisecond apart and the Pause went into the opening dialog; on 2026-10-01, at a load average
  * of 3.5, the run started 2.16 s in, the Steer appointment at 1.9 s found no control, and the Pause pressed alone
- * (`docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`).
+ * (`docs/archive/defects/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`).
  *
  * The schedule now follows the steer instead of guessing at it:
  *  - Steer the run waits (`@~`) for its control AND for the composer's send to have settled (its send pill enabled
@@ -18,7 +18,7 @@
  *    composer took focus back when its send settled, and a dialog opened before that lost its focus to the composer
  *    behind it, so the steer's text was typed into the composer and the dialog's Steer refused an empty text. Seen
  *    twice in eight runs on 2026-10-01 and once in the ten after
- *    (`docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`,
+ *    (`docs/archive/defects/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`,
  *    repaired the same day; the steer-early launch, `steer-early.mjs`, now opens the dialog inside that window on
  *    purpose). This launch keeps the wait, because what it measures is a steer pending at a rest, not that window;
  *  - the text, then the dialog's Steer, are appointments after that deadline;
@@ -67,7 +67,7 @@ export const STEER_REST_TYPE = 'go left>>no-enter@3800';
  * Until 2026-10-01 it pressed Steer the run at a fixed 1900 ms, typed at 2300 ms and pressed the dialog's Steer at
  * 2600 ms, appointments a run starting after 1.9 s misses: the press found no control, the text went to whatever held
  * focus, and the proof failed with "the steer was not submitted and injected", a red that says nothing about the
- * product (`docs/defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md`).
+ * product (`docs/archive/defects/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md`).
  * It now takes the steer-rest launch's steer: Steer the run waits for its control and for the composer's settled send,
  * the text and the dialog's Steer are appointments after that deadline, and the proof names a step it never pressed.
  * The dialog opened while the send is still settling is the steer-early launch's (`steer-early.mjs`), not this one's.

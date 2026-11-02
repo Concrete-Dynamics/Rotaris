@@ -1,7 +1,7 @@
 /**
  * The project the code-intelligence server was LAUNCHED against in a run, read from the application log — the live run's
  * requirements check, so that "the run was confined to a worktree of its own" is not passed on the session's worktree
- * record alone (`docs/defects/fixed/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`, finding
+ * record alone (`docs/archive/defects/an-isolated-runs-code-intelligence-server-is-bound-to-the-anchoring-checkout.md`, finding
  * D1 of the default live run at 1763f7f: the record named the worktree and the server answered from the main checkout).
  *
  * The run host's launch lines name the project the launched description carried (REQ-MCP-034; `projectWords` in
@@ -16,7 +16,7 @@
  *   mcp code_intelligence (project /ws/…/u1): tool discovery failed in 973 ms (Connection closed (… | …)); the persona prompt …
  *
  * Until then the run host said a failure again in its own line, `(project …) failed (…)`, its detail running over several
- * log lines (`docs/defects/fixed/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`); an older pack's
+ * log lines (`docs/archive/defects/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`); an older pack's
  * line of that shape is still read.
  */
 const SERVER = 'code_intelligence';

@@ -4,8 +4,8 @@
  * first, the element last), ranked by importance, then specificity, then order. A class written on the element is no promise
  * that it wins: the adopted `textarea.input { font-family: inherit }` (0,1,1) outranks `.mono` (0,1,0), which is how the
  * artifact inspector's editor and the restore confirmation's preview field both lost their monospace face
- * (docs/defects/fixed/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md,
- * docs/defects/fixed/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md).
+ * (docs/archive/defects/the-artifact-inspectors-markdown-editor-is-not-drawn-in-the-monospace-face.md,
+ * docs/archive/defects/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md).
  *
  * It reads compound selectors of a type and classes joined by descendant or child combinators — every selector that can reach
  * a classed element in these sheets — and skips the rest (attribute selectors, pseudo-classes, `@media` bodies), which a test

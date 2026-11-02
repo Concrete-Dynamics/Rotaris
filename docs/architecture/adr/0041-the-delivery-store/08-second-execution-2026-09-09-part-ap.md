@@ -127,7 +127,7 @@ unmeasured here, because that button is `REQ-TRACE-465`'s and no surface in this
 > **Reconciled 2026-09-28 (`PD-ORCH-005` clauses 3, 9 and 15, OQ-108, R-065).** The coordinator's `cancelAll` is now
 > `quitAll`, and it sends the run host's `session.control {op: 'announceShutdown'}`, the application's quit, not the
 > stop control's `cancel`: a stop request keeps its first reason, so the `cancel` rested a board run by `stop`
-> (`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The run comes to rest by `quit`, and what
+> (`docs/archive/defects/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The run comes to rest by `quit`, and what
 > waits on a person is **withdrawn** by the quit (clause 9), never answered and no longer `cancelled`, so the
 > paragraph above describes the release before the directive. REQ-TRACE-469's guarantee holds unchanged: the unlimited
 > wait still ends at once with the quit. REQ-TRACE-464's "SHALL cancel" is read through clause 3's quit; OQ-108 records

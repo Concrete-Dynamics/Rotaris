@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { replicaRunStartDeclines, unexpectedRendererErrors, updateDepthErrors, updateDepthVerdict } from './renderer-console.mjs';
 
 /**
- * Live-run finding D8 (docs/defects/fixed/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md): the run
+ * Live-run finding D8 (docs/archive/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md): the run
  * counts the relayed renderer console lines naming React's update-depth error, which it read at `info` and passed.
  */
 describe('updateDepthErrors (D8)', () => {
@@ -59,7 +59,7 @@ describe('live-run\'s launch takes the update-depth verdict as a check (D8 guard
 });
 
 /**
- * docs/defects/fixed/palette-proof-fails-on-the-replicas-documented-run-start-decline.md: palette-proof counted the replica's
+ * docs/archive/defects/palette-proof-fails-on-the-replicas-documented-run-start-decline.md: palette-proof counted the replica's
  * run-start decline, REQ-SESSION-161's own recovery, as a renderer error and went red about one launch in four under load with
  * nothing wrong on screen. The filter mission-proof kept to itself is shared here, and both proofs read through it.
  */
@@ -102,7 +102,7 @@ describe('palette-proof and mission-proof read renderer errors through the share
 });
 
 /*
- * docs/defects/fixed/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md: notice-proof's
+ * docs/archive/defects/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md: notice-proof's
  * launches start scripted runs and ended each with `errors.length === 0`, and mission-proof's `painted` and `waiting` launches,
  * each starting a delegating run, did the same before its later checks read through `unexpected`. Either could go red on
  * REQ-SESSION-161's own recovery with nothing wrong on screen, as palette-proof did.

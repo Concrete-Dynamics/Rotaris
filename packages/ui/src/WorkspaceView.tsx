@@ -1478,7 +1478,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
               * Drawn from the mockup's WORKSPACE → transcript column, where the magnifying glass sits before the terminal
               * control as a bare icon in the tertiary text colour; its tooltip and accessible description carry the
               * platform-formatted chord (REQ-SHELL-058). Until 2026-10-14 the toolbar had no search control
-              * (`docs/defects/fixed/the-transcript-has-no-toolbar-control-for-search.md`). */}
+              * (`docs/archive/defects/the-transcript-has-no-toolbar-control-for-search.md`). */}
             <TranscriptSearchControl onOpen={openSearch} />
             {/* Part AL2 — REQ-SHELL-080/108: the toolbar's terminal control with its counts, always enabled; the counts and the opener come from the renderer's terminal host (`terminal/host.tsx`), so this view's props do not change. The toolbar renders whenever `onOpenStash` is given, which the product always gives, so the control is reachable from a cold start; the condition above is not widened. */}
             <TerminalToolbarControl />

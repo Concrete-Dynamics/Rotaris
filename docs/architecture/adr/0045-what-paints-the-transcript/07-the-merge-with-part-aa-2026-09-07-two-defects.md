@@ -42,7 +42,7 @@ The coordinate contract remains `translateY(measuredOffset)`: offsets retain the
 
 *Reported here because this record fixed the measurement point — the double `requestAnimationFrame` — and predicted that
 appending would cost the frame cadence and nothing more. The defect note
-`docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md` holds every run and figure;
+`docs/archive/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md` holds every run and figure;
 this is what the round found about the point itself and about the recycler.*
 
 **The point measures the queue in front of an update, and the proof had been measuring a queue without knowing it.**
@@ -90,7 +90,7 @@ does not — "the loaded transcript faster than the empty one" did not recur and
 **Fix round 2, the same day — still open.** The bounded form was still wrong on a pure append: its cut read runs on the
 raw rows while the fold reads the rows hygiene keeps (REQ-CHAT-048's dropped reasoning split an activity line), and a
 repeated diff REQ-CHAT-050 drops let the reused prefix pass the changed index; both repaired in step 4 and pinned
-(`docs/defects/fixed/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md`). The repair moves the bounded
+(`docs/archive/defects/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md`). The repair moves the bounded
 projection's own cost by nothing measurable (0.117 → 0.119 ms at 1,200 rows). Six runs on it: every update **+29.6**,
 +11.7, **+35.9**, **+18.7**, **+43.7**, +4.5 ms — two passes in six, on a host carrying other agents' Electron proofs;
 the verifier's three runs on fix round 1's build had passed three in a row (+11.5, −4.4, −12.4). Fifteen runs since the
@@ -168,12 +168,12 @@ scroll, on the first round's build, three runs of three. The pane now observes a
 key it was not observed under (`observeAgain`). The pool, its capacity and the anchor rule are as they were; the proof's
 paging check now holds the anchor row itself to 4 px, because a row measured below the reader moves the transcript's
 height and not the reader, and fails on any bound row positioned by its estimate once the pool has settled
-(`docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`). Noticed
+(`docs/archive/defects/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`). Noticed
 on the way and recorded, not repaired: the capacity rule's 30 px unit is larger than a row PD-CHAT-003 draws inside a
-block — a one-line system notice drew 23.8 px (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`, repaired 2026-10-01 below);
+block — a one-line system notice drew 23.8 px (`docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`, repaired 2026-10-01 below);
 and a row that GROWS is positioned by the height its identity drew last until it is measured again, which drew the
 planted activity line 21.8 px through the row beneath it for a frame in one run of six when it turned live again
-(`docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`, repaired 2026-10-01 below) — the proof's new-row
+(`docs/archive/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`, repaired 2026-10-01 below) — the proof's new-row
 watch records such a pair of rows already drawn and holds only the pairs with a new row to 1 px.
 
 **The capacity unit, 2026-10-01 (R-067, acceptance finding A38) — the capacity rule's 30 px reason falsified, kept beside its
@@ -190,7 +190,7 @@ sheds its overscan, below and then above, before it cuts a visible row: a viewpo
 `ceil(H ÷ h)` (one partly at either edge), which the rule does not count and the old rail cut first. On the repair the stage
 is green — 226 slots, the bound rows covering the viewport with no gap at the tail and in the middle. A larger pool is more
 empty containers allocated at construction, which the memory tripwire subtracts away; nothing else this record decided
-moved (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`; OQ-166 asks whether
+moved (`docs/archive/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`; OQ-166 asks whether
 PD-CHAT-003's cost paragraph, which describes the capacity arithmetic as keeping 30 px, needs a revision; ruled 2026-10-06,
 [R-071](../../../product/requests.md#r-071): [`PD-CHAT-003`](../../../product/directives/pd-chat-003.md#pd-chat-003) revision 2 names the 20 px unit, and the code is unchanged).
 
@@ -210,14 +210,14 @@ reading. The observer's delivery comes after layout and before the paint, and it
 (`flushSync`); the reading is 0 px on every frame in four runs of four. Its cost is the same render moved before the paint,
 and, where that render rebinds or re-observes a slot, a slot's size deferred to the next frame with Chromium's "loop completed
 with undelivered notifications" line in the renderer console — once in the proof's eleven launches
-(`docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`). The identity's last height still places the row for the render that binds it, so a streaming row
+(`docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`). The identity's last height still places the row for the render that binds it, so a streaming row
 is never placed by an estimate; what changed is that the render is not the one painted. The read forces layout of the slots
 the update bound or changed, before a paint that would have laid them out anyway, and walks the pool's slots rather than the
 rows held (REQ-CHAT-055); what it costs is that a new row's first painted frame carries the second render the delivery used
 to cause a frame later, and the append comparison passed in four runs of five on the repair, red in the one taken at a host
 load of 4.5 to 5.5. On the repair the stage reads 0 px on all twelve frames after the click and holds the pairs of
 rows already drawn, which it had recorded and not held, to 1 px: 0 in three runs of three
-(`docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`). Nothing else this
+(`docs/archive/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`). Nothing else this
 record decided moved.
 
 
@@ -233,7 +233,7 @@ scrollbar appearing inside a delivery's render narrowed every slot by 6 px. That
 measurement key carries the width, and it once painted a re-wrapped row 30.7 px through the row beneath it. **The scroller
 holds its scrollbar gutter**, so the width the rows are measured at never changes with the bar. `transcript-proof` now fails
 on the line in any launch. Nothing else this record decided moved
-(`docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`).
+(`docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`).
 
 **A delivery held to the committed span, 2026-10-02 (R-062, after verification).** The two repairs above did not remove the
 line: on the branch carrying them, the proof's check failed 3 of 5 runs, in the append launches, 20 to 120 ms after the
@@ -243,7 +243,7 @@ launch traced) and rebound every slot, each changing size inside the delivery at
 render now binds the span the pool last committed** (`bindRange`); it moves rows and rebinds none, and an ordinary update
 after the frame releases the hold and rebinds what it held back. The row that grew is still painted with the row beneath
 it moved, which is what the synchronous render is for. Such a delivery came in 3 of 24 append launches, and the line in
-none of them (`docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`).
+none of them (`docs/archive/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`).
 Nothing else this record decided moved.
 
 **The append comparison under host load, 2026-10-02 (fin7).** fin4's verifiers saw the append comparison red at load
@@ -256,4 +256,4 @@ comparison was alternated between dc796f5's build and f2bddcf's, the commit befo
 averages of 0.6 to 4.8: all six passed, the build with the hold reading the loaded side at 78.45 to 102.1 ms against
 101.2 to 108.8 empty, and the build without it at 124 to 171.95 against 127 to 155.55, so the reds were not the hold's.
 Nothing this record decided moved
-(`docs/defects/fixed/transcript-proofs-append-comparison-goes-red-under-host-load.md`).
+(`docs/archive/defects/transcript-proofs-append-comparison-goes-red-under-host-load.md`).

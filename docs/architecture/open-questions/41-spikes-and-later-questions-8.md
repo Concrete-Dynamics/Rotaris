@@ -12,7 +12,7 @@ Part 41 of 68 of the [open-questions record](../open-questions.md), which indexe
 "resubmits the current composer draft"; REQ-NOTIFY-066, the draft stored under `composerDraft`; REQ-CHAT-014, the draft
 published to application state; REQ-CHAT-011/170/171/172, a submission's attachments and their gates. Raised 2026-10-02 by
 the repair of
-[`the-retry-action-resubmits-a-prompt-without-its-images.md`](../../defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md)
+[`the-retry-action-resubmits-a-prompt-without-its-images.md`](../../archive/defects/the-retry-action-resubmits-a-prompt-without-its-images.md)
 (fin8). Open.)*
 
 **Deferred 2026-10-06 by the owner ([R-071](../../product/requests.md#r-071)).**

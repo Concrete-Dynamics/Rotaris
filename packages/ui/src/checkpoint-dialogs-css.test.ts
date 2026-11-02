@@ -11,7 +11,7 @@ import { cascadeOf, classesOf, type CascadeElement } from './css-cascade.test-su
  * (`css-cascade.test-support.ts`, the reading the artifact inspector's editor test made): every sheet `apps/desktop/src/renderer/design.css`
  * imports, in its order, each rule matched against the dialog's own markup.
  *
- * docs/defects/fixed/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md: the field is a
+ * docs/archive/defects/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md: the field is a
  * `textarea.input` carrying `mono checkpoint-dialog__preview`, and the adopted `textarea.input { font-family: inherit }` (0,1,1)
  * outranked both single classes (0,1,0), so REQ-GIT-064's text — its paths aligned after a 9-character verb column — was drawn
  * in the dialog's proportional face. REQ-GIT-097: "the restore preview text of REQ-GIT-064 in a read-only monospace field";

@@ -11,7 +11,7 @@ import { INITIALIZATION_TASK_ID } from './initialization-marker.mjs';
  * (REQ-WORKSPACE-084: a failure leaves it pending), and the product says why in its own log. A proof that expects the
  * task to be recorded completed (REQ-WORKSPACE-083/088) then reports "the background task recorded nothing", which names
  * the workspace file's writer when the cause is the build tree
- * (`docs/defects/fixed/init-proof-reads-a-missing-code-intelligence-bundle-as-a-task-that-recorded-nothing.md`).
+ * (`docs/archive/defects/init-proof-reads-a-missing-code-intelligence-bundle-as-a-task-that-recorded-nothing.md`).
  *
  * So the proof checks the tree first (`bundle.mjs --check`), builds it when the proof builds, refuses at once naming
  * `pnpm code-intel:bundle` when it does not, and quotes the app's own setup failure when the marker is still not written.
@@ -31,7 +31,7 @@ export const BUNDLE_SCRIPT = join(APP, 'scripts', 'code-intelligence', 'bundle.m
  * The reason the build streams, kept beside it: fin47's `ensureBundle` captured the build through `spawnSync`'s defaults (the
  * call before it had inherited the streams), so a first build printed nothing for minutes, and one printing more than
  * `spawnSync`'s default `maxBuffer` of 1 MiB would have been ended with ENOBUFS and read as a failed build (fin47's review of
- * `accept1-1`; docs/defects/fixed/ensure-bundles-build-shows-no-progress-and-fails-past-spawnsyncs-buffer.md).
+ * `accept1-1`; docs/archive/defects/ensure-bundles-build-shows-no-progress-and-fails-past-spawnsyncs-buffer.md).
  */
 export function runBundleScript(args, timeoutMs, { script = BUNDLE_SCRIPT, stream = false, stdio = ['ignore', 'inherit', 'inherit'] } = {}) {
   if (stream) {
@@ -59,7 +59,7 @@ const PROOF_CONSEQUENCE = 'Without it code-intelligence-setup fails and records 
  * With `skipBuild` nothing is built: an absent or stale tree refuses at once, naming the command that builds it, and
  * `consequence` says what the caller would have judged without it. Answers what was done: `'present'` or `'built'`.
  * The live run has the same precondition since 2026-10-03
- * (`docs/defects/fixed/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`).
+ * (`docs/archive/defects/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`).
  */
 export function ensureBundle({ skipBuild, consequence = PROOF_CONSEQUENCE, check = () => runBundleScript(['--check'], 60_000), build = () => buildBundle() }) {
   const first = check();

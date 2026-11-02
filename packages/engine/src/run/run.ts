@@ -583,7 +583,7 @@ export class Run {
    * REQ-MONITOR-052/066 with REQ-MONITOR-049: each child's ladder cell of this run, by task id — the latest execution's, with
    * the configured pair and key its row records — so `childModel` names the model a moved child runs on. Until 2026-10-03
    * a child's cell was built unnamed and the record read `children.model_key` alone
-   * (docs/defects/fixed/a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md).
+   * (docs/archive/defects/a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md).
    */
   private readonly childCells = new Map<string, { readonly cell: AgentResilienceCell; readonly configured: ModelRef; readonly key: string }>();
   /** REQ-NOTIFY-078: the session's memory changed under the root (a pin taken back), so its cell is rebuilt at its next turn. */
@@ -919,7 +919,7 @@ export class Run {
    * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
    * writer feeds, keyed by the name the root dispatches under (`rootName`, as `entryContext` reads it). Not the run's
    * persona: a root resumed as the entry role keeps the persona its iteration was opened with (OQ-97), and read by the entry
-   * role's name its calls were never found (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+   * role's name its calls were never found (docs/archive/defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
    * Like `entryContext`, the entry role has no `children` row.
    */
   get entryTools(): EntryToolsPayload {
@@ -959,7 +959,7 @@ export class Run {
    * entry and no carried key names. (Until the first repair round of 2026-10-03 the carried key did not exist and the first
    * configured key for the pair was named, a-fast for a root configured on a-deep.) Until
    * 2026-10-03 the inspector named the configured key or the override in force while the root ran on a candidate
-   * (docs/defects/fixed/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md).
+   * (docs/archive/defects/the-inspector-names-the-configured-model-while-the-root-runs-on-a-same-tier-candidate.md).
    */
   get entryModelKey(): string | null {
     const cell = this.rootCell;
@@ -1372,7 +1372,7 @@ export class Run {
      * writes to the tree (a formatter's rewrite, a build artifact) is in this iteration's checkpoint rather than the next
      * one's, or, after the run's last iteration, in none. Awaited, so it finishes before the next iteration and before
      * teardown. Until 2026-10-13 the capture came first, on ADR-0039's reading that a hook might later "carry" the
-     * checkpoint (`docs/defects/fixed/an-iterations-checkpoint-is-captured-before-its-iteration-end-hooks-run.md`).
+     * checkpoint (`docs/archive/defects/an-iterations-checkpoint-is-captured-before-its-iteration-end-hooks-run.md`).
      * `finally`: hooks that raise still leave the iteration its one capture, and the raise goes on as it did before.
      */
     const credited = this.creditedChild();
@@ -2390,7 +2390,7 @@ export class Run {
    * `awaiting_plan_decision`. `ended` is set only after each of the three forwarded what it wrote and ran the `session_end`
    * hooks (and, at the teardown, the hooks advisory); a control accepted between the write and `ended` saved `cancelling`,
    * `pausing` or `running` over that end, and nothing wrote it again
-   * (`docs/defects/fixed/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`).
+   * (`docs/archive/defects/a-stop-accepted-during-teardown-writes-cancelling-over-the-runs-terminal-status.md`).
    */
   private get endWritten(): boolean {
     return this.ended || this.cancelWindowClosed || this.restWritten;
@@ -2939,7 +2939,7 @@ export class Run {
       plan = report.status === 'failed' ? '' : report.text.trim();
       // REQ-NOTIFY-070: a plan cycle's turn is the root's model call too, so its failure records the model it was calling,
       // as an iteration's does — a first 401 here restarts on the fallback like any other (the repair of the plan-mode
-      // finding on docs/defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
+      // finding on docs/archive/defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
       if (report.status === 'failed') this.recordRootModelFailure(report.error);
     } catch (cause) {
       this.lastFailure = String(cause);
@@ -3022,7 +3022,7 @@ export class Run {
    * PD-ORCH-005 clause 9 / REQ-SESSION-031: every agent's pending approval — each port holds its own — for the session's one
    * `pending_approvals` column, which a port rewrites whole each time one of its approvals is put or ends. Until 2026-10-14
    * each port wrote its own list there, so two agents waiting at once overwrote each other
-   * (`docs/defects/fixed/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`).
+   * (`docs/archive/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md`).
    */
   pendingApprovals(): ApprovalPayload[] {
     const out: ApprovalPayload[] = [];
@@ -3072,7 +3072,7 @@ export class Run {
    * there by every later save of the run on its way to rest, as the explicit cancel's is (OQ-165's reading, ruled 2026-10-06 by R-071). Until fin22 the
    * control wrote the status itself and the run's next save (a token sample, a child's settle, a mode change) wrote `running`
    * again, so every window read `running` for the rest of the graceful stop
-   * (`docs/defects/fixed/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`).
+   * (`docs/archive/defects/a-stops-saved-cancelling-reads-running-again-at-the-runs-next-save.md`).
    */
   stopAccepted(): boolean {
     // finacc3 F05: refused once the run's end is written — the teardown's, or a rest's — as the explicit cancel is (`cancelAgent`).

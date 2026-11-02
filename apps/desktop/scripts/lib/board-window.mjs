@@ -10,7 +10,7 @@
  * on 2026-10-07 (finacc3, load 12 to 13 on four CPUs): a 423 ms mount task, 210 ms of it V8's lazy compilation of the
  * view's code, beside a board paint of 32 ms, and the proof read the 423 as the board's. Those tasks are reported apart
  * (`beforeArrival`) and never counted; every task that ended after the answer is counted, whatever it was, as before
- * (docs/defects/fixed/requirements-proof-counted-the-requirements-views-first-mount-against-the-board-on-screen.md).
+ * (docs/archive/defects/requirements-proof-counted-the-requirements-views-first-mount-against-the-board-on-screen.md).
  *
  * Nothing here is product code. It runs only from the proofs; `board-window.test.ts` pins it.
  */
@@ -46,7 +46,7 @@ export const READ_LONGTASKS = `(${readLongTasks.toString().replace(/\s*\n\s*/g, 
  * the effect focuses the card in a further animation frame — and REQ-TRACE-364 fixes no number of frames for it. The stage
  * read the focus exactly two frames after asking until 2026-10-07 and went red on a loaded host for a card revealed and
  * focused moments later
- * (docs/defects/fixed/requirements-proofs-drop-stage-reads-a-revealed-cards-focus-two-frames-after-asking-for-it.md).
+ * (docs/archive/defects/requirements-proofs-drop-stage-reads-a-revealed-cards-focus-two-frames-after-asking-for-it.md).
  * The focus is still required; what is no longer assumed is that it arrives within two frames.
  */
 export async function revealUntilFocused(id, boundMs) {

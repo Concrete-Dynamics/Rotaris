@@ -9,7 +9,7 @@ The ruled, closed, resolved and withdrawn entries of [part 59](../../../architec
 told what was found and that it recovers nothing that may have been there", and "the listing reports the condition rather than
 an empty list"; REQ-SESSION-043; REQ-SESSION-089; REQ-EVENTS-084; W-31 (3), "a fence, not a new surface"; REQ-SHELL-023.
 Raised 2026-10-14 by fin43 (`fin43-restore-recovery`) while repairing
-[`../../../defects/fixed/a-store-place-that-holds-no-database-is-opened-as-a-fresh-empty-store.md`](../../../defects/fixed/a-store-place-that-holds-no-database-is-opened-as-a-fresh-empty-store.md);
+[`../../defects/a-store-place-that-holds-no-database-is-opened-as-a-fresh-empty-store.md`](../../defects/a-store-place-that-holds-no-database-is-opened-as-a-fresh-empty-store.md);
 the plan's range is OQ-281 to OQ-295, and this is the first of it this bundle takes — renumbered at landing if a sibling took
 it first.)*
 
@@ -63,7 +63,7 @@ place, so at a live path of 247 to 251 characters, which D11 admits, the sibling
 create failed, and its cleanup's `EPERM` replaced the engine's error; no first store could be made there. Repaired the same
 day on the owner's ruling: the sibling is `.<32 hex>`, two characters shorter than the place, a `.<identifier>.new` an earlier
 build left is removed at the next open too, and the cleanup never replaces the failure it follows
-([`a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md`](../../../defects/fixed/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md)).)*
+([`a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md`](../../defects/a-first-store-at-247-to-251-characters-cannot-be-created-on-windows.md)).)*
 
 **The recommendations it weighed** *(written 2026-10-15 by fin47 from the consortium's ruling record)*. **Advocate A** (the user's
 lens, change-behaviour): "Build the resolution inside the product … the existing restore, made to work there, and a new deliberate
@@ -79,7 +79,7 @@ renamed into place; A's on the deliberate establishing action, which B read REQ-
 user anything further"; REQ-NOTIFY-031 and REQ-NOTIFY-032, "Open the session"; REQ-NOTIFY-024; PD-SHELL-001 and its revision 2
 ([OQ-267](57-spikes-and-later-questions-24.md#oq-267)), whose reach binds the members that name a workspace; PD-SHELL-002. Raised 2026-10-14 by fin43
 (`fin43-notices-and-config`) while repairing
-[`a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md`](../../../defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md);
+[`a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md`](../../defects/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md);
 numbered from the top of the plan's range, OQ-281 to OQ-295, below the numbers its sibling bundles took. Ruled 2026-10-14
 under R-072, below.)*
 
@@ -120,7 +120,7 @@ declares hooks the user has not reviewed"; REQ-HOOKS-101, whose fixed text reads
 .rotaris/agents.yaml"; PD-WORKSPACE-005, which named the project in the project-setup banners for the same reason; PD-SHELL-001
 revision 2. Raised 2026-10-14 by fin43 (`fin43-notices-and-config`) from the consortium's ruling of OQ-267 (step 8 (b)),
 recorded in
-[`the-unreviewed-hooks-notice-does-not-name-its-project.md`](../../../defects/fixed/the-unreviewed-hooks-notice-does-not-name-its-project.md);
+[`the-unreviewed-hooks-notice-does-not-name-its-project.md`](../../defects/the-unreviewed-hooks-notice-does-not-name-its-project.md);
 numbered from the top of the plan's range. Ruled 2026-10-14 under R-072, below.)*
 
 The notice is an application notice, shown in every main window, and its words — the title "Workspace hooks need review" and
@@ -145,9 +145,9 @@ Both raise sites — main's at the workspace's open and the run's through `notic
 "Review hooks" action names the workspace whose hooks it counts (on the run path, the run's own workspace, never the focused
 window's). Covered by REQ-NOTIFY-224, REQ-NOTIFY-005, REQ-HOOKS-101 and REQ-HOOKS-102: no directive is minted, and
 REQ-HOOKS-101 keeps its text, since the name is carried by the title and the detail alone. Two defects found while writing it
-up: [`the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md`](../../../defects/fixed/the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md)
+up: [`the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md`](../../defects/the-unreviewed-hooks-notice-folds-its-sentence-under-details-at-open.md)
 (the open path put REQ-HOOKS-101's sentence in the folded detail) and
-[`a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md`](../../../defects/fixed/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md)
+[`a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md`](../../defects/a-runs-unreviewed-hooks-notice-names-the-active-windows-workspace.md)
 (the run path's action named the focused window's workspace). **Built 2026-10-14 (fin44, `fin44-hooks-and-config`):** one
 composer, `hooksReviewNotice` (`apps/desktop/src/main/hooks-review-notice.ts`), used by the open slot (`hooksReviewOpenReport`)
 and by main's mapping of the run's `notice.publish` (`runNoticeReport`, `run-notice.ts`), which names the root the run host
@@ -251,7 +251,7 @@ child's REQ-ORCH-095 re-prompt) and [OQ-284](60-spikes-and-later-questions-27.md
 *(REQ-ORCH-095, "one re-prompt"; REQ-ORCH-096, "one corrective message"; REQ-ORCH-104's stuck-mode clause; [OQ-282](#oq-282) and
 [`PD-ORCH-009`](../../../product/directives/pd-orch-009.md#pd-orch-009) revision 3, which narrowed the same shape for the entry role alone and
 named every delegated child as unchanged. Raised 2026-10-14 by fin43 (`fin43-live-findings`) from
-[`../../../defects/fixed/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md`](../../../defects/fixed/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md).)*
+[`../../defects/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md`](../../defects/a-delegated-childs-re-prompt-is-followed-by-the-stuck-corrective-in-the-same-request.md).)*
 
 **What is open.** A child that ends its turn with neither text nor a call is re-prompted once ("Carry out the task now, …",
 `IterationChildren` in `packages/engine/src/children/orchestration.ts`), and that empty turn also armed REQ-ORCH-096's stuck

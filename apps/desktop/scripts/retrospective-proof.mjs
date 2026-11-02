@@ -50,12 +50,12 @@
  *      configured while `medium_model` resolves: the gesture runs the pass on the retrospective's own model and stores its
  *      artifact, the log saying the setup took that model in the entry's place; no "could not be started" / "The workspace
  *      configuration could not be loaded" notice, which is what it answered until fin47
- *      (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
+ *      (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
  *  12. CONFINEMENT REQUESTED (since fin47, PD-LIBRARY-002 with REQ-SANDBOX-094/095/097) — `sandbox_mode: workspace-write` on a
  *      launch whose PATH holds no `bwrap`, so the run host's verdict settles unavailable: the gesture runs the pass and stores its
  *      artifact, no "could not be started" / "could not be loaded" notice, which is what it answered until fin47; a prompt
  *      submitted after it is still refused by the gate before the run starts
- *      (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+ *      (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
  *      Where the run host's verdict reads available (a host this launch cannot take `bwrap` from: macOS), that last check is
  *      inverted — the prompt's run is not refused — and the check names which the host read (since loc1).
  *  13. AN UNKNOWN PERSONA (since loc1, PD-LIBRARY-002 revision 6, OQ-363) — `default_persona` names a role this build does not
@@ -940,7 +940,7 @@ for (const [script, notesPrefix, reasonText] of [['crash', 'collector crashed: '
 //    workspace-write` is set and the launch's PATH holds every launcher but `bwrap`, so the run host's verdict settles unavailable
 //    (REQ-SANDBOX-066's launcher lookup) — the case of every host without confinement, and the gate's reading of a verdict not yet
 //    settled. Until fin47 the gesture was answered "The retrospective could not be started: The workspace configuration could not
-//    be loaded" (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+//    be loaded" (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
 //    The same launch then submits a prompt, which the gate still refuses before the run starts (REQ-SANDBOX-095).
 {
   const name = 'confinement-requested';

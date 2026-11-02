@@ -11,4 +11,4 @@ banner is inferred from those timestamps and the screenshot, not logged. **The l
 implicated**: the file stayed byte-identical in both runs. The scenario is now driven, each press a settled click confirmed
 landed, each step waiting for the state the last produced; the assertions stand as they were. Four repaired runs passed Discard (one of them red later, at scenario 5 under load),
 without meeting the banner, so the race is guarded by the settled click's contract rather than shown by these runs. Recorded
-and repaired in [`config-proofs-discard-leaves-the-save-status-unsaved.md`](../../../defects/fixed/config-proofs-discard-leaves-the-save-status-unsaved.md).
+and repaired in [`config-proofs-discard-leaves-the-save-status-unsaved.md`](../../../archive/defects/config-proofs-discard-leaves-the-save-status-unsaved.md).

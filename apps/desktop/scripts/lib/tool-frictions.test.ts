@@ -38,7 +38,7 @@ describe('writeSelectorReadings (PD-TOOLS-007)', () => {
    * The session writer stores an error-path record's arguments over 2,000 characters as their JSON cut to a string
    * (REQ-SESSION-136), so a refused whole-file write — the duress shape the reading exists for — was never create-shaped
    * (finding M2 of the c2a9444 default run:
-   * `docs/defects/fixed/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`).
+   * `docs/archive/defects/the-live-runs-tool-friction-checks-read-two-scenarios-and-miss-a-refused-call-whose-arguments-were-cut.md`).
    */
   const cut = (args: Record<string, unknown>, marker = '') => `${JSON.stringify(args).slice(0, 2000 - marker.length)}${marker}`;
   const long = 'export const x = "a\\b";\n'.repeat(200);
@@ -78,7 +78,7 @@ describe('writeSelectorReadings (PD-TOOLS-007)', () => {
  * `inferArguments` (`createOnlyTarget` in packages/agent-tools/src/tools/files.ts) reads one and the schema then accepts
  * it. Until fin25 the harness dropped a call carrying `replace_all: false` or any key beyond path, file_path and content,
  * which the product infers, and took `path: ''`, which it refuses
- * (docs/defects/fixed/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
+ * (docs/archive/defects/the-live-runs-create-shape-reading-differs-from-the-products-create-only-target.md).
  */
 describe('the create shape agrees with the product\'s inference (PD-TOOLS-007)', () => {
   const refusal = 'write_file requires an operation: one of create, edit, overwrite, insert, undo. (operation: Invalid option)';
@@ -156,7 +156,7 @@ describe('runWideReadings (PD-TOOLS-007, PD-TOOLS-008, REQ-SESSION-136)', () => 
  * ordinal 66 "Path '/tmp/rotaris-verify-req104.mjs' is outside workspace root '<workspace>/.rotaris/requirements/worktrees/
  * rotaris-req-req-104-u1'", and its `sessions.worktree` names that path. Until fin25 the reader judged every session by the
  * workspace, so a create-shaped call naming a workspace path outside the worktree read as the old shape, a false FAIL
- * (docs/defects/fixed/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
+ * (docs/archive/defects/the-live-runs-pd-tools-007-check-judges-a-requirements-runs-fence-by-the-workspace.md).
  */
 describe('the fence root a session is judged by (PD-TOOLS-007)', () => {
   const workspace = '/tmp/rotaris-live-run/x/workspace';

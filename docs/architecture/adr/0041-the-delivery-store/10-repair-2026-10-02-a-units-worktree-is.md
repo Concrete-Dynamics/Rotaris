@@ -5,7 +5,7 @@ Part 10 of 16 of [ADR-0041](../0041-the-delivery-store.md), which indexes every 
 ## Repair — 2026-10-02: a unit's worktree is provisioned once
 
 *Reported back in place, under CLAUDE.md's standing policy, by the repair of
-[`a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`](../../../defects/fixed/a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md).*
+[`a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`](../../../archive/defects/a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md).*
 
 Part AP's second execution reads: "a run-starting action provisions its worktree inside the transition's single-flight
 window and hands the row back." **That held only for a unit with no tree, and is kept above as it was written.** A card

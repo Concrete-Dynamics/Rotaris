@@ -9,7 +9,7 @@ import { RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type RunConfig, type Ru
 import type { SessionRecord } from '@rotaris/contracts';
 
 /*
- * REQ-SANDBOX-121 (the repair of `docs/defects/fixed/no-workspace-indicator-names-the-confinement-backend.md`): the session
+ * REQ-SANDBOX-121 (the repair of `docs/archive/defects/no-workspace-indicator-names-the-confinement-backend.md`): the session
  * record the renderer receives names the backend its latest run was confined by, beside `sandboxed`, so the workspace
  * indicator can name it. Before the repair the backend reached only the `session.start` event (`sandbox.backend`) and
  * the record carried the flag alone.

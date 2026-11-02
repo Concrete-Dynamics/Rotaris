@@ -2,7 +2,7 @@
  * `code-intel-proof`'s branch client (ADR-0035 c.1, REQ-MCP-033): a request never outlives the child. Pinned against a
  * fake child process — a branch that exits before answering, one that answers and then exits, one that answers only
  * after the guard killed it — so the proof's section 1 fails in seconds with the child's own exit status and standard
- * error rather than waiting for ever (`docs/defects/fixed/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`).
+ * error rather than waiting for ever (`docs/archive/defects/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`).
  */
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';

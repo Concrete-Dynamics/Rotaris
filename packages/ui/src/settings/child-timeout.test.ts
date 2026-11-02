@@ -104,7 +104,7 @@ describe('the per-agent timeout in minutes (PD-CONFIG-003, REQ-MONITOR-286)', ()
 
   it('states the stored seconds, not an unsaved edit, during an edit (REQ-CONFIG-446, REQ-CONFIG-419)', () => {
     // A stored 3 s, shown clamped as 1 minute, overtyped with 1: the form holds 60 s until Save, the workspace file still 3 s
-    // (docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md). Until 2026-10-15 the
+    // (docs/archive/defects/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md). Until 2026-10-15 the
     // description read the pending 60.
     const section = limits(render(snapshotWith(3), timeoutSecondsFromInput(1)));
     expect(section).toMatch(/id="child-timeout"[^>]*value="1"/);

@@ -10,7 +10,7 @@ import { sessionTaskTitle } from './todo-view.js';
 /*
  * REQ-SESSION-042 / REQ-SESSION-154 with REQ-SESSION-030/032: the session list labels each row from its listing record
  * alone — the task title derived from the persisted todo (the newest top-level task), else the session id — and reads no
- * transcript. Before the repair of `docs/defects/fixed/the-session-list-reads-each-sessions-transcript-for-its-label.md`
+ * transcript. Before the repair of `docs/archive/defects/the-session-list-reads-each-sessions-transcript-for-its-label.md`
  * `Sessions.list` read every listed session's resident rows and labelled it with the oldest resident prompt, so a session
  * whose first prompt was released past the resident window was listed under another name after a long run.
  */
@@ -101,7 +101,7 @@ describe('REQ-SESSION-031: the listing\'s awaiting-input flag reads pending appr
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  it('flags a session waiting on a question as it flags one waiting on an approval, and neither when nothing is pending (docs/defects/fixed/the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md)', () => {
+  it('flags a session waiting on a question as it flags one waiting on an approval, and neither when nothing is pending (docs/archive/defects/the-session-browser-shows-no-awaiting-input-for-a-run-waiting-on-a-question.md)', () => {
     const list = new Sessions({
       clocks: new FakeClock(), publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 77, host: HOST,
       retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-new', model: null,

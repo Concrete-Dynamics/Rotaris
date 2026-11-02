@@ -55,7 +55,7 @@ function section(md: string, name: string): string[] {
  * REQ-SESSION-140: what `summary.md` holds and in what order. Until fin22 `renderSummary` wrote a heading, eight lines (the
  * stop reason always, `—` for none; tokens and cost `0` for a session that made no request) and a closing line — none of the
  * Task line, Metrics, Warnings, Agents, Slowest Tools or the inspection note
- * (`docs/defects/fixed/summary-md-carries-none-of-the-sections-its-requirement-lists.md`).
+ * (`docs/archive/defects/summary-md-carries-none-of-the-sections-its-requirement-lists.md`).
  */
 describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its order', () => {
   it('heading; status, workspace, created, updated; task; then Metrics, Warnings, Agents, Slowest Tools and the inspection note', () => {
@@ -110,7 +110,7 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
   /*
    * PD-SESSION-002 (OQ-207, ruled 2026-10-07 under R-072). Until the ruling the line read
    * `n/a (no record measures how much of an artifact was elided)` in every summary.md of every session
-   * (`docs/defects/fixed/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`).
+   * (`docs/archive/defects/summary-md-counts-no-mostly-elided-artifacts-until-oq-207-is-ruled.md`).
    */
   it('Mostly-elided artifacts counts the attached artifacts delegated agents were not given, with the agents and the record it is counted from (PD-SESSION-002)', () => {
     const one = renderSummary(factsOf(rowOf(), { elidedAttachments: { artifacts: 1, agents: 1 } }));
@@ -138,7 +138,7 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
    * REQ-SESSION-136's tool errors are its `tool_error` issues — every failure but a shell failure, a suspicious success and a
    * timeout. Until fin23 the line read the histogram's `tool_error` bucket, which a record carrying an `outcome_kind` never
    * reaches: the requirements session of the c2a9444 live run would read "Issues: 5 (… tool_error 4)" beside "Tool errors: 3"
-   * (`docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
+   * (`docs/archive/defects/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
    */
   it('Tool errors counts every tool_error issue REQ-SESSION-136 filed, whatever outcome_kind its record carries, and agrees with the Issues line', () => {
     const row = rowOf();
@@ -201,7 +201,7 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
   /*
    * REQ-SESSION-133: a count over a capped ring describes what is stored. Until finacc3 (F10) Permission denials and Tool
    * errors — and the Metrics lines that print the same figures — read as whole after the cap had dropped rows
-   * (`docs/defects/fixed/summary-md-permission-denials-and-tool-errors-read-short-past-the-cap-with-no-flag.md`).
+   * (`docs/archive/defects/summary-md-permission-denials-and-tool-errors-read-short-past-the-cap-with-no-flag.md`).
    */
   it('a count over a ring the cap has dropped rows of reads as a lower bound and says how many were dropped (REQ-SESSION-133, REQ-SESSION-140)', () => {
     const row = rowOf();
@@ -226,7 +226,7 @@ describe('run/summary — summary.md carries REQ-SESSION-140\'s sections, in its
    * the tool-call record and one over the issues record (REQ-SESSION-136 files one issue for each such call, a timeout of an
    * MCP call or a fetch included). Either reading is the run's whole count while its ring is whole, so the figure is a lower
    * bound only once both rings have dropped rows. Until finacc3 A2-09 the three read plain whatever the cap had dropped
-   * (`docs/defects/fixed/summary-md-terminal-failures-and-timeouts-read-short-past-the-cap-with-no-flag.md`).
+   * (`docs/archive/defects/summary-md-terminal-failures-and-timeouts-read-short-past-the-cap-with-no-flag.md`).
    */
   it('Terminal failures, suspicious successes and Timeouts read as a lower bound once both rings they are counted from have dropped rows (finacc3 A2-09)', () => {
     const row = rowOf();

@@ -199,7 +199,7 @@ export function registerPromptCommands(registry: SlashRegistry, result: PromptsR
   // registrar holds them. They register by effect, AFTER `buildCatalogue` has put the cached prompt files on the registry
   // and after this registrar's mount has recorded the bare stems as its own, so a `skills.md` took `/skills` there and a
   // re-read, trusting its record, took it back from the listing the fixed command had put over it —
-  // docs/defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md.
+  // docs/archive/defects/a-prompt-file-named-skills-takes-the-skills-command.md.
   const { registrations, skipped } = promptRegistrations(result.files, (name) => {
     if (FIXED_SKILL_COMMAND_NAMES.has(name)) return true;
     const held = registry.lookup(name);

@@ -105,7 +105,7 @@ export function lastUtf8Bytes(text: string, bytes: number): string {
 /**
  * REQ-WORKSPACE-091/092: a setup step's detail in this domain's words, read from the facts the run host's status carries
  * beside its own `detail` — which stays the MCP category's (REQ-MCP-099/112) and is never shown here
- * (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`). A stopped step and a
+ * (`docs/archive/defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`). A stopped step and a
  * skipped one read in the requirements' fixed sentences; every other step's detail is the last 400 bytes of its output, with
  * no prefix, empty for a step that wrote nothing or never ran. A step whose command could not be started has no output and
  * reads in the launch's own error (OQ-175 records that reading and the empty ones).
@@ -152,7 +152,7 @@ export const CLOSED_WORKSPACE_RECORDS_NOTHING = 'the workspace was closed while 
  * Main's way to the run host's one setup. Every call names the workspace it is made for — the run's own, by the identifier
  * main was handed when that workspace opened (`open`) — never the focused window's: with two main windows open
  * (PD-SHELL-001) the focused one may hold the other workspace, and at quit none may be left at all
- * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
+ * (`docs/archive/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
  */
 export interface SetupPort {
   /**
@@ -198,7 +198,7 @@ export type MarkerServiceRequest =
  * before its own write. The workspace's open already bootstraps (`workspace-service/open-bootstrap.ts`), so this covers
  * a file removed while the workspace is open. Until 2026-10-03 the record went straight to the per-field path, and on a
  * first run it created the file without the starter
- * (`docs/defects/fixed/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`). A bootstrap that is refused or not
+ * (`docs/archive/defects/a-first-run-workspace-never-gets-the-starter-agents-yaml.md`). A bootstrap that is refused or not
  * answered does not stop the record: the per-field write then answers for the file as it finds it (REQ-CONFIG-442).
  *
  * `ask` answers null when the workspace's service is not running.
@@ -265,7 +265,7 @@ interface WorkspaceEntry {
   /**
    * Whether `report` describes a run the resolution started for background tasks (REQ-WORKSPACE-083) rather than one the
    * user started. Published beside the report, because the dialog must not draw such a run as its own
-   * (REQ-WORKSPACE-103; `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+   * (REQ-WORKSPACE-103; `docs/archive/defects/the-setup-dialog-takes-a-background-run-as-its-own.md`).
    */
   background: boolean;
   /**
@@ -301,7 +301,7 @@ export class InitializationCoordinator {
   /**
    * The live follow's way to end without a `finished` status, set and cleared beside `setupListener`: the run host's exit
    * (`onRunHostExit`) calls it, so the run ends and its turn of `setupTurn` passes on
-   * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`).
+   * (`docs/archive/defects/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`).
    */
   private setupAbandon: ((detail: string) => void) | null = null;
   /**
@@ -309,7 +309,7 @@ export class InitializationCoordinator {
    * before any sink was installed for it. A setup whose every step ends without waiting (a documentation-only workspace
    * whose runtime marker is present) runs to its end inside the run host's start, so its steps and its `finished` status
    * can reach main before the start is answered; dropped, the follow waited for a `finished` push that had come and gone
-   * until `SETUP_FOLLOW_BOUND_MS` (`docs/defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`).
+   * until `SETUP_FOLLOW_BOUND_MS` (`docs/archive/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`).
    * `undefined` while no start is in flight, so a push no setup of this coordinator's is waiting for is still dropped.
    */
   private setupEarly: McpSetupStatus | null | undefined = undefined;
@@ -319,7 +319,7 @@ export class InitializationCoordinator {
    * under its cancellation. Before this, the replacement's start was refused as already running, or its follow took the
    * outgoing setup's cancelled finish as its own; and the outgoing run's end cleared the replacement's sink, so its steps
    * were never reported and its run never ended
-   * (`docs/defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). The wait is the
+   * (`docs/archive/defects/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). The wait is the
    * task's, inside the run: the replacement's resolution returns at once and never waits on the cancellation.
    */
   private setupTurn: Promise<void> = Promise.resolve();
@@ -331,7 +331,7 @@ export class InitializationCoordinator {
    * inside its turn from the file as the previous write left it (see `marker`). Before this, a skip built its patch from
    * the in-memory state while the background run's completion write was in flight, and the run built its patch from a
    * read taken before a skip's write had landed: whichever landed second erased the other
-   * (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`). One queue per root, not one for the
+   * (`docs/archive/defects/a-skip-can-move-a-completed-task-into-skipped.md`). One queue per root, not one for the
    * coordinator: each root's marker is its own file written by its own workspace service, so nothing orders it against
    * another root's, and a workspace just opened is not made to wait behind the last recording of the one it replaced,
    * which can take the whole 30 s write timeout (REQ-WORKSPACE-013).
@@ -373,7 +373,7 @@ export class InitializationCoordinator {
           if (workspaceId === null || !await this.turnReached(previous, ctx.signal)) return this.failure(CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
           // REQ-WORKSPACE-084/093: a start the run host never answers — main's request rejects on its bound, as when the run
           // host has exited — is this task's own retryable failure, not one that ended without an outcome
-          // (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
+          // (`docs/archive/defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
           let started: Awaited<ReturnType<SetupPort['start']>>;
           let early: McpSetupStatus | null = null;
           this.setupEarly = null;
@@ -390,7 +390,7 @@ export class InitializationCoordinator {
           // REQ-WORKSPACE-093/094: a refused start is not REQ-WORKSPACE-094's "not a local launch" — that one arrives as an
           // `unavailable` status, which `resultOf` maps — but a condition that may not hold at the next open: retryable, in
           // this domain's summary, the refusal's own words as the detail
-          // (`docs/defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`).
+          // (`docs/archive/defects/a-refused-setup-start-is-reported-as-not-a-local-launch.md`).
           if (!started.ok) {
             this.deps.log(`initialization: the run host refused ${CODE_INTELLIGENCE_TASK_ID}'s setup start for ${ctx.workspaceRoot} (${started.code}: ${started.reason})`, 'warn');
             return this.failure(`${SETUP_REASON}: ${started.reason}`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
@@ -459,7 +459,7 @@ export class InitializationCoordinator {
       // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel whose request fails is said, not dropped: at a
       // quit as what is expected — the run host's shutdown ends the setup itself, and may have exited or closed its stores
       // before the request reached it — and otherwise as a fault (PD-MONITOR-002;
-      // `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+      // `docs/archive/defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
       const onAbort = (): void => {
         this.deps.setup.cancel(workspaceId).catch((cause: unknown) => {
           if (this.deps.quitting()) this.deps.log(`initialization: the setup's cancellation did not reach the run host at the quit, whose shutdown ends the setup itself (${String(cause)})`);
@@ -588,7 +588,7 @@ export class InitializationCoordinator {
    * open of the same root is a new open with its own automatic resolution (REQ-WORKSPACE-102) and the replacement
    * window's resolution never waits on the cancellation. Before this was called, a switch left the outgoing run going,
    * recorded its outcome, and a return to the root found its automatic resolution already spent
-   * (`docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`).
+   * (`docs/archive/defects/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`).
    *
    * OQ-141: REQ-WORKSPACE-013 names only a switch's outgoing window and a background run. The same rule is applied to
    * every run of a workspace no window holds any more — a plain close of one of several windows (PD-SHELL-001), a
@@ -723,7 +723,7 @@ export class InitializationCoordinator {
       // REQ-WORKSPACE-013 (OQ-141's reading, confirmed 2026-10-06 by R-071): a workspace closed while its resolution was under way is no window's, and the
       // banner reaches every live window — so it is said in the log only, as `publish` shows nothing of it. The silent stamp's
       // write is one way there: main's marker request rejects when the service gives no reply within its bound
-      // (`docs/defects/fixed/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`).
+      // (`docs/archive/defects/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`).
       if (e.closed) {
         this.deps.log(`initialization: resolution failed for ${e.root}, which was closed while it was under way, so nothing is shown (${String(cause)})`);
         return await this.viewFor(e);
@@ -823,7 +823,7 @@ export class InitializationCoordinator {
     // answered in that interval performs the open's one automatic resolution first (REQ-WORKSPACE-102; the window is
     // plainly accepting input, since it answered) and is recorded against what that resolution left. Without it the
     // skip wrote `code-intelligence-setup` as skipped before it had started, and the resolution then started nothing
-    // (`init-proof` on Linux, `docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+    // (`init-proof` on Linux, `docs/archive/defects/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
     // Once that resolution is made, or under way, the skip waits for it and reads nothing more: a view recomputed here
     // would cost a run-host status read, and a background run could end inside it.
     if (e.automatic === null) {
@@ -838,7 +838,7 @@ export class InitializationCoordinator {
     // A task the live run is attempting is not the user's to skip; its own outcome is owed (see `attempting`).
     // REQ-WORKSPACE-084/086: nor is a task already recorded completed. A skip names what the dialog last drew, and a
     // background run can finish between that draw and the skip, or while the skip performs the resolution; recording
-    // it moved the id out of `completed` (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`).
+    // it moved the id out of `completed` (`docs/archive/defects/a-skip-can-move-a-completed-task-into-skipped.md`).
     const { r, mine } = await this.marker(e, async (current) => {
       const completed = new Set(current.completed);
       const running = ids.filter((id) => e.attempting.has(id));

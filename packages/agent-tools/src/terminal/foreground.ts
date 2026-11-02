@@ -150,12 +150,12 @@ export interface PausedEnd {
  * `exe` can still read while `cmdline` reads empty (the argument vector lived in that memory); read as an identity, that
  * pair named another program, so a shell a soft-paused `exit 4` ended was taken for one an `exec` replaced, and the call
  * waiting behind it was told it had replaced the shell
- * (`docs/defects/fixed/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`;
+ * (`docs/archive/defects/a-call-waiting-behind-a-soft-paused-command-that-ends-the-shell-can-read-as-replacing-the-shell-under-load.md`;
  * in 122 of 300 exits read in a tight loop, the first reading that was not the process's own was that pair). The shell is
  * started with an argument vector (`posixShellArgs`), so an empty one there is the exiting shell's, never another program.
  *
  * Not reached, so not watched — one more beside the cases the replaces-the-shell note lists as "Not reached"
- * (`docs/defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`): a program in the shell's place that
+ * (`docs/archive/defects/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`): a program in the shell's place that
  * runs with an EMPTY argument vector of its own, one `execve`d with argc 0. No shell's `exec` makes one (`exec -a ''`
  * passes one empty argument), but a program the command `exec`s may start one in its own place before the watch's next
  * reading. On a Linux kernel before 5.18 its `cmdline` reads empty, so it reads as no identity, and the call goes
@@ -805,7 +805,7 @@ export function wrapCommand(backend: ShellBackend, command: string, start: strin
     // ran none of it, so the end frame never printed: measured under pwsh 7.6.6 and 5.1, every such command read 124 at the
     // hard cap with its session reset, where the same command over two lines reported exit 1 in about 0.1 s; and 5.1's
     // error text quoted the wrapper's own exit expression to the agent
-    // (docs/defects/fixed/a-single-line-powershell-command-that-throws-loses-its-end-frame.md). Every command now takes
+    // (docs/archive/defects/a-single-line-powershell-command-that-throws-loses-its-end-frame.md). Every command now takes
     // the guarded path, one line or many. An `exit` in the payload still ends the session's shell (measured, both shells),
     // so a command that ends the shell reads as OQ-144 ruled it (R-071), unchanged.
     //
@@ -861,7 +861,7 @@ export function wrapCommand(backend: ShellBackend, command: string, start: strin
 
 /**
  * The longest line the POSIX wrapper may be, its CR included, before the command is staged instead (live-run finding M1,
- * docs/defects/fixed/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md). The shell reads
+ * docs/archive/defects/a-terminal-command-longer-than-the-ptys-input-line-never-reaches-the-shell-whole.md). The shell reads
  * the wrapper through the PTY's canonical-mode line discipline, which keeps 4,095 characters of one line on Linux and
  * discards the rest up to the line end (termios(3)); macOS keeps `MAX_CANON`, 1,024. This stays under both.
  */
@@ -925,11 +925,11 @@ export function snapshotCommand(backend: ShellBackend): string {
     // UTF-8, base64, cut into 64-character rows behind the marker. Until 2026-10-06 it printed one plain row per variable
     // and the parse took a row the screen wrapped for a newline inside the value — a `Path` past the 240 columns, every
     // row at the 20 the display may narrow to — and cut a directory wider than the screen at its edge
-    // (docs/defects/fixed/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md). Read from the
+    // (docs/archive/defects/the-powershell-shell-state-snapshot-joins-a-wrapped-row-with-a-newline.md). Read from the
     // POSIX repair and pinned over the parse on Linux; executing it needs a Windows host. Executed 2026-10-15 on Windows 11
     // ARM64 under pwsh 7.6.6 and 5.1: read whole and restored byte for byte at 20 to 240 columns (B2 of that session's
     // record, ADR-0020), 20 and 33 once ConPTY's wrapped rows were rejoined for the frame match the same day
-    // (docs/defects/fixed/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
+    // (docs/archive/defects/below-34-columns-every-powershell-call-runs-to-its-hard-timeout.md).
     return `$__m = '${SNAPSHOT_MARK}'; $__s = '${PS_SNAPSHOT_TAG}' + [char]0 + (Get-Location).Path + [char]0 + ((Get-ChildItem Env: | ForEach-Object { $_.Name + '=' + $_.Value + [char]0 }) -join ''); $__b = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($__s)); for ($__i = 0; $__i -lt $__b.Length; $__i += ${SNAPSHOT_ROW}) { Write-Output ($__m + ':' + $__b.Substring($__i, [Math]::Min(${SNAPSHOT_ROW}, $__b.Length - $__i))) }`;
   }
   // POSIX: the directory and `env -0`, NUL-separated, as base64 folded to 64 columns. The capture is the EMULATED
@@ -938,7 +938,7 @@ export function snapshotCommand(backend: ShellBackend): string {
   // (`sleep: not found`), measured on Linux 2026-09-24. Base64 holds no newline of its own, so a row break inside the
   // capture is always the screen's, and the parse (`encodedSnapshot`) joins the rows back with nothing between them; NUL
   // separates entries even where a value holds a newline.
-  // FALSIFIED, kept beside its replacement (docs/defects/fixed/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md,
+  // FALSIFIED, kept beside its replacement (docs/archive/defects/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md,
   // 2026-10-04): "a 64-column line never wraps". A row is the 12-column marker and 64 characters, 76 columns, and the
   // display narrows the screen to as few as 20 (REQ-TOOLS-128); the parse kept only the rows that began with the marker,
   // and at 40 columns fin15 read back three entries, PATH and HOME gone, one name spliced from two and a value cut.
@@ -1186,7 +1186,7 @@ export class ForegroundSession {
    * soft-paused command too. A paused command is not the session's active call, so the kill did nothing; the stream's control
    * dropped the answer and the window was told ok, while the shell, the command and its grandchild ran on and the next call
    * queued behind them to its own hard cap
-   * (docs/defects/fixed/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md).
+   * (docs/archive/defects/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md).
    */
   killActive(): boolean {
     const a = this.active;
@@ -1452,7 +1452,7 @@ export class ForegroundSession {
     // printed or in an echo of its wrapper that escaped the removal above — since what follows is the next call's, and
     // after that the product's snapshot. It is looked for in the rows BEFORE the stray-echo filter: the row carrying an
     // unmatched echo's head (`printf '%s\n' '__r`) carries the first characters of that marker, and dropping the row
-    // first left a marker nobody could find (docs/defects/fixed/at-the-20-column-floor-an-interrupted-calls-poll-intermittently-carries-the-next-calls-wrapper-echo.md).
+    // first left a marker nobody could find (docs/archive/defects/at-the-20-column-floor-an-interrupted-calls-poll-intermittently-carries-the-next-calls-wrapper-echo.md).
     // The echo goes unmatched when the shell's own output lands inside it: after C-c, dash prints a line end and its
     // prompt when it takes the interrupt, and when the next call's wrapper is written first the line discipline is
     // already echoing it, so the prompt splits the echo (measured at 20 columns, before the end statement's closing
@@ -1796,7 +1796,7 @@ export class ForegroundSession {
       // session was restarted by `killActive`" — and nothing more. The kill was the one reset path that re-applied nothing:
       // after `$env:ROTARIS_KEPT = 'kept'` and a kill from the window, the next call read the variable empty and stood in the
       // spawn directory, while the kill's detail named neither the loss nor a restore
-      // (docs/defects/fixed/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md).
+      // (docs/archive/defects/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md).
       // A call that waited behind a soft-paused command the kill ended never ran when the shell had not reached its line
       // (`ranLine`): no exit code, as OQ-164 reads a line the session's reset went before. FALSIFIED, kept beside its
       // replacement (the review of `loc1-terminal-kill`, 2026-10-21): "−1, killed while it ran" for every call the kill

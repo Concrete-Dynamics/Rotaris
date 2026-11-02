@@ -1,9 +1,9 @@
 /**
  * REQ-SESSION-140 as the live run reads it from each session's `summary.md`, the file `preserveRun` now copies into the pack
- * (`docs/defects/fixed/the-live-runs-pack-carries-no-summary-md.md`). Pinned against the product's own renderer, so the
+ * (`docs/archive/defects/the-live-runs-pack-carries-no-summary-md.md`). Pinned against the product's own renderer, so the
  * reading and the file cannot drift apart, and against the shapes it must refuse: a section out of order, a missing one, a
  * stop-reason line with none recorded, and the Tool errors line that disagreed with its own Issues line until fin23
- * (`docs/defects/fixed/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
+ * (`docs/archive/defects/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md`).
  */
 import { describe, expect, it } from 'vitest';
 import { renderSummary, sessionMetrics, type SummaryFacts } from '@rotaris/engine';
@@ -74,7 +74,7 @@ describe('summaryReading (REQ-SESSION-140)', () => {
   });
 
   /*
-   * finacc3 F10 (`docs/defects/fixed/summary-md-permission-denials-and-tool-errors-read-short-past-the-cap-with-no-flag.md`):
+   * finacc3 F10 (`docs/archive/defects/summary-md-permission-denials-and-tool-errors-read-short-past-the-cap-with-no-flag.md`):
    * past the retention cap the counts read `at least N`; the agreement is still read, never skipped for the form.
    */
   it('past the retention cap the counts read `at least`, and the Tool errors line is still held to its Issues line', () => {
@@ -90,7 +90,7 @@ describe('summaryReading (REQ-SESSION-140)', () => {
  * Each kept session's summary check is recorded, whatever stops it. Until fin25 a throw inside the summary step —
  * `assertNoCredential` refusing the text, the write, or `checkSummary` itself — was pushed to the pack's `failed` list
  * alone, and that scenario's check vanished from results.json
- * (`docs/defects/fixed/a-summary-check-that-throws-leaves-no-check-in-the-live-runs-results.md`).
+ * (`docs/archive/defects/a-summary-check-that-throws-leaves-no-check-in-the-live-runs-results.md`).
  */
 describe('preserveSummary (REQ-SESSION-140)', () => {
   type Check = [boolean, string, string];

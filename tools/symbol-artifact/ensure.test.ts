@@ -7,7 +7,7 @@ import { ensureSymbolArtifact, symbolArtifactPlugin } from './ensure.mjs';
 /**
  * ADR-0056's build input on the build path: a tree with no artifact gets one from the generator, a tree with one keeps
  * it untouched, and a generation that fails fails the build naming the file and `pnpm symbols`
- * (docs/defects/fixed/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md). The generator here is a stand-in
+ * (docs/archive/defects/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md). The generator here is a stand-in
  * written to a scratch directory, so the real artifact, which the running suite imports, is never removed.
  */
 describe('ADR-0056: the build writes the requirement-symbol artifact when it is absent', () => {

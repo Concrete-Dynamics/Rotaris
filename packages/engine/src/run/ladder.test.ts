@@ -1294,7 +1294,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   /*
    * REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: the record says which configured key a session-wide override replaces and
    * the key it runs on, so the composer's model chip and the inspector name what the next run starts with. Before it the chips
-   * read the configured key (docs/defects/fixed/the-model-chips-show-the-configured-model-while-a-session-wide-override-is-in-force.md).
+   * read the configured key (docs/archive/defects/the-model-chips-show-the-configured-model-while-a-session-wide-override-is-in-force.md).
    */
   it('REQ-CHAT-006 / REQ-SESSION-026: the record names the override in force — in this process, and after a fresh one opens the session', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
@@ -2177,7 +2177,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(timeline(sid2)).not.toContain('llm_unresponsive');
   });
 
-  // docs/defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md: a step that opens with a tool call
+  // docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md: a step that opens with a tool call
   // whose arguments stream past llm_response_timeout has answered; its first argument piece is its first event.
   it('REQ-ORCH-090: a step whose first part is a streamed tool-call piece is not given up as unresponsive however long the call streams', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
@@ -2274,7 +2274,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   });
 
   it('PD-ORCH-017 (REQ-ORCH-088, REQ-ORCH-112): a child retried on the role\'s fallback after its hard timeout works past 100 model steps in the retry', async () => {
-    // docs/defects/fixed/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md: REQ-ORCH-088's
+    // docs/archive/defects/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md: REQ-ORCH-088's
     // retry is a route into the child's turn too, so a numeric cap on it would end the retry `partial` at step 101 and
     // settle the child `succeeded` with an empty `final_response`.
     const LONG = 105;
@@ -2330,7 +2330,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   });
 
   /*
-   * The fin20 verifier's finding against PD-ORCH-008 (`docs/defects/fixed/a-replaced-attempts-completed-calls-hide-the-retrys-unfinished-call-from-the-count.md`):
+   * The fin20 verifier's finding against PD-ORCH-008 (`docs/archive/defects/a-replaced-attempts-completed-calls-hide-the-retrys-unfinished-call-from-the-count.md`):
    * the settle counted `priorCalls + Math.max(made, live)`, so a replaced attempt with no outcome but completed calls (in
    * `live`) covered a call the retry started and never completed (in `made`). Each attempt's remainder is now counted on
    * its own: every call its turns counted (`TurnDeps.onToolCounted`, a replay included) less the calls it completed,
@@ -3161,7 +3161,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   /*
    * REQ-NOTIFY-069/070/074/076 with REQ-SESSION-192: the authentication restarts and the recovery dialog read the session's
    * last prompt over released rows too (`lastSubmittedPrompt`, through `lastPromptOf`). Before the repair of
-   * `docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`
+   * `docs/archive/defects/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`
    * they searched the resident window only, so once the prompt had been released the restart refused with "No prompt is
    * recorded for this session." and the dialog said no prompt was recorded. fin8's verifier found nothing pinned it.
    */

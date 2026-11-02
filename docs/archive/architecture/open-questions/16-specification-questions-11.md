@@ -133,7 +133,7 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   account (SIGTERM, the desktop's logout, `app.quit()`) first closes the main windows through their guards, all or
   none, so no dialog closes before every main window's close is confirmed. While the application stays, both requirements govern unchanged.
   *Until phase 7's repairs the quit's close sent the Deny and the cancellation first, and the agent stepped on them
-  (`docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`).*
+  (`docs/archive/defects/a-quit-denies-the-approval-it-should-withdraw.md`).*
 - **No model call after the pause, wherever one is made (clause 2).** The step in flight is the only model call that
   finishes, and its report stands: a transient failure of it is not retried, no fallback model is tried, a context
   rejection is not condensed, and a provider limit it meets is not waited on. An agent already parked on a provider limit
@@ -166,8 +166,8 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   from is answered in its record as interrupted, its row settled; a call of the same step that completed keeps its
   result, as above. When the execution returns, the engine writes nothing
   more for it (REQ-SESSION-094's straggler clause). What the call's own tool gate or a streaming model step writes as it
-  finishes is not stopped; `docs/defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md` records it. A root's call
-  has no such bound (`docs/defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`, which predates the
+  finishes is not stopped; `docs/archive/defects/a-detached-call-still-writes-through-its-tool-gate.md` records it. A root's call
+  has no such bound (`docs/archive/defects/a-root-call-that-ignores-the-stop-holds-the-run-open.md`, which predates the
   build). *Reported back 2026-09-29 ([R-067](../../../product/requests.md#r-067)): that last sentence no longer holds. The root
   is awaited within the same 30 s, counted from the first stop request whether or not it was forced, and one still in a
   call past it is detached as a child execution is: left `paused` by a stop or a quit, with its open call answered as
@@ -176,7 +176,7 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   the root's time and then a second 30 s for the children. Under the explicit cancel, which rests nothing, the child
   executions still running once their records are settled are detached with the root, and a root given up on still
   drains the background children, bounded by REQ-ORCH-080's own timeout (OQ-121)
-  (`docs/defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`). *First reported as "A rest that
+  (`docs/archive/defects/a-root-call-that-ignores-the-stop-holds-the-run-open.md`). *First reported as "A rest that
   follows a detached root waits for no child execution again", which was true and not enough: a root that returned at
   29 s still gave the rest a fresh 30 s, and under the explicit cancel the children stayed attached and the drain was
   skipped (found by the verifier of the repair, corrected the same day).*
@@ -186,7 +186,7 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   interrupted statement, and the gate writes nothing after it. A model step the rest detached streams no row, settles
   none and counts no usage when it returns, and so does one the explicit cancel leaves running past the grace: the
   cancel's children are awaited within what is left of it after their records are settled, and detached past it
-  (`docs/defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md`). *First reported without that last
+  (`docs/archive/defects/a-detached-call-still-writes-through-its-tool-gate.md`). *First reported without that last
   clause, when only a rest detached: a child step that ignored the explicit cancel still wrote its row and usage after
   `result` (found by the verifier of the repair, corrected the same day).*
 - **A call cut by no rest.** A call cut by its agent's limit, by the cancellation of that agent or by the explicit

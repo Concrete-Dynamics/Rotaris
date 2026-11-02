@@ -80,7 +80,7 @@ describe('the capture script grammar (verification seams)', () => {
 
   it('reads `@from~ms` as the waiting form whose wait starts at `from`, and only that form carries `from`', () => {
     // part-j-proof's steer-rest Pause: no steer dialog open is true from the run's start, so the wait must start after
-    // the Steer was pressed (docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md).
+    // the Steer was pressed (docs/archive/defects/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md).
     const [late] = parseSteps('body:not(:has(.dialog.steer)) .pause@3800~9000');
     expect(late).toEqual({ selector: 'body:not(:has(.dialog.steer)) .pause', arg: null, at: 9000, until: true, from: 3800 });
     expect(parseSteps('.x>>Go@~900')[0]).not.toHaveProperty('from');
@@ -113,7 +113,7 @@ describe('the capture script grammar (verification seams)', () => {
 /**
  * The waiting form's start (`@from~ms`): the step looks at nothing before `from`, so a selector already true at the
  * launch is not taken for the effect of the step it follows
- * (`docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`).
+ * (`docs/archive/defects/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`).
  */
 describe('settleAt — when the waiting form starts looking', () => {
   const flush = async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };

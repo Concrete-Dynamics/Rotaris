@@ -29,7 +29,7 @@ replacement. `REQ-CONFIG-192` as now written says a file that still states `stor
 rather than rejected", and `REQ-CONFIG-183`'s carve-out fixes what the report conveys. The loader read neither: the opaque
 `delivery` block carried the key unread, so it was neither rejected nor reported. It is now reported once and dropped
 (`WITHDRAWN_STORE_SUBPATH` in `packages/config/src/sections/requirements.ts`;
-[`../../../defects/fixed/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md`](../../../defects/fixed/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md)).)*
+[`../../../archive/defects/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md`](../../../archive/defects/a-withdrawn-delivery-store-subpath-is-accepted-silently-rather-than-reported.md)).)*
 
 `REQ-CONFIG-192` also fixes **forward-tolerant version handling**, and this is the sharpest constraint
 in the domain for a database: the reader supports exactly versions 1 through the configured value; a

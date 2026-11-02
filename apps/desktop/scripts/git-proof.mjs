@@ -94,7 +94,7 @@ const cellVerdict = (measured, where) => {
   // Branch elides, so a cut name is no finding above; but every row still draws its name's first character and the marker
   // (UIR-002: the name elides, it does not vanish), and no tag is laid out past the cell's edge, where the cell's clip
   // hides it. Until 2026-10-04 the base row at 1000x680 drew neither `main` nor its `active` tag
-  // (docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
+  // (docs/archive/defects/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md).
   const body = measured.rows.filter((r) => r.key !== 'header');
   const nameless = body.filter((r) => { const name = r.cells[0]?.runs.find((x) => !x.text.startsWith('[')); return !name || !runShowsLeadingChars(measured, r.key, 'Branch', name.text); });
   if (nameless.length > 0) throw new Error(`${where}: a worktree row's Branch cell leaves no room for its name's first character and the marker: ${nameless.map((r) => `${r.key} ${JSON.stringify(r.cells[0])}`).join(' | ')}`);
@@ -376,7 +376,7 @@ const isolated = await launch('isolated', workspace, local, preferences, {
 // 3c. The bound row's State cell draws the PRESENTED status (REQ-NOTIFY-048/049, REQ-GIT-109): the session's persisted
 // `execution_status` set to `paused_message_limit` while the app is closed, the Git view opened without reopening the
 // session. The session listing carries the persisted word; the row must read `paused · ready`. Until 2026-10-04 it read
-// `paused_message_limit · ready` (docs/defects/fixed/the-git-views-state-cell-renders-the-raw-persisted-execution-status.md).
+// `paused_message_limit · ready` (docs/archive/defects/the-git-views-state-cell-renders-the-raw-persisted-execution-status.md).
 // The status is put back afterwards, so the launches after this one see the session as the run left it.
 {
   const sid = results.isolated.sessionId;
@@ -427,7 +427,7 @@ const relaunch = await launch('relaunch', workspace, local, preferences, { ROTAR
 // the overview's object (migrated first) at version 2 and the git one at version 1. Only the version-1 object is carried, and
 // the stamp is 1, so the git split is restored at 528; until 2026-10-14 the overview object's 2 became the one stamp and every
 // layout fell back to its default (REQ-SHELL-069, REQ-SHELL-006;
-// docs/defects/fixed/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md).
+// docs/archive/defects/the-pane-layout-carry-over-stamps-every-layout-with-the-first-old-objects-version.md).
 {
   const file = join(preferences, 'preferences.json');
   const before = JSON.parse(readFileSync(file, 'utf8'));
@@ -487,7 +487,7 @@ const notRepo = await launch('not-a-repository', plain, local, preferences, { RO
 // 6c. A repository before its first commit (an unborn branch): REQ-WORKSPACE-029's branch name is empty, and REQ-WORKSPACE-020
 // renders the item as empty text — no icon, no arrow, no tooltip; PD-WORKSPACE-008's words name other states only. Until fin22
 // the item drew the branch icon and a branch named `—`, "Branch this workspace is on: —."
-// (`docs/defects/fixed/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md`). Outside this
+// (`docs/archive/defects/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md`). Outside this
 // repository, for the reason 6b gives.
 const STRIP_BRANCH_EMPTY = '[data-testid="strip-branch"][data-branch-state="empty"][aria-label="Checked-out branch"]';
 const STRIP_BRANCH_TITLED = '[data-testid="strip-branch"][title]';
@@ -512,7 +512,7 @@ const unbornRun = await launch('unborn-branch', unborn, local, preferences, { RO
 // 7. A configured `worktree_storage_subpath` (REQ-GIT-073, REQ-CONFIG-068, REQ-GIT-005): an isolated session in a repository whose
 // file names `trees/sessions` is placed under `.rotaris/trees/sessions/<sid>`, and nothing is created under the default
 // `.rotaris/worktrees/`. Until fin41 main sent no subpath and the tree went under `worktrees/` whatever the file said
-// (`docs/defects/fixed/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md`). Its own
+// (`docs/archive/defects/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md`). Its own
 // repository and its own store directory, so the session and the database read here are this launch's alone.
 const subpathRoot = join(root, 'configured-subpath');
 const subpathWorkspace = join(subpathRoot, 'workspace');

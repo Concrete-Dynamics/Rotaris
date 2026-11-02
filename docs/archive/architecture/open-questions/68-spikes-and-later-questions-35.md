@@ -106,7 +106,7 @@ Launches 10, 11 and 13 to 15 are re-run. Launches 16 and 17 join launches 11 and
     - a commit;
     - a checkpoint taken with untracked files (REQ-GIT-034, REQ-GIT-051).
 
-    Every cost revision 2 accepted for a rename would be multiplied by the search's frequency. The record shows agents spending a whole child on a workspace change they could not account for ([`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it`](../../../defects/fixed/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md)). It also shows the owner moving the runtime's marker line out of the person's `.gitignore` (OQ-161). A's timings come from one fresh server per row, not from searches across a session.
+    Every cost revision 2 accepted for a rename would be multiplied by the search's frequency. The record shows agents spending a whole child on a workspace change they could not account for ([`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it`](../../defects/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md)). It also shows the owner moving the runtime's marker line out of the person's `.gitignore` (OQ-161). A's timings come from one fresh server per row, not from searches across a session.
 - **Advocate B (the system's lens).** B argued four points. The deletion is the harm OQ-273 and OQ-362 ruled out for the rename. The binding was built for it: the manifest's `editArguments` already names the deletion's `relative_path`. Under (b) the product writes only around an EDIT-tier call. A wrong search is not a forwarded edit's false success.
   - The ruling took from B:
     - revision 3 as the vehicle, with clauses 1 to 4 left the rename's;

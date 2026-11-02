@@ -47,7 +47,7 @@ prints each side's readings as that side's. Point 1, the 25 ms floor and the 3.0
 the repair read the parse ratio at 2.24 to 2.35 and the parser's at 1.89 to 2.06; a seventh, and five more on a quieter
 host in the verification's repair round, read the parse at 2.19 to 2.33 and the parser at 2.03 to 2.09. On this host the half-size sweep reads
 18 to 23 ms, under the floor, so its ratio stays recorded and not asserted. The note is
-[`traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`](../../../defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md).
+[`traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`](../../../archive/defects/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md).
 
 *History: [the correction of 2026-10-02](../../../archive/architecture/adr/0040-history.md#correction-2026-10-02).*
 
@@ -63,9 +63,9 @@ loops, ten runs after the repair passed at load averages of 10.4 to 14.7, the pa
 1.96 to 2.23 on the thread's CPU time while their wall ratios read 1.84 to 3.56 and 1.73 to 6.69. The half-size sweep reads
 14 to 23 ms of thread CPU, under the floor, so its ratio stays recorded and not asserted, as on an idle host's wall clock.
 The sweep's linear clause is therefore never asserted on this host. That is recorded as its own open note,
-[`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../../defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
+[`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../../archive/defects/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
 The note is
-[`traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`](../../../defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md).
+[`traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`](../../../archive/defects/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md).
 
 *History: [the correction of 2026-10-02](../../../archive/architecture/adr/0040-history.md#correction-2026-10-02-2).*
 
@@ -78,7 +78,7 @@ low end its loaded figures extrapolate to (about 28 ms). At 2,000 against 4,000,
 averages of 2.1 to 3.3 on 4 CPUs, the sweep's ratio asserted at 1.6 to 2.3 with the half side's minimum at 76 to 94 ms of
 thread CPU. Building and reading the pair adds 4.1 to 8.0 s to the proof (`pairMs`), which ran 18 to 23 s in all. The builder
 took no run beside added busy loops (the session's permission system refused launching them); fin7's verifier took one: four bounded `node -e 'for(;;){}'` loops beside the proof gave "sweep growth ratio 1.71 against work ratio 2", asserted, with the half side's minimum at 107 ms of thread CPU, at a load average of 7.77 on 4 CPUs, and the proof PASSED. The note is
-[`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../../defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
+[`traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`](../../../archive/defects/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md).
 
 *History: [the correction of 2026-10-01](../../../archive/architecture/adr/0040-history.md#correction-2026-10-01-2).*
 
@@ -92,4 +92,4 @@ average of 11.8 to 14.1 and eight in a row at 6.0 to 9.4; the second was answere
 posted, the first `cancelled` 12 to 43 ms after. With the engine's guard removed from the built bundle alone, the proof
 goes red on the refusal (`["ok","ok"]`, the first answered at 933 and 1,683 ms in two runs). The engine is unchanged.
 The note is
-[`traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md`](../../../defects/fixed/traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md).
+[`traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md`](../../../archive/defects/traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md).

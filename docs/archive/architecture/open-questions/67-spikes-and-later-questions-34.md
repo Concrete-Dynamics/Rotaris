@@ -10,13 +10,13 @@ proceeding; REQ-WORKSPACE-141, initialization resolution in the open's slot, wit
 hook review and OQ-279's configuration load beside it; REQ-WORKSPACE-058, discovery on open; REQ-SESSION-089 and
 REQ-EVENTS-084, a store that cannot be opened refuses the run. Raised 2026-10-20 by the host-independent finish (local session),
 bundle `loc1-main-rejection`, from
-[`a-workspace-opened-timeout-is-an-unhandled-main-rejection.md`](../../../defects/fixed/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md);
+[`a-workspace-opened-timeout-is-an-unhandled-main-rejection.md`](../../defects/a-workspace-opened-timeout-is-an-unhandled-main-rejection.md);
 the bundle's range OQ-386 to OQ-387, its first number. Renumbered at landing if `main` holds it. **Ruled 2026-10-21.**)*
 
 **What is open.** A workspace open has two hops. The workspace service opens the store and answers `workspace.opened`. Main
 then hands the store to the run host in its own `workspace.opened` request, bounded at 5,000 ms. When that reply misses the
 bound, main cannot tell what happened. The run host may have opened the store and answered late (the likely case:
-[the run host's skill discovery runs before its reply](../../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
+[the run host's skill discovery runs before its reply](../../defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
 It may have refused, or it may never answer. A late reply finds no pending request and is dropped. The specification states
 what a store that cannot be opened owes (the run refused, the reason reported). It says nothing about a hand-off between
 two processes of one application whose outcome is unknown. Until 2026-10-20 the timeout was a rejection out of the launch,
@@ -53,7 +53,7 @@ open, as a refused open does.
 
    `skills.read`, `skills.forceLoad`, `skills.loadFile` and `skills.list` wait for a warm-up in flight instead of walking the tree a second time.
 
-   Moving the warm-up past the reply would not have been enough. The walk (`readdirSync`, `statSync`, `readFileSync`) holds every request queued behind it. That includes the window's start-time reads and the slot's own `hooks.summary`. `hooks.summary` is sent 800 ms after the acknowledgement under a 10,000 ms bound, and when it misses, neither the hook review nor the no-provider notice is raised. A hold of more than 3,000 ms also trips ADR-0019's presenter lapse, which cancels every waiting approval (`run-host/host.ts`). The launch of 2026-10-16 logged that lapse beside its 8,201.5 ms discovery. REQ-WORKSPACE-058 asks that discovery run on open with no user action. It does not ask anything to wait on it. The repair takes the shape fin38 gave the cross-file edit's tree walk ([`a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md`](../../../defects/fixed/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md)).
+   Moving the warm-up past the reply would not have been enough. The walk (`readdirSync`, `statSync`, `readFileSync`) holds every request queued behind it. That includes the window's start-time reads and the slot's own `hooks.summary`. `hooks.summary` is sent 800 ms after the acknowledgement under a 10,000 ms bound, and when it misses, neither the hook review nor the no-provider notice is raised. A hold of more than 3,000 ms also trips ADR-0019's presenter lapse, which cancels every waiting approval (`run-host/host.ts`). The launch of 2026-10-16 logged that lapse beside its 8,201.5 ms discovery. REQ-WORKSPACE-058 asks that discovery run on open with no user action. It does not ask anything to wait on it. The repair takes the shape fin38 gave the cross-file edit's tree walk ([`a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md`](../../defects/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md)).
 
 2. **The case is idempotent.** The lease refusal stays first. After it:
    - A `workspace.opened` for an identifier the run host already holds under the same store file, with its connection open, is acknowledged without a second connection.
@@ -124,7 +124,7 @@ clear overtakes stops at its next read (reworked after review, the same day). A 
 entry's "never holds its event loop" and "instead of walking the tree a second time" exclude, and point 3's "nothing proceeds
 on an expiry" states the refusal. The first execution held in the unit cases, and the proofs ran on the built app on 2026-11-01, where the launch's walk read 9.0 ms over a one-skill tree, which is no like-for-like reading of the 8,201.5 ms
 ([first-executions](../../../architecture/first-executions/34-the-register-33.md);
-[the note](../../../defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
+[the note](../../defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md)).
 **Repaired after a third review, 2026-11-01.** ~~One `WARM_UP_WAIT_BOUND` of 9 s for all four requests~~: it refused a read main allows 15 s and left a gesture about 1 s, so each wait is now main's bound less 3 s (`warmUpWaitBound`). A read that never returns keeps its walk in flight, and "try again in a moment" was false of it: past `WARM_UP_STALL_BOUND` (60 s) the refusal says so (`skills.discovery-stalled`) and a gesture meets it at once. Main answers a `skills.read` its bound expired on as `skills.no-reply`, which the built app showed is needed. The renderer no longer reads any of these as an empty catalogue: it asks again until the walk ends (`askUntilDiscovered`), REQ-CHAT-034's commands register then with nothing done by the person, and Settings says "discovering" rather than "none". No ruling was needed: the entry's "nothing proceeds on an expiry" holds, and the 60 s is an implementation figure no requirement states. A walk that never ends stays parked until a rescan or a session creation, and those then walk synchronously, the loop-holding path recorded below, which on a dead mount holds the loop for as long as the read blocks.
 Points 2 to 5 are not built. The first item recorded beside the ruling stands as recorded. One more path holds the loop at
 launch, which the ruling's four waiters do not name and this entry did not record: a run started in an existing session during
@@ -138,7 +138,7 @@ terminates it" and "The agent reads the killed command's output as its result"; 
 frame carrying the observation's final plain text; REQ-TOOLS-128, the stream info record's running flag and exit code;
 REQ-TOOLS-098, a soft-paused call has returned while its process keeps running; OQ-164, ruled 2026-10-06, a paused
 command's end is reported by the next observation. Raised 2026-10-20 by plan loc1 (bundle `loc1-terminal-kill`) from the repair
-of [`the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md`](../../../defects/fixed/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md);
+of [`the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md`](../../defects/the-terminal-windows-kill-of-a-soft-paused-command-does-nothing-and-reports-success.md);
 the bundle's range OQ-370 and OQ-371, its first number. **Ruled 2026-10-21.**)*
 
 **What is open.** The window's kill of a RUNNING command returns that command's call at once, and the call's final result

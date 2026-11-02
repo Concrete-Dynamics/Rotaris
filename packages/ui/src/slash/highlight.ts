@@ -104,7 +104,7 @@ export function ensureContrast(colour: string, surface: string, dark: boolean, f
  * (PD-CHAT-001 revision 2's docked strip, `shell.css`), so the ground under the token is the dock's `--rt-surface`.
  * The mockup's bare `.input` paints on `--rt-bg`, and until 2026-09-29 the colours were corrected against that — a ground
  * the docked composer no longer paints, on which the partial shade fell to 4.06:1 on `rotaris-dim`
- * (`docs/defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`).
+ * (`docs/archive/defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`).
  * `slash.test.ts` reads the dock's background out of `shell.css`, so the two cannot drift apart silently again.
  */
 export const COMPOSER_GROUND = '--rt-surface' as const satisfies `--rt-${string}`;

@@ -27,7 +27,7 @@
  *      drawn WHOLE, after the branch icon in the accent colour (REQ-SHELL-042), because the path gives up its width first;
  *      widening the window
  *      re-measures it. The workspace sits at a deliberately deep path for this
- *      (`docs/defects/fixed/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`).
+ *      (`docs/archive/defects/the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md`).
  *
  * Evidence under `.proof/layout-proof/`: a PNG per size, `results.json`. `--skip-build` skips the build.
  */
@@ -250,7 +250,7 @@ try {
    * REQ-SHELL-022: "no control requires horizontal scrolling to reach", and a task's text is a control (it renames the
    * task). Ordinary words wrap; a token with none (a path, a hash, the live run's `printf "LINE-%03d xxxx…"`) ran past
    * the sidebar's edge and gave `.agents` a horizontal scrollbar
-   * (`docs/defects/fixed/a-long-unbroken-token-in-a-task-pushes-the-task-plan-into-horizontal-scroll.md`). The task is
+   * (`docs/archive/defects/a-long-unbroken-token-in-a-task-pushes-the-task-plan-into-horizontal-scroll.md`). The task is
    * added through the pane's own "+ Add task" control, at the wide size the live run saw it.
    */
   const TOKEN = `LONG-${'x'.repeat(195)}`;

@@ -19,7 +19,7 @@ clears the snapshot — the user asked for a clean shell. Aliases, functions and
 restored and the detail says so. The timeout test now asserts the variable survives the respawn.
 
 *Reported back 2026-09-29 (R-067), when the timeout test's intermittent `[]` was traced
-([`a-hard-timeout-reset-can-lose-the-restored-variable-under-load`](../../../defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md)):
+([`a-hard-timeout-reset-can-lose-the-restored-variable-under-load`](../../../archive/defects/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md)):
 "the snapshot after each completed command" means each command the session **sees** complete. A command that
 soft-paused (REQ-TOOLS-098) and finished while the next call waited behind it is never seen. Its effects are then
 missing from the snapshot a later reset re-applies, although they happened before the respawn PD-TOOLS-001 names.

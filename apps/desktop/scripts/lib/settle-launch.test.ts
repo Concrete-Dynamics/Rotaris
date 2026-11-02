@@ -1,6 +1,6 @@
 /**
  * The live run's wait on a launch ends within the launch's bound, even when a process the launch started keeps its pipes
- * open (`docs/defects/fixed/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`, part c). Pinned
+ * open (`docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`, part c). Pinned
  * against REAL children, because what is pinned is what the operating system does with inherited handles: a grandchild
  * that inherited the child's standard output and error holds them past the child's own end, so a wait on `close` lasts as
  * long as the grandchild does. No product code runs here.

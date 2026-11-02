@@ -596,9 +596,9 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
     // `session_action` and its `agent_name`. Until 2026-10-03 the key was the command's first 120 characters alone, so a
     // long `cd <worktree> && ` prefix collapsed different commands and a `send_signal` and a `query` of one session, both
     // carrying `true`, read as one retried
-    // (`docs/defects/fixed/the-autopsy-reader-counts-different-commands-as-one-retried-command.md`). Until 2026-10-06 the
+    // (`docs/archive/defects/the-autopsy-reader-counts-different-commands-as-one-retried-command.md`). Until 2026-10-06 the
     // key carried no agent, so two agents each running the suite once read as one command retried twice
-    // (`docs/defects/fixed/the-autopsy-reader-reads-two-agents-each-running-a-command-once-as-one-command-retried.md`). The
+    // (`docs/archive/defects/the-autopsy-reader-reads-two-agents-each-running-a-command-once-as-one-command-retried.md`). The
     // script reader keys the same way in `apps/desktop/scripts/lib/autopsy-retries.mjs`.
     const commands = new Map<string, { agent: string; command: string; session_action: string | null; times: number }>();
     for (const t of toolCalls) {

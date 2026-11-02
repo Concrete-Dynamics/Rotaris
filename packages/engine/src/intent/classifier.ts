@@ -117,7 +117,7 @@ const KEYS_INSTRUCTION = 'Answer with one JSON object and nothing else, with exa
  * schema shapes only the decoded answer — so at 552d346 the duress classification chose `whole_project` early and spent the
  * rest of its 12 s bound deciding which key to write it under, and was cut mid-way through `{"classification":
  * "whole_project"}` (finding V3; three of the default pack's four cuts deliberated the same way, finding Q2)
- * (docs/defects/fixed/the-intent-classifiers-strict-rung-never-names-the-objects-keys.md).
+ * (docs/archive/defects/the-intent-classifiers-strict-rung-never-names-the-objects-keys.md).
  */
 const SCHEMA_INSTRUCTION = KEYS_INSTRUCTION;
 /** Rung 2 (REQ-ORCH-010): the exact keys and one example appended. */

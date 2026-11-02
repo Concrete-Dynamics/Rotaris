@@ -108,7 +108,7 @@ export function openPlanIds(plan: PlanItems | null): Set<string> {
  * re-queue). `excused` is what was already open when the task was first taken up (OQ-203; `Task.planExcused`, kept with the
  * task in the stored todo): an item a given-up task or an earlier run left open is not held against a task REQ-ORCH-067
  * confines to its own work, and one the task's own earlier iteration left open always is. The repair of
- * `docs/defects/fixed/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` (live-run finding G5).
+ * `docs/archive/defects/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md` (live-run finding G5).
  */
 export function openPlanItems(plan: PlanItems | null, excused: ReadonlySet<string> = new Set()): string[] {
   if (plan === null) return [];

@@ -4,7 +4,7 @@ Part 15 of 18 of [ADR-0027](../0027-the-model-client-implementation.md), which i
 
 ## Tenth execution — 2026-10-02, every waiting pair's override persisted (REQ-ORCH-091 d, REQ-SESSION-026/196)
 
-*The repair of [`a-wait-choice-persists-the-override-for-the-shown-wait-alone.md`](../../../defects/fixed/a-wait-choice-persists-the-override-for-the-shown-wait-alone.md)
+*The repair of [`a-wait-choice-persists-the-override-for-the-shown-wait-alone.md`](../../../archive/defects/a-wait-choice-persists-the-override-for-the-shown-wait-alone.md)
 (fin10). Found a defect in the third execution's mechanism.*
 
 The third execution said the override is persisted "so a later run of the session never returns to an exhausted model and

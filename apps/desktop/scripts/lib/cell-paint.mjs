@@ -10,7 +10,7 @@
  *
  *   - `overrun` — a visible run reaches past its own cell's border box: it is painted under the neighbouring cell. The
  *     Git view's bound worktree row did this until 2026-10-04, `completed · ready` running on under the Ahead figure
- *     (`docs/defects/fixed/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`).
+ *     (`docs/archive/defects/the-git-views-worktree-state-cell-overruns-the-ahead-column.md`).
  *   - `cut` — a run is narrower on screen than it is laid out, because an ancestor inside the cell clips it. Allowed only
  *     in the columns named in `elide` (the ones whose content is shortened by design and carries its full text as a
  *     tooltip); anywhere else a cut run is text the reader cannot see.
@@ -155,7 +155,7 @@ export function runShownWhole(measured, key, column, text, tolerance = CELL_PAIN
  * only**: a run clipped with no marker at all passes it, so whether the marker is drawn is `runMarksElision`'s
  * (fin16's verifier; until then only `layout-regression.test.ts`'s `text-overflow: ellipsis` pin held the marker). The Git view's base row drew no
  * character of `main` at the 1000×680 minimum until 2026-10-04, its two tags taking the cell's whole width
- * (`docs/defects/fixed/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md`).
+ * (`docs/archive/defects/the-git-views-base-row-hides-its-branch-name-behind-its-tags-at-the-minimum-window.md`).
  * @param {{ rows?: Row[] }} measured
  * @param {string} key
  * @param {string} column

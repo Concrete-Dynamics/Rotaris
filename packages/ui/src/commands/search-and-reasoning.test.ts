@@ -14,7 +14,7 @@ import { commandById, filterCommands, shortcutCommands } from './registry.js';
 
 /**
  * N71 (2026-10-13): the two palette entries `OMITTED_COMMANDS` withheld for reasons that were no longer true
- * (`docs/defects/fixed/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md`).
+ * (`docs/archive/defects/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md`).
  * Each claim here failed before the repair: neither entry was in `COMMANDS`, nothing wrote `display/showReasoning`,
  * Settings → Display had no reasoning switch, and Ctrl+F was the transcript pane's private window listener.
  */
@@ -103,7 +103,7 @@ describe('"Toggle reasoning bodies" — REQ-CHAT-167, the one writer of display/
     ]);
   });
 
-  // `docs/defects/fixed/two-reasoning-toggles-inside-one-write-both-write-the-same-value.md`: the second activation reads the
+  // `docs/archive/defects/two-reasoning-toggles-inside-one-write-both-write-the-same-value.md`: the second activation reads the
   // state the first one wrote, so two activations flip twice and acknowledge two states.
   it('two activations inside one write\'s round trip flip twice, each reading the state the other left', async () => {
     // The window's store changes only once main has answered `prefs.set`, as `writeDisplayPref` does.
@@ -160,7 +160,7 @@ describe('"Toggle reasoning bodies" — REQ-CHAT-167, the one writer of display/
 
 /**
  * Channel 14 (REQ-CHAT-167, REQ-CONFIG-403): every window folds a stored display preference main announces, so a persona
- * window already open follows a change made elsewhere (`docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
+ * window already open follows a change made elsewhere (`docs/archive/defects/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
  */
 describe('a display:changed announcement folded into a window\'s display store — REQ-CHAT-167, REQ-CONFIG-403', () => {
   it('sets the one field the stored key names to the stored value', () => {

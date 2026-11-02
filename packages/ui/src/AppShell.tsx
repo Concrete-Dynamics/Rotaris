@@ -79,7 +79,7 @@ export interface AppShellProps {
    * REQ-WORKSPACE-106 / ADR-0048: a non-modal, window-level dialog — the project setup consent dialog. Drawn in the
    * rail-and-view region, at its top corner, so it is shown in every view and stands below the title bar's controls and
    * the notice slot's answers at any notice height; until 2026-10-02 it was fixed at the window's corner, over them
-   * (`docs/defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`). Where it may stand
+   * (`docs/archive/defects/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`). Where it may stand
    * over the view's own controls was OQ-187, ruled 2026-10-06 (R-071): this floating placement is accepted, lying over
    * the view's top corner while it is open.
    */

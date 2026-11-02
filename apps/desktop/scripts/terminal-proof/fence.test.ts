@@ -2,7 +2,7 @@
  * REQ-SHELL-101's three input checks in `terminal-proof` (`wheel.subNotch`, `selection.text`, `selection.emptyCopyFails`)
  * read the page after an input. Until 2026-10-01 they read it after a fixed pause, which a loaded host outran: the page had
  * not yet handled the event, and the check read the state from before it
- * (`docs/defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`). The fence waits until
+ * (`docs/archive/defects/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`). The fence waits until
  * the page has counted the event. The page here is a counter that counts the event only on its fourth read — a host on
  * which the event arrives late, deterministically, with no clock in the test.
  */

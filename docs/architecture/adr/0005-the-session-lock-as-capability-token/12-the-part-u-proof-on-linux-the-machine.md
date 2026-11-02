@@ -27,7 +27,7 @@ Two further repairs came with it, to preconditions the proof stated and did not 
     The first round used the exited child on every platform, and that was corrected in review. Windows was not run.
 
 Recorded and repaired in
-[`sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`](../../../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md).
+[`sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`](../../../archive/defects/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md).
 On Linux as root under Xvfb, three consecutive runs passed all ten launches. They included `repair-all` (B and C
 repaired, D untouched, then "Nothing was stale") and everything after it, which had never run on Linux.
 

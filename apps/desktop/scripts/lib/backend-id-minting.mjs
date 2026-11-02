@@ -15,7 +15,7 @@
  *
  * The proof used to look for the UUID-slicing spelling an agent task's id had before 2026-10-01, in `run.ts` alone, and
  * went red when the spelling moved although the requirement was still met
- * (`docs/defects/fixed/todo-proofs-stable-backend-ids-check-looks-for-an-id-minting-form-that-moved-out-of-run-ts.md`).
+ * (`docs/archive/defects/todo-proofs-stable-backend-ids-check-looks-for-an-id-minting-form-that-moved-out-of-run-ts.md`).
  * So this reads the property where it lives. What `mintTodoId` yields is measured by
  * `packages/engine/src/run/todo.test.ts`, and the ids `add_phase` and `add_task` report through `hexId` are read as eight
  * lowercase hex characters by `packages/agent-tools/src/tools/tools.test.ts`; the proof runs both beside these checks.

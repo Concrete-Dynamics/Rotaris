@@ -9,7 +9,7 @@ The ruled, closed, resolved and withdrawn entries of [part 36](../../../architec
 bound to the same model key reaches a terminal state"; REQ-MONITOR-020, "the freed slot must promote exactly one waiting
 agent"; REQ-CONFIG-094, which counts "children belonging to any other session running in the same process" against the
 cap; ADR-0012 and ADR-0013. Raised 2026-09-30 under [R-067](../../../product/requests.md#r-067) by the repair of
-[`the-per-model-cap-counts-only-one-iterations-children.md`](../../../defects/fixed/the-per-model-cap-counts-only-one-iterations-children.md),
+[`the-per-model-cap-counts-only-one-iterations-children.md`](../../defects/the-per-model-cap-counts-only-one-iterations-children.md),
 acceptance finding A13. ~~Open;~~ ruled 2026-10-06; numbered OQ-146 when it was raised, renumbered OQ-148 on its branch once OQ-146 and OQ-147
 were taken on `main`.)*
 
@@ -46,7 +46,7 @@ limit it already held"; REQ-CONFIG-094, which counts "every child agent currentl
 children belonging to any other session running in the same process"; REQ-ORCH-050; REQ-MONITOR-020, "only running and
 summarizing agents count"; PD-ORCH-005 clauses 6 and 16. Raised 2026-09-30 under [R-067](../../../product/requests.md#r-067)
 by the verification of the repair of
-[`the-per-model-cap-counts-only-one-iterations-children.md`](../../../defects/fixed/the-per-model-cap-counts-only-one-iterations-children.md),
+[`the-per-model-cap-counts-only-one-iterations-children.md`](../../defects/the-per-model-cap-counts-only-one-iterations-children.md),
 acceptance finding A13. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built, and `PD-ORCH-005` revision 6 states it in clause 39: a child paused out of `starting`, `running` or `summarizing` keeps its slot while its session rests; a session paused by an earlier process holds none until a run of it starts; a resting session's places do not lapse. REQ-MONITOR-020 and REQ-CONFIG-094 join the directive's Narrows list.
@@ -83,7 +83,7 @@ session's places lapse after some time.
 even where they name the same provider model, since the cap is a property of the configured entry"; REQ-CONFIG-005 and
 REQ-CONFIG-031, under which a workspace's configuration may define its own `models:` entries; ADR-0013. Raised 2026-09-30
 under [R-067](../../../product/requests.md#r-067) by the verification of the repair of
-[`the-per-model-cap-counts-only-one-iterations-children.md`](../../../defects/fixed/the-per-model-cap-counts-only-one-iterations-children.md),
+[`the-per-model-cap-counts-only-one-iterations-children.md`](../../defects/the-per-model-cap-counts-only-one-iterations-children.md),
 acceptance finding A13. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: the per-model cap counts by the key string across every session of the process, each session judging the sum against its own configuration's cap.
@@ -114,7 +114,7 @@ vocabulary has?** *(REQ-ORCH-139, "MUST NOT use any name outside those vocabular
 record alike; REQ-SESSION-134, REQ-SESSION-142, REQ-SESSION-199; REQ-ORCH-091 (a) and (d); REQ-MONITOR-086; REQ-NOTIFY-268;
 `PD-ORCH-005`; ADR-0027 and ADR-0060, which decided three of the names; OQ-53, OQ-76 and OQ-127, which raised the same gap for
 one mechanism each. Raised 2026-10-01 under [R-067](../../../product/requests.md#r-067) by the repair of
-[`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../../../defects/fixed/the-run-writes-timeline-events-outside-its-closed-vocabulary.md),
+[`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md),
 acceptance finding A29. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** as recommended — the specification gains the words, in one amendment with OQ-53's, OQ-54's, OQ-76's and OQ-127's: the fifteen run facts, OQ-127's three watchdog words and the three issue kinds join domain 01's lists ([`PD-ORCH-014`](../../../product/directives/pd-orch-014.md#pd-orch-014), which also names REQ-NOTIFY-268's entry `notice`), the thirteen chat controls form the chat domain's own timeline vocabulary ([`PD-CHAT-009`](../../../product/directives/pd-chat-009.md#pd-chat-009)), and OQ-76's two words join domain 05's ([`PD-TOOLS-011`](../../../product/directives/pd-tools-011.md#pd-tools-011)). The pairing the build read (one mechanism, one entry word and one issue word) stands as built, and `tools/check-timeline-vocabulary.mjs`'s `AWAITING` is empty, so the vocabulary is closed again.
@@ -188,10 +188,10 @@ the canonical name is used everywhere the task is referenced (transcripts, depen
 REQ-MONITOR-071, REQ-CHAT-069 and REQ-MONITOR-044, which the surfaces meet by name; PD-ORCH-005 clause 4 with OQ-97, under
 which a root keeps its own persona's name; REQ-LIBRARY-093. Raised 2026-10-01 under [R-067](../../../product/requests.md#r-067)
 by the repair of
-[`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../../../defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md),
+[`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../../defects/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md),
 acceptance finding A23. ~~Open.~~ Ruled 2026-10-06.)*
 
-**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the renaming is accepted as built: no child at any depth takes the canonical name or the persona of its own root or of any root the session has recorded, and such a child is renamed `<name>_<n>`. The remaining edge, a root named like an earlier child, is left until after the first release, and its note, [`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../../defects/fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md), closes with this ruling. [`PD-ORCH-010`](../../../product/directives/pd-orch-010.md#pd-orch-010) narrows REQ-ORCH-044.
+**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the renaming is accepted as built: no child at any depth takes the canonical name or the persona of its own root or of any root the session has recorded, and such a child is renamed `<name>_<n>`. The remaining edge, a root named like an earlier child, is left until after the first release, and its note, [`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md), closes with this ruling. [`PD-ORCH-010`](../../../product/directives/pd-orch-010.md#pd-orch-010) narrows REQ-ORCH-044.
 
 A transcript row, a tool call and an artifact know their agent by a name alone. The surfaces give the run-level agent every
 row and artifact carrying the entry persona or a name one of the session's roots carries (`ownRow`, `artifactNames`,
@@ -216,7 +216,7 @@ recorded root's two names (`recordedRootNames` in `children/naming.ts`: each ite
 Two edges are left as they are. A child named before this repair keeps its name. And a **root named like an earlier child**
 — the entry persona changed to one an earlier child's canonical name already spells — is drawn as both, since the root's
 name is its persona and no ledger names it
-([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../../defects/fixed/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
+([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
 
 **What a ruling decides.** Whether a root's names count as in use under every parent, or the surfaces must tell a child
 from a root by an identity the rows carry; with the second, whether rows recorded before keep the name-only rule.
@@ -230,7 +230,7 @@ count; REQ-MONITOR-052's meta line, `{state} · {elapsed or em-dash} · {N} tool
 which call the run's own agent its synthetic root, as ADR-0012 does; REQ-MONITOR-086 and REQ-MONITOR-060; REQ-MONITOR-102
 with REQ-ORCH-097's cadence (OQ-116). Raised 2026-10-01 under [R-067](../../../product/requests.md#r-067) by the verification of
 the repair of
-[`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../../../defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md),
+[`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../../defects/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md),
 acceptance finding A20. Raised on its branch as OQ-158 and renumbered OQ-159 at the merge, origin/main's OQ-158 keeping its number. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: the run-level agent carries its own tool-call count and called history (the roots'), and REQ-MONITOR-101's aggregate run count is REQ-MONITOR-102's displayed total; the run-level agent's compression count stays the run-wide count. [`PD-MONITOR-003`](../../../product/directives/pd-monitor-003.md#pd-monitor-003) narrows REQ-MONITOR-101.
@@ -260,7 +260,7 @@ agent as REQ-MONITOR-044 presents one, carrying its own count and history, and R
 some other surface — the run header, or the run-wide totals of REQ-MONITOR-098.
 
 *2026-10-02, the repair of
-[`the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md`](../../../defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md):*
+[`the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md`](../../defects/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md):*
 the compression reading recorded above was not what the build did — `runLevelAgent` summed `SessionRecord.agents`, which
 holds the children alone, so a root's own compressions were counted nowhere. The record now carries the run-wide count
 (`SessionRecord.compressions`, the session's maintained aggregate, the roots' included) and the run-level agent shows it, as
@@ -272,7 +272,7 @@ the reading says; the inspector and the persona window draw it. Nothing about th
 *(REQ-WORKSPACE-113, "a recorded failure appends 'Last run failed: {message}' to the hint"; REQ-WORKSPACE-093, which fixes a
 failure's form as "{reason}: {detail}"; REQ-WORKSPACE-103, under which the recorded outcome is visible in Settings Project. Raised 2026-10-01 under
 [R-067](../../../product/requests.md#r-067) by the repair of
-[`the-project-sections-failure-hint-runs-out-of-the-sidebar.md`](../../../defects/fixed/the-project-sections-failure-hint-runs-out-of-the-sidebar.md),
+[`the-project-sections-failure-hint-runs-out-of-the-sidebar.md`](../../defects/the-project-sections-failure-hint-runs-out-of-the-sidebar.md),
 acceptance finding A39. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** confirmed as built: the sidebar's `{message}` is the recorded failure whole, broken to the column (`overflow-wrap: anywhere`), and Settings → Project shows the same outcome. REQ-WORKSPACE-113 does not bound `{message}`, so this ruling settles it.

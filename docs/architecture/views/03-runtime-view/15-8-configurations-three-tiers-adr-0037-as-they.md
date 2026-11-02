@@ -46,7 +46,7 @@ Part 15 of 16 of [the runtime view](../03-runtime-view.md), which indexes every 
   models or personas entry over a non-mapping, an entry's immediate field, a list, a scalar over a section's mapping) takes
   the fault (and a warning, through the same search) whatever an earlier file states beneath that prefix, so a field
   missing from an entry a later file replaced whole is no longer reported in the earlier file whose value the merge discarded
-  (`docs/defects/fixed/a-fault-inside-a-wholesale-replaced-value-is-attributed-to-an-earlier-file-that-states-the-deeper-path.md`).
+  (`docs/archive/defects/a-fault-inside-a-wholesale-replaced-value-is-attributed-to-an-earlier-file-that-states-the-deeper-path.md`).
 
 - **What no tier reaches — the update check (REQ-STARTUP-111, the updater of 2026-09-28).** Whether, when and
   where a supported standalone build checks for an update is decided by no configuration value in any tier, no
@@ -74,7 +74,7 @@ Part 15 of 16 of [the runtime view](../03-runtime-view.md), which indexes every 
   (`config.live-state-invalid`, the run host's warn line naming each path) and the state held before stays, so the passes
   never meet an overlay value at fault and never name a scope file for one** — until then the state was installed
   unchecked, and a live `max_depth: 0` was refused at run start in the name of a scope file that held another value
-  (`docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md`); the run's `RunConfig`, runtime posture, persona resolver, model references, entry
+  (`docs/archive/defects/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md`); the run's `RunConfig`, runtime posture, persona resolver, model references, entry
   tier, providers to lease and message limit come from that. Initial starts capture this once before
   credential preparation and pass the completed setup into `Sessions.start`. The authorized board grant
   is a separate per-launch input carrying both fields required by REQ-TRACE-470. The runtime keys the live state lays

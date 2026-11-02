@@ -5,11 +5,11 @@ import { analysisTimedOutAfter, emptyArtifactNotice, passFailureDetail, passFail
  * PD-CONFIG-003 revision 2 (OQ-223) with REQ-NOTIFY-100: a post-run analysis that reached its limit says so. Before, its
  * empty artifact — REQ-LIBRARY-023's `collector timed out after <t> seconds` — read "Nothing was proposed in <id>.", like a
  * review that looked and found nothing
- * (`docs/defects/fixed/a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md`).
+ * (`docs/archive/defects/a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md`).
  *
  * PD-LIBRARY-005 (OQ-285): an empty artifact whose collector crashed or whose answer could not be parsed is its pass's failure
  * warning, for both passes, and a timed-out retrospective states its limit. Before, both read as the zero-proposal info notice
- * with "Nothing was proposed in <id>." (`docs/defects/fixed/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`).
+ * with "Nothing was proposed in <id>." (`docs/archive/defects/a-crashed-improvement-collector-reads-as-an-analysis-that-found-nothing.md`).
  */
 const postRun = (notes: string | null, artifact_id = 'impart_00000001') => ({ artifact_id, source_kind: 'post_run', notes });
 const retrospective = (notes: string | null, artifact_id = 'impart_00000002') => ({ artifact_id, source_kind: 'retrospective', notes });
@@ -34,7 +34,7 @@ describe("the empty artifact's notice (REQ-LIBRARY-124, REQ-LIBRARY-022/023, REQ
 
   /*
    * PD-LIBRARY-002 revision 5 (OQ-300): a reason that is a refusal's sentence ends in its own period, and the warning ends in a
-   * single one (docs/defects/fixed/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md).
+   * single one (docs/archive/defects/a-retrospectives-failure-warning-ends-in-a-doubled-period-when-its-reason-ends-in-one.md).
    */
   it('adds the closing period only to a reason that does not already end in terminal punctuation, for both passes', () => {
     const refused = 'the analyst could not start — Provider authentication required: Authenticate at least one configured provider before running a retrospective.';

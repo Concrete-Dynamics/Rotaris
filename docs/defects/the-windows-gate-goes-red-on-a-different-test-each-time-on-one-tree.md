@@ -85,7 +85,7 @@ not yet let go of, or a reading taken before a loaded host has finished — but 
   in the listen backlog and is served once `spawnSync` returns — and the leg waits
   `spawnSync(…, { timeout: 20_000 })` on a child whose own fetch aborts at 1,500 ms. What an empty stdout means — the
   child killed rather than reaching its fetch's end, or its output lost — is not decided by this log. The repaired note
-  [the recording proxy could not answer a single call, because `spawnSync` blocked the loop it listened on](fixed/the-recording-proxy-could-not-answer-while-spawnsync-blocked.md)
+  [the recording proxy could not answer a single call, because `spawnSync` blocked the loop it listened on](../archive/defects/the-recording-proxy-could-not-answer-while-spawnsync-blocked.md)
   is a **different** defect (the recorder itself was inert under `spawnSync`, since repaired); this is the case that
   pins that arrangement going red on a loaded runner.
 - `runs.test.ts:201` and `setup at 77` had **no note at all** before this one. Those three sites are this note's new
@@ -146,11 +146,11 @@ touch, and none repeated in that day's gates.
   run only because that run ended on a different red: this case did not fail again.
 - `packages/agent-tools/src/terminal/terminal.test.ts`, "PD-TOOLS-001 (OQ-134): a reset restores the snapshot of the last command
   the product saw complete": `expected 93106.2667 to be less than 93050.296`, a timing reading. The case is named in
-  [the repaired note on the restored variable](fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md), which is
+  [the repaired note on the restored variable](../archive/defects/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md), which is
   about a different reading.
 - `packages/agent-tools/src/terminal/terminal.test.ts`, "REQ-TOOLS-098/100/103 (OQ-144): a soft-paused command that ends the shell
   is handed over by the poll as an execution_error": `expected 'soft_pause' not to be 'soft_pause'`. The case comes from
-  [the repaired note on a command that exits the shell](fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md);
+  [the repaired note on a command that exits the shell](../archive/defects/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md);
   this is its reading going red under the gate's load, not shown to be that defect back. Green on the next run of the same head.
 
 The same day's other reds were at recorded sites: `runs.test.ts`'s `-2` collision, `setup at 77`, the soft-paused kill family, the

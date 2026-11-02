@@ -5,7 +5,7 @@
  * The comparison is two alternating launches a side, judged on the loaded side's median against the empty side's
  * median plus one measured frame (about 17 ms). One launch that lands in a burst of other work on the host moves its
  * side's median by two frames or more, and fin4's verifiers saw it red at load averages of 5 to 14.7 on 4 CPUs, with
- * nothing in the evidence to say so (`docs/defects/fixed/transcript-proofs-append-comparison-goes-red-under-host-load.md`).
+ * nothing in the evidence to say so (`docs/archive/defects/transcript-proofs-append-comparison-goes-red-under-host-load.md`).
  * So each launch records the host's load at its start and its end; a red verdict where any launch ran at a one-minute
  * load average above the CPU count runs the alternating launches once more and is judged on that second set, both sets
  * kept. The slack and the statistic are unchanged, a red with no launch above the CPU count stands, and a red on the

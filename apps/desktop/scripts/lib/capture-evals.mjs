@@ -6,7 +6,7 @@
  * `capture: eval-at <ms> <expression> → <JSON>`, with the expression exactly as the step list carried it (trimmed, as
  * `parseSteps` trims each step). Two probes scheduled at one offset both fire and both log, so the offset alone does not
  * name a probe: `slash-proof` read the model chip's answer at 5,900 ms and got the usage notice's
- * (`docs/defects/fixed/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md`). A read here names
+ * (`docs/archive/defects/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md`). A read here names
  * the offset AND the expression, and a read that still matches more than one logged eval throws rather than choosing.
  *
  * Nothing here is product code. It runs only from the proofs.

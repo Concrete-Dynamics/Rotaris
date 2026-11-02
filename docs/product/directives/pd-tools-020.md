@@ -66,5 +66,5 @@ in level 3's shift like any other.*
 > as-built result was level 4, not the "no match" the defect note's five-line file gave; the cell depends on the window's
 > similarity, and both readings are outside level 3. **What was not measured.** No live run: the `crlf` scenario, which fails a
 > level-4 window edit whose `old_string` was a uniform indent off, is the orchestrator's. Repairs
-> [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../../defects/fixed/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
+> [`a-block-with-a-blank-interior-line-never-matches-at-level-3`](../../archive/defects/a-block-with-a-blank-interior-line-never-matches-at-level-3.md).
 > The row is in [`../architecture/first-executions.md`](../../architecture/first-executions.md).

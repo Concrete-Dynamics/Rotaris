@@ -427,7 +427,7 @@ describe('the successor\'s side of the two-step pass — REQ-STARTUP-121 (ADR-00
  * before acting as one, and where it finds a record naming another process it must stop behaving as the instance rather than
  * compete". Measured not to hold on Windows on 2026-10-21: the resumed primary answered the hand-over queued on its pipe and
  * surfaced its window beside the instance that had reclaimed the record
- * (`docs/defects/fixed/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). The suspension is not
+ * (`docs/archive/defects/a-primary-resumed-after-a-reclaim-goes-on-acting-as-the-instance.md`). The suspension is not
  * reproduced here; its result is — the record rewritten under a primary whose endpoint is still listening.
  */
 describe('a process the record was reclaimed from stands down — ADR-0055 consequence 14, REQ-STARTUP-161, REQ-STARTUP-164', () => {
@@ -760,9 +760,9 @@ describe('a holder that is live and never answers is reclaimed after the second 
  * Where the hand-over socket lives off Windows (REQ-STARTUP-145, REQ-STARTUP-161, REQ-STARTUP-164). Until fin30 the claim
  * listened under the data directory whatever its length, so a deep one made the listen fail with `EINVAL` and the
  * rejection went unhandled in main — a launch with no window that said nothing
- * (`docs/defects/fixed/a-deep-data-directory-leaves-the-launch-windowless.md`); and it took `XDG_RUNTIME_DIR` with `??`, so
+ * (`docs/archive/defects/a-deep-data-directory-leaves-the-launch-windowless.md`); and it took `XDG_RUNTIME_DIR` with `??`, so
  * a set-but-empty value put the socket in the working directory
- * (`docs/defects/fixed/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
+ * (`docs/archive/defects/an-empty-xdg-runtime-dir-puts-the-instance-socket-in-the-working-directory.md`).
  */
 describe('the hand-over socket\'s directory — REQ-STARTUP-145, REQ-STARTUP-161, REQ-STARTUP-164', () => {
   const posixHost = process.platform !== 'win32';
@@ -852,7 +852,7 @@ describe('the hand-over socket\'s directory — REQ-STARTUP-145, REQ-STARTUP-161
     expect(socketDirectoryCandidates({ platform: 'linux', pid: 4242, endpointDir: bare, tempDirs: [room] }).map((c) => `${c.dir}${c.private ? ' (private)' : ''}`)).toEqual([bare, `${room} (private)`]);
   });
 
-  // OQ-248 (R-072, 2026-10-13) closes docs/defects/fixed/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md:
+  // OQ-248 (R-072, 2026-10-13) closes docs/archive/defects/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md:
   // the private directory below the temporary one is made per attempt under an unpredictable name, so nothing already there
   // can deny it. A file standing where the old shared `rotaris-<uid>` directory went is what another local user could create.
   it.skipIf(!posixHost)('a name already taken below the temporary directory no longer denies the fallback: each attempt makes its own private directory', async () => {
@@ -874,7 +874,7 @@ describe('the hand-over socket\'s directory — REQ-STARTUP-145, REQ-STARTUP-161
   });
 
   // OQ-248: the endpoint is the record's, so the reclaim that removes a dead process's record removes its endpoint with it
-  // (docs/defects/fixed/a-reclaim-leaves-the-dead-instances-socket-behind.md).
+  // (docs/archive/defects/a-reclaim-leaves-the-dead-instances-socket-behind.md).
   it.skipIf(!posixHost)('a reclaim removes the socket a dead recorded process left, and its own private directory; it leaves a live process\'s endpoint and a name that is not one', async () => {
     const dead = spawnSync(process.execPath, ['-e', '0']).pid as number;
     const own = join(dir, 'rotaris-Ab12Cd');

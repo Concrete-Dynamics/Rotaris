@@ -49,7 +49,7 @@ measurement. A scan rooted inside an ignored component, which the ruling found s
 **Built 2026-10-07 (fin27):** `IGNORE_COMPONENTS` takes `CODE_INTELLIGENCE_MARKER_SEGMENTS[0]` from `@rotaris/config`; the
 one set feeds the walker and `listing` (`files.ts`). The ruling's premise that the parent listing of a missing path already
 skipped `.rotaris` was false: it skipped nothing, recorded and repaired in the same bundle
-([`a-missing-paths-parent-listing-shows-the-ignore-components.md`](../../../defects/fixed/a-missing-paths-parent-listing-shows-the-ignore-components.md)),
+([`a-missing-paths-parent-listing-shows-the-ignore-components.md`](../../defects/a-missing-paths-parent-listing-shows-the-ignore-components.md)),
 so it now reads the same set. Pinned by the case "the code-intelligence marker directory is a
 hard-coded ignore component, named by the manifest" in `packages/agent-tools/src/tools/tools.test.ts`, red on `d12f1f2`.
 Findings L3, N6 and H3 close with it; the next duress live run is the measurement.
@@ -87,7 +87,7 @@ nested `dist`, `build`, `out`, `cache` and `node_modules`. `glob '*.js' base_pat
 `glob 'node_modules/x/*.js'` did not, and `glob '*' base_path='.rotaris'` listed the product's own state. A `grep` entry
 naming one file walked its parent's whole subtree and compared lower-cased paths, so on a case-sensitive disk naming
 `src/a.ts` also searched `src/A.ts`. Recorded as
-[`an-explicit-search-base-inside-an-ignored-directory-is-walked.md`](../../../defects/fixed/an-explicit-search-base-inside-an-ignored-directory-is-walked.md).
+[`an-explicit-search-base-inside-an-ignored-directory-is-walked.md`](../../defects/an-explicit-search-base-inside-an-ignored-directory-is-walked.md).
 
 **What a ruling decides.** Whether an explicit base is the caller's decision (the component and gitignore filters stand
 aside below it, as `read_file`'s exemption does for a named file, which needs a directive), whether REQ-TOOLS-139 governs as
@@ -112,7 +112,7 @@ descriptions. No directive is minted: the requirement is faithful and the code d
 (`packages/agent-tools/src/tools/search.ts`); pinned by the five cases under "an explicit base or a named file inside an
 excluded directory yields nothing" in `packages/agent-tools/src/tools/tools.test.ts`, four red on `d12f1f2` (the fifth, a
 run rooted under `.rotaris/worktrees/<w>`, guards the repair). Noticed while ruling and recorded open, not repaired here:
-[`a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md`](../../../defects/fixed/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md). **Repaired 2026-10-07 (fin30):** a rule now matches
+[`a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md`](../../defects/a-re-included-directory-under-an-ignored-glob-keeps-its-files-ignored.md). **Repaired 2026-10-07 (fin30):** a rule now matches
 the path itself and nothing beneath it, and `ignoredBy` asks every proper directory prefix before the path, in git's
 order, so `gen/*` then `!gen/keep/` keeps `gen/keep/f.ts` for the search tools and the contains-code walk alike
 (`packages/config/src/init/gitignore.ts`).
@@ -127,7 +127,7 @@ in this workspace" and calls itself consistent with REQ-GIT-119 and REQ-GIT-120;
 resume half scoped "there" and "in a workspace where a run is already executing"; `PD-SHELL-002`, "while any run is active in
 the workspace, the dialog SHALL lock", and "a window of another project is untouched by all of this". Raised 2026-10-07 by
 the R-072 consortium as its question GI1, from
-[`the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md`](../../../defects/fixed/the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md)
+[`the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md`](../../defects/the-launch-dialog-locks-isolation-only-for-a-run-in-its-own-workspace.md)
 (fin28's repair round 1), and recorded here as OQ-224, the number the round assigned it. ~~Open.~~ **Ruled 2026-10-07.**)*
 
 The launch dialog locks isolation on for a busy session of its own workspace (`currentBusy || listBusy` over the window's
@@ -161,7 +161,7 @@ fin28's verifier did, and A's containment rule, without which a base-tree launch
 in a window open on `/repo/app`; and from B the history corrected beside the claim it replaces and the resume refusal placed
 at continuing, with the session excluded. Neither settled two things, which the ruling adds: an unreadable count locks the
 dialog and forces the worktree, and a forced placement says so.
-[`a-base-tree-session-continues-beside-another-run-in-its-workspace.md`](../../../defects/fixed/a-base-tree-session-continues-beside-another-run-in-its-workspace.md)
+[`a-base-tree-session-continues-beside-another-run-in-its-workspace.md`](../../defects/a-base-tree-session-continues-beside-another-run-in-its-workspace.md)
 records the unbuilt resume half, written before its code.
 
 <a id="oq-223"></a>
@@ -172,7 +172,7 @@ records the unbuilt resume half, written before its code.
 REQ-LIBRARY-041, the improvement domain's one Settings row, the toggle; REQ-CONFIG-118 and REQ-LIBRARY-039, the key and its
 60 s default; REQ-NOTIFY-100 and REQ-LIBRARY-023/124, a timed-out analysis and its notice; OQ-114's F4, the measured analyst
 calls. Raised 2026-10-07 by the R-072 consortium as its question IT1, from
-[`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../../../defects/fixed/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md)
+[`the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md`](../../defects/the-improvement-analysis-timeout-control-writes-a-key-no-settings-list-names.md)
 (noticed while building OQ-218), and recorded here as OQ-223, the number the round assigned it. ~~Open.~~ **Ruled
 2026-10-07.**)*
 
@@ -204,7 +204,7 @@ list, the equality tests that would have caught this defect, and the objection t
 widening PD-CONFIG-003's heading. It departs from A on the dispositions: REQ-CONFIG-323's four toggles are untouched
 (extended), and REQ-CONFIG-325's "two numeric policy limits" is the count that changes (narrowed). R-071 is not revised: the
 60 s default stands.
-[`a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md`](../../../defects/fixed/a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md)
+[`a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md`](../../defects/a-timed-out-improvement-analysis-reads-as-one-that-found-nothing.md)
 records the notice's half, written before its code.
 
 <a id="oq-225"></a>
@@ -220,7 +220,7 @@ PD-ORCH-009, the re-prompt of an answerless root. Raised 2026-10-07 from finding
 row 48) while its plan's "Report one line per command" read `PENDING`; with no correction the task was re-queued, the fresh
 root (traffic #25: the task and the marker only; tool call `#25`, `background_output`, refused "not found among your
 children") re-delegated the whole probe, and transcript row 54 told the person the report "never delivered". Recorded as
-[`a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md`](../../../defects/fixed/a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md),
+[`a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md`](../../defects/a-re-queued-tasks-fresh-root-cannot-see-the-answer-its-iteration-was-held-back-for.md),
 repaired by fin31.
 Ruled the same day.)*
 

@@ -160,10 +160,10 @@ describe('REQ-MONITOR-044/052/068/069 (live-run finding K1): artifact links', ()
   /*
    * REQ-LIBRARY-093 (the repair of a-roots-publish-names-its-persona-as-its-author.md): a root's publish and its reads record
    * its canonical instance name, which for a persona the canonicaliser rewrites is not the entry persona the run-level agent
-   * is named by — so its links read empty (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+   * is named by — so its links read empty (docs/archive/defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
    */
   /*
-   * docs/defects/fixed/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md (acceptance A22,
+   * docs/archive/defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md (acceptance A22,
    * R-067): a plan cycle's root that only READ is named by the session's `plan_roots` row, so at the gate, with no run live
    * and nothing it produced, the run-level agent still has its received link. Without the root named, it has none.
    */
@@ -253,7 +253,7 @@ describe('REQ-MONITOR-089 / REQ-MONITOR-065 (acceptance A36): the run-level agen
 });
 
 /*
- * docs/defects/fixed/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the inspector
+ * docs/archive/defects/the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md: the inspector
  * and a persona window drew an agent's tokens and tool calls and never its compression count (REQ-MONITOR-281), and nothing
  * drew the run-wide count (REQ-MONITOR-086). Each now draws it as an element of its own, labelled with its unit; the
  * run-level agent's is the run-wide count, the roots' compressions included (OQ-159 as ruled, R-071).

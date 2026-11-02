@@ -190,7 +190,7 @@ was executed against a real refusal: Git's phrase matched, the forced removal to
 *Reported back 2026-10-13 (fin41): the configured storage subpath, first executed.* The sentence above names the default
 directory because the default was the only one ever used: main sent `worktree.create`'s session target with no `subpath`, and the
 `worktree_storage_subpath` the loader read reached nothing
-([`a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md`](../../defects/fixed/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md)).
+([`a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md`](../../archive/defects/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md)).
 Main now reads the key from the service's `config.read` snapshot and sends it; `pnpm git-proof` launch 7 (`configured-subpath`)
 creates, writes and lists a session tree at `.rotaris/trees/sessions/<sid>` with no `.rotaris/worktrees/` made. The write path of
 this record (REQ-GIT-005's placement and its `Worktree storage path must stay inside .rotaris.` refusal in

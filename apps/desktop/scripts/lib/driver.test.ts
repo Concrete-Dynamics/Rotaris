@@ -179,7 +179,7 @@ describe('R-062: waiting on a condition, and choosing in either chooser kind', (
   });
 });
 
-describe('clickLanded (docs/defects/fixed/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md)', () => {
+describe('clickLanded (docs/archive/defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md)', () => {
   /** A driver whose settled clicks answer in turn: a string is the seam's refusal, anything else its reply. */
   function clicking(answers: unknown[]) {
     const sent: Record<string, unknown>[] = [];

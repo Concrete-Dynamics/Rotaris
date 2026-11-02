@@ -84,7 +84,7 @@ says something false of the tree.** The generator reads `pins.json` as its manif
 this build pins no machine tools"; the manifest pins two. `REQ-STARTUP-142` wants that section generated from the setup
 manifest and listing Git and ripgrep. Recorded and not repaired — the build was told to leave what the notices file lists
 alone while **OQ-73** is open, and OQ-73's gate-review addendum already says the generator's reader follows the shape
-machine setup decides (`../../../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
+machine setup decides (`../../../archive/defects/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
 *Repaired 2026-09-28 under R-062, OQ-73 still open (deferred 2026-10-06 by
 [R-071](../../../product/requests.md#r-071), with the release pipeline's notices and signing):*
 the generator now reads this manifest in `SetupManifestSchema`'s

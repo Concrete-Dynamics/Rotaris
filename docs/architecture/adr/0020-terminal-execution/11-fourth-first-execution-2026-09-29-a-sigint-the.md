@@ -38,4 +38,4 @@ on either side of that correction. OQ-135 records the reading,
 its residue (an `exec` inside the reading's step; a script that traps SIGINT overridden; a shell other than `dash` not
 read), and stays open *(ruled 2026-10-06, [R-071](../../../product/requests.md#r-071): the narrow re-delivery accepted
 as built where the session's shell is `dash` on Linux, with that residue; `PD-TOOLS-010`)*
-([the note](../../../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)).
+([the note](../../../archive/defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)).

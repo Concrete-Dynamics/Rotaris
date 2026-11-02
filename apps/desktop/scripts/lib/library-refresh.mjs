@@ -9,7 +9,7 @@
  * setup in a second Electron process just before). In the acceptance round's run 1 the renderer answered the press's
  * lookup 1.5 s late; it had processed the queued key events first, so the press looked for the tab in the Workspace
  * view, both probes read `[]`, and the proof failed on "the empty state was not shown before the run published"
- * (`docs/defects/fixed/artifacts-proofs-publish-launch-reads-the-empty-library-in-a-window-a-startup-stall-closes.md`).
+ * (`docs/archive/defects/artifacts-proofs-publish-launch-reads-the-empty-library-in-a-window-a-startup-stall-closes.md`).
  *
  * The schedule now follows the Library instead of guessing at it:
  *  - Ctrl+6 is still the first appointment, at 1200 ms;

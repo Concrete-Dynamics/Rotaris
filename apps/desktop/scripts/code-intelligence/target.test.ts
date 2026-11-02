@@ -1,6 +1,6 @@
 /**
  * The bundle's target architecture (OQ-400, ruled 2026-10-15 under R-072;
- * `docs/defects/fixed/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`): `bundle.mjs`
+ * `docs/archive/defects/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`): `bundle.mjs`
  * installs the interpreter by the target's full uv key, carries the target's architecture in the marker's hash, and on a
  * Windows ARM64 host takes the pinned `win32-x64` uv, since no `win32-arm64` uv is pinned.
  */
@@ -66,7 +66,7 @@ describe("pinsHashInput — the marker's hash changes with the target's architec
 });
 
 // REQ-STARTUP-143: the reviewed-exceptions table names exact versions, so the closure it reviews must not be resolved on the
-// day of the build (docs/defects/fixed/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md).
+// day of the build (docs/archive/defects/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md).
 describe('parseClosureLock — every distribution of the closure at one exact version, by hash', () => {
   const H = 'a'.repeat(64);
   it('reads name, version, marker and hashes over continuation lines, and skips comments', () => {

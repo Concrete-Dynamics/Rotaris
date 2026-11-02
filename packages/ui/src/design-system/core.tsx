@@ -37,7 +37,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
  * `docs/design/README.md` §4.1 resolves it (`.status-dot:where([data-state=…])`), at the
  * specificity of `.status-dot` alone, so a surface that paints its dot otherwise still does. Until 2026-10-01 the
  * product's kinds were written to `data-kind`, which no stylesheet read, so a bare dot drew nothing
- * (`docs/defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`).
+ * (`docs/archive/defects/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`).
  */
 export const STATUS_DOT_STATES = ['run', 'wait', 'done', 'fail', 'ok', 'warn', 'idle'] as const;
 export type StatusDotState = (typeof STATUS_DOT_STATES)[number];
@@ -60,7 +60,7 @@ export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(function St
  * by `kind` alone (`tools/check-ui-language.mjs` refuses a Tag whose class spells `tag` or a `tag-` tone). Until
  * 2026-10-01 four of the kinds (`running`, `waiting`, `danger`, `info`) named classes no stylesheet defines, and a
  * `className` replaced the foundation (`componentClass`), so every caller spelled `tag tag-…` by hand
- * (`docs/defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`).
+ * (`docs/archive/defects/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`).
  */
 export const TAG_KINDS = ['accent', 'neutral', 'outline', 'run', 'wait', 'done', 'fail'] as const;
 export type TagKind = (typeof TAG_KINDS)[number];

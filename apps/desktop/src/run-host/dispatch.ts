@@ -88,7 +88,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
    * per process, cached (REQ-SANDBOX-067), so a settled verdict costs nothing here. A refusal then carries the backend's
    * reason and remediation (REQ-SANDBOX-095/071). Until 2026-10-20 no continuation settled it: one reached before a run start
    * or a `confinement.status` read was refused "No OS-level confinement can be used on this host." even where confinement
-   * was available (docs/defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
+   * was available (docs/archive/defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
    */
   const settledContinuationLease = async (sessionId: string): Promise<ProcessReply | null> => {
     await settleConfinement();
@@ -114,7 +114,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
        * is logged and costs nothing, because the next ask discovers on a cold cache anyway." The warm-up was a
        * `queueMicrotask`, and the microtask ran before the reaction `index.ts` attaches to this promise to post the reply, so
        * the synchronous walk ran first and held the loop while it did: 8,201.5 ms beside the full suite, against main's
-       * 5,000 ms bound (docs/defects/fixed/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md).
+       * 5,000 ms bound (docs/archive/defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md).
        * OQ-386 point 1 (ruled 2026-10-21): the warm-up starts from a zero-delay timer on the clock port, which runs after the
        * reply is posted, and reads the tree asynchronously, a few reads at a time (`SkillHost.warm`). A failure is still
        * logged and still costs nothing; the `skills.*` requests below wait for a warm-up in flight rather than walk again.
@@ -205,7 +205,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     case 'config.liveState': {
       // ADR-0037 Tier B: main hands over the settings store's current values; the next run start reads them. REQ-CONFIG-111:
       // a value the load's schema rejects is refused at the handover and the state held before stays, so the run start never
-      // meets it in a scope file's name (docs/defects/fixed/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
+      // meets it in a scope file's name (docs/archive/defects/a-live-setting-the-load-schema-rejects-is-reported-in-a-scope-file-that-does-not-hold-it.md).
       const state = req.state as LiveState;
       const problems = liveStateProblems(state);
       if (problems.length > 0) {
@@ -239,7 +239,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // Recorded only once the engine has loaded the session from THIS workspace's store: a `focus-session` notice pressed in
       // a window holding another workspace asks for a session this store does not hold, and recording it first moved a session
       // live elsewhere onto this workspace's continuation lease (REQ-NOTIFY-044, PD-SHELL-001;
-      // docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
+      // docs/archive/defects/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md).
       sessionRoots.set(req.sessionId, s.root);
       return { kind: 'session.resumed', sessionId: resumed.value.sessionId };
     }
@@ -313,7 +313,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       if (leased.kind === 'refused') return leased.reply;
       // PD-LIBRARY-002: "A workspace with no resolvable retrospective model captures no pass" — said as the configured case below
       // says it. An entry role with no usable model no longer reaches here while the retrospective's own model resolves
-      // (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
+      // (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md).
       if (leased.kind === 'no-model') {
         log(`retrospective: ${leased.reason}`);
         return { kind: 'refused', code: 'retrospective.no-model', headline: 'No retrospective analyst is configured' };
@@ -321,7 +321,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       /*
        * Only a configuration that did not load reaches here (`LeasedSetup`); one that loaded and refused the pass comes back as
        * `refused` with its own reason above. REQ-NOTIFY-254: the loader's reason travels as the detail, not in the log alone
-       * (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+       * (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
        */
       if (leased.kind === 'unconfigured') {
         log(leased.reason, 'warn');
@@ -375,7 +375,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         if (leased.kind === 'refused') return leased.reply;
         if (leased.kind === 'no-model') return { kind: 'refused', code: 'improvement.no-model', headline: 'No improvement analyst is configured' };
         // REQ-NOTIFY-254: an unloadable configuration is said as one, with the loader's reason — never as an expired job, which
-        // it read until 2026-10-15 (docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
+        // it read until 2026-10-15 (docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md).
         if (leased.kind === 'unconfigured') {
           log(leased.reason, 'warn');
           return { kind: 'refused', code: 'improvement.no-configuration', headline: 'The workspace configuration could not be loaded', detail: leased.reason };
@@ -839,7 +839,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
  * OQ-279 (ruled 2026-10-13 under R-072) read with REQ-CONFIG-478: the five `skills.*` requests project or act on the saved
  * `skills:` policy, and a fatal load leaves none — the configuration is unloaded, not defaulted — so each is refused with the
  * fatal report as its detail, as a run is. Until 2026-10-14 they answered from the shipped defaults
- * (docs/defects/fixed/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
+ * (docs/archive/defects/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md).
  */
 export function skillsUnloaded(skills: Pick<SkillHost, 'fault'>, workspaceRoot: string): Extract<ProcessReply, { kind: 'refused' }> | undefined {
   const fault = skills.fault(workspaceRoot);
@@ -855,7 +855,7 @@ function unloadedRefusal(fault: string): Extract<ProcessReply, { kind: 'refused'
  * — and refused the same way when a read `answer` makes finds it unloaded (`SkillsUnloaded`): the file can be saved with a fault
  * between the first read and the next, and the request then answers OQ-279's refusal from that read rather than throwing, or
  * answering a force-load as a skill not found
- * (docs/defects/fixed/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md).
+ * (docs/archive/defects/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md).
  */
 export function skillsAnswer(skills: Pick<SkillHost, 'fault'>, workspaceRoot: string, answer: () => ProcessReply): ProcessReply {
   const unloaded = skillsUnloaded(skills, workspaceRoot);

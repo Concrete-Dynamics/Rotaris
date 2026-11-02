@@ -1,7 +1,7 @@
 /**
  * `part-j-proof`'s steer-early launch (REQ-MONITOR-137): its schedule opens the steer dialog while the composer's send
  * is still settling, inside the window main's held `session.subscribe` reply keeps open, and types only once the reply
- * has gone (`docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`).
+ * has gone (`docs/archive/defects/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`).
  * The schedule is read through the capture seam's own parser, so a step written in the waiting form is seen as one.
  */
 import { describe, expect, it } from 'vitest';

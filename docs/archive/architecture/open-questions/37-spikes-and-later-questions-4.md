@@ -11,7 +11,7 @@ best-effort amended to exclude `.rotaris/`"; REQ-CONFIG-456; ground 3 of REQ-CON
 choice"; REQ-MCP-099 and REQ-MCP-116, which name the runtime's per-project marker file and read it from the binding
 manifest; ADR-0035, "At the merge", which took the reading and flagged it for the owner. Raised 2026-10-01 from the
 live-run autopsy at 71ad8e8 finding a71-1,
-[`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md`](../../../defects/fixed/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md).
+[`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md`](../../defects/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md).
 ~~Open.~~ Ruled 2026-10-06. Raised as OQ-160 on its branch and renumbered OQ-161 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
 
@@ -24,7 +24,7 @@ revision 2). The 2026-10-06 text is kept as it was ruled.
 hard-coded ignore component ([`PD-TOOLS-012`](../../../product/directives/pd-tools-012.md#pd-tools-012)), so the file tools no longer list it. The
 rest of the ruling below stands as built. The 2026-10-06 text is kept as it was ruled.
 
-**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current behaviour is accepted: a configuration load appends `.rotaris/` alone to the workspace's `.gitignore` (REQ-CONFIG-013, REQ-MCP-089), and the code-intelligence runtime's marker directory `.serena/` goes to the untracked `info/exclude` file of the repository whose top level is the workspace, best-effort and idempotent, on the terms stated above; a workspace below a repository's top level, or in none, gets no line. The marker stays in the workspace root as the runtime creates it, so the file tools, which read the root `.gitignore` alone (REQ-TOOLS-139, REQ-TOOLS-140), still list it, as the duress run of 2026-10-06 showed, and the agents are not told that the product wrote the exclude line. D-21's one exception covers the exclude file as a second ignore file. The requirements name the `.rotaris/` line and are silent on the marker, so this ruling settles it; [`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md`](../../../defects/fixed/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md) closes with it.
+**Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the current behaviour is accepted: a configuration load appends `.rotaris/` alone to the workspace's `.gitignore` (REQ-CONFIG-013, REQ-MCP-089), and the code-intelligence runtime's marker directory `.serena/` goes to the untracked `info/exclude` file of the repository whose top level is the workspace, best-effort and idempotent, on the terms stated above; a workspace below a repository's top level, or in none, gets no line. The marker stays in the workspace root as the runtime creates it, so the file tools, which read the root `.gitignore` alone (REQ-TOOLS-139, REQ-TOOLS-140), still list it, as the duress run of 2026-10-06 showed, and the agents are not told that the product wrote the exclude line. D-21's one exception covers the exclude file as a second ignore file. The requirements name the `.rotaris/` line and are silent on the marker, so this ruling settles it; [`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md`](../../defects/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md) closes with it.
 
 The bundled runtime creates `.serena/project.yml` in the workspace root whenever it starts with a project (ADR-0035,
 finding 5). With the `code_intelligence` entry enabled by default, every first run therefore left an untracked directory
@@ -82,7 +82,7 @@ first iteration"; REQ-ORCH-013, the prior intent inherited only "when (a) the fr
 REQ-ORCH-016, the intent-to-tools mapping that "MUST gate the entry role's tool set"; REQ-ORCH-014, the status that
 conveys the classified intent; REQ-ORCH-007 and REQ-ORCH-008, the 12 s bound and its fallback (OQ-114). Raised 2026-10-01
 from the live-run autopsy at 71ad8e8 finding a71-3,
-[`continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`](../../../defects/fixed/continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md).
+[`continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`](../../defects/continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md).
 ~~Open.~~ **Ruled 2026-10-06.** Raised as OQ-161 on its branch and renumbered OQ-162 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
 
@@ -158,7 +158,7 @@ wholesale state changes; the violation message is `Only one task can be IN_PROGR
 Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`"; REQ-TOOLS-146, whose rejection "with the
 message of REQ-TOOLS-145" covers a `replace` that marks another task `IN_PROGRESS` "while a protected active task exists".
 Raised 2026-10-01 from the live-run autopsy at 71ad8e8 finding a71-7,
-[`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../../../defects/fixed/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
+[`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../../defects/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
 Open until 2026-10-06; ruled then, below. Raised as OQ-162 on its branch and renumbered OQ-163 before it reached `main`, where OQ-160 had been taken
 meanwhile.)*
 

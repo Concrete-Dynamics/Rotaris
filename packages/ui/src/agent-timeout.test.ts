@@ -13,7 +13,7 @@ import { pendingFrom } from './settings/config-state.js';
 
 /**
  * PD-CONFIG-003 revision 3 (OQ-234, the R-072 consortium's CN1), the repair of
- * docs/defects/fixed/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md: a delegated agent its per-agent timeout
+ * docs/archive/defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md: a delegated agent its per-agent timeout
  * stopped read `failed` and nothing else on every surface (the final duress live run at `a68f121`, `bg_dcecf655` and
  * `bg_98fa54d7`), and nothing named the control that moves the limit. Now the tree row and the Mission-table row carry a
  * "timed out" tag after the state, and the inspector (under its meta line) and the persona window's instance tab (under its

@@ -26,7 +26,7 @@ function paneLayoutViewOf(key: string): PaneLayoutView | null {
  * a persona window or a second main window already open redraws its rows under the new value rather than the one it
  * booted with. The window that wrote it receives it too and folds the same value it already holds. Until 2026-10-14 the
  * value reached only the writer's own store
- * (`docs/defects/fixed/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
+ * (`docs/archive/defects/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md`).
  */
 export function announceDisplayPreference(key: DisplayPreferenceKey, value: boolean, windows: readonly BrowserWindow[] = BrowserWindow.getAllWindows()): number {
   let sent = 0;
@@ -192,7 +192,7 @@ export function shellCommands(
      * did not exist when it was published — channel 4 reaches only the windows attached at publication. Answered after the
      * store's chain has applied every publication accepted before the question, in channel 4's own shape, so the renderer
      * seeds its store with it (`NoticeState.seed`). Until 2026-10-14 a main window added after a publication showed no notice
-     * (docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
+     * (docs/archive/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
      */
     'notice.current': async () => {
       await notices.settled();

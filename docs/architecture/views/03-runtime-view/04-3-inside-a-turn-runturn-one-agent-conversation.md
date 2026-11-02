@@ -34,7 +34,7 @@ call under way or complete: the adapter forwards the SDK's `tool-input-start` an
 stream parts, one per piece of a call's streamed arguments, beside the call itself, which still arrives once, whole, as
 `tool-call` (since 2026-10-07; until then they re-armed only the adapter's own idle bound, so a step streaming a long
 `write_file` was silent above the adapter —
-[`a-child-streaming-a-long-tool-call-is-reported-stalled.md`](../../../defects/fixed/a-child-streaming-a-long-tool-call-is-reported-stalled.md)). After the step: the supervisor observes the
+[`a-child-streaming-a-long-tool-call-is-reported-stalled.md`](../../../archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md)). After the step: the supervisor observes the
 message; each tool call is observed, written as a running `tool` row, dispatched through the **gate** (policy →
 approval when needed — resolved at once under the headless policy while the run treats the user as **away**,
 `PD-TOOLS-005`, §5 → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an

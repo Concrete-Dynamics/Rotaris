@@ -7,19 +7,19 @@
  *
  * Acceptance finding F15: PD-ORCH-014 listed REQ-CONFIG-135 under Extends and its note read "Extended by", where OQ-53's
  * ruling narrows the requirement's "session's event stream" to the timeline
- * (docs/defects/fixed/pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it.md).
+ * (docs/archive/defects/pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it.md).
  *
  * Both directions are read (OQ-222, BP1, ruled under R-072): a labelled note whose requirement the register does not
  * record under that verb and directive, and a register entry with no such note at its requirement. Six notes once
  * named a directive whose disposition block left their requirement out, and REQ-TOOLS-069 and REQ-SHELL-119 sat in the
  * register with no note
- * (docs/defects/fixed/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md). A note
+ * (docs/archive/defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md). A note
  * that names a directive with no disposition for that requirement is a cross-reference in its own words and takes none
  * of the three labels (docs/product/README.md, "The back-pointer, in place").
  *
  * Since OQ-237 (GV1, ruled under R-072) Narrows and Extends hold a list per requirement, so a note agrees when its
  * directive is in its verb's list; Supersedes stays one directive per requirement
- * (docs/defects/fixed/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md).
+ * (docs/archive/defects/a-requirement-two-directives-narrow-can-name-only-one-so-the-second-is-recorded-under-another-verb.md).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';

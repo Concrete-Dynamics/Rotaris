@@ -49,7 +49,7 @@ export interface ExecuteDeps {
    * workspace starts its background task at open and may raise the setup prompt in the same moment (REQ-WORKSPACE-083),
    * and answering that prompt with Skip writes to the same section while the task runs. The first repair was a `reread`
    * taken just before the write; it read the disk before a skip whose write was still in flight had landed, and then
-   * erased it (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`, fourth round). Absent, the run's
+   * erased it (`docs/archive/defects/a-skip-can-move-a-completed-task-into-skipped.md`, fourth round). Absent, the run's
    * in-memory state is used, which is correct when nothing else writes.
    */
   readonly commit?: MarkerCommit | undefined;

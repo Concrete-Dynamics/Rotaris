@@ -2,7 +2,7 @@
  * REQ-ORCH-139's gate over the product's own source, and over fixtures for what it must tell apart: a timeline name in no
  * vocabulary fails wherever it is written (a writer call, a sink, the store's insert, main's request), a word of a
  * vocabulary passes, a name held by an open question passes until nothing writes it, and a name the gate cannot read fails unless a
- * PASS_THROUGH entry says why. Acceptance finding A29: docs/defects/fixed/the-run-writes-timeline-events-outside-its-closed-vocabulary.md.
+ * PASS_THROUGH entry says why. Acceptance finding A29: docs/archive/defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md.
  */
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

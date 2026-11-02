@@ -25,7 +25,7 @@ REQ-GIT-122 still governs, the worktree branch's included.
 above: REQ-WORKSPACE-020's empty item still governs them. Until 2026-10-06 (fin22) the build departed from it there, drawing
 the branch icon, `—` and "Branch this workspace is on: —."; it now draws the empty item, no text, icon, tooltip or
 description (repaired in
-[`the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md`](../../defects/fixed/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md)).
+[`the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md`](../../archive/defects/the-status-strips-branch-item-draws-an-unborn-branch-as-a-branch-named-dash.md)).
 
 **Why, and what it costs.** OQ-193: REQ-GIT-161 requires a detached checkout and a non-repository to be conveyed, each
 distinct from a branch name and from the other, and REQ-WORKSPACE-020 requires the item to be empty in exactly those cases.

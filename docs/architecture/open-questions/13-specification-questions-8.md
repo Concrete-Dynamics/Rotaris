@@ -91,7 +91,7 @@ it can:
   a fact: it says the tools are to be downloaded after installation by machine setup, which this build does not yet
   carry, so this build downloads none of them. What the file says once machine setup ships, or is ruled out of the
   first release, is still this question's ruling. The "pins no machine tools" sentence stays for a manifest that pins
-  none (`../../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
+  none (`../../archive/defects/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
 
 **What a ruling decides.** Whether the first release ships without Manrope, and if so whether REQ-STARTUP-142's
 font clause is narrowed to the faces the build carries; and whether machine setup belongs in the first release —

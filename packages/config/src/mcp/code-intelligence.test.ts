@@ -293,7 +293,7 @@ describe('the warm-up before a symbol rename (PD-MCP-004, REQ-MCP-116)', () => {
 /**
  * PD-MCP-004 revision 2 (OQ-362, ruled 2026-10-20 under R-072): in a workspace no `tsconfig.json` or `jsconfig.json` covers, the
  * TypeScript language server holds the open files alone, and a cold rename stayed in its declaring file after clause 2's search
- * (docs/defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). The run host places
+ * (docs/archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md). The run host places
  * a `jsconfig.json` of the product's own at the project root for the search and the rename. The manifest records the clause by
  * capability; the reader answers by the name the server reports, and only for a declaring file the runtime's TypeScript language
  * serves.

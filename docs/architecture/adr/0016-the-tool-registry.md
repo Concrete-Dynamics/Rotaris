@@ -191,7 +191,7 @@ something other than the public tool or removed itself at the gate. Consequence 
 held for the facet accessors: under `ask` a server's read tool asks on every call and only a session approval — exact
 arguments, REQ-TOOLS-024 — quiets it; under `restricted` it is denied by the default, which the surface's withholding
 already made moot. `resolvePersonaMcp`'s prefix rule is unchanged. Measured by unit tests over the policy, the predicate,
-the gate and the real port with a stand-in MCP host (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`);
+the gate and the real port with a stand-in MCP host (`docs/archive/defects/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`);
 the built app was not driven, since neither `plan-gate-proof` nor `mcp-proof` declares a server tool under a public
 name and both spawn Electron without the root host's `--no-sandbox` switch on this host.
 
@@ -213,4 +213,4 @@ from what is left, and a printed name stays callable (REQ-MCP-062); pinned by th
 which renders through the real `renderMcpSection` and was red on the loop-only form. Measured by unit tests over the stage (`policy.test.ts`) and five
 cases through the loader and the real port (`run-host/tools.test.ts`), four of them red on the old code. The built app
 was not driven: no proof or live-run scenario configures `tool_restrictions`
-([the note](../../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md)).
+([the note](../../archive/defects/a-personas-tool-restrictions-never-narrow-its-grant.md)).

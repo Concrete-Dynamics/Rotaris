@@ -73,7 +73,7 @@ by name, never `git add -A`; LF line endings.
 **Never `git stash`**: `refs/stash` lives in the common git directory, one stash for every worktree, so a `pop` takes
 whatever entry is on top, another agent's included. On 2026-10-03 at about 07:04 UTC the builders of finacc's
 `accept1-5` and `accept1-6` each received the other's uncommitted edits that way
-(`docs/defects/fixed/parallel-worktree-agents-swap-uncommitted-edits-through-the-shared-git-stash.md`). Set a change
+(`docs/archive/defects/parallel-worktree-agents-swap-uncommitted-edits-through-the-shared-git-stash.md`). Set a change
 aside with a patch file outside the checkout (`git diff -- <files> > <scratchpad>/<name>.patch`,
 `git checkout -- <files>`, then `git apply <scratchpad>/<name>.patch`), or read the base in a throwaway detached worktree
 (`git worktree add --detach <path> origin/main`, removed after).

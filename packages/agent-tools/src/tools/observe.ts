@@ -31,7 +31,7 @@ export const SNAPSHOT_FILE_LIMIT = 200_000;
  * The most file statuses a snapshot reads at once. Until fin39 a directory's files were all read together before the limit was
  * checked, so one directory holding far more than `SNAPSHOT_FILE_LIMIT` files was read whole where the synchronous walk had
  * stopped at the limit, and every read was issued in one turn of the event loop
- * (docs/defects/fixed/a-snapshot-reads-every-file-of-a-directory-before-it-checks-the-limit.md).
+ * (docs/archive/defects/a-snapshot-reads-every-file-of-a-directory-before-it-checks-the-limit.md).
  */
 export const SNAPSHOT_STAT_BATCH = 256;
 
@@ -45,7 +45,7 @@ export const SNAPSHOT_STAT_BATCH = 256;
  * streams, tool results and the events the window draws are not held behind a project-wide walk. The reason, kept beside it: until fin38 the walk read with
  * `lstatSync` and `readdirSync`, so a symbol rename or a whole-project replacement stalled everything else the run host did
  * for the length of two walks of up to `SNAPSHOT_FILE_LIMIT` files
- * (docs/defects/fixed/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md).
+ * (docs/archive/defects/a-cross-file-edit-calls-tree-walk-blocks-the-run-hosts-event-loop.md).
  */
 export async function snapshotTree(root: string, base: string, limit: number = SNAPSHOT_FILE_LIMIT): Promise<TreeSnapshot | null> {
   const rootAbs = resolve(root);
@@ -176,7 +176,7 @@ export async function observeReach(o: { readonly root: string; readonly reach: {
   // The root as the native tools note their writes against it (`realPathOf` in the run host's `tools.ts`), and as the walk can
   // enter it: a workspace reached through a symbolic link was walked as the link, which `lstat` does not follow, so nothing was
   // observed, and a sibling's noted write never matched (fin36,
-  // docs/defects/fixed/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md).
+  // docs/archive/defects/a-siblings-native-write-is-not-subtracted-from-an-observation-taken-through-a-symlinked-workspace.md).
   // It is that very function, the native resolution: fin36 first resolved the root with the JavaScript `realpathSync`, which on
   // Windows leaves a substituted drive, an 8.3 short name or a drive letter's case as given where the native one canonicalises
   // them, so the spellings could still differ there (fin36's review).

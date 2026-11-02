@@ -17,7 +17,7 @@ const ok = async () => ({ ok: true as const });
 /**
  * REQ-CHAT-074's "opened by toolbar button or Ctrl+F": until 2026-10-14 the transcript toolbar carried no search control,
  * so a reader who did not know the chord had no visible way in
- * (`docs/defects/fixed/the-transcript-has-no-toolbar-control-for-search.md`).
+ * (`docs/archive/defects/the-transcript-has-no-toolbar-control-for-search.md`).
  */
 describe('the transcript toolbar\'s search control — REQ-CHAT-074, REQ-SHELL-048/058', () => {
   it('is drawn in the Workspace\'s transcript toolbar, named "Search transcript", its tooltip carrying Ctrl+F', () => {
@@ -52,7 +52,7 @@ describe('the transcript toolbar\'s search control — REQ-CHAT-074, REQ-SHELL-0
  * REQ-SHELL-055 step (1): with the transcript search panel visible, window-level Escape closes it and focus returns to the
  * composer, before the drawers are considered. Until 2026-10-14 nothing registered the `searchPanel` slot, so Escape with
  * focus outside the panel's field closed the drawers and left the panel open
- * (`docs/defects/fixed/window-level-escape-skips-the-open-transcript-search-panel.md`).
+ * (`docs/archive/defects/window-level-escape-skips-the-open-transcript-search-panel.md`).
  */
 describe('window-level Escape and the transcript search panel — REQ-SHELL-055 (1), REQ-CHAT-074', () => {
   const empty: Record<OverlayKind, OverlayCloser | null> = { slashPopup: null, searchPanel: null, drawers: null };

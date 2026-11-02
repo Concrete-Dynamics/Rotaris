@@ -21,7 +21,7 @@ derivation cannot part again without a red (on the old default the test failed a
 execution's `--rt-bg` values), resolved 9.20:1, argument 8.56:1; `nocturne` on `oklch(0.18 0 0)` — partial 4.50:1,
 unknown 9.94:1, resolved 10.82:1, argument 11.14:1; `high-contrast` on `oklch(0.12 0 0)` — partial 4.50:1, unknown
 13.91:1, resolved 15.07:1, argument 16.02:1. Four distinct colours on each palette, the weights unchanged. Repaired note:
-`../../../defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`. Not
+`../../../archive/defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`. Not
 shown: any of it on Windows or macOS (IC-3 — *corrected 2026-10-14: for the Windows half, a Windows host, which this Linux container is not; IC-3 binds Linux and macOS artifacts*).
 
 **The design material.** *(Added 2026-09-30, the verifier's fix round 1.)* The mockup (`pnpm mockup`, its
@@ -42,5 +42,5 @@ scrolls, and the failing item lies 1.2 px inside the window's right edge. The pr
 whole reads 6.74:1). Whether an item lands in that position depends on the widths the strip draws ahead of it: the
 branch label with its ahead count, which is the checkout's branch because the scratch workspace sits inside it, and the
 theme's name. The elided `svc:` path stays at its 48 px floor. Recorded as a proof defect
-(`../../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`, corrected in place), and not
+(`../../../archive/defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`, corrected in place), and not
 absorbed here.

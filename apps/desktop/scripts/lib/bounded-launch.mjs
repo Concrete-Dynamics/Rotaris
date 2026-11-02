@@ -10,11 +10,11 @@
  *
  * `spawnBounded` is the same ending for a launch a proof starts itself, where `spawnSync(…, { timeout })` used to
  * stand — in every proof since 2026-09-29, which `launch-sites.test.ts` (rule 4) keeps
- * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). Until 2026-09-29 that call could not bound a launch: at its timeout Node sends the signal AND closes its ends of the child's
+ * (`docs/archive/defects/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). Until 2026-09-29 that call could not bound a launch: at its timeout Node sends the signal AND closes its ends of the child's
  * standard output and error, so the application's first quit-path line (`quit: requested (before-quit)`) fails with
  * EPIPE, and the main process's uncaught-exception handler logs that failure to the same closed stream — a loop at full
  * CPU that never reaches the quit, and a `spawnSync` that never returns
- * (`docs/defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`, repaired 2026-09-29). Since
+ * (`docs/archive/defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`, repaired 2026-09-29). Since
  * that repair the application does quit on it, and `spawnSync` returns at its timeout — but with `status` 0, only
  * `error.code` `ETIMEDOUT` to show the overrun, and none of the quit path's lines (measured 2026-09-30), so a `launch`
  * that checks the status passes an overrun as a clean exit. Here the pipes stay open and read until the process has
@@ -246,7 +246,7 @@ function groupLive(pgid) {
 }
 
 /**
- * finacc3 A2-19 (`docs/defects/fixed/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md`): a launch ends
+ * finacc3 A2-19 (`docs/archive/defects/a-proof-exits-while-processes-of-the-app-it-launched-still-run.md`): a launch ends
  * with its whole process group, not with its main process alone. Called once the leader has exited: the rest of the group
  * is given `graceMs` to leave on its own, and whatever is still running then is ended with SIGKILL and NAMED — a proof that
  * moved on with it alive would have measured beside its own leftovers. Resolves with `{ endedBy, lingered, afterMs }`:
@@ -256,7 +256,7 @@ function groupLive(pgid) {
  *
  * Since fin34 the drain also reaches what the launch started in process groups of its OWN, which the group's signal never
  * reached: a project-setup step outlived `pnpm requirements-proof`'s exit on 2026-10-07, so the next proof could start
- * beside it (`docs/defects/fixed/a-proof-can-exit-while-a-setup-step-the-app-started-in-its-own-process-group-is-still-ending.md`).
+ * beside it (`docs/archive/defects/a-proof-can-exit-while-a-setup-step-the-app-started-in-its-own-process-group-is-still-ending.md`).
  * Those are found by the mark the launch's environment gives them (`markOf`, Linux) and given `ownGroupGraceMs` — the
  * product's own 5 s bound, REQ-WORKSPACE-092, and a margin — before SIGKILL; `ownGroups` reports them as `lingered` does
  * the group's, `null` when none was left.

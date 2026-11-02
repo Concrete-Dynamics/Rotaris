@@ -18,7 +18,7 @@ import { withholdsOn } from './registry.js';
  * server's tool offered as `read_file` (a persona's MCP surface prefixes a server's tool only when its name is
  * already taken) carries none, so it is withheld like every other undeclared tool whatever it is called. Until
  * 2026-09-28 both readers asked the registry about the name alone and such a tool survived the hold
- * (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`). The default
+ * (`docs/archive/defects/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`). The default
  * serves the caller that narrows a persona's DECLARED names, which REQ-TOOLS-002 keeps public.
  */
 export function withheldUnderPlanGate(name: string, isPublicTool = true): boolean {

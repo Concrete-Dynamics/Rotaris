@@ -250,7 +250,7 @@ point, in the built application. All six held. The absent-subpath case of `REQ-S
 the writable bind. The renderer's reason "leave nothing on the host" is falsified by that measurement and stays
 beside its replacement when one is written. The table, the host, and what the run could not show are in IC-8's
 section of `../implementation-conditions.md`. The defect is
-[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../../defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
+[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../../archive/defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
 macOS remains unmeasured, and IC-8 is not discharged.
 
 **Reported back 2026-09-29 (R-067): consequence 3's reading is now what the Linux renderer does.** "Implement
@@ -270,16 +270,16 @@ confinement was not available, which includes a Linux host without `bwrap`, wher
 answer the disclosure says nothing changes. Both now call `owesNoConfinementDisclosure` in `@rotaris/contracts`,
 beside the disclosure's text. `pnpm sandbox-proof` reads the dialog in the built app (scenario 2b). The build before
 this repair failed that check on Linux without `bwrap`; the build after it passes with and without `bwrap`
-([the note](../../defects/fixed/the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md)).
+([the note](../../archive/defects/the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md)).
 
 **Noted 2026-10-15 (fin47, `fin47-accept1-4`): the start-time gate is a run start's, and a retrospective no longer meets it.** The
 gate sits in `prepareRun`, which the retrospective (ADR-0065) also used to prepare its setup, so a requested mode refused a pass
 that opens no shell wherever the verdict was unsettled or unavailable. `prepareRun` now leaves the gate out of a retrospective's
 setup; a run start and a continuation are unchanged
-([`../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](../../defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)).
+([`../../archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`](../../archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md)).
 A continuation still reads the cached verdict without settling it first — `ConfigureDeps.confinement`'s "a continuation reads what
 that launch settled" assumes a launch came first in the run host's life; recorded, not repaired, in
-[`../../defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md`](../../defects/fixed/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
+[`../../archive/defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md`](../../archive/defects/a-continuation-before-the-confinement-verdict-settles-is-refused-as-confinement-unavailable.md).
 *(Repaired 2026-10-20; the next paragraph.)*
 
 **Reported back 2026-10-20 (loc1, `loc1-confinement-retro`): every run-launching continuation settles the verdict before its run is

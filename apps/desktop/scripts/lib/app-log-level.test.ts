@@ -1,6 +1,6 @@
 /**
  * `pnpm live-run --app-log-level` takes only the thresholds the run's readings survive
- * (`docs/defects/fixed/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`): `debug`
+ * (`docs/archive/defects/a-live-run-at-app-log-level-warning-or-error-misreads-its-missing-info-lines-as-outcomes.md`): `debug`
  * and `info`, in any casing. `warning` and `error` drop the `info` lines every scenario reads, so they are refused before any
  * launch, saying why. No product code runs here.
  */

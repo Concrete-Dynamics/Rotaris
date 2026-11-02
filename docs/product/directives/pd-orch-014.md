@@ -55,7 +55,7 @@ write.
 *REQ-CONFIG-135 stood under **Extends** until 2026-10-06, and its back-pointer read "Extended by": acceptance finding F15
 found the label wrong, since OQ-53's ruling reads its "session's event stream" as the timeline, so the requirement
 governs except in the case named here. The disposition and the back-pointer were relabelled; no text changed
-([`pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it`](../../defects/fixed/pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it.md)).*
+([`pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it`](../../archive/defects/pd-orch-014-records-req-config-135-as-extended-where-oq-53-narrows-it.md)).*
 
 *Raised by the owner, 2026-10-06, ruling OQ-157, OQ-53 and OQ-127 as recommended; logged as [R-071](../requests.md#r-071). Built as
 `PD-ORCH-006` and renumbered `PD-ORCH-014` before it landed, `main`'s `PD-ORCH-006` to `PD-ORCH-013` having landed

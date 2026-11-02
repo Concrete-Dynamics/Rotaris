@@ -91,7 +91,7 @@ joins it; the handle is cleared when the read settles, so focus and configuratio
 reader drops both. The correction is written here rather than in place, and AO-1's sentence stands as it was measured.
 The skill catalog's reader, modelled on this one (ADR-0063 §5), had the gap verbatim and with three starters rather than
 two, so it joins reads now as well. The note is
-`docs/defects/fixed/the-prompt-roots-are-read-twice-as-a-window-settles.md`; the coalescing itself has a regression test
+`docs/archive/defects/the-prompt-roots-are-read-twice-as-a-window-settles.md`; the coalescing itself has a regression test
 on both readers and has not yet been seen in a launch of the built app.
 
 **Readings recorded.**

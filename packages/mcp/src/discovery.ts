@@ -118,7 +118,7 @@ export class ToolDiscovery {
           // The one record of the failure: the run host's `prepare` writes no line of its own for it, and the detail — which
           // carries the child's standard error, often several lines — is kept on this record's one line. Until 2026-10-03 the
           // run host said the same failure again 1 ms later and each record printed as three physical lines
-          // (`docs/defects/fixed/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`).
+          // (`docs/archive/defects/one-mcp-discovery-failure-is-logged-twice-its-stderr-breaking-each-record.md`).
           log.warn(`mcp ${req.name}${req.context ? ` (${req.context})` : ''}: tool discovery failed in ${result.elapsedMs.toFixed(0)} ms (${oneLine(result.detail)}); the persona prompt will list this server with no tool details attached (REQ-MCP-048)`);
         }
         resolve(result);

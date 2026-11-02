@@ -57,7 +57,7 @@ function readOnly(path: string): string | null {
 /** REQ-MCP-083: global then workspace per key, workspace winning; the overridden global entry is not listed twice. */
 export function mergeSecrets(global: readonly SecretEntry[], workspace: readonly SecretEntry[]): SecretEntry[] {
   // The separator is NUL, which neither a server name nor a key can hold; written as the escape, never the byte, so Git
-  // reads this file as text (docs/defects/fixed/the-secret-merge-keys-carry-literal-nul-bytes-so-git-treats-their-file-as-binary.md).
+  // reads this file as text (docs/archive/defects/the-secret-merge-keys-carry-literal-nul-bytes-so-git-treats-their-file-as-binary.md).
   const byKey = new Map<string, SecretEntry>();
   for (const e of global) byKey.set(`${e.server}\u0000${e.key}`, e);
   for (const e of workspace) byKey.set(`${e.server}\u0000${e.key}`, e);
@@ -115,12 +115,12 @@ export function resolveRemoteUrl(name: string, url: string, processEnv: Readonly
   // The words follow the reason too (2026-10-06): an enabled entry is unavailable until the placeholder resolves; a
   // disabled one is unavailable because it is switched off (REQ-CONFIG-465), and a resolved key would leave it so —
   // "unavailable until it is" promised otherwise on every launch for the shipped `web_search`
-  // (docs/defects/fixed/a-disabled-servers-unresolved-placeholder-line-says-a-key-would-make-it-available.md).
+  // (docs/archive/defects/a-disabled-servers-unresolved-placeholder-line-says-a-key-would-make-it-available.md).
   const consequence = enabled
     ? 'the server is configured but unavailable until it is'
     : "the server is disabled by its configured 'enabled: false' (REQ-CONFIG-465), so nothing connects to it, and enabling it will also need the placeholder resolved";
   // REQ-CONFIG-225 names "the file the entry came from": the file that stated this url, or the built-in defaults when
-  // none did (docs/defects/fixed/the-unresolved-placeholder-warning-names-no-configuration-file.md).
+  // none did (docs/archive/defects/the-unresolved-placeholder-warning-names-no-configuration-file.md).
   const where = source === null ? 'from the built-in defaults' : `set in ${source}`;
   const diagnostics: Diagnostic[] = unresolved.map((v) => {
     const message = `mcp ${name}: the placeholder \${${v}} in its url, ${where}, could not be resolved from a stored secret or the environment; ${consequence} (REQ-MCP-088, REQ-CONFIG-225)`;

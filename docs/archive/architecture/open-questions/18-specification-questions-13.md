@@ -55,7 +55,7 @@ no more; its last sentence settles "every other unfinished agent of a session at
   there too. *Until the fourteenth review round the strip read "run Running", and one drive showed that window's root
   with no rows; that second defect was not reproduced (`docs/defects/fixed/`).*
   *Amended 2026-10-03 (fin10): the strip draws no run state any more — REQ-SHELL-038's item list is closed and names none
-  ([`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../../../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)),
+  ([`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../../defects/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)),
   and `statusStripRunItem` is gone. The Workspace view's run header and the Mission view's subtitle carry `Run needs recovery`,
   so the sentence above about the strip is kept as the record of what was built until then; no surface reads a run as
   active beside a root drawn `paused` still holds through those two.
@@ -92,7 +92,7 @@ no more; its last sentence settles "every other unfinished agent of a session at
   live (`AgentRecord.live`, running only) nor ended, so a waiting or queued agent read `waiting` alone where the base
   read `waiting · 1m 3s`; the merged build's eleventh review round restricted it to `paused`.* The agent tree, the
   table and the inspector drop a waiting or queued agent's time too, as they did before revision 4
-  ([`a-waiting-agents-elapsed-time-is-not-shown.md`](../../../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)); that
+  ([`a-waiting-agents-elapsed-time-is-not-shown.md`](../../defects/a-waiting-agents-elapsed-time-is-not-shown.md)); that
   is not this directive's, and is not repaired here. *Repaired 2026-09-29 under R-067: the tree, the table, the inspector and
   the persona window show a waiting or queued agent's time, advancing, by a clock predicate of their own (OQ-124); a
   `paused` agent keeps this reading.*

@@ -26,7 +26,7 @@ describe('admitTodoItem (PD-TOOLS-006 revision 6)', () => {
   });
 
   // fin38's review: the refusal said "or name or add an open item" and openItemsSentence then offered the add again, and with
-  // no open item it offered to name one (docs/defects/fixed/the-terminal-item-refusal-offers-the-add-twice.md).
+  // no open item it offered to name one (docs/archive/defects/the-terminal-item-refusal-offers-the-add-twice.md).
   it('(b) the refusal offers the add once: through the open items it lists, or alone when there are none', () => {
     const listed = admitTodoItem({ named: '00000001', inherited: null, plan: plan(['PENDING', 'COMPLETED']), implementation: true, persona: 'coding-agent', holderOf: none });
     expect(listed).toEqual({ ok: false, requirement: 'REQ-ORCH-028', reason: "todo_item '00000001' names 'Item 1', which is COMPLETED, and a delegation to 'coding-agent', which writes workspace files, serves an open item. Reopen it with todo update, or name an open item. Its open items: Item 0 (00000000). If none of them is this work, add one with the todo tool (add_task) and name its id." });
@@ -62,7 +62,7 @@ describe('admitTodoItem (PD-TOOLS-006 revision 6)', () => {
 
   // Live-run finding Q3 (552d346): a docs delegation naming no item was refused listing only the verification item, and the
   // refusal did not say that work no listed item serves gets an item of its own
-  // (docs/defects/fixed/the-no-todo-item-refusal-names-add-task-only-when-the-plan-holds-no-open-item.md).
+  // (docs/archive/defects/the-no-todo-item-refusal-names-add-task-only-when-the-plan-holds-no-open-item.md).
   it('a plan with open items lists them and says to add one when none of them is the work (PD-TOOLS-006 revision 6, Q3)', () => {
     expect(openItemsSentence(plan(['COMPLETED', 'PENDING']).document)).toBe('Its open items: Item 1 (00000001). If none of them is this work, add one with the todo tool (add_task) and name its id.');
   });

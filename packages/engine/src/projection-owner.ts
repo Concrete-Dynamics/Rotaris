@@ -94,7 +94,7 @@ export class ProjectionOwner {
       // `wait_for_tasks` settling under its child's whole run — carries the rows after it too. The first form published
       // the row alone, and the view dropped every row behind it: H5 of the final duress autopsy at 27a5127, the failed
       // child's 89 rows gone from All activity
-      // (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md).
+      // (docs/archive/defects/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md).
       this.publishIncrement(c.row.index, this.rowsFrom(c.row.index));
       return;
     }

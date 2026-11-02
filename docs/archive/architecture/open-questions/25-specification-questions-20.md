@@ -52,7 +52,7 @@ or the owner's choice, so each would be a directive or a revision, not a repair.
 
 *(Added 2026-10-03, a further case of the continuation that starts from nothing, from finding U2 of the orchestrator's
 duress live run at `1763f7f` (pack `2026-10-03T06-15-52-273Z`)
-([`a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md`](../../../defects/fixed/a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md)).
+([`a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md`](../../defects/a-continuation-is-briefed-as-if-it-remembered-and-rebuilds-its-brief-from-the-products-store.md)).
 The parent is not told that a continuation starts from nothing: neither the cut-off offer ("the remaining work may be
 delegated to a new child as a continuation of this one", `packages/engine/src/children/cut-off.ts`) nor `delegate`'s
 description of `continuation_of` (`packages/agent-tools/src/tools/delegation.ts`) says so, and no requirement fixes either
@@ -74,7 +74,7 @@ an agent's terminal may read the product's own data directory is not asked here:
 there would be a directive of its own.)*
 
 *(Added 2026-10-04, a further case of the intent bound (F2), from run 5 of `slice-proof` on 2026-10-03 (`katalyst`), recorded in
-[`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../../../defects/fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md).
+[`fixed/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md`](../../defects/slice-proof-reds-on-live-model-answers-that-vary-run-to-run.md).
 The third intent prompt's classification ran into the 12 s bound and took REQ-ORCH-007's fallback ("the classification
 call timed out after 12 s"). The load on this host was 0.7, and another live run (the acceptance run, started
 05:56:26 UTC) shared the endpoint from before the classification until after it. The same prompt classified in time on
@@ -92,7 +92,7 @@ OQ-332's ruling (R-072; F8 of fin46's final acceptance): no longer so for a fall
 REQ-ORCH-007's specified answer, so `slice-proof` reports it as a NOTE with the bound and the time it took, keeps the
 attempt as `intents-<n>.attempt-1.log`, and asks once more, sharing the one extra ask an answer outside the set gets; a
 second problem of either kind is the red, and any other fallback is still a red at once
-(`docs/defects/fixed/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`).] This case adds one thing
+(`docs/archive/defects/slice-proof-reds-on-an-intent-classification-timed-out-at-req-orch-008s-bound.md`).] This case adds one thing
 to what a ruling of this question decides: whether the bound should allow for a self-hosted endpoint shared by concurrent
 runs.)*
 
@@ -171,7 +171,7 @@ deadline `sessions.tool_calls` read 240 against 309 `tool_calls` rows — the or
 to 309. REQ-ORCH-097's "after each successful execution pass" is met to the letter, and a surface following REQ-MONITOR-102
 shows a figure 69 calls behind the record for as long as the pass lasts. The crash half of the same finding — calls made
 before a crash that never reach the total — is a defect of its own,
-[`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../../../defects/fixed/a-roots-calls-before-a-crash-never-reach-the-session-total.md), repaired 2026-09-29 without moving this cadence.
+[`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../../defects/a-roots-calls-before-a-crash-never-reach-the-session-total.md), repaired 2026-09-29 without moving this cadence.
 
 **What the build proceeds under.** REQ-ORCH-097 as written: accumulated at the end of each pass.
 
@@ -180,7 +180,7 @@ record during a pass, which would amend or narrow REQ-ORCH-097's timing; or whet
 the total is as of the last completed pass.
 
 *Reported 2026-10-01 by the repair of
-[`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../../../defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md)
+[`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../../defects/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md)
 (acceptance A20, R-067), which leaves this cadence and the displayed total as they were.* The per-agent figures no longer
 wait for it: a child's count already read the tracker's live count beside its persisted one, and the run-level agent's now
 reads the roots' persisted share plus the live root's calls not yet counted (`SessionRecord.entryToolCalls`). So during a
@@ -201,7 +201,7 @@ and `store.test.ts`.
 
 <a id="oq-117"></a>
 
-**OQ-117 — What is an iteration told of a task it takes up that is not the run's own, and with what?** *(REQ-CHAT-040, whose queued prompt becomes a task "carrying the prompt text as its content"; REQ-ORCH-004 and REQ-ORCH-135, whose task a resumed session carries on and "stays anchored"; REQ-ORCH-072, which gives the root execution record "the task's execution payload"; REQ-CHAT-090 and REQ-CHAT-091, which let the user rename a task; and `PD-ORCH-005` clause 17 with OQ-102, whose message is told in words of its own. Raised 2026-09-29 by the repair of [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md) under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
+**OQ-117 — What is an iteration told of a task it takes up that is not the run's own, and with what?** *(REQ-CHAT-040, whose queued prompt becomes a task "carrying the prompt text as its content"; REQ-ORCH-004 and REQ-ORCH-135, whose task a resumed session carries on and "stays anchored"; REQ-ORCH-072, which gives the root execution record "the task's execution payload"; REQ-CHAT-090 and REQ-CHAT-091, which let the user rename a task; and `PD-ORCH-005` clause 17 with OQ-102, whose message is told in words of its own. Raised 2026-09-29 by the repair of [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md) under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** every reading built is confirmed, and `PD-ORCH-005` revision 6 states them in clause 31: the task part is worded as built and carries the task's content, not a queued prompt's name; a task that repeats the launch content's request, and a renamed own task, are told nothing more; and no images are carried.
 
@@ -236,7 +236,7 @@ whether a renamed own task should be sent its new text; and whether a task taken
 images its prompt was sent with, which needs a task to hold them.
 
 *Added 2026-10-01 by the repair of
-[`a-queued-prompts-task-is-not-named-queued-prompt.md`](../../../defects/fixed/a-queued-prompts-task-is-not-named-queued-prompt.md)
+[`a-queued-prompts-task-is-not-named-queued-prompt.md`](../../defects/a-queued-prompts-task-is-not-named-queued-prompt.md)
 (acceptance A28, R-067).* The task a queued prompt becomes is now named as REQ-CHAT-040 and REQ-ORCH-071 state: a todo task
 carries an optional `name` beside its text, and `Run.consumeQueued` names it "Queued Prompt: <first 8 characters of the
 prompt id>" with the prompt text as its content. The Todo pane draws the name, and so does the handoff's todo list,
@@ -262,7 +262,7 @@ rule 1, "not asserting which of the two person-stops it was" and "no rule of thi
 REQ-MONITOR-125, a paused session persists "with an interruption message"; `PD-ORCH-005` clauses 2, 3 and 21, under which
 a pause and a stop leave agents a continue resumes and the explicit cancel leaves none, and all three record the stop
 reason `user_cancelled`. Raised 2026-09-29 by the repair of
-[`a-paused-runs-notice-says-a-person-stopped-it.md`](../../../defects/fixed/a-paused-runs-notice-says-a-person-stopped-it.md)
+[`a-paused-runs-notice-says-a-person-stopped-it.md`](../../defects/a-paused-runs-notice-says-a-person-stopped-it.md)
 under [R-067](../../../product/requests.md#r-067). ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** the neutral wording is kept: REQ-ORCH-082's rule 1 reads "The run came to rest at the user's request." for every rest a person asked for, and the transcript's row, the timeline and the Continue action's count tell the difference. `PD-ORCH-005` revision 6 records it in clause 32; REQ-ORCH-082 is not narrowed, since the wording keeps it.

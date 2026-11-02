@@ -61,7 +61,7 @@ const WORKSPACE = [
 // finds nothing pending and the section's one writer (REQ-WORKSPACE-085) has nothing to write. The Discard scenario
 // is seeded with it. On a never-initialized seed a host that carries the code-intelligence bundle records
 // `code-intelligence-setup` in this same file while Discard is pressed, and a byte comparison cannot tell the two
-// writes apart (docs/defects/fixed/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md).
+// writes apart (docs/archive/defects/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md).
 const INITIALIZED = [
   'initialization:',
   '  completed:',
@@ -167,7 +167,7 @@ results.modelsSave = { workspaceFile: ws2 };
 // Driven, not captured: the capture seam presses each control at a box measured once, and the "No model provider is
 // authenticated yet" notice can fill the shell's notice slot between that measurement and the press, moving the save bar
 // down under it, so Discard was reported clicked while the press met the banner
-// (docs/defects/fixed/config-proofs-discard-leaves-the-save-status-unsaved.md). The driver's settled click presses a box
+// (docs/archive/defects/config-proofs-discard-leaves-the-save-status-unsaved.md). The driver's settled click presses a box
 // only once it has held still and is the element at its own centre, and says whether the press met it (`clickLanded`);
 // every step below waits for the state the one before it produced.
 const s3 = scenario('discard', { global: GLOBAL, workspace: WORKSPACE + INITIALIZED });

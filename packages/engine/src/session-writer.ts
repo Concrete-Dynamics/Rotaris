@@ -972,7 +972,7 @@ export class SessionWriter {
     const { dal, sessionId, wall } = this.deps;
     const at = toIsoUtc(wall.instant());
     // REQ-SESSION-194 names this cut among those its marker governs (live-run M3,
-    // docs/defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md): until 2026-10-06
+    // docs/archive/defects/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md): until 2026-10-06
     // it was a bare `slice(0, 2000)`, and a cut value could not be told from a whole one.
     const capped = (s: string) => (settle.is_error ? cut(s, ERROR_RECORD_CAP) : s);
     const entry: Record<string, unknown> = {
@@ -1066,7 +1066,7 @@ export class SessionWriter {
    * The evidence is written with `recorded: true` (REQ-MONITOR-049/060): the spawn writes `[]` and evidence with no marker,
    * and so did every row before 2026-10-01, so the marker is what tells a grant the controls left empty of native tools
    * from no grant recorded at all, with no migration (`toAgentRecord`'s `grantRecorded`;
-   * docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+   * docs/archive/defects/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
    */
   recordChildGrant(taskId: string, grant: AgentGrant): Result<void, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });

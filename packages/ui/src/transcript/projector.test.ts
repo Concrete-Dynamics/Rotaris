@@ -291,7 +291,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       expect(projector.project(next).display).toEqual(projectDisplay(next));
     });
 
-    // H5 of the final duress autopsy at 27a5127 (docs/defects/fixed/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md):
+    // H5 of the final duress autopsy at 27a5127 (docs/archive/defects/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md):
     // All activity drew a failed child's 21-minute run as its first row alone. The rows had left the replica — the
     // publisher sent a row settled below the last without the rows after it — and this pins the projector's half of the
     // chain against the run's exact order: given what REQ-MONITOR-214's increments carry, every row is drawn, bounded or whole.

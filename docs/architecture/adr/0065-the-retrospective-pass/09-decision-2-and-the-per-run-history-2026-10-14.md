@@ -8,7 +8,7 @@ Reported back by fin43 (`fin43-analysis-and-artifacts`). Decision 2 kept `source
 artifact so that REQ-SESSION-021's marker stayed whole and "`REQ-LIBRARY-034`'s history filter keeps meaning what it means";
 that stamp did not settle whether a later run's history should hold a retrospective's artifact, and by REQ-LIBRARY-034's letter
 it did, with no session for REQ-LIBRARY-025 to record (fin42's
-[`a-post-run-analysis-after-a-retrospective-is-never-captured`](../../../defects/fixed/a-post-run-analysis-after-a-retrospective-is-never-captured.md)).
+[`a-post-run-analysis-after-a-retrospective-is-never-captured`](../../../archive/defects/a-post-run-analysis-after-a-retrospective-is-never-captured.md)).
 `source_kind` now settles it: `captureImprovementJob` keeps only `post_run` artifacts, dropping the retrospective's before the
 bound of five. **Measured:** `analyst.test.ts`'s two revision-3 cases (red on the code before), and `pnpm retrospective-proof`
 54 of 54 at a load average of 1.3 to 2.2 on four CPUs, launch 8 (`live-shape-timeout`) still capturing the later run's analysis

@@ -4,7 +4,7 @@
  * (`runWideReadings` in `./tool-frictions.mjs`).
  *
  * Live-run finding M3 (the default live run at `c2a9444`, 2026-10-06;
- * `docs/defects/fixed/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md`): the session writer
+ * `docs/archive/defects/an-error-path-tool-record-cuts-its-arguments-and-result-without-the-cut-marker.md`): the session writer
  * cut an error-path record's arguments and result with a bare `slice(0, 2000)`. Its requirements session held two refused
  * `write_file` calls whose arguments were 2,000-character strings, and a failed `terminal` call whose result was 2,000
  * characters ending mid-word; none carried `...`. Since fin23 the writer cuts with `run/cut.ts`: a result at most 2,000

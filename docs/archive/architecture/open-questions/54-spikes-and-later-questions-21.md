@@ -10,7 +10,7 @@ REQ-TOOLS-001, the three facets; REQ-CONFIG-100, a configured `system_prompt` re
 `PD-TOOLS-006` revisions 3 (the write-scope refusal) and 4 (the catalogue); OQ-216, whose target of zero the duress run
 at `a68f121` missed; OQ-228 and OQ-229, the delegation targets. Raised 2026-10-07 from the final live runs: finding D3 of the duress
 autopsy at `a68f121` (pack `2026-10-07T07-09-30-708Z`, session `e6747bd0`, `#114`, `#115`, `#164`), recorded in
-[`the-routing-table-leads-the-coordinator-past-delegates-catalogue.md`](../../../defects/fixed/the-routing-table-leads-the-coordinator-past-delegates-catalogue.md);
+[`the-routing-table-leads-the-coordinator-past-delegates-catalogue.md`](../../defects/the-routing-table-leads-the-coordinator-past-delegates-catalogue.md);
 the consortium's question D3. The round assigned it OQ-233, which fin32 took on main for `write_file`'s level-3 shift; raised
 as OQ-241 and renumbered OQ-250 before the landing, after OQ-249, for the reason OQ-249's entry gives. **Ruled 2026-10-07.**)*
 
@@ -81,7 +81,7 @@ or across a line boundary. A file `x = 1\nmax = 1\n` with `old_string` `x = 1 ` 
 refused "Found 2 occurrences of old_str at lines 1, 2" and writes nothing. The several-windows reply ("send its exact text as
 old_string") fails the same way whenever the windows' text is identical (two lines `x = 1`, `old_string` `x = 1 `). Clause 5's
 promise of a level-1 match holds; it is silent on whether that match is unique. Recorded as
-[`a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly`](../../../defects/fixed/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md).
+[`a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly`](../../defects/a-near-miss-quote-that-occurs-more-than-once-is-promised-to-match-exactly.md).
 
 **What the build proceeds under.** The quote and its promise as built, whatever the text's occurrences.
 
@@ -131,7 +131,7 @@ The directive's template writes every limit that is not a whole number of minute
 first execution recorded that without the directive following. The case is reachable: the workspace file takes any integer of
 at least 1 second (`child_timeout: z.number().int().min(1)`, `packages/contracts/src/config.ts`; no maximum in
 `packages/config/src/sections/runtime.ts`), though the widget offers 60 to 14,400. Recorded as
-[`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../../../defects/fixed/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
+[`pd-config-003-writes-a-one-second-limit-as-1-seconds`](../../defects/pd-config-003-writes-a-one-second-limit-as-1-seconds.md).
 
 **What the build proceeds under.** "1 second", as built at revision 3.
 
@@ -172,7 +172,7 @@ An edit whose `old_string` matches at level 1 replaces the exact span with `new_
 lines written with `\n` alone and the file is CRLF, the result has LF-only lines among CRLF ones: `write_file` on
 `one\r\ntwo\r\n` with `old_string` `one` and `new_string` `ONE\nX` leaves `ONE\nX\r\ntwo\r\n`; `haet_edit` does the same, and so
 does a `replace_all`. Recorded as
-[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../../../defects/fixed/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
+[`a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file`](../../defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md),
 and pinned as built by "PD-TOOLS-016 … level 1, replace_all and haet_edit are unchanged on a CRLF file" in
 `packages/agent-tools/src/tools/tools.test.ts`. No requirement's text is contradicted: "exact" writes `new_string` as given.
 
@@ -225,7 +225,7 @@ protection is otherwise unchanged"; `PD-TOOLS-006` revision 7, an admitted deleg
 REQ-TOOLS-147; REQ-ORCH-029, REQ-ORCH-075 and PD-ORCH-015, the correction and re-queue an open plan meets; OQ-249 and OQ-163.
 Raised 2026-10-13 from revision 7's first execution in [`directives.md`](../../../product/directives/pd-tools-006.md#pd-tools-006) ("`replace`
 cannot complete an active item") and the `todo` tool's `replace` branch (`packages/agent-tools/src/tools/todo.ts`), recorded in
-[`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../../../defects/fixed/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md);
+[`a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md`](../../defects/a-todo-replace-cannot-close-a-delegated-item-and-hides-the-restore.md);
 the consortium's question RC1. Raised as OQ-254 and renumbered OQ-255 before the landing, since origin/main took OQ-254 for the
 level-1 CRLF edit meanwhile. **Ruled 2026-10-13.**)*
 
@@ -279,7 +279,7 @@ then an `update` for that item. The harness reads 0 served-and-ended items resto
 
 *Asked by the live run since 2026-10-13 (fin41, item N65):* no live prompt had asked a coordinator to close with a `replace`, and
 at `0bc3eee` every close was an `update`, so the harness's "0 restored" read PASS with nothing measured
-([`../../../defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md`](../../../defects/fixed/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md)).
+([`../../defects/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md`](../../defects/the-live-runs-closing-replace-check-passes-with-no-closing-replace.md)).
 The `edit` scenario's prompt now asks its coordinator to close the plan with ONE `replace` sending both tasks COMPLETED once both
 children have reported; `heldItemReading` counts the closes it asked (`closes`), and a run with none prints a NOTE that the close
 is unasked instead of the PASS. The next default run's `edit` session is the measure: the check names each close and the state

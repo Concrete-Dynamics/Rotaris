@@ -13,7 +13,7 @@ import { Button as DesignButton, EmptyState as DesignEmptyState, Table as Design
  * agent's compression count (`AgentRecord.compressions`, REQ-MONITOR-086), in its own column whose header names the unit, as the
  * tool-call column's does (281). Until 2026-10-01 that cell read `not recorded`, titled "The record carries no compression
  * count in this build", though the record had carried the count since Part AH
- * (docs/defects/fixed/the-mission-table-says-the-record-carries-no-compression-count.md). A row is a memoised component keyed by agent id: only
+ * (docs/archive/defects/the-mission-table-says-the-record-carries-no-compression-count.md). A row is a memoised component keyed by agent id: only
  * rows whose record changed re-render (275's row-by-row refresh); the elapsed cell is the one that changes on
  * the tick, and only for rows whose clock advances. Structure from docs/spec; language from docs/design/system.
  */

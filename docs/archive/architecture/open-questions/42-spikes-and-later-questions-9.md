@@ -10,7 +10,7 @@ saying "it applies from the next iteration"; REQ-MONITOR-143, after the loop has
 override"; REQ-SESSION-026, "A mid-session runtime model override (active model key and runtime model configurations) MUST
 persist across calls and across reloads of the session"; REQ-MONITOR-146, "Composer-side model, persona, and reasoning
 choices apply to the next prompt". Raised 2026-10-02 by
-[`an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md`](../../../defects/fixed/an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md)
+[`an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md`](../../defects/an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md)
 (fin8, ladder-overrides, task 2), as OQ-183, and renumbered OQ-185 at its merge because `origin/main` had taken OQ-183
 and OQ-184 meanwhile. Open until 2026-10-06; ruled that day by the owner, and built.)*
 
@@ -37,7 +37,7 @@ still says "it applies from the next iteration", which is true while the run has
 prompt, a task added while it runs) and untrue when it has none. A change-model resolution of a wait (REQ-ORCH-091 d) is
 not such a switch: its override is session-wide and reaches every later run. The autopsy reader prints the entry key
 `undetermined` after a continuation whose snapshot names no entry model when a switch onto another key preceded it
-([the repair](../../../defects/fixed/the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)),
+([the repair](../../defects/the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)),
 so its reading is right under either answer; a continuation whose snapshot names the entry model says which it ran on.
 
 **What a ruling decides.** Whether a switch made from the run header or the inspector reaches the session's next run
@@ -55,7 +55,7 @@ equals the current model's tier, less any model excluded … in the order their 
 REQ-NOTIFY-074, "lists models from providers other than the one that failed, ahead of any others … Where no other provider
 offers a model, every model except the one that failed is listed"; REQ-MONITOR-194, "from any model selector or from the
 quota-wait decision surface … listed there rather than hidden, annotated". Raised 2026-10-02 by the repair of
-[`the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md`](../../../defects/fixed/the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md)
+[`the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md`](../../defects/the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md)
 (fin8, bundle `fin8-noticed-gaps-4`), as OQ-185, and renumbered OQ-186 at its merge of `origin/main` because the
 ladder-overrides bundle had taken OQ-185 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
@@ -94,7 +94,7 @@ takes room from every view?** *(REQ-WORKSPACE-106, "a non-modal, window-level di
 navigable)"; REQ-WORKSPACE-105, opened by itself once per workspace open and open until answered; ADR-0048's non-modal
 window-level level, "an in-window panel that does not trap focus and leaves the rest navigable"; REQ-SHELL-022's 1000x680
 minimum; REQ-SHELL-024's vertical order. Raised 2026-10-02 by the repair of
-[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../../../defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)
+[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../../defects/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)
 (fin8, bundle `fin8-noticed-gaps-4`), as OQ-186, and renumbered OQ-187 at its merge of `origin/main` because the
 ladder-overrides bundle had taken OQ-185 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
@@ -134,7 +134,7 @@ plan gate.
 which fixes the three choices and "what each does"; REQ-NOTIFY-263's three choices; REQ-MONITOR-192 and REQ-NOTIFY-087, the
 auto-resume variant ending by itself when its interval elapses; REQ-MONITOR-004's closed enumeration of twenty-two operations;
 REQ-MONITOR-194. Raised 2026-10-02 by task 1 of plan fin10's `fin10-quota-exclusions-and-choices` bundle, recording
-[`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../../../defects/fixed/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md).
+[`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../../defects/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md).
 Open; owner-only, as every question this round raises. Ruled 2026-10-06 by the owner, and built.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** keep waiting retries the same model at once in
@@ -178,7 +178,7 @@ timer to retry; and whether either is a new operation or a reading of an existin
 which reads the exclusion as governing automatic behaviour; REQ-ORCH-091 (d), the override "for the rest of the session";
 REQ-MONITOR-080, a configured compression model used, else the agent's own; REQ-ORCH-114, the classifier's slot order.
 Raised 2026-10-03 by task 2 of plan fin10's `fin10-quota-exclusions-and-choices` bundle, recording
-[`a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md`](../../../defects/fixed/a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md).
+[`a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md`](../../defects/a-configured-model-slot-is-called-on-a-pair-the-session-replaced-or-holds-out-of-quota.md).
 Numbered 189, the next free on the branch after its OQ-188; renumbered at the merge if taken meanwhile. Open; owner-only, as
 every question this round raises. Ruled 2026-10-06 by the owner, and built.)*
 
@@ -223,7 +223,7 @@ yields to the exclusion of its pair.
 *(REQ-SHELL-044, "The tokens item reads the running total of tokens used"; REQ-SHELL-045, the cost item's figure is "the
 model provider's reported cost for this workspace's runs so far"; REQ-SHELL-038, the items' accessible names, "Tokens used"
 and "Cost so far". Raised 2026-10-02 by the repair of
-[`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../../../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
+[`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../../defects/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
 (fin10, bundle `fin10-strip-notices-and-listing`). Raised as OQ-188; renumbered 190 at the merge, since origin/main took 188 and 189 meanwhile. ~~Open.~~ Ruled 2026-10-06.)*
 
 **Ruled 2026-10-06 by the owner ([R-071](../../../product/requests.md#r-071)):** accepted: the tokens item counts the workspace's runs, as the cost item does, the sum of every stored session's `tokens_input + tokens_output` for this workspace, and its tooltip says so ("Tokens used by this workspace's runs so far: {n} tok."). REQ-SHELL-044 names no scope, so this ruling settles it.
@@ -254,7 +254,7 @@ mode is in force and that it decides whether a tool call is allowed outright, pu
 flag's "that secrets are removed from what is recorded and displayed and that this cannot be turned off", and the
 circuit-breaker flag's "that the circuit breaker is armed and will halt a run that trips it"; REQ-SHELL-047,
 "This document owns the status strip". Raised 2026-10-02 by the repair of
-[`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../../../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
+[`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../../defects/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
 (fin10, bundle `fin10-strip-notices-and-listing`). Raised as OQ-189; renumbered 191 at the merge, since origin/main took 188 and 189 meanwhile. ~~Open.~~ Ruled 2026-10-06. *Amended 2026-10-03 (fin10's repair round): raised as "three
 things", it missed the redaction and circuit-breaker explanations, which REQ-WORKSPACE-022's "exactly the following and no
 more" bounds as well; both are added below.*)*

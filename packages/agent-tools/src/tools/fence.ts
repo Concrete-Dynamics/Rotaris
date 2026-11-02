@@ -27,7 +27,7 @@ export type FenceVerdict =
  * `existing.slice(parent.length)` less one leading separator, which is one character too few when the parent is
  * `.` — a relative path's walk ends there, `dirname('specs')` is `.`, and `'specs'.slice(1)` is `pecs`; so
  * `realPathOf('specs/index.md')` answered `<cwd>/pecs/index.md` and `realPathOf('D:/ws')` on POSIX `<cwd>/:/ws`
- * (`docs/defects/fixed/realpathof-drops-a-character-from-a-relative-path.md`). The falsified premise, kept beside
+ * (`docs/archive/defects/realpathof-drops-a-character-from-a-relative-path.md`). The falsified premise, kept beside
  * its replacement: "no production caller passes a relative path" — the policy's path scope did, on every
  * workspace-relative argument, until it joined the root first (REQ-TOOLS-018).
  */

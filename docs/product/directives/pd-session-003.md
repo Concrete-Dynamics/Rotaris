@@ -46,5 +46,5 @@ takes PD-SESSION-002.*
 > is no first execution, and no row is owed in [`../architecture/first-executions.md`](../../architecture/first-executions.md)
 > (the ruling, following advocate B and `PD-SESSION-001`'s precedent). One gap was repaired with it: `delegate`'s
 > `inherited_context` and `attach_artifacts` joined clause (d)'s keys
-> ([`a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md`](../../defects/fixed/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md)),
+> ([`a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md`](../../archive/defects/a-delegate-calls-sibling-and-artifact-ids-can-be-cut-in-an-error-path-record.md)),
 > and `cut.test.ts` classifies every argument key of every built-in tool.

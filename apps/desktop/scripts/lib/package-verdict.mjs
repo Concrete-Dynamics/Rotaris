@@ -10,7 +10,7 @@
  *  - that a requested counterfactual was NOT exercised, when the package was refused before `electron-builder` ran —
  *    its rules live in the hooks, so a refusal that came first is not the counterfactual's evidence;
  *  - that `out/` now holds a SEAM-FREE build, only when `electron-vite build` ran. It once printed after every run, a
- *    refusal before the build included (docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md);
+ *    refusal before the build included (docs/archive/defects/pnpm-package-announced-a-seam-free-build-it-had-not-made.md);
  *  - a development package's announcement, last, where it cannot scroll away (first-release-plan.md §4.4).
  */
 

@@ -44,7 +44,7 @@ const until = async (hit: () => boolean, boundMs = 10_000): Promise<number | nul
   }
 };
 const registries: SessionConnections[] = [];
-// The suite's scratch directory goes with it (docs/defects/fixed/unit-tests-leave-their-temporary-directories-behind.md).
+// The suite's scratch directory goes with it (docs/archive/defects/unit-tests-leave-their-temporary-directories-behind.md).
 afterAll(async () => { for (const r of registries) await r.closeAll(); rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); });
 
 describe('ToolDiscovery (REQ-MCP-046/047/048/051/052/053)', () => {

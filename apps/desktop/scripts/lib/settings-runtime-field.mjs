@@ -10,7 +10,7 @@
  * overtyped `1` stayed 3 s with the bar clean (first measured by `continuation-proof`, 2026-10-13). The field now commits
  * from the input event (`ClampedNumberField`), and `continuation-proof`'s later-run scenario, which types `1` over a stored
  * 3 s shown as `1`, is the measurement of that path
- * (`docs/defects/fixed/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`).
+ * (`docs/archive/defects/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`).
  *
  * Built for PD-CONFIG-003's two Runtime timeouts, whose stored values the harnesses had only ever written into
  * `agents.yaml` themselves (`withRuntimeKey`): the Per-agent timeout (`#child-timeout`, whole minutes, stored as seconds)
@@ -24,7 +24,7 @@
  * The field's `aria-description` is read twice through `ROTARIS_CAPTURE_EVAL_AT`: after the edit and before Save, when it must
  * still state the value the file holds (REQ-CONFIG-446, REQ-CONFIG-419), and after Save, when it states the new one. Until
  * 2026-10-15 the description read the form's pending value, so the first reading stated the unsaved edit as stored
- * (`docs/defects/fixed/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
+ * (`docs/archive/defects/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
  */
 export function runtimeFieldSteps({ id, value, at = 8_000 }) {
   if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`a Settings field id is a bare id: ${id}`);

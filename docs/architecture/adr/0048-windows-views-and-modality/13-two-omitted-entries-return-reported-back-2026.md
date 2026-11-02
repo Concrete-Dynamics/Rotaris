@@ -4,7 +4,7 @@ Part 13 of 13 of [ADR-0048](../0048-windows-views-and-modality.md), which indexe
 
 ## Two omitted entries return — reported back 2026-10-13 (fin41, N71)
 
-*The defect note is [`search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true`](../../../defects/fixed/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md);
+*The defect note is [`search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true`](../../../archive/defects/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md);
 the proof is `pnpm palette-proof`'s stage 6 and `pnpm settings-proof`'s Display launches.*
 
 **The falsified reasons, kept beside their replacements.** `OMITTED_COMMANDS` withheld "Search transcript" because "no
@@ -30,7 +30,7 @@ switch in Display, which `REQ-CONFIG-403` says "holds two transcript toggles", i
 
 **Still not built.** "Open demo window" (`REQ-SHELL-162`, no demo mode). The search panel's Escape slot (the note linked
 above), and `REQ-CHAT-074`'s toolbar control for search
-([`the-transcript-has-no-toolbar-control-for-search`](../../../defects/fixed/the-transcript-has-no-toolbar-control-for-search.md)),
+([`the-transcript-has-no-toolbar-control-for-search`](../../../archive/defects/the-transcript-has-no-toolbar-control-for-search.md)),
 both noticed by this change and recorded, not repaired. *Both repaired 2026-10-14 (fin43, `fin43-transcript-and-prefs`):*
 the toolbar's search control runs this registry's `transcript.search`, so it is one more way in to the same command and
 no second binding, its tooltip carrying the chord as `REQ-SHELL-058` formats it; the slot is filled as the first execution

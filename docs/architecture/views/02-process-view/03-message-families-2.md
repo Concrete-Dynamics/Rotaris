@@ -32,13 +32,13 @@ Linux `app.exit` over an open modal child segfaults. Neither sends `shutdown`; b
 capture whose wait timed out ends through `app.quit()`** rather than `exitCleanly` (`CaptureHost.quit`, `capture/probe.ts`):
 both then take the user's path below and send `shutdown`, so a live run comes to rest as a quit leaves it (PD-ORCH-005
 clause 3). A capture whose wait was satisfied, or that had none, still ends by `exitCleanly`
-(`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). A quit Electron starts on its own account (SIGTERM,
+(`docs/archive/defects/the-drivers-quit-skips-the-applications-shutdown.md`). A quit Electron starts on its own account (SIGTERM,
 the desktop's logout where Electron emits `before-quit`, `app.quit()`)
 is turned into the same path. **On Windows Electron emits no `before-quit` at a logout, restart or system shutdown**; since
 2026-10-07 (fin29) each main window's `session-end` (Windows only, and not refusable) starts the same orderly shutdown
 `window-all-closed` runs — memoized, so it runs once whichever starts it — with the quit marked as the process's exit and no
 guard asked, and the process exits when it is done (`SessionEndShutdown`, `main/exit.ts`;
-`docs/defects/fixed/a-windows-logout-skips-the-orderly-shutdown.md`; not yet observed on a Windows host — *2026-10-20: observed on a Windows ARM64 host under a SIMULATED logoff (the two end-session messages sent to the application's own windows): the line logged, exit 0 in 0.9–1.9 s, the store as clause 23 wants; a real logout is still unobserved, and Windows' allowance against the 30 s bounds is [OQ-402](../../open-questions/66-spikes-and-later-questions-33.md#oq-402)*). For the quits
+`docs/archive/defects/a-windows-logout-skips-the-orderly-shutdown.md`; not yet observed on a Windows host — *2026-10-20: observed on a Windows ARM64 host under a SIMULATED logoff (the two end-session messages sent to the application's own windows): the line logged, exit 0 in 0.9–1.9 s, the store as clause 23 wants; a real logout is still unobserved, and Windows' allowance against the 30 s bounds is [OQ-402](../../open-questions/66-spikes-and-later-questions-33.md#oq-402)*). For the quits
 that do emit it: `before-quit` is held while any main window is open, and the main windows are closed
 all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window closed). The handler is
 `QuitOutsideAnyWindow` (`main/exit.ts`, since 2026-10-14 fin46; inline in `main/index.ts` before): it holds the quit while a
@@ -57,7 +57,7 @@ answer allows** (since 2026-10-14, fin43): the renderer's guard is asked by `ask
 rejects at once when the window's
 `webContents` has crashed or is destroyed and the moment `render-process-gone` or `destroyed` is emitted while it is out,
 because Electron's `executeJavaScript` on a disposed frame never settles; until then a crashed renderer held a person's close
-and the quit for good (`docs/defects/fixed/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`,
+and the quit for good (`docs/archive/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`,
 shown by `pnpm exit-trace-proof`). **A renderer that is alive but does not answer cannot answer either** (since 2026-10-14,
 fin44; `PD-SHELL-010`, OQ-297): beside the guard's question `askRendererGuard` sends main's own liveness probe
 (`executeJavaScript('true')`) and arms `RENDERER_LIVENESS_BOUND_MS` (5 000 ms) on the main-window timers port; a probe answered
@@ -65,7 +65,7 @@ in time is followed by the next when the bound elapses, and one unanswered at it
 contents while the question is out — rejects the question ("cannot answer: unresponsive", apart from "gone"), main writes at
 `warn` which signal it was, and every listener and timer is removed whichever way the question settles. Until then a hung
 renderer held a person's close and the quit, a SIGTERM's included, for good
-(`docs/defects/fixed/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`, shown by `exit-trace-proof`'s `hang`
+(`docs/archive/defects/a-main-window-whose-renderer-hangs-holds-the-applications-quit.md`, shown by `exit-trace-proof`'s `hang`
 and `hang-close` launches: the renderer stopped with SIGSTOP, the quit and the host's close each end the process, exit 0, about
 5.6 s after they were asked). The allowed `win.close()` completes on a hung renderer, so the close stays a close, not a
 `destroy()`. A renderer that answers its probes is waited for with no bound: its guard may be a person's Save/Discard/Cancel
@@ -190,7 +190,7 @@ the log says so — and `leasedSetup` answers `no-model` only when neither resol
 `retrospective.no-model` and `improvement.analyze` as `improvement.no-model` (*since 2026-10-15, fin47; until then the entry
 role's `no-model` became `unconfigured`, answered `retrospective.no-configuration` "The workspace configuration could not be
 loaded" and, at the analysis, `improvement.expired`,
-`docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md`*).
+`docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-the-entry-role-has-no-usable-model.md`*).
 ADR-0022's start-time confinement gate does not meet a retrospective's setup: it is a run start's, and the pass opens no shell, so
 `runtime.sandbox_mode` and the run host's verdict — settled or not — refuse nothing here, while a run start and a continuation keep
 the gate. Of `prepareRun`'s other refusals, only a configuration that did not load or apply (`ConfigureRefusal` code `unloaded`)
@@ -207,11 +207,11 @@ loc1; from 2026-10-15 (fin47 `fin47-accept1-4`) the unknown persona and the refe
 `retrospective.configuration` with `prepareRun`'s reason, and until then a requested confinement refused the pass wherever the
 verdict was unsettled or unavailable, and every such refusal read "The workspace configuration could not be loaded" and, at the
 analysis, `improvement.expired`,
-`docs/defects/fixed/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`*). Every run
+`docs/archive/defects/a-retrospective-is-refused-as-an-unloadable-configuration-when-confinement-is-requested.md`*). Every run
 start and continuation keeps both refusals word for word.
 A lease that leaves the retrospective model's sign-in provider unresolved — the model its request goes to, `retrospective_model`
 then `medium_model`, never the entry role's (*since 2026-10-14, fin46; it read "the entry provider" and checked the entry role's,
-`docs/defects/fixed/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`*) — answers `session.provider-auth` with REQ-WORKSPACE-137's headline and the
+`docs/archive/defects/a-retrospectives-lease-checks-the-entry-roles-provider-not-the-retrospective-models.md`*) — answers `session.provider-auth` with REQ-WORKSPACE-137's headline and the
 retrospective's own detail ("Authenticate at least one configured provider before running a retrospective."), which main
 posts as one error notice per gesture carrying the action that opens Settings at Models; the same refusal at
 `improvement.analyze` ends the job, and its reason reaches `PD-LIBRARY-002` (c)'s warning with no action

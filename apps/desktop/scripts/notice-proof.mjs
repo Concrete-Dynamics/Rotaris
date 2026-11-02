@@ -152,7 +152,7 @@ async function launch(name, s, extra, opts = {}) {
   // The replica's run-start decline is REQ-SESSION-161's own recovery, which a launch that starts a run meets under load with
   // nothing wrong on screen: every check reads `errors` through `unexpectedRendererErrors` (renderer-console.mjs, shared with
   // palette-proof and mission-proof), and what it let through is counted here
-  // (docs/defects/fixed/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md).
+  // (docs/archive/defects/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md).
   (results.replicaRunStartDeclines ??= {})[name] = replicaRunStartDeclines(errors);
   return { log, png, elapsedMs: Date.now() - started, errors };
 }
@@ -321,7 +321,7 @@ if (want('1c')) {
 // 1d. A fault found on the MERGED document, stated in the GLOBAL file (REQ-CONFIG-478, REQ-CONFIG-183): an unknown key under
 // `requirements:` in the global `agents.yaml`, the workspace file stating no `requirements:` at all. The open-time notice names
 // the global file by full path and the global scope — until 2026-10-14 every merged-document fault named the workspace file
-// and scope whatever file stated it (docs/defects/fixed/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
+// and scope whatever file stated it (docs/archive/defects/a-fatal-key-in-the-global-file-is-reported-in-the-workspace-file.md).
 // 1b's hook fault is found before the merge, so it never reached that attribution.
 const s1d = scenario('global-merged-fault');
 if (want('1d')) {
@@ -354,7 +354,7 @@ if (want('1d')) {
 // under `compressor:` in the global `agents.yaml`. The load completes and the run starts; the run host's configuration
 // warning names the global file by full path, the key's full path and the global scope, in the fatal report's form. Until
 // fin46 the section readers' warnings reached the load as `<path>: <message>` alone
-// (docs/defects/fixed/an-unknown-key-in-a-merged-section-is-reported-without-the-file-that-states-it.md).
+// (docs/archive/defects/an-unknown-key-in-a-merged-section-is-reported-without-the-file-that-states-it.md).
 const s1e = scenario('global-merged-warning', { globalHooks: ['# an unknown key in a merged section (REQ-CONFIG-233)', 'compressor:', '  bogus_key: 1', ''].join('\n') });
 if (want('1e')) {
   const globalFile = join(configDirFor(s1e.local), 'agents.yaml');
@@ -376,7 +376,7 @@ if (want('1e')) {
 // 1f. A fault on a role the GLOBAL file states under its legacy name (REQ-CONFIG-478, REQ-CONFIG-062): `oracle` is
 // canonicalised to `codebase-analyst` before the merge, and the readers raise the fault on the merged document. The
 // open-time notice names the key as the named file spells it. Until fin46 it read `personas.codebase-analyst.purpose`, a key
-// the global file does not hold (docs/defects/fixed/a-fatal-report-names-a-legacy-role-by-a-name-its-file-does-not-hold.md).
+// the global file does not hold (docs/archive/defects/a-fatal-report-names-a-legacy-role-by-a-name-its-file-does-not-hold.md).
 const s1f = scenario('global-legacy-role-fault');
 if (want('1f')) {
   const appRoot = join(output, 'global-legacy-role-fault-app');
@@ -555,7 +555,7 @@ if (want('6')) {
 // application-wide, so this is a second window's notice, or one that outlived a workspace switch. The window holds a
 // workspace with no hooks; the notice names a second workspace declaring one, which no window holds. Activating it
 // reaches that workspace — a window added for it, nothing asked, nothing closed (OQ-267) — and opens ITS review there.
-// Before the repair of docs/defects/fixed/a-hook-review-notice-for-another-workspace-opens-nothing.md the renderer logged
+// Before the repair of docs/archive/defects/a-hook-review-notice-for-another-workspace-opens-nothing.md the renderer logged
 // "… which is not the open workspace" and opened nothing.
 const s4b = scenario('review-other');
 const s4bTarget = scenario('review-other-target', { workspaceHook: true });
@@ -607,7 +607,7 @@ if (want('6b')) {
 // raised). Main reaches the workspace and refuses the review — "This workspace declares no hooks" — and that refusal is
 // published as a persistent notice in the pressing window, in main's words. Until 2026-10-14 the renderer's arm answered it
 // with `console.warn` alone and the screen did not move
-// (docs/defects/fixed/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md).
+// (docs/archive/defects/a-refused-hook-review-notice-action-is-reported-only-to-the-renderer-console.md).
 const s4e = scenario('review-refused');
 if (want('6e')) {
   const pressed = `Workspace hooks need review: ${basename(s4e.workspace)}`;
@@ -649,7 +649,7 @@ if (want('6e')) {
 // time. Until 2026-10-15 each arm wrote it to the console (`console.warn`), relayed here as a renderer error, and every other
 // refusal of the two (`window.gone`, `window.notMain`, which no built-app press reaches deterministically, and the unit cases
 // in `notice-action-refusal.test.ts` pin) reached no one
-// (docs/defects/fixed/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
+// (docs/archive/defects/a-refused-focus-session-or-project-setup-notice-action-is-reported-only-to-the-renderer-console.md).
 const s4f = scenario('action-refused');
 if (want('6f')) {
   const notADirectory = join(s4f.workspace, 'README.md');
@@ -690,7 +690,7 @@ if (want('6f')) {
 // added on `atlas-billing`, which owes one failing background task (`ROTARIS_INIT_TEST_TASK`, the ordinary registry), so its
 // open raises "Project setup did not finish: atlas-billing" with "Try again" — a real banner, not a publication of the
 // proof's — once both windows exist, and the banner, an application notice, stands in both. (A window added AFTER a notice
-// was published did not show it until 2026-10-14: docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md;
+// was published did not show it until 2026-10-14: docs/archive/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md;
 // the order is kept, and section 6d reads the repair.) With
 // an unsaved edit standing in the holding window's Settings › Instructions, "Try again" is pressed in the FIRST window, which
 // does not hold the project: the holding window is surfaced and shows Settings › Project, its edit still pending.
@@ -703,7 +703,7 @@ if (want('6f')) {
 // session", ends while no window shows it, and REQ-NOTIFY-031's notice — "Open the session", naming the session and its
 // workspace — is pressed in the FIRST window. The holding window is brought forward and follows the session; no "could not be
 // loaded" error is raised. (From 2026-10-14 until the revision the press was not dispatched; before that it raised that error
-// in the pressing window, docs/defects/fixed/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md.)
+// in the pressing window, docs/archive/defects/a-focus-session-notice-action-acts-in-a-window-holding-another-workspace.md.)
 if (want('6c')) {
   const base = join(output, 'project-init');
   const folder = (name, skipped) => {
@@ -899,7 +899,7 @@ if (want('6d')) {
     await step('A switches to gamma', d.command({ kind: 'workspace.choose', newWindow: false }));
     const switched = await step('no window holds alpha', until(() => d.windows(), (w) => w.windows.length === 2 && w.windows.every((x) => !String(x.workspace).endsWith('reach-alpha')) && w.windows.some((x) => String(x.workspace).endsWith('reach-gamma')), { timeoutMs: 30_000, what: 'A replaced by gamma' }));
     // The gamma window was built after the notice was published, and shows it all the same: it asked main for the current
-    // notice at boot (`notice.current`; docs/defects/fixed/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
+    // notice at boot (`notice.current`; docs/archive/defects/a-main-window-added-after-a-notice-was-published-does-not-show-it.md).
     const lateNotice = await step('the notice in the window built after it', until(() => noticeIn('reach-gamma'), (n) => n !== null && n.title === ending.title, { timeoutMs: 15_000, what: 'the current notice in the window built after its publication' }));
     await d.useWindow('reach-beta');
     await step('Open the session, in B', d.click('.notice__action', { text: 'Open the session' }));
@@ -937,7 +937,7 @@ if (want('6d')) {
 // the window resubmits the last submitted prompt to the session it follows, and a second run of that session starts on
 // it. (Its outcome is the double's: a new iteration's root starts the script again, so it meets the same 401; what is
 // measured is that the retry reached its target.) Before the repair of
-// `docs/defects/fixed/the-retry-run-notice-action-has-no-target.md` the window logged "has no target" and nothing ran.
+// `docs/archive/defects/the-retry-run-notice-action-has-no-target.md` the window logged "has no target" and nothing ran.
 const s5 = scenario('retry-action');
 if (want('7')) {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
@@ -977,9 +977,9 @@ if (want('7')) {
 // prompt's row one stored PNG (the file under the session's directory, its digest on the row, as `persistAttachments`
 // writes them) and appends more rows after it than the resident window holds, releasing the oldest pages as the writer
 // does, so the prompt is no longer resident. The second launch reopens the session, and the retry action is clicked.
-// Before the repair of `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md` the
+// Before the repair of `docs/archive/defects/the-retry-action-reads-the-last-prompt-from-the-resident-window.md` the
 // window searched its replica, found no prompt and refused ("Nothing was retried"); before that of
-// `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md` it re-sent the text alone.
+// `docs/archive/defects/the-retry-action-resubmits-a-prompt-without-its-images.md` it re-sent the text alone.
 const s6 = scenario('retry-image', { images: true });
 if (want('7b')) {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
@@ -1049,7 +1049,7 @@ if (want('7b')) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 8. REQ-NOTIFY-031 / REQ-MONITOR-202: a run that completes while its session is not the one on screen raises the notice
-// naming it. Before the repair of `docs/defects/fixed/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md`
+// naming it. Before the repair of `docs/archive/defects/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md`
 // the ending raised the run's summary ("The run completed.") whatever the focus, and after "New session" main still
 // counted the released session as the one on screen (`session.release`).
 // The improvement collector off: its own notice follows a completed run within seconds and would replace the one read here
@@ -1113,7 +1113,7 @@ if (want('8')) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 9. REQ-NOTIFY-093 with REQ-NOTIFY-030/031: a run that ends on a provider limit while its session is not on screen raises
 // REQ-NOTIFY-031's notice naming it, and REQ-NOTIFY-063's notice with its model-settings action arrives with the focus.
-// Before the repair of `docs/defects/fixed/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md` nothing
+// Before the repair of `docs/archive/defects/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md` nothing
 // was held for the focus, so the limit reached the user only as a plain ending.
 const s9 = scenario('background-quota', { runtime: ['  improvement_collector_enabled: false'] });
 if (want('9')) {

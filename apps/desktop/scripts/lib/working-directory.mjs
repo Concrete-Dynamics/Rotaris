@@ -6,11 +6,11 @@
  * in `apps/desktop`, so each opened the checkout the proof runs in. The background initialization then ran the bundled
  * code-intelligence setup over the product's own source. The capture seam's immediate exit sends the run host no
  * `shutdown`, so the index's serena and pyright processes were still running more than 6 s after the launch
- * (`docs/defects/fixed/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
+ * (`docs/archive/defects/settings-proofs-no-workspace-launches-open-the-repositorys-apps-desktop-and-index-it.md`).
  *
  * `workspace-proof`'s `cold` and `gone` launches and `updater-proof`'s first stage did the same through the driver's
  * `startApp`, which ran every launch in `apps/desktop`; since plan `loc1` they name a directory of their own as its `cwd`
- * (`docs/defects/fixed/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
+ * (`docs/archive/defects/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
  *
  * `emptyWorkingDirectory` makes the directory such a launch runs in: new, empty, and in no git repository. Under the
  * checkout's `.proof/` the harness's git bar (`barEnclosingRepository`) makes that so. `openedWorkspace` reads what the
@@ -39,7 +39,7 @@ export function enclosingRepository(directory) {
  * `platform`'s rule, the long real name the filesystem answers (`realpathSync.native`) when it exists on this host, no
  * trailing separator, and on Windows an upper-case drive letter. Node's JavaScript `realpathSync` is not that spelling:
  * on Windows it keeps the letter case and the 8.3 short names it was given
- * (`docs/defects/fixed/assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md`).
+ * (`docs/archive/defects/assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md`).
  */
 export function spelledAsTheAppDoes(path, platform = process.platform) {
   const { resolve, sep } = platform === 'win32' ? win32 : posix;

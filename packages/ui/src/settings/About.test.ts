@@ -41,7 +41,7 @@ describe('the About licensing caption (REQ-SHELL-142)', () => {
 /**
  * REQ-STARTUP-160: the application itself discloses its network activity on About & Legal — static text, drawn from the
  * bundle alone, never behind a modal, an interstitial, a checkbox or a hover, and naming no host. The built app's reading at
- * REQ-SHELL-022's minimum window size is `settings-proof`'s (`docs/defects/fixed/the-about-page-carries-no-network-activity-disclosure.md`).
+ * REQ-SHELL-022's minimum window size is `settings-proof`'s (`docs/archive/defects/the-about-page-carries-no-network-activity-disclosure.md`).
  */
 describe('the network-activity disclosure on About & Legal (REQ-STARTUP-160)', () => {
   const section = (html: string): string => /<section[^>]*data-testid="network-disclosure"[^>]*>([\s\S]*?)<\/section>/.exec(html)?.[0] ?? '';

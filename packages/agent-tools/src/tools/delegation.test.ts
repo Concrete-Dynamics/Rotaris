@@ -105,7 +105,7 @@ describe('delegate — session_id (REQ-TOOLS-152, PD-ORCH-005 clause 22)', () =>
  * PD-TOOLS-006 revision 4 (OQ-216, ruled 2026-10-07 under R-072): `delegate`'s description states, for the caller, what each
  * persona's tools let it do. It named the built-in personas only, and in both duress live runs of 2026-10-06 the coordinator
  * briefed `docs-writer` children, which hold no terminal, to run the tests themselves
- * (docs/defects/fixed/the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md).
+ * (docs/archive/defects/the-coordinator-is-not-told-which-personas-hold-a-terminal-or-a-file-tool.md).
  */
 describe('delegate — what each persona can do (PD-TOOLS-006 revision 4)', () => {
   const port: DelegationPort = {

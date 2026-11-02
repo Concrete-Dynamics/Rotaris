@@ -12,19 +12,19 @@ launch is driven (the header's `SearchableSelect` chosen by real clicks, `overri
 bounded — the ten seam-driven ones by `spawnBounded`, the driven one by the driver's `stopApp`, both ending an overrun
 through `lib/bounded-launch.mjs` by SIGTERM, a grace, then SIGKILL and reporting it with its log tail — and every
 scenario runs to its end with its failure listed in `results.json`
-([note](../../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md)).
+([note](../../archive/defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md)).
 `spawnSync`'s own timeout could not bound a launch: it closes the pipes as it signals, and the application's quit then
-loops on its own EPIPE ([note](../../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md); repaired
+loops on its own EPIPE ([note](../../archive/defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md); repaired
 2026-09-29 under R-067 — the application log's writer, `standardStreamWriter`, absorbs a failed write and stops).
 Since 2026-10-01 every scenario's workspace carries the answered project-setup section (`lib/initialization-marker.mjs`)
 and every launch fails if the setup started in the background anyway, so a bundle-less checkout's "Project setup did not
 finish" no longer stands in the one notice slot `cancel` and `fatal` read; `fatal` asserts the 401's own notice (its
 failure text as detail) rather than only "not a provider limit"
-([note](../../defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md)).
+([note](../../archive/defects/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md)).
 Since 2026-10-02 a `switch-back` scenario follows the same-tier move with a switch of the entry model back to the
 configured key from the run header, and a follow-up queued beside it: iteration 2 runs on the configured model, as the
 switch's REQ-MONITOR-142 row says (OQ-177;
-[note](../../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)); since
+[note](../../archive/defects/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)); since
 2026-10-06 (plan fin21) `keep-waiting` drives PD-MONITOR-004 revision 2's retry of an out-of-quota pair from the wait header (pressed
 twice in one frame since that plan's repair round 1: one retry, no switch of the entry model) and
 `switch-over-override` PD-ORCH-013's take-back of an earlier wait's override by a header switch, the switch rows reading
@@ -39,7 +39,7 @@ REQ-NOTIFY-063's quota notice for the focus of such a session whose run ended on
 `notice-proof`'s `background-quota` drives; since finacc2's A1 of 2026-10-06 a session counts as on screen in the window
 that is starting it, before its subscription — `MainWindows.showingSession` — and REQ-NOTIFY-070's restart clears the
 session's notice as a run start does, REQ-NOTIFY-058; `auth-fallback`, `auth-fallback-dialog` and `generic` assert both
-[note](../../defects/fixed/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md));
+[note](../../archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md));
 an authentication failure asks the automatic fallback first
 (`main/auth-fallback.ts`, parts A and B) and opens the recovery dialog (`main/auth-recovery.ts`,
 `packages/ui/src/AuthRecoveryDialog.tsx`, parts C and D) only where that answers it is the dialog's — a second failure, or
@@ -72,7 +72,7 @@ turn on a first 401 and reads the restart relaunch the same revise on beta — c
 re-submitted, the gate reading "You asked for: …" (REQ-ORCH-154, the fourth repair round's `relaunchAfterAuthFailure`).
 **What the 401 recovery does not do:** a device-code or browser provider is told its method is not provided by this build,
 the sign-in flows being owed (REQ-NOTIFY-076's second branch,
-[note](../../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
+[note](../../archive/defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong
@@ -122,7 +122,7 @@ quit. Evidence under `.proof/mcp-proof/`. **Launches 6 and 7 are driven (2026-09
 both `Check status` presses, the secrets choice and every read wait for their conditions through `lib/driver.mjs`
 rather than firing at offsets, each step recorded in `<name>.steps.json`; the offsets had made two REQ-MCP-115 reds on a
 loaded Linux host that the product had not earned
-([note](../../defects/fixed/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md)).
+([note](../../archive/defects/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md)).
 
 
 **What `pnpm sessions-proof` does.** It builds Electron and launches the app ten times against a scratch store and
@@ -134,11 +134,11 @@ capped history — every file parsed by a SEPARATE node process holding no produ
 and deleted; the backup disclosure panel. Evidence under `.proof/sessions-proof/`. The planted locks name this machine through the
 identifier where the product mints it on the running platform (`machineIdFileFor`), and a "dead" pid is chosen per platform
 (`plantedDeadPid`: one the script saw exit on Linux and macOS, `4242` on Windows, where a freed pid is soon reissued); until 2026-09-28 the Windows spelling made the proof crash at `repair-all` on Linux (R-062;
-[the note](../../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)). The delete's
+[the note](../../archive/defects/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)). The delete's
 premise — every reference to `sessions` is `session_id` → `session_id` `ON DELETE CASCADE`, and `delivery_runs` alone
 carries the column as a fact — is read from the schema by `scripts/lib/session-cascade.mjs`; the count pin of sixteen it
 replaced stopped the proof before the delete on every run once v23–v24 made the cascading tables twenty (R-067;
-[the note](../../defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md)). The delete now
+[the note](../../archive/defects/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md)). The delete now
 also asserts that A's agent record (`iterations`, `agent_messages`, `agent_terminals`, `agent_fingerprints`) was there and
 leaves with it (PD-ORCH-005 clause 12); the scripted runs start no background terminal, so A's `agent_terminals` row is
 planted, as its `plan_cycles` row is.
@@ -146,7 +146,7 @@ planted, as its `plan_cycles` row is.
 **What `pnpm code-intel-proof` does.** Once it has set the runtime's home aside and wiped its previous evidence, and before it
 reads the bundle's marker, builds the app or makes any launch, it asks `bundle.mjs --check` and builds the git-ignored bundle when it is
 absent or stale for the host, under `--skip-build` too, the build's output streamed as it runs (since 2026-10-20) (since fin47, A4: it used to build only an absent one and ran a
-superseded recipe-3 bundle without a word, [note](../../defects/fixed/code-intel-proof-uses-a-stale-code-intelligence-bundle-without-checking-it.md);
+superseded recipe-3 bundle without a word, [note](../../archive/defects/code-intel-proof-uses-a-stale-code-intelligence-bundle-without-checking-it.md);
 `results.json`'s `bundle` now names the recipe, pins hash and target). It then
 runs fifteen numbered launches (`--steps` picks among them; launches 2 and 3 share one app launch, launch 5 is five, launch 6
 starts no app, and launch 7 runs only against the packaged binary; *corrected 2026-10-20: this read "launches the app seven
@@ -162,7 +162,7 @@ project read back with both files it changed, observed by the run host around th
 `agent-tools/src/tools/observe.ts`; OQ-245); and, since fin42 (N59), a refactorer's symbol rename across two TypeScript
 files through the runtime's TypeScript language server after a reference search, both files read back, the same rename with
 nothing before it — red until
-[the note](../../defects/fixed/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
+[the note](../../archive/defects/a-symbol-rename-that-is-the-servers-first-cross-file-request-renames-the-declaring-file-alone.md)
 it found was repaired (OQ-273): the pinned runtime renamed the declaring file alone; since fin43 (`PD-MCP-004`) the run host
 sends the reference search itself before every rename, writing no row, and the eleventh launch is green with both files renamed
 and no search row, `PD-MCP-004`'s acceptance gate, re-run on every pin change; since fin47 a thirteenth launch,
@@ -177,7 +177,7 @@ the global configuration's `tool_name_map`, read back with both files (REQ-MCP-0
 `.proof/code-intel-proof/`. The runtime's home, which it keeps across runs, is the product's own on the running platform
 (`join(dataDirFor(local), 'code-intelligence')`, as `main/sentinel.ts` joins it) since 2026-09-29 (R-067; the Windows
 spelling kept a directory the product never used off Windows,
-[note](../../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)). Its branch client is `scripts/lib/line-rpc-client.mjs` (2026-09-28, R-062): every pending
+[note](../../archive/defects/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)). Its branch client is `scripts/lib/line-rpc-client.mjs` (2026-09-28, R-062): every pending
 request rejects when the child exits, errors or is killed by the guard, with the exit status and standard error's tail,
 so a branch that dies fails the launch in seconds instead of hanging it (`line-rpc-client.test.ts`, 12 cases). It launches the token first and the sandbox switch after it, the
 product's order, which `lib/launch-sites.test.ts` holds for every token launch; its workspace file records
@@ -198,10 +198,10 @@ file runs to completion. Its evidence lands under `.proof/config-proof/`; the lo
 Discard scenario is seeded as a workspace already initialized, because a never-initialized one gets the
 initialization record written into the same file during the launch wherever the code-intelligence bundle is present.
 Its Runtime steps wait for their controls and are read back from the log (2026-09-28, R-062;
-[the note](../../defects/fixed/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md)).
+[the note](../../archive/defects/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md)).
 Since 2026-10-23 that scenario alone is driven (`startApp`, `clickLanded`) rather than captured: a capture press measured
 before the provider notice filled its slot met the banner instead of Discard
-([the note](../../defects/fixed/config-proofs-discard-leaves-the-save-status-unsaved.md)).
+([the note](../../archive/defects/config-proofs-discard-leaves-the-save-status-unsaved.md)).
 
 **The control channel.** `contracts/src/control.ts` (the twenty-two operations, the pause payload), store v6
 (`queued_prompts`, `sessions.message_limit`, `sessions.paused_at_count`), the writer's units, `engine/src/run/run.ts`
@@ -219,19 +219,19 @@ message typed during a run is queued and consumed once as a completed task; a st
 card and injected — since 2026-10-01 with the steer-rest launch's steer (`STEER_CLICKS` in `lib/steer-rest.mjs`: Steer
 the run waits for its control and the settled send, and the launch fails by name on a step it never pressed), where it
 had pressed at fixed appointments a late run start misses
-(`../../defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md`); a steer whose dialog opened while the composer's send was still settling reaches the root's record
+(`../../archive/defects/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md`); a steer whose dialog opened while the composer's send was still settling reaches the root's record
 with the text typed into it — since 2026-10-01 the composer takes the focus back after a submission only when nothing
 else took it meanwhile (`composerReclaimsFocus`), and main holds the `session.subscribe` reply under
 `ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS` so the launch opens the dialog inside that window every time
 (`apps/desktop/scripts/lib/steer-early.mjs`,
-`../../defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`); Pause then the composer's Continue run leave the pause row and two run starts, and a worker thread
+`../../archive/defects/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`); Pause then the composer's Continue run leave the pause row and two run starts, and a worker thread
 sampling the store while the app runs shows the pause released the lock and the continued run held it throughout
 (ADR-0005, 2026-09-29, R-067) and the paused session's summary naming no stop (REQ-ORCH-082 rule 1, OQ-118); a steer
 submitted while the entry role's step is held, then a pause, reaches the root's record at the rest, injected once, and
 the Continue's resumed root reads it (REQ-MONITOR-134, OQ-128, 2026-09-29, R-067) — since 2026-10-01 its Pause
 waits for the steer dialog to close (`apps/desktop/scripts/lib/steer-rest.mjs`, the capture grammar's `@from~ms`), the
 launch fails by name on a step it never pressed, and the store must show the steer pending when the pause was asked for
-(`../../defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`); a `message_limit`
+(`../../archive/defects/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`); a `message_limit`
 of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
 is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
 records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.proof/part-j-proof/`. *On Windows (2026-10-20, the Windows ARM64 session's C5) it went red five times of five, none on the control channel: four runs lost `pause`'s first store to an EPERM on its sibling (`../../defects/a-first-store-on-windows-is-refused-with-eperm-on-its-sibling-and-the-workspace-does-not-open.md`), and the fifth met every scenario up to the two-window launch, which names a window by a forward-slash suffix (`../../defects/part-j-proofs-two-window-launch-names-a-window-by-a-forward-slash-suffix-that-never-matches-on-windows.md`).* The queue

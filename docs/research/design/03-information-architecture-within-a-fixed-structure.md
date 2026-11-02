@@ -154,8 +154,11 @@ for the label column: UIR-010 measured two selects' left edges 51.04 px apart an
 *Panes.* The category list is a vertical navigation list (`REQ-SHELL-153`), its selection kept visible while focus is in
 the body [23].
 
-*Disabled.* Without a configuration service the diagnostics toggle is disabled, and this reading of the code found no
-sentence naming why while the form is clean; `REQ-NOTIFY-008` and [35] ask for one. Unverified in the built app.
+*Disabled.* Without a configuration service the diagnostics toggle is disabled (`disabled={!props.serviceAvailable}`) and
+the card draws its empty state, "No configuration service.", in that same case (`REQ-CONFIG-471`), so the reason stands
+beside the control as `REQ-NOTIFY-008` and [35] ask. A first reading of the prop alone (2026-11-02) took it for a
+reason-less disabled control; following the prop to its producer refuted that, which is the method's own lesson: read the
+producer, not the attribute.
 
 *Filled control.* Save, present only while dirty (`REQ-CONFIG-281`), is the one filled control (§1.7).
 

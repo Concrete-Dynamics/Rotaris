@@ -200,8 +200,8 @@ jobs:
 
       # R-091 (docs/architecture/hardening.md §3.5 row 10): a CycloneDX SBOM of the production dependency tree, Electron
       # included, written by pnpm's own `sbom` command over the installed tree (tools/sbom). It is uploaded as a workflow
-      # artifact of its own and is deliberately NOT copied into release-assets/: REQ-STARTUP-031, 036 and 152 close the set
-      # of assets a release publishes, so publishing it beside the installer, and listing it in SHA256SUMS.txt, waits on
+      # artifact of its own and is deliberately NOT copied into release-assets/: REQ-STARTUP-152 holds every asset a release
+      # publishes to REQ-STARTUP-031's names, so publishing it beside the installer, and listing it in SHA256SUMS.txt, waits on
       # OQ-487's ruling (docs/architecture/open-questions.md). tools/workflows.test.ts holds both halves.
       - name: The SBOM (CycloneDX, production dependencies)
         run: pnpm sbom:write "$env:TAG" apps/desktop/release

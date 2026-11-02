@@ -16,8 +16,8 @@
  *   `docs/architecture/dependency-alerts/2026-11-01-audit-gate.md` §3 records for the production audit. Its version is
  *   the installed one, the one `pnpm package` puts in the installer.
  *
- * Whether this file is published beside the release's artifacts is OQ-487: REQ-STARTUP-031, REQ-STARTUP-036 and
- * REQ-STARTUP-152 close the set of assets a release publishes, and this file is not in it. Until that is ruled the release
+ * Whether this file is published beside the release's artifacts is OQ-487: REQ-STARTUP-152 holds every filename a
+ * release publishes as an asset to REQ-STARTUP-031's naming scheme, and this file is not one of its names. Until that is ruled the release
  * workflow keeps it as a workflow artifact of the build job, outside the release directory and its `SHA256SUMS.txt`.
  */
 

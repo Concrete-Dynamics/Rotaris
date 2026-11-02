@@ -92,8 +92,7 @@ so that the next release can add the updater without stranding anyone.
 assets gain no SBOM yet. The `build` job writes `Rotaris-<v>-sbom.cdx.json` after `pnpm package` (`pnpm sbom:write`,
 `tools/sbom/`: CycloneDX 1.6 of the production tree, Electron added) and uploads it as the workflow artifact
 `sbom-<platform>`, outside the release directory: the manifest above does not list it, the signature does not cover it,
-and the draft does not carry it, because REQ-STARTUP-036 and REQ-STARTUP-152 close the asset set to REQ-STARTUP-031's
-names. Whether it joins the assets, listed and signed with them, is
+and the draft does not carry it, because REQ-STARTUP-152 holds every published asset to REQ-STARTUP-031's names. Whether it joins the assets, listed and signed with them, is
 [OQ-487](../open-questions/69-spikes-and-later-questions-36.md#oq-487).*
 
 *Built 2026-10-22 under [R-080](../../product/requests.md#r-080) (§4.2's first-execution note; ADR-0054).*

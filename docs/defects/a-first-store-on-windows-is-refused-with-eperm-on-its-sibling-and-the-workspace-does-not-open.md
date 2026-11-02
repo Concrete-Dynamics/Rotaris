@@ -26,6 +26,12 @@ WAL-mode SQLite file created and closed in it, `origin.txt` written, renamed at 
 in a scratch directory) was never refused, so the holder is in the application's own launch or in what the host does to a
 launch, not in the sequence alone.
 
+Seen again 2026-11-02 by the builder of hrd1's bundle `hrd1-store-open-integrity`, on Windows 11 ARM64, Node 26.13.0, at CPU
+100 % from other sessions' trees: `pnpm part-j-proof`'s `pause` launch refused with the same message and the proof stopped at
+"found 0", once on the bundle's head (`d6a95096`) and once on `origin/main` (`2bb1ea60`) in a detached tree, so the bundle did
+not cause it. The bundle's change to `openStore` (the automatic checkpoint set and read back) runs in the sibling's open too;
+the same refusal on `origin/main` without it says that is not the holder.
+
 ## Specs
 
 REQ-SESSION-043 (the store is created at a workspace's first open) and OQ-281's ruling (a first store is made whole in its

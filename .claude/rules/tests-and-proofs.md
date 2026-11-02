@@ -16,8 +16,9 @@ collected by `vitest.config.ts` — `*.test.ts` only, so a `.tsx` suffix collect
 
 - **A few suites go red only under full-suite parallelism** — those driving a real PTY or child process. Re-run the file
   alone before believing a red from `pnpm test`.
-- **Coverage is measured in CI, not by the gate, and its floor only rises** — `pnpm test:coverage` fails below the four
-  figures in `vitest.config.ts`, and a whole-suite run that measures more rewrites them, a rewrite committed with its change.
+- **Coverage is measured outside the gate, by CI once hardening bundle G2 wires it in, and its floor only rises** —
+  `pnpm test:coverage` fails below the four figures in `vitest.config.ts`, and a whole-suite run that measures more
+  rewrites them, a rewrite committed with its change.
 - **`pnpm check` is the gate**, green before a commit. Never report green from a piped command (`cmd | tail` reports
   tail's status, and that has produced a false green here): redirect to a file and read the status.
 - **A proof script is evidence, not a test of the harness.** It launches the *built* app against a scratch profile; a red

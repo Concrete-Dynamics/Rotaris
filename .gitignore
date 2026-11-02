@@ -91,5 +91,5 @@ rtk/
 # ADR-0054 P4 (first-release-plan.md §4.5): the portable launcher's Cargo build output.
 apps/desktop/launcher/target/
 
-# `pnpm test:coverage` writes its lcov report here (R-091, hardening F1); CI publishes it, git never holds it.
+# `pnpm test:coverage` writes its lcov report here (R-091, hardening F1); git never holds it.
 coverage/

@@ -18,19 +18,27 @@ these shapes out of their leak property and pin each one as still leaking):
 - **A flag after a secret assignment's separator** (layers 1 then 2): `password: --token abc123def456` redacts to
   `password: *** abc123def456` — layer 1 masks `--token` as the password's value, and layer 2 no longer sees a flag.
   Layer 1's quoted-name form does the same: `"key" -key i7UjG8xTU36Z4w1S6Ass2fR8xLM7h` leaves the value after `-key`.
+- **An assignment or a quoted name after a secret assignment's separator** (layer 1): `key= key = V7K3PCvlN7fLyjl2xQDssxbaGUALAN`
+  redacts to `key= *** = V7K3PCvlN7fLyjl2xQDssxbaGUALAN`, and `key= "key" B3ZEhj60960dio5O` leaves `B3ZEhj60960dio5O` —
+  the outer `key=` masks the inner name as its value. Measured 2026-11-03 by the same tests once the pass's repair of a
+  nested assignment
+  ([an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md](../archive/defects/an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md))
+  let them stop holding every assignment out where the text before it carries `=`, `:` or a quote: 40 of 60 seeds met it
+  within 500 runs.
 
 ## Specs
 
 REQ-TOOLS-171 (layer 2 masks the value after a secret-looking flag, layer 3 the value after `Bearer`, `Basic` or
 `token`, wherever the text comes from) and REQ-EVENTS-060 ("everything after the scheme word is masked"): in each shape a
-secret-looking flag or a scheme word stands in the text and its value survives. The sibling shape for assignments is
-[the-redaction-pass-leaves-a-secret-assignment-that-is-the-value-of-a-plain-one.md](the-redaction-pass-leaves-a-secret-assignment-that-is-the-value-of-a-plain-one.md).
+secret-looking flag, a scheme word or a secret-looking name stands in the text and its value survives. The sibling shape
+for assignments, repaired, is
+[the-redaction-pass-leaves-a-secret-assignment-that-is-the-value-of-a-plain-one.md](../archive/defects/the-redaction-pass-leaves-a-secret-assignment-that-is-the-value-of-a-plain-one.md).
 
 ## Relevant files
 
 - `packages/kernel/src/redaction.ts` — `layerFlags` (a non-secret flag consumes the next token even when it starts with
   `-`), `layerSchemes` (a scheme word consumes the next scheme word as its value), `layerAssignments` (a secret
-  assignment masks a flag name as its value).
+  assignment masks a flag name, an assignment's name or a quoted name as its value).
 - `packages/kernel/src/redaction.property.test.ts` — `heldOut` and `endsTakingAValue` keep these shapes out of the leak
   property; the test "holds out a shape only while its note stands" pins each as leaking. The repair removes both.
 - `packages/kernel/src/redaction.test.ts` — no worked example of a flag after a flag or a scheme word after another.

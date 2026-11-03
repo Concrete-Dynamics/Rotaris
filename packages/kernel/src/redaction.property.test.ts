@@ -8,16 +8,15 @@
  * Seeded: each property runs `numRuns: 500` from `SEED`, so a run is the same 500 cases every time. A failure prints
  * the counterexample with its seed and path; `fc.assert(…, { seed, path })` with the printed values replays it alone.
  *
- * Two families are held out of the leak property by named predicates (`heldOut`), because the pass leaks there today
- * and each is recorded: a secret name read as the value of the token before it (a flag after a flag, a scheme word
- * after a scheme word, a flag after an assignment's separator or a quoted name —
- * `docs/defects/the-redaction-pass-masks-a-secret-name-as-the-value-before-it-and-leaks-the-secret-after.md`), and an
- * assignment nested in a non-secret assignment's value
- * (`docs/defects/the-redaction-pass-leaves-a-secret-assignment-that-is-the-value-of-a-plain-one.md`). The repair of
- * either removes its branch there, in the same commit. A third hold-out is no defect: quotes that pair across the
- * planted shape (`quotesMayPairAcross`). The second note's shape also breaks idempotence, so the idempotence property
- * holds out a text that nests an assignment in an assignment's value (`nestsAnAssignment`), and its repair removes that
- * predicate too.
+ * One family is held out of the leak property by a named predicate (`heldOut`), because the pass leaks there today and
+ * it is recorded: a secret name read as the value of the token before it (a flag after a flag, a scheme word after a
+ * scheme word, a flag, an assignment or a quoted name after a secret assignment's separator or a quoted name —
+ * `docs/defects/the-redaction-pass-masks-a-secret-name-as-the-value-before-it-and-leaks-the-secret-after.md`). Its repair
+ * removes that branch, in the same commit. A second hold-out is no defect: quotes that pair across the planted shape
+ * (`quotesMayPairAcross`). An assignment nested in a non-secret assignment's value was held out of the leak and the
+ * idempotence properties until 2026-11-03, when the pass's repair of it (hardening D1,
+ * `docs/archive/defects/an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md`) met this file's pin and
+ * both hold-outs went (`docs/archive/defects/the-redaction-pass-leaves-a-secret-assignment-that-is-the-value-of-a-plain-one.md`).
  *
  * Beyond the committed 500 runs, the leak property ran 20,000 times at each of seeds 1 to 12 on 2026-11-03 with these
  * hold-outs, green; that sweep is how the hold-outs were found, and it is the way to look for the next one.
@@ -126,29 +125,16 @@ function quotesMayPairAcross(left: string, planted: string): boolean {
 }
 
 /**
- * The recorded leaks (this file's header): a flag or a scheme word whose secret name the token before it took as its
- * value, and an assignment that a non-secret assignment's value (bare or quoted) swallows. And one case that is no
- * defect: where a quote before the shape can pair with one inside it, the text's quotes pair differently from the planted
+ * The recorded leak (this file's header): a flag, a scheme word, an assignment or a quoted name whose secret name the
+ * token before it took as its value. And one case that is no defect: where a quote before the shape can pair with one inside it, the text's quotes pair differently from the planted
  * ones (`key="` or `"key="` before `bearer "s rest"` makes `" bearer "` the key's value), so the planted value is not
  * a value token of that text.
  */
 function heldOut(left: string, planted: Planted): boolean {
   const kind = planted.kind;
   if (quotesMayPairAcross(left, planted.text)) return true;
-  if (kind === 'flag' || kind === 'scheme') return endsTakingAValue(left);
-  if (kind === 'assignment' || kind === 'quoted-key') return /[=:"']/.test(left);
+  if (kind === 'flag' || kind === 'scheme' || kind === 'assignment' || kind === 'quoted-key') return endsTakingAValue(left);
   return false;
-}
-
-/**
- * An assignment whose value token carries a separator of its own, or is followed by one: the nested-assignment shape
- * (`docs/defects/the-redaction-pass-leaves-a-secret-assignment-that-is-the-value-of-a-plain-one.md`), on which the pass
- * is not idempotent today — `ghp_= key=…` and `ghp_= key = …` mask the inner value only on a second pass. Seeds 2 and 18
- * of the idempotence property met the first within 500 runs, and seeds 2, 6 and 17 the second once the first was held
- * out (2026-11-03).
- */
-function nestsAnAssignment(text: string): boolean {
-  return /[=:]\s*("[^"]*[=:]|'[^']*[=:]|("[^"]*"|'[^']*'|[^\s"']*)\s*[=:])/.test(text);
 }
 
 /** Whole alphanumeric runs, as REQ-TOOLS-172 splits a name. */
@@ -192,7 +178,6 @@ describe('kernel — redaction, as properties (REQ-TOOLS-171, REQ-TOOLS-172, REQ
     );
     fc.assert(
       fc.property(text, (input) => {
-        fc.pre(!nestsAnAssignment(input));
         const once = redact(input);
         expect(redact(once)).toBe(once);
       }),
@@ -210,14 +195,19 @@ describe('kernel — redaction, as properties (REQ-TOOLS-171, REQ-TOOLS-172, REQ
     );
   });
 
+  it('masks an assignment nested in a plain one in one pass, the shape the idempotence property met at seeds 2, 6, 17 and 18', () => {
+    const once = redact('ghp_= key=f9Z3MQ06w0ZfbLzsnUuZ4DwNtYL94b');
+    expect(once).not.toContain('f9Z3MQ06w0ZfbLzsnUuZ4DwNtYL94b');
+    expect(redact(once)).toBe(once);
+  });
+
   it('holds out a shape only while its note stands: each still leaks, so its repair is noticed here', () => {
     // The first note's three shapes. When one is masked, the note is repaired: its branch of `heldOut` goes, and this line.
     expect(redact('curl -s --api-key abc123def456 https://x')).toContain('abc123def456');
     expect(redact('say token Basic dXNlcjpwYXNz')).toContain('dXNlcjpwYXNz');
     expect(redact('password: --token abc123def456')).toContain('abc123def456');
     expect(redact('"key" -key i7UjG8xTU36Z4w1S6Ass2fR8xLM7h')).toContain('i7UjG8xTU36Z4w1S6Ass2fR8xLM7h');
-    // The second note's shape breaks idempotence. When a second pass changes nothing here, `nestsAnAssignment` goes.
-    const nested = redact('ghp_= key=f9Z3MQ06w0ZfbLzsnUuZ4DwNtYL94b');
-    expect(redact(nested)).not.toBe(nested);
+    expect(redact('key= key = V7K3PCvlN7fLyjl2xQDssxbaGUALAN')).toContain('V7K3PCvlN7fLyjl2xQDssxbaGUALAN');
+    expect(redact('key= "key" B3ZEhj60960dio5O')).toContain('B3ZEhj60960dio5O');
   });
 });

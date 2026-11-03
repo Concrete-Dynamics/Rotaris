@@ -32,3 +32,20 @@ REQ-TOOLS-171 (one value token after a secret-looking key is masked, wherever th
   outer one's value and `isSecretLookingName(key)` is false for the outer key, so the match is kept whole.
 - `packages/kernel/src/redaction.test.ts` — has no case of an assignment nested as another's value.
 - `apps/desktop/src/main/command-dispatch.ts` — one of the callers that hands the pass an error message.
+
+## Outcome — repaired 2026-11-01 (hardening plan hrd1, bundle D1), closed 2026-11-03 (hrd2, bundle F2)
+
+The pass's first layer now consumes a value only when it masks it, so a non-secret assignment's value is read for a
+secret assignment of its own: D1's repair (`layerPlainAssignments`, `valueEnd` in `packages/kernel/src/redaction.ts`),
+recorded under its own note,
+[an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md](an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md),
+which found the same defect from the application log; `redaction.test.ts` pins `error: token=` and a URL's key query.
+This note stayed open beside it until F2's landing met D1's repair at its rebase: the pin of
+`packages/kernel/src/redaction.property.test.ts` ("`ghp_= key=…` still changes on a second pass") turned red, as it was
+written to. Every shape above now masks in one pass and a second pass changes nothing: `Error: token=***`,
+`msg: "use password=*** now"`, `*** key=*** ` and `*** key = *** ` (probed on the rebased head, 2026-11-03). The property
+file dropped `nestsAnAssignment` and the assignment branch of `heldOut` that blamed this note, and holds the shape by a
+worked case ("masks an assignment nested in a plain one in one pass"); the leak and idempotence properties ran green at
+500 runs over 60 seeds without them. What the broad branch had also been hiding, a secret name taken as the value of a
+secret assignment before it (`key= key = …`), is the other family, recorded on
+[the-redaction-pass-masks-a-secret-name-as-the-value-before-it-and-leaks-the-secret-after.md](../../defects/the-redaction-pass-masks-a-secret-name-as-the-value-before-it-and-leaks-the-secret-after.md).

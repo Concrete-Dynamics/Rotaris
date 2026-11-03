@@ -1204,6 +1204,7 @@
     "defects/the-recording-proxy-does-not-pass-a-client-abort-upstream.md": "92e93f026b67e8dbf2c920749d6b6105fe0f693a76c47596dee20f308ed7ef70",
     "defects/the-recording-proxy-writes-nothing-for-a-call-in-flight-at-close.md": "94d27b0d42cc07a513a7491fdcfbc4773e1a225a19ca8cce8813274f17300f36",
     "defects/the-records-prose-names-defect-notes-at-paths-they-no-longer-have.md": "051ce88021c6333081ed76a73fc3242acce39e53f0b6bd7851350118c052c1b0",
+    "defects/the-redaction-pass-leaves-a-secret-assignment-that-is-the-value-of-a-plain-one.md": "00212d58a9278a5e4d7042c0c875a1ccb27c037c5d2490a959adb4a658dc700f",
     "defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md": "5d5e777c7c69c6e2ac012424cccafe9c9ecd37ca3cb7118202815b9fc4b16ccc",
     "defects/the-repository-card-and-the-git-view-count-uncommitted-paths-differently.md": "14dcf6a3ce0a8bf06258bc64430d39c5bdeec5cd516e7582e2b9a932e314a1c4",
     "defects/the-repository-git-view-and-setup-step-lines-are-each-logged-twice.md": "9095e29d0dc891107732d7a2ed9ae39a196517bcaec31438335ee5a18a0a9f75",

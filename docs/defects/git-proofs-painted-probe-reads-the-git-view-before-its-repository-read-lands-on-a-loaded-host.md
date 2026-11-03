@@ -7,7 +7,7 @@ and failed on what the view still showed: `Error: the header branch reads "readi
 (`00c62861`), the probe's `git-sync` reading "Refreshing repository state…". The launch log has the workspace service's
 read land late: `repository …: git=true repo=true branch=main … in 3934 ms`. The same proof at the bundle's fork point
 (`origin/main` at `9b0b5858`, built in a throwaway tree) failed the same way under the same load, once on the hello bound
-([the hello-bound note](a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md)) and once
+([the hello-bound note](../archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md)) and once
 on `Error: the sync label reads "Refreshing repository state…"`, so the bundle did not cause it.
 
 The view is right to show "reading…" until its read lands; the proof decides from a single reading taken at a fixed

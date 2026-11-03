@@ -33,4 +33,4 @@ one now names its part.
 | [09](0002-process-topology/09-first-execution-2026-09-03-consequence-7s.md) | First execution — 2026-09-03, consequence 7's narrow request back to main |
 | [10](0002-process-topology/10-first-execution-2026-09-05-the-quit-path-during.md) | First execution — 2026-09-05, the quit path during a run |
 | [11](0002-process-topology/11-first-execution-2026-10-20-req-tools-111-on.md) | First execution — 2026-10-20, REQ-TOOLS-111 on Windows (consequence 5) |
-| [12](0002-process-topology/12-first-execution-2026-11-03-a-child-ends-on-its-own.md) | First execution — 2026-11-03, a utility process ends on its own (R-091) |
+| [12](0002-process-topology/12-first-execution-2026-11-03-a-child-ends-on-its-own.md) | First execution — 2026-11-03, a utility process ends on its own (R-091); 2026-11-04, the bounded ready and the loss notice (OQ-462) |

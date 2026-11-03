@@ -8,7 +8,7 @@ status 0`, `quit: exiting with status 0`), the endpoint file is removed, and the
 ("still running after 30 s"; in launch 13 "still running after 60 s", while the store showed the run at rest with
 `application_shutdown`). Once the harness's SIGTERM and SIGKILL were both not reaped within 15 s. The next launch of the same
 run then failed its run host's hello bound (`NoReplyWithinBound: no reply to hello within 5000 ms`), which is
-[the hello-bound note](a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md)'s shape.
+[the hello-bound note](../archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md)'s shape.
 
 **Not caused by R-091's bundle A1.** Reproduced on a build of `origin/main` at `6a7f5088` driven by `main`'s own
 `driver-proof.mjs` (first launch's quit red, second launch's hello red), and on the bundle's build with `app.enableSandbox()`

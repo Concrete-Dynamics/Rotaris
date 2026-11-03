@@ -608,6 +608,7 @@
     "defects/a-hook-review-notice-for-another-workspace-opens-nothing.md": "66843a54629fcc055ddf40aa281a0cde8f7f98f279bee912547a9cebe1832801",
     "defects/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md": "f52aaacce2eee7faf5a86e9b7e52580d0965a461a1f43cb06a406b26ce10729c",
     "defects/a-kill-of-a-background-session-that-has-already-ended-says-it-was-killed.md": "7c8685a719dd3fe1c9eefc13667c14744423db681e9512e1af4b9bb3816dfc88",
+    "defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md": "4644e89430e4c6d80f2e5dbd0bb87b1d5f6ab4110dd14ff839457138116fa3b8",
     "defects/a-launch-whose-two-hand-overs-go-unanswered-ends-with-no-window.md": "400651b9b997e97a83431578e663144e0c9cbe11f283f7dcf7c677b0de740e37",
     "defects/a-level-1-edit-writes-new-strings-lf-lines-into-a-crlf-file.md": "783e1112f6a82db002dac059133d48fce6fed64e751b4e83514fda66d5fd1c76",
     "defects/a-literal-plural-marker-is-rendered-in-sign-in-notices.md": "1a6559fc0050acb413a368297711f0fc8951e7c88461cdc49d3453bfb6d201e6",

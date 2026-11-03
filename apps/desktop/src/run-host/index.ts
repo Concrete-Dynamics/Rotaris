@@ -39,14 +39,15 @@ superviseUtilityProcess({
   logError: (message) => { process.parentPort.postMessage({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'log', level: 'error', message } }); },
   timers: nodeClocks().timers,
 });
-// Verification only, compiled out of a packaged build: a fault the last-resort handler is proved against (`exit-trace-proof`).
-if (__ROTARIS_SEAMS__) injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'run-host', nodeClocks().timers);
+// Verification only, compiled out of a packaged build: a fault the last-resort handler is proved against (`exit-trace-proof`),
+// or silence, which misses main's ready bound (OQ-462 (2)).
+const fault = __ROTARIS_SEAMS__ ? injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'run-host', nodeClocks().timers) : { silent: false };
 
 // Everything this process holds, built now rather than at import (`host.ts`), and the one request path over it.
 const h = createRunHost();
 const { port, send, reply, pendingAsks } = h;
 
-port.on('message', (e: { data: unknown }) => {
+if (!fault.silent) port.on('message', (e: { data: unknown }) => {
   const answer = ServiceAnswerEnvelopeSchema.safeParse(e.data);
   if (answer.success) {
     const p = pendingAsks.get(answer.data.ask);

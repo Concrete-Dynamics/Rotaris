@@ -22,6 +22,7 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
   private readonly pending = new Map<number, { resolve: (r: ProcessReply) => void; reject: (e: Error) => void; cancel: () => void }>();
   private readonly eventListeners = new Set<(e: ProcessEvent) => void>();
   private askHandler: ((ask: ServiceAsk) => Promise<ProcessReply>) | null = null;
+  private ended: Extract<ProcessReply, { kind: 'refused' }> | null = null;
   private readonly stop: () => void;
 
   constructor(private readonly port: MessagePortLike, private readonly timers: Timers) {
@@ -67,7 +68,25 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
     this.askHandler = fn;
   }
 
+  /**
+   * OQ-462 (3), ruled 2026-11-01: the child behind this link is gone (its `exit`, or main ending it for a missed ready
+   * bound), so no answer can come. Every request still waiting is answered `refusal` at once, and every later one is
+   * answered `refusal` without being posted or waiting out its bound. Idempotent: the first refusal stands.
+   */
+  end(refusal: Extract<ProcessReply, { kind: 'refused' }>): void {
+    if (this.ended !== null) return;
+    this.ended = refusal;
+    for (const p of this.pending.values()) { p.cancel(); p.resolve(refusal); }
+    this.pending.clear();
+  }
+
+  /** The refusal every request is answered with once `end` has been called; null while the child is there. */
+  get endedWith(): Extract<ProcessReply, { kind: 'refused' }> | null {
+    return this.ended;
+  }
+
   request(request: Req, boundMs: Millis): Promise<ProcessReply> {
+    if (this.ended !== null) return Promise.resolve(this.ended);
     const id = this.nextId++;
     const env: ProcessRequestEnvelope = { v: CONTRACT_SCHEMA_VERSION, id, request };
     return new Promise<ProcessReply>((resolve, reject) => {

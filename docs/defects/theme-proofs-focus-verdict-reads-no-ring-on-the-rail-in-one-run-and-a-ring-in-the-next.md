@@ -6,7 +6,7 @@ twelve Electron processes of four other trees' proofs open on the same desktop).
 same build, back to back, failed different cases:
 
 - first run (21:46 UTC): `nocturne @ 1.75: FAIL focus`, and `nocturne @ 1.5` met the run host's hello bound
-  ([the hello-bound note](a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md));
+  ([the hello-bound note](../archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md));
   `high-contrast` passed at every scale;
 - second run (21:57 UTC): `high-contrast @ 1.75` and `@ 2: FAIL focus`, and `nocturne @ 1.75` failed with no driver
   endpoint within 90 s after the hello-bound rejection; every `rotaris-dim` case, `nocturne` at 1, 1.25, 1.5 and 2, and

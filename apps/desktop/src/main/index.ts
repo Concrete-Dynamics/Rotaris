@@ -67,6 +67,7 @@ import { emptyArtifactNotice, passFailureDetail, passFailureTitle } from './impr
 import { answerUnderHeldRefusal, cutRestoreNotice, holdOpenRefusal, type HeldOpenRefusal } from './store-notice.js'; // REQ-SESSION-202, REQ-SESSION-197, OQ-266, OQ-281
 import { handOffOpenedWorkspace } from './workspace-handoff.js'; // W-18, ADR-0002 consequence 11, OQ-386
 import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
+import { boundedReady, ChildLossReporter, runHostGoneRefusal, RUN_HOST_READY_BOUND_MS, workspaceServiceGoneRefusal, WORKSPACE_SERVICE_READY_BOUND_MS } from './child-supervision.js'; // OQ-462
 import { childExitReading, ChildrenEndedByMain, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
@@ -109,6 +110,11 @@ const quit = new QuitState();
 const RUN_HOST_SERVICE_NAME = 'rotaris-run-host';
 /** PD-MONITOR-002 (live-run finding L13): the children main ends itself, whose `killed` report is not a loss (`exit.ts`). */
 const endedByMain = new ChildrenEndedByMain();
+/**
+ * OQ-462 (ruled 2026-11-01): which child's end is a loss the person is told of, and the notices held until the notice store
+ * exists (`child-supervision.ts`). Not main's own end of a child, and nothing once the application is ending.
+ */
+const childLoss = new ChildLossReporter({ endedByMain: (name) => endedByMain.ended(name), quitting: () => quit.ending(), log: (m, level) => { log(m, level); } });
 /**
  * Main's end waits for the run host's (`endBeforeMain`, `exit.ts`): a run host that outlives main keeps every session it
  * held refused to the next launch until its pid stops answering. Nothing to wait for until the run host is forked.
@@ -367,7 +373,17 @@ async function main(): Promise<void> {
   // reported 1, 3, 6, 9, 11 and 15). Any other status is the process lost, and an `error`; 70 is the run host's own
   // last-resort handler, whose stack is its line before (R-091, `childExitReading`). A run host still running when
   // its `shutdown` bound elapses at quit is said on the quit path (`window-all-closed`, below).
-  runHostChild.on('exit', (code) => { const r = childExitReading(code); log(`run host exited (${code}), ${r.reading}; NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`, r.level); });
+  // OQ-462 (ruled 2026-11-01): a run host main did not end, while the application is not quitting, is raised as one error
+  // notice ("did not start" for a missed `hello`, else "stopped"), and every request to it from then on is refused at once
+  // (`child-supervision.ts`). It is never forked again (ADR-0002 consequence 1).
+  let runHostPid: number | undefined;
+  runHostChild.once('spawn', () => { runHostPid = runHostChild.pid; });
+  runHostChild.on('exit', (code) => {
+    const r = childExitReading(code);
+    log(`run host exited (${code}), ${r.reading}; NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`, r.level);
+    const how = childLoss.exited(RUN_HOST_SERVICE_NAME, { process: 'run-host' }, { code, pid: runHostPid });
+    runHost.end(runHostGoneRefusal(how ?? 'stopped'));
+  });
   // PD-MONITOR-002: the run host's level, under the same threshold as main's own — its MCP children's stderr is `debug`.
   // Registered at the fork (R-091), so a line it writes before the handshake — its last-resort handler's among them — is kept.
   runHost.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'run host', e.message); });
@@ -448,8 +464,22 @@ async function main(): Promise<void> {
       svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers), exit: watchChildExit(child) };
       services.set(key, svc);
       // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown`, or Electron tearing the service down at quit (see the
-      // run host's exit above); any other status is the service lost, and an `error`.
-      child.on('exit', (code) => { const r = childExitReading(code); log(`workspace service for ${key} exited (${code}), ${r.reading}`, r.level); services.delete(key); cancelImprovementWorkspace(key); });
+      // run host's exit above); any other status is the service lost, and an `error`. OQ-462 (1): a service main did not
+      // end, while the application is not quitting, is raised as one error notice naming its workspace — unless it was
+      // ended for a missed `hello`, which its pending open reports instead (2). It is forked again at the next open (4).
+      const serviceName = `rotaris-workspace:${key}`;
+      const own = svc;
+      let servicePid: number | undefined;
+      child.once('spawn', () => { servicePid = child.pid; });
+      child.on('exit', (code) => {
+        const r = childExitReading(code);
+        log(`workspace service for ${key} exited (${code}), ${r.reading}`, r.level);
+        own.link.end(workspaceServiceGoneRefusal(key));
+        childLoss.exited(serviceName, { process: 'workspace-service', workspace: key }, { code, pid: servicePid }, !childLoss.didNotStart(serviceName));
+        // The entry is this child's only while no later open has forked another for the same workspace.
+        if (services.get(key) === own) services.delete(key);
+        cancelImprovementWorkspace(key);
+      });
       // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads),
       // at the level the service gave them and under the same threshold as main's own (PD-MONITOR-002).
       svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
@@ -469,6 +499,19 @@ async function main(): Promise<void> {
           default: return Promise.resolve({ kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from a workspace service` } as ProcessReply);
         }
       });
+      // OQ-462 (2): the service's first answer is bounded as the run host's is; one that misses it is ended through
+      // `endBeforeMain`, and this open is refused on its own surface (REQ-SHELL-112's transient), with no notice besides.
+      const ready = await boundedReady(() => own.link.request({ kind: 'hello' }, WORKSPACE_SERVICE_READY_BOUND_MS), async (cause) => {
+        childLoss.missedReady(serviceName, WORKSPACE_SERVICE_READY_BOUND_MS);
+        log(`workspace service for ${key} did not answer its hello within ${WORKSPACE_SERVICE_READY_BOUND_MS} ms (${cause}); main ends it and refuses the open (OQ-462)`, 'error');
+        if (services.get(key) === own) services.delete(key);
+        own.link.end(workspaceServiceGoneRefusal(key));
+        await endBeforeMain(child, own.exit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, () => { log(`the workspace service for ${key} (pid ${servicePid ?? '?'}) was still running ${RUN_HOST_END_BOUND_MS} ms after main ended it`, 'error'); });
+      });
+      if (ready === null) {
+        notices.acknowledge('fail', 'The project could not be opened', `Its workspace service did not start within ${WORKSPACE_SERVICE_READY_BOUND_MS / 1000} s. Open the project again to retry.`);
+        return undefined;
+      }
     }
     const opened = await svc.link.request({ kind: 'workspace.open', workspaceRoot: key }, millis(10_000));
     if (opened.kind !== 'workspace.opened') {
@@ -519,7 +562,9 @@ async function main(): Promise<void> {
         const configRead = svc.link.request({ kind: 'config.read', workspaceRoot: key }, millis(10_000))
           .then((r) => (r.kind === 'config.snapshot' ? r.snapshot : null))
           .catch((cause: unknown) => { log(`config: the read at the open of ${key} failed (${String(cause)})`); return null; });
-        const hooksSummary = runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).catch(() => null);
+        // OQ-462 (3): a run host that is gone refuses at once; a refusal is no summary read, so it raises nothing more here
+        // — no "no model provider" notice in the one slot over the loss notice (REQ-NOTIFY-024).
+        const hooksSummary = runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => (r.kind === 'refused' ? null : r)).catch(() => null);
         void Promise.all([configRead, hooksSummary]).then(([snapshot, r]) => {
           // OQ-293: named for its project, REQ-HOOKS-101's sentence in the message row, built as the run's own is (`hooks-review-notice.ts`);
           // `key` is the canonical root the windows hold. Once per workspace and hook set, by the store's key (REQ-NOTIFY-224).
@@ -538,10 +583,20 @@ async function main(): Promise<void> {
   };
 
   // PD-PROVIDER-001: the handshake hands the run host the shared-quota caps the provider catalogue declares.
-  const rhHello = await runHost.request({ kind: 'hello', sharedQuotaCaps: sharedQuotaCaps() }, millis(5_000));
+  // OQ-462 (2): bounded by RUN_HOST_READY_BOUND_MS. A run host that misses it is ended through `endBeforeMain`, every request
+  // to it is refused at once from here on, and the launch goes on to its window, where the "did not start" notice stands
+  // (raised on its exit, held until the notice store below exists). Until 2026-11-03 the miss rejected out of `main()`
+  // and ended the launch with no window
+  // (`docs/archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md`).
+  const rhHello = await boundedReady(() => runHost.request({ kind: 'hello', sharedQuotaCaps: sharedQuotaCaps() }, RUN_HOST_READY_BOUND_MS), async (cause) => {
+    childLoss.missedReady(RUN_HOST_SERVICE_NAME, RUN_HOST_READY_BOUND_MS);
+    log(`run host did not answer its hello within ${RUN_HOST_READY_BOUND_MS} ms (${cause}); main ends it, and no run can start until the application is restarted (OQ-462)`, 'error');
+    runHost.end(runHostGoneRefusal('did-not-start'));
+    await endBeforeMain(runHostChild, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
+  });
   // Main's own line about the handshake: named `run host hello:` so it cannot be read as a line the run host forwarded,
   // which the log writes as `run host: …` (PD-MONITOR-002's source column).
-  log(`run host hello: ${JSON.stringify(rhHello)}`);
+  if (rhHello !== null) log(`run host hello: ${JSON.stringify(rhHello)}`);
 
   const relay = new UpdateRelay();
   // Verification only: the capture may wait for the first terminal result (ROTARIS_CAPTURE_WAIT=result).
@@ -572,6 +627,8 @@ async function main(): Promise<void> {
     log,
     focusedSession: () => activeWindow()?.followedSessionId ?? null,
   });
+  // OQ-462 (1): a child's loss is told through this store; one raised before it existed (a run host that missed its hello) now.
+  childLoss.attach((notice) => { void notices.report(notice); });
   /**
    * THE UPDATER (first-release-plan.md §4.6, ADR-0054; ruled into the first release by O-10) — `main/updater/`.
    * Classified once from the artifact the launch started from (REQ-STARTUP-106); its check runs from `MainWindows`'
@@ -2094,6 +2151,8 @@ async function main(): Promise<void> {
   let shutdownRun: Promise<void> | null = null;
   const orderlyShutdown = (): Promise<void> => {
     if (shutdownRun !== null) return shutdownRun;
+    // OQ-462 (1): from here a child's end is the application's, not a loss to tell the person of.
+    quit.shuttingDown();
     improvementCoordinator.shutdown();
     shutdownRun = (async () => {
       // REQ-STARTUP-046 / REQ-SHELL-121: an update check, download or install still in flight is waited for at most

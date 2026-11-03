@@ -92,6 +92,24 @@ describe('shell — the process link (ADR-0002 consequence 11)', () => {
     await expect(p).rejects.toThrow(/within 2000 ms/);
     link.close();
   });
+  it('OQ-462 (3): once the child is gone, a waiting request and every later one are refused at once, without the bound', async () => {
+    const clock = new FakeClock();
+    const { a, b } = pair();
+    const posted: unknown[] = [];
+    b.onMessage((m) => { posted.push(m); });
+    const link = new ProcessLink(a, clock);
+    const waiting = link.request({ kind: 'ping' }, millis(30_000));
+    expect(link.endedWith).toBeNull();
+    const refusal = { kind: 'refused', code: 'runHost.gone', headline: 'The run host has stopped' } as const;
+    link.end(refusal);
+    await expect(waiting).resolves.toEqual(refusal);
+    await expect(link.request({ kind: 'ping' }, millis(30_000))).resolves.toEqual(refusal);
+    expect(posted).toHaveLength(1);
+    link.end({ kind: 'refused', code: 'other', headline: 'second' });
+    expect(link.endedWith).toEqual(refusal);
+    expect(clock.pendingCount()).toBe(0);
+    link.close();
+  });
   it('a throwing event listener does not break dispatch to the rest', async () => {
     const clock = new FakeClock();
     const { a, b } = pair();

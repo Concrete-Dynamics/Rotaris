@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-04**
 
+**A child that does not start, or stops: the bounded ready and the loss notice (R-091 bundle B1, hardening §3.2 rows 2 and 3; OQ-462, ADR-0002 consequence 1, REQ-NOTIFY-023, REQ-SESSION-066; 2026-11-04).** `06-sequences/01-1-launch-to-a-painted-main-window.md`: the launch diagram gains the run host's `hello` bounded at 5 s (`RUN_HOST_READY_BOUND_MS`) with its miss — ended through `endBeforeMain`, every later request refused at once, "The run host did not start" on its exit — and, for a service this open forks, its own bounded `hello` and the open's transient refusal; a paragraph after the diagram states OQ-462's notice, the refusal of every request to a run host that is gone (`ProcessLink.end`) and `QuitState.ending`, and points at OQ-473. Consulted `02-process-view` (the "How a utility process ends" paragraph stands; main still forks and shuts down the two child kinds), `03-runtime-view` §6 (unchanged: a lost run host's sessions settle through the crash path as written) and `05-state-ownership` (no fact moves).
+
 **The parent watch is not yet the orphaned run host's repair (R-091 bundle B1, hardening §3.2 row 1; 2026-11-04).** `02-process-view/01-what-each-process-owns.md`'s "How a utility process ends" paragraph and `03-runtime-view/11-6-end.md`'s "An end main does not drive" now say that 2 of 4 `exit-trace-proof` runs read the run host still running 10 s after main's kill, during its code-intelligence setup step, and point at the note, which is open again.
 
 **The driver's `commandThrowing` (hardening F3, R-091; ADR-0019; 2026-11-04, `../hardening.md` §3.5 row 7).** `02-process-view/01-what-each-process-owns.md` names the driver seam's new op: main's own `dispatchCommand` over a handler table in which every handler throws (`everyHandlerThrows`, `main/driver.ts`), the one way the built app reaches `command.failed`, which `driver-proof` step 9e measures beside a malformed and an oversized command sent through the page's own channel. `runCommand` is that dispatch over the product's own table (`dispatchOver(handlers)` in `main/index.ts`); no channel, message, process or ownership changed, and a packaged build compiles the op out with the rest of the driver.
@@ -124,35 +126,6 @@ No package, edge, process, message, channel or ownership changed.
 
 **The queue's rest and end repaired (REQ-CHAT-035/037/038/040, R-089; 2026-10-30).** `03-runtime-view.md` §5: a resting session's queued prompts stay editable (`editQueuedAtRest`), `createQueuedPrompt` is refused once the run stops stepping, and a completed task moves its prompt to COMPLETED.
 
-Last reconciled with the code: **2026-10-29**
-
-**The requirements adoption assistant (domain 22, PD-TRACE-001, R-088; 2026-10-29).** `01-component-view.md`'s
-responsibilities table gains the assistant's row (`workspace/src/adoption/`, `engine/src/adoption/`,
-`contracts/src/adoption.ts`; no new package, no new edge). `02-process-view.md`'s third message part gains the two
-`requirements.*` members, the service's `adoption.interpret` ask, the run host's request of that name and its
-`adoption.interpreted` reply. `05-state-ownership.md` gains the adoption record's row: a file in the workspace scope
-directory the service alone writes, on the user's press; the layout file is written only by the user's choice and never
-over an existing one. No channel or store table changed.
-
-(Add the composer's microphone: dictation inserted as prompt text)
-
-**The ancestor `CLAUDE.md` removed, and the eager-import crutch dropped (2026-10-27).** The entry below left a host-side
-condition: a `CLAUDE.md` above the checkout (`/home/glados/CLAUDE.md`) shadowed `AGENTS.md` from Claude Code. That file
-has been moved aside (`~/.CLAUDE.md.removed-20261027`), so no `CLAUDE.md` stands in or above a checkout and Claude Code's
-own discovery reaches `AGENTS.md` again — measured in this branch's checkout, Claude Code 2.1.310, every tool disabled,
-3 of 3 sessions holding the repository `AGENTS.md`. The `.claude/rules/repository-rules.md` eager import (`bd46f85a`)
-that worked around the condition was dropped with it: a `paths:`-less rule file is a second, silent route to the rules,
-and the branch carries one rules file alone. `tools/agent-config.test.ts` now fails any `.claude/rules/` file without
-`paths:` frontmatter instead of pinning that import; `AGENTS.md` and
-`docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md` state the closure. No
-package, edge, process, message, channel or ownership changed.
-
-**The repository's `CLAUDE.md` deleted (the owner's option (a); 2026-10-27).** The import `@AGENTS.md` the entry below
-left is gone and `AGENTS.md` is the rules alone; a Claude session under an ancestor `CLAUDE.md` loads none of them, an
-accepted gap recorded in `docs/defects/claude-code-sessions-under-an-ancestor-claude-md-load-no-repository-rules.md`
-and closed the same day by removing that ancestor file (the entry above).
-No package, edge, process, message, channel or ownership changed.
-
 ## Older entries
 
 Until 2026-10-26 every entry stood in this one file, 3,697 lines by then. The entries before 2026-10-16 were moved
@@ -163,7 +136,7 @@ with the next number, and its row goes at the top of this table.
 
 | Part | "Last reconciled" dates it carries | Its newest entry |
 |---|---|---|
-| [18](reconciliation-log/18.md) | — | The agent configuration consolidated into `AGENTS.md` (2026-10-26). |
+| [18](reconciliation-log/18.md) | 2026-10-29 | The requirements adoption assistant (domain 22, PD-TRACE-001, R-088; 2026-10-29). |
 | [17](reconciliation-log/17.md) | — | The notices generator's reviewed exceptions resolved (O-3, O-11, OQ-74, OQ-75; 2026-10-23). |
 | [16](reconciliation-log/16.md) | — | The release feed names `Concrete-Dynamics/Rotaris` (O-5 re-ruled by R-078, REQ-STARTUP-105; 2026-10-21). |
 | [15](reconciliation-log/15.md) | — | A retrospective's refusals as built under PD-LIBRARY-002 revision 6 (OQ-363; 2026-10-20). |

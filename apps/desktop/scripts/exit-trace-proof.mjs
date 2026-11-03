@@ -7,7 +7,7 @@
  * `render-process-gone` for a renderer lost, `child-process-gone` for a utility child lost, and `process.on('exit')` last
  * (`docs/archive/defects/process-exit-left-no-diagnosable-trace.md`). The orderly half was measured when it landed; the crash
  * handlers were "argued, not measured", and no proof or live launch killed a process until this one
- * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Nine driven launches:
+ * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Eleven driven launches:
  *
  *   1. orderly — launched and quit through the driver: the log carries `quit: exiting with status 0` and
  *                `main process exiting with status 0`, and NO `error` line for a renderer or a child gone. The control for
@@ -15,7 +15,9 @@
  *   2. crash   — the run host, whose pid main logs in its `hello` line, is ended with SIGKILL from outside: main writes
  *                `run host exited (9)` and `CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 9)`, both at
  *                `error`, and not "main ended it" (`ChildrenEndedByMain`, `exit.ts`: only a kill main sent itself is
- *                `info`). Main still answers. Then the main window's renderer is crashed with SIGSEGV: main writes
+ *                `info`). Main still answers, and (OQ-462, ruled 2026-11-01) the person is told: ONE error notice "The run
+ *                host stopped" with a dismiss and no action, and a submit after it is refused at once with the draft kept.
+ *                Then the main window's renderer is crashed with SIGSEGV: main writes
  *                `RENDERER GONE (<reason>, exit <n>) for <its URL>` at `error`. The application's quit (`app.quit()`,
  *                a quit from outside any window) is then asked, and ends the process: since OQ-298's ruling it asks no
  *                close guard at all (`quitGuardsOutsideAnyWindow`, `exit.ts`), the window closes, and the orderly shutdown
@@ -45,6 +47,10 @@
  *                its last-resort handler's; the application still answers and quits with 0.
  *   7. main-killed — main killed from outside: the run host and the workspace service, which probe main's pid every 250 ms,
  *                are gone within 2,000 ms (`RUN_HOST_END_BOUND_MS`), since Electron's parent port emits no `close`.
+ *   8. not-ready — OQ-462 (2): a run host, then a workspace service, that never answers its `hello` (the seam's `silent`): the
+ *                window still paints, main ends the child at the 5 s bound with no unhandled rejection, the run host's miss
+ *                raises "The run host did not start" and refuses every later request at once, the service's refuses its
+ *                open with the transient "The project could not be opened" and no notice, and the application quits 0.
  *
  * What it cannot fire: `unhandledRejection` and `uncaughtException` in main. Neither can be raised in main from outside the
  * process, and adding a seam that throws inside main to prove a one-line log call is not justified (the repaired note's
@@ -141,6 +147,12 @@ const logOf = (started) => readFileSync(started.logFile, 'utf8');
 /** Main's own lines, as `<level> <message>`: the forwarded children's lines carry their own prefix. */
 const mainLines = (log) => log.split('\n').flatMap((line) => { const m = /^\[main [^\]]+\] (\w+)\s+(.*)$/.exec(line); return m ? [{ level: m[1], message: m[2] }] : []; });
 const goneAtError = (log) => mainLines(log).filter((l) => l.level === 'error' && /GONE \(/.test(l.message));
+/** The persistent notice on screen (REQ-NOTIFY-023): its title, detail, severity, and whether it carries an action. */
+const READ_NOTICE = `(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; return { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, message: n.querySelector('[data-testid="notice-message"]')?.textContent ?? null, detail: n.querySelector('[data-testid="notice-detail"]')?.textContent ?? null, severity: n.dataset.severity ?? null, action: n.querySelector('.notice__action') !== null, dismiss: n.querySelector('.notice__dismiss') !== null }; })()`;
+/** The composer's draft and the error line under it. */
+const READ_COMPOSER = `(() => { const t = document.querySelector('textarea.composer__input'); if (!t) return null; const e = t.closest('.composer')?.querySelector('.composer__error') ?? document.querySelector('.composer__error'); return { text: t.value, error: e ? e.textContent : null }; })()`;
+/** The transient acknowledgements on screen (REQ-SHELL-112). */
+const READ_ACKS = `[...document.querySelectorAll('[data-testid="acknowledgement-title"]')].map((e) => e.textContent)`;
 
 const results = {};
 // ── 1. orderly: the control ─────────────────────────────────────────────────────────────────────────────
@@ -170,6 +182,25 @@ const results = {};
   check('the run host killed from outside: main writes its exit status at error', exited?.level === 'error' && exited.message.startsWith(`run host exited (${KILL_EXIT})`), exited ? `${exited.level} ${exited.message}` : 'no line');
   check('…and Electron\'s child-process-gone at error, as a loss main did not cause', gone?.level === 'error' && gone.message === `CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit ${KILL_EXIT})`, gone ? `${gone.level} ${gone.message}` : 'no line');
   check('main still answers after its run host is gone', (await started.driver.eval('1 + 1').catch((e) => String(e))) === 2);
+  // OQ-462 (1), ruled 2026-11-01: ONE error notice for the loss, naming the process and saying it stopped, with no action.
+  const lostNotice = await until(() => started.driver.eval(READ_NOTICE).catch(() => null), (n) => n?.title === 'The run host stopped', { timeoutMs: 15_000, what: 'the run host\'s loss notice' }).catch(() => null);
+  check('OQ-462 (1): the person is told — one error notice "The run host stopped", a dismiss and no action, the status and pid in its detail', lostNotice?.severity === 'error' && lostNotice.action === false && lostNotice.dismiss === true && new RegExp(`pid \\d+ exited with status ${KILL_EXIT}`).test(lostNotice.detail ?? ''), JSON.stringify(lostNotice));
+  // OQ-462 (3): a submit is refused at once — no ProcessLink bound waited out — and the composer keeps its draft.
+  await started.driver.click('.nav-item', { text: 'Workspace' });
+  await started.driver.click('textarea.composer__input');
+  const submittedAt = Date.now();
+  await started.driver.type('kept after the run host is gone', { enter: true });
+  const refused = await until(() => started.driver.eval(READ_COMPOSER).catch(() => null), (c) => c !== null && c.error !== null, { timeoutMs: 15_000, what: 'the submit\'s refusal' }).catch(() => null);
+  const refusedMs = Date.now() - submittedAt;
+  // The proof's workspace is no Git repository, so a submit is refused by the session's worktree before the run host is
+  // asked; that the draft stays is the ruling's clause, and the run host's own refusal is read through a command below.
+  check('OQ-462 (3): a submit after the loss is refused, and the composer keeps its draft', refused?.text === 'kept after the run host is gone' && refusedMs < 5_000, `${JSON.stringify(refused)} after ${refusedMs} ms`);
+  const listAskedAt = Date.now();
+  const listed = await started.driver.command({ kind: 'session.list' }).catch((e) => ({ error: String(e) }));
+  const listedMs = Date.now() - listAskedAt;
+  check('OQ-462 (3): a request that reaches the run host is refused at once, as `runHost.gone`', listed?.ok === false && listed.code === 'runHost.gone' && listedMs < 3_000, `${JSON.stringify(listed).slice(0, 240)} after ${listedMs} ms`);
+  const lostNotices = mainLines(logOf(started)).filter((l) => /^notice: The run host /.test(l.message));
+  check('OQ-462 (1): one notice per loss, written to the log at error', lostNotices.length === 1 && lostNotices[0].level === 'error', lostNotices.map((l) => `${l.level} ${l.message}`).join(' | ') || 'none');
 
   const renderers = renderersOf(started.child.pid);
   check('the launch has a renderer to crash', renderers.length >= 1, renderers.map((r) => r.pid).join(', ') || 'none');
@@ -399,6 +430,46 @@ for (const [name, spec, source, event, exitPattern] of [
   check(`main-killed: every utility process is gone within ${RUN_HOST_END_BOUND_MS} ms of main's kill`, children.length >= 2 && children.every((pid) => (goneAfter.get(pid) ?? Infinity) <= RUN_HOST_END_BOUND_MS), [...readings, ...survivors].join('; '));
   for (const pid of children) if (!goneAfter.has(pid)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
   results['main-killed'] = { mainPid, children: readings, survivors };
+}
+
+// ── 8. not-ready: a run host, then a workspace service, that never answers its hello (OQ-462 (2)) ─────────────────────────
+/*
+ * OQ-462 (2), ruled 2026-11-01: each child's first answer is bounded at 5 s; one that misses it is ended. The run host's
+ * miss was an unhandled rejection in main that ended the launch with no window
+ * (docs/archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md): now the window
+ * paints with the "did not start" notice, every request to the run host is refused at once, and the application quits 0.
+ * A service's miss refuses its open on the open's own surface (REQ-SHELL-112's transient) and raises no notice. The silence
+ * is the seam `ROTARIS_CAPTURE_CHILD_FAULT=<process>:silent`: the child starts and answers nothing.
+ */
+for (const [name, spec, missLine, noticeTitle] of [
+  ['not-ready-run-host', 'run-host:silent', /^run host did not answer its hello within 5000 ms \(no reply to hello within 5000 ms\); main ends it/, 'The run host did not start'],
+  ['not-ready-workspace-service', 'workspace-service:silent', /^workspace service for .* did not answer its hello within 5000 ms \(no reply to hello within 5000 ms\); main ends it and refuses the open/, null],
+]) {
+  const started = await startApp({ root: join(output, name), workspace, extra: { ROTARIS_CAPTURE_CHILD_FAULT: spec }, timeoutMs: 90_000 });
+  const painted = await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 }).then(() => true, () => false);
+  check(`${name}: the window paints although the child never answered`, painted);
+  const missed = await until(() => mainLines(logOf(started)).find((l) => missLine.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 30_000, what: 'main\'s missed-hello line' }).catch(() => null);
+  check(`${name}: main writes the missed bound at error and ends the child`, missed?.level === 'error', missed ? `${missed.level} ${missed.message}` : 'no line');
+  const unhandled = mainLines(logOf(started)).filter((l) => /^UNHANDLED rejection in main|^UNCAUGHT in main/.test(l.message));
+  check(`${name}: no unhandled rejection or uncaught exception in main`, unhandled.length === 0, unhandled.map((l) => l.message).join(' | ') || 'none');
+  if (noticeTitle !== null) {
+    const notice = await until(() => started.driver.eval(READ_NOTICE).catch(() => null), (n) => n?.title === noticeTitle, { timeoutMs: 20_000, what: 'the did-not-start notice' }).catch(() => null);
+    check(`${name}: one error notice "${noticeTitle}", no action, saying no run can start until a restart`, notice?.severity === 'error' && notice.action === false && /No run can start until the application is restarted/.test(notice.message ?? '') && /no answer to its hello within 5000 ms/.test(notice.detail ?? ''), JSON.stringify(notice));
+    const askedAt = Date.now();
+    const answer = await started.driver.command({ kind: 'session.list' }).catch((e) => ({ error: String(e) }));
+    check(`${name}: a request that reaches the run host is answered at once, not after a bound`, Date.now() - askedAt < 3_000, `${Date.now() - askedAt} ms: ${JSON.stringify(answer).slice(0, 200)}`);
+  } else {
+    const acks = await until(() => started.driver.eval(READ_ACKS).catch(() => []), (a) => Array.isArray(a) && a.includes('The project could not be opened'), { timeoutMs: 20_000, what: 'the refusal of the open' }).catch(() => started.driver.eval(READ_ACKS).catch(() => []));
+    check(`${name}: the open's refusal is the transient "The project could not be opened"`, Array.isArray(acks) && acks.includes('The project could not be opened'), JSON.stringify(acks));
+    // The service's exit follows main's kill within the end bound; any notice it would raise has been raised by then.
+    await new Promise((r) => setTimeout(r, 3_000));
+    const notice = await started.driver.eval(READ_NOTICE).catch(() => null);
+    check(`${name}: no persistent notice for the service — its open is refused on its own surface`, !/workspace service/i.test(notice?.title ?? ''), JSON.stringify(notice));
+  }
+  const stopped = await stopApp(started);
+  if (stopped.overran) throw new Error(stopOverrunMessage(name, stopped, logOf(started)));
+  check(`${name}: the application then quits, exit 0`, stopped.exit?.code === 0, JSON.stringify(stopped.exit));
+  results[name] = { spec, missed: missed ? `${missed.level} ${missed.message}` : null, exit: stopped.exit };
 }
 
 results.checks = checks;

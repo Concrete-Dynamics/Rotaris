@@ -45,6 +45,7 @@ export interface ExitDeps {
 export class QuitState {
   #exiting = false;
   readonly #closing = new Set<number>();
+  #shuttingDown = false;
   /** PD-SHELL-009: the sessions a window's close stopped whose run has not yet ended (its `run.result` not yet seen). */
   readonly #stoppedByClose = new Set<string>();
   /** How many `run.result` events main has seen, and when (in that count) each session's last one came. */
@@ -53,6 +54,14 @@ export class QuitState {
 
   /** The process is about to exit at once. */
   exiting(): void { this.#exiting = true; }
+  /** The orderly shutdown (`window-all-closed`, or the desktop session's end) has begun asking the children to stop. */
+  shuttingDown(): void { this.#shuttingDown = true; }
+  /**
+   * OQ-462 (1): whether a child's end now belongs to the application's own end — the immediate exit, or the orderly
+   * shutdown begun — rather than being a loss. Unlike `quitting`, it reads no window: before the first main window
+   * exists (a run host that misses its `hello`) no window staying does not mean a quit.
+   */
+  ending(): boolean { return this.#exiting || this.#shuttingDown; }
   /** A main window's close was confirmed by its guard and is under way. */
   closeConfirmed(wcId: number): void { this.#closing.add(wcId); }
   isClosing(wcId: number): boolean { return this.#closing.has(wcId); }
@@ -431,6 +440,11 @@ export class ChildrenEndedByMain {
   /** `child` whose `kill` is recorded under `name` — the service name Electron reports it by — before it is sent. */
   endable(name: string, child: { kill(): boolean }): { kill(): boolean } {
     return { kill: () => { this.#ended.add(name); return child.kill(); } };
+  }
+
+  /** Whether main ended the child with this service name itself (OQ-462 (1): such an end is no loss). */
+  ended(name: string): boolean {
+    return this.#ended.has(name);
   }
 
   /** The line for Electron's report of a child gone, and its level. */

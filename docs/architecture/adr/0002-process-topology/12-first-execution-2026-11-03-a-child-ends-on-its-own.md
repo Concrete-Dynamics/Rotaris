@@ -38,5 +38,31 @@ Measured on Windows 11 ARM64, Node 26.13.0, Electron 44.3.0, at `hrd1-child-proc
 
 Found by the same drive, not by this mechanism: a launch at 100 % CPU missed the run host's 5 s `hello` bound and ended main
 on `UNHANDLED rejection in main: NoReplyWithinBound: no reply to hello within 5000 ms`, the note
-[`a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md`](../../../defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md)
+[`a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md`](../../../archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md)
 reproduced on its first reading of this host; OQ-462 (2) rules what such a launch does, built as hardening §3.2 row 2.
+
+## First execution — 2026-11-04, the bounded ready and the loss notice (OQ-462; hardening §3.2 rows 2 and 3)
+
+Consequence 1 is unchanged — the run host is never forked again — and [OQ-462](../../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-462)'s
+ruling of 2026-11-01 is built as written (`apps/desktop/src/main/child-supervision.ts`, wired in `main/index.ts`): each
+child's `hello` is bounded at 5 s (`RUN_HOST_READY_BOUND_MS`, `WORKSPACE_SERVICE_READY_BOUND_MS`) through `boundedReady`,
+which never rejects; a child that misses it is ended through `endBeforeMain`; a child main did not end, while the
+application is not ending (`QuitState.ending`), raises ONE persistent `error` notice with no action and no session
+(`ChildLossReporter`, which holds a notice raised before the store exists); a service whose open was pending is refused
+on the open's surface instead; and from a child's exit on, its `ProcessLink` answers every request with a named refusal
+at once (`ProcessLink.end`: `runHost.gone`, `runHost.notStarted`, `workspace.serviceGone`). No action member and no
+directive were added.
+
+Measured on Windows 11 ARM64, Node 26.13.0, Electron 44.3.0, CPU at 100 % from other sessions' work, by
+`exit-trace-proof` (64 checks of 64 in its last run): the `crash` launch's killed run host raised "The run host stopped"
+with a dismiss, no action and "pid … exited with status 1: lost to a signal or a crash" in its detail; a `session.list`
+was refused `runHost.gone` in 1 ms; a submit was refused with the draft kept. The `not-ready-run-host` launch (the seam's
+`silent`) painted its window with "The run host did not start", refused a run-host command in 0 ms and quit 0, with no
+unhandled rejection; `not-ready-workspace-service` refused its open with the transient "The project could not be opened"
+and no notice. Unplanned, the proof's `orderly` launch of one run missed the bound on load alone and still painted its
+window — the miss [OQ-473](../../open-questions/71-spikes-and-later-questions-38.md#oq-473) asks about.
+
+Two findings the build made and repaired in the same change: a refused `hooks.summary` at an open was read as a summary,
+so a run host already gone raised "No model provider is authenticated yet" over the loss notice in the one slot (now a
+refusal raises nothing there); and a loss notice for a run host whose kill landed only during the quit was raised as the
+application ended (now nothing is raised once it is ending).

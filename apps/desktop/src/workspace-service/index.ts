@@ -49,8 +49,9 @@ superviseUtilityProcess({
   logError: (message) => { port.postMessage({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'log', level: 'error', message } }); },
   timers: clocks.timers,
 });
-// Verification only, compiled out of a packaged build: a fault the last-resort handler is proved against (`exit-trace-proof`).
-if (__ROTARIS_SEAMS__) injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'workspace-service', clocks.timers);
+// Verification only, compiled out of a packaged build: a fault the last-resort handler is proved against (`exit-trace-proof`),
+// or silence, which misses main's ready bound (OQ-462 (2)).
+const fault = __ROTARIS_SEAMS__ ? injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'workspace-service', clocks.timers) : { silent: false };
 const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(layout.workspaces, { recursive: true });
@@ -366,7 +367,7 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
   }
 }
 
-port.on('message', (e: { data: unknown }) => {
+if (!fault.silent) port.on('message', (e: { data: unknown }) => {
   const answer = ServiceAnswerEnvelopeSchema.safeParse(e.data);
   if (answer.success) {
     const p = pendingAsks.get(answer.data.ask);

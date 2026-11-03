@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-523 – OQ-540 and OQ-485.
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-523 – OQ-540, OQ-485 and OQ-473.
 
 <a id="oq-523"></a>
 
@@ -193,3 +193,13 @@ The renderer's boundary is the same shape. `dispatchCommand` (`apps/desktop/src/
 **What the build proceeds under.** Both as built: the process link's drop silent, the request left to its deadline and the next valid message answered (`packages/shell/src/process-link.test.ts`), and a malformed command answered with no line (`driver-proof` step 9e), each citing this entry.
 
 **What decides it.** A ruling on whether a refused process message leaves one line (at which level, naming what, under PD-MONITOR-002's rule that the log never carries a payload) or stays silent, and whether a burst of them is bounded.
+
+<a id="oq-473"></a>
+
+**OQ-473 — Is 5 s the right bound on a utility process's first answer on a loaded host, now that a run host that misses it stays gone until a restart?** *(OQ-462, ADR-0002 consequence 1, REQ-STARTUP-156. Raised 2026-11-04 by [R-091](../../product/requests.md#r-091)'s hardening bundle B1, building OQ-462 (2); numbered from the hardening plan's range OQ-469 – OQ-480.)*
+
+**What is open.** OQ-462 (2) applies the run host's 5 s `hello` bound to both children and ends a child that misses it; (4) never forks the run host again. Together, a run host that answers in six seconds on a busy machine leaves the person without runs for the whole session. That is not hypothetical on this host: on 2026-11-03, with the CPU at 100 % from another session's proofs, a driven launch's run host wrote its first line about 5.8 s after main claimed the instance and missed the bound ("no reply to hello within 5000 ms"), and loc1's reviewer met the same miss on 2026-10-21 at 22 to 100 % CPU ([the note](../../archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md)). Before OQ-462 such a launch ended with no window at all; now it paints and says "The run host did not start". The specification states no bound on a child's start, and REQ-STARTUP-156 bounds the first paint, not the run host.
+
+**What the build proceeds under.** The ruling as written: 5 s for both (`RUN_HOST_READY_BOUND_MS`, `WORKSPACE_SERVICE_READY_BOUND_MS` in `apps/desktop/src/main/child-supervision.ts`), the bound counted from the `hello` request main sends after `app.ready` and the provider service, not from the child's own start.
+
+**What decides it.** A ruling on the bound — kept, lengthened, or counted from the child's `spawn` — or on one fresh fork after a missed ready only (never after a run host that ran, ADR-0002 consequence 1), which the specification does not address.

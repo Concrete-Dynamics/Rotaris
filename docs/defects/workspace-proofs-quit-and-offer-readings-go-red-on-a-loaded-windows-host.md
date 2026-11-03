@@ -29,5 +29,5 @@ shown contradicted yet: the readings were taken under load.
 - `apps/desktop/scripts/workspace-proof.mjs` — the deferred-offer check (`answering one window cancels only its deferred
   offer`) and the setup-step quit check (`exitedAfter <= 5_000`).
 - `apps/desktop/src/main/exit.ts` — the orderly shutdown the quit runs.
-- [the hello-bound note](a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md) — the
+- [the hello-bound note](../archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md) — the
   other launch reading this host gives under load.

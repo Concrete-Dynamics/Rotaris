@@ -27,3 +27,18 @@ left to whoever repairs this.
 - `apps/desktop/src/main/index.ts` — the `hello` request to the run host, bounded at 5,000 ms.
 - `apps/desktop/src/run-host/dispatch.ts` — the run host's `hello` answer.
 - `apps/desktop/scripts/code-intel-proof.mjs` — the `child-edit` launch that met it.
+
+## Outcome — repaired 2026-11-04 (R-091, hardening §3.2 row 2; OQ-462 (2))
+
+Reproduced first on this host at `hrd1-child-process-failure` (Windows 11 ARM64, Node 26.13.0, Electron 44.3.0, CPU at 100 %
+from other sessions' work): a driven launch's run host wrote its first line about 5.8 s after main claimed the instance and
+main ended on `UNHANDLED rejection in main: NoReplyWithinBound: no reply to hello within 5000 ms`, with no window. The
+`hello` is now awaited through `boundedReady` (`apps/desktop/src/main/child-supervision.ts`), which never rejects: a miss is
+written at `error`, the run host is ended through `endBeforeMain`, every later request to it is refused at once
+(`runHost.notStarted`), and the launch goes on to paint, where "The run host did not start" stands as OQ-462 (1) and (2)
+rule. Measured after the change on the same loaded host: `exit-trace-proof`'s `orderly` launch missed the bound on its own
+load (its window then loaded 2.4 s later, no unhandled rejection), and its `not-ready-run-host` launch, which silences the
+run host through the seam `ROTARIS_CAPTURE_CHILD_FAULT=run-host:silent`, painted its window with the notice, answered a
+run-host command in 0 ms with the refusal and quit 0. Pinned by `child-supervision.test.ts` and that launch. Whether 5 s is
+the right bound on a loaded host — the miss is now a run host gone for the session rather than a launch gone — is
+[OQ-473](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-473).

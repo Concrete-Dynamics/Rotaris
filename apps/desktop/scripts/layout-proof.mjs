@@ -36,7 +36,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
-import { endLaunch, startApp } from './lib/driver.mjs';
+import { endLaunch, startApp, until } from './lib/driver.mjs';
 
 const output = evidenceDirectory('.layout-proof');
 rmSync(output, { recursive: true, force: true });
@@ -188,10 +188,12 @@ try {
     big.cols.length === big.areaCols && Math.abs(claimed - big.grid.w) < 2,
     `${big.cols.length} tracks (${big.cols.join(' ')}) summing to ${Math.round(claimed)} across a ${big.grid.w}px grid; maximized=${maxed.maximized}`);
 
-  // ── 4. Back up, to prove the breakpoint is not a one-way trip.
+  // ── 4. Back up, to prove the breakpoint is not a one-way trip. The wide layout is WAITED for, bounded, never read at a fixed
+  //    offset: on 2026-11-04 a landing's run read `workspace--narrow` 700 ms after the resize with the host at 97 % CPU, and the
+  //    same head read it wide alone (docs/archive/defects/layout-proofs-wide-layout-return-reads-the-narrow-class-at-a-fixed-700-ms-after-the-resize.md).
+  //    If the bound passes, one more reading, so the check fails with what was seen rather than with a thrown wait.
   await d.resize(1400, 900);
-  await sleep(700);
-  const back = await measure();
+  const back = await until(measure, (m) => !m.cls.includes('workspace--narrow') && m.cols.length === m.areaCols, { timeoutMs: 10_000, what: 'the wide layout after the resize back to 1400×900' }).catch(() => measure());
   check('1400×900 again: the wide layout returns',
     !back.cls.includes('workspace--narrow') && back.cols.length === back.areaCols,
     `class "${back.cls}", ${back.cols.length} tracks against ${back.areaCols} declared`);

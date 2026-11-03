@@ -901,6 +901,7 @@
     "defects/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md": "bf9f8ae9fef6c61b685a79cf0849d99c1363eb4dd18d25a7581d106b246c248d",
     "defects/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md": "406407f514c8d3e74de51ec4dcd8e307ee364f214684ce386012120586eb4385",
     "defects/launch-audit-runtime-placeholder.md": "929fb0345bbf702d04d929be2c0e7097cdeedd64825b4ec4419af2f0e4333375",
+    "defects/layout-proofs-wide-layout-return-reads-the-narrow-class-at-a-fixed-700-ms-after-the-resize.md": "3e64d8d150f583c6b01fb4444504cded061ea782974329f4bc02f427cfa1d1a2",
     "defects/live-rows-are-never-measured.md": "2e4dab400edd79e88b48c6afa9b3f5eec8cac397ad378979267b88ccc002ccad",
     "defects/live-runs-notes-cite-defect-notes-at-paths-they-no-longer-have.md": "3fc75959e57150ff8d91840ed3b5421af5fc22ac865c76f2d408f5559e725d6a",
     "defects/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md": "5ebd0d24284fcb26dd1ad59bb03e73dba248505bb16d7deb1d689aedc0bf9194",

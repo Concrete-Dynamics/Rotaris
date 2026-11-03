@@ -141,39 +141,6 @@ channel or ownership changed.
 hold their sections, verbatim and in order, in the folder of the same name; every link to a section names its part. The
 entries before 2026-10-16 moved, verbatim, into the numbered parts this log indexes at its foot. No view's content
 changed, so the date above stays: no package, edge, process, message, channel or ownership changed.
-**The notices generator's reviewed exceptions resolved (O-3, O-11, OQ-74, OQ-75; 2026-10-23).** `01-component-view.md`'s
-notices section names the table's identifier entries and its `licenseText` and `embedded` parts, and the licence texts
-`tools/notices/licenses/` now holds for them. The tool reads one input more — the vendored licence file inside an installed
-package an entry names — and still writes one file. No package, edge, process, message, channel or ownership changed.
-**The compiled-in key set carries O-2's public half (R-082; first-release-plan.md §6.1; 2026-10-23).**
-`05-state-ownership.md`'s key-set row reads "one key since 2026-10-23" where it read "empty until O-2". The fact's owner,
-its writer and its reader are unchanged: the build alone writes it, main reads it at every install. No package, edge,
-process, message, channel or ownership changed.
-**The portable's launcher stub, the assisted installer and the icon (the 2026-10-23 packaging brief; ADR-0054 P4,
-`first-release-plan.md` §4.5, §4.9).** `01-component-view.md` gains "The portable's launcher stub and its assembly":
-`apps/desktop/launcher/` (Rust, no dependency), `scripts/lib/portable.mjs`, `scripts/lib/pe-icons.mjs`, and
-`tools/release-pipeline/cli.mjs`'s import of the assembler. `02-process-view.md` gains the stub as the process before
-main on the portable, the preparation root under the per-user data directory, and the run-scoped placement. The
-installer's include (`apps/desktop/resources/installer.nsh`) writes `HKCU\Software\Rotaris\InstallDir`, the value
-`classify.ts` already read; no product process, message, channel or ownership moved.
-
-
-**Dependency patches for 47 Dependabot alerts (R-081; 2026-10-22).** `01-component-view.md`'s `mcp` section and its `ajv`
-paragraph name `@modelcontextprotocol/client` 2.3.0, pinned in place of 2.0.0. The SDK's `http` and `sse` transports now refuse
-a redirect to another origin (OQ-451). `undici` 7.29.1, `vite` 8.2.4 and the build-time copies moved inside their ranges. No package,
-edge, process, message, channel or ownership changed.
-
-**The Linux and macOS packaging configuration, prepared and not wired (R-080; ADR-0054; 2026-10-22).**
-`apps/desktop/scripts/lib/platform-targets.mjs` holds the two configurations a macOS and a Linux host would merge over
-`electron-builder.yml`; nothing that builds imports it and the hooks refuse both platforms (IC-3). It is a packaging
-script, outside the boundary rule, so no view changed: no package, edge, process, message, channel or ownership moved.
-
-**The release pipeline's stages after the build (R-080; first-release-plan.md §4.2, §4.7, §4.8; 2026-10-22).**
-`01-component-view.md` gains "The release pipeline's stages after the build": `tools/release-pipeline/`, a build-time
-tool outside the boundary rule, and its one reach into an application root, `apps/desktop/src/main/updater/keys.ts`,
-so the pipeline verifies with the updater's own verifier and key set. `.github/workflows/release.yml` runs it; the
-process view is unchanged, because nothing the product runs, sends or stores moved. No package, edge, process,
-message, channel or ownership changed.
 
 ## Older entries
 
@@ -185,6 +152,7 @@ with the next number, and its row goes at the top of this table.
 
 | Part | "Last reconciled" dates it carries | Its newest entry |
 |---|---|---|
+| [17](reconciliation-log/17.md) | — | The notices generator's reviewed exceptions resolved (O-3, O-11, OQ-74, OQ-75; 2026-10-23). |
 | [16](reconciliation-log/16.md) | — | The release feed names `Concrete-Dynamics/Rotaris` (O-5 re-ruled by R-078, REQ-STARTUP-105; 2026-10-21). |
 | [15](reconciliation-log/15.md) | — | A retrospective's refusals as built under PD-LIBRARY-002 revision 6 (OQ-363; 2026-10-20). |
 | [14](reconciliation-log/14.md) | 2026-10-19, 2026-10-18 | The handoff — one closing shape (2026-10-19). |

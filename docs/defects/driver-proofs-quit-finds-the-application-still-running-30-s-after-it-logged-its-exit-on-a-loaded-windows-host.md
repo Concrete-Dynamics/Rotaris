@@ -24,6 +24,14 @@ nor SIGKILL (5009 ms) was reaped", alone "SIGTERM ended it after 7278 ms". The p
 (the stepper present, "Could not deliver answers. The waiting agent is no longer available.", Submit enabled, `stale.png`
 captured), so the red is this note's shape and not the question flow's.
 
+Seen again 2026-11-03 in `pnpm workspace-proof`'s `init-quit` launch, twice on one build of `f2143904` (Windows 11 ARM64,
+Node 26.13.0, two other sessions' builders on the host, the proof run alone each time): the REQ-WORKSPACE-092 / 109 check
+"an orderly quit during a setup step completes within 5000 ms" read the process gone 9222 ms after the driver's quit in one
+run and not within 15 s in the other, while the application's own log put `quit: exiting with status 0` 2.6 s and 3.7 s
+after `quit: requested` — the setup's cancelled create step terminated in 3978 ms and 4905 ms, the run host and the
+workspace service exited 0 — so the seconds past the bound fall after the exit was logged, the shape above. Every other
+check of the launch passed (49 of 50, 5 skipped).
+
 ## Specs
 
 PD-ORCH-005 clause 9 and REQ-SHELL-121 (the application's quit ends the process), if the lingering process is the

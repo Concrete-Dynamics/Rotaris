@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ESLint } from 'eslint';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 // @ts-expect-error -- a plain JavaScript module without declarations
@@ -238,6 +239,14 @@ describe('lint — import hygiene and the zero-warning gate (R-091, hardening.md
     for (const name of ['crypto', 'net', 'http', 'https', 'tls', 'dgram', 'worker_threads', 'node:crypto']) {
       expect(await lintAs('packages/ui/src/violation.ts', `import * as m from '${name}';\nexport const x = m;\n`), name).toContain('no-restricted-imports');
     }
+  });
+  it('a warning fails the gate: the react-hooks dependency rule warns, and `pnpm lint` runs eslint at --max-warnings 0', async () => {
+    const hook = "import { useEffect } from 'react';\nexport function Probe({ n }: { n: number }): null {\n  useEffect(() => { console.info(n); }, []);\n  return null;\n}\n";
+    const [result] = await eslint.lintText(hook, { filePath: join(repo, 'packages/ui/src/violation.tsx') });
+    const severities = (result?.messages ?? []).filter((m) => m.ruleId === 'react-hooks/exhaustive-deps').map((m) => m.severity);
+    expect(severities).toEqual([1]);
+    const scripts = (JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts;
+    expect(scripts['lint']).toMatch(/&& eslint \. --max-warnings 0"?$/);
   });
   it('a disable directive that suppresses nothing is reported as an error', async () => {
     const [result] = await eslint.lintText('// eslint-disable-next-line no-debugger\nexport const a = 1;\n', { filePath: join(repo, 'packages/engine/src/fine.ts') });

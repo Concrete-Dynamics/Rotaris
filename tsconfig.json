@@ -1,8 +1,17 @@
 {
-  // The solution (R-091, hardening.md §3.5 row 4): `pnpm typecheck` runs `tsc -b` over the projects below, and an
-  // editor or `typescript-eslint`'s project service finds a file's project through them. It extends the base so that a
-  // tool reading only this file (the import resolvers in `eslint.config.js`) still sees the workspace's `paths`.
+  // The solution (R-091, hardening.md §3.5 rows 4 and 5): `pnpm typecheck` runs `tsc -b --force` over the projects below
+  // — every one checked whole on every run — and an editor or `typescript-eslint`'s project service finds a file's project
+  // through them. One project per process kind (ADR-0002): the code both sides share, Node's processes (the run host
+  // apart), the renderer; then the product's tests and the tooling. It extends the base so that a tool reading only this
+  // file (the import resolvers in `eslint.config.js`) still sees the workspace's `paths`.
   "extends": "./tsconfig.base.json",
   "files": [],
-  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.scripts.json" }]
+  "references": [
+    { "path": "./tsconfig.shared.json" },
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.run-host.json" },
+    { "path": "./tsconfig.renderer.json" },
+    { "path": "./tsconfig.tests.json" },
+    { "path": "./tsconfig.scripts.json" }
+  ]
 }

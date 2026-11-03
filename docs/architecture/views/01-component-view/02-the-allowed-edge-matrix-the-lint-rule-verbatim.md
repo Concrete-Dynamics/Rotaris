@@ -10,6 +10,22 @@ importer's own `package.json` does not declare (`import-x/no-extraneous-dependen
 also written in the manifest — `engine` → `config` was allowed here and undeclared in `packages/engine/package.json`
 until that day.
 
+**What a package may use of its host** (since 2026-11-03, R-091, hardening.md §3.5 row 5). The compiler holds the process
+boundary too: `pnpm typecheck` checks each package against the libraries of the process kind that loads it, one project
+each under the root solution `tsconfig.json`.
+
+| Project | Holds | Libraries |
+|---|---|---|
+| `tsconfig.shared.json` | `kernel`, `contracts` — loaded on both sides | the language (ES2024) alone, and `contracts/src/web-platform.d.ts`: `URL`, `AbortSignal`, `TextEncoder`, the members it reads, which Node and Chromium both implement |
+| `tsconfig.node.json` | `platform`, `store`, `config`, `hooks`, `providers`, `engine`, `model`, `mcp`, `workspace`, `shell`, `release-naming`; `app-main`, `app-preload`, `app-workspace-service` | ES2024 and Node's types; no DOM |
+| `tsconfig.run-host.json` | `agent-tools`, `app-run-host` | ES2024, Node's and Electron's types; the DOM's globals arrive with the terminal emulator's typings ([the note](../../../defects/the-run-hosts-typecheck-declares-the-doms-globals-through-the-terminal-emulators-typings.md)) |
+| `tsconfig.renderer.json` | `ui-core`, `ui`, `app-renderer` | ES2024, the DOM and `DOM.Iterable`, Vite's client types; no Node types |
+
+So a `document` in main or the workspace service, a `process` or a `Buffer` in the renderer, and any of the three in
+`kernel` or `contracts` fail the typecheck. Tests are not held to their package's libraries: they run in Vitest under
+Node and may drive both sides (`tsconfig.tests.json`, the DOM and Node's types), and the tooling is
+`tsconfig.scripts.json`'s.
+
 | From | May import |
 |---|---|
 | `kernel` | — |

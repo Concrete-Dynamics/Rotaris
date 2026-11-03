@@ -12,8 +12,10 @@
     // The release pipeline and two proof libraries import TypeScript sources by their `.ts` path, as Node's type
     // stripping runs them; nothing here is emitted.
     "allowImportingTsExtensions": true,
-    // The proof scripts hand callbacks to the renderer (`evaluate`), which run against the DOM.
-    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+    // The proof scripts run under Node and hand callbacks to the renderer (`evaluate`), which run against the DOM.
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    // Vite's client types too: a renderer module a test or a proof imports imports its stylesheet.
+    "types": ["node", "vite/client"]
   },
   "include": [
     "apps/desktop/scripts/**/*.ts",

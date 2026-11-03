@@ -99,7 +99,7 @@ export function createUpdaterPorts(updatesDir: string): UpdaterPorts {
         const body = response.body;
         const result: NetworkResponse = {
           status: response.status,
-          body: body === null ? (async function* () { /* no body */ })() : (body as unknown as AsyncIterable<Uint8Array>),
+          body: body === null ? (async function* () { /* no body */ })() : body,
         };
         return result;
       },

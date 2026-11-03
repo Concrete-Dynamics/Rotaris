@@ -34,7 +34,7 @@ import { costAskFor, reportedCostExtractor, reportedCostFrom } from './reported-
  *   execution has the falsified reason.
  * - No SDK type crosses the port; cost is never computed here.
  */
-export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+export type FetchLike = (input: Parameters<typeof fetch>[0], init?: RequestInit) => Promise<Response>;
 
 export interface AiSdkClientOptions {
   readonly baseUrl: string;
@@ -59,6 +59,17 @@ export interface AiSdkClientOptions {
 }
 
 const SECRET_HEADER = /authorization|api-key|x-api-key|cookie/i;
+
+/**
+ * A `Headers` as a plain record, read through `forEach`, which every host's `Headers` has: the run host's program sees
+ * the DOM's `Headers` without its iterable half (the terminal emulator's typings bring the DOM, not `DOM.Iterable`;
+ * R-091, hardening.md §3.5 row 5), where `entries()` read before.
+ */
+function headerRecord(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  headers.forEach((value, key) => { out[key] = value; });
+  return out;
+}
 
 export function redactHeaders(h: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -213,7 +224,7 @@ export class AiSdkModelClient implements ModelClient {
       for (const [k, v] of Object.entries(req.headers ?? {})) headers.set(k, v);
       if (credential) headers.set('authorization', `Bearer ${credential}`);
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-      this.opts.onRequest?.({ url, method: init?.method ?? 'POST', headers: redactHeaders(Object.fromEntries(headers.entries())) });
+      this.opts.onRequest?.({ url, method: init?.method ?? 'POST', headers: redactHeaders(headerRecord(headers)) });
       try {
         const response = await base(input, { ...init, headers });
         if (!response.ok) failed = { status: response.status, at: this.opts.monotonic.now() };

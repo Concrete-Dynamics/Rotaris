@@ -16,6 +16,13 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-03**
 
+**Each process kind typechecked against its own host (hardening E2, R-091; 2026-11-03).** The root `tsconfig.json` became a
+solution over one project per process kind — `tsconfig.shared.json` (`kernel`, `contracts`), `tsconfig.node.json`,
+`tsconfig.run-host.json`, `tsconfig.renderer.json` — and the tests' and the tooling's (`tsconfig.tests.json`,
+`tsconfig.scripts.json`). `01-component-view/02-the-allowed-edge-matrix-the-lint-rule-verbatim.md` gains "What a package
+may use of its host", the table of which libraries each package is checked against. No package, edge, process, message,
+channel or ownership changed.
+
 **A shipped migration is held by its SQL's hash (hardening C2, REQ-SESSION-013, REQ-SESSION-038; 2026-11-03, `../hardening.md` §3.3 row 3).** `04-seams/03-3-a-store-table-or-column.md` gains step 2, `packages/store/src/migrations.sha256.json`: each migration's SHA-256 of its LF-normalised SQL, keyed by `to`, which `schema.test.ts` recomputes, failing an edited row as shipped and a new migration with the line to append; the later steps are renumbered 3 to 6, and the invariants name the hash. No package, edge, process, message, channel or store column changed.
 
 **The packaged executable's fuses (R-091 bundle A2; Electron security checklist 19; ADR-0054, ADR-0056 rule 4; 2026-11-03).** `02-process-view/01-what-each-process-owns.md` gains a paragraph after the children's environment: a packaged `Rotaris.exe` is fused by electron-builder.yml's `electronFuses` (RunAsNode, `NODE_OPTIONS`, the inspector switches off; cookie encryption, embedded asar integrity, `onlyLoadAppFromAsar` on; the file protocol's privileges left on, OQ-466), and no process changes for it. No package, edge, process, channel, command, notice or store column changed, and no fact changed owner.

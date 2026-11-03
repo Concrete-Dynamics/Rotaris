@@ -1,0 +1,21 @@
+{
+  // The run host and `agent-tools` (R-091, hardening.md §3.5 row 5; ADR-0002): Node's types, and no DOM of this project's
+  // own. A project apart from `tsconfig.node.json` because the terminal emulator's typings bring the DOM with them:
+  // `@xterm/addon-serialize`'s import `@xterm/xterm`'s, which declare `/// <reference lib="dom" />`, so in any program that
+  // holds `agent-tools/src/terminal/emulator.ts` the DOM's globals are declared and a `document` here would not fail.
+  // Kept apart, main, the preload and the workspace service are checked without them.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2024"],
+    // Electron's types for the utility process's `process.parentPort`, which main's program has through its imports.
+    "types": ["node", "electron"]
+  },
+  "include": [
+    "packages/agent-tools/src/**/*.ts",
+    "apps/desktop/src/run-host/**/*.ts",
+    // The build-time flag the run host reads (`__ROTARIS_SEAMS__`), declared beside main.
+    "apps/desktop/src/main/seams.d.ts"
+  ],
+  "exclude": ["**/node_modules", "**/dist", "**/out", "**/*.test.ts", "**/*.test.tsx", "**/*.test-support.ts"]
+}

@@ -1,0 +1,13 @@
+{
+  // The code both process kinds load (R-091, hardening.md §3.5 row 5; ADR-0002): `kernel` and `contracts`, checked
+  // against the language alone — no DOM, no Node types — so a `Buffer`, a `process`, a `document` written here fails the
+  // typecheck rather than one side at run time. Their tests are the tests project's.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2024"],
+    "types": []
+  },
+  "include": ["packages/kernel/src/**/*.ts", "packages/contracts/src/**/*.ts"],
+  "exclude": ["**/node_modules", "**/dist", "**/out", "**/*.test.ts", "**/*.test-support.ts"]
+}

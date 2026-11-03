@@ -3,12 +3,20 @@
     "target": "ES2023",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2023"],
+    // The language alone (R-091, hardening.md §3.5 row 5): each project adds the host it runs in — the DOM for the
+    // renderer's, Node's types for the processes that have Node, neither for the code both sides share.
+    "lib": ["ES2024"],
+    "types": [],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUncheckedSideEffectImports": true,
+    "forceConsistentCasingInFileNames": true,
+    // Not `noPropertyAccessFromIndexSignature`: it would only respell `record.key` as `record['key']` across the code,
+    // with `noUncheckedIndexedAccess` already making both reads `T | undefined` — churn without safety (R-091).
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "verbatimModuleSyntax": true,
@@ -17,7 +25,6 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "jsx": "react-jsx",
-    "types": ["node"],
     "paths": {
       "@rotaris/kernel": ["./packages/kernel/src/index.ts"],
       "@rotaris/contracts": ["./packages/contracts/src/index.ts"],

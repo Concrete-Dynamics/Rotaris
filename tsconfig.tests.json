@@ -1,0 +1,25 @@
+{
+  // The product's tests (R-091, hardening.md §3.5 row 5): they run in Vitest under Node, read the files beside them and
+  // drive either side of the process boundary — a main test may render a renderer component's model, a renderer test reads
+  // its stylesheet — so they have Node's types and the DOM both. The code they test is checked against its own process's
+  // libraries in `tsconfig.shared.json`, `tsconfig.node.json` and `tsconfig.renderer.json`.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    // Vite's client types too: a renderer module a test imports imports its stylesheet.
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "packages/*/src/**/*.test.ts",
+    "packages/*/src/**/*.test.tsx",
+    "packages/*/src/**/*.test-support.ts",
+    "packages/*/src/**/*.test-support.tsx",
+    "apps/desktop/src/**/*.test.ts",
+    "apps/desktop/src/**/*.test.tsx",
+    "apps/desktop/src/**/*.test-support.ts",
+    "apps/desktop/src/main/seams.d.ts",
+    "tools/release-naming/src/**/*.test.ts"
+  ],
+  "exclude": ["**/node_modules", "**/dist", "**/out"]
+}

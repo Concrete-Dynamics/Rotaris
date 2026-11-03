@@ -1,0 +1,21 @@
+{
+  // The renderer (R-091, hardening.md §3.5 row 5; ADR-0002, ADR-0044): `ui`, `ui-core` and the renderer root, against the
+  // DOM and no Node types, so a `process` or a `Buffer` written here fails the typecheck. Their tests are the tests
+  // project's.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    // Vite's client types: the stylesheets the renderer imports for their effect, which Vite bundles.
+    "types": ["vite/client"]
+  },
+  "include": [
+    "packages/ui/src/**/*.ts",
+    "packages/ui/src/**/*.tsx",
+    "packages/ui-core/src/**/*.ts",
+    "packages/ui-core/src/**/*.tsx",
+    "apps/desktop/src/renderer/**/*.ts",
+    "apps/desktop/src/renderer/**/*.tsx"
+  ],
+  "exclude": ["**/node_modules", "**/dist", "**/out", "**/*.test.ts", "**/*.test.tsx", "**/*.test-support.ts", "**/*.test-support.tsx"]
+}

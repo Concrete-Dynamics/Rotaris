@@ -39,6 +39,14 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   `// @ts-nocheck — <why>` and is listed in `tools/typecheck-exceptions.json`, which `tools/typecheck-exceptions.test.ts`
   holds to the files carrying the line and caps at the 96 it started with: the list only shrinks. Before, 117 of 517
   test files and every `.mjs` were in no typecheck, and 113 `@ts-expect-error` stood on `.mjs` imports.
+- **Each process kind is typechecked against its own host** (since 2026-11-03, R-091, hardening.md §3.5 row 5) — the
+  product project became four: `tsconfig.shared.json` (`kernel`, `contracts`: the language alone, plus the three web
+  globals both hosts implement, `contracts/src/web-platform.d.ts`), `tsconfig.node.json` (main, the preload, the
+  workspace service and their packages: Node's types, no DOM), `tsconfig.run-host.json` (the run host and `agent-tools`,
+  apart because `@xterm`'s typings bring the DOM) and `tsconfig.renderer.json` (`ui`, `ui-core`, the renderer: the DOM and
+  Vite's client types, no Node types); the product's tests are `tsconfig.tests.json`'s (both). The component view's
+  "What a package may use of its host" is the table. The base adds `noImplicitReturns`, `noUncheckedSideEffectImports`
+  and `forceConsistentCasingInFileNames`, and leaves `noPropertyAccessFromIndexSignature` out, saying why.
 - **A warning fails the gate, and so does a disable that disables nothing** (since 2026-11-01, R-091) — `eslint .
   --max-warnings 0` in `pnpm lint`, and `linterOptions.reportUnusedDisableDirectives: 'error'`. A disable says why on its
   own line (`-- <reason>`).

@@ -16,7 +16,10 @@ The same shape breaks the pass's idempotence, measured 2026-11-03 by the propert
 `*** key=A0000a0aa0aAAa0A ` — the outer `ghp_=` assignment swallows `key=…`, then layer 4 masks `ghp_=` itself — and a
 second pass, which no longer sees the outer assignment, masks `key=***`. A quoted outer value swallows the inner
 assignment too (`msg: "use password=hunter22 now"` comes back unchanged). Those tests hold every assignment shape out of
-their leak property where the text before it carries `=`, `:` or a quote; the repair removes that branch of `heldOut`.
+their leak property where the text before it carries `=`, `:` or a quote, and a text that nests an assignment in an
+assignment's value out of their idempotence property (`nestsAnAssignment`; the spaced `ghp_= key = …`, whose inner name
+the outer assignment takes as its value, breaks it the same way), and pin `ghp_= key=…` as still changing on a second
+pass; the repair removes that branch of `heldOut`, the predicate and the pin.
 
 ## Specs
 

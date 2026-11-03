@@ -42,6 +42,11 @@ override behind. Without it, `model`'s auto-installed `zod` peer stayed at 4.5.4
 **After:** `pnpm audit --prod` reads "No known vulnerabilities found". The package tests ran against the moved tree
 (the bundle's report gives the command and its result).
 
+**What the move changed underneath (2026-11-03, at the landing).** zod 4.6 no longer copies a check's maximum into a
+schema's internal `_zod.bag` (4.5.4 did); parsing, the errors and `z.toJSONSchema`'s `maxLength`/`maxItems` are unchanged.
+One reader of that internal existed: hardening D1's `packages/contracts/src/limits.test.ts`, landed beside this branch,
+whose walk found every bounded field unbounded under 4.6.7. It now reads the `max_length` and `length_equals` checks.
+
 ## 3. What the blocking step does not see
 
 `--prod` follows the manifests' `dependencies`. **Electron is a `devDependency` of `apps/desktop`** (electron-builder's

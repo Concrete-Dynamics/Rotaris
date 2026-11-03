@@ -11,7 +11,19 @@ import { RunHostRequestSchema } from './process-protocol.js';
 
 type Def = { type: string; [k: string]: unknown };
 const defOf = (s: unknown): Def => (s as { _zod: { def: Def } })._zod.def;
-const maxOf = (s: unknown): number | undefined => (s as { _zod: { bag?: { maximum?: number } } })._zod.bag?.maximum;
+type CheckDef = { check: string; maximum?: number; length?: number };
+/**
+ * A string's or a list's maximum, read from its checks: `max_length` (`.max()`), and `length_equals` (`.length()`), which
+ * bounds it too. zod 4.6 no longer copies a check's maximum into `_zod.bag` (4.5.4 did; measured 2026-11-03 when R-091's
+ * audit moved the catalog to `^4.6.6`, past GHSA-mrhx-c7xc-m3w5), so the bag is only the fallback.
+ */
+const maxOf = (s: unknown): number | undefined => {
+  const internals = (s as { _zod: { def: { checks?: Array<{ _zod: { def: CheckDef } }> }; bag?: { maximum?: number } } })._zod;
+  const caps = (internals.def.checks ?? [])
+    .map(({ _zod: { def } }) => (def.check === 'max_length' ? def.maximum : def.check === 'length_equals' ? def.length : undefined))
+    .filter((n): n is number => typeof n === 'number');
+  return caps.length > 0 ? Math.min(...caps) : internals.bag?.maximum;
+};
 /** A schema that carries a JSON-length bound (`jsonBounded`) — the one place an open-shaped `z.unknown()` may sit under. */
 const jsonBound = isJsonBounded;
 

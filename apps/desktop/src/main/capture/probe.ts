@@ -1,6 +1,6 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
-import { type CaptureHost, parseSelectors, pause, settled, stepFailed } from './host.js';
+import { type CaptureHost, parseSelectors, parseSteps, pause, settleAt, settled, stepFailed } from './host.js';
 
 /**
  * THE PACKAGED PROBE — the part of a capture a shipped build still answers.
@@ -12,7 +12,7 @@ import { type CaptureHost, parseSelectors, pause, settled, stepFailed } from './
  *
  * Nothing here may be scripted from outside beyond those. A new variable in this file ships unless it is
  * read behind `__ROTARIS_SEAMS__` on the read's own line, as the verification-only ones below are
- * (`_PROMPT_MS`, `_WAIT`, `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`, `_PROBE`; since 2026-10-14, when a packaged
+ * (`_PROMPT_MS`, `_WAIT`, `_WAIT_MS`, `_END_VIEW`, `_END_VIEW_MS`, `_END_VIEW_UNTIL`, `_PROBE`; since 2026-10-14, when a packaged
  * build was found still answering them); put it in `seams.ts` unless the packaged probe itself needs it.
  * `scripts/lib/seam-check.test.ts` fails a capture variable read off the flag in any module a packaged build keeps.
  */
@@ -139,6 +139,11 @@ export const PROBE_TEXT = "(t) => (t.length <= 2000 ? t : t.slice(0, 1600) + ' \
  *
  * `_END_VIEW=<n>`: open view n (Ctrl+n) once the wait is over and before the capture, so a
  * proof can drive a run from the Workspace view and read the Overview afterwards.
+ * `_END_VIEW_UNTIL="selector>>text@~ms"`: the probes then wait for that selector to MATCH — the step grammar's waiting
+ * form, a deadline rather than an appointment, logged either way — instead of waiting `_END_VIEW_MS`. How the overview
+ * proof's relaunch waits for the sessions card's first row, which `session.list` fills after the repository reads on a
+ * loaded host; probed 2.5 s after the chord, the card still read "Loading sessions…" with no row
+ * (docs/archive/defects/overview-proofs-relaunch-reads-the-sessions-card-at-a-fixed-offset-while-it-is-still-loading.md).
  * `_PROBE="selector;;…"`: each selector's text (as `PROBE_TEXT` keeps it) and `data-*` attributes logged as JSON
  * before the capture — what a proof asserts against.
  *
@@ -166,13 +171,15 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
   const wait = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_WAIT'] : undefined;
   const waitBound = Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_WAIT_MS'] : undefined) ?? 600_000);
   const endView = Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW'] : undefined) ?? 0);
+  const endViewUntil = parseSteps(__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW_UNTIL'] : undefined)[0] ?? null;
   const probes = parseSelectors(__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROBE'] : undefined);
 
   const finish = (timedOut = false) => host.clocks.timers.after(millis(after), settled(async () => {
     if (endView > 0) {
       host.win.webContents.sendInputEvent({ type: 'keyDown', keyCode: String(endView), modifiers: ['control'] });
       host.win.webContents.sendInputEvent({ type: 'keyUp', keyCode: String(endView), modifiers: ['control'] });
-      await pause(host, Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW_MS'] : undefined) ?? 2_500));
+      if (endViewUntil !== null) await settleAt(host, endViewUntil);
+      else await pause(host, Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW_MS'] : undefined) ?? 2_500));
     }
     for (const selector of probes) {
       // `value` rides along for a control (a select, an input), since its text is every option it offers (Part R's proof reads the strategy selector).

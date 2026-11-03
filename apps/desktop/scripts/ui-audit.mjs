@@ -28,6 +28,7 @@
  *
  * Evidence under `.ui-audit/`: a PNG per view per size, and `report.json`.
  */
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { buildDesktop, evidenceDirectory, repo } from './lib/harness.mjs';
@@ -76,6 +77,19 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
   'mcp_servers:', '  code_intelligence: { enabled: false }',
   'rotaris:', '  delegation_strategy: single', '',
 ].join('\n'));
+/**
+ * The workspace is a one-commit repository of its own, as `overview-proof`'s and `mcp-proof`'s are. It sits inside the
+ * checkout (`.ui-audit/`, or `ui-review`'s `.ui-review/<revision>/iteration-N/`), and with no `.git` of its own the
+ * workspace service read the enclosing checkout as its repository — 19 worktrees, 50 reads in 15 s on 2026-11-02 — while
+ * `/worktree`, available only once that read has answered, read UNREACHED as if the product had failed to open it
+ * (docs/archive/defects/ui-audits-worktree-dialog-reads-unreached-until-the-git-view-has-read-the-enclosing-checkout.md).
+ * `.rotaris/` is ignored so the configuration load's amendment (REQ-CONFIG-013) is a no-op and the tree stays clean.
+ */
+const git = (...args) => execFileSync('git', args, { cwd: workspace, stdio: 'ignore', env: { ...process.env, GIT_AUTHOR_NAME: 'ui-audit', GIT_AUTHOR_EMAIL: 'ui-audit@rotaris.local', GIT_COMMITTER_NAME: 'ui-audit', GIT_COMMITTER_EMAIL: 'ui-audit@rotaris.local' } });
+git('init', '-q', '-b', 'main');
+writeFileSync(join(workspace, '.gitignore'), '.rotaris/\n.serena/\n');
+git('add', 'README.md', '.gitignore');
+git('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
 
 /** REQ-SHELL-023's seven, in the specification's order, with the root each one renders. */
 const VIEWS = [
@@ -396,12 +410,23 @@ const OVERLAYS = [
   // so the stash is made through the composer's own control rather than through a second slash command: a
   // slash command typed and submitted in one burst arrives before the popup has filtered, and the composer
   // keeps the literal text. An opener that cannot open is a finding about the audit, not about the product.
+  // The control is the composer strip's Stash (`composer-stash`, REQ-CHAT-042: the text onto the stash, the
+  // composer cleared), not the transcript toolbar's `transcript-stash`, which is "Manage prompt stash" and OPENS
+  // the dialog: until 2026-11-03 the prelude pressed that one, so the dialog the sweep measured was the one the
+  // press had opened and the `/pop` it then submitted ran nothing, unavailable over an empty stash
+  // (docs/archive/defects/ui-audits-stash-dialog-was-opened-by-the-toolbars-manage-control-never-by-pop.md).
   { name: 'stash dialog', root: '[data-testid="stash-dialog"]', typed: '/pop', enter: true,
-    prelude: [{ text: 'a prompt for the ui audit', enter: false }, { click: '[data-testid="transcript-stash"]' }] },
+    prelude: [{ text: 'a prompt for the ui audit', enter: false }, { click: '[data-testid="composer-stash"]' }] },
   { name: 'session browser', root: '.session-browser', typed: '/sessions', enter: true },
   { name: 'start-session dialog', root: '[data-testid="start-session-dialog"]', typed: '/new', enter: true },
   { name: 'worktree dialog', root: '[data-testid="worktree-dialog"]', typed: '/worktree', enter: true },
 ];
+/**
+ * How long a typed slash command may take to read AVAILABLE in the popup before it is submitted. `/worktree`'s condition
+ * is the renderer's `hasGit`, which the start-time `git.read` fills; REQ-GIT-102 gives that read 15 s, and the bound
+ * leaves it a margin.
+ */
+const SLASH_AVAILABLE_MS = 20_000;
 
 /** @type {Array<Record<string, unknown> & { kind: string }>} */
 const findings = [];
@@ -491,12 +516,29 @@ try {
           // Select what is already there so the typing REPLACES it. Without this the previous overlay's
           // text survives and "/pop" is typed as "//pop", which opens nothing and reads as UNREACHED —
           // this pass's own first execution reported nine of those and not one was the product's.
-          // Typed first, THEN submitted: a slash command whose Enter rides in the same burst arrives before
-          // the popup has filtered, and the command never runs.
+          // Typed first, THEN submitted, and submitted only once the popup lists the command AVAILABLE
+          // (`data-available="1"` on its row): the popup must have filtered — an Enter riding in the typing's burst
+          // arrived before it had — and the command's own condition must hold: `/worktree`'s is the renderer's
+          // `hasGit`, which the start-time `git.read` fills, `/pop`'s the stash the prelude made. A fixed 450 ms waited
+          // for neither, and on a loaded host the worktree dialog read UNREACHED while the catalogue still refused the
+          // command (docs/archive/defects/ui-audits-worktree-dialog-reads-unreached-until-the-git-view-has-read-the-enclosing-checkout.md).
+          // When the deadline passes, the reason the row shows is the finding.
           await d.chord('Ctrl+A');
           await d.type(overlay.typed, { enter: false });
-          await sleep(450);
-          if (overlay.enter === true) { await d.chord('Return'); }
+          if (overlay.enter === true) {
+            const row = `.slash-popup__row[data-command=${JSON.stringify(overlay.typed.slice(1))}]`;
+            const available = await d.waitFor(`${row}[data-available="1"]`, { timeoutMs: SLASH_AVAILABLE_MS })
+              .then((found) => ({ ok: true, waitedMs: found.waitedMs }))
+              .catch(async () => ({ ok: false, reason: await d.eval(`document.querySelector(${JSON.stringify(`${row} .slash-popup__reason`)})?.textContent ?? null`).catch(() => null) }));
+            if (!available.ok) {
+              note('UNREACHED', `overlay: ${overlay.name}`, size.label, { root: overlay.root, opener: overlay.typed, unavailable: available.reason ?? `no ${overlay.typed} row read available in the slash popup within ${SLASH_AVAILABLE_MS} ms` });
+              await d.chord('Escape');
+              await sleep(200);
+              continue;
+            }
+            console.log(`         ${overlay.typed} read available after ${available.waitedMs} ms`);
+            await d.chord('Return');
+          } else await sleep(450);
         }
         const open = await d.waitFor(overlay.root, { timeoutMs: 6_000 }).then(() => true).catch(() => false);
         if (!open) {

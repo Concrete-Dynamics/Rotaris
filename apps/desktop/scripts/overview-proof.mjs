@@ -12,7 +12,8 @@
  *                  tokens card with ≥ 2 samples, the tool-call chips matching the store, the agents caption, the
  *                  repository card with the branch, the sessions card with the session and its duration.
  *   3. relaunch  — the same profile again: the sparkline's samples identical (persisted with the session,
- *                  REQ-MONITOR-166) and the pane split written in (2) restored (REQ-SHELL-069).
+ *                  REQ-MONITOR-166), the pane split written in (2) restored (REQ-SHELL-069) and the session listed; its
+ *                  two steps wait for their conditions (the resume's open, the sessions card's first row), bounded.
  *
  * Evidence under `.proof/overview-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
@@ -175,15 +176,28 @@ results.run = { status: session.execution_status, samples: samples.length, token
 mkdirSync(preferences, { recursive: true });
 writeFileSync(join(preferences, 'preferences.json'), JSON.stringify({ ...JSON.parse(existsSync(join(preferences, 'preferences.json')) ? require('node:fs').readFileSync(join(preferences, 'preferences.json'), 'utf8') : '{}'), 'panels/version': 1, 'panels/overview/panes': 2, 'panels/overview/state': [800, 420] }, null, 2));
 
-// 3. Relaunch: the samples identical, the split restored, the session listed.
-const again = await launch('relaunch', workspace, local, preferences, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_AFTER_MS: '2500' });
+// 3. Relaunch: the samples identical, the split restored, the session listed. Two conditions, no appointments: the chord
+//    back to the Overview waits for the resume to have opened the stored session (the view is the Workspace and the browser
+//    is closed — `openSession` switches the view once `session.subscribe` has answered), and the probes wait for the
+//    sessions card's first row, which `session.list` fills after the repository reads on a loaded host. Until 2026-11-03
+//    the chord came at 2.5 s and the probe 3.5 s later, and under a writing workflow of fourteen agents it read
+//    "Loading sessions…" with 0 rows while the reads were still ending
+//    (docs/archive/defects/overview-proofs-relaunch-reads-the-sessions-card-at-a-fixed-offset-while-it-is-still-loading.md).
+const RESUMED = `document.querySelector('.app-shell')?.dataset.view === 'workspace' && !document.querySelector('.session-browser')`;
+const again = await launch('relaunch', workspace, local, preferences, {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_WAIT: `js:${RESUMED}`, ROTARIS_CAPTURE_WAIT_MS: '20000', ROTARIS_CAPTURE_AFTER_MS: '500',
+  ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_UNTIL: '[data-testid="overview-sessions"] .ov-session@~20000',
+});
+if (!/capture: wait for js:.* satisfied after \d+ ms/.test(again.log)) throw new Error(`the relaunch never saw the stored session opened from the browser:\n${again.log.split('\n').filter((l) => /capture: (wait|no |opened)/.test(l)).join('\n')}`);
+const sessionRowWait = /capture: \[data-testid="overview-sessions"\] \.ov-session (matched with (-?\d+) ms to spare|never matched within \d+ ms)/.exec(again.log);
 const sparkAgain = Number(first(again.probes, '.ov-spark')?.data?.['data-samples'] ?? -1);
 if (sparkAgain !== samples.length) throw new Error(`after the relaunch the sparkline carries ${sparkAgain} samples; the store holds ${samples.length}`);
 const divider = first(again.probes, '[data-testid="overview-divider"]');
 if (divider?.data?.['aria-valuenow'] !== '420') throw new Error(`the stored split was not restored: aria-valuenow=${divider?.data?.['aria-valuenow'] ?? 'absent'}`);
 const rowsAgain = again.probes['[data-testid="overview-sessions"] .ov-session'] ?? [];
-if (rowsAgain.length !== 1) throw new Error(`after the relaunch the sessions card listed ${rowsAgain.length} row(s)`);
-results.relaunch = { samples: sparkAgain, split: 420, sessionsListed: rowsAgain.length };
+if (rowsAgain.length !== 1) throw new Error(`after the relaunch the sessions card listed ${rowsAgain.length} row(s) (${sessionRowWait?.[1] ?? 'no wait for the row was logged'})`);
+results.relaunch = { samples: sparkAgain, split: 420, sessionsListed: rowsAgain.length, sessionRowWithinMs: sessionRowWait?.[2] === undefined ? null : 20_000 - Number(sessionRowWait[2]) };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

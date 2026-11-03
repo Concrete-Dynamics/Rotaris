@@ -174,8 +174,8 @@ describe('a packaged build answers no capture variable beyond the probe\'s three
     }
   });
 
-  it('names the eight the packaged probe does not need, so the seam check fails a build that keeps one', () => {
-    for (const name of ['ROTARIS_CAPTURE_WAIT', 'ROTARIS_CAPTURE_WAIT_MS', 'ROTARIS_CAPTURE_END_VIEW', 'ROTARIS_CAPTURE_END_VIEW_MS', 'ROTARIS_CAPTURE_PROBE', 'ROTARIS_CAPTURE_PROMPT_MS', 'ROTARIS_CAPTURE_SKILLS_HOME', 'ROTARIS_CAPTURE_INSTRUCTIONS_HOME']) {
+  it('names the eight the packaged probe does not need (and `_END_VIEW_UNTIL`, under `_END_VIEW`), so the seam check fails a build that keeps one', () => {
+    for (const name of ['ROTARIS_CAPTURE_WAIT', 'ROTARIS_CAPTURE_WAIT_MS', 'ROTARIS_CAPTURE_END_VIEW', 'ROTARIS_CAPTURE_END_VIEW_MS', 'ROTARIS_CAPTURE_END_VIEW_UNTIL', 'ROTARIS_CAPTURE_PROBE', 'ROTARIS_CAPTURE_PROMPT_MS', 'ROTARIS_CAPTURE_SKILLS_HOME', 'ROTARIS_CAPTURE_INSTRUCTIONS_HOME']) {
       expect(covered(name), name).toBe(true);
     }
     const r = seamCheck(out({ 'index.js': 'env.ROTARIS_CAPTURE_PNG; env.ROTARIS_CAPTURE_PROMPT; env.ROTARIS_CAPTURE_AFTER_MS; env.ROTARIS_CAPTURE_WAIT_MS', 'run-host.js': "process.env['ROTARIS_CAPTURE_SKILLS_HOME']" }));

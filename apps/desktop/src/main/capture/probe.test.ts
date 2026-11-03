@@ -13,7 +13,7 @@ import { installFinish, installPromptSeam, promptEvents, submitEvents, textEvent
  * run's deadline quit (PD-ORCH-005 clause 3: a quit brings a live run to rest).
  */
 
-const VARIABLES = ['ROTARIS_CAPTURE_AFTER_MS', 'ROTARIS_CAPTURE_WAIT', 'ROTARIS_CAPTURE_WAIT_MS', 'ROTARIS_CAPTURE_END_VIEW', 'ROTARIS_CAPTURE_PROBE'] as const;
+const VARIABLES = ['ROTARIS_CAPTURE_AFTER_MS', 'ROTARIS_CAPTURE_WAIT', 'ROTARIS_CAPTURE_WAIT_MS', 'ROTARIS_CAPTURE_END_VIEW', 'ROTARIS_CAPTURE_END_VIEW_MS', 'ROTARIS_CAPTURE_END_VIEW_UNTIL', 'ROTARIS_CAPTURE_PROBE'] as const;
 const saved = Object.fromEntries(VARIABLES.map((v) => [v, process.env[v]]));
 const dirs: string[] = [];
 afterEach(() => {
@@ -126,6 +126,87 @@ describe('a capture\'s wait counts from the submission of its typed prompt (prob
     await tick(h, 500);
     h.clock.advance(100);
     await settle();
+    expect(h.ended).toEqual(['exit 0']);
+  });
+});
+
+/**
+ * The last view's probes wait for a condition when `_END_VIEW_UNTIL` names one, bounded, rather than for `_END_VIEW_MS`:
+ * `overview-proof`'s relaunch read the sessions card 2.5 s after its Ctrl+1 while the card still said "Loading sessions…"
+ * on a loaded host (docs/archive/defects/overview-proofs-relaunch-reads-the-sessions-card-at-a-fixed-offset-while-it-is-still-loading.md).
+ */
+describe('the last view\'s probes wait for the selector `_END_VIEW_UNTIL` names (probe.ts, installFinish)', () => {
+  function viewHost(matched: () => boolean) {
+    const clock = new FakeClock();
+    const lines: string[] = [];
+    const ended: string[] = [];
+    const chords: string[] = [];
+    const stub = {
+      win: { webContents: {
+        capturePage: () => Promise.resolve({ toPNG: () => Buffer.from('png') }),
+        // The match probe (`.some(`) answers the condition; a probe read (`.map(`) answers an empty list.
+        executeJavaScript: (code: string) => Promise.resolve(code.includes('.some(') ? matched() : code.includes('.map(') ? [] : null),
+        sendInputEvent: (event: { type: string; keyCode: string }) => { chords.push(`${event.type} ${event.keyCode}`); },
+      } },
+      clocks: clock,
+      log: (m: string) => { lines.push(m); },
+      resultSeen: () => false,
+      exit: (code: number) => { ended.push(`exit ${code}`); },
+      quit: () => { ended.push('quit'); },
+    };
+    return { host: stub as unknown as CaptureHost, clock, lines, ended, chords };
+  }
+  function lastView(until: string | undefined, endViewMs?: string): string {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-probe-'));
+    dirs.push(dir);
+    for (const v of VARIABLES) delete process.env[v];
+    process.env['ROTARIS_CAPTURE_AFTER_MS'] = '100';
+    process.env['ROTARIS_CAPTURE_END_VIEW'] = '1';
+    process.env['ROTARIS_CAPTURE_PROBE'] = '.ov-session';
+    if (until !== undefined) process.env['ROTARIS_CAPTURE_END_VIEW_UNTIL'] = until;
+    if (endViewMs !== undefined) process.env['ROTARIS_CAPTURE_END_VIEW_MS'] = endViewMs;
+    return join(dir, 'capture.png');
+  }
+  const step = async (h: { clock: FakeClock }, ms: number): Promise<void> => { h.clock.advance(ms); await settle(); };
+
+  it('probes once the selector matches, and says how much of the bound was left', async () => {
+    let matched = false;
+    const h = viewHost(() => matched);
+    installFinish(h.host, lastView('.ov-session@~5000'), undefined);
+    await step(h, 100);
+    expect(h.chords).toEqual(['keyDown 1', 'keyUp 1']);
+    for (let i = 0; i < 6; i += 1) await step(h, 50);
+    expect(h.lines.some((l) => l.startsWith('capture: probe'))).toBe(false);
+    matched = true;
+    await step(h, 50);
+    await settle();
+    const matchedAt = h.lines.findIndex((l) => /^capture: \.ov-session matched with -?\d+ ms to spare$/.test(l));
+    expect(matchedAt).toBeGreaterThanOrEqual(0);
+    expect(h.lines.indexOf('capture: probe .ov-session → []')).toBeGreaterThan(matchedAt);
+    expect(h.ended).toEqual(['exit 0']);
+  });
+
+  it('probes at the deadline when the selector never matches, and the log says so', async () => {
+    const h = viewHost(() => false);
+    installFinish(h.host, lastView('.ov-session@~120'), undefined);
+    await step(h, 100);
+    // The deadline is wall time (`settleAt`); each step is 50 ms of the clock ports and about 20 ms of the wall's.
+    for (let i = 0; i < 40 && !h.lines.includes('capture: .ov-session never matched within 120 ms'); i += 1) await step(h, 50);
+    expect(h.lines).toContain('capture: .ov-session never matched within 120 ms');
+    await settle();
+    expect(h.lines).toContain('capture: probe .ov-session → []');
+    expect(h.ended).toEqual(['exit 0']);
+  });
+
+  it('without it the probes wait `_END_VIEW_MS`, as before', async () => {
+    const h = viewHost(() => true);
+    installFinish(h.host, lastView(undefined, '400'), undefined);
+    await step(h, 100);
+    await step(h, 399);
+    expect(h.lines.some((l) => l.startsWith('capture: probe'))).toBe(false);
+    await step(h, 1);
+    await settle();
+    expect(h.lines).toContain('capture: probe .ov-session → []');
     expect(h.ended).toEqual(['exit 0']);
   });
 });

@@ -1,5 +1,19 @@
 ## overview-proof's relaunch reads the sessions card at a fixed offset while it is still loading
 
+**Outcome (repaired 2026-11-03).** The relaunch waits for its two conditions, bounded, in place of its two appointments.
+The capture seam gained `ROTARIS_CAPTURE_END_VIEW_UNTIL="selector>>text@~ms"` (`apps/desktop/src/main/capture/probe.ts`,
+read behind `__ROTARIS_SEAMS__` on its own line: the step grammar's waiting form, `settleAt`, after the `_END_VIEW` chord in
+place of the `_END_VIEW_MS` pause, the seam check's `_END_VIEW` prefix covering it; `probe.test.ts` pins the match, the
+deadline and the pause it replaces), and `overview-proof.mjs`'s relaunch names the sessions card's first row
+(`[data-testid="overview-sessions"] .ov-session@~20000`) and gates the chord back to the Overview on the resume having
+opened the stored session (`ROTARIS_CAPTURE_WAIT=js:…` — the view is the Workspace and the browser closed, which
+`openSession` makes true once `session.subscribe` has answered; 20 s), asserting that wait was satisfied and recording how
+long the row took (`results.json`, `sessionRowWithinMs`). First executed 2026-11-03 on the working tree over `83910dc8`
+(Windows 11 ARM64, Node 26.13.0, Electron 44.3.0, two other sessions working on the host): `pnpm overview-proof` three
+times green, the resume seen 1514, 1527 and 1573 ms after the launch, the row 742, 3351 and 2525 ms after the chord — the
+second within 150 ms of the appointment this note records — with the git view's reads taking 1.7 to 5.0 s. The record:
+`docs/proofs/overview-proof.md`; the register row is in `docs/architecture/first-executions/35-the-register-34.md`.
+
 `pnpm overview-proof`'s third launch (`relaunch`, `apps/desktop/scripts/overview-proof.mjs`) resumes the stored session
 with `ROTARIS_CAPTURE_RESUME=latest`, ends on the Overview after `ROTARIS_CAPTURE_END_VIEW_MS=3500`, and probes the view
 `ROTARIS_CAPTURE_AFTER_MS=2500` later. Nothing waits for the cards to settle: the probe reads whatever the view shows at

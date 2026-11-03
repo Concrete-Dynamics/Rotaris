@@ -1,5 +1,21 @@
 ## ui-audit's worktree dialog reads UNREACHED until the git view has read the enclosing checkout
 
+**Outcome (repaired 2026-11-03).** Both parts, in the harness. `ui-audit.mjs` makes its scratch workspace a one-commit
+repository of its own (`git init -q -b main`, a `.gitignore` keeping `.rotaris/` out, one commit — `overview-proof`'s
+shape), so the workspace service reads it and not the enclosing checkout; and the overlay sweep submits a typed slash
+command only once its popup row reads available (`.slash-popup__row[data-command=…][data-available="1"]`, the driver's
+`waitFor`, bounded at 20 s — REQ-GIT-102's 15 s with a margin), the reason the row shows becoming the `UNREACHED` finding
+when the deadline passes, in place of a fixed 450 ms after the typing. That wait found a second condition of the sweep on
+its first run: the stash dialog's opener had never been `/pop`
+(`docs/archive/defects/ui-audits-stash-dialog-was-opened-by-the-toolbars-manage-control-never-by-pop.md`, repaired with
+this one). First executed 2026-11-03 on the working tree over `83910dc8` (Windows 11 ARM64, Node 26.13.0, Electron 44.3.0,
+two other sessions working on the host): `pnpm ui-review -- --iteration=1 --views=1` three times after the stash repair
+(and three before it), the worktree dialog reached and CLEAN at 1400×900 and 1000×680 in every pack, `/worktree` read
+available 103 to 131 ms after the typing, `UNREACHED` 0 and the last three packs' findings 0; the log's repository line
+reads `git=true repo=true branch=main` with `worktrees=1`, and the git view's reads are 10 in 2.0 to 4.2 s against the 50
+in 15.3 s this note records. The record: `docs/proofs/ui-audit.md`; the register row is in
+`docs/architecture/first-executions/35-the-register-34.md`.
+
 `pnpm ui-audit` (and `pnpm ui-review`, which runs it) opens each overlay by typing its slash command into the composer and
 waits 6 s for the overlay's root (`apps/desktop/scripts/ui-audit.mjs`, the overlay sweep). `/worktree` is available only
 while the renderer's `hasGit` is true, and `hasGit` is `git.state?.gitAvailable && git.state.isRepository`

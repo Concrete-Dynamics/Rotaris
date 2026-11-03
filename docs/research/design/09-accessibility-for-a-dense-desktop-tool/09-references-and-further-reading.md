@@ -1,0 +1,62 @@
+# 09. Accessibility for a dense desktop tool — 9. References and further reading
+
+Section 9 of [guide 09](../09-accessibility-for-a-dense-desktop-tool.md), moved here verbatim on 2026-11-03 so that the guide's section 8 can carry the rulings of its questions within [the document budget](../../../README.md#the-document-budget); the `[n]` marks in the guide's sections 2 to 8 name the entries below.
+
+- [1] [W3C WAI, What's New in WCAG 2.2](https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/) — the new AA criteria; retrieved 2026-11-01
+- [2] [W3C WAI, Understanding SC 2.4.11: Focus Not Obscured (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html) — overlays; retrieved 2026-11-01
+- [3] [W3C WAI, Understanding SC 2.4.13: Focus Appearance](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html) — area, inset; retrieved 2026-11-01
+- [4] [W3C WAI, Understanding SC 1.4.11: Non-text Contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html) — adjacency, icons, thin lines; retrieved 2026-11-01
+- [5] [Sara Soueidan, A guide to designing accessible, WCAG-conformant focus indicators](https://www.sarasoueidan.com/blog/focus-indicators/) — two colours; retrieved 2026-11-01
+- [6] [MDN Web Docs, forced-colors](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/forced-colors) — forced properties; retrieved 2026-11-01
+- [7] [Microsoft Learn, Contrast themes](https://learn.microsoft.com/en-us/windows/apps/design/accessibility/high-contrast-themes) — system colours, borders; retrieved 2026-11-01
+- [8] [W3C WAI, Understanding SC 2.5.8: Target Size (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) — 24 px circle; retrieved 2026-11-01
+- [9] [Apple, Accessibility, Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/accessibility) — macOS sizes, motion; retrieved 2026-11-01
+- [10] [W3C WAI, Understanding SC 1.4.10: Reflow](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html) — Reflow and Resize Text; retrieved 2026-11-01
+- [11] [Microsoft Learn, Keyboard accessibility](https://learn.microsoft.com/en-us/windows/apps/design/accessibility/keyboard-accessibility) — F6, shortcut channels; retrieved 2026-11-01
+- [12] [W3C WAI-ARIA APG, Developing a Keyboard Interface](https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/) — composites, focus, chords; retrieved 2026-11-01
+- [13] [W3C WAI-ARIA APG, Dialog (Modal) Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/) — return, initial focus; retrieved 2026-11-01
+- [14] [W3C WAI-ARIA APG, Tree View Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/) — keys, states; retrieved 2026-11-01
+- [15] [W3C WAI-ARIA APG, Grid Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/grid/) — interactive cells only; retrieved 2026-11-01
+- [16] [W3C WAI-ARIA APG, Tabs Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/) — activation by latency; retrieved 2026-11-01
+- [17] [GitHub Primer, IconButton accessibility](https://primer.style/product/components/icon-button/accessibility/) — names, tooltips; retrieved 2026-11-01
+- [18] [W3C WAI, Understanding SC 1.4.13: Content on Hover or Focus](https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html) — three conditions; retrieved 2026-11-01
+- [19] [Scott O'Hara, Are we live?](https://www.scottohara.me/blog/2022/02/05/are-we-live.html) — persistent regions; retrieved 2026-11-01
+- [20] [MDN Web Docs, ARIA live regions](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Guides/Live_regions) — plain text; retrieved 2026-11-01
+- [21] [W3C WAI, Understanding SC 4.1.3: Status Messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html) — roles, phrases; retrieved 2026-11-01
+- [22] [W3C WAI, Understanding SC 2.2.2: Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html) — auto-updating content; retrieved 2026-11-01
+- [23] [Microsoft, Visual Studio Code, Accessibility](https://code.visualstudio.com/docs/configure/accessibility/accessibility) — Accessible View; retrieved 2026-11-01
+- [24] [GitHub Blog, Accessibility considerations behind code search and code view](https://github.blog/engineering/user-experience/accessibility-considerations-behind-code-search-and-code-view/) — virtualisation, headings; retrieved 2026-11-01
+- [25] [Adrian Roselli, Defining 'Toast' Messages](https://adrianroselli.com/2020/01/defining-toast-messages.html) — timed messages; retrieved 2026-11-01
+- [26] [Microsoft Edge, ariaNotify explainer](https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/Accessibility/AriaNotify/explainer.md) — region failures, fallback; retrieved 2026-11-01
+- [27] [GNOME, Accessibility, Human Interface Guidelines](https://developer.gnome.org/hig/guidelines/accessibility.html) — manual checklist; retrieved 2026-11-01
+- [28] [Sampath, Merrick, Macvean, Accessibility of Command Line Interfaces (CHI 2021)](https://storage.googleapis.com/gweb-research2023-media/pubtools/6065.pdf) — structure, status, effort; retrieved 2026-11-01
+- [29] [Potluri et al., CodeTalk (CHI 2018)](https://www.microsoft.com/en-us/research/publication/codetalk-improving-programming-environment-accessibility-for-visually-impaired-developers/) — four families; retrieved 2026-11-01
+- [30] [Chen et al., Unblind Your Apps (ICSE 2020)](https://arxiv.org/abs/2003.00380) — missing labels; retrieved 2026-11-01
+- [31] [WebAIM, The WebAIM Million 2026](https://webaim.org/projects/million/) — failure rates, ARIA; retrieved 2026-11-01
+- [32] [Deque Systems, Automated Accessibility Testing Coverage](https://www.deque.com/automated-accessibility-testing-coverage/) — coverage by volume; retrieved 2026-11-01
+- [33] [WebAIM, Screen Reader User Survey #10 Results](https://webaim.org/projects/screenreadersurvey10/) — readers, barriers; retrieved 2026-11-01
+- [34] [W3C WAI-ARIA APG, Feed Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/feed/) — busy while updating; retrieved 2026-11-01
+- [35] [W3C WAI-ARIA APG, Read Me First](https://www.w3.org/WAI/ARIA/apg/practices/read-me-first/) — roles as promises; retrieved 2026-11-01
+- [36] [W3C WAI, Understanding SC 1.4.3: Contrast (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) — derivation, rounding; retrieved 2026-11-01
+- [37] [Andrew Somers, Myndex, Why APCA](https://git.apcacontrast.com/documentation/WhyAPCA) — dark colours; retrieved 2026-11-01
+- [38] [Raluca Budiu, Nielsen Norman Group, Dark Mode vs. Light Mode](https://www.nngroup.com/articles/dark-mode/) — polarity; retrieved 2026-11-01
+- [39] [WebAIM, Survey of Users with Low Vision #2 Results](https://webaim.org/projects/lowvisionsurvey2/) — preference, zoom; retrieved 2026-11-01
+- [40] [W3C AG WG, WCAG2ICT for WCAG 2.2](https://www.w3.org/TR/wcag2ict-22/) — software readings; retrieved 2026-11-01
+- [41] [W3C WAI, Understanding SC 2.3.3: Animation from Interactions](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html) — opacity, auto-start; retrieved 2026-11-01
+- [42] [W3C WAI, Understanding SC 1.4.1: Use of Color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html) — non-colour cue; retrieved 2026-11-01
+- [43] [Electron, Accessibility](https://www.electronjs.org/docs/latest/tutorial/accessibility) — tree on demand; retrieved 2026-11-01
+- [44] [Flores-Saviaga et al., The Impact of Generative AI Coding Assistants on Developers Who Are Visually Impaired (CHI 2025)](https://arxiv.org/html/2503.16491) — overload, focus; retrieved 2026-11-01
+- [45] [xterm.js, AccessibilityManager.ts](https://github.com/xtermjs/xterm.js/blob/master/src/browser/AccessibilityManager.ts) — output speech, cap; retrieved 2026-11-01
+- [46] [Microsoft, VS Code, chatAccessibilityService.ts](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/chat/browser/accessibility/chatAccessibilityService.ts) — pending cues; retrieved 2026-11-01
+- [47] [W3C, WAI-ARIA 1.2](https://www.w3.org/TR/wai-aria-1.2/) — busy, politeness; retrieved 2026-11-01
+- [48] [NV Access, NVDA 2026.3 User Guide](https://download.nvaccess.org/documentation/userGuide.html) — terminal diffing; retrieved 2026-11-01
+- [49] [W3C WAI, Understanding SC 1.1.1: Non-text Content](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html) — chart alternatives; retrieved 2026-11-01
+- [50] [W3C WAI, Understanding SC 1.3.1: Info and Relationships](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html) — relationships; retrieved 2026-11-01
+- [51] [Frank Elavsky, Chartability workbook](https://chartability.github.io/POUR-CAF/) — tables, tab stops, state contrast; retrieved 2026-11-01
+- [52] [W3C, SVG Accessibility API Mappings](https://www.w3.org/TR/svg-aam-1.0/) — unnamed shapes; retrieved 2026-11-01
+- [53] [W3C WAI-ARIA APG, Meter Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/meter/) — meter, value text; retrieved 2026-11-01
+- [54] [W3C WAI-ARIA APG, Radio Group Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/radio/) — group names; retrieved 2026-11-01
+- [55] [W3C WAI, Understanding SC 3.3.2: Labels or Instructions](https://www.w3.org/WAI/WCAG22/Understanding/labels-or-instructions.html) — visible labels; retrieved 2026-11-01
+- [56] [W3C WAI, Form Instructions](https://www.w3.org/WAI/tutorials/forms/instructions/) — described-by, placeholder; retrieved 2026-11-01
+- [57] [W3C WCAG 2.2 Techniques, ARIA21](https://www.w3.org/WAI/WCAG22/Techniques/aria/ARIA21) — invalid timing; retrieved 2026-11-01
+- [58] [Government Digital Service, GOV.UK Design System, Radios](https://design-system.service.gov.uk/components/radios/) — no pre-selection; retrieved 2026-11-01

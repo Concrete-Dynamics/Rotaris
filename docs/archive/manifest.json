@@ -889,6 +889,7 @@
     "defects/four-not-measured-statements-stand-after-later-runs-answered-them.md": "cd27fc976d1aa45ce5c46221a918252776de6ae39735faee67eb93547d0ac89b",
     "defects/git-diff-with-differences-read-as-a-failure.md": "b8007268fb9014d29f16cef539fcc3fd02c2a99783605ecc2f3801e643993457",
     "defects/glob-compiles-a-brace-group-into-an-invalid-regex.md": "479ede9aee2f5c80c01863173f837d59d13fbe790123114676191e4dec7a8014",
+    "defects/guide-09-and-the-backlog-stood-at-the-document-budget-so-the-first-ruling-of-their-questions-broke-it.md": "39d78dde1e74b2cf55658608618cb5f3bac3c4751a038b908e12c3f9490fa607",
     "defects/haet-edit-answers-a-whitespace-only-miss-with-not-found-exactly.md": "900e886cbf731d38bb2f2e93e4dd12185eea06bad0984865fea350872c00a930",
     "defects/haet-edit-applies-an-edit-that-changes-nothing.md": "2d2205f1ddd93e36cd0ce70f6bab2cf986c46c519b95f52874e24674ae9a807b",
     "defects/haet-edit-quotes-an-empty-window-for-a-blank-old-string.md": "4131f0742e4254146f71cf9ae5f966a975cfe6d4e63a4d3bdc319fdb9ccde892",

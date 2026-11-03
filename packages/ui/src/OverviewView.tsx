@@ -120,6 +120,15 @@ export function agentStatesLine(c: Pick<ReturnType<typeof agentCounts>, 'running
   return `running ${c.running} · waiting ${c.waiting}${c.paused > 0 ? ` · paused ${c.paused}` : ''} · done ${c.done} · failed ${c.failed}`;
 }
 
+/**
+ * The cost label's leading amount (PD-MONITOR-001's label text is fixed; this only chooses what the mono face sets): the figure,
+ * `< 0.0001` included, and the rest of the label; a label with no leading figure ("price not established") is all rest.
+ */
+export function costLabelParts(text: string): { figure: string; rest: string } {
+  const m = /^(<\s?)?\d[\d.,]*/.exec(text);
+  return m ? { figure: m[0], rest: text.slice(m[0].length) } : { figure: '', rest: text };
+}
+
 /** REQ-MONITOR-171's dot: attached → run; background → informational; other busy → pulsing run; failed → failure; else idle. */
 export function sessionDot(row: SessionListItemPayload, attached: boolean): { tone: 'run' | 'info' | 'fail' | 'idle'; pulse: boolean; text: string } {
   const p = presentationStatus(row.status);
@@ -240,18 +249,21 @@ export function OverviewView(props: OverviewProps) {
             <div className="overview__metrics">
               {/* Audit P4: with no session focused the three session-scoped cards draw a dash in every figure and one sentence as
                   their caption, as the Cloud credit tile and the header do, instead of ten zeros read as a session that measured
-                  nothing; the Repository card reads the workspace, so its figures stay. Audit item 5: every caption that carries a
-                  figure is set in `--rt-font-mono` (`.mono` on the line, as the agent captions already were); the sentence is prose. */}
+                  nothing; the Repository card reads the workspace, so its figures stay. Audit item 5: every figure a caption
+                  carries is set in `--rt-font-mono` — a span per figure, the prose in the body face, as HOME sets "14/18" beside
+                  "Billing core" — not the whole line: set whole in mono, "1 file touched · 0 uncommitted" and the cost label outgrew
+                  the four-column card's 171 px at 1400 and broke "uncommitted" and "rates" from their figures (iteration 2's UIR-201).
+                  The adopted `.card-meta` is a flex row, so each caption's content is one child span and wraps as inline text. */}
               <Card kicker="Tokens" className="ov-card--tokens">
                 <div className="ov-kpi"><span className="kpi-value" data-testid="overview-tokens">{session ? total.toLocaleString('en-US') : '—'}</span><span className="kpi-unit">tok</span></div>
                 <svg className="ov-spark" viewBox="0 0 160 36" width="160" height="36" role="img" aria-label={path ? `token history, ${session?.usageHistory.length ?? 0} samples` : 'no token history yet'} data-samples={session?.usageHistory.length ?? 0}>
                   {path ? <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" /> : <line x1="0" y1="35" x2="160" y2="35" stroke="currentColor" strokeDasharray="2 3" opacity="0.5" />}
                 </svg>
-                <div className={`card-meta${session ? ' mono' : ''}`}><span data-testid="overview-cost" data-qualifier={session?.costLabel.qualifier ?? 'unknown'}>{session ? `${path ? '' : 'no history yet · '}${session.costLabel.text}` : OVERVIEW_NO_SESSION_CAPTION}</span></div>
+                <div className="card-meta"><span data-testid="overview-cost" data-qualifier={session?.costLabel.qualifier ?? 'unknown'}>{session ? <>{path ? null : 'no history yet · '}{costLabelParts(session.costLabel.text).figure !== '' && <span className="mono">{costLabelParts(session.costLabel.text).figure}</span>}{costLabelParts(session.costLabel.text).rest}</> : OVERVIEW_NO_SESSION_CAPTION}</span></div>
               </Card>
               <Card kicker="Tool calls">
                 <div className="ov-kpi"><span className="kpi-value" data-testid="overview-tool-calls">{session ? session.toolCalls.total : '—'}</span></div>
-                <div className={`card-meta${session ? ' mono' : ''}`} data-testid="overview-tool-agents">{session ? `across ${session.toolCalls.agents} agent${session.toolCalls.agents === 1 ? '' : 's'}` : OVERVIEW_NO_SESSION_CAPTION}</div>
+                <div className="card-meta" data-testid="overview-tool-agents"><span>{session ? <>across <span className="mono">{session.toolCalls.agents}</span> agent{session.toolCalls.agents === 1 ? '' : 's'}</> : OVERVIEW_NO_SESSION_CAPTION}</span></div>
                 <div className="ov-chips" data-testid="overview-tool-chips">
                   {(session?.toolCalls.byTool ?? []).slice(0, 5).map((t) => <DesignTag key={t.tool} kind="neutral" className="mono">{t.tool} {t.count}</DesignTag>)}
                 </div>
@@ -268,16 +280,17 @@ export function OverviewView(props: OverviewProps) {
                             at 1400 px) a count wraps whole and its word never leaves its figure. */}
                         <div className="ov-kpi mono" data-testid="overview-repo-counts"><span className="ov-kpi__count"><i className="ph ph-arrow-up ov-kpi__marker" aria-hidden="true" /><span className="kpi-value">{repository.ahead}</span><span className="kpi-unit">ahead</span></span><span className="ov-kpi__count"><i className="ph ph-arrow-down ov-kpi__marker" aria-hidden="true" /><span className="kpi-value">{repository.behind}</span><span className="kpi-unit">behind</span></span></div>
                         <div className="card-meta mono" data-testid="overview-repo-branch">{repository.base ?? 'no base'} → {repository.branch ?? '—'}</div>
-                        <div className="card-meta mono" data-testid="overview-repo-touched">{repository.touched} file{repository.touched === 1 ? '' : 's'} touched · {repository.uncommitted} uncommitted{repository.failed.length > 0 ? ` · not read: ${repository.failed.join(', ')}` : ''}</div>
+                        <div className="card-meta" data-testid="overview-repo-touched"><span><span className="ov-caption__unit"><span className="mono">{repository.touched}</span> file{repository.touched === 1 ? '' : 's'} touched</span> · <span className="ov-caption__unit"><span className="mono">{repository.uncommitted}</span> uncommitted</span>{repository.failed.length > 0 ? ` · not read: ${repository.failed.join(', ')}` : ''}</span></div>
                       </>)}
               </Card>
               <Card kicker="Agents">
                 <div className="ov-kpi"><span className="kpi-value" data-testid="overview-agent-count">{session ? session.agents.length : '—'}</span></div>
-                <div className="card-meta mono" data-testid="overview-agent-caps">depth {session ? counts.depth : '—'} / {caps?.depth ?? '—'} · fan-out {session ? counts.running : '—'} / {caps?.fanOut ?? '—'}</div>
+                {/* REQ-MONITOR-169's caption form, its two clauses each one unit so a wrap falls at the " · " and never orphans a limit (UIR-202). */}
+                <div className="card-meta mono" data-testid="overview-agent-caps"><span><span className="ov-caption__unit">depth {session ? counts.depth : '—'} / {caps?.depth ?? '—'}</span> · <span className="ov-caption__unit">fan-out {session ? counts.running : '—'} / {caps?.fanOut ?? '—'}</span></span></div>
                 <div className={`card-meta${session ? ' mono' : ''}`} data-testid="overview-agent-states">{session ? agentStatesLine(counts) : OVERVIEW_NO_SESSION_CAPTION}</div>
               </Card>
             </div>
-            <Card kicker="Sessions" className="ov-card--sessions" actions={<span className="card-meta mono">{sessions.length} listed</span>}>
+            <Card kicker="Sessions" className="ov-card--sessions" actions={<span className="card-meta"><span><span className="mono">{sessions.length}</span> listed</span></span>}>
               {sessionsState === 'loading' && sessions.length === 0 ? <div className="card-body">Loading sessions…</div>
                 : sessionsState === 'error' ? (
                   /* Audit P1: a refused read is its own cell (REQ-NOTIFY-006's shape for a failed region, as REQ-NOTIFY-267 draws one):

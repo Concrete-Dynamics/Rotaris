@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, type AgentRecord, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
-import { clampRight, OVERVIEW_DIVIDER_WIDTH, OVERVIEW_LOADING_LABEL, OVERVIEW_NO_SESSION_CAPTION, OVERVIEW_PROPOSALS_HINT, OVERVIEW_SESSIONS_FAILED, OverviewView, type OverviewProps } from './OverviewView.js';
+import { clampRight, costLabelParts, OVERVIEW_DIVIDER_WIDTH, OVERVIEW_LOADING_LABEL, OVERVIEW_NO_SESSION_CAPTION, OVERVIEW_PROPOSALS_HINT, OVERVIEW_SESSIONS_FAILED, OverviewView, type OverviewProps } from './OverviewView.js';
 
 /**
  * The Overview audit of 2026-11-02 (`docs/design/briefs/overview.md`), executed 2026-11-03: each case pins one item's or one
@@ -85,23 +85,27 @@ describe('the three session-scoped cards with sessions listed and none focused (
     expect(html).toContain('data-testid="overview-tokens">—<');
     expect(html).toContain('data-testid="overview-tool-calls">—<');
     expect(html).toContain('data-testid="overview-agent-count">—<');
-    expect(html).toContain('data-testid="overview-agent-caps">depth — / 3 · fan-out — / 4<');
+    expect(html).toContain('data-testid="overview-agent-caps"><span><span class="ov-caption__unit">depth — / 3</span> · <span class="ov-caption__unit">fan-out — / 4</span></span></div>');
     expect(count(html, OVERVIEW_NO_SESSION_CAPTION)).toBe(3);
     expect(html).not.toContain('across 0 agents');
     expect(html).not.toContain('running 0 · waiting 0');
-    expect(html).toContain('data-testid="overview-repo-touched">1 file touched · 0 uncommitted<');
-    // The sentence is prose: it is not set in the data face (the audit's taste note on prose in mono).
-    expect(html).toContain('<div class="card-meta" data-testid="overview-tool-agents">');
+    expect(html).toContain('data-testid="overview-repo-touched"><span><span class="ov-caption__unit"><span class="mono">1</span> file touched</span> · <span class="ov-caption__unit"><span class="mono">0</span> uncommitted</span></span></div>');
+    // The sentence is prose: no figure in it is set in the data face (the audit's taste note on prose in mono).
+    expect(html).toContain(`<div class="card-meta" data-testid="overview-tool-agents"><span>${OVERVIEW_NO_SESSION_CAPTION}</span></div>`);
   });
 });
 
 describe('the populated cards (REQ-MONITOR-166..169; audit items 4, 5, 6, 13, 16)', () => {
   const html = render({ session: session({ agents: [agent()] }), sessions: [row()] });
-  it('sets every caption that carries a figure in the mono face — item 5', () => {
-    expect(html).toContain('<div class="card-meta mono"><span data-testid="overview-cost" data-qualifier="configured">0.0028 at configured rates</span></div>');
-    expect(html).toContain('<div class="card-meta mono" data-testid="overview-tool-agents">across 1 agent</div>');
-    expect(html).toContain('<div class="card-meta mono" data-testid="overview-repo-touched">1 file touched · 0 uncommitted</div>');
-    expect(html).toContain('<span class="card-meta mono">1 listed</span>');
+  it('sets every figure a caption carries in the mono face, the prose in the body face, each figure one unit with its word — item 5, UIR-201', () => {
+    expect(html).toContain('<div class="card-meta"><span data-testid="overview-cost" data-qualifier="configured"><span class="mono">0.0028</span> at configured rates</span></div>');
+    expect(html).toContain('<div class="card-meta" data-testid="overview-tool-agents"><span>across <span class="mono">1</span> agent</span></div>');
+    expect(html).toContain('<div class="card-meta" data-testid="overview-repo-touched"><span><span class="ov-caption__unit"><span class="mono">1</span> file touched</span> · <span class="ov-caption__unit"><span class="mono">0</span> uncommitted</span></span></div>');
+    expect(html).toContain('<span class="card-meta"><span><span class="mono">1</span> listed</span></span>');
+    expect(html).toContain('<div class="card-meta mono" data-testid="overview-agent-caps"><span><span class="ov-caption__unit">depth 1 / 3</span> · <span class="ov-caption__unit">fan-out 0 / 4</span></span></div>');
+    expect(rule('.ov-caption__unit')).toContain('white-space: nowrap');
+    expect(costLabelParts('< 0.0001 at configured rates')).toEqual({ figure: '< 0.0001', rest: ' at configured rates' });
+    expect(costLabelParts('price not established')).toEqual({ figure: '', rest: 'price not established' });
   });
   it('draws REQ-MONITOR-168\'s markers as Phosphor arrows beside the numerals, the words carrying the direction — item 6', () => {
     expect(html).toContain('<span class="ov-kpi__count"><i class="ph ph-arrow-up ov-kpi__marker" aria-hidden="true"></i><span class="kpi-value">0</span><span class="kpi-unit">ahead</span></span><span class="ov-kpi__count"><i class="ph ph-arrow-down ov-kpi__marker" aria-hidden="true"></i><span class="kpi-value">0</span><span class="kpi-unit">behind</span></span>');

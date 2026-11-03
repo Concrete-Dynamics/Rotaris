@@ -1336,6 +1336,8 @@
    marker sits flush to its numeral (the glyph's own side bearings space it, as the typed glyph's did) and the word follows at the
    figure gap; the three are one unit, so a count wraps whole in the narrow four-column card. */
 .ov-kpi__count { display: inline-flex; align-items: baseline; }
+/* A caption's figure and its word are one unit: a wrap falls between units (at the " · "), never between a figure and its word. */
+.ov-caption__unit { white-space: nowrap; }
 .ov-kpi__count > .kpi-unit { margin-inline-start: var(--rt-space-2); }
 .ov-kpi__marker { font-size: var(--rt-icon-size); color: var(--rt-text-tertiary); align-self: center; }
 .ov-spark { color: var(--rt-accent-300); max-width: 100%; }

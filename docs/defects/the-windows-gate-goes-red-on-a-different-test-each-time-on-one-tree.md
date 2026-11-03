@@ -176,6 +176,21 @@ straight after, the host still loaded by the neighbours: 107 passed, 42 skipped,
 landing, an hour earlier beside the consortium's twenty-one agents, had gone red on the same checkpoints case and on
 `packages/mcp/src/setup.test.ts`'s 2 s cancellation bound, both green alone in 58.8 s. A third landing attempt follows this note.
 
+*Seen again 2026-11-03, late evening* (the same host, `pnpm worktree:land`'s gate on `claude/busy-noyce-b7b850`'s rebased head
+`45665fa9`, the consortium's rulings of OQ-493 to OQ-540 — a docs-only branch plus one word in a skill file — while the two sibling
+sessions and the hardening orchestration's run 4 ran on the host: CPU 91 % with 19 node and 12 Electron processes at 22:12, 100 %
+with 25 and 23 at 22:39). Two landing attempts, the gate red both times and nothing pushed. The first (24m21s): 14 cases in five
+files — `tools/worktree/land.test.ts` (five, four of them 30–40 s timeouts, "re-rebases and gates again when origin/main moves
+under the push" among them), `packages/mcp/src/setup.test.ts` (two, the 600 ms step budget and the 300 ms hurry),
+`apps/desktop/src/main/terminal-display.test.ts` (one, the live-run L9 second-command case),
+`packages/agent-tools/src/terminal/terminal.test.ts` (five, the shell-ending case of its own note among them) and
+`packages/workspace/src/improvements/executor.test.ts` (its 30 s timeout). The second, 25 minutes later (16m35s): 5 cases in
+three files — `land.test.ts` (one), `terminal.test.ts` (three, the shell-ending case again) and `executor.test.ts`. The five
+files rerun together alone between the two attempts: 130 passed, 46 skipped, 0 failed. Before either, the branch worktree's own
+full `pnpm check` (798 s) had gone red on 11 cases in four files (`terminal.test.ts`, `checkpoints.test.ts`'s restore case,
+`executor.test.ts`, `land.test.ts`), those four alone green but for one different PTY case, and `terminal.test.ts` alone
+after that 93 passed, 42 skipped. The third attempt, 25 minutes after the second (23m35s, the host still at 100 %): 8 cases in two files — `terminal.test.ts` (seven) and `executor.test.ts` (one). Recorded, not investigated; the landing waits for a quiet host, and nothing was pushed or landed by hand (the starting session's ruling, the owner asked).
+
 ## Specs
 
 None contradicted on this evidence. The failures are the harness's readings and its bounds: `REQ-MCP-066`/`REQ-MCP-067`

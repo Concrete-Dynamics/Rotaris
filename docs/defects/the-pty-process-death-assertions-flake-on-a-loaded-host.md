@@ -120,3 +120,11 @@ host at 73 to 100 % CPU with nineteen Electron processes of two sibling sessions
 `packages/agent-tools/src/terminal/terminal.test.ts` red in a 21 m 53 s `pnpm check`: the soft-paused kill's next command at
 11,050 ms against 10 s, and the keystrokes-without-Enter case at its 30 s bound. The file alone, the host still at 100 %: 93
 passed, 42 skipped, 261 s. Recorded, not investigated; the umbrella note holds the gate's reading.
+
+**Observed again, 2026-11-03, late evening (the consortium branch `claude/busy-noyce-b7b850` at `45665fa9`, Windows 11 ARM64,
+Node 26.13.0, the host at 91–100 % CPU under the sibling sessions and the hardening orchestration).** `pnpm worktree:land`'s
+gate went red twice on this file among others: five cases the first time (the shell-ending command of line 1031 again, the
+window's kill of a soft-paused command twice, the two A10 typeahead cases), three the second (the shell-ending case, the
+soft-paused hand-over of OQ-144, the kill's next command). The file alone on the same tree, between the attempts, with the
+neighbours still running: 93 passed, 42 skipped; and once more alone with four other red files, 130 passed across the five, 0
+failed. A third landing attempt went red on seven cases of this file (the three above, the hard-timeout kill, the PD-TOOLS-001 reset, the A10 typeahead case and the throwing single-line command). Recorded, not investigated; the landing waits for a quiet host.

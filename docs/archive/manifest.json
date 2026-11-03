@@ -1223,6 +1223,7 @@
     "defects/the-run-autopsy-skill-has-no-claude-skills-router.md": "d14842ce3d0cd711e993e1e038891d93204750c1c402ff125d29af33bef0cebd",
     "defects/the-run-header-and-the-inspectors-run-level-row-read-one-run-duration-a-second-apart.md": "0da4fb5445a39968fe17af1ad04db83f3ef8b51ab6f33e241b70ac0c3bd19d0c",
     "defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md": "d0c454c1b82762c1ff342d32950eaeccad1ad752171542cab221db1b21c83bd3",
+    "defects/the-run-hosts-typecheck-declares-the-doms-globals-through-the-terminal-emulators-typings.md": "e6d6d4d4e189ffed8d8b34ed9a5fa7bc1116bbc79c1300b9466f3c47d2191ec8",
     "defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md": "d0e2f50efa82715afc588305a2aa7448f36beb2e94c4f5edd9e3eaf071826915",
     "defects/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md": "94ae9e65498bc57c4643bd7d1e5ebc255119f0687e5cf65b9f8383b8bd784a2e",
     "defects/the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md": "6883d8e86726d9dfeabc49c60e60780bddb67e6124f9735987d62bc2b931065c",

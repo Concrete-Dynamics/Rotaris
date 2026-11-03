@@ -1,15 +1,36 @@
 {
-  // The run host and `agent-tools` (R-091, hardening.md §3.5 row 5; ADR-0002): Node's types, and no DOM of this project's
-  // own. A project apart from `tsconfig.node.json` because the terminal emulator's typings bring the DOM with them:
-  // `@xterm/addon-serialize`'s import `@xterm/xterm`'s, which declare `/// <reference lib="dom" />`, so in any program that
-  // holds `agent-tools/src/terminal/emulator.ts` the DOM's globals are declared and a `document` here would not fail.
-  // Kept apart, main, the preload and the workspace service are checked without them.
+  // The run host and `agent-tools` (R-091, hardening.md §3.5 row 5; ADR-0002): Node's types and no DOM, so a `window` or a
+  // `document` written here fails the typecheck. A project apart from `tsconfig.node.json` for the terminal emulator's
+  // typings: `@xterm/addon-serialize`'s import `@xterm/xterm`'s, which declare `/// <reference lib="dom" />`, and in any
+  // program holding `agent-tools/src/terminal/emulator.ts` that reference would declare every DOM global. Here
+  // `@xterm/xterm` resolves to `agent-tools/src/terminal/xterm-api.d.ts`, the names the addon reads, taken from
+  // `@xterm/headless`, so the reference is never read. `paths` replaces the base's whole rather than merging with it, so
+  // the base's entries are repeated; `tools/typecheck-projects.test.ts` holds the two to each other and the program to no DOM.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2024"],
     // Electron's types for the utility process's `process.parentPort`, which main's program has through its imports.
-    "types": ["node", "electron"]
+    "types": ["node", "electron"],
+    "paths": {
+      "@rotaris/kernel": ["./packages/kernel/src/index.ts"],
+      "@rotaris/contracts": ["./packages/contracts/src/index.ts"],
+      "@rotaris/platform": ["./packages/platform/src/index.ts"],
+      "@rotaris/config": ["./packages/config/src/index.ts"],
+      "@rotaris/hooks": ["./packages/hooks/src/index.ts"],
+      "@rotaris/providers": ["./packages/providers/src/index.ts"],
+      "@rotaris/store": ["./packages/store/src/index.ts"],
+      "@rotaris/engine": ["./packages/engine/src/index.ts"],
+      "@rotaris/agent-tools": ["./packages/agent-tools/src/index.ts"],
+      "@rotaris/model": ["./packages/model/src/index.ts"],
+      "@rotaris/mcp": ["./packages/mcp/src/index.ts"],
+      "@rotaris/workspace": ["./packages/workspace/src/index.ts"],
+      "@rotaris/shell": ["./packages/shell/src/index.ts"],
+      "@rotaris/ui-core": ["./packages/ui-core/src/index.ts"],
+      "@rotaris/ui": ["./packages/ui/src/index.ts"],
+      "@rotaris/release-naming": ["./tools/release-naming/src/index.ts"],
+      "@xterm/xterm": ["./packages/agent-tools/src/terminal/xterm-api.d.ts"]
+    }
   },
   "include": [
     "packages/agent-tools/src/**/*.ts",

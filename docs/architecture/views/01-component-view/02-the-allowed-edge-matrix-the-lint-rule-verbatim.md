@@ -18,10 +18,10 @@ each under the root solution `tsconfig.json`.
 |---|---|---|
 | `tsconfig.shared.json` | `kernel`, `contracts` — loaded on both sides | the language (ES2024) alone, and `contracts/src/web-platform.d.ts`: `URL`, `AbortSignal`, `TextEncoder`, the members it reads, which Node and Chromium both implement |
 | `tsconfig.node.json` | `platform`, `store`, `config`, `hooks`, `providers`, `engine`, `model`, `mcp`, `workspace`, `shell`, `release-naming`; `app-main`, `app-preload`, `app-workspace-service` | ES2024 and Node's types; no DOM |
-| `tsconfig.run-host.json` | `agent-tools`, `app-run-host` | ES2024, Node's and Electron's types; the DOM's globals arrive with the terminal emulator's typings ([the note](../../../defects/the-run-hosts-typecheck-declares-the-doms-globals-through-the-terminal-emulators-typings.md)) |
+| `tsconfig.run-host.json` | `agent-tools`, `app-run-host` | ES2024, Node's and Electron's types; no DOM — `@xterm/xterm`, whose typings reference the DOM library and which the terminal emulator's addon imports, resolves to `agent-tools/src/terminal/xterm-api.d.ts`, the names it reads from `@xterm/headless` ([the note](../../../archive/defects/the-run-hosts-typecheck-declares-the-doms-globals-through-the-terminal-emulators-typings.md); `tools/typecheck-projects.test.ts`) |
 | `tsconfig.renderer.json` | `ui-core`, `ui`, `app-renderer` | ES2024, the DOM and `DOM.Iterable`, Vite's client types; no Node types |
 
-So a `document` in main or the workspace service, a `process` or a `Buffer` in the renderer, and any of the three in
+So a `document` in main, the run host or the workspace service, a `process` or a `Buffer` in the renderer, and any of the three in
 `kernel` or `contracts` fail the typecheck. Tests are not held to their package's libraries: they run in Vitest under
 Node and may drive both sides (`tsconfig.tests.json`, the DOM and Node's types), and the tooling is
 `tsconfig.scripts.json`'s.

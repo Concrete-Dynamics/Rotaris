@@ -32,15 +32,16 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   workspaces stay out).
 - **Every test and every tool is typechecked** (since 2026-11-03, R-091, hardening.md §3.5 row 4) — the root
   `tsconfig.json` is a solution that `pnpm typecheck` builds (`tsc -b --force`: every project checked whole, nothing
-  reused from a previous run) over two projects: `tsconfig.app.json`, the product (`packages/*/src`, `apps/*/src`,
-  `tools/release-naming/src`), and `tsconfig.scripts.json`, the tooling — the proof scripts and their library, the
+  reused from a previous run) over the product's projects (`packages/*/src`, `apps/*/src`, `tools/release-naming/src`,
+  one per process kind, and their tests: the next bullet) and a second project, `tsconfig.scripts.json`, the tooling —
+  the proof scripts and their library, the
   tools, the build and test configuration and every test beside them — with `allowJs`, `checkJs` and `strict`, so the
   `.mjs` are typed by their JSDoc and a test that imports one reads its types. A file too far gone for that opens with
   `// @ts-nocheck — <why>` and is listed in `tools/typecheck-exceptions.json`, which `tools/typecheck-exceptions.test.ts`
   holds to the files carrying the line and caps at the 96 it started with: the list only shrinks. Before, 117 of 517
   test files and every `.mjs` were in no typecheck, and 113 `@ts-expect-error` stood on `.mjs` imports.
 - **Each process kind is typechecked against its own host** (since 2026-11-03, R-091, hardening.md §3.5 row 5) — the
-  product project became four: `tsconfig.shared.json` (`kernel`, `contracts`: the language alone, plus the three web
+  product's one project (`tsconfig.app.json` in row 4's first commit) became four: `tsconfig.shared.json` (`kernel`, `contracts`: the language alone, plus the three web
   globals both hosts implement, `contracts/src/web-platform.d.ts`), `tsconfig.node.json` (main, the preload, the
   workspace service and their packages: Node's types, no DOM), `tsconfig.run-host.json` (the run host and `agent-tools`:
   Node's and Electron's types, no DOM; apart because its `paths` map `@xterm/xterm`, whose typings reference the DOM, to

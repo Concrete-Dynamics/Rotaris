@@ -76,9 +76,10 @@ Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C
 | No property-based tests; `shell` and `kernel` thin | `packages/shell` (1 test file), `packages/kernel` (4) | F2, F3 |
 | ~~`minimumReleaseAge` implicit; no `trustPolicy`; no `engineStrict`; duplicated specifiers~~ closed 2026-11-01: seven days, `no-downgrade`, `blockExoticSubdeps`, `engineStrict`, a catalog, `.node-version` (`tools/dependency-policy.test.ts`) | `pnpm-workspace.yaml`, `.npmrc` | G1 |
 | ~~No dependency-update bot~~ closed 2026-11-01: Dependabot for npm (cooldown seven days, three groups) and the SHA-pinned actions (`.github/dependabot.yml`, `tools/dependabot.test.ts`) | `.github/` | G1 |
-| No audit, no SAST, no SBOM, no `SECURITY.md`, no `CODEOWNERS` | `.github/workflows/`, the root | G2 |
+| ~~No audit, no SAST, no SBOM, no `SECURITY.md`, no `CODEOWNERS`~~ closed by G2: `pnpm deps:audit` (`pnpm audit --prod --audit-level=high`) blocks CI's gate job, its first run's five highs patched ([the reading](../dependency-alerts/2026-11-01-audit-gate.md)), the whole tree audited beside it without blocking; `pnpm test:coverage` after `pnpm check` (F1's floor), `coverage/` uploaded; `codeql.yml` (`javascript-typescript`, `security-and-quality`, not a landing gate); `SECURITY.md`; `.github/CODEOWNERS` (`tools/workflows.test.ts`, `tools/security-policy.test.ts`). The SBOM is written by the release build (`tools/sbom/`) and kept a workflow artifact until [OQ-487](../open-questions/69-spikes-and-later-questions-36.md#oq-487) rules whether a release may publish it (REQ-STARTUP-152). The owner's: private vulnerability reporting (off on 2026-11-03), the 14 days, the login ([the note](../../defects/security-md-routes-reports-to-a-private-advisory-form-the-repository-has-switched-off.md)) | `.github/workflows/`, the root | G2 |
 
 Scorecard checks met today: Binary-Artifacts, CI-Tests, Dangerous-Workflow, License, Maintained, Pinned-Dependencies
-(actions by SHA, a lockfile), Token-Permissions. Open and closable here: Dependency-Update-Tool, Fuzzing (property
-tests count), SAST, SBOM, Security-Policy, Vulnerabilities. The owner's: Branch-Protection, Code-Review, Signed-Releases
-(signing, R-071).
+(actions by SHA, a lockfile), Token-Permissions. Configured, and counted once Scorecard reads them on main: Dependency-Update-Tool
+(G1), SAST and Security-Policy (G2). Open and closable here: Fuzzing (property tests count), SBOM (OQ-487),
+Vulnerabilities (the production tree audits clean, the whole tree does not: Electron 44.3.0, the audit reading's §3).
+The owner's: Branch-Protection, Code-Review (`CODEOWNERS` only requests the review), Signed-Releases (signing, R-071).

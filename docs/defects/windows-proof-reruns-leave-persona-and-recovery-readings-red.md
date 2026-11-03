@@ -20,6 +20,16 @@ taken on a loaded host, and the two inspector and dialog readings repeat across 
 readings did not recur: `compression-proof` and the `auth-fallback` minimum-size launch were green in the sweep. No repair
 is claimed here either.
 
+**2026-11-03, R-091 bundle A2's tree** (`hrd1-secure-windows-and-fuses` merged with `origin/main` at `e6a79b43`; Windows 11
+ARM64, Node 26.13.0, Electron 44.3.0), with the host's CPU at 100 % from other trees' gates and proofs and 6 to 20 Electron
+processes of theirs beside it. `resilience-proof` ran twice and went red on 6 and then 10 scenarios: the two this note
+holds (`child-timeout-inspector`, here "the child did not succeed on the fallback under its configured key", and `fatal`),
+quits the harness could not reap within 15 s (`override`, `quota-retry`, `generic`, `reauth` once, `auth-fallback-dialog`),
+launches that wrote no driver endpoint within 60 s (`keep-waiting`, `switch-over-override`, `two-waits`, `generic` once),
+one "no reply to hello within 5000 ms" (the hello-bound note) and the minimum-size launch with no size reading. No idle
+host was available to rerun it alone, so these are loaded-host readings not yet separated from the product; the bundle
+changed no quit, launch or child path. No repair is claimed.
+
 ## Specs
 
 These proofs verify REQ-MONITOR-086/281 (run-wide compression display), REQ-MONITOR-052/066 (the active model and input ceiling), and REQ-NOTIFY-072 (the recovery dialog).

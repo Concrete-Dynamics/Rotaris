@@ -145,18 +145,6 @@ accepted gap recorded in `docs/defects/claude-code-sessions-under-an-ancestor-cl
 and closed the same day by removing that ancestor file (the entry above).
 No package, edge, process, message, channel or ownership changed.
 
-**The agent configuration consolidated into `AGENTS.md` (2026-10-26).** `CLAUDE.md` is folded into `AGENTS.md` and
-reduced to the import `@AGENTS.md`, so the maintenance rule this README cites is stated in `AGENTS.md`; the README's pointer moves with it. The
-live run's manual moved from `AGENTS.md` to `docs/proofs/live-run.md`, and the proof-launch mechanics to the proof
-registry's page. `tools/skill-routers.test.ts` became `tools/agent-config.test.ts`. No package, edge, process, message,
-channel or ownership changed.
-
-**Four views, and this log, split under the document budget (`docs/README.md`; 2026-10-26).** `01-component-view.md`,
-`02-process-view.md`, `03-runtime-view.md`, `04-seams.md` and `06-sequences.md` each keep their path as an index and
-hold their sections, verbatim and in order, in the folder of the same name; every link to a section names its part. The
-entries before 2026-10-16 moved, verbatim, into the numbered parts this log indexes at its foot. No view's content
-changed, so the date above stays: no package, edge, process, message, channel or ownership changed.
-
 ## Older entries
 
 Until 2026-10-26 every entry stood in this one file, 3,697 lines by then. The entries before 2026-10-16 were moved
@@ -167,6 +155,7 @@ with the next number, and its row goes at the top of this table.
 
 | Part | "Last reconciled" dates it carries | Its newest entry |
 |---|---|---|
+| [18](reconciliation-log/18.md) | — | The agent configuration consolidated into `AGENTS.md` (2026-10-26). |
 | [17](reconciliation-log/17.md) | — | The notices generator's reviewed exceptions resolved (O-3, O-11, OQ-74, OQ-75; 2026-10-23). |
 | [16](reconciliation-log/16.md) | — | The release feed names `Concrete-Dynamics/Rotaris` (O-5 re-ruled by R-078, REQ-STARTUP-105; 2026-10-21). |
 | [15](reconciliation-log/15.md) | — | A retrospective's refusals as built under PD-LIBRARY-002 revision 6 (OQ-363; 2026-10-20). |

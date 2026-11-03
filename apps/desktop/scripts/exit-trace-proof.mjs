@@ -347,7 +347,7 @@ for (const [name, spec, source, event, exitPattern] of [
 
 // ── 7. main killed: both utility processes end within RUN_HOST_END_BOUND_MS ─────────────────────────────────────────────
 /*
- * R-091 (hardening §3.2 row 1; docs/archive/defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md):
+ * R-091 (hardening §3.2 row 1; docs/defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md):
  * main is killed from outside (SIGKILL; on Windows `TerminateProcess`, what `taskkill /F` sends), and each utility process —
  * which probes its parent's pid every 250 ms (`watchParent`, `@rotaris/platform`) — must be gone within 2,000 ms of the kill
  * (`RUN_HOST_END_BOUND_MS`, `exit.ts`). Electron's parent port emits no `close` for this (measured 2026-11-03), so this is the
@@ -361,20 +361,44 @@ for (const [name, spec, source, event, exitPattern] of [
   const mainPid = started.child.pid;
   const children = processes().filter((p) => p.ppid === mainPid && /--utility-sub-type=node\.mojom\.NodeService/.test(p.command)).map((p) => p.pid);
   check('main-killed: the launch has a run host and a workspace service to watch', children.length >= 2, children.join(', ') || 'none');
-  const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
-  const killedAt = Date.now();
-  process.kill(mainPid, 'SIGKILL');
   const goneAfter = new Map();
-  while (goneAfter.size < children.length && Date.now() - killedAt < 10_000) {
-    for (const pid of children) if (!goneAfter.has(pid) && !alive(pid)) goneAfter.set(pid, Date.now() - killedAt);
-    await new Promise((r) => setTimeout(r, 25));
+  const exitCodes = new Map();
+  const survivors = [];
+  if (WINDOWS) {
+    /*
+     * On Windows a pid is recycled within seconds on a busy host, so signal 0 on a pid can read a newcomer as the child
+     * (2026-11-04: one child "still running 10 s after the kill" that no repetition by hand reproduced). PowerShell opens
+     * each child's handle first, then kills main and waits on the handles, which also gives each exit code (69 is the
+     * child's own parent watch; Chromium ending it first reads otherwise).
+     */
+    const script = [
+      `$h = @{}; foreach ($i in @(${children.join(',')})) { try { $p = Get-Process -Id $i -ErrorAction Stop; [void]$p.Handle; $h[[int]$i] = $p } catch { } }`,
+      '$sw = [Diagnostics.Stopwatch]::StartNew()',
+      `Stop-Process -Id ${mainPid} -Force`,
+      '$out = @{}',
+      'while ($out.Count -lt $h.Count -and $sw.ElapsedMilliseconds -lt 10000) { foreach ($k in @($h.Keys)) { if (-not $out.ContainsKey($k) -and $h[$k].HasExited) { $out[$k] = @{ ms = $sw.ElapsedMilliseconds; code = $h[$k].ExitCode } } }; Start-Sleep -Milliseconds 10 }',
+      '$out.GetEnumerator() | ForEach-Object { "{0} {1} {2}" -f $_.Key, $_.Value.ms, $_.Value.code }',
+      // A child still running is described, so a red here says what the process was doing: its CPU time, its threads by state, its children.
+      'foreach ($k in @($h.Keys)) { if (-not $out.ContainsKey($k)) { $p = $h[$k]; $p.Refresh(); "survivor {0}: cpu {1}; threads {2}; {3}; children {4}" -f $k, $p.TotalProcessorTime, $p.Threads.Count, (($p.Threads | Group-Object ThreadState, WaitReason | ForEach-Object { "{0}x {1}" -f $_.Count, $_.Name }) -join ", "), ((Get-CimInstance Win32_Process -Filter "ParentProcessId=$k" | ForEach-Object { "{0} {1}" -f $_.ProcessId, $_.Name }) -join ", ") } }',
+    ].join('\n');
+    const lines = (() => { try { return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 60_000 }); } catch (e) { return String(e.stdout ?? ''); } })();
+    for (const line of lines.split(/\r?\n/)) { const m = /^(\d+) (\d+) (-?\d+)$/.exec(line.trim()); if (m) { goneAfter.set(Number(m[1]), Number(m[2])); exitCodes.set(Number(m[1]), Number(m[3])); } }
+    survivors.push(...lines.split(/\r?\n/).filter((l) => l.startsWith('survivor ')));
+  } else {
+    const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+    const killedAt = Date.now();
+    process.kill(mainPid, 'SIGKILL');
+    while (goneAfter.size < children.length && Date.now() - killedAt < 10_000) {
+      for (const pid of children) if (!goneAfter.has(pid) && !alive(pid)) goneAfter.set(pid, Date.now() - killedAt);
+      await new Promise((r) => setTimeout(r, 25));
+    }
   }
   started.driver.close();
   await drainGroup(started.child);
-  const readings = children.map((pid) => `${pid}: ${goneAfter.has(pid) ? `gone ${goneAfter.get(pid)} ms after the kill` : 'still running 10 s after the kill'}`);
-  check(`main-killed: every utility process is gone within ${RUN_HOST_END_BOUND_MS} ms of main's kill`, children.length >= 2 && children.every((pid) => (goneAfter.get(pid) ?? Infinity) <= RUN_HOST_END_BOUND_MS), readings.join('; '));
+  const readings = children.map((pid) => `${pid}: ${goneAfter.has(pid) ? `gone ${goneAfter.get(pid)} ms after the kill${exitCodes.has(pid) ? `, exit ${exitCodes.get(pid)}` : ''}` : 'still running 10 s after the kill'}`);
+  check(`main-killed: every utility process is gone within ${RUN_HOST_END_BOUND_MS} ms of main's kill`, children.length >= 2 && children.every((pid) => (goneAfter.get(pid) ?? Infinity) <= RUN_HOST_END_BOUND_MS), [...readings, ...survivors].join('; '));
   for (const pid of children) if (!goneAfter.has(pid)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
-  results['main-killed'] = { mainPid, children: readings };
+  results['main-killed'] = { mainPid, children: readings, survivors };
 }
 
 results.checks = checks;

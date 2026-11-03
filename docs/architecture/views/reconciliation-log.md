@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-04**
 
+**The parent watch is not yet the orphaned run host's repair (R-091 bundle B1, hardening §3.2 row 1; 2026-11-04).** `02-process-view/01-what-each-process-owns.md`'s "How a utility process ends" paragraph and `03-runtime-view/11-6-end.md`'s "An end main does not drive" now say that 2 of 4 `exit-trace-proof` runs read the run host still running 10 s after main's kill, during its code-intelligence setup step, and point at the note, which is open again.
+
 **The driver's `commandThrowing` (hardening F3, R-091; ADR-0019; 2026-11-04, `../hardening.md` §3.5 row 7).** `02-process-view/01-what-each-process-owns.md` names the driver seam's new op: main's own `dispatchCommand` over a handler table in which every handler throws (`everyHandlerThrows`, `main/driver.ts`), the one way the built app reaches `command.failed`, which `driver-proof` step 9e measures beside a malformed and an oversized command sent through the page's own channel. `runCommand` is that dispatch over the product's own table (`dispatchOver(handlers)` in `main/index.ts`); no channel, message, process or ownership changed, and a packaged build compiles the op out with the rest of the driver.
 
 Last reconciled with the code: **2026-11-03**

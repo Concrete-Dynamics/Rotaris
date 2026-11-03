@@ -7,7 +7,7 @@ that escapes `dispatch()` or a rejection nothing awaits ends the Node process wi
 nobody reads in a packaged build. Main sees only the `exit` event ("run host exited (1); NOT re-forked"), the sessions the
 run host held settle through stale detection, and the user sees nothing until the list marks them stale. Neither child
 listens for its parent port closing either, which is the mechanism behind
-[the run host outliving a killed main on Windows](the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md).
+[the run host outliving a killed main on Windows](../../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md).
 Found 2026-11-01 by the read-only survey for [R-091](../../product/requests.md#r-091).
 
 ## Specs
@@ -36,7 +36,7 @@ are repaired by the engine's crash path on the next open. Main forwards the line
 the fork, so a line written before the handshake is kept) and reads the status through `childExitReading`
 (`apps/desktop/src/main/exit.ts`): "run host exited (70), its last-resort handler: …". A line posted and followed at once by
 `process.exit(70)` reached main before the exit event in 18 of 18 scratch launches. The parent-port end is
-[the orphaned run host's outcome](the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md). Pinned
+[the orphaned run host's outcome](../../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md). Pinned
 by `utility-process.test.ts`, `exit.test.ts` and `exit-trace-proof`'s two `last-resort` launches (the seam
 `ROTARIS_CAPTURE_CHILD_FAULT`, compiled out of a packaged build). The bounded `ready` and the notice of OQ-462 are §3.2
 rows 2 and 3, built by the same bundle's second task.

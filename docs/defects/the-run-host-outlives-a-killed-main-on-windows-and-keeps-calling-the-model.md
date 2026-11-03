@@ -16,7 +16,7 @@ about 15:34 UTC. What it had started was not:
 
 The machine was restarted before this was examined (2026-10-20), so the survivors' pids could no longer be matched to a run
 host or a workspace service, and the store went with the sandbox
-([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
+([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](../archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
 Not established: why the child's hard per-child timeout (REQ-ORCH-088, 1200 s) and PD-ORCH-004's 30 s bound on what is in
 flight at its expiry did not end the 7,273 s call. The run host's own timers may or may not have run on with main gone; the
 model client's bound is an idle one by design (`packages/model/src/ai-sdk-client.ts`), and a stream that never pauses does
@@ -63,7 +63,7 @@ within about 1 s of main's kill. The same host put a `sessions-proof` launch int
 reported "SIGTERM ended it after 9152074 ms", standby 09:09:10 to 12:37:14 UTC, broken only for a moment at 10:04:41), so a long stall read on this machine is
 checked against 506/507 first. The note is kept open as written; closing it is not this session's to rule.
 
-## Outcome — repaired 2026-11-03 (R-091, hardening §3.2 row 1)
+## The parent watch, built 2026-11-03 (R-091, hardening §3.2 row 1) — the note stays open
 
 Whatever let the live run's utility processes run on, nothing in the run host watched for main's end, and that is now
 closed. Both utility processes probe main's pid every 250 ms from their first statement and exit with status 69 once it
@@ -78,3 +78,15 @@ and 1.2 to 2.5 s in the other two; `exit-trace-proof`'s new `main-killed` launch
 after the kill. What the probe cannot answer is a host in Modern Standby, where no process runs at all (the second
 addendum): such a stall is still read against Kernel-Power 506/507 first. Pinned by `utility-process.test.ts` and
 `exit-trace-proof`'s `main-killed` launch.
+
+**Not closed: two survivors in the proof (2026-11-04).** `exit-trace-proof`'s `main-killed` launch read the run host still
+running 10 s after main's kill in 2 of its 4 runs on this host (CPU 100 % from other sessions' work): once by signal-0
+polling (pid 24016) and once by a PowerShell watcher holding the process handle, which a recycled pid cannot fool (pid 6140;
+the workspace service beside it ended with Chromium's exit 0 in 91 ms). In both, main had been killed while the run host's
+code-intelligence setup step was running its child (`electron.exe … builtin:code-intelligence -- project create`); in the
+two passing runs that step had already ended. Neither Chromium's own end nor the parent watch (which runs on the run host's
+main thread) ended it, which reads as that thread being blocked — not established. Not reproduced outside the
+proof (34 kills, `taskkill /F` of a driven or scripted launch, at the workspace's `ack` and 0 to 1 s into the setup step: every run
+host ended within 84 ms to 2.5 s, with Chromium's 0 or the watch's 69). The proof now describes a survivor — its CPU time, its
+threads by state and wait reason, its children — so the next red says what the run host was doing. Until that is read, the
+watch is a measured improvement and not the repair.

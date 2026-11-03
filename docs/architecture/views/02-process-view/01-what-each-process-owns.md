@@ -45,6 +45,8 @@ from the child side: every 250 ms (`PARENT_WATCH_PERIOD_MS`) the child probes th
 status **69** at once, pausing nothing. Electron's `parentPort` offers no event for this — measured 2026-11-03 on Windows
 11 ARM64 (Electron 44.3.0): no `close`, no `disconnect` and no `exit` reached the child when main was killed, and Chromium
 ended it natively between about 0 and 3 s later. In the built app, main killed with `taskkill /F`, both children read
-exit 69 within 0.4 s of the kill in two launches and within 2.5 s in two more, all at 100 % CPU (another session's proofs), so
-the end is this probe's. A verification seam, `ROTARIS_CAPTURE_CHILD_FAULT` (`injectChildFault`, compiled out of a
+exit 69 within 0.4 s of the kill in two launches and within 2.5 s in two more, all at 100 % CPU (another session's proofs);
+in later kills Chromium often ended them first (exit 0), and in 2 of 4 `exit-trace-proof` runs the run host was still running
+10 s after the kill, during its code-intelligence setup step — why is open on
+[the orphaned run host note](../../../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md). A verification seam, `ROTARIS_CAPTURE_CHILD_FAULT` (`injectChildFault`, compiled out of a
 packaged build), raises a throw or a rejection in either child for `exit-trace-proof`'s `last-resort` launches.

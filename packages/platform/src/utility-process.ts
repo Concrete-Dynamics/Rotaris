@@ -10,7 +10,7 @@ import { probePid, type Liveness } from './liveness.js';
  * "run host exited (1)"
  * (`docs/archive/defects/the-run-host-and-the-workspace-service-have-no-last-resort-exception-handler-and-end-without-a-word.md`),
  * and nothing in the child watched for main's end
- * (`docs/archive/defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`).
+ * (`docs/defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`).
  *
  * WHAT WAS MEASURED (2026-11-03, Windows 11 ARM64, Electron 44.3.0, a scratch app beside the build):
  * - `process.parentPort` emits no `close` when main is killed (`taskkill /F`), and the child gets no `disconnect` and no

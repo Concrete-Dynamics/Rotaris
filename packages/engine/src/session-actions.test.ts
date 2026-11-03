@@ -188,6 +188,21 @@ describe('Part U — repair, delete and the exports', () => {
       expect(dal.getSession(asSessionId('S-corrupt'))?.execution_status).toBe('running');
     });
 
+    it('REQ-SESSION-045 (hardening C2): one session whose stored state cannot be decoded never costs the listing the others, and only it is marked', () => {
+      plant('S-a', 'completed');
+      plant('S-bad-progress', 'completed', { progress: '{"step": 3, "unterminated' });
+      plant('S-bad-todo', 'completed');
+      dal.db.prepare('UPDATE sessions SET todo = ? WHERE session_id = ?').run('[{"id": nope}', 'S-bad-todo');
+      plant('S-b', 'completed');
+      const listed = sessions().list(dal, WS);
+      expect(listed.map((r) => r.sessionId).sort()).toEqual(['S-a', 'S-b', 'S-bad-progress', 'S-bad-todo']);
+      const marked = Object.fromEntries(listed.map((r) => [r.sessionId, r.unreadable]));
+      expect(marked['S-a']).toBeNull();
+      expect(marked['S-b']).toBeNull();
+      expect(marked['S-bad-progress']).toContain('S-bad-progress');
+      expect(marked['S-bad-todo']).toEqual(expect.any(String));
+    });
+
     it('REQ-SESSION-171 (defect 40): the listing and liveness() agree on a lock this process holds with no run behind it — a loaded session left running by a crash is stale, and repaired with that reason', () => {
       // The route ADR-0039's note described: a resume reaps the dead lock and claims it, but the status stays `running`.
       const sid = plant('S-mine', 'running', { lock: { pid: 4242 } });

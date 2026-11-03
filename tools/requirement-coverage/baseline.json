@@ -783,7 +783,7 @@
       ]
     },
     "SESSION": {
-      "uncited": 68,
+      "uncited": 66,
       "requirements": [
         "REQ-SESSION-009",
         "REQ-SESSION-011",
@@ -800,9 +800,7 @@
         "REQ-SESSION-027",
         "REQ-SESSION-035",
         "REQ-SESSION-037",
-        "REQ-SESSION-040",
         "REQ-SESSION-044",
-        "REQ-SESSION-045",
         "REQ-SESSION-061",
         "REQ-SESSION-064",
         "REQ-SESSION-066",

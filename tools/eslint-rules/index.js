@@ -36,7 +36,8 @@ const noBareTimers = {
           }
         }
       },
-      NewExpression(node) {
+      /** `any`: an ESTree `NewExpression`, its options read syntactically as the comment above says. */
+      NewExpression(/** @type {any} */ node) {
         if (node.callee.type === 'Identifier' && node.callee.name === 'Date' && node.arguments.length === 0) {
           context.report({ node, messageId: 'clock', data: { name: 'new Date()' } });
         }
@@ -299,13 +300,18 @@ const SECURITY_KEYS = new Set([
   'sandbox', 'contextIsolation', 'nodeIntegration', 'nodeIntegrationInWorker', 'nodeIntegrationInSubFrames', 'webSecurity',
   'allowRunningInsecureContent', 'experimentalFeatures', 'enableBlinkFeatures', 'webviewTag',
 ]);
-/** The name a non-computed property key is written with, or null. */
+/**
+ * The name a non-computed property key is written with, or null. `any`: an ESTree `Property`, read on its `key` alone.
+ * @param {any} property
+ * @returns {string | null}
+ */
 const keyName = (property) => {
   if (property.computed) return null;
   if (property.key.type === 'Identifier') return property.key.name;
   if (property.key.type === 'Literal' && typeof property.key.value === 'string') return property.key.value;
   return null;
 };
+/** @param {any} node */
 const isFactoryCall = (node) => node?.type === 'CallExpression' && node.callee.type === 'Identifier' && node.callee.name === 'secureWebPreferences';
 
 const browserWindowUsesSecurePrefs = {
@@ -322,17 +328,19 @@ const browserWindowUsesSecurePrefs = {
       spread: 'R-091: a second spread inside `webPreferences` may replace what `secureWebPreferences()` set; name the keys instead.',
     },
   },
+  /** @param {import('eslint').Rule.RuleContext} context */
   create(context) {
     return {
-      NewExpression(node) {
+      /** `any`: an ESTree `NewExpression`, its options read syntactically as the comment above says. */
+      NewExpression(/** @type {any} */ node) {
         const callee = node.callee;
         const named = callee.type === 'Identifier' ? callee.name : callee.type === 'MemberExpression' && !callee.computed && callee.property.type === 'Identifier' ? callee.property.name : null;
         if (named !== 'BrowserWindow') return;
         const options = node.arguments[0];
         if (options?.type !== 'ObjectExpression') { context.report({ node, messageId: 'options' }); return; }
-        const index = options.properties.findLastIndex((p) => p.type === 'Property' && keyName(p) === 'webPreferences');
+        const index = options.properties.findLastIndex((/** @type {any} */ p) => p.type === 'Property' && keyName(p) === 'webPreferences');
         if (index === -1) { context.report({ node: options, messageId: 'missing' }); return; }
-        if (options.properties.slice(index + 1).some((p) => p.type === 'SpreadElement')) { context.report({ node: options.properties[index], messageId: 'overridden' }); return; }
+        if (options.properties.slice(index + 1).some((/** @type {any} */ p) => p.type === 'SpreadElement')) { context.report({ node: options.properties[index], messageId: 'overridden' }); return; }
         const prefs = options.properties[index].value;
         if (prefs.type !== 'ObjectExpression' || prefs.properties[0]?.type !== 'SpreadElement' || !isFactoryCall(prefs.properties[0].argument)) {
           context.report({ node: prefs, messageId: 'notFactory' });

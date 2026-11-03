@@ -25,12 +25,16 @@ if (args.length !== 2 || !/^v\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$/.test(args[0] ?? '
 const [tag, outDir] = /** @type {[string, string]} */ (args);
 const version = tag.slice(1);
 
+/**
+ * @param {string} message
+ * @returns {never}
+ */
 function fail(message) {
   process.stderr.write(`error: ${message}\n`);
   process.exit(1);
 }
 
-const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
+const readJson = (/** @type {string} */ path) => JSON.parse(readFileSync(path, 'utf8'));
 const declared = readJson(join(ROOT, 'apps', 'desktop', 'package.json')).version;
 if (declared !== version) fail(`the tag ${tag} names ${version}, and apps/desktop declares ${declared} (REQ-STARTUP-028)`);
 let electronVersion;

@@ -99,3 +99,10 @@ its grandchild not) after 10.4 s in a 416 s test run, with a Vitest fork worker 
 host also carried a thirty-agent research workflow at the time. `pnpm vitest run packages/agent-tools/src/terminal/terminal.test.ts`
 alone, minutes later on the same tree: 93 passed, 42 skipped, 363 s. The Windows reading therefore still flakes away
 alone where the Linux reading of 2026-10-29 did not. Recorded, not investigated.
+
+**Observed again, 2026-11-03 (the design-knowledge branch at `e4a6d08b`, Windows 11 ARM64, Node 26.13.0).** The full
+`pnpm check` went red on one case only, the shell-ending command of line 1031 (REQ-TOOLS-097/098/100/103, OQ-144):
+`Write-Output 'bye'; exit 3` took 5241.7 ms against the 5 s bound, in a 420 s test run while a proof rerun
+(`code-intel-proof`) still ran beside it for part of the gate — a different case from the 2026-11-01 reading, the same
+shape. `pnpm vitest run packages/agent-tools/src/terminal/terminal.test.ts` alone, ten minutes later on the same tree
+(CPU at 74 % before it): 93 passed, 42 skipped, 281.6 s. Recorded, not investigated.

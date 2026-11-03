@@ -16,11 +16,17 @@ Part 5 of 7 of [domain 03](../03-conversation-composer-transcript.md), which ind
 
 - **REQ-CHAT-092** — A structured-questions action MUST carry 1–10 ordered steps; each step has a unique id, a non-empty title, an optional description, at most 8 options (each with a non-empty label and optional description), and a freeform-allowed flag defaulting to true; a step MUST offer options or freeform (or both). Violations reject the action before anything is shown to the user.
 - **REQ-CHAT-093** — The default response timeout MUST be **300 seconds** (overridable at tool construction; the tool's own description tells agents the conversation waits up to 300 seconds). A timeout value of **zero means wait without limit**.
+  > **Extended by [`PD-CHAT-014`](../../product/directives/pd-chat-014.md#pd-chat-014), 2026-11-03.** A pending
+  > question states the bound on its wait, and a timed-out question states how long it waited; the text above still
+  > governs in full, and the directive adds behaviour beside it.
 - **REQ-CHAT-094** — At most one question prompt may be pending per conversation; a second concurrent request for the same conversation MUST be rejected and its tool call observes a cancelled result. If the steps cannot be published to the frontend, the pending prompt is discarded and the tool observes a cancelled result with the message "Questions could not be shown to the user.".
   > **Narrowed by [`PD-ORCH-005`](../../product/directives/pd-orch-005.md#pd-orch-005) revision 6, 2026-10-06.** Clause 38: a
   > question put in the quit's gap is recorded pending and withdrawn by the quit, not discarded as "could not be
   > shown".
 - **REQ-CHAT-095** — Tool outcomes: cancelled → "Questions were cancelled."; timed out → "User did not respond within <N> seconds." (the model sees "User did not respond to the questions in time."); resolved → "Received answers for N step(s)." with an answers map `{step_id: {selected_option: string|null, freeform_text: string|null}}`. The model-visible content renders a "## User Answers" section with one `- **<id>**: <value>` line per step and "(no answer)" for empty answers.
+  > **Extended by [`PD-CHAT-014`](../../product/directives/pd-chat-014.md#pd-chat-014), 2026-11-03.** A pending
+  > question states the bound on its wait, and a timed-out question states how long it waited; the text above still
+  > governs in full, and the directive adds behaviour beside it.
 - **REQ-CHAT-096** — Answer routing MUST target the exact (conversation, prompt id) pair: a stale prompt id resolves nothing; conversation teardown cancels that conversation's pending prompt; run shutdown cancels every pending prompt; a timed-out wait cleans up its own pending entry.
 
 ### 17. Desktop Question Stepper

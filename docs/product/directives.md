@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and five.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and sixteen.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -44,6 +44,9 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CHAT-009](directives/pd-chat-009.md) | the user's chat controls are recorded under the chat domain's timeline words |
 | [PD-CHAT-010](directives/pd-chat-010.md) | the transcript's tool-rendering verbosity is one slider with five ordered stops |
 | [PD-CHAT-011](directives/pd-chat-011.md) | a composer draft or an image past the contract's bound is refused and the refusal is shown |
+| [PD-CHAT-012](directives/pd-chat-012.md) | each transcript surface owns one polite live region that speaks a tool row on arrival and every row on completion, never a stream |
+| [PD-CHAT-013](directives/pd-chat-013.md) | a tool call held for approval reads `waiting`, not `running` |
+| [PD-CHAT-014](directives/pd-chat-014.md) | a pending question states the bound on its wait, and a timed-out question states how long it waited |
 
 ### CONFIG
 
@@ -76,6 +79,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-LIBRARY-003](directives/pd-library-003.md) | an artifact's body is its document, and a person's edit of it survives and travels |
 | [PD-LIBRARY-004](directives/pd-library-004.md) | a read marks the reading agent instance a consumer by its canonical name |
 | [PD-LIBRARY-005](directives/pd-library-005.md) | an improvement pass whose collector failed reads as the failure it is |
+| [PD-LIBRARY-006](directives/pd-library-006.md) | while the Library's query is non-empty each tab shows how many of its rows match |
 
 ### MCP
 
@@ -97,6 +101,13 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-MONITOR-005](directives/pd-monitor-005.md) | the stall watch counts the silence of the agent's own model steps, and a wait the run holds it in is not that silence |
 | [PD-MONITOR-006](directives/pd-monitor-006.md) | a switch of the entry model or reasoning level from the run header holds for its own run |
 | [PD-MONITOR-007](directives/pd-monitor-007.md) | helper model calls follow the session's override and stay off a model held out of quota |
+| [PD-MONITOR-008](directives/pd-monitor-008.md) | Workspace compact mode's 1180 px is the view's own width, not the viewport's |
+
+### NOTIFY
+
+| Directive | What it decides |
+|---|---|
+| [PD-NOTIFY-001](directives/pd-notify-001.md) | an acknowledgement's lifetime holds while the pointer rests on the stack |
 
 ### ORCH
 
@@ -149,6 +160,10 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-SHELL-008](directives/pd-shell-008.md) | the status strip carries the sandbox indicator after the file-access flag |
 | [PD-SHELL-009](directives/pd-shell-009.md) | closing a main window ends its own project's runs, and asks first |
 | [PD-SHELL-010](directives/pd-shell-010.md) | a main window's renderer that is gone or does not answer a liveness probe cannot answer its close guard, and a guard that cannot answer allows |
+| [PD-SHELL-011](directives/pd-shell-011.md) | a keyboard user moves between the main window's regions on F6 and Shift+F6 |
+| [PD-SHELL-012](directives/pd-shell-012.md) | the terminal window speaks the shown terminal's output politely, only while active, at most 20 lines per update |
+| [PD-SHELL-013](directives/pd-shell-013.md) | the main window opens clamped to its display's work area, each dimension on its own, and never below its minimum |
+| [PD-SHELL-014](directives/pd-shell-014.md) | a persona window and the terminal window have a floor, and what each shows there |
 
 ### STARTUP
 
@@ -189,6 +204,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-TOOLS-018](directives/pd-tools-018.md) | a `write_file` insert keeps a CRLF file's line endings |
 | [PD-TOOLS-019](directives/pd-tools-019.md) | a match at level 3 compares each line without its carriage return |
 | [PD-TOOLS-020](directives/pd-tools-020.md) | level 3 matches blank lines by having no visible character |
+| [PD-TOOLS-021](directives/pd-tools-021.md) | the approval dialog states what a session approval lets through |
 
 ### TRACE
 

@@ -47,6 +47,14 @@ Part 2 of 9 of [domain 05](../05-tools-permissions-approvals.md), which indexes 
 
 **REQ-TOOLS-056** — The approval payload (rendered by hosts and persisted into session state) carries: `request_id` (hexadecimal UUID), `session_id`, `agent_id` (falling back to persona for display), `persona`, `tool_name`, `command` (secret-redacted), `argument_summary`, `rule_id`, `reason`.
 
+> **Extended by [`PD-TOOLS-021`](../../product/directives/pd-tools-021.md#pd-tools-021), 2026-11-03.** The approval
+> payload also carries `session_scope` (the case `command`, `paths`, `unresolved` or `arguments`, and for `paths` the
+> resolved path set); the fields above still govern in full.
+
+> **Extended by [`PD-CHAT-013`](../../product/directives/pd-chat-013.md#pd-chat-013), 2026-11-03.** The approval payload
+> also carries `call_id`, REQ-CHAT-046's per-tool-call key, so a pending request is matched to its tool row; the fields
+> above still govern in full.
+
 **REQ-TOOLS-057** — The argument summary renders sorted `key=value` lines; any value whose key looks secret is masked outright; all values are redacted; each rendered value is clipped at 240 characters with a trailing `…`; the summary is empty when the request carries a command (the command line is shown instead). The argument summary appears in the approval payload and the approval dialog only; the audit trail's `summary` field is the request summary of REQ-TOOLS-016, and both are produced by the redaction pass of REQ-TOOLS-171, so neither can display an unmasked credential.
 
 **REQ-TOOLS-058** — If presenting the prompt raises, the pending request is discarded and the call is denied with source `presenter-error` and a reason stating the approval request could not be shown.
@@ -67,6 +75,10 @@ Part 2 of 9 of [domain 05](../05-tools-permissions-approvals.md), which indexes 
   > **Narrowed by [`PD-ORCH-005`](../../product/directives/pd-orch-005.md#pd-orch-005) revision 4, 2026-09-28.** Clauses 9 and 15:
   > a dialog the application's quit closes answers nothing, and the quit withdraws the request. Closing the dialog
   > answers Deny in every other case, as stated.
+
+> **Extended by [`PD-TOOLS-021`](../../product/directives/pd-tools-021.md#pd-tools-021), 2026-11-03.** The approval
+> dialog states what a session approval lets through; the text above still governs in full, and the directive adds
+> behaviour beside it.
 
 **REQ-TOOLS-064** — A session for which no approval presenter is registered — one for which the modal dialog of REQ-TOOLS-063 cannot be shown — resolves every `ask` through the headless approval policy of REQ-TOOLS-065: never a silent allow, never a hang.
 

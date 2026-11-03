@@ -127,28 +127,48 @@ Rubric ids where the rubric carries the criterion; *proposed* where it does not.
 
 Each item is a question to raise; none is a change to make.
 
-- **D10-1 —** Pair a total failure's apology with something novel [1]. Meets §1.11 (no filler), §1.10. *Does any failure here, a crash that leaves a session to continue, warrant more than plain words?* — [OQ-515](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-515)
+- **D10-1 —** Pair a total failure's apology with something novel [1]. Meets §1.11 (no filler), §1.10. *Does any failure here, a crash that leaves a session to continue, warrant more than plain words?* — [OQ-515](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-515)
+
+  *Ruled 2026-11-03 (OQ-515): No: a crash speaks through the strings the specification fixes, which win over voice guidance under §1.11.*
 - **D10-2 —** Avoid "you" in instructing sentences; use the imperative [40]. Meets §1.11 (second person). *Does the imperative satisfy §1.11, and where does a "you" sentence such as a waiting count stand?* — none filed; not-a-question
-- **D10-3 —** macOS and Linux title-case button labels [14]. Meets §1.11 (sentence case). *Is one casing across three platforms a recorded choice against two conventions?* — [OQ-504](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-504)
+- **D10-3 —** macOS and Linux title-case button labels [14]. Meets §1.11 (sentence case). *Is one casing across three platforms a recorded choice against two conventions?* — [OQ-504](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-504)
+
+  *Ruled 2026-11-03 (OQ-504): Yes, one sentence-case casing on all three platforms is a recorded choice, read in a §1.11 note.*
 - **D10-4 —** Keep the voice, vary the tone by context [44]. Meets §1.11. *Is tone meant to be the same on the Overview and the approval dialog?* — none filed; not-a-question
-- **D10-5 —** Abbreviations should be expandable at AAA [46]. Meets §1.11 (`612,480 tok`). *Should `tok` carry an expanded accessible name?* — [OQ-493](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-493)
+- **D10-5 —** Abbreviations should be expandable at AAA [46]. Meets §1.11 (`612,480 tok`). *Should `tok` carry an expanded accessible name?* — [OQ-493](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-493)
+
+  *Ruled 2026-11-03 (OQ-493): Adopted text stands: `612,480 tok` stays visible, its expansion already the tooltip's accessible description.*
 - **D10-6 —** Progress reported slow early and fast late feels faster [28]. Meets §1.11 (exact numbers). *Is any progress figure here a presentation rather than a count?* — none filed; already-ruled: §1.8, §1.11
 - **D10-7 —** Remaining-time estimates should be general and generous [26]. Meets §1.11; `REQ-CHAT-062` marks an estimate with `~`, `REQ-NOTIFY-043` omits an unknown percentage. *Does the exact-number rule bind forecasts, or only counts?* — none filed; not-a-question
 - **D10-8 —** Animated texture made a bar feel about 11 % faster [29]. Meets §1.8 (two infinite animations). *Is a bounded wait's `MeterBar` a status indicator?* — none filed; already-ruled: §1.8, §1.11
-- **D10-9 —** The strongest attention devices in security dialogs moved [20]. Meets §1.8. *Are only the non-motion variants open to the approval dialog?* — [OQ-517](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-517)
-- **D10-10 —** First-person uncertainty reduced overreliance; impersonal hedging did not significantly [32]. Meets §1.11 (unadorned). *Where does product copy end and agent text begin, so calibrated hedges are not read as filler?* — [OQ-514](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-514)
+- **D10-9 —** The strongest attention devices in security dialogs moved [20]. Meets §1.8. *Are only the non-motion variants open to the approval dialog?* — [OQ-517](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-3.md#oq-517)
+
+  *Ruled 2026-11-03 (OQ-517): Neither variant applies: the approval dialog keeps one presentation under §1.7 and §1.8, adopted text unchanged.*
+- **D10-10 —** First-person uncertainty reduced overreliance; impersonal hedging did not significantly [32]. Meets §1.11 (unadorned). *Where does product copy end and agent text begin, so calibrated hedges are not read as filler?* — [OQ-514](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-514)
+
+  *Ruled 2026-11-03 (OQ-514): Product copy ends at authorship; a hedge the model wrote is agent text outside §1.11, read in a §1.11 note.*
 - **D10-11 —** For typed input, accepting many words per target beats one canonical word [48][49]. Meets the glossary as the only vocabulary; `REQ-SHELL-053`'s hidden keywords already do it. *Does the glossary bind what slash-command matching (`REQ-CHAT-018`) accepts, or only what labels show?* — none filed; already-ruled: REQ-SHELL-053
 - **D10-12 —** "Do not invent new words or give words new meanings in your application." [47] Meets the glossary's coined terms (persona window, question stepper) and narrowed ordinary words. *Which reach visible copy, and is each explained where first met?* — none filed; already-ruled: §1.11
-- **D10-13 —** Name the risk, not the resource [19]; title and button share a verb [13]. Meets `REQ-TOOLS-063`'s `Allow <agent> to run <tool>?` beside Approve once. *Is `<tool>` the tool's name or its description (`REQ-CHAT-175`), and is Allow against Approve intended?* — [OQ-510](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-510)
+- **D10-13 —** Name the risk, not the resource [19]; title and button share a verb [13]. Meets `REQ-TOOLS-063`'s `Allow <agent> to run <tool>?` beside Approve once. *Is `<tool>` the tool's name or its description (`REQ-CHAT-175`), and is Allow against Approve intended?* — [OQ-510](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-510)
+
+  *Ruled 2026-11-03 (OQ-510): The headline names the tool as built; Allow and Approve stand as REQ-TOOLS-063's words, adopted text unchanged.*
 - **D10-14 —** A transient message is a poor carrier for an error [11]. Meets `REQ-NOTIFY-018`'s `fail` kind and `REQ-SHELL-155`. *Is a `fail` acknowledgement confined to a refusal that leaves nothing to act on?* — none filed; already-ruled: REQ-NOTIFY-003
-- **D10-15 —** One function, one name [45]; distinct concepts, distinct names [50]. Meets `REQ-NOTIFY-019`'s kind word `Notice` for an acknowledgement and `REQ-SHELL-051`'s "Type an action…", words the glossary assigns elsewhere. *Do these stand under §1.11's precedence as the glossary's exceptions?* — [OQ-510](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-510)
+- **D10-15 —** One function, one name [45]; distinct concepts, distinct names [50]. Meets `REQ-NOTIFY-019`'s kind word `Notice` for an acknowledgement and `REQ-SHELL-051`'s "Type an action…", words the glossary assigns elsewhere. *Do these stand under §1.11's precedence as the glossary's exceptions?* — [OQ-510](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-510)
+
+  *Ruled 2026-11-03 (OQ-510): Both stand as the specification's own exceptions under §1.11, recorded in packages/ui/CONTEXT.md.*
 - **D10-16 —** Sentence case for titles [38]. Meets `PD-CHAT-002`, which fixes step number, title and description but no overall heading; the built stepper keeps superseded `REQ-CHAT-099`'s "Agent Questions" (`QuestionStepper.tsx`). *Does the stepper carry a heading, in which case?* — none filed; defect
 - **D10-17 —** One question per step, no all-steps indicator [51]. Meets `PD-CHAT-002`, whose stepper shows every step at once and retires step pills. *Is the step number the only position cue, and does the built pill row stand?* — none filed; defect
-- **D10-18 —** The commit control is a specific verb, never Next or a generic word [52]. Meets `PD-CHAT-002`'s single Submit, built "Submit answers". *Is Submit a fixed label, and does it say where the answers go?* — [OQ-510](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-510)
+- **D10-18 —** The commit control is a specific verb, never Next or a generic word [52]. Meets `PD-CHAT-002`'s single Submit, built "Submit answers". *Is Submit a fixed label, and does it say where the answers go?* — [OQ-510](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-510)
+
+  *Ruled 2026-11-03 (OQ-510): Submit stands as PD-CHAT-002's, the owner's directive, with the built label Submit answers; text unchanged.*
 - **D10-19 —** One abbreviation per unit: `sec`, `min` [37]. Meets `REQ-CHAT-060`'s `3.2s`, `REQ-CHAT-062`'s `<N>s`. *Is `s` the product's form wherever the unit is left open?* — none filed; not-a-question
 - **D10-20 —** A single line ends without a period [39]. Meets the specification's one-sentence strings, which end with one. *Which rule does an open one-sentence status line follow?* — none filed; not-a-question
-- **D10-21 —** One fixed set of plain state words [30]. Meets §1.11's `waiting` and `done`, not members of `REQ-NOTIFY-048` (`paused`, `completed`). *Are §1.11's words §1.3's axis meanings, with `REQ-NOTIFY-048` the words on screen?* — [OQ-510](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-510)
-- **D10-22 —** A failure gives a next step [1]. Meets `REQ-CHAT-102`'s and `REQ-CHAT-103`'s undeliverable sentences, which give the cause only. *Is closing the dialog or stepper the assumed next step, and need it be said?* — [OQ-510](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-510)
+- **D10-21 —** One fixed set of plain state words [30]. Meets §1.11's `waiting` and `done`, not members of `REQ-NOTIFY-048` (`paused`, `completed`). *Are §1.11's words §1.3's axis meanings, with `REQ-NOTIFY-048` the words on screen?* — [OQ-510](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-510)
+
+  *Ruled 2026-11-03 (OQ-510): Yes, read in a §1.11 note: waiting and done are §1.3's axis meanings, elsewhere REQ-NOTIFY-048's words show.*
+- **D10-22 —** A failure gives a next step [1]. Meets `REQ-CHAT-102`'s and `REQ-CHAT-103`'s undeliverable sentences, which give the cause only. *Is closing the dialog or stepper the assumed next step, and need it be said?* — [OQ-510](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-510)
+
+  *Ruled 2026-11-03 (OQ-510): Both sentences stand, the surface carrying the next step; the approval dialog's Escape case goes to debug-ui.*
 - **D10-23 —** At most one action in an empty state [22]. Meets `REQ-NOTIFY-006`, which sets no upper bound. *Is a second control ever wanted?* — none filed; not-a-question
 
 ## 9. References and further reading

@@ -133,14 +133,24 @@ Each item is a question to raise; none is a change to make.
 
 - **D02-1 —** A model still converges on common faces, Space Grotesk named, though the same text recommends it for a code aesthetic [1]. Meets §1.4 (`--rt-font-display`). *Does that association matter, or does §1.4's role split answer it?* — none filed; not-a-question
 - **D02-2 —** A violet accent and purple gradients are named leading tells [43]. Meets §1.2 (the violet accent), §1.3 (Z violet = done). *Does the association attach to the hue, or only to gradients and accent-everywhere, which §1.7 forbids?* — none filed; not-a-question
-- **D02-3 —** Extreme weight contrast and threefold size jumps are offered as the counter to the generic look [1]. Meets §1.4, "never weight". *Is that advice confined to expressive marketing surfaces?* — [OQ-500](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-500)
+- **D02-3 —** Extreme weight contrast and threefold size jumps are offered as the counter to the generic look [1]. Meets §1.4, "never weight". *Is that advice confined to expressive marketing surfaces?* — [OQ-500](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-500)
+
+  *Ruled 2026-11-03 (OQ-500): §1.4 stands; extreme weight contrast does not reach this product, whose one hierarchy collapse was a size miss.*
 - **D02-4 —** A flat ground is called generic, layered gradients recommended [1]; chart embellishment aided memory without hurting accuracy [51]. Meets §1.7's forbidden list, §1.10. *Does memorability ever matter for Overview's `KpiCard` and `Sparkline`?* — none filed; already-ruled: §2, §1.7
-- **D02-5 —** Minimal motion is called a tell; one orchestrated load sequence is recommended [1]. Meets §1.8. *Is an application window's first paint ever such a moment, given `REQ-SHELL-135`?* — [OQ-496](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-496)
+- **D02-5 —** Minimal motion is called a tell; one orchestrated load sequence is recommended [1]. Meets §1.8. *Is an application window's first paint ever such a moment, given `REQ-SHELL-135`?* — [OQ-496](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-496)
+
+  *Ruled 2026-11-03 (OQ-496): A window's first paint is no motion moment: the view arrives in one update and the load sequence stays guidance.*
 - **D02-6 —** Mono data labels, hairlines with dense columns and a big number over a small label are listed as clichés [29]. Meets §1.4, §1.7, `KpiCard`. *Should the record say these are habits on a marketing site and earned on a data surface?* — none filed; not-a-question
-- **D02-7 —** A pulsing status dot is catalogued as a tell [28]. Meets §1.8 (`.status-dot.is-pulsing`). *Is the pulse bound to an actively running state wherever it is drawn?* — [OQ-502](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-502)
+- **D02-7 —** A pulsing status dot is catalogued as a tell [28]. Meets §1.8 (`.status-dot.is-pulsing`). *Is the pulse bound to an actively running state wherever it is drawn?* — [OQ-502](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-502)
+
+  *Ruled 2026-11-03 (OQ-502): Yes: the pulse marks actively running on every surface, per the state its dot represents; adopted text unchanged.*
 - **D02-8 —** A shadow should have at least two layers, ambient and direct [12]. Meets §1.7 (`--rt-shadow-md`, `-lg`). *Do the adopted shadow tokens already meet that, or need they not?* — none filed; not-a-question
-- **D02-9 —** Material specifies a card rising on hover and drag [44]; a press scale-down is argued as feedback [45]. Meets §1.7, "No scale or shrink effects anywhere". *Is a board card lifted while dragged a floating surface, and is press feedback fully "one ramp step darker"?* — [OQ-513](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-513)
-- **D02-10 —** Flat interactive styling raised missed and false clicks [46]. Meets §1.7 (flat, no bevels). *Do tint, accent ink, the one filled control and the focus ring signal clickability enough in dense views?* — [OQ-503](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-503)
+- **D02-9 —** Material specifies a card rising on hover and drag [44]; a press scale-down is argued as feedback [45]. Meets §1.7, "No scale or shrink effects anywhere". *Is a board card lifted while dragged a floating surface, and is press feedback fully "one ramp step darker"?* — [OQ-513](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-513)
+
+  *Ruled 2026-11-03 (OQ-513): The lifted board card is the native drag image, so no shadow or rise is drawn and no scale anywhere stands.*
+- **D02-10 —** Flat interactive styling raised missed and false clicks [46]. Meets §1.7 (flat, no bevels). *Do tint, accent ink, the one filled control and the focus ring signal clickability enough in dense views?* — [OQ-503](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-503)
+
+  *Ruled 2026-11-03 (OQ-503): Read in §1.7: a control shows a strong-boundary hairline or accent ink; a neutral-ink glyph with no edge is no control.*
 - **D02-11 —** Translucency is a platform convention for navigation and controls, banned from content [47]. Meets §1.7 (no glass or blur). *Should the record say why the title bar and navigation rail stay opaque?* — none filed; not-a-question
 - **D02-12 —** A design system reserves glow and gradient to mark AI content [48]. Meets §1.7. *Is there any content here such a marker would distinguish, when every row comes from an agent?* — none filed; already-ruled: PD-CHAT-005
 - **D02-13 —** APCA is preferred over WCAG 2 for perceptual contrast [12]. Meets `REQ-SHELL-144`, `-145`. *Should `pnpm theme-proof` report an APCA figure beside the WCAG 2 ratios?* — none filed; not-a-question

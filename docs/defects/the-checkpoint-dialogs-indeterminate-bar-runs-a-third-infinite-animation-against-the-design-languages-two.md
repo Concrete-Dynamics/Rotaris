@@ -1,6 +1,6 @@
 ## The checkpoint dialog's indeterminate bar runs a third infinite animation, against the design language's "exactly two"
 
-Noticed 2026-11-03 by the consortium's ruling of [OQ-496](../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-496)
+Noticed 2026-11-03 by the consortium's ruling of [OQ-496](../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-496)
 (the scope of §1.8's motion rule), while reading `packages/ui/src/shell.css` for the animations the shell runs. §1.8 of
 the adopted design language (`docs/design/README/01-1-the-design-language.md`) states: "Exactly two infinite animations
 are permitted in the whole system: `.status-dot.is-pulsing` (1.6 s opacity breathe, used only while a state is actively

@@ -129,11 +129,19 @@ From the pack, the DOM or `critique.json`; rubric ids where the rubric carries t
 Each item is a question to raise; none is a change to make.
 
 - **D11-1 —** Animation is recommended to keep a person engaged while work runs [11]. It meets §1.8: no animation in conversation content, two infinite animations only. *Do long tool work and streamed reasoning need more than the pulse and the tool row's description?* — none filed; not-a-question
-- **D11-2 —** Self-starting motion lasting over five seconds beside other content needs a pause, stop or hide unless essential [40]. It meets §1.8's `.status-dot.is-pulsing`, which can last a whole run, and `REQ-SHELL-135`'s in-app setting. *Is a running pulse essential, and if not, is that setting the mechanism SC 2.2.2 asks for, reachable mid-run?* — [OQ-497](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-497)
+- **D11-2 —** Self-starting motion lasting over five seconds beside other content needs a pause, stop or hide unless essential [40]. It meets §1.8's `.status-dot.is-pulsing`, which can last a whole run, and `REQ-SHELL-135`'s in-app setting. *Is a running pulse essential, and if not, is that setting the mechanism SC 2.2.2 asks for, reachable mid-run?* — [OQ-497](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-497)
+
+  *Ruled 2026-11-03 (OQ-497): Read under §1.8: a change in resolved reduced motion stops every running pulse and spinner at once (REQ-SHELL-135).*
 - **D11-3 —** A measured principle set fuses low-level data into summaries and offers more than one level of detail [50]. It meets §1.11: numbers exact, never "600K+". *Does a `KpiCard` or `MeterBar` ever owe a summary level beside the exact figure?* — none filed; not-a-question
-- **D11-4 —** One symbol with different meanings in different places confused daily users, on one anecdote [6]. It meets §1.3: teal reads running and sound, amber waiting and attention, never mixed on one surface; §7.3 records `--rt-ok` and `--rt-run` resolving alike. *Is "never on one surface" enough when one glance crosses the status strip and the delegation tree?* — [OQ-501](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-501)
-- **D11-5 —** A self-withdrawing message is a time limit when it is the only way to learn or act on something [42]. It meets `REQ-NOTIFY-011`'s fixed lifetime and `PD-WORKSPACE-001`'s acknowledgement carrying "Start a new session". *Is that command reachable another way for the same workspace, and should the record say where?* — [OQ-498](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-498)
-- **D11-6 —** Loading indicators wait about 150–300 ms, then hold a minimum time, against a flash [12]. It meets `REQ-SHELL-117`: the progress dialog "appears immediately". *Does that hold for a merge or checkpoint that ends within a few hundred milliseconds?* — [OQ-528](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-528)
+- **D11-4 —** One symbol with different meanings in different places confused daily users, on one anecdote [6]. It meets §1.3: teal reads running and sound, amber waiting and attention, never mixed on one surface; §7.3 records `--rt-ok` and `--rt-run` resolving alike. *Is "never on one surface" enough when one glance crosses the status strip and the delegation tree?* — [OQ-501](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-501)
+
+  *Ruled 2026-11-03 (OQ-501): Read in §1.3: a surface is one component, so a lifecycle state never takes --rt-ok or --rt-warn inside it.*
+- **D11-5 —** A self-withdrawing message is a time limit when it is the only way to learn or act on something [42]. It meets `REQ-NOTIFY-011`'s fixed lifetime and `PD-WORKSPACE-001`'s acknowledgement carrying "Start a new session". *Is that command reachable another way for the same workspace, and should the record say where?* — [OQ-498](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-498)
+
+  *Ruled 2026-11-03 (OQ-498): The command is reachable as /new in the composer (REQ-CHAT-031), and PD-WORKSPACE-001 stands unchanged.*
+- **D11-6 —** Loading indicators wait about 150–300 ms, then hold a minimum time, against a flash [12]. It meets `REQ-SHELL-117`: the progress dialog "appears immediately". *Does that hold for a merge or checkpoint that ends within a few hundred milliseconds?* — [OQ-528](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-528)
+
+  *Ruled 2026-11-03 (OQ-528): REQ-SHELL-117's appears immediately stands: no recorded operation ends inside the delay, so no directive.*
 
 ## 9. References and further reading
 

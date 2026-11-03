@@ -48,6 +48,10 @@ Part 2 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 
 **REQ-MONITOR-051** — Below a viewport width of 1180 px, choosing an agent opens the inspector as an overlay drawer that is mutually exclusive with the agents/todos drawer. The workspace must remain usable down to 1000×680.
 
+> **Narrowed by [`PD-MONITOR-008`](../../product/directives/pd-monitor-008.md#pd-monitor-008), 2026-11-03.** Workspace
+> compact mode's 1180 px is the view's own width, not the viewport's — the case the directive states; every other
+> sentence above still governs.
+
 **REQ-MONITOR-052** — The inspector for an agent shows: a state-colored status dot that pulses while live; the agent name; a meta line of the form `{state} · {elapsed or em-dash} · {N} tool calls`; a context ring showing used against limit with the compression threshold marked; a caption naming it the context window and stating the compression threshold percentage; a model selector; a reasoning selector offering low / medium / high; a scope note; tool chips; artifact links; a cascade note; and Steer, Cancel, and Pop out actions.
   > **Extended by [`PD-CONFIG-003`](../../product/directives/pd-config-003.md#pd-config-003) revision 3, 2026-10-07 (revision 4, 2026-10-13: a one-second limit reads "1 second").** Directly under the meta line, unchanged in form, the
   > inspector of an agent cut off at its per-agent timeout shows one line giving the limit and naming
@@ -185,5 +189,9 @@ Part 2 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 **REQ-MONITOR-104** — Each agent's in-flight tool calls are tracked and surfaced as active chips. When an agent reaches a terminal state, or is settled by the run ending, its active chips must be cleared so a stale in-progress indicator cannot persist.
 
 **REQ-MONITOR-105** — Tool rows in the transcript carry a machine-readable status of `running`, `ok`, `failed`, or `blocked`, plus a duration. A running tool renders as a pulsing in-progress row; a finished tool renders its outcome and elapsed inline (for example an `ok` outcome with a seconds figure). `blocked` covers every case in which no outcome was observed — the call was refused before it ran, or the run ended before it reported (REQ-MONITOR-228) — and a `blocked` row must convey which of those happened.
+
+> **Narrowed by [`PD-CHAT-013`](../../product/directives/pd-chat-013.md#pd-chat-013), 2026-11-03.** A tool call held at
+> a pending approval renders a still `◉ waiting for approval` in place of the pulsing `◉ running…`; its stored status
+> stays `running` — the case the directive states; every other sentence above still governs.
 
 **REQ-MONITOR-106** — A verification row's status is the check outcome rendered through the mapping of REQ-NOTIFY-142, over the closed five-value check-outcome vocabulary of REQ-ORCH-123 and into the row-status vocabulary of REQ-MONITOR-105. This domain holds no copy of the vocabulary or of the mapping and states no second mapping of its own; what it relies on them for is that the mapping is total over all five outcomes, so no check outcome reaches a row without a status, and that a check which never ran — skipped or invalid — never renders as a passing row, because nothing was verified. Where this document names a check outcome, as REQ-MONITOR-302 does, it names a member of REQ-ORCH-123's set.

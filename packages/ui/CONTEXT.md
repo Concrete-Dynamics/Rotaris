@@ -38,6 +38,7 @@ _Avoid_: status bar, footer
 One entry of the single action vocabulary the palette, the keyboard help and every shortcut resolve
 through. — `REQ-SHELL` commands, shortcuts, palette
 _Avoid_: action, shortcut (a shortcut *invokes* a command)
+_Noted 2026-11-03 ([OQ-510](../../docs/archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-510)): REQ-SHELL-051's palette placeholder "Type an action…" is the specification's own exception; it is the one place "action" reaches the screen for a command, and the avoided word still binds copy the specification leaves to the implementation._
 
 **Overlay drawer**:
 What a pane becomes in the compact layout. — `REQ-SHELL` compact layout and overlay drawers
@@ -139,6 +140,7 @@ _Avoid_: toast, snackbar, flash
 The persistent feedback surface, carrying an id, a severity, a title, a message, copyable details,
 an optional action and an owning session. — `REQ-NOTIFY-023`
 _Avoid_: alert, banner (the update **banner** is its own named surface), notification
+_Noted 2026-11-03 ([OQ-510](../../docs/archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-510)): REQ-NOTIFY-019's kind word `Notice`, the accessible name of an `info` acknowledgement, is the specification's own exception; elsewhere a notice is the persistent surface of REQ-NOTIFY-023, and the avoided words above still bind copy the specification leaves to the implementation._
 
 **Notice severity**:
 `info`, `success`, `warning`, `error`, ascending. — `REQ-NOTIFY-023`

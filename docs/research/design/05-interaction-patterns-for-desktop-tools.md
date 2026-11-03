@@ -121,22 +121,42 @@ The rubric may lift section 6's *new* checks.
 
 ## 8. Where this disagrees with the adopted material
 
-- **D05-1 —** Reorder feedback animates neighbours aside for about 100 ms [42]. §1.8: animation belongs to status indicators only. *Is reorder feedback on the Requirements board a status indication §1.8 admits?* — [OQ-496](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-496)
-- **D05-2 —** Smooth zoom preserves the sense of position [53]. §1.8, with `REQ-TRACE-327`'s re-centring. *Must Graph mode re-centre instantly, and what static cue keeps the operator's place?* — [OQ-496](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-496)
-- **D05-3 —** Animated aids were among those restoring attention to a habituated dialog, still ones as well [4]. §1.8: never in conversation content. *Is any motion admissible on a decision dialog?* — [OQ-517](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-517)
+- **D05-1 —** Reorder feedback animates neighbours aside for about 100 ms [42]. §1.8: animation belongs to status indicators only. *Is reorder feedback on the Requirements board a status indication §1.8 admits?* — [OQ-496](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-496)
+
+  *Ruled 2026-11-03 (OQ-496): Reorder feedback is no status indication: a card changing column takes effect in one update, §1.8 unchanged.*
+- **D05-2 —** Smooth zoom preserves the sense of position [53]. §1.8, with `REQ-TRACE-327`'s re-centring. *Must Graph mode re-centre instantly, and what static cue keeps the operator's place?* — [OQ-496](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-496)
+
+  *Ruled 2026-11-03 (OQ-496): Graph mode re-centres instantly; REQ-TRACE-327's summary and the visible selection are the static cue, §1.8 unchanged.*
+- **D05-3 —** Animated aids were among those restoring attention to a habituated dialog, still ones as well [4]. §1.8: never in conversation content. *Is any motion admissible on a decision dialog?* — [OQ-517](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-3.md#oq-517)
+
+  *Ruled 2026-11-03 (OQ-517): No motion on the approval dialog beyond the finite entrance OQ-496 admits; habituation is answered by frequency.*
 - **D05-4 —** A custom focus style may echo hover [43]. §1.7: the 2 px ring is the only focus treatment. *Is the ring alone legible on a row both hovered and focused?* — none filed; already-ruled: REQ-SHELL-145, REQ-SHELL-160 (c)
-- **D05-5 —** One design system avoids transient messages for now on accessibility grounds [10]; auto-dismissal is a time limit unless the content is reachable elsewhere [9]. `REQ-NOTIFY-011`'s fixed lifetime; `REQ-SHELL-112`. *Is every acknowledgement's content reachable after it withdraws?* — [OQ-498](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-498)
-- **D05-6 —** Unavailable commands show disabled, not hidden [33]; a palette may hide irrelevant ones [11]. `REQ-SHELL-048`: no surface presents an action the window cannot carry out; `REQ-NOTIFY-008`. *Is a command unavailable now omitted from the palette, or shown disabled with its reason?* — [OQ-509](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-509)
+- **D05-5 —** One design system avoids transient messages for now on accessibility grounds [10]; auto-dismissal is a time limit unless the content is reachable elsewhere [9]. `REQ-NOTIFY-011`'s fixed lifetime; `REQ-SHELL-112`. *Is every acknowledgement's content reachable after it withdraws?* — [OQ-498](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-498)
+
+  *Ruled 2026-11-03 (OQ-498): REQ-NOTIFY-003 stands; a directive narrows REQ-NOTIFY-011 so the lifetime holds while the pointer rests on the stack.*
+- **D05-6 —** Unavailable commands show disabled, not hidden [33]; a palette may hide irrelevant ones [11]. `REQ-SHELL-048`: no surface presents an action the window cannot carry out; `REQ-NOTIFY-008`. *Is a command unavailable now omitted from the palette, or shown disabled with its reason?* — [OQ-509](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-509)
+
+  *Ruled 2026-11-03 (OQ-509): Read in REQ-SHELL-048: a state-gated command is listed disabled with its reason on every surface, palette included.*
 - **D05-7 —** Reflow on resize cost over a second per selection, stable scaling a few hundred milliseconds [37]. `REQ-SHELL-059`'s compact mode. *Which positions stay predictable as panes become overlay drawers?* — none filed; already-ruled: REQ-SHELL-059
-- **D05-8 —** List-like groups take one Tab stop, buttons a stop each [20]. `REQ-SHELL-028`, `-032`: a stop per rail button. *Is seven stops before a view's content the accepted cost?* — [OQ-505](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-505)
+- **D05-8 —** List-like groups take one Tab stop, buttons a stop each [20]. `REQ-SHELL-028`, `-032`: a stop per rail button. *Is seven stops before a view's content the accepted cost?* — [OQ-505](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-505)
+
+  *Ruled 2026-11-03 (OQ-505): Seven rail stops stand; a directive extends REQ-SHELL-048 with Focus next region (F6), leaving the rail in one press.*
 - **D05-9 —** The most-cited precedent makes Enter's meaning a preference [50]. `REQ-CHAT-001`: Enter submits, no preference key. *Is a fixed Enter the settled answer?* — none filed; request
 - **D05-10 —** One precedent moves submit to Ctrl+Enter in an expanded compose box [51]. `REQ-CHAT-001`. *Does a long draft change what Enter does?* — none filed; request
 - **D05-11 —** Modifier plus Enter conflicts with system key assignments [19]. `REQ-CHAT-001`'s Ctrl+Return from anywhere. *What happens when the focused control or the terminal window answers Ctrl+Enter itself?* — none filed; already-ruled: REQ-CHAT-001
 - **D05-12 —** Platform popups cycle, the first Up reaching the last item [20]; the authoring practices stop [24]. `REQ-CHAT-026`: no wrap. *Which row does the first Up reach in a popup above the composer (`REQ-CHAT-024`)?* — none filed; already-ruled: REQ-CHAT-026
-- **D05-13 —** Graph viewers keep selecting a node apart from navigating from it [54]. `REQ-TRACE-326`, `-327`: selection re-centres. *How does focus cross nodes without re-centring?* — [OQ-512](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-512)
-- **D05-14 —** Buttons name their outcome, not Yes [1]. `REQ-GIT-117`, `REQ-LIBRARY-115`: Yes and Cancel; §4.1: `ConfirmDialog`'s verb-first label. *Which governs these two confirm buttons?* — [OQ-510](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-510)
-- **D05-15 —** Where undo exists it replaces confirmation [2]. `REQ-LIBRARY-115` confirms what `REQ-LIBRARY-116` makes undoable. *Does an undoable decision still need its confirmation?* — [OQ-533](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-533)
-- **D05-16 —** Grouped proposals were accepted faster than sequential ones [49]; bulk confirmations may apply to all [2]. `REQ-TOOLS-063`: one at a time with a counter; grouping hides the differing call [4]. *Is one at a time settled for one agent's queue?* — [OQ-516](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-516)
+- **D05-13 —** Graph viewers keep selecting a node apart from navigating from it [54]. `REQ-TRACE-326`, `-327`: selection re-centres. *How does focus cross nodes without re-centring?* — [OQ-512](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-512)
+
+  *Ruled 2026-11-03 (OQ-512): Met as built: Tab crosses the graph's nodes without re-centring and activation re-centres (REQ-TRACE-328).*
+- **D05-14 —** Buttons name their outcome, not Yes [1]. `REQ-GIT-117`, `REQ-LIBRARY-115`: Yes and Cancel; §4.1: `ConfirmDialog`'s verb-first label. *Which governs these two confirm buttons?* — [OQ-510](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-510)
+
+  *Ruled 2026-11-03 (OQ-510): The requirements govern: REQ-GIT-117's and REQ-LIBRARY-115's Yes and Cancel stand under §1.11's precedence.*
+- **D05-15 —** Where undo exists it replaces confirmation [2]. `REQ-LIBRARY-115` confirms what `REQ-LIBRARY-116` makes undoable. *Does an undoable decision still need its confirmation?* — [OQ-533](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-2.md#oq-533)
+
+  *Ruled 2026-11-03 (OQ-533): REQ-LIBRARY-115's confirmation and REQ-LIBRARY-116's undo both stand for every review decision on every surface.*
+- **D05-16 —** Grouped proposals were accepted faster than sequential ones [49]; bulk confirmations may apply to all [2]. `REQ-TOOLS-063`: one at a time with a counter; grouping hides the differing call [4]. *Is one at a time settled for one agent's queue?* — [OQ-516](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-3.md#oq-516)
+
+  *Ruled 2026-11-03 (OQ-516): One at a time stands: a grouped dialog would replace REQ-TOOLS-063's fixed contents; adopted text unchanged.*
 - **D05-17 —** Checking an agent's tool call after it runs, with undo, is argued easier than vetting it before [48]. `REQ-TOOLS-063` gates a call before it runs. *Does the record state how the approval dialog and Git view review divide the safeguard?* — none filed; not-a-question
 
 ## 9. References and further reading

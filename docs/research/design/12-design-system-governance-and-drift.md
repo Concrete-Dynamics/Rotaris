@@ -126,7 +126,9 @@ No dated notes yet.
 
 **D12-3 —** *Claim:* a product team may own an interim component outside the core when its deadline cannot wait [46][22]. *Adopted:* the same single-home rule, enforced by `check-ui-language`; seams §8 step 2. *Question:* while a G1–G16 gap is unfilled, where does a surface's sanctioned interim drawing live, and how is it marked? — none filed; request
 
-**D12-4 —** *Claim:* the tokens consumers pick should state their meaning, leaving intent-free names to primitives [5][4]. *Adopted:* §1.3, the axis colours; `--rt-fill-x`, `--rt-fill-y` and their `-ink` pairs name the axis and are read directly by `.tag-run`, `.tag-wait` and `shell.css`. *Question:* should the fill tokens reach consumers through names that state waiting and running? — [OQ-536](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-536)
+**D12-4 —** *Claim:* the tokens consumers pick should state their meaning, leaving intent-free names to primitives [5][4]. *Adopted:* §1.3, the axis colours; `--rt-fill-x`, `--rt-fill-y` and their `-ink` pairs name the axis and are read directly by `.tag-run`, `.tag-wait` and `shell.css`. *Question:* should the fill tokens reach consumers through names that state waiting and running? — [OQ-536](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-2.md#oq-536)
+
+*Ruled 2026-11-03 (OQ-536): The axis names stay and no state-named fill alias is declared; the `.tag-*` classes carry the meaning, read in §1.3.*
 
 **D12-5 —** *Claim:* one team reduced each theme to three generated inputs, contrast continuous [47]. *Adopted:* `REQ-SHELL-128`, three built-in themes. *Question:* is a generator worth recording as a way to produce the three, without changing their number? — none filed; not-a-question
 
@@ -134,9 +136,13 @@ No dated notes yet.
 
 **D12-7 —** *Claim:* stylistic findings frustrate when they block the build; they belong in review [35]. *Adopted:* `check-ui-language` fails `pnpm lint` inside `pnpm check`. *Question:* which design-language checks are exact enough to block, and which belong to `review-ui`? — none filed; request
 
-**D12-8 —** *Claim:* a production system grades token enforcement by domain, colour required, space and shape strongly recommended [36]. *Adopted:* `AGENTS.md` on §1, cite the token by name, never a literal colour or pixel value; the tooling already grades, colour exact, metrics on a 690-occurrence baseline [51]. *Question:* should the adopted text say that the pixel half is on a burn-down? — [OQ-499](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-499)
+**D12-8 —** *Claim:* a production system grades token enforcement by domain, colour required, space and shape strongly recommended [36]. *Adopted:* `AGENTS.md` on §1, cite the token by name, never a literal colour or pixel value; the tooling already grades, colour exact, metrics on a 690-occurrence baseline [51]. *Question:* should the adopted text say that the pixel half is on a burn-down? — [OQ-499](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-499)
 
-**D12-9 —** *Claim:* a new blocking check is enabled only after every existing violation is fixed [35]. *Adopted:* `build-ui` step 3, literal debt added or burned down through `ui-language-baseline.json`. *Question:* is a baseline that admits standing debt the record's chosen trade, and where is that choice written? — [OQ-499](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-499)
+*Ruled 2026-11-03 (OQ-499): Yes: a dated note under §1 says colour is enforced exactly and pixels stand on a baseline debt that only shrinks.*
+
+**D12-9 —** *Claim:* a new blocking check is enabled only after every existing violation is fixed [35]. *Adopted:* `build-ui` step 3, literal debt added or burned down through `ui-language-baseline.json`. *Question:* is a baseline that admits standing debt the record's chosen trade, and where is that choice written? — [OQ-499](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-499)
+
+*Ruled 2026-11-03 (OQ-499): The baseline is the record's chosen trade, now written in §1; build-ui step 3 now reads "Burn down literal debt".*
 
 **D12-10 —** *Claim:* a mismatch between the design library and the coded components is a system bug [22], and a consumer should never have a choice of version [11]. *Adopted:* §1.2, `components.css` line 65's `.seg-opt.is-active` left as imported, the product overriding it; §1.12, a specimen card's chroma left differing. *Question:* should a known divergence inside the adopted sheet be carried as a defect note rather than as a paragraph of §1? — none filed; not-a-question
 

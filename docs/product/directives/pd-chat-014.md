@@ -1,0 +1,17 @@
+[Product directives](../directives.md) › PD-CHAT-014
+
+<a id="pd-chat-014"></a>
+
+### PD-CHAT-014 — a pending question states the bound on its wait, and a timed-out question states how long it waited
+
+While a structured question is pending, its docked form (`PD-CHAT-002`) SHALL state, as text, the bound on the wait the run actually applies to that question: the effective `runtime.approval_timeout_seconds` (REQ-CONFIG-126) as a number of seconds, or, where that value is 0, that the question waits without limit and that stopping the run releases it — the reading REQ-TRACE-468 gives the same budget — and SHALL state that once the bound passes the agent continues without an answer. The statement SHALL apply no clamp, substitution or default of its own, SHALL NOT count down, and SHALL NOT announce itself again after the form opens. Its wording is the implementation's within the copy voice (§1.11), with the number exact.
+
+A timed-out question's settled summary SHALL show, beside the indication of timeout `PD-CHAT-002` requires and without replacing it, REQ-CHAT-095's outcome sentence "User did not respond within <N> seconds.", so a reader sees how long the question waited before the agent continued.
+
+This directive names `PD-CHAT-002` and revises none of its text, its indication of timeout included; it adds a case beside it.
+
+**Why, and what it costs.** The question wait and the approval wait are one budget: REQ-CONFIG-126 registers the one key, default and reading of zero, REQ-TOOLS-055 and REQ-TOOLS-178 forbid a second, and REQ-TRACE-467 relies on the same budget for a run started from the board. A longer or unlimited question default would therefore change every approval wait or split the budget against four requirements, and [OQ-521](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-3.md#oq-521) asked for neither; what the entry found hidden is the bound itself, which the product states once (REQ-TRACE-468, before a run started from the board) and never on the question's own surface. Stating it there, in the same reading, lets an operator who steps away know what the wait is and reach REQ-CONFIG-126's zero if they want none. A duration rather than a deadline is chosen because the budget is re-armed while the application's quit holds the wait (`PD-ORCH-005` clause 9), so a deadline computed at publication can be false; a static statement because §1.8 permits no animation in conversation content. The cost is one sentence of standing text at the tail of the transcript while a question is pending, the bound carried to the surface with the prompt, and one sentence naming the seconds beside the owner's indication of timeout on the settled summary; the default, the tool text agents read and `PD-CHAT-002` are unchanged. The `ask_questions` description's fixed "300 seconds" (REQ-CHAT-093) remains wrong under any other configured value, a tension inside the specification this directive does not settle.
+
+> **Extends:** REQ-CHAT-093, REQ-CHAT-095
+
+*Raised as [OQ-521](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-3.md#oq-521) by [R-093](../requests.md#r-093), 2026-11-03, and ruled the same day by the orchestrator's consortium under the owner's delegation ([R-072](../requests.md#r-072)); minted because REQ-CHAT-093 and REQ-CHAT-095 fix the bound and the outcome without asking either to be shown on the question's surfaces.*

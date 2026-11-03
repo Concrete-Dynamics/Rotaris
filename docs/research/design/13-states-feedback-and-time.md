@@ -121,31 +121,55 @@ No dated notes yet.
 
 ## 8. Where this disagrees with the adopted material
 
-**D13-1 —** *Claim:* a design system avoids transient acknowledgements for accessibility, pending repairs, so perhaps provisionally [13]. *Adopted:* `REQ-SHELL-112`, `REQ-SHELL-113`, one acknowledgement surface. *Question:* should every event an acknowledgement reports also have an inline home in its view? — [OQ-498](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-498)
+**D13-1 —** *Claim:* a design system avoids transient acknowledgements for accessibility, pending repairs, so perhaps provisionally [13]. *Adopted:* `REQ-SHELL-112`, `REQ-SHELL-113`, one acknowledgement surface. *Question:* should every event an acknowledgement reports also have an inline home in its view? — [OQ-498](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-498)
 
-**D13-2 —** *Claim:* a timed message stays at least 5 s and pauses on hover and focus [11]; a time limit is adjustable unless its information is elsewhere [31]. *Adopted:* `REQ-NOTIFY-011`, 4200 ms everywhere; `REQ-NOTIFY-003`, other events need no other record. *Question:* should the lifetime meet a 5 s floor or pause, and which acknowledged events lack a persistent record under SC 2.2.1? — [OQ-498](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-498)
+*Ruled 2026-11-03 (OQ-498): No inline home is owed: REQ-NOTIFY-003 names the three events kept as a persistent notice, adopted text unchanged.*
 
-**D13-3 —** *Claim:* a message with an action stays until acted on [9]; a necessary action is never transient [12]; the timed region is a keyboard landmark [11]. *Adopted:* `PD-WORKSPACE-001`, one action, ignorable "until it withdraws", taking no focus; `REQ-NOTIFY-015`. *Question:* how does a keyboard-only operator reach "Start a new session" in time, and can the offer be found after? — [OQ-498](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-498)
+**D13-2 —** *Claim:* a timed message stays at least 5 s and pauses on hover and focus [11]; a time limit is adjustable unless its information is elsewhere [31]. *Adopted:* `REQ-NOTIFY-011`, 4200 ms everywhere; `REQ-NOTIFY-003`, other events need no other record. *Question:* should the lifetime meet a 5 s floor or pause, and which acknowledged events lack a persistent record under SC 2.2.1? — [OQ-498](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-498)
 
-**D13-4 —** *Claim:* a long background process's completion persists until dismissed, with times and a summary [21]. *Adopted:* the specified dialog set; `REQ-NOTIFY-003`, a success may be transient. *Question:* where does a long run's completion summary persist for an operator who was away? — [OQ-506](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-506)
+*Ruled 2026-11-03 (OQ-498): No 5 s floor, 4200 ms stands; a directive narrows REQ-NOTIFY-011 and -022 to pause while the pointer rests.*
 
-**D13-5 —** *Claim:* a wait past 10 s owes progress and an interrupt [1], moves to the background [5] and sits inline [4]; an indeterminate ring blocks [7]. *Adopted:* `REQ-SHELL-117`, an indeterminate, window-modal, non-cancellable dialog shown at once (G12). *Question:* for a merge or checkpoint past 10 s, is the operator owed how far it has got? — [OQ-529](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-529)
+**D13-3 —** *Claim:* a message with an action stays until acted on [9]; a necessary action is never transient [12]; the timed region is a keyboard landmark [11]. *Adopted:* `PD-WORKSPACE-001`, one action, ignorable "until it withdraws", taking no focus; `REQ-NOTIFY-015`. *Question:* how does a keyboard-only operator reach "Start a new session" in time, and can the offer be found after? — [OQ-498](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-498)
+
+*Ruled 2026-11-03 (OQ-498): A keyboard-only operator reaches the offer as /new (REQ-CHAT-031); the acknowledgement takes no focus, text unchanged.*
+
+**D13-4 —** *Claim:* a long background process's completion persists until dismissed, with times and a summary [21]. *Adopted:* the specified dialog set; `REQ-NOTIFY-003`, a success may be transient. *Question:* where does a long run's completion summary persist for an operator who was away? — [OQ-506](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-506)
+
+*Ruled 2026-11-03 (OQ-506): A finished run persists as its completed row on the Overview's sessions card; the success notice stays single-slot.*
+
+**D13-5 —** *Claim:* a wait past 10 s owes progress and an interrupt [1], moves to the background [5] and sits inline [4]; an indeterminate ring blocks [7]. *Adopted:* `REQ-SHELL-117`, an indeterminate, window-modal, non-cancellable dialog shown at once (G12). *Question:* for a merge or checkpoint past 10 s, is the operator owed how far it has got? — [OQ-529](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-529)
+
+*Ruled 2026-11-03 (OQ-529): REQ-SHELL-117 stands, indeterminate read as no percentage; the named stages the record fixes are the progress owed.*
 
 **D13-6 —** *Claim:* accelerating late progress [23] or animating a bar's fill, by about 11–12 % [24], shortens the felt wait. *Adopted:* §1.11, exact numbers; `REQ-NOTIFY-043`, no estimated bar; §1.8, two infinite animations. *Question:* should the record state that both are declined for `MeterBar`, and at what cost? — none filed; already-ruled: §1.8, §1.11
 
-**D13-7 —** *Claim:* confirmations habituate and undo protects better [16]; reversible comes first for deleting stored data [34]. *Adopted:* `REQ-NOTIFY-009`, a destructive action is confirmed by a dialog. *Question:* may a deletion the store can restore be offered an undo instead of `ConfirmDialog`? — [OQ-533](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-533)
+**D13-7 —** *Claim:* confirmations habituate and undo protects better [16]; reversible comes first for deleting stored data [34]. *Adopted:* `REQ-NOTIFY-009`, a destructive action is confirmed by a dialog. *Question:* may a deletion the store can restore be offered an undo instead of `ConfirmDialog`? — [OQ-533](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-2.md#oq-533)
 
-**D13-8 —** *Claim:* pulsing that starts itself and runs past 5 s beside other content needs a pause, stop or hide unless essential [33]. *Adopted:* §1.8, the 1.6 s pulse while a state runs; `REQ-SHELL-135`. *Question:* does the in-app reduced-motion setting stop the pulse and the spinner, and is it SC 2.2.2's mechanism? — [OQ-497](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-497)
+*Ruled 2026-11-03 (OQ-533): No Library instance: REQ-LIBRARY-118's deletion cannot be undone, so its dialog and REQ-NOTIFY-009 stand.*
 
-**D13-9 —** *Claim:* no false precision — at hours, minutes but not seconds [44]; peripheral status should not churn [43]. *Adopted:* §1.11; `REQ-CHAT-158`, `H:MM:SS` advancing at least once a second; `PD-CHAT-008`. *Question:* past an hour, does the run header's seconds digit inform, or only move? — [OQ-511](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-511)
+**D13-8 —** *Claim:* pulsing that starts itself and runs past 5 s beside other content needs a pause, stop or hide unless essential [33]. *Adopted:* §1.8, the 1.6 s pulse while a state runs; `REQ-SHELL-135`. *Question:* does the in-app reduced-motion setting stop the pulse and the spinner, and is it SC 2.2.2's mechanism? — [OQ-497](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-497)
 
-**D13-10 —** *Claim:* each empty subtype gets a tone and an optional illustration, celebratory for cleared work [40]. *Adopted:* §1.11, no filler; §1.10, the grid motif only; §1.7, no decorative illustration. *Question:* may a user-cleared cell acknowledge finished work in words alone, and in which? — [OQ-515](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-515)
+*Ruled 2026-11-03 (OQ-497): Yes, read from REQ-SHELL-135 and -136: flipping the setting brings every running pulse and spinner to rest at once.*
 
-**D13-11 —** *Claim:* a persistent strip must not flap [14]; non-urgent interruptions wait for a boundary [26] and are postponable [32]. *Adopted:* `REQ-NOTIFY-024`, the newest publication current at once, one slot; `PD-STARTUP-010` [51]. *Question:* may a non-emergency notice be debounced or held, given `REQ-NOTIFY-268` records before rendering? — [OQ-511](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-511)
+**D13-9 —** *Claim:* no false precision — at hours, minutes but not seconds [44]; peripheral status should not churn [43]. *Adopted:* §1.11; `REQ-CHAT-158`, `H:MM:SS` advancing at least once a second; `PD-CHAT-008`. *Question:* past an hour, does the run header's seconds digit inform, or only move? — [OQ-511](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-511)
 
-**D13-12 —** *Claim:* status figures change at a bounded rate [43]; auto-updating content offers an update-frequency control [33]. *Adopted:* `REQ-SHELL-150`, pending changes repainted at least every 120 ms. *Question:* does that floor bind the strip's token and cost figures, or may they be sampled at a stated slower rate? — [OQ-511](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-511)
+*Ruled 2026-11-03 (OQ-511): The seconds stay past an hour under PD-CHAT-008, being the liveness signal; adopted text unchanged.*
 
-**D13-13 —** *Claim:* agent steps include queued and waiting for approval, apart from running [22]. *Adopted:* `REQ-MONITOR-105`, `REQ-CHAT-060`, tool row status closed to `running`, `ok`, `failed`, `blocked`. *Question:* how does a tool row awaiting approval read distinct from one executing, within that set? — [OQ-520](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-520)
+**D13-10 —** *Claim:* each empty subtype gets a tone and an optional illustration, celebratory for cleared work [40]. *Adopted:* §1.11, no filler; §1.10, the grid motif only; §1.7, no decorative illustration. *Question:* may a user-cleared cell acknowledge finished work in words alone, and in which? — [OQ-515](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-515)
+
+*Ruled 2026-11-03 (OQ-515): In words alone: a cleared cell may state its work done with an exact count, never celebrated; text unchanged.*
+
+**D13-11 —** *Claim:* a persistent strip must not flap [14]; non-urgent interruptions wait for a boundary [26] and are postponable [32]. *Adopted:* `REQ-NOTIFY-024`, the newest publication current at once, one slot; `PD-STARTUP-010` [51]. *Question:* may a non-emergency notice be debounced or held, given `REQ-NOTIFY-268` records before rendering? — [OQ-511](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-511)
+
+*Ruled 2026-11-03 (OQ-511): No notice is held or debounced: REQ-NOTIFY-024 forbids queueing and PD-STARTUP-010 stays one named pair.*
+
+**D13-12 —** *Claim:* status figures change at a bounded rate [43]; auto-updating content offers an update-frequency control [33]. *Adopted:* `REQ-SHELL-150`, pending changes repainted at least every 120 ms. *Question:* does that floor bind the strip's token and cost figures, or may they be sampled at a stated slower rate? — [OQ-511](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-511)
+
+*Ruled 2026-11-03 (OQ-511): REQ-SHELL-150's floor binds the strip's token and cost figures, which are not sampled slower; text unchanged.*
+
+**D13-13 —** *Claim:* agent steps include queued and waiting for approval, apart from running [22]. *Adopted:* `REQ-MONITOR-105`, `REQ-CHAT-060`, tool row status closed to `running`, `ok`, `failed`, `blocked`. *Question:* how does a tool row awaiting approval read distinct from one executing, within that set? — [OQ-520](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-3.md#oq-520)
+
+*Ruled 2026-11-03 (OQ-520): A directive narrows REQ-CHAT-060: a held call's row shows a still waiting-for-approval mark, with no fifth status.*
 
 ## 9. References and further reading
 

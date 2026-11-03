@@ -125,23 +125,37 @@ The rubric may lift section 6's *new* checks.
 - **D08-2 —** An overlay draws native caption controls on Windows [1]; the record finds no Snap Layouts flyout [50]. `PD-SHELL-003`: one control set everywhere. *Is losing the flyout accepted, or is the native overlay admissible on Windows?* — none filed; already-ruled: PD-SHELL-003
 - **D08-3 —** Right-clicking the bare Windows bar should open the window menu [3]; the window has no system-menu style [50]. `PD-SHELL-003` names double-click only. *Is the window menu on the title bar's gap owed on Windows?* — none filed; already-ruled: PD-SHELL-003
 - **D08-4 —** The macOS menu bar carries the command set, Window menu included [22]. `PD-SHELL-003`: no application menu on any desktop. *What does the macOS menu bar hold for this product?* — none filed; already-ruled: PD-SHELL-003 revision 2
-- **D08-5 —** Windows sizes the bar to its contents, 32 px standard and 48 px with a search box [3]. `REQ-SHELL-033`, `-129`: 44 px in the default theme. *Is 44 px an accepted departure on Windows?* — [OQ-504](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-504)
+- **D08-5 —** Windows sizes the bar to its contents, 32 px standard and 48 px with a search box [3]. `REQ-SHELL-033`, `-129`: 44 px in the default theme. *Is 44 px an accepted departure on Windows?* — [OQ-504](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-504)
+
+  *Ruled 2026-11-03 (OQ-504): 44 px stands on Windows as on every desktop: a theme token that varies by theme, never by host.*
 - **D08-6 —** Windows' default title-bar material is Mica, a tinted translucent backdrop [3]. §1.7 forbids glass and backdrop blur; §1.1 fixes chroma 0. *Is losing the platform material the cost of §1.7?* — none filed; not-a-question
 - **D08-7 —** Windows sets the title in Segoe UI [3]. §1.4: three faces only. *Does §1.4 govern title text on Windows, where native-framed auxiliary windows show the host's face?* — none filed; not-a-question
-- **D08-8 —** macOS highlights a focused list row rather than ringing it [13]. §1.7: the ring is the only focus treatment; §1.2: a row tint is selection. *On macOS is a focused transcript or `Table` row ringed, as §1.7 says?* — [OQ-504](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-504)
-- **D08-9 —** An inset ring needs more than 2 px to reach the enhanced area [14]. `REQ-SHELL-148`, `-129`: in bounds at 2 px; §1.8 note 3. *Is that shortfall against 2.4.13 accepted for self-painted controls?* — [OQ-493](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-493)
+- **D08-8 —** macOS highlights a focused list row rather than ringing it [13]. §1.7: the ring is the only focus treatment; §1.2: a row tint is selection. *On macOS is a focused transcript or `Table` row ringed, as §1.7 says?* — [OQ-504](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-504)
+
+  *Ruled 2026-11-03 (OQ-504): Yes, a focused row is ringed on macOS (REQ-SHELL-160 (c), REQ-SHELL-153); the departure is read in a §1.7 note.*
+- **D08-9 —** An inset ring needs more than 2 px to reach the enhanced area [14]. `REQ-SHELL-148`, `-129`: in bounds at 2 px; §1.8 note 3. *Is that shortfall against 2.4.13 accepted for self-painted controls?* — [OQ-493](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-493)
+
+  *Ruled 2026-11-03 (OQ-493): Adopted text stands: REQ-SHELL-144..168 names no WCAG level, so SC 2.4.13 does not bind and the 2 px inset ring stays.*
 - **D08-10 —** "In users with normal vision, light mode leads to better performance most of the time" [12]. §1.1, `REQ-SHELL-128`: all three themes are dark. *Is a dark ground for every theme settled for small mono data?* — none filed; request
 - **D08-11 —** Electron's example offers a reset to the system appearance [8]. `REQ-SHELL-128`: three named themes, none following the OS. *Is following the OS appearance in scope?* — none filed; request
-- **D08-12 —** Forced colours override every token and may be light [9][10][11]. `REQ-SHELL-128`'s `high-contrast` is an app theme; `REQ-SHELL-160`(b). *Under an active OS palette, does the shell defer or switch theme, and how does (b) read when it is light?* — [OQ-494](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-494)
+- **D08-12 —** Forced colours override every token and may be light [9][10][11]. `REQ-SHELL-128`'s `high-contrast` is an app theme; `REQ-SHELL-160`(b). *Under an active OS palette, does the shell defer or switch theme, and how does (b) read when it is light?* — [OQ-494](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-494)
+
+  *Ruled 2026-11-03 (OQ-494): Adopted text stands, read in a §1.7 note: the shell defers to an OS forced-colours palette and never switches theme.*
 - **D08-13 —** A light weight's legibility depends on the renderer [35][36]. §1.4: weight 300 for large mono numerals on every build. *Does 300 hold on the Linux build, and who measures it?* — none filed; already-ruled: REQ-SHELL-160 (a)
 - **D08-14 —** macOS replaces an app's accent with the person's choice [47]; GNOME apps follow it [48]; Electron reads it unevenly [49]. §1.2: one violet at hue 292. *Does the fixed accent stand on macOS and GNOME?* — none filed; request
 - **D08-15 —** One colour should not mean two things [47]. §1.2, §1.3: accent and Z `done` share hue 292. *Does a selected row beside a `done` `StatusDot` read as one meaning?* — none filed; already-ruled: §1.3 (colour never carries a fact on its own)
 - **D08-16 —** macOS hides unavailable context-menu items and their shortcuts, Windows shows accelerators [25]. `REQ-SHELL-048`, `-053`. *Does a drawn context menu follow each platform, or one presentation?* — none filed; not-a-question
 - **D08-17 —** Guidance keeps the flash for an inactive app's blocking need, notifications for the rest [42]. `REQ-SHELL-161`: no notification for a declined raise. *May a run waiting on the approval dialog post an OS notification?* — none filed; request
-- **D08-18 —** KDE never binds a bare function key [18]; Apple uses Command-Question mark for help, GNOME Control+? for shortcuts [17][19]. `REQ-SHELL-049`: F1 shows keyboard help. *Is F1 alone the chord on every desktop, laptops included?* — [OQ-504](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-504)
+- **D08-18 —** KDE never binds a bare function key [18]; Apple uses Command-Question mark for help, GNOME Control+? for shortcuts [17][19]. `REQ-SHELL-049`: F1 shows keyboard help. *Is F1 alone the chord on every desktop, laptops included?* — [OQ-504](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-504)
+
+  *Ruled 2026-11-03 (OQ-504): F1 alone stays the chord on every desktop; REQ-SHELL-165 answers a host that claims it, the palette being the route.*
 - **D08-19 —** Critical information should not sit only in a bottom bar [4]. `REQ-SHELL-024`, `-041`: safety flags in the status strip. *Is each flag stated elsewhere than the strip?* — none filed; not-a-question
-- **D08-20 —** At 150 % a 1920×1080 display offers 1280×720 CSS px [31]. `REQ-SHELL-022`: 1440×900, never below 1000×680; `REQ-SHELL-167`'s work-area rule covers auxiliary windows only. *What does the main window open at when the work area cannot hold it?* — [OQ-508](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-508)
-- **D08-21 —** A keyboard route alone does not meet 2.5.7 [38]. `REQ-SHELL-066` – `-068`: drag and keys; `REQ-SHELL-070`: reset. *Does a divider owe a single-pointer route?* — [OQ-493](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-493)
+- **D08-20 —** At 150 % a 1920×1080 display offers 1280×720 CSS px [31]. `REQ-SHELL-022`: 1440×900, never below 1000×680; `REQ-SHELL-167`'s work-area rule covers auxiliary windows only. *What does the main window open at when the work area cannot hold it?* — [OQ-508](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-508)
+
+  *Ruled 2026-11-03 (OQ-508): A directive narrows REQ-SHELL-022: the main window opens clamped to its display's work area, never below 1000×680.*
+- **D08-21 —** A keyboard route alone does not meet 2.5.7 [38]. `REQ-SHELL-066` – `-068`: drag and keys; `REQ-SHELL-070`: reset. *Does a divider owe a single-pointer route?* — [OQ-493](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-493)
+
+  *Ruled 2026-11-03 (OQ-493): Adopted text stands: a divider owes no single-pointer route, REQ-SHELL-068's keys and REQ-SHELL-070's reset suffice.*
 
 ## 9. References and further reading
 

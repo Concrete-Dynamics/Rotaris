@@ -136,11 +136,17 @@ Section 6's "new" lines are proposals for F1, F2 and D3. Section 8 reaches the o
 
 **D04-2 —** A platform guideline discourages progress in separate windows, since closing one has an unclear consequence [12]. It meets the persona windows (`REQ-SHELL-076`: closing hides, not destroys). *Question: does a persona window, and the main window once it closes, say that the agent's run continues and where its state stays visible?* — none filed; not-a-question
 
-**D04-3 —** The operator is away most of a session and suspended work can wait hours [8] [25]. It meets `REQ-SHELL-023`'s seven views, none named as where everything waiting on the operator gathers. *Question: which existing surface (sessions card, status strip, session chip) does a returning operator read for every pending approval and question?* — [OQ-506](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-506)
+**D04-3 —** The operator is away most of a session and suspended work can wait hours [8] [25]. It meets `REQ-SHELL-023`'s seven views, none named as where everything waiting on the operator gathers. *Question: which existing surface (sessions card, status strip, session chip) does a returning operator read for every pending approval and question?* — [OQ-506](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-506)
 
-**D04-4 —** The field study suggests a cue whose salience grows with time since last attention [25]. It meets §1.8: one fixed 1.6 s pulse, only while running. *Question: may a long-waiting `waiting` state change emphasis, or are the word and its elapsed figure the whole signal?* — [OQ-502](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-502)
+*Ruled 2026-11-03 (OQ-506): The Overview's sessions card (REQ-MONITOR-171) is the surface, its rows tagged waiting for you; text unchanged.*
 
-**D04-5 —** A developer design system welcomes first use with an illustration and warm, non-technical copy [33]. It meets §1.11 (direct, technical, no filler) and §1.7, §1.10 (no decorative illustration; the grid motif only). *Question: does the undrawn first-launch surface (§7's "First launch" row) keep the technical voice, with the provider sign-in dialog carrying the guidance a welcome would?* — [OQ-515](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-515)
+**D04-4 —** The field study suggests a cue whose salience grows with time since last attention [25]. It meets §1.8: one fixed 1.6 s pulse, only while running. *Question: may a long-waiting `waiting` state change emphasis, or are the word and its elapsed figure the whole signal?* — [OQ-502](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-502)
+
+*Ruled 2026-11-03 (OQ-502): The word and its elapsed figure are the whole signal; no salience grows with time, adopted text unchanged.*
+
+**D04-5 —** A developer design system welcomes first use with an illustration and warm, non-technical copy [33]. It meets §1.11 (direct, technical, no filler) and §1.7, §1.10 (no decorative illustration; the grid motif only). *Question: does the undrawn first-launch surface (§7's "First launch" row) keep the technical voice, with the provider sign-in dialog carrying the guidance a welcome would?* — [OQ-515](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-2.md#oq-515)
+
+*Ruled 2026-11-03 (OQ-515): Yes, first launch keeps §1.11's technical voice with no welcome illustration; a welcome surface is an owner's request.*
 
 **D04-6 —** Participants judged a traceability matrix right for an overview and preferred it, with graphs, for management tasks [38]. It meets the Requirements view's fixed presentations (`REQ-TRACE-232`, `REQ-TRACE-293`, `REQ-TRACE-322`). *Question: do the board's columns and counts answer the all-requirements-against-evidence overview, or is that an unmet need to record?* — none filed; request
 
@@ -148,9 +154,13 @@ Section 6's "new" lines are proposals for F1, F2 and D3. Section 8 reaches the o
 
 **D04-8 —** Editors keep typed but unsaved edits across a quit and a crash by default [29]. It meets the ruling `AGENTS.md` records after OQ-298 (`docs/architecture/open-questions/61-spikes-and-later-questions-28.md`): no close guard on quit, so unsaved Settings edits are lost. *Question: should unsaved Settings edits outlive a quit as the draft does (`REQ-CHAT-015`), or is their loss the contract to state to the operator?* — none filed; already-ruled: OQ-298
 
-**D04-9 —** A system should convey the consequences of a person's action [21]. It meets `REQ-TOOLS-063`'s enumerated contents, which label "Approve for this session" and state nothing of its scope. *Question: may the approval dialog say what a session-wide approval lets through, or is that content the requirement does not list?* — [OQ-519](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-519) (the session approval's scope); none filed; request (whether the call can be undone)
+**D04-9 —** A system should convey the consequences of a person's action [21]. It meets `REQ-TOOLS-063`'s enumerated contents, which label "Approve for this session" and state nothing of its scope. *Question: may the approval dialog say what a session-wide approval lets through, or is that content the requirement does not list?* — [OQ-519](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-3.md#oq-519) (the session approval's scope); none filed; request (whether the call can be undone)
 
-**D04-10 —** Design decides whether a warning is heeded [19]; a confirmation should not lean toward yes [17]. It meets `REQ-TOOLS-063`'s Approve once in primary styling, the one filled control of §1.7, while focus starts on Deny. *Question: does the filled Approve once draw the eye toward approving an unread call, and should that be measured before it stands?* — [OQ-518](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-518)
+*Ruled 2026-11-03 (OQ-519): A directive extends REQ-TOOLS-063: the dialog states what Approve for this session admits, in one of four strings.*
+
+**D04-10 —** Design decides whether a warning is heeded [19]; a confirmation should not lean toward yes [17]. It meets `REQ-TOOLS-063`'s Approve once in primary styling, the one filled control of §1.7, while focus starts on Deny. *Question: does the filled Approve once draw the eye toward approving an unread call, and should that be measured before it stands?* — [OQ-518](../../archive/architecture/open-questions/70-spikes-and-later-questions-37-continued-3.md#oq-518)
+
+*Ruled 2026-11-03 (OQ-518): The filled Approve once stands, REQ-TOOLS-063's Deny focus being the guard; a filled Deny is refused (§1.3, §1.7).*
 
 ## 9. References and further reading
 

@@ -137,17 +137,25 @@ No dated notes yet.
 
 ## 8. Where this disagrees with the adopted material
 
-**D07-1 —** *Claim:* platform guidance ranks by weight and promotes a confined title by weight at body size [33][34][14]. *Adopted:* §1.4, three weights, hierarchy "never weight". *Question:* are size, colour and space at body size enough for row headers, `Table` group headers and the approval dialog's tool name, and how is that measured? — [OQ-500](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-500)
+**D07-1 —** *Claim:* platform guidance ranks by weight and promotes a confined title by weight at body size [33][34][14]. *Adopted:* §1.4, three weights, hierarchy "never weight". *Question:* are size, colour and space at body size enough for row headers, `Table` group headers and the approval dialog's tool name, and how is that measured? — [OQ-500](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-500)
 
-**D07-2 —** *Claim:* platforms advise one interface font, or as few faces as possible [34][33]. *Adopted:* §1.4, Space Grotesk, Manrope, JetBrains Mono. *Question:* does the display-versus-body split earn its place on dense surfaces? — [OQ-500](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-500)
+*Ruled 2026-11-03 (OQ-500): Yes as built: headers take --rt-weight-medium, a group header is the section kicker, a tool name in a row is mono.*
+
+**D07-2 —** *Claim:* platforms advise one interface font, or as few faces as possible [34][33]. *Adopted:* §1.4, Space Grotesk, Manrope, JetBrains Mono. *Question:* does the display-versus-body split earn its place on dense surfaces? — [OQ-500](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-500)
+
+*Ruled 2026-11-03 (OQ-500): The split stands: Space Grotesk stays with headings, so a dense row carries Manrope and mono only, read in §1.4.*
 
 **D07-3 —** *Claim:* mature systems use a 4 px base and line-heights off the 8 px grid [35]. *Adopted:* §1.5, the 8 px module. *Question:* does the module govern line-heights, or only gaps between boxes? — none filed; not-a-question
 
-**D07-4 —** *Claim:* token spacing may take optical corrections [5]. *Adopted:* §1, "cite the token, never a literal colour or pixel value". *Question:* may a correction off the module exist, and how is it recorded so the audit does not flag it? — [OQ-499](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-499)
+**D07-4 —** *Claim:* token spacing may take optical corrections [5]. *Adopted:* §1, "cite the token, never a literal colour or pixel value". *Question:* may a correction off the module exist, and how is it recorded so the audit does not flag it? — [OQ-499](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-499)
+
+*Ruled 2026-11-03 (OQ-499): No correction off the module is admitted; §1's literal rule stands, read by a dated note under §1's opening paragraph.*
 
 **D07-5 —** *Claim:* desktop guidance gives cards, list items and controls a resting shadow plus a 1 px stroke [36]. *Adopted:* §1.7, a shadow only means this floats. *Question:* should the record state why resting surfaces carry none beside native surfaces that do? — none filed; not-a-question
 
-**D07-6 —** *Claim:* fully flat controls weaken clickability cues [37]. *Adopted:* §1.7, no bevels, one filled control, the rest hairline or bare text. *Question:* do secondary `Button`s and icon controls read as controls, and how would that be tested? — [OQ-503](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-503)
+**D07-6 —** *Claim:* fully flat controls weaken clickability cues [37]. *Adopted:* §1.7, no bevels, one filled control, the rest hairline or bare text. *Question:* do secondary `Button`s and icon controls read as controls, and how would that be tested? — [OQ-503](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-503)
+
+*Ruled 2026-11-03 (OQ-503): They do when drawn as §1.7 is now read, edged in the strong boundary or accent ink; a review-ui walk is the test.*
 
 **D07-7 —** *Claim:* one hue as accent and as state means two things [20]; same-name colours are confused [24]. *Adopted:* §1.2–1.3, accent hue 292 and Z violet = done. *Question:* can a selected row, a link and a done `StatusDot` be told apart on one surface? — none filed; already-ruled: §1.3 (colour never carries a fact on its own)
 
@@ -157,11 +165,15 @@ No dated notes yet.
 
 **D07-10 —** *Claim:* dark text on light reads better for normal vision, the cost grows as text shrinks, and dark is advised as a switch [38]. *Adopted:* §1.1; `REQ-SHELL-128`, three dark themes, `rotaris-dim` default. *Question:* with long sessions of small mono text, is a light theme owed? — none filed; request
 
-**D07-11 —** *Claim:* animated transitions improve tracking of rearranged items, about one second for large moves [43]. *Adopted:* §1.8, status indicators only. *Question:* should board cards changing columns, a graph re-laying out or a re-sorting delegation tree be an exception? — [OQ-496](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-496)
+**D07-11 —** *Claim:* animated transitions improve tracking of rearranged items, about one second for large moves [43]. *Adopted:* §1.8, status indicators only. *Question:* should board cards changing columns, a graph re-laying out or a re-sorting delegation tree be an exception? — [OQ-496](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-496)
+
+*Ruled 2026-11-03 (OQ-496): No exception: board, graph and tree rearrangements take effect in one update and the adopted text is unchanged.*
 
 **D07-12 —** *Claim:* position beats angle and area [44]; rings read by arc remain less accurate than bars [45]. *Adopted:* §4, `ContextRing` beside `MeterBar`. *Question:* where several fill-of-capacity values are compared, which component serves them? — none filed; not-a-question
 
-**D07-13 —** *Claim:* measure is counted in characters, 45–90 [16], at most 80 [17]. *Adopted:* §7.2 item 4, prose at 78 % of the row; `--rt-prose-measure` is a pixel length (`themes.ts`). *Question:* should the transcript's measure be stated in characters? — [OQ-535](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-535)
+**D07-13 —** *Claim:* measure is counted in characters, 45–90 [16], at most 80 [17]. *Adopted:* §7.2 item 4, prose at 78 % of the row; `--rt-prose-measure` is a pixel length (`themes.ts`). *Question:* should the transcript's measure be stated in characters? — [OQ-535](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-2.md#oq-535)
+
+*Ruled 2026-11-03 (OQ-535): The measure stays a length: --rt-prose-measure keeps 340 px and the transcript its 78 % cap, not restated in ch.*
 
 ## 9. References and further reading
 

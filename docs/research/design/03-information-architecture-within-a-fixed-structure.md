@@ -228,10 +228,14 @@ between a requirement, the commits implementing it and the run that produced the
 **D03-2 —** Platform guidance applies a changed setting at once, with no confirmation button [35]. The configuration
 categories defer to Save and Discard behind a leave guard (`REQ-CONFIG-270`, `REQ-CONFIG-286`, `REQ-SHELL-124`), while
 Interface applies at once (`REQ-CONFIG-399`). What keeps the deferred Save, and how does a control show its commit policy where
-the two meet? — [OQ-530](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-530)
+the two meet? — [OQ-530](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-2.md#oq-530)
+
+*Ruled 2026-11-03 (OQ-530): The deferred Save stays under REQ-CONFIG-417 and -418; a departing control states its commit policy in its own hint.*
 
 **D03-3 —** Platform list guidance separates a row's texts by size, weight and colour [36]. §1.4 keeps hierarchy to
-size, colour and space, never weight. Do a dense row's title, description and metadata stay distinct without weight? — [OQ-500](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-500)
+size, colour and space, never weight. Do a dense row's title, description and metadata stay distinct without weight? — [OQ-500](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-500)
+
+*Ruled 2026-11-03 (OQ-500): A dense row's texts stay distinct by size, colour tier, space and §1.4's 500-over-400 split, no weight above 500.*
 
 **D03-4 —** Platform guidance lets people choose a sidebar's areas and order [37], and an adaptable menu was preferred
 and matched an optimal fixed one in speed in one study [18]. The rail's order and labels are fixed (`REQ-SHELL-023`,
@@ -245,10 +249,14 @@ the Library tabs (`REQ-SHELL-023`, `REQ-CONFIG-268`, `REQ-LIBRARY-103`) were nev
 tree test [5] of the fixed labels be run as sanitized evidence? — none filed; not-a-question
 
 **D03-7 —** Revealing a predicted subset at once and fading in the rest over 500 ms sped menu selection [20]. §1.8 keeps
-animation to status indicators. Does §1.8 mean to exclude onset motion in the command palette's listing? — [OQ-496](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-496)
+animation to status indicators. Does §1.8 mean to exclude onset motion in the command palette's listing? — [OQ-496](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-496)
+
+*Ruled 2026-11-03 (OQ-496): No onset motion in the palette's listing, refreshed per keystroke; the palette's surface enters with rt-rise as adopted.*
 
 **D03-8 —** Animating a change of scale substantially reduces reorientation [21]. §1.8 meets the Requirements board's
-graph presentation (`REQ-TRACE-322`), which re-centres. May that presentation animate a change of centre or scale? — [OQ-496](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-496)
+graph presentation (`REQ-TRACE-322`), which re-centres. May that presentation animate a change of centre or scale? — [OQ-496](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-2.md#oq-496)
+
+*Ruled 2026-11-03 (OQ-496): The graph re-centres in one update, REQ-TRACE-327's summary being the cue that keeps the place; §1.8 unchanged.*
 
 **D03-9 —** Separate views cost split attention, large in dynamic tasks (map and driving studies) [21]. A run can be
 watched in a persona window beside the main window (`REQ-SHELL-072` to `REQ-SHELL-079`). Does following one run across
@@ -256,7 +264,9 @@ two windows cost the operator measurably? — none filed; not-a-question
 
 **D03-10 —** Attention encodings, pulsing above all, are for conditions needing a response [44]. `REQ-MONITOR-171`
 pulses other busy sessions in the run colour, and §1.8 pulses an actively running state. Does running need the
-operator, or should the pulse be kept for states that do? — [OQ-502](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-502)
+operator, or should the pulse be kept for states that do? — [OQ-502](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-3.md#oq-502)
+
+*Ruled 2026-11-03 (OQ-502): The pulse stays for running: a run needing the operator keeps pulsing and says so in words, only the held call rests.*
 
 **D03-11 —** An aggregate status lists only non-zero exceptions [45]. The agents card prints every count, zeros
 included (`REQ-MONITOR-169`, narrowed by `PD-ORCH-005` revision 6 clause 23). Is the line's fixed shape worth the
@@ -264,7 +274,9 @@ attention its zeros spend? — none filed; already-ruled: PD-ORCH-005 clause 23
 
 **D03-12 —** The broadest scope should be the default, any narrowing stated on the results [42]. One Library query
 already filters all three tabs (`REQ-LIBRARY-104`), meeting the first half. With the tab labels fixed
-(`REQ-LIBRARY-103`), how does a tab that is not selected say it holds matches? — [OQ-534](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-534)
+(`REQ-LIBRARY-103`), how does a tab that is not selected say it holds matches? — [OQ-534](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-2.md#oq-534)
+
+*Ruled 2026-11-03 (OQ-534): A directive extends REQ-LIBRARY-104: while a query applies each tab shows its exact match count beside its label.*
 
 ## 9. References and further reading
 

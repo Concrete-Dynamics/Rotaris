@@ -12,6 +12,10 @@ Part 3 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
   > are unchanged. The transcript card in (b) draws its rows through the same renderer as the main
   > window, so the role line in the persona's colour and the indent by delegation depth appear there
   > on the same terms.
+  >
+  > **Extended by [`PD-CHAT-012`](../../product/directives/pd-chat-012.md#pd-chat-012), 2026-11-03.** Each
+  > transcript surface owns one polite live region that speaks a tool row on arrival and every row on completion,
+  > never a stream; the text above still governs in full, and the directive adds behaviour beside it.
 - **REQ-SHELL-076**: Persona-window refreshes are coalesced at 120 ms, so a rapid series of updates produces a single rebuild per interval, and a window that is hidden or closed is not rebuilt at all. Closing the window hides it rather than destroying it, so reopening is instantaneous; a full session-state replacement still reaches open windows on the same coalescing terms.
 - **REQ-SHELL-077**: Incremental transcript updates cause an open persona window to rebuild its filtered per-agent slice, so live output appears without a full-session refresh.
 - **REQ-SHELL-078**: All persona windows are closed when the main window closes and when a new session starts (the cache is cleared too); they are owned by their main window and do not outlive it.
@@ -20,6 +24,9 @@ Part 3 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
 ### Terminal pop-out window
 
 - **REQ-SHELL-079**: Terminal output reaches the user in two forms: as a live preview embedded in the transcript row — shown in the main window and, for the owning agent, in the persona window's transcript card (REQ-SHELL-075) — and as the pop-out terminal window, which is the only surface that accepts input. Previews keep updating whether the terminal window is open or closed, so closing that window leaves the user looking at a preview that is already current. Every surface calls the feature "terminal".
+  > **Extended by [`PD-SHELL-012`](../../product/directives/pd-shell-012.md#pd-shell-012), 2026-11-03.** The
+  > terminal window speaks the shown terminal's output politely, only while active, at most 20 lines per update; the
+  > text above still governs in full, and the directive adds behaviour beside it.
 - **REQ-SHELL-080**: The window is reachable from a running transcript row, from the Workspace toolbar's terminal control, which carries a count of currently running terminals, and via Ctrl+Shift+T. The toolbar control can be used before any command has ever run, and the window's empty state covers that situation.
 - **REQ-SHELL-081**: There is a single terminal window per main window: a second request raises the existing window rather than opening another. Its title is "Rotaris · Terminal", or "Rotaris · Terminal — {session label}" when the focused session has a label (its name, or its identifier when unnamed). Initial size: 900×620. When the window opens automatically (REQ-SHELL-108) it must not take keyboard focus.
 - **REQ-SHELL-082**: The window shows one tab per known terminal stream (agent-foreground and background-session streams), with the tab set carrying accessible name "Terminal sessions". A tab is labelled with the stream's command text elided to at most 28 characters when a command is known for it, and with the stream's display name when none is; its tooltip is "{name} · running" while the command runs and "{name} · exit N" once it has ended. Raw internal stream identifiers never appear in any label or accessible name: agent streams show the persona's human-readable name (for example "Coder 1"), background streams display "Background session {identifier elided to 12 characters}", and unknown streams display "Terminal".

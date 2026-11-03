@@ -34,3 +34,8 @@ Every cross-process shape is a schema in `contracts`, and the two directions are
 
 Ordered edit paths: `docs/architecture/views/04-seams.md` §1 (command), §2 (channel), §6 (notice),
 §7 (preference). Evidence: `pnpm app:drive command …` drives `runCommand` by the renderer's own path.
+
+The two schemas' guard is their property tests, `commands.property.test.ts` and `process-protocol.property.test.ts`: every
+`kind`, generated from the schema itself, parses and survives a JSON round trip whole; no input makes `safeParse` throw;
+a non-object is refused; an unknown top-level key is **stripped**, not refused — a new kind or field is covered there
+without an edit, and one the generator cannot meet fails by name.

@@ -111,8 +111,12 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   leaks today are held out by named predicates and pinned as leaking, each with its note.
   `agent-tools/src/tools/fence.property.test.ts` holds `isInside` and `checkFence` (a real root, a write) to a lexical
   oracle under the platform's case rule over relative paths of `..`, `.`, Unicode, case variants, sibling prefixes, long
-  names and mixed separators, and a path that climbs out through `..` and stays out is never inside (since 2026-11-03,
-  R-091, `hardening.md` §3.5 row 7, F2).
+  names and mixed separators, and a path that climbs out through `..` and stays out is never inside.
+  `contracts/src/commands.property.test.ts` and `process-protocol.property.test.ts` generate every `kind` of
+  `CommandRequestSchema` and `ProcessMessageSchema` from the schema itself, through zod's `z.toJSONSchema` and
+  `schema-arbitrary.test-support.ts` (a JSON Schema keyword it does not know throws, and a kind it cannot meet fails by
+  name): `safeParse` never throws on any input, a non-object is refused, a parsed request keeps every field and survives
+  a JSON round trip, and an unknown top-level key is stripped (since 2026-11-03, R-091, `hardening.md` §3.5 row 7, F2).
 - **A PTY repeats the marker back before honouring it** — the terminal's end-marker detection matches the marker
   FOLLOWED BY DIGITS on the VT-stripped stream, never the first occurrence of the marker text, because the
   echoed wrapper carries that text (ADR-0020 first-execution note). `node-pty` loads from its prebuilds under

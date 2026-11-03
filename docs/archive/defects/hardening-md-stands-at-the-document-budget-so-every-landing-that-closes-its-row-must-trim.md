@@ -1,5 +1,13 @@
 ## `hardening.md` stands at the document budget, so every landing that closes its row must trim the record to fit
 
+Outcome: repaired on 2026-11-03 by the review of plan hrd2's bundle E1 (`hrd2-type-aware-lint`, R-091), at its rebase onto
+`24eda16d`: E1 had three rows of §3.5 to close and main's file had 4 bytes left, so no closure fitted at any length.
+`hardening.md` is now the index (its header bullets and a parts table) and the text sits verbatim in
+`docs/architecture/hardening/`: §1 and §2, §3, §4 and §5, §6, each a few KiB. The links to §6's anchor name its part.
+`tools/check-doc-budget.mjs` holds every part to the budget as it held the whole. The note's point stands that the split
+touches the file both plans' bundles edit: a bundle that rebases over it closes its row in the part that holds it, as
+the index says.
+
 `docs/architecture/hardening.md` is the plan record of R-091 and R-092: every bundle of plans hrd1 and hrd2 closes its
 row there in the commit that lands it (strike-through plus what closed it), and each closing adds bytes. On 2026-11-03
 `origin/main` held it at 32,764 bytes, 4 under the 32 KiB budget `tools/check-doc-budget.mjs` holds it to in `pnpm lint`,

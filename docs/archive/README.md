@@ -1,7 +1,7 @@
 # The archive — the record's history, out of the live files
 
 What the record has settled, moved out of the files an agent opens to learn what is still live (the owner's request
-[R-092](../product/requests.md#r-092), 2026-11-01). The design is [`architecture/hardening.md` §6](../architecture/hardening.md#6-requirements-traceability-and-the-decision-archive--r-092);
+[R-092](../product/requests.md#r-092), 2026-11-01). The design is [`architecture/hardening.md` §6](../architecture/hardening/04-requirements-traceability-and-the-decision-archive.md#6-requirements-traceability-and-the-decision-archive--r-092);
 the rule every writer follows is [the record's "The archive"](../README.md#the-archive). This page says what is here, how
 to read it, and how it is kept.
 
@@ -67,5 +67,5 @@ questions), `owner-decisions.mjs`, `adr-history.mjs`, `defects.mjs`, `spec.mjs`,
 
 The whole migration's counts, the live record's size before and after and the gate's cost are its row of 2026-11-02 in
 [`first-executions.md`](../architecture/first-executions.md), which
-[`architecture/hardening.md` §6](../architecture/hardening.md#6-requirements-traceability-and-the-decision-archive--r-092)
+[`architecture/hardening.md` §6](../architecture/hardening/04-requirements-traceability-and-the-decision-archive.md#6-requirements-traceability-and-the-decision-archive--r-092)
 row 6 points at.

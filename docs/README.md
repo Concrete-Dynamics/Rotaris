@@ -100,7 +100,7 @@ listed file back within the budget fails until its line is removed.
 
 **A ruled, closed, resolved or withdrawn entry is history, and it leaves the live record for `docs/archive/`** (the
 owner's request [R-092](product/requests.md#r-092), 2026-11-01; the design is
-[`architecture/hardening.md` §6](architecture/hardening.md#6-requirements-traceability-and-the-decision-archive--r-092)).
+[`architecture/hardening.md` §6](architecture/hardening/04-requirements-traceability-and-the-decision-archive.md#6-requirements-traceability-and-the-decision-archive--r-092)).
 An agent that opens a part to read the questions still open loads those, and not the hundreds already answered.
 
 - **The archive mirrors the record's paths.** The archived entries of `architecture/open-questions/<part>.md` are in

@@ -1,0 +1,84 @@
+# Hardening — the application measured against engineering standards — The findings
+
+Part 2 of 4 of [the hardening record](../hardening.md), which indexes every part.
+
+## 3. The findings
+
+Five clusters. Each row names the gap, the evidence and the bundle that closes it (section 5); a struck row is closed.
+
+### 3.1 The Electron perimeter
+
+| Finding | Evidence | Closes |
+|---|---|---|
+| ~~No `will-navigate`, `will-redirect`, `setWindowOpenHandler` or `will-attach-webview` guard anywhere~~ | `apps/desktop/src` has none; the only navigation hook releases modality (`main-windows.ts`, `did-start-navigation`) | A1 — **closed 2026-11-01**: `main/web-contents-guard.ts`, installed on `web-contents-created` before `whenReady`, refuses a navigation or redirect away from `isApplicationPage` (OQ-466), every `window.open` and every webview, one `warning` line each naming the origin alone; pinned by `web-contents-guard.test.ts` and `pnpm driver-proof` step 9b |
+| ~~`app.enableSandbox()` absent; sandboxing is per window~~ | `main/index.ts` | A1 — **closed 2026-11-01**: called in `main/index.ts` before `whenReady`, every window keeping `sandbox: true`; its place is pinned by `web-contents-guard.test.ts`, and `pnpm driver-proof` runs the built app under it |
+| No fuses flipped, no ASAR integrity, `onlyLoadAppFromAsar` off | `apps/desktop/electron-builder.yml`; `@electron/fuses` unused | A2 |
+| `webSecurity`, `allowRunningInsecureContent`, `experimentalFeatures`, `webviewTag` left to defaults at eight window sites, nothing asserts them | `main-windows.ts:876,1129,1170`; `index.ts:719,759,898,996,1079` | A2 |
+| ~~The dispatcher's sender check falls back to the active window; no sender-origin check~~ | `mainWindows.forCommand` (`main-windows.ts:282`); `runCommand` (`index.ts:1882`) | A1 — **closed 2026-11-01**: the `ipcMain.handle` site refuses a `senderFrame` that is not `isApplicationPage` and, in a packaged build, a sender no main window stands behind (`command.untrustedSender`, `main/command-sender.ts`); a dialog answers for the window it was raised over (`MainWindows.standingBehind`), the active window only for the seams and the driver; pinned by `command-sender.test.ts` and `main-windows.test.ts`, and every command of `pnpm driver-proof`'s windows crosses it |
+| ~~`runCommand` catches nothing; a throwing handler rejects the renderer's `invoke`~~ | `index.ts:1893-1896`; [the note](../../archive/defects/the-command-dispatcher-catches-nothing-so-a-handler-that-throws-rejects-the-renderers-invoke.md) | A1 — **closed 2026-11-01**: `main/command-dispatch.ts` answers a throw `command.failed`, its message redacted and cut to 500 characters, with one `error` record; pinned by `command-dispatch.test.ts` (F3 adds the built app's throwing command) |
+| `setDevicePermissionHandler` and `setDisplayMediaRequestHandler` unset | `main/permissions.ts` | A2, under OQ-459 |
+
+Checklist items met today: 1 (no remote content), 2, 3, 4 (per window), 5, 6, 7 (meta tag, `style-src
+'unsafe-inline'` remains), 8, 9, 10, 11, 12 (no webview), 15, 16 (Electron 44.3.0), 20. Open: 13, 14, 17, 19. Item 18
+(a custom scheme) is deliberately not met under [OQ-466](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-466)'s
+ruling of 2026-11-01: the renderer stays on `file:`, `grantFileProtocolExtraPrivileges` stays enabled, and "the
+application's own page" becomes one exported exact-path predicate (the built renderer's `index.html` under the
+application's renderer directory, or the dev server's exact origin while unpackaged) shared by the permission handlers,
+the navigation guard, the sender check and the reload.
+
+*Since 2026-11-01 (A1):* items 4 (`app.enableSandbox()`, application-wide), 13 and 14 are met, and 12 is guarded as well
+as unused; item 17 is met by the channel's sender check. The predicate is `isApplicationPage` in `main/permissions.ts`;
+the navigation guard and the sender check read it. The permission
+handlers still read the older `isOwnPage`, which admits every `file:` URL, until A2 moves them with OQ-459's changes.
+
+### 3.2 Failure handling outside main
+
+| Finding | Evidence | Closes |
+|---|---|---|
+| The run host and the workspace service have no `uncaughtException` / `unhandledRejection` handler and do not end when the parent port closes | `run-host/index.ts`, `workspace-service/index.ts`; [the note](../../defects/the-run-host-and-the-workspace-service-have-no-last-resort-exception-handler-and-end-without-a-word.md); [the orphaned run host](../../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md) | B1 |
+| A forked child's `ready` is not bounded | `main/index.ts:310`, `:413` | B1 |
+| A lost run host or workspace service is logged and never surfaced | `main/index.ts:339`, `:418`; [OQ-462](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-462) | B1 |
+| No React error boundary; `createRoot` without error options | `renderer/main.tsx:1685`, `windows.tsx:30`, `packages/ui/src/AppShell.tsx` | B2 |
+| A dead renderer is detached and logged; no reload, no notice; GPU loss unhandled | `main-windows.ts:1151-1159` | B2 |
+
+### 3.3 Store integrity on open
+
+| Finding | Evidence | Closes |
+|---|---|---|
+| ~~No `quick_check` before a migration; no corruption-specific refusal~~ | `packages/store/src/open.ts`; `workspace-service/store-open.ts` | C1, closed 2026-11-01: the service's open checks before migrating and refuses as `workspace.store-corrupt`, the log left as found (`open.test.ts`, `store-open.test.ts`, `store-notice.test.ts`); its resolution is [OQ-477](../open-questions/69-spikes-and-later-questions-36.md#oq-477) |
+| ~~`wal_autocheckpoint` and idle checkpoints left to the engine's defaults~~ | `open.ts` | C1, closed 2026-11-01: `WAL_AUTOCHECKPOINT_PAGES` set and read back on every writable open, the service's idle PASSIVE and closing TRUNCATE checkpoints (`store/src/wal-checkpoint.ts`), `synchronous` asserted NORMAL with FULL inside `durableTransaction` only (`wal-checkpoint.test.ts`, `open.test.ts`) |
+| Migration immutability tested as a version sequence only, never as SQL text | `store.test.ts:1807` | C2 |
+| `store` has 3 test files for 17 modules | `packages/store/src` | C2 |
+
+Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C1 pins the floor in a test (`store/src/open.test.ts`, 2026-11-01).
+
+### 3.4 Bounds and sinks
+
+| Finding | Evidence | Closes |
+|---|---|---|
+| `prompt`, every `path` and every name unbounded in `CommandRequestSchema` | `packages/contracts/src/commands.ts`; [OQ-467](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-467) | D1 |
+| Main's application log bypasses `redact()` | `main/app-log.ts`; [the note](../../defects/mains-application-log-lines-bypass-the-redaction-pass.md) | D1 |
+| Application log to stdout alone in a packaged build; diagnostics (REQ-STARTUP-129 to REQ-STARTUP-139) not built | `main/app-log.ts` | D2 |
+| Session log unbounded | `run-host/tools.ts:26`; [OQ-465](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-465) | D2 |
+| The fence folds case on every platform; a check-then-write gap | `agent-tools/src/tools/fence.ts:52-82` | D3 |
+| Terminal, git and MCP writes outside the file tools' fence | `write-scope.ts`; [OQ-464](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-464), ruled 2026-11-01: the boundary is per tool — the fence binds every first-party tool that takes a path, the gate's key scoping binds a path key, and the terminal and MCP are bounded by OS confinement where it exists and by nothing on native Windows (IC-8); the wording the user reads is [OQ-468](../open-questions/69-spikes-and-later-questions-36.md#oq-468) | D3 (the invariant test) |
+
+### 3.5 Engineering hygiene
+
+| Finding | Evidence | Closes |
+|---|---|---|
+| ~~Lint is not type-aware: `recommended` alone, no `projectService`~~ | `eslint.config.js:101` | E1, closed 2026-11-01: `projectService` with `recommendedTypeChecked`, and `no-floating-promises`, `no-misused-promises`, `await-thenable` and `switch-exhaustiveness-check` (`considerDefaultExhaustiveForUnions: false`) at error. Of 2,320 first findings, 397 are fixed in place and 1,923 fall to three rules left off with their reason in the config (`require-await`; `no-unnecessary-condition`, the `strict-type-checked` plan's, §4; `no-unsafe-*` in tests). `eslint .` took 3 min 38 s untyped and 5 min 18 s typed at 100 % CPU (1.46 times), so no cache option was needed; [first execution](../first-executions/35-the-register-34.md) |
+| ~~Warnings do not fail the gate; unused disable directives pass~~ | `package.json`, the `lint` script | E1, closed 2026-11-01: `eslint . --max-warnings 0` and `reportUnusedDisableDirectives: 'error'`. The first run met no warning and no unused directive; the five `react-hooks/exhaustive-deps` disables that gave no reason now each say why |
+| ~~No import-cycle or extraneous-dependency rule~~ | `eslint.config.js` | E1, closed 2026-11-01: `eslint-plugin-import-x` over the TypeScript resolver, with `no-cycle` (`maxDepth: Infinity`, across the workspace's `@rotaris/*` packages too), per-manifest `no-extraneous-dependencies`, `no-duplicates` and `no-self-import` at error; the renderer's restricted built-ins gain the network, crypto and worker modules. Found and fixed: 4 product import cycles ([the note](../../archive/defects/the-product-code-holds-four-import-cycles.md)), 9 undeclared workspace imports, 46 duplicate imports. `pnpm lint` 9 to 11 min at 100 % CPU; [first execution](../first-executions/35-the-register-34.md) |
+| About 110 test files never typechecked; proof scripts never linted; `.mjs` untyped | `tsconfig.json:7-18`; `eslint.config.js:95` | E2 |
+| One tsconfig for every process: DOM types in main, Node types in the renderer | `tsconfig.json:4`, `tsconfig.base.json:20` | E2 |
+| ~~No code coverage, no thresholds~~ **Closed 2026-11-01 (F1):** `pnpm test:coverage` (`@vitest/coverage-v8` 4.1.11, which Dependabot moves with vitest in its `dev-tooling` group since the provider peers on vitest's exact version, outside the gate) holds a floor that only rises, set at the first measurement rounded down — statements 71 % (measured 71.46), branches 64 % (64.89), functions 64 % (64.24), lines 75 % (75.99) — and rewritten by `autoUpdate`. Mock hygiene: `restoreMocks`, `clearMocks`, `unstubEnvs` and `unstubGlobals` are set (`tools/vitest-config.test.ts`), and no test relied on a leaked stub (0 of the 36 files that mock). The `.test-support.ts` naming guard walks `apps/desktop` too — its five roots from the build's inputs and its scripts — and found no misnamed module; `scripts/lib/platform-targets.mjs` stands as a product exception (prepared, IC-3) | `vitest.config.ts`; `tools/test-support-naming/test-support-naming.test.ts` | F1 |
+| No property-based tests; `shell` and `kernel` thin | `packages/shell` (1 test file), `packages/kernel` (4) | F2, F3 |
+| ~~`minimumReleaseAge` implicit; no `trustPolicy`; no `engineStrict`; duplicated specifiers~~ closed 2026-11-01: seven days, `no-downgrade`, `blockExoticSubdeps`, `engineStrict`, a catalog, `.node-version` (`tools/dependency-policy.test.ts`) | `pnpm-workspace.yaml`, `.npmrc` | G1 |
+| ~~No dependency-update bot~~ closed 2026-11-01: Dependabot for npm (cooldown seven days, three groups) and the SHA-pinned actions (`.github/dependabot.yml`, `tools/dependabot.test.ts`) | `.github/` | G1 |
+| No audit, no SAST, no SBOM, no `SECURITY.md`, no `CODEOWNERS` | `.github/workflows/`, the root | G2 |
+
+Scorecard checks met today: Binary-Artifacts, CI-Tests, Dangerous-Workflow, License, Maintained, Pinned-Dependencies
+(actions by SHA, a lockfile), Token-Permissions. Open and closable here: Dependency-Update-Tool, Fuzzing (property
+tests count), SAST, SBOM, Security-Policy, Vulnerabilities. The owner's: Branch-Protection, Code-Review, Signed-Releases
+(signing, R-071).

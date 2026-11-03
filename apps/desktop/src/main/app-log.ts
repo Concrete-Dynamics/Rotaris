@@ -70,12 +70,30 @@ export function formatAppLogLine(at: string, level: AppLogLevel, source: string 
 /** Write one line: at `level`, from `source` (`null` for main's own), unless the threshold leaves it out. */
 export type AppLog = (level: AppLogLevel, source: string | null, message: string) => void;
 
+/**
+ * One recorded line as a record rather than text: what the diagnostics `light` level writes, one JSON line each, to a
+ * window's run directory (`diagnostics.ts`, REQ-STARTUP-129). The level is the word the line is written with
+ * (PD-MONITOR-002's `warning`, not the protocol's `warn`), the source `main` for main's own line, and the message the
+ * redacted one, whole: a record is never split into lines.
+ */
+export interface AppLogRecord {
+  readonly at: string;
+  readonly level: string;
+  readonly source: string;
+  readonly message: string;
+}
+
 export interface AppLogDeps {
   readonly threshold: AppLogLevel;
   /** The instant a line is written at, as ISO-8601 UTC. */
   readonly now: () => string;
   /** Where a recorded line goes: main's standard output. */
   readonly write: (line: string) => void;
+  /**
+   * Where a recorded line ALSO goes, as a record: the diagnostics captures (REQ-STARTUP-129's `light`). Called for exactly
+   * the lines `write` is, after the threshold and the redaction pass, with the same instant; never for a line left out.
+   */
+  readonly record?: (record: AppLogRecord) => void;
 }
 
 /**
@@ -92,7 +110,10 @@ export function createAppLog(deps: AppLogDeps): AppLog {
   const floor = RANK[deps.threshold];
   return (level, source, message) => {
     if (RANK[level] < floor) return;
-    deps.write(formatAppLogLine(deps.now(), level, source, redact(message)));
+    const at = deps.now();
+    const masked = redact(message);
+    deps.write(formatAppLogLine(at, level, source, masked));
+    deps.record?.({ at, level: WORD[level], source: source ?? 'main', message: masked });
   };
 }
 

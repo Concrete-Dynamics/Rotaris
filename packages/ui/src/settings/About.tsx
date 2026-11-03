@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button as DesignButton } from '../design-system/index.js';
+import { DiagnosticsCard, type DiagnosticsCardProps } from './DiagnosticsCard.js';
 
 /**
  * The About category (REQ-CONFIG-398, REQ-SHELL-138..143). It renders from **local data alone** — no network
@@ -7,8 +8,8 @@ import { Button as DesignButton } from '../design-system/index.js';
  * authentication present, which is why the palette's shortcut-less "About & Legal" entry can reach it at any
  * time (REQ-SHELL-138, REQ-SHELL-049).
  *
- * Four sections: the product's identity, the legal documents, the licence, and the network-activity disclosure
- * (REQ-STARTUP-160). The five fixed strings
+ * Five sections: the product's identity, the legal documents, the licence, the network-activity disclosure
+ * (REQ-STARTUP-160) and the diagnostics card (REQ-SHELL-163, `DiagnosticsCard.tsx`). The five fixed strings
  * REQ-SHELL-140 and REQ-SHELL-142 state — publisher, security contact, licence, the base URL and the five
  * document paths — are held here as constants because the requirement fixes them literally; nothing composes
  * them from configuration.
@@ -79,6 +80,8 @@ export interface AboutSettingsProps {
   readonly info: AboutInfo | null;
   readonly onOpenExternal: (url: string) => Promise<Outcome>;
   readonly onOpenThirdPartyLicenses: () => Promise<Outcome>;
+  /** REQ-SHELL-163: the diagnostics card; absent where the root that draws the page offers no capture. */
+  readonly diagnostics?: DiagnosticsCardProps | undefined;
 }
 
 function Row({ name, value }: { name: string; value: string }) {
@@ -91,7 +94,7 @@ function Row({ name, value }: { name: string; value: string }) {
   );
 }
 
-export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses }: AboutSettingsProps) {
+export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses, diagnostics }: AboutSettingsProps) {
   // REQ-SHELL-141: one caption at a time, and a later success hides whatever the last failure said.
   const [linkError, setLinkError] = useState<string | null>(null);
   const [noticesError, setNoticesError] = useState<string | null>(null);
@@ -165,6 +168,9 @@ export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses }
         <p className="about__value" data-testid="network-disclosure-statement">{NETWORK_DISCLOSURE.updates}</p>
         <p className="about__value" data-testid="network-disclosure-statement">{NETWORK_DISCLOSURE.exposure}</p>
       </section>
+
+      {/* REQ-SHELL-163: diagnostics capture is reached here and from nowhere else (REQ-STARTUP-129). */}
+      {diagnostics !== undefined && <DiagnosticsCard {...diagnostics} />}
     </div>
   );
 }

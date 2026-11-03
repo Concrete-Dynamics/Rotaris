@@ -31,6 +31,8 @@ import { createUpdater, updateCloseBox } from './updater/updater.js';
 import { createSuccessorWait } from './updater/successor.js';
 import { classifyThisInstallation, createUpdaterPorts, successorArguments, successorEndpointFromArgv } from './updater/electron.js';
 import { updateCommands } from './commands/update.js';
+import { diagnosticsCommands } from './commands/diagnostics.js'; // REQ-SHELL-163, REQ-STARTUP-129
+import { DiagnosticsCaptures } from './diagnostics.js'; // REQ-STARTUP-129..133, hardening D2
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
@@ -151,7 +153,22 @@ if (!catalogue.ok) throw new Error(`the provider catalogue is invalid: ${catalog
 const appLogLevel = appLogThreshold(process.env[APP_LOG_LEVEL_VARIABLE]);
 // A standard stream whose reader has gone must not turn the log into an endless uncaught EPIPE (`standardStreamWriter`).
 standardStreamWriter(process.stderr);
-const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: standardStreamWriter(process.stdout) });
+/**
+ * REQ-STARTUP-129's `light` level (hardening D2, R-091): every recorded line also reaches the diagnostics capture of each
+ * main window built while `diagnostics/level` was not `off` (`diagnostics.ts`), so a packaged build, whose standard output
+ * nobody reads, keeps its log in the window's run directory. At `off` no capture exists and `record` returns at once
+ * (REQ-STARTUP-130). The registry's own two lines go back through `log`, which is defined below and is never asked for
+ * before a window is built.
+ */
+const diagnostics = new DiagnosticsCaptures({
+  now: () => clocks.wall.instant(),
+  pid: process.pid,
+  app: () => ({ name: 'Rotaris', version: productVersion() }),
+  platform: { os: process.platform, arch: process.arch, runtime: `electron${process.versions.electron ?? ''}` },
+  warn: (m) => { log(m, 'warn'); },
+  info: (m) => { log(m); },
+});
+const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: standardStreamWriter(process.stdout), record: (r) => { diagnostics.record(r); } });
 const log = (m: string, level: AppLogLevel = 'info'): void => { logAt(level, null, m); };
 // ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
 // error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.
@@ -1634,7 +1651,23 @@ async function main(): Promise<void> {
   });
 
   mainWindows = new MainWindows({
-    adapter: electronMainWindowAdapter,
+    /*
+     * REQ-STARTUP-129/131 (hardening D2): a main window's diagnostics capture starts as the preference store stands when the
+     * window is built, so a later choice reaches the windows built afterwards and never this one's (REQ-SHELL-163), and stops
+     * when the window is gone.
+     */
+    adapter: {
+      ...electronMainWindowAdapter,
+      create: async (input) => {
+        const built = await electronMainWindowAdapter.create(input);
+        diagnostics.open(built.wcId, { level: preferences.read('diagnostics/level'), outputDir: preferences.read('diagnostics/outputDir'), workspace: input.workspace === '(no workspace)' ? null : input.workspace });
+        return built;
+      },
+      disposeResources: (win, wcId, personaWindows, terminalWindows) => {
+        diagnostics.close(wcId);
+        electronMainWindowAdapter.disposeResources(win, wcId, personaWindows, terminalWindows);
+      },
+    },
     timers: { after: (delayMs, callback) => clocks.timers.after(millis(delayMs), callback) },
     currentDirectory: () => canonicalPath(process.cwd()),
     rememberedWorkspace: () => {
@@ -1933,7 +1966,7 @@ async function main(): Promise<void> {
     measurePersonaPaint, terminalWindowCommand, surface,
     notices, raiseNotice, raiseNoticeKeyed, recoveryFor, configFatal, raiseTransient: (w, kind, title) => raiseTransient(w, kind, title), announceRepairs, updater,
     providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange,
-    preferences, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey,
+    preferences, diagnostics, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey,
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
     retrospectivePending: (workspaceId) => improvementCoordinator.retrospectivePending(workspaceId),
@@ -1963,6 +1996,7 @@ async function main(): Promise<void> {
     ...checkpointsCommands(commandContext),
     ...configCommands(commandContext),
     ...dialogsCommands(commandContext),
+    ...diagnosticsCommands(commandContext),
     ...dictationCommands(commandContext),
     ...gitCommands(commandContext),
     ...hooksCommands(commandContext),

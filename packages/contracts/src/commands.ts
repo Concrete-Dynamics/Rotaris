@@ -13,6 +13,7 @@ import { PROMPTS_COMMAND_SCHEMAS } from './slash.js'; // Part AO
 import { SKILLS_COMMAND_SCHEMAS } from './skills.js'; // ADR-0063
 import { REAUTH_COMMAND_SCHEMAS } from './reauth.js'; // REQ-NOTIFY-071/078
 import { AUTH_RECOVERY_COMMAND_SCHEMAS } from './auth-recovery.js'; // REQ-NOTIFY-072..080
+import { DIAGNOSTICS_COMMAND_SCHEMAS } from './diagnostics.js'; // REQ-SHELL-163, REQ-STARTUP-129
 import { NoticeSeveritySchema } from './notices.js'; // Part AO
 import { DICTATION_AUDIO_MAX_BASE64, FREE_TEXT_MAX, jsonBounded, LIST_MAX, NAME_MAX, PATH_MAX } from './limits.js'; // OQ-467, PD-CHAT-011
 
@@ -446,6 +447,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   // REQ-NOTIFY-072..080 (the 401 note's parts C and D) — the authentication recovery dialog's payload and its three answers,
   // each for the session the asking window was opened for (`auth-recovery.ts`).
   ...AUTH_RECOVERY_COMMAND_SCHEMAS,
+  // REQ-SHELL-163 / REQ-STARTUP-129 — Settings › About's diagnostics card: its state, the level, the folder from the platform
+  // chooser main opens, and the asking window's own run directory. None names a path or a window.
+  ...DIAGNOSTICS_COMMAND_SCHEMAS,
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

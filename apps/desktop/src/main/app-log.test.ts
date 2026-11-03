@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
-import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, formatAppLogLine, standardStreamWriter, type AppLogLevel } from './app-log.js';
+import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, formatAppLogLine, standardStreamWriter, type AppLogLevel, type AppLogRecord } from './app-log.js';
 
 const LEVELS: readonly AppLogLevel[] = ['debug', 'info', 'warn', 'error'];
 const AT = '2026-09-27T10:00:00.000Z';
@@ -192,6 +192,45 @@ describe('REQ-TOOLS-171: the application log writes every line through the one r
     // The prefix it replaced: under the pass, `credentials: leased` is an assignment and its value is masked.
     h.log('info', 'run host', 'credentials: leased for x');
     expect(message(h.written[2] as string)).toBe('run host: credentials: *** for x');
+  });
+});
+
+/**
+ * REQ-STARTUP-129's `light` level (hardening D2): the diagnostics captures receive exactly the lines the log records, as
+ * records — after the threshold and the redaction pass, with the stamp the written line carries — and nothing else.
+ */
+describe('REQ-STARTUP-129: a recorded line also reaches the diagnostics captures as a record', () => {
+  function recording(threshold: AppLogLevel) {
+    const written: string[] = [];
+    const records: AppLogRecord[] = [];
+    let n = 0;
+    const log = createAppLog({ threshold, now: () => `2026-11-03T00:00:0${n++}.000Z`, write: (line) => written.push(line), record: (r) => records.push(r) });
+    return { log, written, records };
+  }
+
+  it('records each written line once, with its stamp, the written level word, its source and its redacted message', () => {
+    const h = recording('info');
+    h.log('debug', 'run host', 'left out');
+    h.log('info', null, 'a line of main');
+    h.log('warn', 'run host', 'token sk-live-abc123 refused');
+    expect(h.records).toEqual([
+      { at: '2026-11-03T00:00:00.000Z', level: 'info', source: 'main', message: 'a line of main' },
+      { at: '2026-11-03T00:00:01.000Z', level: 'warning', source: 'run host', message: 'token *** refused' },
+    ]);
+    expect(h.written).toHaveLength(2);
+    expect(h.written[1]).toContain('2026-11-03T00:00:01.000Z');
+  });
+
+  it('keeps a message of several lines whole in one record', () => {
+    const h = recording('info');
+    h.log('error', null, 'UNCAUGHT\n    at a (a.js:1:1)');
+    expect(h.records.map((r) => r.message)).toEqual(['UNCAUGHT\n    at a (a.js:1:1)']);
+  });
+
+  it('asks nothing of a log that has no captures to feed', () => {
+    const written: string[] = [];
+    createAppLog({ threshold: 'info', now: () => AT, write: (line) => written.push(line) })('info', null, 'plain');
+    expect(written).toHaveLength(1);
   });
 });
 

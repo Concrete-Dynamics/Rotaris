@@ -2,6 +2,13 @@
 
 Part 5 of 8 of [the process view](../02-process-view.md), which indexes every part.
 
+**`diagnostics.*` (REQ-SHELL-163, REQ-STARTUP-129; hardening D2, 2026-11-03).** Four commands, renderer → main and no
+further: `diagnostics.state`, `diagnostics.setLevel {level}` (one of `off`, `light`, `deep`), `diagnostics.chooseOutputDir`
+(main opens the platform chooser, directories only, over the asking window) and `diagnostics.openRunDirectory`. None names a
+path or a window; each but the open answers the card's `DiagnosticsCardState` for the asking window — the stored level, the
+folder in force for it, and its own capture, fixed when it was built. The capture itself crosses no boundary: main writes the
+application log's lines into the window's run directory as it writes them to its standard output (`main/diagnostics.ts`).
+
 **`initialization.*` (Part AS, ADR-0064).** Five commands, renderer → main and no further: `initialization.read`
 (REQ-WORKSPACE-115's refresh — the persisted section as it is on disk, nothing else disturbed),
 `initialization.resolve` (REQ-WORKSPACE-102's "Check again", additional to the one automatic resolution per

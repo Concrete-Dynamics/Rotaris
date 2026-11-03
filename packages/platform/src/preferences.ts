@@ -5,6 +5,10 @@ import { pathKey } from './canonical.js';
 import { localAppDataDirectory, xdgBaseDirectory } from './dirs.js';
 import { guardedRead, replaceDocument, replaceDocumentSync } from './document.js';
 
+/** REQ-STARTUP-129 / REQ-SHELL-163: the three diagnostics capture levels, exactly; `off` is the default. */
+export const DIAGNOSTICS_LEVELS = ['off', 'light', 'deep'] as const;
+export type DiagnosticsLevel = (typeof DIAGNOSTICS_LEVELS)[number];
+
 export const PREFERENCE_KEYS = {
   'appearance/theme': { type: 'string', default: undefined, owner: 'REQ-SHELL-128', coerce: (value: unknown) => typeof value === 'string' ? value : undefined },
   'interface/settingsTab': { type: 'string', default: 'models', owner: 'REQ-CONFIG-271', coerce: (value: unknown) => typeof value === 'string' ? value : 'models' },
@@ -113,6 +117,16 @@ export const PREFERENCE_KEYS = {
    * write it. Nothing in this store disables the check itself: REQ-STARTUP-111 forbids such a key, and this is not one.
    */
   'updates/dismissedVersion': { type: 'string', default: undefined, owner: 'REQ-STARTUP-146', coerce: (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : undefined) },
+  /**
+   * REQ-SHELL-163 owns both diagnostics keys and REQ-STARTUP-129 makes this store their one source: the capture level,
+   * `off` where nothing is stored or the stored value is not one of the three, and the output base, unset meaning the
+   * default location of REQ-STARTUP-131. Neither is in `PREFERENCE_COMMAND_KEYS`: Settings › About writes the level
+   * through `diagnostics.setLevel`, which carries only the three, and the folder only from the platform chooser main opens
+   * (`diagnostics.chooseOutputDir`), so no renderer can store a path it typed. Main reads both when it builds a main window
+   * (`apps/desktop/src/main/diagnostics.ts`), so a change reaches the windows built afterwards and never a running capture.
+   */
+  'diagnostics/level': { type: 'string', default: 'off', owner: 'REQ-SHELL-163', coerce: (value: unknown): DiagnosticsLevel => (DIAGNOSTICS_LEVELS.includes(value as DiagnosticsLevel) ? value as DiagnosticsLevel : 'off') },
+  'diagnostics/outputDir': { type: 'string', default: undefined, owner: 'REQ-SHELL-163', coerce: (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : undefined) },
 } as const;
 
 /**

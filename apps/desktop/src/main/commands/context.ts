@@ -39,6 +39,7 @@ import type { InitializationCoordinator } from '../initialization.js';
 import type { ConfigFatalNotices } from '../config-fatal-notice.js';
 import type { createRequirementsRuns } from '../requirements-runs.js';
 import type { Updater } from '../updater/updater.js';
+import type { DiagnosticsCaptures } from '../diagnostics.js';
 
 /**
  * COMMANDS — what main answers when the renderer asks, and the one place the answer may be found.
@@ -166,6 +167,8 @@ export interface CommandContext {
 
   // Appearance and the remembered preferences.
   readonly preferences: PreferenceStore;
+  /** REQ-STARTUP-129 / REQ-SHELL-163: every main window's diagnostics capture, which Settings › About's card reads. */
+  readonly diagnostics: DiagnosticsCaptures;
   readonly currentTheme: () => Theme;
   /** Replaces the theme main holds and hands the resolved one back (REQ-SHELL-128). */
   readonly setTheme: (name: string) => Theme;

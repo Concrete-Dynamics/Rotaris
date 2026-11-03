@@ -851,7 +851,7 @@
       ]
     },
     "SHELL": {
-      "uncited": 26,
+      "uncited": 25,
       "requirements": [
         "REQ-SHELL-007",
         "REQ-SHELL-008",
@@ -876,13 +876,12 @@
         "REQ-SHELL-117",
         "REQ-SHELL-120",
         "REQ-SHELL-123",
-        "REQ-SHELL-163",
         "REQ-SHELL-167",
         "REQ-SHELL-169"
       ]
     },
     "STARTUP": {
-      "uncited": 79,
+      "uncited": 73,
       "requirements": [
         "REQ-STARTUP-008",
         "REQ-STARTUP-009",
@@ -939,21 +938,15 @@
         "REQ-STARTUP-103",
         "REQ-STARTUP-104",
         "REQ-STARTUP-128",
-        "REQ-STARTUP-129",
-        "REQ-STARTUP-131",
-        "REQ-STARTUP-132",
-        "REQ-STARTUP-133",
         "REQ-STARTUP-135",
         "REQ-STARTUP-136",
         "REQ-STARTUP-137",
-        "REQ-STARTUP-138",
         "REQ-STARTUP-139",
         "REQ-STARTUP-140",
         "REQ-STARTUP-148",
         "REQ-STARTUP-151",
         "REQ-STARTUP-153",
         "REQ-STARTUP-154",
-        "REQ-STARTUP-157",
         "REQ-STARTUP-170",
         "REQ-STARTUP-171",
         "REQ-STARTUP-172",

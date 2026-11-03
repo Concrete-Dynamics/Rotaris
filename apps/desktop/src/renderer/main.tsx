@@ -2,7 +2,7 @@ import { captureSupport, startCapture } from './dictation-capture.js';
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createReportingRoot, RenderFaultSeam } from './render-failure.js';
 import { useStore } from 'zustand';
-import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult } from '@rotaris/contracts';
+import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult, type CommandRequest, type DiagnosticsCardState } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
@@ -876,6 +876,19 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
     const r = await bridge.command({ kind: 'shell.openThirdPartyLicenses' });
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }, []);
+  /**
+   * REQ-SHELL-163 / REQ-STARTUP-129: the About page's diagnostics card — this window's capture and the stored choices, read
+   * when Settings mounts and replaced by each gesture's answer. The renderer names no path: main opens the chooser and the
+   * window's own run directory.
+   */
+  const [diagnosticsCard, setDiagnosticsCard] = useState<DiagnosticsCardState | null>(null);
+  const diagnosticsCommand = useCallback(async (req: Extract<CommandRequest, { kind: `diagnostics.${string}` }>): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const r = await bridge.command(req);
+    if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
+    if (req.kind !== 'diagnostics.openRunDirectory') setDiagnosticsCard(r.value as DiagnosticsCardState);
+    return { ok: true };
+  }, []);
+  useEffect(() => { queueMicrotask(() => { void diagnosticsCommand({ kind: 'diagnostics.state' }); }); }, [diagnosticsCommand]);
   // ADR-0015: the Hooks category's data — re-read from the sources on every refresh (REQ-CONFIG-014); the tab starts no hook.
   const [summary, setSummary] = useState<HooksSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1028,7 +1041,15 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
         showReasoning: display.showReasoning,
         onShowReasoning: (v) => writeDisplayPref('display/showReasoning', v),
       }}
-      about={{ info: about, onOpenExternal: openExternal, onOpenThirdPartyLicenses: openThirdPartyLicenses }}
+      about={{
+        info: about, onOpenExternal: openExternal, onOpenThirdPartyLicenses: openThirdPartyLicenses,
+        diagnostics: {
+          state: diagnosticsCard,
+          onLevel: (level) => diagnosticsCommand({ kind: 'diagnostics.setLevel', level }),
+          onChooseFolder: () => diagnosticsCommand({ kind: 'diagnostics.chooseOutputDir' }),
+          onOpenRunDirectory: () => diagnosticsCommand({ kind: 'diagnostics.openRunDirectory' }),
+        },
+      }}
       interfaceExtras={<AgentPopOutToggle on={popOut} onChange={onPopOut} />}
       traceability={traceability /* Part AJ2 */}
       projectInit={projectInit /* Part AS */}

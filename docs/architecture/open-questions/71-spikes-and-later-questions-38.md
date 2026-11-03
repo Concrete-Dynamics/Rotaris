@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-485, OQ-473, OQ-475, OQ-476; OQ-523 – OQ-540 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-485, OQ-473, OQ-475, OQ-476, OQ-480; OQ-523 – OQ-540 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
 
 - OQ-523 — Is a `--rt-viz-2` persona label one stop from `--rt-run` a “state colour” under PD-CHAT-005?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-523)
 - OQ-524 — Is Workspace compact mode measured by the view's own width or by the viewport, when REQ-SHELL-059 and REQ-MONITOR-051 name different ones?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-524)
@@ -62,3 +62,13 @@ The renderer's boundary is the same shape. `dispatchCommand` (`apps/desktop/src/
 **What the build proceeds under.** `killed` and `clean-exit` are neither reloaded nor told; every other reason is (`crashed`, `oom`, `abnormal-exit`, `launch-failed`, `integrity-failure`, `memory-eviction`).
 
 **What decides it.** A ruling on `killed`: left as it is, told by a notice without a reload, or reloaded within the same bound as a crash.
+
+<a id="oq-480"></a>
+
+**OQ-480 — May a diagnostics run directory carry the application log, and where does a window with no workspace write?** *(REQ-STARTUP-129, REQ-STARTUP-131, REQ-STARTUP-132, REQ-STARTUP-134, REQ-SHELL-163, PD-MONITOR-002. Raised 2026-11-03 by [R-091](../../product/requests.md#r-091)'s hardening bundle D2 `log-sinks`, building the `light` level for the application log; numbered from the sub-range the plan gave the bundle, so it sits out of order here.)*
+
+**What is open.** Two things the requirements do not settle. **(1) The stream.** The hardening finding is that a packaged Windows build writes its application log to a standard output nobody reads (`docs/architecture/hardening/02-the-findings.md` §3.4), and the plan closes it through the diagnostics `light` level. REQ-STARTUP-132 lists the run directory's artifacts — `manifest.json`, `metrics-NN.jsonl`, `spans-NN.jsonl`, snapshots, `summary.json`, `summary.md` — and the application log is not among them. REQ-STARTUP-134 forbids session content in any diagnostics file: no transcript or prompt text, no model or tool output, no file contents, no credentials. Main's log lines pass the one redaction pass (REQ-TOOLS-171), which masks credentials, but a line can still quote a path, a refused provider's error text or a child's stderr. Whether the list is closed, whether an application-log stream may join it, and what the content rule asks of the lines it carries, is open. **(2) The base.** REQ-STARTUP-131's default base is `<workspace>/.rotaris/diagnostics/rotaris`, and REQ-STARTUP-131 lets a window open with diagnostics inactive only when the base itself is unwritable. A main window can hold no workspace (`(no workspace)` in `main-windows.ts`); with no output folder chosen it has no base at all.
+
+**What the build proceeds under.** (1) A window built while `diagnostics/level` is `light` or `deep` writes `app-log-NN.jsonl` beside its `manifest.json`: every line the application log records (PD-MONITOR-002's threshold, after the redaction pass) as one JSON record `{at, level, source, message}`, within REQ-STARTUP-133's four segments of 8 MiB; the manifest's `captured` list names it, so a reader knows the metric and span streams are unbuilt rather than lost. The lines are what the standard output carries, nothing filtered further. (2) A window with no workspace and no chosen folder opens with its capture inactive, and the card says why (`apps/desktop/src/main/diagnostics.ts`).
+
+**What decides it.** A ruling on whether REQ-STARTUP-132's list admits the application-log stream (a directive extending it, or the stream withdrawn and the log sent elsewhere), what REQ-STARTUP-134's content rule asks of it, and where a window with no workspace writes.

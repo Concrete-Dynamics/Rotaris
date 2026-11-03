@@ -55,6 +55,16 @@ Part 15 of 16 of [the runtime view](../03-runtime-view.md), which indexes every 
   `updates/dismissedVersion`, silences one version's offer and touches the check itself not at all. REQ-STARTUP-111's
   acceptance criterion is a property of the four closed enumerations — this section's keys among them — carrying no
   entry that names update checking, an endpoint, a release source or a channel; none does.
+- **What no tier reaches — diagnostics capture (REQ-STARTUP-129, REQ-SHELL-163; hardening D2, 2026-11-03).** The capture
+  level and its output folder are two desktop preferences, `diagnostics/level` (`off`, `light`, `deep`; `off` where nothing
+  usable is stored) and `diagnostics/outputDir`, and nothing else: no tier, no environment variable, and neither key in
+  `PREFERENCE_COMMAND_KEYS`. Settings › About's card writes them through `diagnostics.setLevel` and
+  `diagnostics.chooseOutputDir` (the folder only from the platform chooser main opens). Main reads both when it builds a
+  main window (the adapter's `create` in `index.ts`), so a choice reaches the windows built afterwards; the capture a window
+  started keeps its level and directory until the window is gone (`disposeResources` closes it). At `light` (and `deep`,
+  which adds nothing yet) every line the application log records is also written to that window's run directory
+  (`main/diagnostics.ts`; process view, "Files and directories on disk"); the run itself is not instrumented and nothing
+  reaches the run host. The `ROTARIS_APP_LOG_LEVEL` threshold (PD-MONITOR-002) still decides which lines are recorded.
 - **Tier A** — Settings Save, the diagnostics toggle, the composer's permission-mode control: the workspace
   service writes through one of the four writers and loads again; main announces `config:changed` to each main window
   and its persona and terminal windows (`configFamily`) with its own workspace's snapshot (`announceConfig`; since

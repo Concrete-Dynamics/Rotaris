@@ -141,7 +141,8 @@ value of every assignment it matched, masked or not, and the URL was the value o
 masked value, false of a value left in place, which can hold an assignment REQ-EVENTS-060 requires masked. **The
 replacement:** layer 1 consumes a value only when it masks it, finding the value's extent (`VALUE`, unchanged) for a
 secret-looking key alone; reading it by a lookahead at every key was quadratic again (3.8 s over 100 KB), the shape the
-first execution at size above warned of, so `redaction.test.ts` pins 100 KB of chained assignments under 100 ms
+first execution at size above warned of, so `redaction.test.ts` pins 100 KB of chained assignments under 1,000 ms, a bound that tells linear from quadratic
+(it read 100 ms until 2026-11-02, which a host at 100 % CPU missed one run in three at 126 to 185 ms cold)
 ([the pass's note](../../archive/defects/an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md)). No shape,
 prefix or vocabulary changed. And the log's own `credentials: leased for …` read as an assignment under the pass and lost
 its value; the product's credential lines now begin `credential lease:` and `credential store:`.

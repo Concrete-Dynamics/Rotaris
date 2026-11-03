@@ -27,6 +27,7 @@ separator is consumed, and the value's extent (`VALUE`'s three alternatives, unc
 secret-looking key alone. A lookahead over the whole value at every key, tried first, made chained assignments quadratic
 (3.8 s over 100 KB); the build kept the per-key cost bounded as ADR-0007's first execution at size requires.
 `redaction.test.ts` pins a URL's key query, `error: token=`, `status:401 auth=`, a plain query unchanged and a masked one
-unchanged, and 100 KB of chained non-secret assignments under 100 ms (both red before: the first on its masking, the
+unchanged, and 100 KB of chained non-secret assignments under 1,000 ms (100 ms until 2026-11-02, which a loaded host
+missed one run in three; the quadratic form took 3.8 s) (both red before: the first on its masking, the
 second on its last assignment). Every other kernel case and every worked example passes as before. No shape was added and
 no vocabulary changed; the pass now does what REQ-EVENTS-060 already said.

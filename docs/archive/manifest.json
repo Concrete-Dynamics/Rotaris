@@ -799,7 +799,7 @@
     "defects/an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.md": "9b1ba44159b68e6118041bfbda47d9d9f6c48937a6406bbcc071c31c75364cef",
     "defects/an-answer-handed-on-through-inherited-context-reaches-the-writer-cut-to-4000-characters.md": "e09b6844139dffaebc651eb1d3b3d20e0a3380c511f62681a5a157aacb09a128",
     "defects/an-approval-asked-after-the-last-window-closes-is-denied.md": "220d72c8ba8bfb0ca5fc4865164c35bf4cd96d0d7d8b5ceb077de14edc0cc414",
-    "defects/an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md": "85f91f052420ef27b59f1ca781d7782fb46a788ad3ee212842e44b0ce1b73c65",
+    "defects/an-assignment-inside-a-non-secret-assignments-value-is-not-masked.md": "459b64f4f5ffbb6befe61cec1d52ffb0047caf45a5604396b4fff68f83fc281a",
     "defects/an-at-rest-cancel-refused-by-a-store-error-reads-as-another-process-or-not-cancellable.md": "b101562c7c27ba7c7efaaed8cc85d1aed7fcce78550127f6cef1dff1da81cc03",
     "defects/an-at-rest-cancel-refused-by-the-lock-or-the-store-reads-not-cancellable.md": "2f9d77e7d403d7e6510d2c7c57e5e83a6439da20b8e2cf6cf679c7fbde1714ac",
     "defects/an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md": "6eebcc38136e495d25cc30846eaf5ec22da9275710c626bfcda21763f155390a",

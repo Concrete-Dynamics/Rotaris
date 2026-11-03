@@ -20,6 +20,8 @@ Last reconciled with the code: **2026-11-04**
 
 Last reconciled with the code: **2026-11-03**
 
+**How a utility process ends when nothing else ends it (R-091 bundle B1, hardening §3.2 row 1; ADR-0002, PD-MONITOR-002; 2026-11-03).** `02-process-view/01-what-each-process-owns.md` gains a closing paragraph: the run host and each workspace service install `superviseUtilityProcess` (`@rotaris/platform`) first — one `error` line with the stack and status 70 on an uncaught exception or unhandled rejection, status 69 within 250 ms of main's end by probing its pid — with the 2026-11-03 measurement that Electron's parent port emits nothing when main is killed; main's run-host `log` listener moved to the fork, and main reads a child's status through `childExitReading` (`exit.ts`). `03-runtime-view/11-6-end.md` gains "An end main does not drive" after the application's end. Consulted `01-component-view` (no edge changes: `platform` was already below both children) and `06-sequences` (the launch sequence changes with the ready bound, bundle B1's second task).
+
 **Each process kind typechecked against its own host (hardening E2, R-091; 2026-11-03).** The root `tsconfig.json` became a
 solution over one project per process kind — `tsconfig.shared.json` (`kernel`, `contracts`), `tsconfig.node.json`,
 `tsconfig.run-host.json`, `tsconfig.renderer.json` — and the tests' and the tooling's (`tsconfig.tests.json`,

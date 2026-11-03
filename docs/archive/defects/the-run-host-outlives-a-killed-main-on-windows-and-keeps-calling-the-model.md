@@ -16,7 +16,7 @@ about 15:34 UTC. What it had started was not:
 
 The machine was restarted before this was examined (2026-10-20), so the survivors' pids could no longer be matched to a run
 host or a workspace service, and the store went with the sandbox
-([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](../archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
+([`a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`](a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md)).
 Not established: why the child's hard per-child timeout (REQ-ORCH-088, 1200 s) and PD-ORCH-004's 30 s bound on what is in
 flight at its expiry did not end the 7,273 s call. The run host's own timers may or may not have run on with main gone; the
 model client's bound is an idle one by design (`packages/model/src/ai-sdk-client.ts`), and a stream that never pauses does
@@ -62,3 +62,19 @@ had the machine stayed awake was not observed, and C1's path C, on an awake mach
 within about 1 s of main's kill. The same host put a `sessions-proof` launch into standby on 2026-10-20 (its `seed` launch
 reported "SIGTERM ended it after 9152074 ms", standby 09:09:10 to 12:37:14 UTC, broken only for a moment at 10:04:41), so a long stall read on this machine is
 checked against 506/507 first. The note is kept open as written; closing it is not this session's to rule.
+
+## Outcome — repaired 2026-11-03 (R-091, hardening §3.2 row 1)
+
+Whatever let the live run's utility processes run on, nothing in the run host watched for main's end, and that is now
+closed. Both utility processes probe main's pid every 250 ms from their first statement and exit with status 69 once it
+is gone (`watchParent` / `superviseUtilityProcess`, `packages/platform/src/utility-process.ts`, installed by
+`apps/desktop/src/run-host/index.ts` and `apps/desktop/src/workspace-service/index.ts`). Measured first, on this host
+(Windows 11 ARM64, Electron 44.3.0, a scratch app): Electron's `parentPort` emits no `close` when main is killed with
+`taskkill /F`, and the child receives no `disconnect` or `exit` either; Chromium ended the child natively between about 0
+and 3 s later, with no JavaScript run. Measured after, on the built app at `hrd1-child-process-failure`: main killed with
+`taskkill /F` in four driven launches at 100 % CPU (another session's proofs beside it), the run host and the workspace
+service each read **exit code 69** — the probe's end, not Chromium's — 343 to 377 ms after the kill began in two launches
+and 1.2 to 2.5 s in the other two; `exit-trace-proof`'s new `main-killed` launch (CPU 26 % at its start) read both gone 60 ms
+after the kill. What the probe cannot answer is a host in Modern Standby, where no process runs at all (the second
+addendum): such a stall is still read against Kernel-Power 506/507 first. Pinned by `utility-process.test.ts` and
+`exit-trace-proof`'s `main-killed` launch.

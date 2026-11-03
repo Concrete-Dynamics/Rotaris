@@ -9,7 +9,7 @@
  * one process), and two utility processes of the dead main kept the pipes, so `close`, and with it the harness, came eight
  * hours later (`docs/archive/defects/a-live-run-launch-overrun-leaves-no-results-or-failed-session-export.md`, its 2026-10-20
  * addendum; the orphans are the Windows session's own note,
- * `docs/defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`). Here the wait settles on
+ * `docs/archive/defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`). Here the wait settles on
  * the child's `exit` and then drains the pipes for at most `drainMs`; whatever still holds them after that is let go and
  * named (`pipesHeld`), never waited on. A SIGKILL whose `exit` never comes is given `reapMs`, then reported `unreaped`.
  *

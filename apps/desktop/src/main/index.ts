@@ -67,7 +67,7 @@ import { emptyArtifactNotice, passFailureDetail, passFailureTitle } from './impr
 import { answerUnderHeldRefusal, cutRestoreNotice, holdOpenRefusal, type HeldOpenRefusal } from './store-notice.js'; // REQ-SESSION-202, REQ-SESSION-197, OQ-266, OQ-281
 import { handOffOpenedWorkspace } from './workspace-handoff.js'; // W-18, ADR-0002 consequence 11, OQ-386
 import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
-import { ChildrenEndedByMain, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { childExitReading, ChildrenEndedByMain, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
@@ -364,9 +364,13 @@ async function main(): Promise<void> {
   // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown` (`dispatch.ts`), or Electron tearing the process down at
   // quit, which also reports 0 (measured on a scratch Electron 44.1.1 app: `app.quit()`, `app.exit(0)` and
   // `utilityProcess.kill()` all report 0; an uncaught throw, `process.exit(3)`, SIGABRT, SIGKILL, SIGSEGV and SIGTERM
-  // reported 1, 3, 6, 9, 11 and 15). Any other status is the process lost, and an `error`. A run host still running when
+  // reported 1, 3, 6, 9, 11 and 15). Any other status is the process lost, and an `error`; 70 is the run host's own
+  // last-resort handler, whose stack is its line before (R-091, `childExitReading`). A run host still running when
   // its `shutdown` bound elapses at quit is said on the quit path (`window-all-closed`, below).
-  runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`, code === 0 ? 'info' : 'error'));
+  runHostChild.on('exit', (code) => { const r = childExitReading(code); log(`run host exited (${code}), ${r.reading}; NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`, r.level); });
+  // PD-MONITOR-002: the run host's level, under the same threshold as main's own — its MCP children's stderr is `debug`.
+  // Registered at the fork (R-091), so a line it writes before the handshake — its last-resort handler's among them — is kept.
+  runHost.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'run host', e.message); });
   // A session lock ends with the application that held it: main is gone only after the run host (`endBeforeMain`).
   // An immediate exit asked nothing of the run host, so it is ended at once; the orderly quit below gives it the grace
   // its answered `shutdown` needs (a 0 ms timer) before ending it. Either way the next launch finds its pid dead.
@@ -445,7 +449,7 @@ async function main(): Promise<void> {
       services.set(key, svc);
       // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown`, or Electron tearing the service down at quit (see the
       // run host's exit above); any other status is the service lost, and an `error`.
-      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`, code === 0 ? 'info' : 'error'); services.delete(key); cancelImprovementWorkspace(key); });
+      child.on('exit', (code) => { const r = childExitReading(code); log(`workspace service for ${key} exited (${code}), ${r.reading}`, r.level); services.delete(key); cancelImprovementWorkspace(key); });
       // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads),
       // at the level the service gave them and under the same threshold as main's own (PD-MONITOR-002).
       svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
@@ -1337,8 +1341,7 @@ async function main(): Promise<void> {
       resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
     }
-    // PD-MONITOR-002: the run host's level, under the same threshold as main's own — its MCP children's stderr is `debug`.
-    else if (e.kind === 'log') logAt(e.level, 'run host', e.message);
+    // The run host's `log` lines are forwarded by the listener registered at its fork (R-091).
   });
   // Part AL — channel 3 (ADR-0021 first executed): a terminal frame is delivered to each subscribed window under
   // REQ-MONITOR-306's per-window bound, merged into larger steps rather than dropped (REQ-SHELL-103) — `main/terminal.ts`.

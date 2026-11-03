@@ -1,6 +1,6 @@
 # ADR-0002 — Process topology — Discharged — the double-hop latency clause, retired 2026-09-01
 
-Part 6 of 11 of [ADR-0002](../0002-process-topology.md), which indexes every part.
+Part 6 of 12 of [ADR-0002](../0002-process-topology.md), which indexes every part.
 
 ## Discharged — the double-hop latency clause, retired 2026-09-01
 

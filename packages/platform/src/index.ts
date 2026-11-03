@@ -11,3 +11,4 @@ export * from './artifact-environment.js';
 export * from './preferences.js';
 export * from './version.js';
 export * from './chromium-switches.js';
+export * from './utility-process.js';

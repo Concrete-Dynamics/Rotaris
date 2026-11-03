@@ -1,6 +1,6 @@
 # ADR-0002 — Process topology — Decision
 
-Part 3 of 11 of [ADR-0002](../0002-process-topology.md), which indexes every part.
+Part 3 of 12 of [ADR-0002](../0002-process-topology.md), which indexes every part.
 
 ## Decision
 

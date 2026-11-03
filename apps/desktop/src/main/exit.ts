@@ -1,5 +1,6 @@
 import type { ProcessEvent, ProcessReply } from '@rotaris/contracts';
 import { millis, type Timers } from '@rotaris/kernel';
+import { LAST_RESORT_EXIT_STATUS } from '@rotaris/platform';
 import type { AppLogLevel } from './app-log.js';
 
 /**
@@ -386,6 +387,21 @@ function exitedWithin(exit: ChildExit, ms: number, timers: Timers): Promise<bool
     const bound = timers.after(millis(ms), () => resolve(false));
     void exit.exited.then(() => { bound.cancel(); resolve(true); });
   });
+}
+
+/**
+ * What a utility process's exit status says, for main's line about it (PD-MONITOR-002; R-091, hardening §3.2 row 1).
+ *
+ * 0 is an orderly end — the child's own exit after `shutdown`, or Electron's teardown at quit (measured: `app.quit()`,
+ * `app.exit(0)` and `utilityProcess.kill()` all report 0). `LAST_RESORT_EXIT_STATUS` (70) is the child's own last-resort
+ * handler: an uncaught exception or an unhandled rejection, whose stack the child wrote to this log as its last line
+ * (`superviseUtilityProcess`, `@rotaris/platform`). Anything else is a signal or a crash (measured: SIGKILL 9, SIGTERM 15,
+ * SIGSEGV 11, SIGABRT 6, a throw before the handler is installed 1).
+ */
+export function childExitReading(code: number): { readonly level: AppLogLevel; readonly reading: string } {
+  if (code === 0) return { level: 'info', reading: 'an orderly end' };
+  if (code === LAST_RESORT_EXIT_STATUS) return { level: 'error', reading: 'its last-resort handler: an uncaught exception or an unhandled rejection, whose stack is the line it wrote before' };
+  return { level: 'error', reading: 'lost to a signal or a crash' };
 }
 
 /** What Electron's `child-process-gone` carries that the line reads. */

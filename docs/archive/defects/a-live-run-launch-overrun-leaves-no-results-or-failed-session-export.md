@@ -3,7 +3,7 @@
 ## Outcome (2026-10-20, loc1 `loc1-live-evidence`, task 1): repaired
 
 Three parts, none of them Windows-specific; the orphaned processes themselves stay the Windows session's
-([`the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`](../../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md)),
+([`the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`](the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md)),
 not repaired here.
 
 - **(a) Whatever ends the run, the pack gets its results.** `apps/desktop/scripts/lib/run-ending.mjs`'s `createRunEnding` is the
@@ -67,7 +67,7 @@ streamed model call, begun at 15:28:52 UTC, carried reasoning deltas only (425,5
 machine had lost its network. The harness's SIGKILL at the bound (about 15:34 UTC) ended main alone, and `runElectron`,
 which resolves on `close`, returned only at 23:33 UTC, when the throw above was printed; two utility processes of the dead
 main were still running after that. Those are recorded in
-[`the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`](../../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md).
+[`the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md`](the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md).
 The three earlier scenarios' checks were computed in memory and lost with the throw; their saved summaries read `terminal`
 24 tool calls (success 17, soft_pause 4, timeout 1, tool_error 1, one denial), `frictions` 9 (background_running 2,
 background_terminal 1), `frictions-cut` 1 (shell_failure 1).

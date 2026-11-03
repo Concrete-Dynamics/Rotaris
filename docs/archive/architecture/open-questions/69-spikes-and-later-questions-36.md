@@ -28,7 +28,7 @@ The ruled, closed, resolved and withdrawn entries of [part 69](../../../architec
 
 <a id="oq-462"></a>
 
-**OQ-462 — What is the person told when a utility process is lost or never reports ready, and is it forked again?** *(ADR-0002, REQ-SESSION-066, REQ-NOTIFY-023, PD-MONITOR-002. Raised 2026-11-01 by [R-091](../../../product/requests.md#r-091); [the note](../../../defects/the-run-host-and-the-workspace-service-have-no-last-resort-exception-handler-and-end-without-a-word.md).)*
+**OQ-462 — What is the person told when a utility process is lost or never reports ready, and is it forked again?** *(ADR-0002, REQ-SESSION-066, REQ-NOTIFY-023, PD-MONITOR-002. Raised 2026-11-01 by [R-091](../../../product/requests.md#r-091); [the note](../../defects/the-run-host-and-the-workspace-service-have-no-last-resort-exception-handler-and-end-without-a-word.md).)*
 
 **What is open.** ADR-0002 says a run host that ends is not forked again and every run it held settles through stale detection; REQ-SESSION-066 states the two consequences the person must be able to observe afterwards, a stale marking in the list and a refused restore. No requirement says whether the person is told at the moment the process is lost, with what severity, or what main does with a child that never answers `ready` after `utilityProcess.fork`. The workspace service is forked again at the next open of its workspace; the run host never is, and a window whose run host is gone keeps its composer.
 

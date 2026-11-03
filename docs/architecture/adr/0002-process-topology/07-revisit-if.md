@@ -1,6 +1,6 @@
 # ADR-0002 — Process topology — Revisit if
 
-Part 7 of 11 of [ADR-0002](../0002-process-topology.md), which indexes every part.
+Part 7 of 12 of [ADR-0002](../0002-process-topology.md), which indexes every part.
 
 ## Revisit if
 

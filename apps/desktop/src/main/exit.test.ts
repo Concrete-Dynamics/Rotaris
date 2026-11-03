@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ProcessEvent, ProcessReply } from '@rotaris/contracts';
 import { FakeClock, millis } from '@rotaris/kernel';
-import { CHILD_CLOSE_BOUND_MS, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, quitGuardsOutsideAnyWindow, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { CHILD_CLOSE_BOUND_MS, childExitReading, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, quitGuardsOutsideAnyWindow, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 import { guardClose, type GuardedWindow } from './main-windows.js';
 
 /** A window whose destruction reports `closed` at once, later, or never. */
@@ -611,5 +611,13 @@ describe("REQ-SHELL-121 on Windows: the desktop session's end runs the orderly s
     expect(exited).toBe(1);
     expect(lines[0]![0]).toMatch(/\(no reason given\)/);
     expect(lines[1]).toEqual([expect.stringMatching(/the orderly shutdown at the session's end failed \(Error: store busy\)/), 'error']);
+  });
+});
+
+describe("what a utility process's exit status says (R-091, PD-MONITOR-002)", () => {
+  it('0 is an orderly end at info; 70 is the last-resort handler and anything else a signal or a crash, both at error', () => {
+    expect(childExitReading(0)).toEqual({ level: 'info', reading: 'an orderly end' });
+    expect(childExitReading(70)).toEqual({ level: 'error', reading: expect.stringMatching(/^its last-resort handler: an uncaught exception or an unhandled rejection/) });
+    for (const code of [1, 3, 6, 9, 11, 15, 69]) expect(childExitReading(code)).toEqual({ level: 'error', reading: 'lost to a signal or a crash' });
   });
 });

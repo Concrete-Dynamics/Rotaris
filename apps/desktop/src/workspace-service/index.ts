@@ -1,6 +1,6 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnvelopeSchema, WorkspaceServiceRequestSchema, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { countNoun, fileStamp, millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
-import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
+import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, injectChildFault, superviseUtilityProcess } from '@rotaris/platform';
 import { walCheckpointBeforeClose, walCheckpoint, establishWorkspaceId, forgetSpelling, IDLE_WAL_CHECKPOINT_MS, IdleWalCheckpoint, readWorkspaceId, REFUSAL_LEASE_MS, workspaceIdFile, type WalCheckpointResult, type ResolvedStore, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
@@ -37,6 +37,20 @@ import { openStoreAtOpen, RestoreInFlight } from './store-open.js';
  */
 const port = process.parentPort;
 const clocks = nodeClocks();
+/*
+ * R-091 (hardening §3.2 row 1): installed before anything else this process starts — one `error` line to main's log and
+ * status 70 on a throw or a rejection no request path caught, and status 69 within 250 ms of main's end
+ * (`superviseUtilityProcess`, `@rotaris/platform`). An in-flight checkpoint Git operation is not waited for on either:
+ * there is no one left to answer, and the store is left as a crash leaves it.
+ */
+superviseUtilityProcess({
+  process,
+  name: 'workspace service',
+  logError: (message) => { port.postMessage({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'log', level: 'error', message } }); },
+  timers: clocks.timers,
+});
+// Verification only, compiled out of a packaged build: a fault the last-resort handler is proved against (`exit-trace-proof`).
+if (__ROTARIS_SEAMS__) injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'workspace-service', clocks.timers);
 const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(layout.workspaces, { recursive: true });

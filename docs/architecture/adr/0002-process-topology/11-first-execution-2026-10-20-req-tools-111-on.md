@@ -1,6 +1,6 @@
 # ADR-0002 — Process topology — First execution — 2026-10-20, REQ-TOOLS-111 on Windows (consequence 5)
 
-Part 11 of 11 of [ADR-0002](../0002-process-topology.md), which indexes every part.
+Part 11 of 12 of [ADR-0002](../0002-process-topology.md), which indexes every part.
 
 ## First execution — 2026-10-20, REQ-TOOLS-111 on Windows (consequence 5)
 

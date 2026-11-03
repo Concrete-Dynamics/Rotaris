@@ -1,6 +1,6 @@
 # ADR-0002 — Process topology — Unresolved conflict between slices
 
-Part 5 of 11 of [ADR-0002](../0002-process-topology.md), which indexes every part.
+Part 5 of 12 of [ADR-0002](../0002-process-topology.md), which indexes every part.
 
 ## Unresolved conflict between slices
 

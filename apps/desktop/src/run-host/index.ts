@@ -1,4 +1,5 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, ServiceAnswerEnvelopeSchema } from '@rotaris/contracts';
+import { injectChildFault, nodeClocks, superviseUtilityProcess } from '@rotaris/platform';
 import { createRunHost } from './host.js';
 import { dispatch } from './dispatch.js';
 
@@ -24,9 +25,22 @@ import { dispatch } from './dispatch.js';
  *
  * This file is the ENTRY and nothing else: what the process holds is `host.ts`,
  * what it answers is `dispatch.ts`, and the stand-in every proof runs against is
- * `scripted-client.ts`. Only the three lines below start anything, which is what
+ * `scripted-client.ts`. Only the lines below start anything, which is what
  * lets the other two be imported without forking a single child.
+ *
+ * R-091 (hardening §3.2 row 1): the first thing it starts is how it ends when nothing else ends it — one `error` line
+ * to main's log and status 70 on a throw or a rejection no request path caught, and status 69 within 250 ms of main's
+ * end (`superviseUtilityProcess`, `@rotaris/platform`). Nothing more is written to the store either way: the sessions
+ * it held are repaired by the engine's crash path on the next open (`packages/engine/src/run/crash.ts`).
  */
+superviseUtilityProcess({
+  process,
+  name: 'run host',
+  logError: (message) => { process.parentPort.postMessage({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'log', level: 'error', message } }); },
+  timers: nodeClocks().timers,
+});
+// Verification only, compiled out of a packaged build: a fault the last-resort handler is proved against (`exit-trace-proof`).
+if (__ROTARIS_SEAMS__) injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'run-host', nodeClocks().timers);
 
 // Everything this process holds, built now rather than at import (`host.ts`), and the one request path over it.
 const h = createRunHost();

@@ -7,7 +7,7 @@
  * `render-process-gone` for a renderer lost, `child-process-gone` for a utility child lost, and `process.on('exit')` last
  * (`docs/archive/defects/process-exit-left-no-diagnosable-trace.md`). The orderly half was measured when it landed; the crash
  * handlers were "argued, not measured", and no proof or live launch killed a process until this one
- * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Six driven launches:
+ * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Nine driven launches:
  *
  *   1. orderly — launched and quit through the driver: the log carries `quit: exiting with status 0` and
  *                `main process exiting with status 0`, and NO `error` line for a renderer or a child gone. The control for
@@ -39,6 +39,12 @@
  *                a person answers Save/Discard/Cancel). Quit once through the driver (`unsaved-quit`) and once by SIGTERM to
  *                main (`unsaved-sigterm`): each exits 0 through the orderly path (`quit: exiting with status 0`) with the
  *                OQ-298 line, shows no dialog, and leaves the workspace configuration file byte-identical.
+ *   6. last-resort — R-091 (hardening §3.2 row 1): a throw in the run host and a rejection in the workspace service that no
+ *                request path catches (the seam `ROTARIS_CAPTURE_CHILD_FAULT`, compiled out of a packaged build), one launch
+ *                each: the child writes ONE `error` line through main's log with the stack and exits 70, which main reads as
+ *                its last-resort handler's; the application still answers and quits with 0.
+ *   7. main-killed — main killed from outside: the run host and the workspace service, which probe main's pid every 250 ms,
+ *                are gone within 2,000 ms (`RUN_HOST_END_BOUND_MS`), since Electron's parent port emits no `close`.
  *
  * What it cannot fire: `unhandledRejection` and `uncaughtException` in main. Neither can be raised in main from outside the
  * process, and adding a seam that throws inside main to prove a one-line log call is not justified (the repaired note's
@@ -198,7 +204,7 @@ const results = {};
   check('the quit took the orderly path: the windows closed in clause 9\'s order asking no guard (OQ-298), and main wrote `quit: exiting with status 0`', guardedExit !== null && lines.some((l) => /^quit: closing 1 main window\(s\) through their close guards first/.test(l.message)) && lines.some((l) => l.message === 'quit: exiting with status 0'), lines.filter((l) => /^quit: /.test(l.message)).map((l) => l.message).join(' | ') || 'no quit line');
   // `process.on('exit')` is the last line main writes of its own; a child's exit Electron reports in the same turn may follow it.
   const lastOwn = lines.findLastIndex((l) => l.message === 'main process exiting with status 0');
-  check('the log ends where the process did: main\'s exit line comes after the losses, and nothing of main\'s own work after it', lastOwn > lines.findIndex((l) => /^RENDERER GONE \(/.test(l.message)) && lines.slice(lastOwn + 1).every((l) => /^quit: exiting with status \d+$|^workspace service for .* exited \(\d+\)$/.test(l.message)), lines.slice(-3).map((l) => l.message).join(' | '));
+  check('the log ends where the process did: main\'s exit line comes after the losses, and nothing of main\'s own work after it', lastOwn > lines.findIndex((l) => /^RENDERER GONE \(/.test(l.message)) && lines.slice(lastOwn + 1).every((l) => /^quit: exiting with status \d+$|^workspace service for .* exited \(\d+\)(, an orderly end)?$/.test(l.message)), lines.slice(-3).map((l) => l.message).join(' | '));
   results.crash = { runHostPid, runHost: runHostLines.map((l) => `${l.level} ${l.message}`), renderers: renderers.map((r) => r.pid), renderer: rendererLine ? `${rendererLine.level} ${rendererLine.message}` : null, guardedQuit: guardedExit === null ? { held: true } : { held: false, exit: guardedExit }, exit: ended, last: lines.slice(-3).map((l) => `${l.level} ${l.message}`) };
 }
 
@@ -309,6 +315,66 @@ for (const [name, how] of [['unsaved-quit', 'driver'], ['unsaved-sigterm', 'sigt
   check(`${name}: no dialog was shown, and no close guard was asked of the renderer`, dialogBefore === 0 && !lines.some((l) => /close guard: the renderer|PD-SHELL-010|a close guard refused/.test(l.message)), `${dialogBefore} dialog title(s) before the quit; ${lines.filter((l) => /close guard/.test(l.message)).map((l) => l.message).join(' | ') || 'no close-guard line'}`);
   check(`${name}: the workspace configuration file is byte-identical — nothing unsaved was written`, Buffer.compare(before, after) === 0, `${before.length} bytes before, ${after.length} after`);
   results[name] = { exit: ended, tookMs, armed, dialogBefore, configUnchanged: Buffer.compare(before, after) === 0, last: lines.slice(-4).map((l) => `${l.level} ${l.message}`) };
+}
+
+// ── 6. last-resort: a throw in the run host, and a rejection in the workspace service, that no request path catches ───────
+/*
+ * R-091 (hardening §3.2 row 1): each utility process ends on its last-resort handler with ONE `error` line through main's
+ * log, carrying the stack, and status 70, which main reads as that handler's (`childExitReading`, `exit.ts`). The fault is
+ * the verification seam `ROTARIS_CAPTURE_CHILD_FAULT` (`injectChildFault`, `@rotaris/platform`), compiled out of a packaged
+ * build, armed late enough that the launch has opened its window first. The application then still quits orderly.
+ */
+const CHILD_FAULT_AFTER_MS = 15_000;
+for (const [name, spec, source, event, exitPattern] of [
+  ['last-resort-run-host', `run-host:uncaught:${CHILD_FAULT_AFTER_MS}`, 'run host', 'an uncaught exception', /^run host exited \(70\), its last-resort handler/],
+  ['last-resort-workspace-service', `workspace-service:rejection:${CHILD_FAULT_AFTER_MS}`, 'workspace service', 'an unhandled rejection', /^workspace service for .* exited \(70\), its last-resort handler/],
+]) {
+  const started = await startApp({ root: join(output, name), workspace, extra: { ROTARIS_CAPTURE_CHILD_FAULT: spec }, timeoutMs: 90_000 });
+  await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 });
+  const found = await until(() => mainLines(logOf(started)).filter((l) => l.message.startsWith(`${source}: ${event} reached the ${source}'s last-resort handler`) || exitPattern.test(l.message)), (f) => f.length >= 2, { timeoutMs: CHILD_FAULT_AFTER_MS + 30_000, what: `the ${source}'s last-resort line and its exit` }).catch(() => []);
+  const handler = found.filter((l) => l.message.startsWith(`${source}: ${event}`));
+  const exited = found.find((l) => exitPattern.test(l.message));
+  // The stack's frames follow on lines of their own, which `mainLines` reads as main's continuation lines: the first line names the error.
+  check(`${name}: the ${source} writes ONE error line through main's log, naming the error`, handler.length === 1 && handler[0].level === 'error' && /ending with status 70 \(R-091, ADR-0002\): Error: child fault: /.test(handler[0].message), handler.map((l) => `${l.level} ${l.message.slice(0, 240)}`).join(' | ') || 'no line');
+  check(`${name}: …with the stack after it`, new RegExp(`\\n\\[main [^\\]]+\\] error\\s+${source}: \\s*at `).test(logOf(started).slice(logOf(started).indexOf(`${event} reached the ${source}'s last-resort handler`))), 'the frames that follow the line');
+  check(`${name}: main reads its exit as the last-resort handler's, status 70, at error`, exited?.level === 'error', exited ? `${exited.level} ${exited.message}` : 'no line');
+  check(`${name}: main still answers`, (await started.driver.eval('1 + 1').catch((e) => String(e))) === 2);
+  const stopped = await stopApp(started);
+  if (stopped.overran) throw new Error(stopOverrunMessage(name, stopped, logOf(started)));
+  check(`${name}: the application then quits, exit 0`, stopped.exit?.code === 0, JSON.stringify(stopped.exit));
+  results[name] = { spec, handler: handler.map((l) => `${l.level} ${l.message}`), exited: exited ? `${exited.level} ${exited.message}` : null, exit: stopped.exit };
+}
+
+// ── 7. main killed: both utility processes end within RUN_HOST_END_BOUND_MS ─────────────────────────────────────────────
+/*
+ * R-091 (hardening §3.2 row 1; docs/archive/defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md):
+ * main is killed from outside (SIGKILL; on Windows `TerminateProcess`, what `taskkill /F` sends), and each utility process —
+ * which probes its parent's pid every 250 ms (`watchParent`, `@rotaris/platform`) — must be gone within 2,000 ms of the kill
+ * (`RUN_HOST_END_BOUND_MS`, `exit.ts`). Electron's parent port emits no `close` for this (measured 2026-11-03), so this is the
+ * mechanism's only end-to-end reading. Liveness is probed with signal 0, every 25 ms.
+ */
+{
+  const RUN_HOST_END_BOUND_MS = 2_000;
+  const started = await startApp({ root: join(output, 'main-killed'), workspace, timeoutMs: 90_000 });
+  await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 });
+  await until(() => /run host: workspace\.ack/.test(logOf(started)), (ok) => ok, { timeoutMs: 30_000, what: 'the workspace opened' }).catch(() => false);
+  const mainPid = started.child.pid;
+  const children = processes().filter((p) => p.ppid === mainPid && /--utility-sub-type=node\.mojom\.NodeService/.test(p.command)).map((p) => p.pid);
+  check('main-killed: the launch has a run host and a workspace service to watch', children.length >= 2, children.join(', ') || 'none');
+  const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+  const killedAt = Date.now();
+  process.kill(mainPid, 'SIGKILL');
+  const goneAfter = new Map();
+  while (goneAfter.size < children.length && Date.now() - killedAt < 10_000) {
+    for (const pid of children) if (!goneAfter.has(pid) && !alive(pid)) goneAfter.set(pid, Date.now() - killedAt);
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  started.driver.close();
+  await drainGroup(started.child);
+  const readings = children.map((pid) => `${pid}: ${goneAfter.has(pid) ? `gone ${goneAfter.get(pid)} ms after the kill` : 'still running 10 s after the kill'}`);
+  check(`main-killed: every utility process is gone within ${RUN_HOST_END_BOUND_MS} ms of main's kill`, children.length >= 2 && children.every((pid) => (goneAfter.get(pid) ?? Infinity) <= RUN_HOST_END_BOUND_MS), readings.join('; '));
+  for (const pid of children) if (!goneAfter.has(pid)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
+  results['main-killed'] = { mainPid, children: readings };
 }
 
 results.checks = checks;

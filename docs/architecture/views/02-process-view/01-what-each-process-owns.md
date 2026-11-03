@@ -31,3 +31,20 @@ executable, and encrypts its cookies; it keeps the `file:` protocol's privileges
 no RunAsNode, the native bindings load from `app.asar.unpacked` and the code-intelligence server is `Rotaris.exe
 builtin:code-intelligence -- …` started as the application, handing over to the interpreter under `resources/`. A development
 launch runs the unfused Electron of the checkout.
+
+**How a utility process ends when nothing else ends it (R-091, hardening §3.2 row 1; 2026-11-03).** The run host and every
+workspace service install `superviseUtilityProcess` (`@rotaris/platform`, `utility-process.ts`) as the first thing their
+entry starts. On an `uncaughtException` or an `unhandledRejection` no request path caught, the child posts ONE `error`
+`log` event to main naming the event and carrying the stack, and exits with status **70** (EX_SOFTWARE); main forwards the
+line under the child's source (the run host's `log` listener is registered at its fork since this date, so a line written
+before the handshake is kept) and reads the status through `childExitReading` (`exit.ts`): 0 an orderly end, 70 the
+child's last-resort handler, anything else a signal or a crash. Nothing more is written to the store: the sessions a run
+host held are left as a lost process leaves them, for the engine's crash path on the next open. **Main's end** is watched
+from the child side: every 250 ms (`PARENT_WATCH_PERIOD_MS`) the child probes the pid it was started under
+(`probePid`, REQ-SESSION-053's probe) and compares its current parent pid, and on either telling main is gone exits with
+status **69** at once, pausing nothing. Electron's `parentPort` offers no event for this — measured 2026-11-03 on Windows
+11 ARM64 (Electron 44.3.0): no `close`, no `disconnect` and no `exit` reached the child when main was killed, and Chromium
+ended it natively between about 0 and 3 s later. In the built app, main killed with `taskkill /F`, both children read
+exit 69 within 0.4 s of the kill in two launches and within 2.5 s in two more, all at 100 % CPU (another session's proofs), so
+the end is this probe's. A verification seam, `ROTARIS_CAPTURE_CHILD_FAULT` (`injectChildFault`, compiled out of a
+packaged build), raises a throw or a rejection in either child for `exit-trace-proof`'s `last-resort` launches.

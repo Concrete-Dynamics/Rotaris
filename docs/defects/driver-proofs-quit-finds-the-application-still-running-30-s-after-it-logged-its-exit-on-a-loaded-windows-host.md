@@ -16,6 +16,14 @@ removed. Whether the process that lingers is Electron's main process or a child 
 later on its own, was not measured; the cause is unidentified. A run of the same proof earlier the same evening passed the
 first launch's quit with the same build, so the reading depends on the host's load.
 
+**Observed again, 2026-11-03, in `pnpm questions-proof`'s `stale` launch** (R-093's proof sweep; `499a78c0` under the
+seventeen-suite sweep, then `4edb333b` alone): the capture's 120 s wait for a result the stale scenario never delivers
+timed out at 00:14:15, the application logged its orderly quit by 00:14:17.7 (`run host exited (0)`, `main process exiting
+with status 0`), and the proof's 150 s `spawnBounded` bound still found it running: in the sweep "neither SIGTERM (10003 ms)
+nor SIGKILL (5009 ms) was reaped", alone "SIGTERM ended it after 7278 ms". The product's own probes were right both times
+(the stepper present, "Could not deliver answers. The waiting agent is no longer available.", Submit enabled, `stale.png`
+captured), so the red is this note's shape and not the question flow's.
+
 ## Specs
 
 PD-ORCH-005 clause 9 and REQ-SHELL-121 (the application's quit ends the process), if the lingering process is the

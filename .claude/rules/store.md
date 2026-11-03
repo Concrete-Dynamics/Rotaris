@@ -10,6 +10,8 @@ One writer, one migrator, one version.
 
 - **Append a `Migration` to `MIGRATIONS`; never edit one that has shipped.** `to` is the next integer,
   and `CURRENT_SCHEMA_VERSION` is *derived* from the last entry — writing it by hand is a defect.
+  Each migration's SQL has its SHA-256 in `migrations.sha256.json` beside `schema.ts`, and `schema.test.ts` fails an
+  edited one and names the line a new one appends.
 - `migrateStore` runs each migration **in one transaction and bumps `user_version` inside it**, so a
   crash leaves a whole version rather than half of one.
 - **Only the workspace service migrates** (W-02). The run host opens and writes; it never migrates.

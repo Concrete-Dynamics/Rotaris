@@ -47,7 +47,7 @@ which admitted every `file:` URL, is gone), and every window is built from `secu
 |---|---|---|
 | ~~No `quick_check` before a migration; no corruption-specific refusal~~ | `packages/store/src/open.ts`; `workspace-service/store-open.ts` | C1, closed 2026-11-01: the service's open checks before migrating and refuses as `workspace.store-corrupt`, the log left as found (`open.test.ts`, `store-open.test.ts`, `store-notice.test.ts`); its resolution is [OQ-477](../open-questions/69-spikes-and-later-questions-36.md#oq-477) |
 | ~~`wal_autocheckpoint` and idle checkpoints left to the engine's defaults~~ | `open.ts` | C1, closed 2026-11-01: `WAL_AUTOCHECKPOINT_PAGES` set and read back on every writable open, the service's idle PASSIVE and closing TRUNCATE checkpoints (`store/src/wal-checkpoint.ts`), `synchronous` asserted NORMAL with FULL inside `durableTransaction` only (`wal-checkpoint.test.ts`, `open.test.ts`) |
-| Migration immutability tested as a version sequence only, never as SQL text | `store.test.ts:1807` | C2 |
+| ~~Migration immutability tested as a version sequence only, never as SQL text~~ | `store.test.ts:1807` | C2, closed 2026-11-03: each migration's SQL, normalised to LF, held by its SHA-256 in `store/src/migrations.sha256.json`; `schema.test.ts` fails an edited row as shipped and a new migration with the line to append |
 | `store` has 3 test files for 17 modules | `packages/store/src` | C2 |
 
 Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C1 pins the floor in a test (`store/src/open.test.ts`, 2026-11-01).

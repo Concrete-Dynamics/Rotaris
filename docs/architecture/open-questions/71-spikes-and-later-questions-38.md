@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-523 – OQ-540.
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-523 – OQ-540 and OQ-485.
 
 <a id="oq-523"></a>
 
@@ -181,3 +181,13 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** REQ-MONITOR-166's explicit empty sparkline, drawn locally by the Overview.
 
 **What decides it.** One ruling: the variant joins the design system by §4 amendment, or the local drawing is recorded as sanctioned.
+
+<a id="oq-485"></a>
+
+**OQ-485 — Does main leave a line in the application log for a message it refuses at a process boundary?** *(ADR-0002 consequence 11, ADR-0044, PD-MONITOR-002, `docs/architecture/hardening.md` §3.5 row 7. Raised 2026-11-04 by hrd2's bundle F3 (`thin-packages`), building the process link's tests; numbered in the hardening orchestration's range.)*
+
+**What is open.** `ProcessLink` (`packages/shell/src/process-link.ts`) reads every message from a child with `ProcessMessageSchema.safeParse` and drops one it cannot read with no trace: nothing is logged and the request it may have answered stays pending. A run host or workspace service speaking another contract version (`v`), or a reply kind main does not know, therefore reads in main as `NoReplyWithinBound` at the request's bound, with nothing in the log that says a message arrived and was refused. No requirement or decision says whether such a drop is recorded; the brief that raised this assumed it was ("dropped and logged").
+
+**What the build proceeds under.** The drop as built: silent, the request left to its deadline, the next valid message answered. `packages/shell/src/process-link.test.ts` pins that, citing this entry.
+
+**What decides it.** A ruling on whether a refused process message leaves one line (at which level, naming what, under PD-MONITOR-002's rule that the log never carries a payload) or stays silent, and whether a burst of them is bounded.

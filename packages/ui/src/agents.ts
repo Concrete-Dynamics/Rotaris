@@ -497,6 +497,6 @@ export function agentDotState(state: AgentRecord['presentationState'] | 'idle' |
     case 'waiting': case 'queued': case 'paused': return 'wait';
     case 'done': return 'done';
     case 'failed': case 'cancelled': return 'fail';
-    default: return 'idle';
+    case 'idle': case null: case undefined: return 'idle';
   }
 }

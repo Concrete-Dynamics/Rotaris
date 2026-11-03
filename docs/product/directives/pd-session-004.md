@@ -35,3 +35,15 @@ log; a reader holding the file open sees it change under it; and the figures are
 request [R-091](../requests.md#r-091), 2026-11-01, and ruled the same day by the orchestrator's consortium under the
 owner's delegation ([R-072](../requests.md#r-072)); minted because the bound departs from the unbounded file the
 requirement states. Built by the hardening plan's bundle `log-sinks`.*
+
+> **First execution, 2026-11-03 (hardening D2, `log-sinks`):** built as written. `SESSION_LOG_MAX_BYTES` (32 MiB) and
+> `SESSION_LOG_RETAINED_BYTES` (16 MiB) stand beside `fileAppender` in `apps/desktop/src/run-host/tools.ts`; the appender reads
+> the file's size when a run opens it and counts in memory after that; an append that would pass the bound first rewrites the
+> file in place (`writeFileSync` over the one file, no sibling) with its newest 16 MiB from a line boundary behind one line
+> `<instant> WARNING session log reached its 32 MiB bound; <n> bytes dropped since the file was created`, the instant from the
+> wall-clock port, an earlier marker's total read back and replaced. A failed compaction writes one `warn` line to the
+> application log through the run host's `log` and ends that run's writing. **The text met the code once:** a single line
+> longer than the room a compaction leaves cannot be kept whole within the bound, and the directive forbids cutting one; it is
+> not written, and its bytes join the next marker's total, so the bound and "no line cut" both hold. Measured by unit tests
+> with a 1,000-byte bound and a 500-byte retention (`run-host/tools.test.ts`, "the session log's bound"), not by a run that
+> wrote 32 MiB in the built app. The row is in [`../../architecture/first-executions.md`](../../architecture/first-executions.md).

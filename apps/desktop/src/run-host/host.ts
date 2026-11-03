@@ -486,7 +486,8 @@ export function createRunHost() {
       },
     }),
     attended: () => presenters.attended,
-    sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log')),
+    // PD-SESSION-004: one file of at most 32 MiB, its marker stamped from the wall-clock port; a failed compaction is a warning in the application log.
+    sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log'), { wall: clocks.wall, warn: (m) => log(m, 'warn') }),
     // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).
     hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: configDir, env: hostEnv }),
     // ADR-0039: the capture at iteration close — Git through main to the workspace service, the row through the writer.

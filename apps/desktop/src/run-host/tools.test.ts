@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
@@ -10,7 +10,7 @@ import { resolveDelegationTarget, SessionWriter, UserPresence, type ArtifactOps,
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
 import type { McpHost } from './mcp.js';
-import { createToolPort, implementationRole, isEntryPort, RunHostPresenter, toolSpec, type ToolPortDeps } from './tools.js';
+import { compactSessionLog, createToolPort, fileAppender, implementationRole, isEntryPort, RunHostPresenter, SESSION_LOG_MAX_BYTES, SESSION_LOG_RETAINED_BYTES, sessionLogMarker, toolSpec, type ToolPortDeps } from './tools.js';
 
 /**
  * Part N's finding: the entry test was written against the root id `root`, which Part B had already made
@@ -1532,3 +1532,104 @@ describe('RunHostPresenter (ADR-0019, REQ-TOOLS-063)', () => {
   });
 });
 
+/**
+ * PD-SESSION-004 (OQ-465, narrowing REQ-SESSION-142 and REQ-MONITOR-238): the session log stays one file of at most the bound;
+ * past it the appender keeps the most recent retained bytes from a line boundary, behind one WARNING marker in the log's own
+ * format carrying the bytes dropped since the file was created. Driven at small bounds with a fake wall clock.
+ */
+describe('the session log\'s bound (PD-SESSION-004)', () => {
+  let dir: string;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-session-log-')); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  const clock = () => new FakeClock(0, Date.UTC(2026, 10, 3, 12, 0, 0));
+  /** A session-log line as `SessionLog.write` writes it, numbered so the order can be read back: 50 bytes each. */
+  const entry = (n: number) => `2026-11-03T12:00:00.000Z DEBUG   line ${String(n).padStart(6, '0')} ${'x'.repeat(4)}\n`;
+  const numbers = (text: string) => [...text.matchAll(/line (\d{6})/g)].map((m) => Number(m[1]));
+  const MARKER = /^2026-11-03T12:00:00\.000Z WARNING session log reached its 1000 bytes bound; (\d+) bytes dropped since the file was created$/;
+
+  it('appends verbatim under the bound, in the one file, making its directory', () => {
+    const file = join(dir, 'sessions', 's1', 'session.log');
+    const append = fileAppender(file, { wall: clock(), warn: () => undefined, maxBytes: 1000, retainedBytes: 500 });
+    for (let n = 0; n < 10; n += 1) append(entry(n));
+    expect(readFileSync(file, 'utf8')).toBe(Array.from({ length: 10 }, (_, n) => entry(n)).join(''));
+  });
+
+  it('never passes the bound, keeps the newest lines whole and contiguous behind one marker, and writes no other file', () => {
+    const file = join(dir, 'session.log');
+    const append = fileAppender(file, { wall: clock(), warn: () => undefined, maxBytes: 1000, retainedBytes: 500 });
+    const written: string[] = [];
+    for (let n = 0; n < 200; n += 1) {
+      append(entry(n));
+      written.push(entry(n));
+      expect(statSync(file).size).toBeLessThanOrEqual(1000);
+    }
+    expect(readdirSync(dir)).toEqual(['session.log']);
+    const [first, ...rest] = readFileSync(file, 'utf8').split('\n');
+    const dropped = Number(MARKER.exec(first ?? '')?.[1]);
+    const kept = rest.join('\n');
+    // Nothing is lost at a boundary: the kept lines are a contiguous run ending at the newest, each whole.
+    const seen = numbers(kept);
+    expect(seen.at(-1)).toBe(199);
+    expect(seen).toEqual(Array.from({ length: seen.length }, (_, k) => (seen[0] ?? 0) + k));
+    expect(kept).toBe(written.slice(seen[0]).join(''));
+    // The marker counts every byte dropped since the file was created, across every compaction: exactly the lines before the first kept.
+    expect(dropped).toBe(Buffer.byteLength(written.slice(0, seen[0]).join('')));
+    expect(readFileSync(file, 'utf8').match(/WARNING session log reached/g)).toHaveLength(1);
+  });
+
+  it('keeps the most recent retained bytes from the first line boundary within them', () => {
+    const compacted = compactSessionLog(Buffer.from('aaaa\nbbbb\ncccc\n'), { at: 'T', maxBytes: 1000, retainedBytes: 7 });
+    expect(compacted.toString('utf8')).toBe('T WARNING session log reached its 1000 bytes bound; 10 bytes dropped since the file was created\ncccc\n');
+    const again = compactSessionLog(Buffer.concat([compacted, Buffer.from('dddd\neeee\n')]), { at: 'U', maxBytes: 1000, retainedBytes: 10 });
+    expect(again.toString('utf8')).toBe('U WARNING session log reached its 1000 bytes bound; 15 bytes dropped since the file was created\ndddd\neeee\n');
+    expect(sessionLogMarker('T', SESSION_LOG_MAX_BYTES, 0)).toBe('T WARNING session log reached its 32 MiB bound; 0 bytes dropped since the file was created\n');
+    expect([SESSION_LOG_MAX_BYTES, SESSION_LOG_RETAINED_BYTES]).toEqual([32 * 1024 * 1024, 16 * 1024 * 1024]);
+  });
+
+  it('stamps the marker from the clock port, in the log\'s own line format at WARNING', () => {
+    const file = join(dir, 'session.log');
+    const wall = clock();
+    wall.advance(90_000);
+    const append = fileAppender(file, { wall, warn: () => undefined, maxBytes: 1000, retainedBytes: 500 });
+    for (let n = 0; n < 30; n += 1) append(entry(n));
+    expect(readFileSync(file, 'utf8').split('\n')[0]).toMatch(/^2026-11-03T12:01:30\.000Z WARNING session log reached its 1000 bytes bound; \d+ bytes dropped/);
+  });
+
+  it('takes its starting size from the file on disk, since a later run of the session appends to the same file', () => {
+    const file = join(dir, 'session.log');
+    writeFileSync(file, Array.from({ length: 19 }, (_, n) => entry(n)).join('')); // 950 bytes, left by an earlier run
+    const append = fileAppender(file, { wall: clock(), warn: () => undefined, maxBytes: 1000, retainedBytes: 500 });
+    append(entry(19));
+    expect(statSync(file).size).toBe(1000);
+    append(entry(20));
+    const text = readFileSync(file, 'utf8');
+    expect(text.split('\n')[0]).toMatch(/WARNING session log reached its 1000 bytes bound; 500 bytes dropped/);
+    expect(numbers(text)).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+  });
+
+  it('writes no line longer than the room a compaction leaves, and counts it as dropped rather than cutting it', () => {
+    const file = join(dir, 'session.log');
+    const append = fileAppender(file, { wall: clock(), warn: () => undefined, maxBytes: 1000, retainedBytes: 500 });
+    for (let n = 0; n < 15; n += 1) append(entry(n));
+    const huge = `2026-11-03T12:00:00.000Z DEBUG   ${'y'.repeat(900)}\n`;
+    append(huge);
+    append(entry(15));
+    expect(readFileSync(file, 'utf8')).not.toContain('yyyy');
+    expect(statSync(file).size).toBeLessThanOrEqual(1000);
+  });
+
+  it('fails a compaction without failing the run: one warning to the application log, then nothing more appended', () => {
+    const file = join(dir, 'session.log');
+    writeFileSync(file, Array.from({ length: 19 }, (_, n) => entry(n)).join(''));
+    const warnings: string[] = [];
+    const files = { size: (f: string) => statSync(f).size, read: (f: string) => readFileSync(f), rewrite: () => { throw new Error('EPERM: the file is locked'); }, append: (f: string, l: string) => { appendFileSync(f, l); } };
+    const append = fileAppender(file, { wall: clock(), warn: (m) => warnings.push(m), maxBytes: 1000, retainedBytes: 500, files });
+    append(entry(19));
+    expect(() => { append(entry(20)); append(entry(21)); }).not.toThrow();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('EPERM: the file is locked');
+    expect(statSync(file).size).toBe(1000);
+    expect(numbers(readFileSync(file, 'utf8')).at(-1)).toBe(19);
+  });
+});

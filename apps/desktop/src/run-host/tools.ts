@@ -1,6 +1,6 @@
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { toIsoUtc, type Clocks } from '@rotaris/kernel';
+import { toIsoUtc, type Clocks, type WallClock } from '@rotaris/kernel';
 import { presetRank, resolvePreset, restrictionsAllow, TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, grantsOn, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
@@ -22,12 +22,116 @@ import { z } from 'zod';
  * (ADR-0036/0037, `configuration.ts`), per workspace; the entry role's direct-work bundle is the
  * pre-flight's grant or a `single` strategy (REQ-ORCH-025).
  */
-/** REQ-SESSION-142: the session's log file, appended line by line; the directory is made on first write. */
-export function fileAppender(file: string): (line: string) => void {
+const MIB = 1024 * 1024;
+/**
+ * PD-SESSION-004 (OQ-465, ruled 2026-11-01 under R-072; narrows REQ-SESSION-142 and REQ-MONITOR-238): the session log holds
+ * at most this many bytes, and a compaction keeps the most recent `SESSION_LOG_RETAINED_BYTES` of it. Named constants beside
+ * the appender, as the directive has them; no configuration key reaches either. 32 MiB is REQ-STARTUP-133's per-stream figure,
+ * so the product's logs share one number.
+ */
+export const SESSION_LOG_MAX_BYTES = 32 * MIB;
+export const SESSION_LOG_RETAINED_BYTES = 16 * MIB;
+
+/** How a bound is written in the marker: whole MiB as the directive states it, otherwise bytes (a test's small bound). */
+function boundWords(bytes: number): string {
+  return bytes % MIB === 0 ? `${bytes / MIB} MiB` : `${bytes} bytes`;
+}
+
+/** The marker's own words after the log's stamp and level; the cumulative total is read back from them at the next compaction. */
+const MARKER_TEXT = /^\S+ WARNING session log reached its .+? bound; (\d+) bytes dropped since the file was created\r?\n$/;
+
+/**
+ * PD-SESSION-004's marker: one line in the log's own format (`SessionLog.write`'s `<ISO-8601 UTC> <LEVEL padded to 7>
+ * <message>`) at WARNING, naming the bound and the bytes dropped since the file was created.
+ */
+export function sessionLogMarker(at: string, maxBytes: number, dropped: number): string {
+  return `${at} WARNING session log reached its ${boundWords(maxBytes)} bound; ${dropped} bytes dropped since the file was created\n`;
+}
+
+/** The file system the appender reads and rewrites through; the default is node's, a test hands another. */
+export interface SessionLogFiles {
+  readonly size: (file: string) => number;
+  readonly read: (file: string) => Buffer;
+  readonly rewrite: (file: string, content: Buffer) => void;
+  readonly append: (file: string, line: string) => void;
+}
+
+const NODE_FILES: SessionLogFiles = {
+  size: (file) => { try { return statSync(file).size; } catch (cause) { if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return 0; throw cause; } },
+  read: (file) => readFileSync(file),
+  // In place: the one file truncated and written, never a sibling or temporary file in the session's place (REQ-SESSION-002).
+  rewrite: (file, content) => { writeFileSync(file, content); },
+  append: (file, line) => { appendFileSync(file, line, 'utf8'); },
+};
+
+export interface FileAppenderOptions {
+  /** The clock port the marker's stamp is read from. */
+  readonly wall: WallClock;
+  /** One line for the application log, at warning: a compaction that failed. */
+  readonly warn: (message: string) => void;
+  readonly maxBytes?: number;
+  readonly retainedBytes?: number;
+  readonly files?: SessionLogFiles;
+}
+
+/**
+ * PD-SESSION-004's compaction of the log's text: the most recent `retainedBytes`, from the first line boundary within them,
+ * behind one marker carrying the cumulative bytes dropped — the earlier marker's total, read back and replaced, plus what this
+ * one drops. Never cuts a line: the kept text starts at a line's start.
+ */
+export function compactSessionLog(content: Buffer, opts: { readonly at: string; readonly maxBytes: number; readonly retainedBytes: number; readonly alsoDropped?: number }): Buffer {
+  let body = content;
+  let dropped = opts.alsoDropped ?? 0;
+  const firstBreak = content.indexOf(0x0a);
+  if (firstBreak >= 0) {
+    const earlier = MARKER_TEXT.exec(content.subarray(0, firstBreak + 1).toString('utf8'));
+    if (earlier) { dropped += Number(earlier[1]); body = content.subarray(firstBreak + 1); }
+  }
+  let start = Math.max(0, body.length - opts.retainedBytes);
+  if (start > 0 && body[start - 1] !== 0x0a) {
+    const next = body.indexOf(0x0a, start);
+    start = next === -1 ? body.length : next + 1;
+  }
+  dropped += start;
+  return Buffer.concat([Buffer.from(sessionLogMarker(opts.at, opts.maxBytes, dropped), 'utf8'), body.subarray(start)]);
+}
+
+/**
+ * REQ-SESSION-142 under PD-SESSION-004: the session's log file, appended line by line, synchronously as before; the directory
+ * is made on first write. It holds at most `maxBytes`: the appender takes the file's size from disk when it is opened (a
+ * session's later runs append to the same file) and counts in memory after that, and an append that would pass the bound
+ * first compacts the file in place (`compactSessionLog`). A line that still would not fit after a compaction — one longer
+ * than the room the kept text leaves — is not written, and its bytes join the next marker's total, so no line is cut and the
+ * bound holds. A compaction that fails never fails the run and raises no notice: one warning goes to the application log, and
+ * nothing more is appended for this run, so the file never grows past the bound.
+ */
+export function fileAppender(file: string, opts: FileAppenderOptions): (line: string) => void {
+  const maxBytes = opts.maxBytes ?? SESSION_LOG_MAX_BYTES;
+  const retainedBytes = opts.retainedBytes ?? SESSION_LOG_RETAINED_BYTES;
+  const files = opts.files ?? NODE_FILES;
+  let size = files.size(file);
   let made = false;
+  let stopped = false;
+  let unwritten = 0;
   return (line) => {
+    if (stopped) return;
     if (!made) { mkdirSync(dirname(file), { recursive: true }); made = true; }
-    appendFileSync(file, line, 'utf8');
+    const bytes = Buffer.byteLength(line, 'utf8');
+    if (size + bytes > maxBytes) {
+      try {
+        const compacted = compactSessionLog(files.read(file), { at: toIsoUtc(opts.wall.instant()), maxBytes, retainedBytes, alsoDropped: unwritten });
+        files.rewrite(file, compacted);
+        size = compacted.length;
+        unwritten = 0;
+      } catch (cause) {
+        stopped = true;
+        opts.warn(`session log ${file}: compacting it at its ${boundWords(maxBytes)} bound failed (${cause instanceof Error ? cause.message : String(cause)}); nothing more is written to it in this run (PD-SESSION-004)`);
+        return;
+      }
+      if (size + bytes > maxBytes) { unwritten += bytes; return; }
+    }
+    files.append(file, line);
+    size += bytes;
   };
 }
 

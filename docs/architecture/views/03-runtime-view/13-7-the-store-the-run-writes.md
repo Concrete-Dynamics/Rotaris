@@ -38,6 +38,15 @@ both before any of this and held the same way. In a window holding such a refusa
 `workspace.none` answer (and the checkpoints' `checkpoint.no-workspace`) leaves `runCommand` as the held refusal (`answerUnderHeldRefusal`), and `session.start` says nothing was
 started because the store could not be opened (REQ-SESSION-089).
 
+**The session log beside the store (REQ-SESSION-142 as `PD-SESSION-004` narrows it; 2026-11-03, hardening D2).** Each run of a
+session opens the run host's `fileAppender` on `sessions/<sid>/session.log` (`run-host/tools.ts`, handed to `Sessions` as
+`sessionLogAppender`), which writes synchronously as before and takes the file's size from disk when it is opened, since a
+session's later runs append to the same file. The file holds at most `SESSION_LOG_MAX_BYTES` (32 MiB): an append that would pass
+it first rewrites the file in place with its most recent `SESSION_LOG_RETAINED_BYTES` (16 MiB) from a line boundary, behind one
+`WARNING` line in the log's own format naming the bound and the bytes dropped since the file was created (`compactSessionLog`;
+the stamp from the wall-clock port). No sibling or temporary file is written in the session's place. A compaction that fails
+writes one warning to the application log and ends that run's writing to the file; the run goes on.
+
 **Resolving a place that holds no store (OQ-281, ruled 2026-10-14 under R-072).** Main holds the refusal per canonical root
 (`storeRefusals`, with the id of the error notice it raised, whose action opens Settings at Project). Settings › Project ›
 Session store resolves it in one of two deliberate ways, both conducted by `main/store-resolution.ts`: the **restore**, admitted

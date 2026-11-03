@@ -14,6 +14,9 @@ collected by `vitest.config.ts` — `*.test.ts` only, so a `.tsx` suffix collect
 `scripts/`, where the name ends `.test-support.mjs` or `.cjs` for a script). Nothing one test stubs reaches the next:
 `vitest.config.ts` restores spies, clears calls and undoes `vi.stubEnv` and `vi.stubGlobal` before each test.
 
+- **A property test is seeded and sits beside its unit** (`<unit>.property.test.ts`, `fast-check`, pinned): a fixed
+  `seed` and `numRuns` written in the file, so every run meets the same cases and a printed counterexample replays from
+  its `seed` and `path`; a shape a property holds out is named by a predicate citing the note that records it.
 - **A few suites go red only under full-suite parallelism** — those driving a real PTY or child process. Re-run the file
   alone before believing a red from `pnpm test`.
 - **Coverage is measured outside the gate, by CI's gate job after `pnpm check` (since 2026-11-03, hardening G2), and

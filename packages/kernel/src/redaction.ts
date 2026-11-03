@@ -22,8 +22,8 @@ import { textOf } from './text-of.js';
  */
 export const REDACTION_MARK = '***';
 
-/** REQ-TOOLS-172: the closed segment list. */
-const SECRET_SEGMENTS: ReadonlySet<string> = new Set([
+/** REQ-TOOLS-172: the closed segment list. Exported so a test builds its names from the list, not a copy of it. */
+export const SECRET_SEGMENTS: ReadonlySet<string> = new Set([
   'key', 'keys', 'apikey', 'apikeys', 'token', 'tokens', 'secret', 'secrets', 'password', 'passwords', 'passwd',
   'credential', 'credentials', 'auth', 'authorization', 'bearer',
 ]);
@@ -53,7 +53,10 @@ export function namesCredential(key: string): boolean {
   return CREDENTIAL_FRAGMENTS.some((f) => n.includes(f));
 }
 
-const SCHEME_WORDS = /^(bearer|basic|token)$/i;
+/** REQ-TOOLS-171 layer 3: the words whose next value token is masked, compared without regard to case. */
+export const SCHEME_KEYWORDS = ['bearer', 'basic', 'token'] as const;
+const SCHEME_ALTERNATION = SCHEME_KEYWORDS.join('|');
+const SCHEME_WORDS = new RegExp(`^(${SCHEME_ALTERNATION})$`, 'i');
 const VALUE = String.raw`("[^"]*"|'[^']*'|[^\s"']+)`;
 /**
  * Bounded at 128 characters (first execution under REQ-HOOKS-139's 100 KB payload bound, 2026-09-03): an
@@ -144,7 +147,7 @@ function layerFlags(text: string): string {
 
 function layerSchemes(text: string): string {
   // (3) the value after Bearer / Basic / token, keywords compared without regard to case.
-  const re = new RegExp(String.raw`(^|[^A-Za-z0-9_])(bearer|basic|token)(\s+)${VALUE}`, 'gi');
+  const re = new RegExp(String.raw`(^|[^A-Za-z0-9_])(${SCHEME_ALTERNATION})(\s+)${VALUE}`, 'gi');
   return text.replace(re, (_m, pre: string, word: string, ws: string, value: string) => `${pre}${word}${ws}${maskToken(value)}`);
 }
 

@@ -104,6 +104,15 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   (`hooks/runner.ts` calls `kill()` on the one process, `terminal/foreground.ts` runs `taskkill /T`).
 - **The redaction pass is bounded, not merely correct** — every pattern that scans an unbounded alphanumeric run
   is capped or anchored (ADR-0007 first-execution note); `redaction.test.ts` pins 100 KB under 50 ms.
+- **What must hold for every input is a property, not only an example** — `fast-check` (4.10.2, pinned) beside the unit,
+  each property 500 runs from seed `20261103`. `kernel/src/redaction.property.test.ts` plants a secret of every shape the
+  pass knows, built from its own lists (`SECRET_SEGMENTS`, `SCHEME_KEYWORDS`, `CREDENTIAL_VALUE_PREFIXES`), in arbitrary
+  text: it never comes through, a second pass changes nothing, and text with no secret is unchanged. The shapes the pass
+  leaks today are held out by named predicates and pinned as leaking, each with its note.
+  `agent-tools/src/tools/fence.property.test.ts` holds `isInside` and `checkFence` (a real root, a write) to a lexical
+  oracle under the platform's case rule over relative paths of `..`, `.`, Unicode, case variants, sibling prefixes, long
+  names and mixed separators, and a path that climbs out through `..` and stays out is never inside (since 2026-11-03,
+  R-091, `hardening.md` §3.5 row 7, F2).
 - **A PTY repeats the marker back before honouring it** — the terminal's end-marker detection matches the marker
   FOLLOWED BY DIGITS on the VT-stripped stream, never the first occurrence of the marker text, because the
   echoed wrapper carries that text (ADR-0020 first-execution note). `node-pty` loads from its prebuilds under

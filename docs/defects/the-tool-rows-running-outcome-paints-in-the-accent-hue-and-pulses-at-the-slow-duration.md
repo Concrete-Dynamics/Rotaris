@@ -28,5 +28,5 @@ item 7, "One C6 question") first read it from the source.
 - `packages/contracts/src/theme/themes.ts` — `--rt-accent-300`, `--rt-run`, `--rt-duration-slow` (240 ms).
 - `docs/design/README/01-1-the-design-language.md` — §1.3, §1.8; `docs/design/README/07-7-fidelity-consult-before-maintain-after.md` — §7.2 item 5.
 - `docs/research/design/07-visual-composition-beyond-tokens.md` — section 5, item 7.
-- `docs/defects/the-agent-rows-hand-drawn-status-dot-paints-done-in-the-running-hue.md` — the neighbouring note: the same
+- `docs/archive/defects/the-agent-rows-hand-drawn-status-dot-paints-done-in-the-running-hue.md` — the neighbouring note: the same
   `--rt-duration-slow` pulse on the agent row's hand-drawn dot.

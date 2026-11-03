@@ -1,9 +1,9 @@
 import { memo } from 'react';
 import { contextPercent, type AgentRecord } from '@rotaris/contracts';
 import { clockAdvances, elapsedLabel, elapsedShown } from './AgentTree.js';
-import { countNoun, stalledText, tableOrder, TIMED_OUT_TAG, timeoutLine } from './agents.js';
+import { agentDotState, countNoun, stalledText, tableOrder, TIMED_OUT_TAG, timeoutLine } from './agents.js';
 import { markMotionStart } from './motion.js';
-import { Button as DesignButton, EmptyState as DesignEmptyState, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState, StatusDot as DesignStatusDot, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
 
 /**
  * REQ-MONITOR-274/275/116/281 (Part R): the Mission view's agent activity table — one row per agent in the tree's
@@ -30,7 +30,7 @@ const Row = memo(function Row({ a, selected, elapsed, onSelect, onOpen, onPopOut
   const percent = contextPercent(a.contextUsed, a.contextLimit);
   return (
     <tr className={`agent-table__row${selected ? ' is-selected' : ''}`} data-agent-id={a.id} data-state={a.presentationState} aria-selected={selected} onClick={() => onSelect(a.id)}>
-      <td className="agent-table__state"><span ref={(element) => { if (element && a.live) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${a.presentationState}`} aria-hidden="true" /><span className="agent-table__state-text">{a.presentationState}</span>{a.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}{a.timedOut !== null && <>{' '}<DesignTag kind="fail" className="agent-row__timed-out" data-testid="agent-timed-out" title={timeoutLine(a.timedOut)} aria-description={timeoutLine(a.timedOut)}>{TIMED_OUT_TAG}</DesignTag></>}</td>
+      <td className="agent-table__state"><DesignStatusDot ref={(element) => { if (element && a.live) markMotionStart(element); }} state={agentDotState(a.presentationState)} pulse={a.presentationState === 'running'} /><span className="agent-table__state-text">{a.presentationState}</span>{a.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}{a.timedOut !== null && <>{' '}<DesignTag kind="fail" className="agent-row__timed-out" data-testid="agent-timed-out" title={timeoutLine(a.timedOut)} aria-description={timeoutLine(a.timedOut)}>{TIMED_OUT_TAG}</DesignTag></>}</td>
       <td className="agent-table__name"><span className="agent-table__given">{a.givenName}</span><span className="agent-table__canonical mono text-secondary">{a.name}</span></td>
       <td className="agent-table__persona" title={a.persona}>{a.persona}</td>
       <td className="agent-table__activity" title={a.delegationTask || a.activity}>{a.activity || '—'}</td>

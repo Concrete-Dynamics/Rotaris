@@ -31,3 +31,8 @@ failing run did not record whether the `node` child was still alive at the renam
 
 - `packages/mcp/src/mcp.test.ts` — the case, `renameSync(workspace, moved)` straight after `t.close()`.
 - `packages/mcp/src/` — `OwnedStdioTransport`'s close and its Windows tree termination (ADR-0033, ADR-0007).
+
+**Observed again, 2026-11-03 (the Overview audit's execution branch over `83910dc8`, Windows 11 ARM64, Node 26.13.0, the
+host at 100 % CPU).** In a 22 m 31 s `pnpm check` the case ended on `EBUSY: resource busy or locked, rename
+'…\rotaris-mcp-oJ9fri\stubborn-workspace' -> '…\stubborn-workspace-closed'`, the shape this note records; the file alone,
+the host still at 100 %: 22 of 22 in 13 s. Recorded, not investigated.

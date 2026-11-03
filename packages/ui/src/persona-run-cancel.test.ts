@@ -40,8 +40,8 @@ describe('REQ-MONITOR-127 / REQ-MONITOR-130: a persona window shows a confirmed 
     const html = render(shownSession(record, store.getState())!);
     expect(stateLabel(html)).toBe('cancelling');
     expect(tabTitle(html).startsWith('cancelling · ')).toBe(true);
-    // The instance is still live while the run winds down: the dot keeps pulsing (REQ-SHELL-075 (a)).
-    expect(html).toContain('agent-row__dot agent-row__dot--running');
+    // The instance is still live while the run winds down: the design StatusDot keeps pulsing in the run state (REQ-SHELL-075 (a)).
+    expect(html).toContain('class="status-dot is-pulsing" data-state="run"');
   });
 
   it('reads `cancelling` when the engine\'s own record reads it (the stop writes it)', () => {
@@ -95,7 +95,7 @@ describe('REQ-MONITOR-127 / REQ-MONITOR-130: the inspector\'s meta line shows a 
     const shown = shownSession(record, store.getState())!;
     const html = inspector(shown, RUN_AGENT_ID);
     expect(meta(html)).toBe('cancelling · 1m 4s · 3 tool calls');
-    expect(html).toContain('agent-row__dot agent-row__dot--running');
+    expect(html).toContain('class="status-dot is-pulsing" data-state="run"');
     expect(meta(inspector(shown, child.id))).toBe('running · 59s · 1 tool call');
     // The engine's own `cancelling` (the stop's) reads the same.
     expect(meta(inspector(session({ executionStatus: 'cancelling', entryToolCalls: 3 }), RUN_AGENT_ID))).toBe('cancelling · 1m 4s · 3 tool calls');

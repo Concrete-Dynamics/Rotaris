@@ -209,3 +209,19 @@ reading, those requirements are where it would land.
   `docs/defects/the-pty-process-death-assertions-flake-on-a-loaded-host.md`,
   `docs/defects/the-powershell-shell-exit-case-exceeds-its-bound-under-full-gate-load.md` — the three notes this one
   points at, and the neighbourhoods it leaves to them.
+
+**Observed again, 2026-11-03, on a local tree under full host load (the Overview audit's execution branch over `83910dc8`,
+Windows 11 ARM64, Node 26.13.0).** `pnpm check` ran 22 m 31 s (the tests' own clock 3,229 s) from 20:52 local with the host at
+100 % CPU — six Electron and twenty-one Node processes of two sibling sessions' gates and proof reruns beside it — and went
+red on 7 files, 17 cases, every one process-bound and most at a 30 s bound: `tools/worktree/land.test.ts` (5, each a real
+rebase and landing, timed out), `packages/agent-tools/src/terminal/terminal.test.ts` (6: the shell-exit case at 5,671.5 ms
+against its 5 s bound, a 19,961 ms read against 10 s, four timeouts), `packages/mcp/src/mcp.test.ts` (1, the stubborn
+runner's `EBUSY` on the rename of its closed workspace), `apps/desktop/src/main/terminal-display.test.ts` (1),
+`packages/workspace/src/git/checkpoints.test.ts` (2), `packages/workspace/src/git/worktrees.test.ts` (1: the attach check
+read `baseBranch` as `HEAD`, the fallback `checkAttach` takes when its bounded `rev-parse --abbrev-ref HEAD` answers
+nothing in time) and `packages/workspace/src/improvements/executor.test.ts` (1). The same seven files run alone, one after
+another, 23:08 to 23:19 with the host still at 100 %: all green — the landing 21 of 21 in 112 s, the terminal 93 passed and
+42 skipped in 427 s, the MCP 22, the display 1, the checkpoints 14, the worktrees 36, the executor 3. The shape this note
+records, on a developer's tree rather than the hosted runner: a red that names no defect of the code, only the bound a
+case gives a child process under load. Recorded, not investigated; the commit went on the green reruns, as the rule in
+`.claude/rules/tests-and-proofs.md` says.

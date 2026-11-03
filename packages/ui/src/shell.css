@@ -564,8 +564,10 @@
      .row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse …; }
      @media (prefers-reduced-motion: reduce) { .row__streaming { animation: none; } }
    `rt-pulse` itself stays: REQ-CHAT-060's `◉ running…`, REQ-CHAT-062's `◉ reasoning…` and PD-CHAT-004's in-flight
-   word keep their animation, and the directive records that each was considered and left. */
-@keyframes rt-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+   word keep their animation, and the directive records that each was considered and left. Its one definition is the adopted
+   `docs/design/system/components.css` (1 → 0.35 → 1, loaded before this sheet by `design.css`): a second copy stood here until
+   2026-11-03, `0%, 100% { opacity: 0.35; } 50% { opacity: 1; }`, and being the later one it won over the adopted keyframes for
+   every pulse in the product (the note archived with the agent row's dot, item 4 of the Overview audit of 2026-11-02). */
 .composer__hint { align-self: center; margin-right: auto; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); }
 .composer__actions { gap: var(--rt-space-2, 8px); }
 /* The chips' `flex: 1 1 100%` (UIR-009's forced first band) is gone: the rules at line ~307 and the media query
@@ -839,19 +841,18 @@
 .btn-secondary, .input, .select, .seg { border-color: var(--rt-boundary-strong); }
 .input:hover { border-color: var(--rt-boundary-strong); }
 .agent-tree--empty { font-size: var(--rt-text-xs, 12px); }
-.agent-row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 6px; padding: 4px 6px; border-left: 3px solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
+/* The row's rule and its inset are named once, so the Overview's tree card can pull them out (`.ov-card--tree .agent-row`, below). */
+.agent-row { --agent-row-rule: 3px; --agent-row-pad: 6px; display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: var(--agent-row-pad); padding: 4px var(--agent-row-pad); border-left: var(--agent-row-rule) solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .agent-row:hover { background: var(--rt-hover); }
 .agent-row.is-selected { border-left-color: var(--rt-accent-300); background: var(--rt-accent-tint-10); }
 .agent-row.is-live .agent-row__persona { color: var(--rt-text); }
 .agent-row__prefix { white-space: pre; color: var(--rt-text-tertiary); font-size: var(--rt-text-2xs, 10px); }
-.agent-row__dot { width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: 50%; background: var(--rt-text-tertiary); }
-.agent-row__dot--running { background: var(--rt-run); animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
-.agent-row__dot--waiting, .agent-row__dot--queued { background: var(--rt-wait); }
-.agent-row__dot--done { background: var(--rt-ok); }
-.agent-row__dot--failed { background: var(--rt-danger-300); }
-.agent-row__dot--cancelled { background: var(--rt-warn); }
-/* PD-ORCH-005 clause 13: a paused agent's dot is REQ-SHELL-036's waiting family, never pulsing; its state text says `paused` (no design). */
-.agent-row__dot--paused { background: var(--rt-wait); }
+/* The agent row's dot is the design `StatusDot` since 2026-11-03 (`agentDotState` in `agents.ts`; the Overview audit of 2026-11-02,
+   item 4 and P2). The hand-drawn `.agent-row__dot` and its six state modifiers stood here, falsified and kept named: done on
+   `--rt-ok`, which resolves with `--rt-run` in every theme, so a done agent and a running one differed only by the pulse; failed on
+   `--rt-danger-300` (not `--rt-fail`); cancelled on `--rt-warn`, the waiting hue; the base and idle on `--rt-text-tertiary`, plain
+   text colour; and running pulsing on `--rt-duration-slow` (240 ms) where §1.8 gives `.status-dot.is-pulsing` 1.6 s. PD-ORCH-005
+   clause 13 holds in the mapping: a paused agent's dot is the waiting family, never pulsing. */
 .agent-row__main { display: flex; flex-direction: column; min-width: 0; }
 .agent-row__persona { font-weight: var(--rt-weight-medium, 500); }
 .agent-row__task { color: var(--rt-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -873,7 +874,6 @@
    112 to 41 px (two lines, row 61 px) and widened the Mission table's state cell so the card scrolled 32 px sideways, measured
    in the built app at 1440 × 900 with a child stalled past a 3 s threshold (`pnpm mission-proof` item 1f). */
 .agent-table__state .agent-row__timed-out, .agent-table__state .agent-row__stalled { display: flex; width: fit-content; margin-top: var(--rt-space-1); }
-@media (prefers-reduced-motion: reduce) { .agent-row__dot--running { animation: none; } }
 
 /* Part AD — REQ-CHAT-085..091: the editable task-plan strip in the workspace sidebar. */
 .todo-pane { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding-top: var(--rt-space-3, 12px); border-top: 1px solid var(--rt-divider); }
@@ -1293,21 +1293,37 @@
    wherever a view had not overridden it: Library and Settings drew at 32 px while Overview and Git
    overrode to 18, Mission to 20 and Requirements to 14. Ctrl+1..7 changed the window's typographic
    register, not just its contents. The class is declared here, in the language's own tokens, and the
-   five per-view overrides that stood in for it are gone. */
-.display { margin: 0; font-family: var(--rt-font-display); font-weight: var(--rt-weight-display); font-size: var(--rt-text-lg); }
+   five per-view overrides that stood in for it are gone.
+   Its size is `--rt-h4`, the adopted PageHeader's `h4` with the display face's tight tracking and leading (§1.4): until 2026-11-03
+   it asked for `--rt-text-lg`, a name `themes.ts` never declared, so every view's title silently inherited the header's 14 px — the
+   size of an empty state's title, outranked by a card's numerals (the Overview audit of 2026-11-02, item 8). No fallback literal:
+   a token the theme does not declare must fail visibly, not quietly. 20 px at 1.12 leading stays inside the 32 px header band. */
+.display { margin: 0; font-family: var(--rt-font-display); font-weight: var(--rt-weight-display); font-size: var(--rt-h4); letter-spacing: var(--rt-tracking-tight); line-height: var(--rt-leading-tight); }
 .overview__session { color: var(--rt-text-secondary); }
+/* Audit item 14: the title and the session label share one baseline (the adopted PageHeader aligns on it; the product's row centres
+   its items for the controls), at the header's own gap. */
+.overview__heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--rt-space-3); min-width: 0; }
 .overview__spacer { flex: 1; }
 .overview__error { margin: 0; color: var(--rt-danger-300); font-size: var(--rt-text-xs, 12px); }
 /* UIR-007: sized to its message. `flex: 1` made the panel take the view's whole remaining height —
    634.75 px of dashed frame and dot grid around three lines of copy. */
 .overview__empty { flex: 0 0 auto; margin-block: auto; }
-.overview__body { display: grid; grid-template-columns: minmax(320px, 1fr) 8px 340px; gap: 0; align-items: start; min-height: 0; }
+/* The adopted EmptyState's `action` slot stands `--rt-space-2` above its control (`EmptyState.jsx`'s `marginTop: 8`), so the control
+   sits further from the hint than the hint from the title (audit item 12). Product-wide: every EmptyState with an `action`. */
+.empty-state-action { margin-top: var(--rt-space-2); }
+/* Audit P3: the body's stand-in while the first read is pending — one named Spinner, centred where the empty state would be. */
+.overview__loading { flex: 0 0 auto; margin-block: auto; display: flex; justify-content: center; }
+/* Audit item 9: the divider track is `--rt-space-4`, the left column's between-group gap, so the seam between the columns reads
+   wider than the 12 px between two metric cards; the component's `OVERVIEW_DIVIDER_WIDTH` is the same value, for the clamp. */
+.overview__body { display: grid; grid-template-columns: minmax(320px, 1fr) var(--rt-space-4) 340px; gap: 0; align-items: start; min-height: 0; }
 .overview__left { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); min-width: 320px; }
 .overview__metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--rt-space-3, 12px); }
 @media (max-width: 1079px) { .overview__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.overview__divider { width: 8px; align-self: stretch; cursor: col-resize; border-radius: var(--rt-radius-md); }
+.overview__divider { width: var(--rt-space-4); align-self: stretch; cursor: col-resize; border-radius: var(--rt-radius-md); }
 .overview__divider:hover, .overview__divider:focus-visible { background: var(--rt-hover); }
-.overview__right { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); min-width: 260px; max-width: 560px; }
+/* Audit item 16: card above card takes one gap in both columns, `--rt-space-4` (published as a `spacing-token` relation on each
+   column); the smaller `--rt-space-3` stays the gap inside the metric group. */
+.overview__right { display: flex; flex-direction: column; gap: var(--rt-space-4); min-width: 260px; max-width: 560px; }
 .ov-card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-width: 0; }
 /* UIR-010: the kicker holds one line and the caption takes the remainder, so a card head has one
    baseline instead of two that wrap independently of each other. */
@@ -1316,6 +1332,12 @@
 .ov-card__head > .card-meta { min-width: 0; text-align: end; }
 .ov-card__title { margin: 0; }
 .ov-kpi { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
+/* Audit item 6: REQ-MONITOR-168's directional markers, Phosphor regular at the rail's size in the passive-metadata ink (§1.9). A
+   marker sits flush to its numeral (the glyph's own side bearings space it, as the typed glyph's did) and the word follows at the
+   figure gap; the three are one unit, so a count wraps whole in the narrow four-column card. */
+.ov-kpi__count { display: inline-flex; align-items: baseline; }
+.ov-kpi__count > .kpi-unit { margin-inline-start: var(--rt-space-2); }
+.ov-kpi__marker { font-size: var(--rt-icon-size); color: var(--rt-text-tertiary); align-self: center; }
 .ov-spark { color: var(--rt-accent-300); max-width: 100%; }
 .ov-chips { display: flex; flex-wrap: wrap; gap: var(--rt-space-1, 4px); }
 .ov-sessions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -1329,6 +1351,18 @@
 .ov-dot--fail { background: var(--rt-danger-300); }
 .ov-dot--idle { background: var(--rt-text-tertiary); }
 .ov-card--tree .agent-tree--empty { color: var(--rt-text-tertiary); font-size: var(--rt-text-xs, 12px); }
+/* Audit item 13: inside the tree card the row's rule and padding are pulled out past the card's content edge, and the gap after a
+   depth-0 row's empty prefix track is dropped, so the first dot shares the kicker's x (`align-x`, `overview-agents-first-dot` on
+   `overview-agents-kicker`); the selection tint keeps its room in the card's padding. The tree in Workspace and Mission is unchanged. */
+.ov-card--tree .agent-row { margin-inline-start: calc(-1 * (var(--agent-row-rule) + var(--agent-row-pad))); column-gap: 0; }
+.ov-card--tree .agent-row > * + * { margin-inline-start: var(--agent-row-pad); }
+.ov-card--tree .agent-row__prefix:empty + .status-dot { margin-inline-start: 0; }
+/* Audit item 10: a card's own empty case — the title in the empty-state tier over the hint as card body, within the prose measure. */
+.ov-card__empty { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.ov-card__empty-hint { max-width: var(--rt-prose-measure); }
+/* Audit P1: the sessions card's refused read — the sentence, the refusal as selectable detail, the one control. */
+.ov-card__failed { display: flex; flex-direction: column; align-items: flex-start; gap: var(--rt-space-2); }
+.ov-card__failed-detail { margin: 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
 
 /* ── Git view (REQ-GIT-075..090, 115..117; language: Card, Table/TableCard, EmptyState, Tag, the G8 divider) ── */
 .git { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); height: 100%; min-height: 0; padding: var(--rt-space-4, 16px) var(--rt-space-5, 20px); overflow: auto; position: relative; }
@@ -1677,7 +1711,6 @@
 .ctx-ring--fail .ctx-ring__fill { stroke: var(--rt-danger-300); }
 .ctx-ring__tick { stroke: var(--rt-text-secondary); stroke-width: 2; }
 .ctx-ring__value { position: relative; font-size: var(--rt-text-2xs, 10px); color: var(--rt-text); }
-.agent-row__dot--idle { background: var(--rt-text-tertiary); }
 .workspace--narrow { grid-template-columns: 1fr; grid-template-areas: 'bar' 'runhead' 'reauth' 'plangate' 'transcript' 'queue' 'divider' 'composer'; grid-template-rows: auto auto minmax(0, auto) auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); position: relative; }
 .workspace--narrow > .workspace__drawer-bar { grid-area: bar; display: flex; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); border-bottom: 1px solid var(--rt-border); background: var(--rt-chrome); }
 .workspace--narrow > .transcript { grid-area: transcript; }
@@ -1720,7 +1753,7 @@
 .agent-table__row:hover { background: var(--rt-hover); }
 .agent-table__row.is-selected { background: var(--rt-accent-tint-10); box-shadow: inset 3px 0 0 var(--rt-accent-300); }
 .agent-table__state { white-space: nowrap; }
-.agent-table__state .agent-row__dot { display: inline-block; margin-right: 6px; vertical-align: middle; }
+.agent-table__state .status-dot { margin-right: 6px; vertical-align: middle; }
 .agent-table__name { display: flex; flex-direction: column; gap: 1px; }
 .agent-table__canonical { font-size: var(--rt-text-2xs, 10px); }
 /* A persona is one identifier: the table's automatic layout broke "coding-agent" at its hyphen (fin36). */

@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { DELEGATION_STRATEGY_NAMES, isBusy, presentationStatus, RUN_AGENT_ID, STATUS_LABELS, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { AgentTable } from './AgentTable.js';
 import { AgentTree } from './AgentTree.js';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cancelUnavailableReason, cascadeKind, cascadeNote, PAUSED_CANCEL_ALONE, pauseAvailability, pausedCancelWith } from './agents.js';
+import { agentDotState, CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cancelUnavailableReason, cascadeKind, cascadeNote, PAUSED_CANCEL_ALONE, pauseAvailability, pausedCancelWith } from './agents.js';
 import { pausePendingAfter, RUN_STATE_LABELS, type PauseScope } from './composer.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { markMotionStart } from './motion.js';
-import { Button as DesignButton, PageHeader as DesignPageHeader, Select as DesignSelect } from './design-system/index.js';
+import { Button as DesignButton, PageHeader as DesignPageHeader, Select as DesignSelect, StatusDot as DesignStatusDot } from './design-system/index.js';
 
 /**
  * REQ-SHELL-023's third view, Mission (Part R; REQ-MONITOR-274..276, 038, 042, 043, 107, 116, 213, 273, 281,
@@ -132,7 +132,7 @@ export function MissionView(props: MissionViewProps) {
           <div className={`mission__run-row${selectedAgentId === RUN_AGENT_ID ? ' is-selected' : ''}`} role="button" tabIndex={0} aria-pressed={selectedAgentId === RUN_AGENT_ID} data-testid="mission-run-row"
             title={runLevel ? `The run: ${runLevel.persona} at depth 0. Select it to pause or cancel the whole run.` : 'No run has started.'}
             onClick={() => onSelect(RUN_AGENT_ID, 'click')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(RUN_AGENT_ID, 'key'); } }}>
-            <span ref={(element) => { if (element && runActive) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${runLevel?.presentationState ?? 'idle'}`} aria-hidden="true" />
+            <DesignStatusDot ref={(element) => { if (element && runActive) markMotionStart(element); }} state={agentDotState(runLevel?.presentationState)} pulse={runLevel?.presentationState === 'running'} />
             <span className="mission__run-label">Run{runLevel ? ` · ${runLevel.persona}` : ''}</span>
             <span className="mission__run-state mono text-secondary">{statusLabel ?? 'no session'}</span>
           </div>

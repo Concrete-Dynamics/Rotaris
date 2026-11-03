@@ -139,7 +139,8 @@ if (samples.length < 2) throw new Error(`fewer than two token samples were persi
 const view2 = first(run.probes, '.app-shell')?.data?.['data-view'];
 if (view2 !== 'overview') throw new Error(`the capture was not on the Overview (view ${view2 ?? 'none'})`);
 const header = text(run.probes, '[data-testid="overview-session"]')[0] ?? '';
-if (!/^session .* · Completed · \d+:\d{2}/.test(header)) throw new Error(`the header did not name the session, its status and its runtime: "${header}"`);
+// REQ-MONITOR-164's `{status}` is the lower-case REQ-NOTIFY-048 member (the Overview audit of 2026-11-02, item 15; "Completed" until 2026-11-03).
+if (!/^session .* · completed · \d+:\d{2}/.test(header)) throw new Error(`the header did not name the session, its status and its runtime: "${header}"`);
 const tokensShown = (text(run.probes, '[data-testid="overview-tokens"]')[0] ?? '').replace(/,/g, '');
 const totalStored = session.tokens_input + session.tokens_output;
 if (Number(tokensShown) !== totalStored) throw new Error(`the tokens card shows ${tokensShown}; the store holds ${totalStored}`);

@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { agentArtifacts, cancelCascade, cancelOffered, cancelUnavailableReason, cascadeNote, chipStates, compressionLine, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
+import { agentArtifacts, agentDotState, cancelCascade, cancelOffered, cancelUnavailableReason, cascadeNote, chipStates, compressionLine, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
 import { TimeoutLine } from './TimeoutLine.js';
 import { elapsedLabel, elapsedShown } from './AgentTree.js';
 import { AgentArtifactLinks } from './ArtifactLinks.js';
 import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
-import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect } from './design-system/index.js';
+import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, StatusDot as DesignStatusDot } from './design-system/index.js';
 import { PopoverMenu } from './design-system/overlays.js';
 import { annotatedModelOptions } from './model-options.js';
 
@@ -134,7 +134,7 @@ export function Inspector(props: InspectorProps) {
       {shown ? (
         <div className="inspector__body">
           <div className="inspector__title">
-            <span ref={(element) => { if (element && shown.live) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${shown.presentationState}`} aria-hidden="true" />
+            <DesignStatusDot ref={(element) => { if (element && shown.live) markMotionStart(element); }} state={agentDotState(shown.presentationState)} pulse={shown.presentationState === 'running'} />
             <span className="inspector__name" data-testid="inspector-name">{shown.name}</span>
           </div>
           <div className="inspector__meta mono" data-testid="inspector-meta">{metaLine(shown, session, elapsed)}</div>
@@ -196,7 +196,7 @@ export function Inspector(props: InspectorProps) {
         </div>
       ) : (
         <div className="inspector__body inspector__body--empty" data-testid="inspector-empty">
-          <div className="inspector__title"><span className="agent-row__dot agent-row__dot--idle" aria-hidden="true" /><span className="inspector__name">—</span></div>
+          <div className="inspector__title"><DesignStatusDot state="idle" /><span className="inspector__name">—</span></div>
           <div className="text-secondary">No agent is selected, and no transcript row names one.</div>
           <div className="inspector__ring"><ContextRing used={0} limit={1} thresholdPercent={compressionThresholdPercent} label="No agent's context window" /></div>
           <div className="inspector__actions">

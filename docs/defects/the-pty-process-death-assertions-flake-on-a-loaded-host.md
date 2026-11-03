@@ -106,3 +106,11 @@ alone where the Linux reading of 2026-10-29 did not. Recorded, not investigated.
 (`code-intel-proof`) still ran beside it for part of the gate — a different case from the 2026-11-01 reading, the same
 shape. `pnpm vitest run packages/agent-tools/src/terminal/terminal.test.ts` alone, ten minutes later on the same tree
 (CPU at 74 % before it): 93 passed, 42 skipped, 281.6 s. Recorded, not investigated.
+
+**Observed again, 2026-11-03, later the same day (the Overview audit's execution branch over `83910dc8`, Windows 11 ARM64,
+Node 26.13.0, the host at 100 % CPU from two sibling sessions' gates and proof reruns).** Six cases of
+`packages/agent-tools/src/terminal/terminal.test.ts` went red in a 22 m 31 s `pnpm check`: the shell-exit case at 5,671.5 ms
+against 5 s, one read at 19,961 ms against 10 s, and four at their 30 s and 60 s bounds (the hard-timeout restart, the
+soft-paused command's own exit status, the PowerShell typeahead case, the kill-and-restore case). The file alone, with the
+host still at 100 %: 93 passed, 42 skipped, 427 s. Recorded, not investigated; the umbrella note
+`the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md` holds the whole gate's reading.

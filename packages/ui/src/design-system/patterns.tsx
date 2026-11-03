@@ -29,8 +29,14 @@ export interface EmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, 't
   readonly icon?: string;
   readonly action?: ReactNode;
 }
+/**
+ * The adopted EmptyState (`docs/design/system/components/patterns/EmptyState.jsx`) wraps its `action` in a box standing
+ * `--rt-space-2` above it (`marginTop: 8`), so the control sits further from the hint than the hint from the title; until
+ * 2026-11-03 the product's copy dropped that wrapper and the control followed the hint by the list's own 6 px gap (the Overview
+ * audit of 2026-11-02, item 12). `.empty-state-action` in `shell.css` carries the margin by its token.
+ */
 export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(function EmptyState({ title, hint, icon, action, children, className, ...rest }, ref) {
-  return <div ref={ref} className={classes('empty-state', 'rt-dot-grid-bg', className)} data-ui-component="EmptyState" {...rest}>{icon === undefined ? null : <i className={classes('ph', icon)} aria-hidden="true" />}{title === undefined ? children : <><div className="empty-state-title">{title}</div>{hint === undefined ? null : <div className="empty-state-hint">{hint}</div>}{action}</>}</div>;
+  return <div ref={ref} className={classes('empty-state', 'rt-dot-grid-bg', className)} data-ui-component="EmptyState" {...rest}>{icon === undefined ? null : <i className={classes('ph', icon)} aria-hidden="true" />}{title === undefined ? children : <><div className="empty-state-title">{title}</div>{hint === undefined ? null : <div className="empty-state-hint">{hint}</div>}{action === undefined ? null : <div className="empty-state-action">{action}</div>}</>}</div>;
 });
 
 export interface LogLine { readonly time?: string; readonly level?: 'info' | 'ok' | 'warn' | 'fail'; readonly text: ReactNode }

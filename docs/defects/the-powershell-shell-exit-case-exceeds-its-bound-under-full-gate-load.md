@@ -52,3 +52,9 @@ bound under load, the same timing sensitivity the two notes above record.
 - `packages/agent-tools/src/terminal/terminal.test.ts` — the case (line 1014), its ender loop and bound (lines 1020
   and 1031), the idle measurement in its comment (lines 1011 to 1013).
 - `packages/agent-tools/src/terminal/foreground.ts` — the shell-exit detection whose wall time the bound measures.
+
+**Observed again, 2026-11-03 (the Overview audit's execution branch over `83910dc8`, Windows 11 ARM64, Node 26.13.0).**
+`Write-Output 'bye'; exit 3` took 5,671.5 ms against the 5 s bound in a 22 m 31 s `pnpm check` with the host at 100 % CPU
+from two sibling sessions' gates and proof reruns, one of six reds in the file that run; the file alone two hours later,
+the host still at 100 %: 93 passed, 42 skipped, 427 s. The third reading in three days, each under full load, each green
+alone. Recorded, not investigated.

@@ -474,11 +474,10 @@
       ]
     },
     "NOTIFY": {
-      "uncited": 166,
+      "uncited": 164,
       "requirements": [
         "REQ-NOTIFY-002",
         "REQ-NOTIFY-004",
-        "REQ-NOTIFY-006",
         "REQ-NOTIFY-007",
         "REQ-NOTIFY-009",
         "REQ-NOTIFY-010",
@@ -640,8 +639,7 @@
         "REQ-NOTIFY-262",
         "REQ-NOTIFY-264",
         "REQ-NOTIFY-265",
-        "REQ-NOTIFY-266",
-        "REQ-NOTIFY-267"
+        "REQ-NOTIFY-266"
       ]
     },
     "ORCH": {

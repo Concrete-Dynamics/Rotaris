@@ -421,7 +421,11 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
   // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
   const session = useShownSession();
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
-  const [sessionsState, setSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
+  // The list starts as pending, not idle: at `idle` with nothing listed the view drew the onboarding empty state before the first
+  // read began, then the nine-card grid with zero figures for the read's length, then the empty state again, on every switch to
+  // the view (the Overview audit of 2026-11-02, P3, confirmed by `pnpm app:drive` on 2026-11-03: the zero grid painted for
+  // about 950 ms). A window with no workspace settles to `idle` in `refresh`, so the empty state is never withheld there.
+  const [sessionsState, setSessionsState] = useState<'idle' | 'loading' | 'error'>('loading');
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [repository, setRepository] = useState<RepositoryState | null>(null);
   const [caps, setCaps] = useState<{ depth: number; fanOut: number } | null>(null);
@@ -441,7 +445,7 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
     return () => { live = false; };
   }, [hasWorkspace, libraryRevision]);
   const refresh = useCallback(async () => {
-    if (!hasWorkspace) { setRepository(UNREAD_REPOSITORY); return; }
+    if (!hasWorkspace) { setRepository(UNREAD_REPOSITORY); setSessionsState('idle'); return; }
     setSessionsState('loading');
     const [list, repo] = await Promise.all([bridge.command({ kind: 'session.list' }), bridge.command({ kind: 'repository.read' })]);
     if (list.ok) { setSessions((list.value as { sessions: SessionListItemPayload[] }).sessions); setSessionsState('idle'); }
@@ -463,7 +467,7 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
   return <OverviewView
     session={session} sessions={sessions} sessionsState={sessionsState} sessionsError={sessionsError} repository={repository} caps={caps}
     layout={layout} onLayout={onLayout} nowIso={session && isBusy(session.executionStatus) ? nowIso : session?.updatedAt ?? null} reducedMotion={reducedMotion}
-    onListSessions={onListSessions} onNewSession={onNewSession}
+    onListSessions={onListSessions} onNewSession={onNewSession} onRefresh={() => { void refresh(); }}
     onOpenSession={(id) => { void onOpenSession(id); }} onContinueSession={(id) => { void onOpenSession(id); }}
     onGoTo={(view) => useShellState.getState().switchView(view)}
     improvements={improvements}

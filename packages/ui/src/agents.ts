@@ -1,6 +1,7 @@
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, presentationStatus, PRIMARY_VIEWS, RUN_AGENT_ID, type AgentRecord, type ConfigSnapshot, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { countNoun } from '@rotaris/kernel';
 import { treeRows } from './agent-tree-rows.js';
+import type { StatusDotState } from './design-system/core.js';
 import { PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL } from './settings/config-state.js';
 
 /**
@@ -478,4 +479,24 @@ export function timeoutLine(timedOut: NonNullable<AgentRecord['timedOut']>): str
 export function metaLine(agent: AgentRecord, session: Pick<SessionRecord, 'executionStatus'> | null, elapsed: string | null): string {
   const stalled = stalledText(agent.stalledSeconds);
   return `${agentStateLabel(agent, session)} · ${elapsed ?? '—'} · ${countNoun(agent.toolCalls, 'tool call')}${stalled === null ? '' : ` · ${stalled}`}`;
+}
+
+/**
+ * REQ-SHELL-036's colour groups for an agent's presentation state (REQ-MONITOR-046's vocabulary), onto the design `StatusDot`'s
+ * lifecycle family — the one mapping for every surface that draws an agent's dot (the tree, the Mission table and run row, the
+ * inspector, a persona window). `running` → `run`, the only state that pulses (REQ-MONITOR-040); `waiting`, `queued` and
+ * `paused` → `wait` (PD-ORCH-005 clause 13: a paused agent is the waiting family, never pulsing); `done` → `done`, so a done
+ * agent is painted from `--rt-done` and no longer from `--rt-ok`, which resolves with `--rt-run` in every theme; `failed` and
+ * `cancelled` → `fail`, the group REQ-MONITOR-169 counts them in; no agent → `idle`, REQ-SHELL-036's fifth group on
+ * `--rt-info-500`. Until 2026-11-03 six call sites re-drew the dot by hand with five values of their own (the Overview audit of
+ * 2026-11-02, item 4 and P2; `docs/archive/defects/the-agent-rows-hand-drawn-status-dot-paints-done-in-the-running-hue.md`).
+ */
+export function agentDotState(state: AgentRecord['presentationState'] | 'idle' | null | undefined): StatusDotState {
+  switch (state) {
+    case 'running': return 'run';
+    case 'waiting': case 'queued': case 'paused': return 'wait';
+    case 'done': return 'done';
+    case 'failed': case 'cancelled': return 'fail';
+    default: return 'idle';
+  }
 }

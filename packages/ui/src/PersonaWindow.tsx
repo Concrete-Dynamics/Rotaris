@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
-import { agentArtifacts, agentStateLabel, chipStates, compressionLine, countNoun, instancesOf, mcpFateText, personaArtifacts, resolvedTools, rowsOf, stalledText } from './agents.js';
+import { agentArtifacts, agentDotState, agentStateLabel, chipStates, compressionLine, countNoun, instancesOf, mcpFateText, personaArtifacts, resolvedTools, rowsOf, stalledText } from './agents.js';
 import { TimeoutLine } from './TimeoutLine.js';
 import { AgentArtifactLinks, ArtifactLinkList } from './ArtifactLinks.js';
 import { AgentCancelConfirm } from './AgentCancelConfirm.js';
@@ -10,7 +10,7 @@ import { RowList, type Acknowledger } from './TranscriptSurface.js';
 import type { TerminalPreview } from './terminal/streams.js'; // Part AL2
 import { personaColourToken } from './transcript/Row.js';
 import { markMotionStart } from './motion.js';
-import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as DesignPageHeader, Tag as DesignTag, TextArea as DesignTextArea } from './design-system/index.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as DesignPageHeader, StatusDot as DesignStatusDot, Tag as DesignTag, TextArea as DesignTextArea } from './design-system/index.js';
 
 /**
  * REQ-SHELL-074/075, REQ-MONITOR-068..071 (Part R): the persona pop-out window's content. The header with the persona
@@ -118,7 +118,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
       {shown && (
         <div className="persona-window__page" role="tabpanel" aria-label={shown.name}>
           <div className="persona-window__heading">
-            <span ref={(element) => { if (element && shown.live) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${shown.presentationState}`} aria-hidden="true" />
+            <DesignStatusDot ref={(element) => { if (element && shown.live) markMotionStart(element); }} state={agentDotState(shown.presentationState)} pulse={shown.presentationState === 'running'} />
             <span className="persona-window__name" style={{ color: `var(${personaColourToken(persona)}, var(--rt-text))` }} data-testid="persona-agent-name">{shown.name}</span>
             <span className="text-secondary mono" data-testid="persona-agent-state">{agentStateLabel(shown, session)}</span>
           </div>

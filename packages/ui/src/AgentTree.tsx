@@ -2,9 +2,9 @@ import { useState, type KeyboardEvent } from 'react';
 import type { AgentRecord } from '@rotaris/contracts';
 import { markMotionStart } from './motion.js';
 import { treeRows } from './agent-tree-rows.js';
-import { stalledText, TIMED_OUT_TAG, timeoutLine } from './agents.js';
+import { agentDotState, stalledText, TIMED_OUT_TAG, timeoutLine } from './agents.js';
 import { wholeSeconds } from './composer.js';
-import { Tag as DesignTag } from './design-system/index.js';
+import { StatusDot as DesignStatusDot, Tag as DesignTag, type UiLayoutContract } from './design-system/index.js';
 
 /**
  * REQ-MONITOR-036..047, REQ-MONITOR-304: the delegation tree — a depth-first list of rows with box-drawing
@@ -50,9 +50,11 @@ export interface AgentTreeProps {
   /** `source` says whether a pointer click or a key move selected the row: REQ-SHELL-073's pop-out-on-click follows a click only. */
   readonly onSelect: (id: string | null, source?: 'click' | 'key') => void;
   readonly nowIso?: string | null | undefined;
+  /** A layout contract for the first row's dot — the Overview's tree card aligns it on its kicker (`align-x`, audit item 13). */
+  readonly firstDotUi?: UiLayoutContract | undefined;
 }
 
-export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTreeProps) {
+export function AgentTree({ agents, selected, onSelect, nowIso = null, firstDotUi }: AgentTreeProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const rows = treeRows(agents, collapsed);
   const index = rows.findIndex((r) => r.agent.id === selected);
@@ -84,7 +86,7 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
   if (agents.length === 0) return <div className="agent-tree agent-tree--empty text-secondary" aria-label="Agents">No delegated agents.</div>;
   return (
     <div className="agent-tree" role="tree" aria-label="Agents" tabIndex={0} onKeyDown={onKey}>
-      {rows.map((r) => {
+      {rows.map((r, i) => {
         const a = r.agent;
         const isSelected = a.id === selected;
         return (
@@ -101,7 +103,8 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
             data-state={a.presentationState}
           >
             <span className="agent-row__prefix mono" aria-hidden="true">{r.prefix}</span>
-            <span ref={(element) => { if (element && a.presentationState === 'running') markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${a.presentationState}`} aria-hidden="true" />
+            {/* The design StatusDot, one state mapping for every agent surface (`agentDotState`); the ref marks the motion start so a reduced-motion preference stops the pulse (REQ-SHELL-135). */}
+            <DesignStatusDot ref={(element) => { if (element && a.presentationState === 'running') markMotionStart(element); }} state={agentDotState(a.presentationState)} pulse={a.presentationState === 'running'} {...(i === 0 && firstDotUi !== undefined ? { ui: firstDotUi } : {})} />
             <span className="agent-row__main">
               <span className="agent-row__persona">{a.persona}</span>
               <span className="agent-row__task">{a.givenName}</span>

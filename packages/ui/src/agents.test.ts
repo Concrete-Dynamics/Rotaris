@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, entryRole, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, compressionLine, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, runLevelModel, steerOffered, tableOrder } from './agents.js';
+import { agentDotState, CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, entryRole, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, compressionLine, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, runLevelModel, steerOffered, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
 import { useShellState } from './shell-state.js';
 
@@ -436,5 +436,22 @@ describe('agents — PD-ORCH-005 clause 16 (revision 4): a paused child\'s confi
   it('at rest, where every unfinished descendant is paused, the set and the wording are what they were', () => {
     const rested = agent({ id: 'g2', name: 'g2', parentId: 'one', state: 'paused', presentationState: 'paused', live: false });
     expect(cancelConfirmation({ id: 'one', name: 'one' }, [one, rested])).toMatchObject({ body: PAUSED_CANCEL_WITH, lines: ['g2'] });
+  });
+});
+
+describe('agentDotState — REQ-SHELL-036\'s groups for an agent\'s dot, one mapping for every surface (the Overview audit of 2026-11-02, item 4)', () => {
+  it('paints done from the done token, never the running one, and the two failed-family states from fail', () => {
+    expect(agentDotState('done')).toBe('done');
+    expect(agentDotState('running')).toBe('run');
+    expect(agentDotState('failed')).toBe('fail');
+    expect(agentDotState('cancelled')).toBe('fail');
+  });
+  it('puts waiting, queued and paused in the waiting family (PD-ORCH-005 clause 13), and no agent in the idle group', () => {
+    expect(agentDotState('waiting')).toBe('wait');
+    expect(agentDotState('queued')).toBe('wait');
+    expect(agentDotState('paused')).toBe('wait');
+    expect(agentDotState('idle')).toBe('idle');
+    expect(agentDotState(null)).toBe('idle');
+    expect(agentDotState(undefined)).toBe('idle');
   });
 });

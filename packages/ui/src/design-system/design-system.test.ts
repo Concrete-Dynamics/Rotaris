@@ -473,6 +473,12 @@ describe('production design-system layer', () => {
       expect(markup).toContain('class="empty-state-title">No sessions yet<');
       expect(markup).toContain('Start one from the composer.');
       expect(markup).not.toContain('ignored');
+      expect(markup).not.toContain('empty-state-action');
+    });
+
+    it('stands its action in the adopted slot below the hint, and draws no slot without one (the Overview audit of 2026-11-02, item 12)', () => {
+      const markup = render(design.EmptyState, { title: 'No sessions yet', hint: 'Start one from the composer.', action: 'Open Workspace' });
+      expect(markup).toContain('Start one from the composer.</div><div class="empty-state-action">Open Workspace</div>');
     });
   });
 

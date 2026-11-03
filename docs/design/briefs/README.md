@@ -12,4 +12,4 @@ Rules:
 
 | Surface | Brief | Last audit |
 |---|---|---|
-| Overview | [`overview.md`](overview.md) | 2026-11-02 (audit only) |
+| Overview | [`overview.md`](overview.md) | 2026-11-02; its executable items implemented 2026-11-03 (items 1, 3–6, 8–10, 12–16, P1–P4) |

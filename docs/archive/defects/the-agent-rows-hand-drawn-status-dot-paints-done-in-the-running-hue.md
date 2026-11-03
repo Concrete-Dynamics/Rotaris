@@ -32,3 +32,16 @@ design research corpus.
 - `packages/ui/src/AgentTree.tsx`, `AgentTable.tsx`, `Inspector.tsx`, `MissionView.tsx`, `PersonaWindow.tsx` — the call
   sites; `packages/ui/src/persona-run-cancel.test.ts` pins `agent-row__dot--running`.
 - `docs/research/design/12-design-system-governance-and-drift.md` — section 5 walks it as the worked example.
+
+## Outcome — repaired 2026-11-03 (the Overview audit of 2026-11-02, item 4 and P2; R-093)
+
+The six call sites draw the design `StatusDot` through one mapping, `agentDotState` in `packages/ui/src/agents.ts`: `running` →
+`run`, pulsing; `waiting`, `queued` and `paused` → `wait`; `done` → `done`; `failed` and `cancelled` → `fail`, the family
+REQ-MONITOR-169 counts them in (the lifecycle family has no waiting hue for a cancelled agent, and the health family may not mix
+with it on one surface); no agent → `idle`, `--rt-info-500`. `.agent-row__dot` and its six modifiers are gone from `shell.css`,
+and the second `@keyframes rt-pulse` with them, so the adopted `components.css` holds the one definition. Measured on the built
+app with `pnpm app:drive` (1400×900, `rotaris-dim`): before, the Overview tree card's done row painted `oklch(0.65 0.188 165)`,
+`--rt-ok` and `--rt-run` alike, and `document.getAnimations()` on a running row held `rt-pulse` at 240 ms on
+`.agent-row__dot--running`; after, the done row paints `oklch(0.59 0.16 292)`, `--rt-done`, and the running row's one animation is
+`rt-pulse` at 1,600 ms on `.status-dot.is-pulsing` with `data-motion="full"`. `agents.test.ts` pins the mapping,
+`persona-run-cancel.test.ts` the pulsing run-state dot, `overview-view.test.ts` the done dot and the absent keyframes.

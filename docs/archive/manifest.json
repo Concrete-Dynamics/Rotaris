@@ -1013,6 +1013,7 @@
     "defects/the-adoption-suites-symbolic-link-cases-fail-rather-than-skip-on-a-windows-host-without-the-symlink-privilege.md": "b46ac37a90711c91b0fad1535e95a68791dcb5325c8b632f04b0c9fac2da546a",
     "defects/the-advertised-tool-schema-is-stricter-than-the-parser.md": "c4314e7548f3fc3ffaaca348035d49c22ff31088ecb4fd3d99926fd02fd8d9fb",
     "defects/the-agent-pop-out-terminal-auto-open-and-pane-layout-preferences-are-stored-under-unregistered-keys.md": "c426633beb8f49282964b69f3c35e22f57a3d3e18fe94bb339ef6025e71376df",
+    "defects/the-agent-rows-hand-drawn-status-dot-paints-done-in-the-running-hue.md": "ce5c1d1dd3aea10d96b0c2de07ec72abf9f078f3e24e3345837ae03540c06d39",
     "defects/the-analysis-completion-notice-does-not-match-its-requirement.md": "8a7d8ffb711f2545a7f30a8d0631fec97727dcd4f1d4bac182afcc407cfb2354",
     "defects/the-app-segfaults-on-quit-after-adding-a-provider-on-headless-linux.md": "e2765d4ba91e292f615452b16f064673ee57d2c8eed1547701ca379eae89a3ae",
     "defects/the-application-log-keeps-every-level-because-nothing-reads-one.md": "0a665644e68b5f0a1cbb83ca3e137d7b48151367514776cb2446006058ce78a1",

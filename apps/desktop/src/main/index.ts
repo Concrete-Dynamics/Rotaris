@@ -571,9 +571,17 @@ async function main(): Promise<void> {
           if (r?.kind === 'hooks.summary' && r.summary.status === 'review') void notices.report(hooksReviewOpenReport(key, r.summary));
           else if (r !== null) {
             // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
+            // The consequence is the notice's MESSAGE row (REQ-NOTIFY-037), never its copyable detail (REQ-NOTIFY-038): until
+            // 2026-11-03 it rode as `detail`, so the first launch showed the title alone over a closed "Details" holding one
+            // sentence and a Copy control, and that sentence named a second route ("Settings → Models") beside the one notice
+            // action that starts the flow (the Overview audit of 2026-11-02, item 1, `docs/design/briefs/overview.md`).
             const authenticated = providers.list().filter((row) => row.authenticated).map((row) => row.id);
             log(`providers: ${authenticated.length} authenticated${authenticated.length > 0 ? ` (${authenticated.join(', ')})` : ''}`);
-            if (authenticated.length === 0 && raiseNoticeKeyed('providers.none', 'info', NO_PROVIDER_HEADLINE, 'Runs cannot start until a model provider is authenticated. Add one from Settings → Models.', recoveryFor('providers.add'))) log(`notice: ${NO_PROVIDER_HEADLINE}`);
+            if (authenticated.length === 0) {
+              const recovery = recoveryFor('providers.add');
+              void notices.report({ severity: 'info', title: NO_PROVIDER_HEADLINE, key: 'providers.none', message: NO_PROVIDER_MESSAGE, ...(recovery.length === 0 ? {} : { action: recovery[0]! }) });
+              log(`notice: ${NO_PROVIDER_HEADLINE}`);
+            }
           }
           if (snapshot !== null) void configFatal.observe(key, snapshot);
         }).catch(() => undefined);
@@ -789,6 +797,8 @@ async function main(): Promise<void> {
   };
   /** REQ-WORKSPACE-152 (3): the first-launch notice — persistent, informational, dismissible, gating nothing. */
   const NO_PROVIDER_HEADLINE = 'No model provider is authenticated yet';
+  /** REQ-WORKSPACE-152 (3)'s second clause, the message row under that title; it agrees with the one action and names no other route. */
+  const NO_PROVIDER_MESSAGE = 'Runs cannot start until a model provider is authenticated.';
   /**
    * ADR-0019 / REQ-TOOLS-063: main owns the per-window DIALOG QUEUE and nothing else — it never decides.
    * One approval dialog open per window, oldest first by the payload's sequence, the next within 100 ms

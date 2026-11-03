@@ -400,7 +400,8 @@ await (async () => {
     // PD-LIBRARY-002 revision 2, clause (f): the Overview card's empty hint, word for word, before any proposal exists.
     // The card is drawn once the record holds a session (the seed launch, with none, shows the Overview's own empty state).
     await d.click('.nav-item', { text: 'Overview', timeoutMs: 20_000 });
-    const hint = await until(d, '.ov-card--proposals .empty-state-hint', (m) => m.length === 1, 20_000) ? await one(d, '.ov-card--proposals .empty-state-hint') : null;
+    // Since 2026-11-03 the card's empty case is its own body, not a nested EmptyState (the Overview audit of 2026-11-02, item 10).
+    const hint = await until(d, '.ov-card--proposals [data-testid="overview-proposals-hint"]', (m) => m.length === 1, 20_000) ? await one(d, '.ov-card--proposals [data-testid="overview-proposals-hint"]') : null;
     check('the Overview card\'s empty hint names both sources (PD-LIBRARY-002 revision 2 (f), REQ-LIBRARY-130)',
       hint !== null && hint.text.trim() === "Run improvement analysis, or a retrospective over this workspace's history, to produce reviewable suggestions.",
       hint === null ? 'no empty hint on the card' : `"${hint.text.trim()}"`);

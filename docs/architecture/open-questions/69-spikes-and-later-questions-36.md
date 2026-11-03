@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (36 of 36)
 
-Part 69 of 69 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-468, OQ-477, OQ-490, OQ-491, OQ-493 – OQ-506; OQ-460 – OQ-467 archived in [the archive](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md).
+Part 69 of 69 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-468, OQ-477, OQ-490, OQ-491, OQ-493 – OQ-503; OQ-460 – OQ-467 archived in [the archive](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md).
 
 - OQ-460 — May clause (4)'s second hand-over wait an interval of its own?; ruled 2026-11-01; [archived](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460)
 - OQ-461 — What does a launch end as when the holder is live and never answers?; ruled 2026-11-01; [archived](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461)
@@ -160,33 +160,3 @@ Part 69 of 69 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** §1.7's flat controls.
 
 **What decides it.** A journey walk or click study first, then one ruling: secondary controls gain a resting cue within §1.7's tokens (a reading), or §1.7 is amended.
-
-<a id="oq-504"></a>
-
-**OQ-504 — Where the record fixes one value for every desktop and a platform's guideline differs, does the one value stand, or does a per-platform exception enter?** *(PD-SHELL-003, REQ-SHELL-029, REQ-SHELL-033, REQ-SHELL-049, §1.7, §1.11, IC-3. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 08 §8 items 5, 8 and 18 ([the guide](../../research/design/08-platform-conventions-for-electron.md)), guide 09 §8 item 7 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)) and guide 10 §8 item 3 ([the guide](../../research/design/10-ux-writing.md)) of the design research corpus and backlog rows 58, 78, 79, 116 and 126 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** Five values are fixed for every desktop, and in each a platform guideline differs. REQ-SHELL-029 sets rail labels at 9 px, where guide 09 §8 D09-7 cites macOS's 10 pt minimum. REQ-SHELL-033 sets the title bar at 44 px in the default theme, where guide 08 §8 D08-5 cites Windows' 32 px standard bar. REQ-SHELL-049 binds F1 alone to keyboard help, where guide 08 §8 D08-18 notes KDE never binds a bare function key and Apple and GNOME use Command-? and Control+?. §1.7 makes the 2 px ring “the **only** focus treatment”, where guide 08 §8 D08-8 notes macOS highlights a focused list row instead. §1.11 says “Sentence case everywhere”, where guide 10 §8 D10-3 notes macOS and Linux title-case button labels. For the main window's frame, the owner's PD-SHELL-003 says the product “SHALL use the same controls and command path on Windows, Linux and macOS rather than branching”.
-
-**What the build proceeds under.** One value on every desktop, as each requirement and §1 states it.
-
-**What decides it.** One ruling: PD-SHELL-003's one-presentation principle is read as governing these values too, each departure recorded, or named per-platform exceptions are admitted (a directive per requirement, a §1 amendment for §1.7 and §1.11). The macOS items can be measured only once IC-3's host exists.
-
-<a id="oq-505"></a>
-
-**OQ-505 — How does a keyboard user move between the window's regions, the rail, the view, its panes and its overlay drawers, when no command does so?** *(REQ-SHELL-048, REQ-SHELL-049, REQ-SHELL-062, REQ-SHELL-153, REQ-SHELL-028, REQ-SHELL-032. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 09 §8 item 13 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)), guide 14 §8 item 7 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) and guide 05 §8 item 8 ([the guide](../../research/design/05-interaction-patterns-for-desktop-tools.md)) of the design research corpus and backlog rows 20, 43 and 76 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** REQ-SHELL-049, “The authoritative shortcut table”, binds no command that moves between regions. REQ-SHELL-062's drawer toggles “appear only in compact mode”, and no command opens a drawer. REQ-SHELL-153 keeps the rail out of the vertical-list rule (“it follows the button semantics of REQ-SHELL-027 through REQ-SHELL-032”), so each of the seven rail buttons is its own Tab stop before a view's content. Guide 09 §8 D09-13 cites cycling a multi-pane window's regions on F6 and Shift+F6. Guide 14 §8 D14-7 cites a command with a shortcut as one of the ways back to a hidden pane. Guide 05 §8 D05-8 cites one Tab stop per list-like group.
-
-**What the build proceeds under.** REQ-SHELL-049's table, REQ-SHELL-062's compact-only toggles with Escape, and a Tab stop per rail button.
-
-**What decides it.** One ruling: a region-moving command, with commands for the two drawers, joins REQ-SHELL-048's vocabulary and REQ-SHELL-049's table by directive (the rail's Tab stops then stay or become one roving stop), or the present routes stand.
-
-<a id="oq-506"></a>
-
-**OQ-506 — Which existing surface does a returning operator, or one whose overlay drawers are closed, read for every pending approval, open question and finished run?** *(REQ-SHELL-023, REQ-SHELL-061, REQ-NOTIFY-003, REQ-NOTIFY-059, REQ-NOTIFY-024, REQ-MONITOR-171. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 04 §8 item 3 ([the guide](../../research/design/04-the-agent-operator-journeys.md)), guide 13 §8 item 4 ([the guide](../../research/design/13-states-feedback-and-time.md)) and guide 14 §8 item 4 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) of the design research corpus and backlog row 10 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** REQ-SHELL-023 fixes seven primary views, and none is named as the place where everything waiting on the operator gathers. REQ-SHELL-061 closes both overlay drawers at 1000×680. REQ-NOTIFY-003 lets an ordinary event be “acknowledged transiently and reported nowhere else”. REQ-NOTIFY-059 makes a completed run a persistent success notice, but the notice slot holds one, and REQ-NOTIFY-024 lets a later publication replace it. Guides 04 §8 D04-3, 13 §8 D13-4 and 14 §8 D14-4 find that an operator away for hours needs one place listing pending approvals and questions, plus a completion summary that persists. They also find hidden navigation used about half as often on desktop.
-
-**What the build proceeds under.** The surfaces as specified (the Overview's sessions card of REQ-MONITOR-171, the status strip, the session chip), with no new view.
-
-**What decides it.** A reading that names which existing surface carries the pending and finished set, with any copy it owes added by directive. A new view or tab is outside the corpus's licence (`docs/design/README.md` §6.1) and would be a request.

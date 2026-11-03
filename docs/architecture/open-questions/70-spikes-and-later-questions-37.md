@@ -1,6 +1,36 @@
 # Open questions — Spikes, and the questions raised since (37 of 37)
 
-Part 70 of 70 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-507 – OQ-529.
+Part 70 of 70 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-504 – OQ-522.
+
+<a id="oq-504"></a>
+
+**OQ-504 — Where the record fixes one value for every desktop and a platform's guideline differs, does the one value stand, or does a per-platform exception enter?** *(PD-SHELL-003, REQ-SHELL-029, REQ-SHELL-033, REQ-SHELL-049, §1.7, §1.11, IC-3. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 08 §8 items 5, 8 and 18 ([the guide](../../research/design/08-platform-conventions-for-electron.md)), guide 09 §8 item 7 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)) and guide 10 §8 item 3 ([the guide](../../research/design/10-ux-writing.md)) of the design research corpus and backlog rows 58, 78, 79, 116 and 126 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** Five values are fixed for every desktop, and in each a platform guideline differs. REQ-SHELL-029 sets rail labels at 9 px, where guide 09 §8 D09-7 cites macOS's 10 pt minimum. REQ-SHELL-033 sets the title bar at 44 px in the default theme, where guide 08 §8 D08-5 cites Windows' 32 px standard bar. REQ-SHELL-049 binds F1 alone to keyboard help, where guide 08 §8 D08-18 notes KDE never binds a bare function key and Apple and GNOME use Command-? and Control+?. §1.7 makes the 2 px ring “the **only** focus treatment”, where guide 08 §8 D08-8 notes macOS highlights a focused list row instead. §1.11 says “Sentence case everywhere”, where guide 10 §8 D10-3 notes macOS and Linux title-case button labels. For the main window's frame, the owner's PD-SHELL-003 says the product “SHALL use the same controls and command path on Windows, Linux and macOS rather than branching”.
+
+**What the build proceeds under.** One value on every desktop, as each requirement and §1 states it.
+
+**What decides it.** One ruling: PD-SHELL-003's one-presentation principle is read as governing these values too, each departure recorded, or named per-platform exceptions are admitted (a directive per requirement, a §1 amendment for §1.7 and §1.11). The macOS items can be measured only once IC-3's host exists.
+
+<a id="oq-505"></a>
+
+**OQ-505 — How does a keyboard user move between the window's regions, the rail, the view, its panes and its overlay drawers, when no command does so?** *(REQ-SHELL-048, REQ-SHELL-049, REQ-SHELL-062, REQ-SHELL-153, REQ-SHELL-028, REQ-SHELL-032. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 09 §8 item 13 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)), guide 14 §8 item 7 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) and guide 05 §8 item 8 ([the guide](../../research/design/05-interaction-patterns-for-desktop-tools.md)) of the design research corpus and backlog rows 20, 43 and 76 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** REQ-SHELL-049, “The authoritative shortcut table”, binds no command that moves between regions. REQ-SHELL-062's drawer toggles “appear only in compact mode”, and no command opens a drawer. REQ-SHELL-153 keeps the rail out of the vertical-list rule (“it follows the button semantics of REQ-SHELL-027 through REQ-SHELL-032”), so each of the seven rail buttons is its own Tab stop before a view's content. Guide 09 §8 D09-13 cites cycling a multi-pane window's regions on F6 and Shift+F6. Guide 14 §8 D14-7 cites a command with a shortcut as one of the ways back to a hidden pane. Guide 05 §8 D05-8 cites one Tab stop per list-like group.
+
+**What the build proceeds under.** REQ-SHELL-049's table, REQ-SHELL-062's compact-only toggles with Escape, and a Tab stop per rail button.
+
+**What decides it.** One ruling: a region-moving command, with commands for the two drawers, joins REQ-SHELL-048's vocabulary and REQ-SHELL-049's table by directive (the rail's Tab stops then stay or become one roving stop), or the present routes stand.
+
+<a id="oq-506"></a>
+
+**OQ-506 — Which existing surface does a returning operator, or one whose overlay drawers are closed, read for every pending approval, open question and finished run?** *(REQ-SHELL-023, REQ-SHELL-061, REQ-NOTIFY-003, REQ-NOTIFY-059, REQ-NOTIFY-024, REQ-MONITOR-171. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 04 §8 item 3 ([the guide](../../research/design/04-the-agent-operator-journeys.md)), guide 13 §8 item 4 ([the guide](../../research/design/13-states-feedback-and-time.md)) and guide 14 §8 item 4 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) of the design research corpus and backlog row 10 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** REQ-SHELL-023 fixes seven primary views, and none is named as the place where everything waiting on the operator gathers. REQ-SHELL-061 closes both overlay drawers at 1000×680. REQ-NOTIFY-003 lets an ordinary event be “acknowledged transiently and reported nowhere else”. REQ-NOTIFY-059 makes a completed run a persistent success notice, but the notice slot holds one, and REQ-NOTIFY-024 lets a later publication replace it. Guides 04 §8 D04-3, 13 §8 D13-4 and 14 §8 D14-4 find that an operator away for hours needs one place listing pending approvals and questions, plus a completion summary that persists. They also find hidden navigation used about half as often on desktop.
+
+**What the build proceeds under.** The surfaces as specified (the Overview's sessions card of REQ-MONITOR-171, the status strip, the session chip), with no new view.
+
+**What decides it.** A reading that names which existing surface carries the pending and finished set, with any copy it owes added by directive. A new view or tab is outside the corpus's licence (`docs/design/README.md` §6.1) and would be a request.
 
 <a id="oq-507"></a>
 
@@ -161,73 +191,3 @@ Part 70 of 70 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** REQ-CHAT-005's `Queue`, with stop through `/stop` and the stop control.
 
 **What decides it.** One ruling: REQ-CHAT-005 stands, or a directive over it puts stop in the button and moves queuing elsewhere.
-
-<a id="oq-523"></a>
-
-**OQ-523 — Is a `--rt-viz-2` persona label one stop from `--rt-run` a “state colour” under PD-CHAT-005?** *(PD-CHAT-005, §1.3. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 06 §8 item 15 ([the guide](../../research/design/06-ux-patterns-for-agent-products.md)) of the design research corpus and backlog row 15 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** PD-CHAT-005, the owner's, takes persona colours “from the categorical set the adopted design language already declares … in that set's own order”. It also says “No persona colour SHALL be a **state** colour … because the two would then be indistinguishable on a row that carries both”. In `tokens/colors.css`, `--rt-viz-1` to `--rt-viz-3` are `--rt-accent-400`, `--rt-axis-y-400` and `--rt-axis-x-400`: the done, running and waiting hues one stop lighter. Guide 06 §8 D06-15 notes a shipping agent's agent hues overlapping its state hues.
-
-**What the build proceeds under.** PD-CHAT-005 and the persona ramp as adopted.
-
-**What decides it.** A reading of “state colour” in PD-CHAT-005: the token, so one stop of separation suffices, or the hue. If the hue, the directive conflicts with its own categorical set, which is the owner's to revise or settle by a §1.3 ramp change.
-
-<a id="oq-524"></a>
-
-**OQ-524 — Is Workspace compact mode measured by the view's own width or by the viewport, when REQ-SHELL-059 and REQ-MONITOR-051 name different ones?** *(REQ-SHELL-059, REQ-MONITOR-051. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 14 §8 item 2 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) of the design research corpus and backlog row 61 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** REQ-SHELL-059: “The Workspace view enters compact mode when its own width is below 1180 px”. REQ-MONITOR-051: “Below a viewport width of 1180 px, choosing an agent opens the inspector as an overlay drawer”. The built `useNarrow` (`packages/ui/src/WorkspaceView.tsx:316`) reads a media query, which is the viewport. REQ-SHELL-047's thresholds measure the window, but they govern the status strip and are not in conflict. Guide 14 §8 D14-2 cites container-query guidance that thresholds belong to the container.
-
-**What the build proceeds under.** As built, the viewport, which REQ-MONITOR-051 names.
-
-**What decides it.** One ruling naming the governing requirement. The other gains a back-pointer by directive, and the hook changes if the view's width wins.
-
-<a id="oq-525"></a>
-
-**OQ-525 — Is 700 px the Workspace centre's floor at every docked width, or only at 1440×900?** *(REQ-SHELL-064, REQ-SHELL-065. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 14 §8 item 3 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) of the design research corpus and backlog row 62 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** REQ-SHELL-065: “At 1440×900 both side panels are visible and the center panel is at least 700 px wide”. REQ-SHELL-064's maxima (sidebar 520 px, inspector 560 px) let a user leave a 1180 px view's centre near 100 px. Guide 14 §8 D14-3 cites guidance that a side pane never look too wide or too narrow beside the main area.
-
-**What the build proceeds under.** REQ-SHELL-064's maxima, with 700 px stated at 1440×900 only.
-
-**What decides it.** One ruling: 700 px is a floor at every docked width (a directive clamping the panes), or it holds only at 1440×900.
-
-<a id="oq-526"></a>
-
-**OQ-526 — Below 1180 px, is having the delegation tree beside the transcript given up by design?** *(REQ-SHELL-059, REQ-MONITOR-051. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 14 §8 item 5 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) of the design research corpus and backlog row 64 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** REQ-SHELL-059 removes the sidebar and the inspector from the docked arrangement in compact mode, and REQ-MONITOR-051 makes the two drawers “mutually exclusive”. Guide 14 §8 D14-5 cites evidence it rates low-confidence that tiled windows beat overlapping ones for tasks spanning both.
-
-**What the build proceeds under.** REQ-SHELL-059 and REQ-MONITOR-051: one overlay drawer at a time below 1180 px.
-
-**What decides it.** One ruling: the loss is confirmed, or a directive keeps the tree docked down to a lower threshold.
-
-<a id="oq-527"></a>
-
-**OQ-527 — What must a persona window or the terminal window show at the smallest size it can be resized to?** *(REQ-SHELL-022, REQ-SHELL-167, REQ-SHELL-146. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 14 §8 item 10 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) of the design research corpus and backlog row 60 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** REQ-SHELL-022: “no surface declares a minimum window size of its own”. REQ-SHELL-167: after opening, “the user may resize freely”. Guide 14 §8 D14-10 notes that Electron's window floor binds only drags. Nothing states what an auxiliary window shows, or must keep reachable, at its smallest.
-
-**What the build proceeds under.** REQ-SHELL-167's free resize, with no stated minimum content.
-
-**What decides it.** One ruling by directive: a minimum size for auxiliary windows, or a minimum-content contract.
-
-<a id="oq-528"></a>
-
-**OQ-528 — Should REQ-SHELL-117's progress dialog wait briefly before appearing and then hold a minimum time, rather than appear at once?** *(REQ-SHELL-117. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 11 §8 item 6 ([the guide](../../research/design/11-design-critique-and-evaluation.md)) of the design research corpus and backlog row 53 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** REQ-SHELL-117: worktree-merge and checkpoint operations show an “indeterminate, window-modal, non-cancellable progress dialog that appears immediately”. Guide 11 §8 D11-6 cites a 150–300 ms show delay followed by a minimum hold, which avoids a flash on a fast operation.
-
-**What the build proceeds under.** REQ-SHELL-117's immediate appearance.
-
-**What decides it.** One ruling: “appears immediately” stands, or a directive over REQ-SHELL-117 sets a show delay and a minimum hold.
-
-<a id="oq-529"></a>
-
-**OQ-529 — Is an operator owed how far a merge or checkpoint has got, and a way to interrupt it, once it runs past 10 s?** *(REQ-SHELL-117. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 13 §8 item 5 ([the guide](../../research/design/13-states-feedback-and-time.md)) of the design research corpus and backlog row 53 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
-
-**What is open.** REQ-SHELL-117 makes the dialog “indeterminate” and “non-cancellable”. Guide 13 §8 D13-5 cites response-time guidance that a wait past 10 s owes progress and a way to interrupt.
-
-**What the build proceeds under.** REQ-SHELL-117's indeterminate, non-cancellable dialog.
-
-**What decides it.** One ruling: REQ-SHELL-117 stands, or a directive owes determinate progress (which needs a count from the operation) and states whether it can be cancelled.

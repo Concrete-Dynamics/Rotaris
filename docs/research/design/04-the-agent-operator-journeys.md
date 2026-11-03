@@ -136,7 +136,7 @@ Section 6's "new" lines are proposals for F1, F2 and D3. Section 8 reaches the o
 
 **D04-2 —** A platform guideline discourages progress in separate windows, since closing one has an unclear consequence [12]. It meets the persona windows (`REQ-SHELL-076`: closing hides, not destroys). *Question: does a persona window, and the main window once it closes, say that the agent's run continues and where its state stays visible?* — none filed; not-a-question
 
-**D04-3 —** The operator is away most of a session and suspended work can wait hours [8] [25]. It meets `REQ-SHELL-023`'s seven views, none named as where everything waiting on the operator gathers. *Question: which existing surface (sessions card, status strip, session chip) does a returning operator read for every pending approval and question?* — [OQ-506](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-506)
+**D04-3 —** The operator is away most of a session and suspended work can wait hours [8] [25]. It meets `REQ-SHELL-023`'s seven views, none named as where everything waiting on the operator gathers. *Question: which existing surface (sessions card, status strip, session chip) does a returning operator read for every pending approval and question?* — [OQ-506](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-506)
 
 **D04-4 —** The field study suggests a cue whose salience grows with time since last attention [25]. It meets §1.8: one fixed 1.6 s pulse, only while running. *Question: may a long-waiting `waiting` state change emphasis, or are the word and its elapsed figure the whole signal?* — [OQ-502](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-502)
 

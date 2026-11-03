@@ -787,6 +787,7 @@
     "defects/add_phase-refuses-the-batch-its-own-schema-advertises.md": "f5a0ec9f3d7a1df9648c47bc441728e7d3d2c88ea3349d7fa89489420e982857",
     "defects/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md": "6b260af7642cd3234137d431df4bcd565e29fe2bb60acc31a1275fda88fb6f8f",
     "defects/agent-tools-imports-zod-without-declaring-it.md": "bdcb39a17a65e4e7e78c8f9befa082135add9e3c80d706c5b39f1d8999207284",
+    "defects/agents-md-approves-the-design-reference-for-information-architecture-which-the-adoption-rule-does-not-adopt.md": "1e44cac17cefdd5b318682621dcb075906a7e89729cb513f166de3279ca9535b",
     "defects/agents-md-git-proof-row-omits-the-unborn-branch-launch.md": "f957b6cbb2323cdf5b30b26bc24d2e964f3445cf9f1554722f249f8f748a74e2",
     "defects/agents-md-says-the-drivers-stop-asks-a-close-guard.md": "caf482e245e074b987126ad2cc9584a16a41d93558f93925a417339a73df205a",
     "defects/agents-md-still-counts-continuous-integration-as-owed-after-r-079.md": "030ccfdcb25029694ab11e993121c21d5490141f8a27da40853aa207645a2832",

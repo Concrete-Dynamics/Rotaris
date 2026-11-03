@@ -129,7 +129,7 @@ Each item is a question to raise; none is a change to make.
 
 - **D10-1 —** Pair a total failure's apology with something novel [1]. Meets §1.11 (no filler), §1.10. *Does any failure here, a crash that leaves a session to continue, warrant more than plain words?* — [OQ-515](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-515)
 - **D10-2 —** Avoid "you" in instructing sentences; use the imperative [40]. Meets §1.11 (second person). *Does the imperative satisfy §1.11, and where does a "you" sentence such as a waiting count stand?* — none filed; not-a-question
-- **D10-3 —** macOS and Linux title-case button labels [14]. Meets §1.11 (sentence case). *Is one casing across three platforms a recorded choice against two conventions?* — [OQ-504](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-504)
+- **D10-3 —** macOS and Linux title-case button labels [14]. Meets §1.11 (sentence case). *Is one casing across three platforms a recorded choice against two conventions?* — [OQ-504](../../architecture/open-questions/70-spikes-and-later-questions-37.md#oq-504)
 - **D10-4 —** Keep the voice, vary the tone by context [44]. Meets §1.11. *Is tone meant to be the same on the Overview and the approval dialog?* — none filed; not-a-question
 - **D10-5 —** Abbreviations should be expandable at AAA [46]. Meets §1.11 (`612,480 tok`). *Should `tok` carry an expanded accessible name?* — [OQ-493](../../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-493)
 - **D10-6 —** Progress reported slow early and fast late feels faster [28]. Meets §1.11 (exact numbers). *Is any progress figure here a presentation rather than a count?* — none filed; already-ruled: §1.8, §1.11

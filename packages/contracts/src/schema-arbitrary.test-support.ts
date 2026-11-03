@@ -112,7 +112,7 @@ function objectArbitrary(s: JsonSchema): fc.Arbitrary<Record<string, unknown>> {
     // A record keyed by an enum is exhaustive in zod 4, and says so as `required`: those keys are always written.
     const required = s.required ?? [];
     if (required.length === 0) return rest;
-    const always = fc.record(Object.fromEntries(required.map((name) => [name, value])) as Record<string, fc.Arbitrary<unknown>>);
+    const always = fc.record(Object.fromEntries(required.map((name) => [name, value])));
     return fc.tuple(always, rest).map(([fixed, more]) => ({ ...more, ...fixed }));
   }
   const model: Record<string, fc.Arbitrary<unknown>> = {};

@@ -682,7 +682,7 @@
       ]
     },
     "PROVIDER": {
-      "uncited": 59,
+      "uncited": 58,
       "requirements": [
         "REQ-PROVIDER-013",
         "REQ-PROVIDER-020",
@@ -700,7 +700,6 @@
         "REQ-PROVIDER-032",
         "REQ-PROVIDER-033",
         "REQ-PROVIDER-034",
-        "REQ-PROVIDER-035",
         "REQ-PROVIDER-036",
         "REQ-PROVIDER-037",
         "REQ-PROVIDER-038",

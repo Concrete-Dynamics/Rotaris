@@ -47,4 +47,4 @@ fields; the redaction is the pass's (REQ-TOOLS-171).
 (`run-host/configuration.ts`, pinned by `configuration.test.ts`, red without the change). The stall line's
 `token for N seconds`, which the scheme layer reads as `token ***`, is recorded rather than reworded, since the stored
 issue carries the same words
-([`the-application-log-masks-the-word-after-token-in-the-products-own-stall-line.md`](../the-application-log-masks-the-word-after-token-in-the-products-own-stall-line.md)).
+([`the-application-log-masks-the-word-after-token-in-the-products-own-stall-line.md`](../../defects/the-application-log-masks-the-word-after-token-in-the-products-own-stall-line.md)).

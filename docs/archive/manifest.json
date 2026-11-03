@@ -903,7 +903,7 @@
     "defects/live-rows-are-never-measured.md": "2e4dab400edd79e88b48c6afa9b3f5eec8cac397ad378979267b88ccc002ccad",
     "defects/live-runs-notes-cite-defect-notes-at-paths-they-no-longer-have.md": "3fc75959e57150ff8d91840ed3b5421af5fc22ac865c76f2d408f5559e725d6a",
     "defects/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md": "5ebd0d24284fcb26dd1ad59bb03e73dba248505bb16d7deb1d689aedc0bf9194",
-    "defects/mains-application-log-lines-bypass-the-redaction-pass.md": "804f2fbf556f2f0d4bf7e7f47afbc5859fb6c1414af77700c2eba711ddb6c55c",
+    "defects/mains-application-log-lines-bypass-the-redaction-pass.md": "5aa7975b8c6b3b58563227a77ae54aff2dcbececa7c584e092d6d44e9e11d533",
     "defects/mcp-proof-mistakes-a-user-skill-catalog-for-a-repository-walk.md": "53cc93c571d971e6ceefeea3cf76a1c00f4270e3dd1f777d36b340b6ca8ef6f6",
     "defects/mcp-proof-writes-its-global-configuration-where-posix-never-reads-it.md": "c87a8ad69472f95d2c301266b2f39f4391c1b8b5502e03802f6858be28e0609e",
     "defects/mcp-proofs-cancellation-launch-kills-electron-on-windows.md": "16722a3e970ee0e3f62936a8fafcfcbd2f39a7edff345d73d543719c2e260ca5",

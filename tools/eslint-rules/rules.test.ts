@@ -18,7 +18,7 @@ const repo = fileURLToPath(new URL('../..', import.meta.url));
  * takes them into the default project the repository's own configuration names, on the root tsconfig's options. Only
  * the list of files it admits is widened; every rule is the repository's.
  */
-const FIXTURES = ['tools/*.test.ts', 'packages/*/src/violation.ts', 'packages/*/src/fine.ts', 'packages/*/src/ok.ts', 'packages/*/src/x.test.ts', 'packages/*/src/violation.tsx', 'apps/desktop/src/main/violation.ts', 'apps/desktop/src/main/fine.ts', 'tools/requirement-coverage/fixture.test.ts'];
+const FIXTURES = ['tools/*.test.ts', 'packages/*/src/violation.ts', 'packages/*/src/fine.ts', 'packages/*/src/ok.ts', 'packages/*/src/x.test.ts', 'packages/*/src/violation.tsx', 'apps/desktop/src/main/violation.ts', 'apps/desktop/src/main/fine.ts', 'apps/desktop/src/renderer/fine.ts', 'tools/fine.ts', 'tools/requirement-coverage/fixture.test.ts'];
 const eslint = new ESLint({
   cwd: repo,
   overrideConfigFile: join(repo, 'eslint.config.js'),
@@ -128,7 +128,10 @@ describe('lint — R-091: every BrowserWindow is built with secureWebPreferences
   it('reads electron.BrowserWindow as well, binds anywhere in the desktop app, and nowhere outside it and shell\'s adapters', async () => {
     expect(secure(await lintAs('apps/desktop/src/main/violation.ts', "import * as electron from 'electron';\nexport const w = new electron.BrowserWindow({ width: 1 });\n"))).toHaveLength(1);
     expect(secure(await lintAs('apps/desktop/src/renderer/fine.ts', 'declare class BrowserWindow { constructor(o: unknown) }\nexport const w = new BrowserWindow({});\n'))).toHaveLength(1);
-    expect(secure(await lintAs('tools/fine.ts', 'declare class BrowserWindow { constructor(o: unknown) }\nexport const w = new BrowserWindow({});\n'))).toHaveLength(0);
+    // Parsed like the others (no 'parse' message), so what is measured is the rule's absence there, not a file it never read.
+    const outside = await lintAs('tools/fine.ts', 'declare class BrowserWindow { constructor(o: unknown) }\nexport const w = new BrowserWindow({});\n');
+    expect(outside).not.toContain('parse');
+    expect(secure(outside)).toHaveLength(0);
   });
 });
 

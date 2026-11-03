@@ -54,7 +54,7 @@ import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands } from './commands/session.js';
 import { dictationCommands } from './commands/dictation.js';
-import { installPermissionHandlers, type ApplicationPages } from './permissions.js';
+import { installPermissionHandlers, type ApplicationPages, type PermissionSession } from './permissions.js';
 import { installWebContentsGuard } from './web-contents-guard.js'; // R-091, OQ-466
 import { secureWebPreferences } from './secure-web-preferences.js'; // R-091: one set of web preferences for every window
 import { dispatchCommand } from './command-dispatch.js'; // R-091: nothing throws out of runCommand (ADR-0019)
@@ -166,7 +166,7 @@ app.on('session-created', (created) => {
   withoutRuntimeRequests(created, (m) => { log(m, 'error'); });
   // OQ-459 (ruled 2026-11-01): one default-deny policy on every session — the microphone for dictation and the clipboard write,
   // to the application's own pages alone; no device and no display capture to any page.
-  installPermissionHandlers(created, applicationPages);
+  installPermissionHandlers(created as unknown as PermissionSession, applicationPages);
 });
 // R-091 (Electron security checklist 12 to 14): no page navigates its window away from the application, opens a window or
 // attaches a webview. Registered before `app.whenReady()`, so every web contents is guarded from its first navigation.

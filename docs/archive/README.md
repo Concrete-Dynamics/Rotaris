@@ -65,6 +65,7 @@ questions), `owner-decisions.mjs`, `adr-history.mjs`, `defects.mjs`, `spec.mjs`,
 
 ## What the first execution found
 
-The whole migration's counts, the live record's size before and after and the gate's cost are in
+The whole migration's counts, the live record's size before and after and the gate's cost are its row of 2026-11-02 in
+[`first-executions.md`](../architecture/first-executions.md), which
 [`architecture/hardening.md` §6](../architecture/hardening.md#6-requirements-traceability-and-the-decision-archive--r-092)
-and [`first-executions.md`](../architecture/first-executions.md).
+row 6 points at.

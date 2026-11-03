@@ -101,8 +101,8 @@ export function compactSessionLog(content: Buffer, opts: { readonly at: string; 
  * is made on first write. It holds at most `maxBytes`: the appender takes the file's size from disk when it is opened (a
  * session's later runs append to the same file) and counts in memory after that, and an append that would pass the bound
  * first compacts the file in place (`compactSessionLog`). A line that still would not fit after a compaction — one longer
- * than the room the kept text leaves — is not written, and its bytes join the next marker's total, so no line is cut and the
- * bound holds. A compaction that fails never fails the run and raises no notice: one warning goes to the application log, and
+ * than the room the kept text leaves — is not written, and its bytes are counted in the marker that same compaction writes,
+ * so no line is cut, the bound holds and the marker's total is every byte dropped since the file was created. A compaction that fails never fails the run and raises no notice: one warning goes to the application log, and
  * nothing more is appended for this run, so the file never grows past the bound.
  */
 export function fileAppender(file: string, opts: FileAppenderOptions): (line: string) => void {
@@ -112,23 +112,28 @@ export function fileAppender(file: string, opts: FileAppenderOptions): (line: st
   let size = files.size(file);
   let made = false;
   let stopped = false;
-  let unwritten = 0;
   return (line) => {
     if (stopped) return;
     if (!made) { mkdirSync(dirname(file), { recursive: true }); made = true; }
     const bytes = Buffer.byteLength(line, 'utf8');
     if (size + bytes > maxBytes) {
+      let fits: boolean;
       try {
-        const compacted = compactSessionLog(files.read(file), { at: toIsoUtc(opts.wall.instant()), maxBytes, retainedBytes, alsoDropped: unwritten });
+        const content = files.read(file);
+        const at = toIsoUtc(opts.wall.instant());
+        let compacted = compactSessionLog(content, { at, maxBytes, retainedBytes });
+        fits = compacted.length + bytes <= maxBytes;
+        // The line is dropped rather than cut, so this compaction's marker counts it: the total on disk stays exact even when no
+        // later compaction comes (a longer total only lengthens the marker, so the line fits no better).
+        if (!fits) compacted = compactSessionLog(content, { at, maxBytes, retainedBytes, alsoDropped: bytes });
         files.rewrite(file, compacted);
         size = compacted.length;
-        unwritten = 0;
       } catch (cause) {
         stopped = true;
         opts.warn(`session log ${file}: compacting it at its ${boundWords(maxBytes)} bound failed (${cause instanceof Error ? cause.message : String(cause)}); nothing more is written to it in this run (PD-SESSION-004)`);
         return;
       }
-      if (size + bytes > maxBytes) { unwritten += bytes; return; }
+      if (!fits) return;
     }
     files.append(file, line);
     size += bytes;

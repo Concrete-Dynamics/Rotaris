@@ -1614,9 +1614,15 @@ describe('the session log\'s bound (PD-SESSION-004)', () => {
     for (let n = 0; n < 15; n += 1) append(entry(n));
     const huge = `2026-11-03T12:00:00.000Z DEBUG   ${'y'.repeat(900)}\n`;
     append(huge);
+    // The compaction the huge line forced dropped the five oldest lines (250 bytes), and its marker counts the huge line too,
+    // at once: a run that ends here leaves the exact total on disk.
+    const marker = readFileSync(file, 'utf8').split('\n')[0] ?? '';
+    expect(marker).toMatch(MARKER);
+    expect(Number(MARKER.exec(marker)?.[1])).toBe(250 + Buffer.byteLength(huge));
     append(entry(15));
     expect(readFileSync(file, 'utf8')).not.toContain('yyyy');
     expect(statSync(file).size).toBeLessThanOrEqual(1000);
+    expect(numbers(readFileSync(file, 'utf8'))).toEqual([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
   });
 
   it('fails a compaction without failing the run: one warning to the application log, then nothing more appended', () => {

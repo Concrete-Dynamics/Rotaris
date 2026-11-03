@@ -44,6 +44,10 @@ requirement states. Built by the hardening plan's bundle `log-sinks`.*
 > wall-clock port, an earlier marker's total read back and replaced. A failed compaction writes one `warn` line to the
 > application log through the run host's `log` and ends that run's writing. **The text met the code once:** a single line
 > longer than the room a compaction leaves cannot be kept whole within the bound, and the directive forbids cutting one; it is
-> not written, and its bytes join the next marker's total, so the bound and "no line cut" both hold. Measured by unit tests
+> not written, and its bytes are counted in the marker of the compaction it forced, so the bound, "no line cut" and the
+> marker's cumulative total all hold. *(Corrected 2026-11-04 by the bundle's review: this read "its bytes join the next
+> marker's total"; they waited in memory for a later compaction, so a run that ended first left the total on disk short of
+> the bytes dropped, and a later run never counted them. The same compaction's marker counts them now, pinned by "writes no
+> line longer than the room a compaction leaves".)* Measured by unit tests
 > with a 1,000-byte bound and a 500-byte retention (`run-host/tools.test.ts`, "the session log's bound"), not by a run that
 > wrote 32 MiB in the built app. The row is in [`../../architecture/first-executions.md`](../../architecture/first-executions.md).

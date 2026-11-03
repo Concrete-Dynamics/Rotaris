@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (36 of 36)
 
-Part 69 of 69 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-468, OQ-477, OQ-490, OQ-491; OQ-460 – OQ-467 archived in [the archive](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md).
+Part 69 of 69 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-468, OQ-477, OQ-490, OQ-491, OQ-493 – OQ-506; OQ-460 – OQ-467 archived in [the archive](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md).
 
 - OQ-460 — May clause (4)'s second hand-over wait an interval of its own?; ruled 2026-11-01; [archived](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-460)
 - OQ-461 — What does a launch end as when the holder is live and never answers?; ruled 2026-11-01; [archived](../../archive/architecture/open-questions/69-spikes-and-later-questions-36.md#oq-461)
@@ -50,3 +50,143 @@ Part 69 of 69 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** `rotaris/requirement-citations-resolve` holds `REQ-ORCH-153` in its `pending` option, citing this entry (`eslint.config.js`): the rule still fails a citation of an identifier that does not exist, and suspends the superseded check for this one identifier only. No citation was rewritten, and nothing `pnpm symbols` generates was changed (bundle I3 reads the superseded set as it stands).
 
 **What decides it.** A ruling on which reading governs. If the rule's: a revision of `PD-ORCH-002` whose disposition narrows `REQ-ORCH-153` (`SUPERSEDED_BY` then loses one key and the live total gains one), and the `pending` entry leaves. If the disposition's: the clauses the code relies on are restated where they govern (a directive), each citation moves to it, and the `pending` entry leaves.
+
+<a id="oq-493"></a>
+
+**OQ-493 — Does the accessibility contract REQ-SHELL-144..168 aim at a WCAG 2.2 conformance level, so that a success criterion it does not restate is owed, or is it the whole contract?** *(REQ-SHELL-144, REQ-SHELL-148, REQ-SHELL-160, REQ-SHELL-066, REQ-SHELL-068, REQ-SHELL-070, §1.11. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 08 §8 items 21 and 9 ([the guide](../../research/design/08-platform-conventions-for-electron.md)), guide 09 §8 item 2 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)) and guide 10 §8 item 5 ([the guide](../../research/design/10-ux-writing.md)) of the design research corpus and backlog rows 19, 46 and 102 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** No desktop requirement names WCAG: in `docs/spec/` the word occurs only in `17-terminal-ui.md`. REQ-SHELL-144 states its own thresholds (“4.5:1 for normal text, and 3:1 for large text … and for non-text boundaries”) and its own naming rule. REQ-SHELL-148 and REQ-SHELL-160 (c) draw the ring “wholly within the control's own bounds” at the theme's width. REQ-SHELL-066 to REQ-SHELL-070 move a divider by drag, by keys and by reset. §1.11 writes `612,480 tok`. Read against WCAG 2.2, guide 08 §8 D08-21 finds SC 2.5.7 (Dragging Movements, AA) unmet by a keyboard route alone. Guides 08 §8 D08-9 and 09 §8 D09-2 find a 2 px inset ring failing SC 2.4.13's area test (AAA). Guide 10 §8 D10-5 finds `tok` unexpanded under SC 3.1.4 (AAA). The guides argue SC 2.2.1, 2.2.2, 1.4.4 and 1.4.10 under OQ-498, OQ-497 and OQ-495. Whether any of these criteria binds depends on a conformance target the record never names.
+
+**What the build proceeds under.** REQ-SHELL-144..168 as written, read as the whole contract: no WCAG success criterion binds unless a requirement restates it.
+
+**What decides it.** One ruling naming the target: the contract as written; WCAG 2.2 AA, which makes each unmet AA criterion (2.5.7 now, and 2.2.1, 2.2.2, 1.4.4 and 1.4.10 where OQ-498, OQ-497 and OQ-495 find them unmet) a directive over the requirement it meets; or AA plus named AAA criteria (2.4.13 through a theme token under REQ-SHELL-129, 3.1.4 through an accessible expansion). The ruling also sets the weight OQ-498, OQ-497 and OQ-495 give their WCAG arguments.
+
+<a id="oq-494"></a>
+
+**OQ-494 — Under an active OS forced-colours palette, does the shell defer to it or switch to `high-contrast`, and what then marks a floating surface and governs REQ-SHELL-160 (b)?** *(REQ-SHELL-128, REQ-SHELL-160, §1.7. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 08 §8 item 12 ([the guide](../../research/design/08-platform-conventions-for-electron.md)) and guide 09 §8 item 11 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)) of the design research corpus and backlog row 24 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** REQ-SHELL-128 offers three app themes, “rotaris-dim” (the default), “nocturne” and “high-contrast”. REQ-SHELL-160 (b) requires that “no native surface presents a light background while a dark theme is active, or the reverse”. §1.7 says “a shadow only ever means *this floats*”. Guides 08 §8 D08-12 and 09 §8 D09-11 note three effects of an OS forced-colours palette: it overrides every token, it may be light, and it removes shadows, so a transitory surface needs a 2 px border to read as floating. OQ-29's ruling read REQ-SHELL-160 (b) as covering only the surfaces the application tints, never an OS palette. The record says nothing of forced colours.
+
+**What the build proceeds under.** The three app themes of REQ-SHELL-128, with no forced-colours handling stated.
+
+**What decides it.** One ruling on the forced-colours stance: defer to the OS palette (forced-colors styles, a border on every floating surface, REQ-SHELL-160 (b) read for a light OS palette), or switch to `high-contrast` while one is active. Deferring widens the theme-proof matrix.
+
+<a id="oq-495"></a>
+
+**OQ-495 — Are renderer zoom and OS text enlargement supported inputs, when under them a 1000×680 window lays out below every compact threshold?** *(REQ-SHELL-022, REQ-SHELL-030, REQ-SHELL-160, PD-SHELL-003. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 09 §8 item 12 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)) and guide 14 §8 item 6 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) of the design research corpus and backlog row 5 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** REQ-SHELL-022 guarantees every view at “1000×680 logical pixels”. REQ-SHELL-160 (d) and REQ-SHELL-030 measure scaling only as “100%, 125%, 150%, 175% and 200% OS display scaling”, a change that leaves the logical width unchanged. Guides 09 §8 D09-12 and 14 §8 D14-6 read WCAG 1.4.4 and 1.4.10 as asking for text enlarged to 200 % and reflow under zoom. Renderer zoom at 200 % would lay a 1000 px window out at 500 CSS px, below REQ-SHELL-059's 1180 and REQ-SHELL-047's 1080. The record says neither whether zoom is reachable nor what it owes. PD-SHELL-003 revision 2 removed Electron's default application menu, and no code under `apps/desktop/src/` sets or limits a zoom factor.
+
+**What the build proceeds under.** REQ-SHELL-022's 1000×680 guarantee under OS display scaling only, and REQ-SHELL-160 (d) as written.
+
+**What decides it.** One ruling on whether renderer zoom and OS text enlargement are supported inputs. Yes owes a layout below 1000 CSS px (a directive over REQ-SHELL-022) and audits at those widths. No records both as outside the contract, and renderer zoom is then bounded or disabled.
+
+<a id="oq-496"></a>
+
+**OQ-496 — Which non-status transitions does §1.8 admit: a rearranged structure, a pane becoming an overlay drawer, the palette's listing appearing, a primary view arriving?** *(§1.8, REQ-SHELL-135, REQ-TRACE-318, REQ-TRACE-327, REQ-SHELL-059, REQ-SHELL-051, REQ-NOTIFY-022. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 03 §8 items 8 and 7 ([the guide](../../research/design/03-information-architecture-within-a-fixed-structure.md)), guide 05 §8 items 1 and 2 ([the guide](../../research/design/05-interaction-patterns-for-desktop-tools.md)), guide 07 §8 item 11 ([the guide](../../research/design/07-visual-composition-beyond-tokens.md)), guide 14 §8 item 1 ([the guide](../../research/design/14-how-a-surface-gives-way.md)), guide 01 §8 item 4 ([the guide](../../research/design/01-how-ai-design-tools-design.md)) and guide 02 §8 item 5 ([the guide](../../research/design/02-the-generated-look-and-its-counter-moves.md)) of the design research corpus and backlog rows 91, 92, 112 and 145 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** §1.8 says “Animation belongs to status indicators only”. It also ships `--rt-ease-out` “for entrances” and `--rt-duration-slow` for “enter-and-exit”, and REQ-NOTIFY-022 animates an acknowledgement's entrance and exit. Which surfaces may enter or move is therefore not stated. REQ-TRACE-318 says the rail's drag widening “SHALL NOT be animated”, and REQ-TRACE-327 re-centres the graph on selection without stating motion. Guides 03 §8 D03-8, 05 §8 D05-1 and D05-2, and 07 §8 D07-11 cite studies in which animated reordering and re-centring reduced reorientation. Guide 14 §8 D14-1 asks that nothing jump or vanish unanimated on resize (REQ-SHELL-059's drawer switch). Guide 03 §8 D03-7 cites a faded-in menu remainder that sped selection, which bears on REQ-SHELL-051's palette. Guides 01 §8 D01-4 and 02 §8 D02-5 cite vendor advice for an orchestrated load animation of a view.
+
+**What the build proceeds under.** §1.8 as adopted: no motion outside status indicators and surfaces that enter, so reorder, re-centring, the drawer switch, the palette listing and a view's arrival are instant, and REQ-TRACE-318's widening unanimated.
+
+**What decides it.** One ruling on §1.8's scope. Either it already excludes every such transition (a reading), or an amendment of §1.8 names the transitions it admits, each honouring REQ-SHELL-135, with REQ-TRACE-318's unanimated widening left standing unless a directive reverses it.
+
+<a id="oq-497"></a>
+
+**OQ-497 — Does flipping the in-app reduced-motion setting stop a pulse or spinner that is already running, or only the next one to start?** *(REQ-SHELL-135, §1.8. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 11 §8 item 2 ([the guide](../../research/design/11-design-critique-and-evaluation.md)) and guide 13 §8 item 8 ([the guide](../../research/design/13-states-feedback-and-time.md)) of the design research corpus and backlog row 4 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** §1.8 permits `.status-dot.is-pulsing`, “used only while a state is actively running”, and the 0.8 s `.spinner`. REQ-SHELL-135 says the value “is read at each animation start rather than cached, so flipping the in-app setting … takes effect without relaunch”. An infinite animation that started before the flip has no later start at which to read it. Guides 11 §8 D11-2 and 13 §8 D13-8 read WCAG SC 2.2.2 as asking that self-starting motion running past 5 s beside other content can be paused, stopped or hidden, and a pulse may last a whole run.
+
+**What the build proceeds under.** REQ-SHELL-135's resolution order, read at each animation's start.
+
+**What decides it.** A reading of REQ-SHELL-135's “takes effect without relaunch”. Either a running pulse or spinner stops when the setting changes, so every StatusDot and Spinner re-reads it on change, or the change waits for each animation's next start. OQ-493's target sets the weight of the SC 2.2.2 argument.
+
+<a id="oq-498"></a>
+
+**OQ-498 — Does an acknowledgement's 4200 ms lifetime pause while the pointer rests on it?** *(REQ-NOTIFY-011, REQ-NOTIFY-003, REQ-NOTIFY-015, REQ-NOTIFY-020, PD-WORKSPACE-001. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 05 §8 item 5 ([the guide](../../research/design/05-interaction-patterns-for-desktop-tools.md)), guide 09 §8 item 5 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)), guide 11 §8 item 5 ([the guide](../../research/design/11-design-critique-and-evaluation.md)) and guide 13 §8 items 1, 2 and 3 ([the guide](../../research/design/13-states-feedback-and-time.md)) of the design research corpus and backlog row 1 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** REQ-NOTIFY-011: an acknowledgement “takes itself off screen 4200 ms after it becomes visible … No surface declares a transient lifetime of its own”, and REQ-NOTIFY-020's non-expiring case is the only exception. REQ-NOTIFY-015 gives it no focus, so it has no focus to pause on. REQ-NOTIFY-003 already makes a failure, a refusal or an outcome with a recovery action a persistent notice as well. PD-WORKSPACE-001, the owner's, puts “Start a new session” on an acknowledgement and accepts that it is “ignored until it withdraws”. Guides 05 §8 D05-5, 09 §8 D09-5, 11 §8 D11-5 and 13 §8 D13-1 to D13-3 read SC 2.2.1 and design-system practice as asking for a 5 s floor and a pause on hover and focus for a self-withdrawing message.
+
+**What the build proceeds under.** REQ-NOTIFY-011's fixed 4200 ms, REQ-NOTIFY-015's no focus, and PD-WORKSPACE-001 as the owner wrote it.
+
+**What decides it.** One ruling: the lifetime pauses while the pointer rests on an acknowledgement (a directive over REQ-NOTIFY-011), or it stands because REQ-NOTIFY-003 already gives every consequential event a notice. PD-WORKSPACE-001 is the owner's and stays as written either way.
+
+<a id="oq-499"></a>
+
+**OQ-499 — May a literal pixel value stand off the token scale, as an optical correction or as the metric debt the ui-language baseline tolerates, and how does §1 say so?** *(§1, §1.5, AGENTS.md (design material). Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 07 §8 item 4 ([the guide](../../research/design/07-visual-composition-beyond-tokens.md)) and guide 12 §8 items 8 and 9 ([the guide](../../research/design/12-design-system-governance-and-drift.md)) of the design research corpus and backlog rows 131 and 150 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** §1 says “Token names are normative — cite the token, never a literal colour or pixel value”, and `AGENTS.md` repeats it. `tools/ui-language-baseline.json` holds the metric half of that rule on a baseline of standing occurrences, while colour is graded exactly. Guide 07 §8 D07-4 cites token systems that admit recorded optical corrections. Guide 12 §8 D12-8 and D12-9 cite graded enforcement, and a blocking check enabled only once every violation is fixed. The adopted sentence admits no exception, yet the tooling holds one.
+
+**What the build proceeds under.** §1's tokens only, with the metric check held at its baseline in `tools/ui-language-baseline.json`.
+
+**What decides it.** One ruling, recorded in §1 by amendment: no literal stands and the baseline is debt to burn down, or a recorded off-scale value is admitted with the form `ui-audit` and `check-ui-language` accept.
+
+<a id="oq-500"></a>
+
+**OQ-500 — Does §1.4's type system, three faces and three weights with “never weight” for hierarchy, keep row headers, Table group headers and the approval dialog's tool name distinct on dense surfaces?** *(§1.4. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 03 §8 item 3 ([the guide](../../research/design/03-information-architecture-within-a-fixed-structure.md)), guide 07 §8 items 1 and 2 ([the guide](../../research/design/07-visual-composition-beyond-tokens.md)), guide 01 §8 item 2 ([the guide](../../research/design/01-how-ai-design-tools-design.md)) and guide 02 §8 item 3 ([the guide](../../research/design/02-the-generated-look-and-its-counter-moves.md)) of the design research corpus and backlog rows 49 and 141 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** §1.4: “Three weights, and only three … Nothing in the system goes above 500. Hierarchy is size, colour and space — never weight.” It also sets three faces: Space Grotesk, Manrope and JetBrains Mono. Guides 03 §8 D03-3 and 07 §8 D07-1 cite platform guidance that ranks a row's texts, and a confined title at body size, by weight. Guide 07 §8 D07-2 cites advice to use one interface face or as few as possible. The precedence question of guides 01 §8 D01-2 and 02 §8 D02-3, about an installed skill advising extreme weight contrast, is already answered: §2 makes the language “Adopted, and authoritative”, and `AGENTS.md`'s approved inputs include no agent skill.
+
+**What the build proceeds under.** §1.4's three faces and three weights.
+
+**What decides it.** After a measurement on the named surfaces, one ruling: §1.4 stands, or a weight or a face changes by §1.4 amendment.
+
+<a id="oq-501"></a>
+
+**OQ-501 — Does §1.3's “never mixed on one surface” mean one window or one component, when a glance crosses the status strip and the delegation tree?** *(§1.3, §7.3. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 11 §8 item 4 ([the guide](../../research/design/11-design-critique-and-evaluation.md)) of the design research corpus and backlog row 99 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** §1.3 lets the same hues read twice: running and `--rt-ok` (sound) on axis Y, waiting and `--rt-warn` (attention) on axis X. It says “the two families are never mixed on one surface”, and `--rt-ok` resolves with `--rt-run` (§7.3). Guide 11 §8 D11-4 cites, on one anecdote, daily users confused by one symbol meaning different things in different places. The status strip and the delegation tree share one window, and §1.3 does not say whether “surface” is that window or each component.
+
+**What the build proceeds under.** §1.3 as adopted, with “surface” undefined.
+
+**What decides it.** A reading of “surface” in §1.3, recorded as a note there. If it means the window, every surface drawing both families is a defect to find.
+
+<a id="oq-502"></a>
+
+**OQ-502 — Should the pulse mark what needs the operator rather than what is running, and may a long wait grow in emphasis?** *(§1.8, REQ-MONITOR-171. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 02 §8 item 7 ([the guide](../../research/design/02-the-generated-look-and-its-counter-moves.md)), guide 03 §8 item 10 ([the guide](../../research/design/03-information-architecture-within-a-fixed-structure.md)) and guide 04 §8 item 4 ([the guide](../../research/design/04-the-agent-operator-journeys.md)) of the design research corpus and backlog row 51 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** §1.8 reserves `.status-dot.is-pulsing` for a state “actively running”. REQ-MONITOR-171 has “other busy states pulse in the run color” on the sessions card. Guide 03 §8 D03-10 cites attention-encoding guidance that keeps pulsing for conditions needing a response. Guide 04 §8 D04-4 suggests a cue whose salience grows with time since last attention. Guide 02 §8 D02-7 lists a pulsing dot as a generated tell.
+
+**What the build proceeds under.** §1.8 and REQ-MONITOR-171 as written: the pulse marks running.
+
+**What decides it.** One ruling: the pulse moves to waiting, with any growth of emphasis over time (a §1.8 amendment and a directive over REQ-MONITOR-171), or the state word and its elapsed figure stay the whole signal.
+
+<a id="oq-503"></a>
+
+**OQ-503 — Do secondary Buttons and icon controls read as controls under §1.7's flat styling?** *(§1.7. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 02 §8 item 10 ([the guide](../../research/design/02-the-generated-look-and-its-counter-moves.md)) and guide 07 §8 item 6 ([the guide](../../research/design/07-visual-composition-beyond-tokens.md)) of the design research corpus and backlog row 50 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** §1.7 forbids “bevels” and says “every other control is a hairline or bare text”, the primary button being “the only filled surface”. Guides 02 §8 D02-10 and 07 §8 D07-6 cite measurement in which flat interactive styling raised missed and false clicks.
+
+**What the build proceeds under.** §1.7's flat controls.
+
+**What decides it.** A journey walk or click study first, then one ruling: secondary controls gain a resting cue within §1.7's tokens (a reading), or §1.7 is amended.
+
+<a id="oq-504"></a>
+
+**OQ-504 — Where the record fixes one value for every desktop and a platform's guideline differs, does the one value stand, or does a per-platform exception enter?** *(PD-SHELL-003, REQ-SHELL-029, REQ-SHELL-033, REQ-SHELL-049, §1.7, §1.11, IC-3. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 08 §8 items 5, 8 and 18 ([the guide](../../research/design/08-platform-conventions-for-electron.md)), guide 09 §8 item 7 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)) and guide 10 §8 item 3 ([the guide](../../research/design/10-ux-writing.md)) of the design research corpus and backlog rows 58, 78, 79, 116 and 126 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** Five values are fixed for every desktop, and in each a platform guideline differs. REQ-SHELL-029 sets rail labels at 9 px, where guide 09 §8 D09-7 cites macOS's 10 pt minimum. REQ-SHELL-033 sets the title bar at 44 px in the default theme, where guide 08 §8 D08-5 cites Windows' 32 px standard bar. REQ-SHELL-049 binds F1 alone to keyboard help, where guide 08 §8 D08-18 notes KDE never binds a bare function key and Apple and GNOME use Command-? and Control+?. §1.7 makes the 2 px ring “the **only** focus treatment”, where guide 08 §8 D08-8 notes macOS highlights a focused list row instead. §1.11 says “Sentence case everywhere”, where guide 10 §8 D10-3 notes macOS and Linux title-case button labels. For the main window's frame, the owner's PD-SHELL-003 says the product “SHALL use the same controls and command path on Windows, Linux and macOS rather than branching”.
+
+**What the build proceeds under.** One value on every desktop, as each requirement and §1 states it.
+
+**What decides it.** One ruling: PD-SHELL-003's one-presentation principle is read as governing these values too, each departure recorded, or named per-platform exceptions are admitted (a directive per requirement, a §1 amendment for §1.7 and §1.11). The macOS items can be measured only once IC-3's host exists.
+
+<a id="oq-505"></a>
+
+**OQ-505 — How does a keyboard user move between the window's regions, the rail, the view, its panes and its overlay drawers, when no command does so?** *(REQ-SHELL-048, REQ-SHELL-049, REQ-SHELL-062, REQ-SHELL-153, REQ-SHELL-028, REQ-SHELL-032. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 09 §8 item 13 ([the guide](../../research/design/09-accessibility-for-a-dense-desktop-tool.md)), guide 14 §8 item 7 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) and guide 05 §8 item 8 ([the guide](../../research/design/05-interaction-patterns-for-desktop-tools.md)) of the design research corpus and backlog rows 20, 43 and 76 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** REQ-SHELL-049, “The authoritative shortcut table”, binds no command that moves between regions. REQ-SHELL-062's drawer toggles “appear only in compact mode”, and no command opens a drawer. REQ-SHELL-153 keeps the rail out of the vertical-list rule (“it follows the button semantics of REQ-SHELL-027 through REQ-SHELL-032”), so each of the seven rail buttons is its own Tab stop before a view's content. Guide 09 §8 D09-13 cites cycling a multi-pane window's regions on F6 and Shift+F6. Guide 14 §8 D14-7 cites a command with a shortcut as one of the ways back to a hidden pane. Guide 05 §8 D05-8 cites one Tab stop per list-like group.
+
+**What the build proceeds under.** REQ-SHELL-049's table, REQ-SHELL-062's compact-only toggles with Escape, and a Tab stop per rail button.
+
+**What decides it.** One ruling: a region-moving command, with commands for the two drawers, joins REQ-SHELL-048's vocabulary and REQ-SHELL-049's table by directive (the rail's Tab stops then stay or become one roving stop), or the present routes stand.
+
+<a id="oq-506"></a>
+
+**OQ-506 — Which existing surface does a returning operator, or one whose overlay drawers are closed, read for every pending approval, open question and finished run?** *(REQ-SHELL-023, REQ-SHELL-061, REQ-NOTIFY-003, REQ-NOTIFY-059, REQ-NOTIFY-024, REQ-MONITOR-171. Raised 2026-11-03 by [R-093](../../product/requests.md#r-093), guide 04 §8 item 3 ([the guide](../../research/design/04-the-agent-operator-journeys.md)), guide 13 §8 item 4 ([the guide](../../research/design/13-states-feedback-and-time.md)) and guide 14 §8 item 4 ([the guide](../../research/design/14-how-a-surface-gives-way.md)) of the design research corpus and backlog row 10 ([the backlog](../../research/design/backlog.md)); numbered from OQ-493: OQ-462 to OQ-492 are the hardening orchestration's.)*
+
+**What is open.** REQ-SHELL-023 fixes seven primary views, and none is named as the place where everything waiting on the operator gathers. REQ-SHELL-061 closes both overlay drawers at 1000×680. REQ-NOTIFY-003 lets an ordinary event be “acknowledged transiently and reported nowhere else”. REQ-NOTIFY-059 makes a completed run a persistent success notice, but the notice slot holds one, and REQ-NOTIFY-024 lets a later publication replace it. Guides 04 §8 D04-3, 13 §8 D13-4 and 14 §8 D14-4 find that an operator away for hours needs one place listing pending approvals and questions, plus a completion summary that persists. They also find hidden navigation used about half as often on desktop.
+
+**What the build proceeds under.** The surfaces as specified (the Overview's sessions card of REQ-MONITOR-171, the status strip, the session chip), with no new view.
+
+**What decides it.** A reading that names which existing surface carries the pending and finished set, with any copy it owes added by directive. A new view or tab is outside the corpus's licence (`docs/design/README.md` §6.1) and would be a request.

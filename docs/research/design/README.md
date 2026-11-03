@@ -67,7 +67,7 @@ Every guide opens with its title, a one-line scope, `**Review date:** YYYY-MM-DD
 ## Keeping it current
 
 - The review date on a guide and on `REFERENCES.md` moves when the guide is re-read against its sources; nothing else moves unless something changed.
-- A lesson a loop pays for goes into the guide's section 7 as a dated italic note, or into the rubric row it amends as a dated bold note — the UI skills' convention. A ruled open question from section 8 gets its note in section 7; the ruling stays the authority.
+- A lesson a loop pays for goes into the guide's section 7 as a dated italic note, or into the rubric row it amends as a dated bold note — the UI skills' convention. A ruled open question from section 8 gets its note in section 7; the ruling stays the authority. The questions the guides' sections 8, the backlog and the Overview audit raised are OQ-493 – OQ-540, filed 2026-11-03 ([R-093](../../product/requests.md#r-093)) and not ruled; each §8 item and backlog row names its number, or says "none filed" and why.
 - The "Used by" column says what an edit may break.
 - The lint fails on a missing review date or section, and prints each guide's age; it never fails on age.
 

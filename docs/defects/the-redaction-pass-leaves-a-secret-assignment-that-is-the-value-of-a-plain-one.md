@@ -11,6 +11,13 @@ dispatcher's `command.failed` test (R-091 bundle A1): `['token=abcdef123456', 'E
 redacts to `['token=***', 'Error: token=abcdef123456', 'x token=***']`. Not repaired here; the dispatcher's test uses a
 prefixed value instead.
 
+The same shape breaks the pass's idempotence, measured 2026-11-03 by the property tests of hardening bundle F2
+(`packages/kernel/src/redaction.property.test.ts`, 20,000 runs at seeds 1 to 3): `ghp_= key=A0000a0aa0aAAa0A ` redacts to
+`*** key=A0000a0aa0aAAa0A ` — the outer `ghp_=` assignment swallows `key=…`, then layer 4 masks `ghp_=` itself — and a
+second pass, which no longer sees the outer assignment, masks `key=***`. A quoted outer value swallows the inner
+assignment too (`msg: "use password=hunter22 now"` comes back unchanged). Those tests hold every assignment shape out of
+their leak property where the text before it carries `=`, `:` or a quote; the repair removes that branch of `heldOut`.
+
 ## Specs
 
 REQ-TOOLS-171 (one value token after a secret-looking key is masked, wherever the text comes from) and REQ-EVENTS-060

@@ -27,9 +27,11 @@
 export const ERROR_RECORD_CAP = 2000;
 const MARKER = '...';
 
+/** @type {(v: unknown) => v is Record<string, unknown>} */
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** Whether any string beneath `value` ends with the marker. */
+/** @param {unknown} value @returns {boolean} */
 function carriesMarker(value) {
   if (typeof value === 'string') return value.endsWith(MARKER);
   if (Array.isArray(value)) return value.some(carriesMarker);
@@ -41,7 +43,13 @@ function carriesMarker(value) {
  * The error-path records of one session's tool calls, sorted by what their cut shows. `failures` is every record that
  * contradicts the repaired cut: an overlong or unmarked result, or arguments stored as a string.
  */
+/**
+ * @template {Record<string, any>} C
+ * @param {C[]} calls
+ * @param {number} [cap]
+ */
 export function errorRecordCuts(calls, cap = ERROR_RECORD_CAP) {
+  /** @type {Record<'errors' | 'markedResults' | 'unmarkedResults' | 'overlongResults' | 'markedArgs' | 'stringArgs' | 'overCapArgs' | 'failures', C[]>} */
   const out = { errors: [], markedResults: [], unmarkedResults: [], overlongResults: [], markedArgs: [], stringArgs: [], overCapArgs: [], failures: [] };
   for (const call of calls) {
     if (call.isError !== true) continue;

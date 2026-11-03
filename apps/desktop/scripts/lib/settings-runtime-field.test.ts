@@ -5,7 +5,6 @@
  * (REQ-CONFIG-446, REQ-CONFIG-419; `docs/archive/defects/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the helper is plain ESM beside the scripts that run it.
 import { fieldSaveReading, runtimeFieldSteps } from './settings-runtime-field.mjs';
 
 const expression = `document.getElementById('child-timeout')?.getAttribute('aria-description') ?? null`;

@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { MAX_BYTES, MAX_LINES, measure, sizeOf, verdict } from './check-doc-budget.mjs';
 
 const size = (lines: number, bytes = lines * 10) => ({ lines, bytes });

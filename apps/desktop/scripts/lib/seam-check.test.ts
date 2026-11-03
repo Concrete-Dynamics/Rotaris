@@ -8,7 +8,6 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — plain ESM beside the scripts that run it.
 import { FORBIDDEN, KEPT, seamCheck } from './seam-check.mjs';
 
 const SRC = join(import.meta.dirname, '..', '..', 'src');
@@ -109,7 +108,7 @@ function flaggedReads(): Map<string, string> {
   return found;
 }
 
-const covered = (name: string): boolean => (FORBIDDEN as string[]).some((f) => name.startsWith(f));
+const covered = (name: string): boolean => (FORBIDDEN).some((f) => name.startsWith(f));
 
 describe('the seam check names every seam read behind __ROTARIS_SEAMS__ (ADR-0056)', () => {
   it('finds main\'s dialog answers among the flagged reads', () => {
@@ -122,7 +121,7 @@ describe('the seam check names every seam read behind __ROTARIS_SEAMS__ (ADR-005
   it('every flagged read is a name the forbidden list covers, and none is one the probe keeps', () => {
     const uncovered = [...flaggedReads()].filter(([name]) => !covered(name)).map(([name, at]) => `${name} (${at})`);
     expect(uncovered).toEqual([]);
-    for (const kept of KEPT as string[]) expect(covered(kept), kept).toBe(false);
+    for (const kept of KEPT) expect(covered(kept), kept).toBe(false);
   });
 });
 
@@ -163,7 +162,7 @@ describe('a packaged build answers no capture variable beyond the probe\'s three
   }
 
   it('reads every other capture variable behind __ROTARIS_SEAMS__, on the read\'s own line', () => {
-    const offFlag = [...unflaggedReads()].filter(([name]) => !(KEPT as string[]).includes(name)).map(([name, at]) => `${name} (${at})`);
+    const offFlag = [...unflaggedReads()].filter(([name]) => !(KEPT).includes(name)).map(([name, at]) => `${name} (${at})`);
     expect(offFlag).toEqual([]);
   });
 
@@ -204,7 +203,7 @@ function unflaggedVariables(): string[] {
   const found: string[] = [];
   for (const { name, text } of keptSources()) {
     for (const r of envReads(text, constants)) {
-      if (!r.flagged && !PRODUCT.has(r.variable) && !(KEPT as string[]).includes(r.variable)) found.push(`${r.variable} (${name}:${r.line})`);
+      if (!r.flagged && !PRODUCT.has(r.variable) && !(KEPT).includes(r.variable)) found.push(`${r.variable} (${name}:${r.line})`);
     }
   }
   return found;
@@ -316,7 +315,7 @@ describe('a packaged build carries no scripted model client (OQ-312, ADR-0056)',
   afterEach(() => { if (dir !== undefined) rmSync(dir, { recursive: true, force: true }); dir = undefined; });
 
   it('the seam check refuses a packaged run host that carries the scripted client', () => {
-    expect(FORBIDDEN as string[]).toContain('scripted model call:');
+    expect(FORBIDDEN).toContain('scripted model call:');
     // The client's own log line, which only the client writes (`scripted-client.ts`): if it moves, this list must follow it.
     expect(readFileSync(join(SRC, 'run-host', 'scripted-client.ts'), 'utf8')).toContain('log(`scripted model call: ');
     dir = mkdtempSync(join(tmpdir(), 'rotaris-seam-check-'));

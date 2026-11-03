@@ -30,7 +30,7 @@ rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }
 mkdirSync(workspace, { recursive: true });
 
 const GIT_IDENTITY = { GIT_AUTHOR_NAME: 'rotaris-proof', GIT_AUTHOR_EMAIL: 'proof@rotaris.invalid', GIT_COMMITTER_NAME: 'rotaris-proof', GIT_COMMITTER_EMAIL: 'proof@rotaris.invalid' };
-const git = (...args) => execFileSync('git', args, { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...GIT_IDENTITY } }).toString().trim();
+const git = (/** @type {string[]} */ ...args) => execFileSync('git', args, { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...GIT_IDENTITY } }).toString().trim();
 try {
   execFileSync('git', ['--version'], { stdio: 'ignore' });
 } catch {
@@ -88,6 +88,7 @@ try { report = JSON.parse(readFileSync(jsonPath, 'utf8')); } catch (e) { console
 const titles = new Map();
 for (const file of report.testResults ?? []) for (const t of file.assertionResults ?? []) titles.set(t.title, t.status);
 
+/** @type {Record<string, unknown>} */
 const results = { elapsedMs, suites: report.numTotalTestSuites, tests: report.numTotalTests, passedTests: report.numPassedTests, failedTests: report.numFailedTests };
 for (const [key, title] of Object.entries(ASSERTIONS)) results[key] = titles.get(title) === 'passed';
 results.allSuitesGreen = test.status === 0 && report.numFailedTests === 0 && report.numFailedTestSuites === 0;

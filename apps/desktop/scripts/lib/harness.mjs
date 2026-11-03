@@ -80,9 +80,14 @@ export function cleanEnvironment() {
   return env;
 }
 
-/** Every `workspace.db` below `root`, depth first. An absent root is no databases, not an error. */
+/**
+ * Every `workspace.db` below `root`, depth first. An absent root is no databases, not an error.
+ * @param {string} root
+ * @returns {string[]}
+ */
 export function findDatabases(root) {
   if (!existsSync(root)) return [];
+  /** @type {string[]} */
   const found = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
@@ -99,6 +104,7 @@ export function findDatabases(root) {
  * Windows-spelled path untouched on Linux, which is why `proof-isolation.test.ts` — written to be decidable on any
  * host — could only pass on Windows (`docs/archive/defects/the-proof-isolation-test-passes-only-on-a-windows-host.md`).
  */
+/** @param {string} path */
 function toPosix(path) {
   return path.split(/[\\/]/).join(posix.sep);
 }
@@ -121,6 +127,7 @@ function toPosix(path) {
  * against `resolveUserDirs`/`dataLayout` themselves on all three platforms, which is what keeps it from
  * drifting — a drift is a failed test, not a proof that quietly finds nothing.
  */
+/** @param {string} local @param {NodeJS.Platform} [platform] @param {string} [home] @returns {string} */
 export function workspacesRootFor(local, platform = process.platform, home = scratchHomeFor(local)) {
   return dataSubdirFor(local, 'workspaces', platform, home);
 }
@@ -131,6 +138,7 @@ export function workspacesRootFor(local, platform = process.platform, home = scr
  * writes `<XDG_DATA_HOME>/rotaris/tokens`, so sign-in timed out, and `dropCredentials` removed a directory that never
  * held the key — the key's own directory survived a `--keep`. Found by the first live run on Linux, 2026-09-24.
  */
+/** @param {string} local @param {NodeJS.Platform} [platform] @param {string} [home] @returns {string} */
 export function tokensDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
   return dataSubdirFor(local, 'tokens', platform, home);
 }
@@ -142,6 +150,7 @@ export function tokensDirFor(local, platform = process.platform, home = scratchH
  * planting a lock that names this machine crashed with ENOENT, and `repair-all` and every launch after it went
  * unmeasured (`docs/archive/defects/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
  */
+/** @param {string} local @param {NodeJS.Platform} [platform] @param {string} [home] @returns {string} */
 export function machineIdFileFor(local, platform = process.platform, home = scratchHomeFor(local)) {
   return dataSubdirFor(local, 'machine-id', platform, home);
 }
@@ -163,6 +172,7 @@ export function machineIdFileFor(local, platform = process.platform, home = scra
  * name REQ-CONFIG-001 never spells, and this copy followed it
  * (`docs/archive/defects/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
  */
+/** @param {string} local @param {NodeJS.Platform} [platform] @param {string} [home] @returns {string} */
 export function configDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
   if (platform === 'win32') return win32.join(local, 'rotaris', 'rotaris');
   if (platform === 'darwin') return macosApplicationSupport(home);
@@ -177,17 +187,20 @@ export function configDirFor(local, platform = process.platform, home = scratchH
  * every platform
  * (`docs/archive/defects/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
  */
+/** @param {string} local @param {NodeJS.Platform} [platform] @param {string} [home] @returns {string} */
 export function dataDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
   if (platform === 'win32') return win32.join(local, 'rotaris', 'data');
   if (platform === 'darwin') return posix.join(macosApplicationSupport(home), 'data');
   return posix.join(toPosix(local), 'rotaris', 'data', 'rotaris');
 }
 
+/** @param {string} local @param {string} leaf @param {NodeJS.Platform} platform @param {string} home */
 function dataSubdirFor(local, leaf, platform, home) {
   return (platform === 'win32' ? win32 : posix).join(dataDirFor(local, platform, home), leaf);
 }
 
 /** `resolveUserDirs`'s `darwin` configuration directory below a home, spelled for the platform that reads it. */
+/** @param {string} home */
 function macosApplicationSupport(home) {
   return posix.join(toPosix(home), 'Library', 'Application Support', 'rotaris');
 }
@@ -198,21 +211,25 @@ function macosApplicationSupport(home) {
  * directory rules above (`configDirFor`, `workspacesRootFor`, `tokensDirFor`) can compose the macOS answer from the
  * same argument every caller already passes them.
  */
+/** @param {string} local */
 export function scratchHomeFor(local) {
   return posix.join(toPosix(local), '..', 'home');
 }
 
 /** The one store below `local`, or a thrown error naming how many there were — a proof that opened the wrong store is the defect this refuses to become. */
+/** @param {string} local @returns {string} */
 export function oneDatabase(local) {
   const databases = findDatabases(local);
-  if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);
-  return databases[0];
+  const [only] = databases;
+  if (databases.length !== 1 || only === undefined) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);
+  return only;
 }
 
 /**
  * An evidence directory below the repository, emptied. The containment check is not decoration: the path is
  * composed from a caller's string, and a proof that deleted a tree outside the repository would do it recursively.
  */
+/** @param {string} name */
 export function evidenceDirectory(name) {
   const output = name.endsWith('-proof') ? resolve(repo, '.proof', name.replace(/^\./, '')) : resolve(repo, name);
   const inside = relative(repo, output);
@@ -221,6 +238,7 @@ export function evidenceDirectory(name) {
 }
 
 /** `pnpm --filter @rotaris/desktop build`, with the log written beside the evidence. Skipped by `--skip-build` in the caller. */
+/** @param {string} [output] */
 export function buildDesktop(output) {
   const began = Date.now();
   const built = process.platform === 'win32'
@@ -235,7 +253,7 @@ export function buildDesktop(output) {
     durationMs: Date.now() - began,
     exitCode: built.status ?? null,
     signal: built.signal ?? null,
-    error: built.error ? built.error.code ?? built.error.message : null,
+    error: built.error ? /** @type {NodeJS.ErrnoException} */ (built.error).code ?? built.error.message : null,
     via: entryRecordIdentity(entryName())?.label ?? null,
   });
   if (output) {
@@ -250,6 +268,10 @@ export function buildDesktop(output) {
  * dialect. A caller adds its own seams on top; nothing here presumes a capture. `home` is `proofIsolationEnv`'s,
  * passed through: a POSIX caller may name its scratch home there (every POSIX launch gets one either way), and a
  * Windows launch never sets `HOME` whatever it is passed (see below).
+ */
+/**
+ * @param {{ local: string, preferences?: string | undefined, home?: string | undefined, extra?: Record<string, string | undefined> }} options
+ * @returns {NodeJS.ProcessEnv}
  */
 export function launchOptions({ local, preferences, home, extra = {} }) {
   return {
@@ -296,6 +318,10 @@ export function launchOptions({ local, preferences, home, extra = {} }) {
  * makes a deep profile launchable; it still keeps each profile's socket in a directory of that profile's own, and
  * `workspace-proof`'s scenario 13b takes it away to drive the fallback.
  */
+/**
+ * @param {{ profileRoot?: string | undefined, local: string, preferences?: string | undefined, home?: string | undefined, platform?: NodeJS.Platform }} options
+ * @returns {Record<string, string>}
+ */
 export function proofIsolationEnv({ profileRoot, local, preferences, home, platform = process.platform }) {
   // The POSIX pair is spelled with POSIX separators even when the harness runs on Windows, where the pair is
   // inert: a Windows-spelled value is a path no POSIX machine would resolve.
@@ -316,6 +342,7 @@ export function proofIsolationEnv({ profileRoot, local, preferences, home, platf
   const roaming = profileRoot !== undefined
     ? join(profileRoot, 'roaming')
     : join(local, '..', 'roaming');
+  /** @type {Record<string, string>} */
   const env = {
     LOCALAPPDATA: local,
     APPDATA: roaming,
@@ -333,11 +360,13 @@ export function proofIsolationEnv({ profileRoot, local, preferences, home, platf
 }
 
 /** The `capture: probe <selector> → <json>` lines a launch logged, by selector. The shape twenty scripts parse. */
+/** @param {string} log @returns {Record<string, unknown[]>} */
 export function readProbes(log) {
+  /** @type {Record<string, unknown[]>} */
   const probes = {};
   for (const line of log.split('\n')) {
     const m = /capture: probe (.+?) → (\[.*\])\s*$/.exec(line);
-    if (m) { try { probes[m[1]] = JSON.parse(m[2]); } catch { probes[m[1]] = []; } }
+    if (m?.[1] !== undefined && m[2] !== undefined) { try { probes[m[1]] = JSON.parse(m[2]); } catch { probes[m[1]] = []; } }
   }
   return probes;
 }

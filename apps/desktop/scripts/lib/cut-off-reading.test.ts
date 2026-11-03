@@ -7,7 +7,6 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { timeoutLine as productLine } from '@rotaris/ui';
 import { OUTCOME_HEAD as productHead, outcomeLine } from '@rotaris/engine';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { OUTCOME_HEAD, TAG_EVAL, cutOffChildren, firstSentence, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLine } from './cut-off-reading.mjs';
 
 const report = (o: Record<string, unknown>) => JSON.stringify({ errors: [{ type: 'timeout', message: 'Child timed out after 60s' }], ...o });

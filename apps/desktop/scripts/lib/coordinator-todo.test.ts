@@ -5,7 +5,6 @@
  * records since fin27 (`failure_kind: todo_list_owed`, `blocked`).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { agentPlanTaskCount, coordinatorTodoReading, heldItemReading, holdingWindows, launchRunOverride, planIdReading, planItemIds, rootAgentPlan, todoItemReading, todoStates, WRITER_ROLES } from './coordinator-todo.mjs';
 import { BUILT_IN_ROLE_TOOLS } from '@rotaris/contracts';
 

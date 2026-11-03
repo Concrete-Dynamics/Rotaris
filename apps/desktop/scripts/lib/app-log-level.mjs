@@ -23,6 +23,7 @@ export const READABLE_LEVELS = ['debug', 'info'];
 /**
  * Null when `value` (the flag's text, or null when the flag is absent) is a threshold the run can read under; otherwise the
  * sentence the run refuses with. Any casing, as PD-MONITOR-002 accepts.
+ * @param {string | null | undefined} value
  */
 export function appLogLevelRefusal(value) {
   if (value === null || value === undefined) return null;

@@ -7,7 +7,6 @@
  * (`codebase.md`, the sixty-eighth defect's family).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the audit library is plain ESM beside the scripts that run it.
 import { DEFAULT_TOLERANCE, RELATION_KINDS, evaluateContracts, evaluateRelation, shrunkBoxes } from './layout-relations.mjs';
 
 const box = (x: number, y: number, width: number, height: number) => ({
@@ -221,8 +220,8 @@ describe('layout-contract relations', () => {
     it('reports the audit itself when the two probes disagree on how many boxes there were', () => {
       const rows = shrunkBoxes([geometry('div.card', 56, 76)], []);
       expect(rows).toHaveLength(1);
-      expect(rows[0].element).toBe('(audit)');
-      expect(rows[0].detail).toContain('read pairwise');
+      expect(rows[0]!.element).toBe('(audit)');
+      expect(rows[0]!.detail).toContain('read pairwise');
     });
 
     it('ignores a box with no height rather than dividing by its absence', () => {

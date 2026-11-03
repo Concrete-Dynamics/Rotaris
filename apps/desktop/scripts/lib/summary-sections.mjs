@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The live run's reading of a session's `summary.md` (REQ-SESSION-140), the file the product writes beside the session's
  * log and `preserveRun` copies into the pack (`apps/desktop/scripts/live-run.mjs`). Until fin23 the pack carried no

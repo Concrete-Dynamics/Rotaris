@@ -395,5 +395,5 @@ export const RULES = Object.freeze([
     review: 'workspace scripts or pins — name the proofs a new script belongs to' },
   { paths: ['.agents/', '.claude/', '.github/'], areas: ['known'] },
   { paths: ['AGENTS.md', 'CONTEXT-MAP.md', 'pnpm-lock.yaml',
-    '.gitattributes', '.gitignore', 'tsconfig.json', 'vitest.config.ts'], areas: ['known'] },
+    '.gitattributes', '.gitignore', 'tsconfig', 'vitest.config.ts'], areas: ['known'] },
 ]);

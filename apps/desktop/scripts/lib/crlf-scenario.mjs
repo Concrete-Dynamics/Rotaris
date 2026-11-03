@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The live run's `crlf` scenario (fin42; N52 of the 2026-10-13 survey): the edit directives `PD-TOOLS-014` to `PD-TOOLS-018`
  * against a real model on a CRLF, tab-indented fixture. Every live edit until fin42 met the LF todo-app fixture and matched at
@@ -83,6 +84,11 @@ export const insertOwesCr = (content) => { const lines = String(content ?? '').s
  * `[{ verdict: 'check'|'note', passed?, what, detail? }]` for one run: `calls` are the session's tool calls in order (`{
  * ordinal, tool_name, agent_name, status, args, result, isError }`), `files` maps each fixture path to its text after the run
  * (null when it is gone).
+ */
+/**
+ * @typedef {{ verdict: 'check' | 'note', passed?: boolean, what: string, detail?: string | undefined }} Verdict
+ * @param {{ calls: Array<Record<string, any>>, files: Record<string, string | null> }} run
+ * @returns {Verdict[]}
  */
 export function crlfVerdicts({ calls, files }) {
   const verdicts = [];

@@ -9,9 +9,7 @@ import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { app, buildCheck, bundleCheck, displayCheck, displayTargets, electron, endpointCheck, environmentCheck, formatReport, mainEntry, newestSourceMtime } from './preflight.mjs';
-import { nodeCheck, parseArgs, platformCheck, probeTargets, proofChecks, repo, runPreflight, scratchCheck, suggestIds } from './preflight.mjs';
-import { connectTargets, probeDisplay, readProbe } from './preflight.mjs';
+import { app, buildCheck, bundleCheck, connectTargets, displayCheck, displayTargets, electron, endpointCheck, environmentCheck, formatReport, mainEntry, newestSourceMtime, nodeCheck, parseArgs, platformCheck, probeDisplay, probeTargets, proofChecks, readProbe, repo, runPreflight, scratchCheck, suggestIds } from './preflight.mjs';
 import { PROOFS } from '../../../tools/proof-registry/registry.mjs';
 import { app as harnessApp, electron as harnessElectron, mainEntry as harnessMainEntry, repo as harnessRepo } from './lib/harness.mjs';
 
@@ -142,7 +140,7 @@ describe('preflight — node, the environment and the display', () => {
 
   it('a target that times out or errors is a miss; only a connect reaches it', () => {
     const net = (outcomes: Record<string, string>) => ({
-      connect: (options: { path?: string }) => {
+      connect: (options: { path?: string; host?: string }) => {
         const s = Object.assign(new EventEmitter(), { setTimeout: () => {}, destroy: () => {} });
         const outcome = outcomes[options.path ?? ''] ?? 'error';
         queueMicrotask(() => (outcome === 'error' ? s.emit('error', Object.assign(new Error('refused'), { code: 'ECONNREFUSED' })) : s.emit(outcome)));
@@ -252,8 +250,8 @@ describe('preflight — a proof id', () => {
   it('an unknown id fails with the closest ids named', () => {
     const checks = proofChecks('mcp-proff');
     expect(checks).toHaveLength(1);
-    expect(checks[0].status).toBe('fail');
-    expect(checks[0].message).toContain('mcp-proof');
+    expect(checks[0]!.status).toBe('fail');
+    expect(checks[0]!.message).toContain('mcp-proof');
     expect(suggestIds('live-rn')).toContain('live-run');
   });
 

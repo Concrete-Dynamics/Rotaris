@@ -72,6 +72,10 @@ const INITIALIZED = [
   '',
 ].join('\n');
 
+/**
+ * @param {string} name
+ * @param {{ global: string | null, workspace: string | null }} [files]
+ */
 function scenario(name, files = { global: GLOBAL, workspace: WORKSPACE }) {
   const root = join(output, name);
   const workspace = join(root, 'workspace');
@@ -86,6 +90,11 @@ function scenario(name, files = { global: GLOBAL, workspace: WORKSPACE }) {
   return { root, workspace, local, configDir, workspaceFile: join(workspace, '.rotaris', 'agents.yaml'), globalFile: join(configDir, 'agents.yaml') };
 }
 
+/**
+ * @param {string} name
+ * @param {ReturnType<typeof scenario>} s
+ * @param {Record<string, string>} [extra]
+ */
 async function launch(name, s, extra) {
   const png = join(output, `${name}.png`);
   const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
@@ -112,6 +121,7 @@ async function launch(name, s, extra) {
  * a point another element covered, fails HERE naming itself, rather than letting the launch carry on and the file
  * assertions below speak for a gesture nobody made.
  */
+/** @param {string} name @param {string} log @param {readonly string[]} whats */
 function clicked(name, log, whats) {
   const missed = unpressedClicks(log, whats);
   if (missed.length > 0) throw new Error(`${name}: ${missed.map((m) => `the step "${m.what}" was ${m.reason === 'covered' ? 'pressed on a point another element covers' : 'never pressed'}`).join('; ')}; see ${name}.log`);

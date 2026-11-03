@@ -99,6 +99,7 @@ export function settleNoticesStep({ code, env, sourceDir }) {
   return decision;
 }
 
+/** @param {string} haystack @param {string} needle */
 function occurrences(haystack, needle) {
   let n = 0;
   for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + needle.length)) n += 1;
@@ -120,7 +121,7 @@ function occurrences(haystack, needle) {
  */
 export function aboutAssetProblems({ resourcesDir, sourceDir, env, toolServerLicense, build }) {
   const problems = [];
-  const read = (dir, name) => { try { return readFileSync(join(dir, name)); } catch { return null; } };
+  const read = (/** @type {string} */ dir, /** @type {string} */ name) => { try { return readFileSync(join(dir, name)); } catch { return null; } };
 
   // REQ-SHELL-140: one stripped line, the one `pnpm build-id` wrote for this build, naming the tree being packed.
   const id = read(resourcesDir, ABOUT_ASSETS.buildId);

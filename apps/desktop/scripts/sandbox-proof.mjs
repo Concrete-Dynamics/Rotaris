@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 import { accessSync, constants, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';

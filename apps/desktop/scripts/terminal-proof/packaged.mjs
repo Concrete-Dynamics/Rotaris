@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * Part T2 — `runtime.terminal_stream_enabled: false` in the PACKAGED application, which every earlier execution of
  * ADR-0021 left owed (Part AL measured it headless, Part AL′ through Electron but not through a packaged build).

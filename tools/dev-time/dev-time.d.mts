@@ -202,7 +202,7 @@ export declare function recordSpan(options: {
   kind: string;
   label: string;
   command?: string | null;
-  cwd?: string;
+  cwd?: string | undefined;
   env?: NodeJS.ProcessEnv;
   startedAt?: Date | null;
   durationMs: number;

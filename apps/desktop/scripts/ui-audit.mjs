@@ -37,6 +37,7 @@ import { readAuditAnswer } from './lib/audit-answer.mjs';
 import { auditFinding, countByKind } from './lib/audit-finding.mjs';
 
 const argv = process.argv.slice(2);
+/** @param {string} name @param {string | boolean | null} fallback @returns {string | boolean | null} */
 const flag = (name, fallback) => {
   const found = argv.find((a) => a === `--${name}` || a.startsWith(`--${name}=`));
   if (found === undefined) return fallback;
@@ -318,7 +319,7 @@ const AUDIT = `JSON.stringify((() => {
  * its own centre, and does the overlay itself sit inside the window? That is defect 85 exactly: a dialog
  * that was visible, focusable and painted under the composer.
  */
-const OVERLAY_AUDIT = (root) => `JSON.stringify((() => {
+const OVERLAY_AUDIT = (/** @type {string} */ root) => `JSON.stringify((() => {
   const cls = (el) => (typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\\s+/).join('.') : el.tagName.toLowerCase());
   const host = document.querySelector(${JSON.stringify(root)});
   if (!host) return { missing: true };
@@ -402,9 +403,11 @@ const OVERLAYS = [
   { name: 'worktree dialog', root: '[data-testid="worktree-dialog"]', typed: '/worktree', enter: true },
 ];
 
+/** @type {Array<Record<string, unknown> & { kind: string }>} */
 const findings = [];
 const geometryEvidence = [];
 const styleEvidence = [];
+/** @param {string} kind @param {string} view @param {string} size @param {Record<string, unknown> | null | undefined} detail */
 const note = (kind, view, size, detail) => {
   findings.push(auditFinding(kind, view, size, detail));
   console.log(`  ${kind.padEnd(11)} ${view} @ ${size} — ${JSON.stringify(detail)}`);
@@ -412,7 +415,7 @@ const note = (kind, view, size, detail) => {
 
 const started = await startApp({ root: join(output, 'app'), workspace, timeoutMs: 90_000 });
 const d = started.driver;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (/** @type {number} */ ms) => new Promise((r) => setTimeout(r, ms));
 
 try {
   await d.waitFor('.app-shell', { timeoutMs: 30_000 });
@@ -453,8 +456,8 @@ try {
       const shrunk = shrunkBoxes(a.geometry, a.styles);
       for (const s of shrunk) note('SHRUNK', view.name, size.label, s);
       const contracts = evaluateContracts(a.measured);
-      for (const contract of contracts.filter((candidate) => !candidate.pass)) note('CONTRACT', view.name, size.label, contract);
-      console.log(`${a.tracks.length + a.escapees.length + a.buried.length + a.trapped.length + shrunk.length + contracts.filter((candidate) => !candidate.pass).length === 0 ? 'CLEAN' : 'FOUND'}  ${view.name} @ ${size.label} (${a.counts.elements} elements, ${a.counts.controls} controls, ${contracts.length} contracts, skipped ${JSON.stringify(a.counts.skipped)})`);
+      for (const contract of contracts.filter((/** @type {{ pass: boolean }} */ candidate) => !candidate.pass)) note('CONTRACT', view.name, size.label, contract);
+      console.log(`${a.tracks.length + a.escapees.length + a.buried.length + a.trapped.length + shrunk.length + contracts.filter((/** @type {{ pass: boolean }} */ candidate) => !candidate.pass).length === 0 ? 'CLEAN' : 'FOUND'}  ${view.name} @ ${size.label} (${a.counts.elements} elements, ${a.counts.controls} controls, ${contracts.length} contracts, skipped ${JSON.stringify(a.counts.skipped)})`);
     }
   }
   // ── The overlays, at both sizes. Nothing was open during the sweep above, and every overlay is a surface

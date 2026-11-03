@@ -12,7 +12,6 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// @ts-expect-error — plain ESM beside the scripts that run it.
 import { BUILDER_ARTIFACT_NAME_KEYS, configurationWithNames, declaredProductVersion, namedConfigurationText, packagingArtifactNames, producedNameProblem } from './artifact-names.mjs';
 import { UnsupportedVersionError } from '../../../../tools/release-naming/src/index.js';
 
@@ -20,6 +19,7 @@ const APP = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const appRequire = createRequire(join(APP, 'package.json'));
 /** electron-builder's own modules, resolved from where electron-builder resolves them. */
 const abl = createRequire(appRequire.resolve('app-builder-lib/package.json'));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- electron-builder.yml as js-yaml reads it, walked by key
 const yaml = abl('js-yaml') as { load: (text: string) => Record<string, any>; dump: (value: unknown, options?: unknown) => string };
 const YML = readFileSync(join(APP, 'electron-builder.yml'), 'utf8');
 
@@ -63,7 +63,7 @@ describe('the declared version is the manifest\'s own text — REQ-STARTUP-158',
   it('a manifest without a version, or with one outside the grammar, declares no name', () => {
     for (const [v, error] of [[undefined, /declares no product version/], [7, /declares no product version/], ['0.1.0-rc1', UnsupportedVersionError], ['v0.1.0', UnsupportedVersionError]] as const) {
       const dir = manifestDir(v);
-      try { expect(() => declaredProductVersion(dir)).toThrow(error as never); } finally { rmSync(dir, { recursive: true, force: true }); }
+      try { expect(() => declaredProductVersion(dir)).toThrow(error); } finally { rmSync(dir, { recursive: true, force: true }); }
     }
   });
 });
@@ -87,6 +87,7 @@ describe('what electron-builder is handed — the written configuration through 
    * electron-builder loads that path with; it is run here on the real yml, so a loader change, or an `artifactName`
    * reappearing in the yml, fails this before it fails a release. Nothing is built.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- electron-builder's resolved configuration, walked by key
   const { getConfig } = abl('app-builder-lib/out/util/config/config.js') as { getConfig: (projectDir: string, configPath: string | null, configFromOptions: null) => Promise<Record<string, any>> };
   const loaded = async (text: string) => {
     mkdirSync(join(APP, 'release'), { recursive: true });

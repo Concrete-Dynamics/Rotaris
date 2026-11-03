@@ -22,7 +22,7 @@ const F8_INTENTS_3 = [
   '[main 2026-10-15T02:39:36.272Z] info    run host: model request POST https://endpoint.invalid/v1/chat/completions',
 ].join('\n');
 const line = (category: string, rest = ' (0.97) via json_schema') => `[main 2026-10-04T00:00:00.000Z] info    run host: intent: ${category}${rest}`;
-const [readme, append, flag] = INTENTS;
+const [readme, append, flag] = [INTENTS[0]!, INTENTS[1]!, INTENTS[2]!];
 
 describe('the intent scenario accepts what REQ-ORCH-006 and REQ-ORCH-021 leave in reach of each prompt', () => {
   it('names only categories of the taxonomy, each prompt with its reason', () => {

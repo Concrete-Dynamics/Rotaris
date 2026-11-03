@@ -33,6 +33,13 @@ export const BUNDLE_SCRIPT = join(APP, 'scripts', 'code-intelligence', 'bundle.m
  * `spawnSync`'s default `maxBuffer` of 1 MiB would have been ended with ENOBUFS and read as a failed build (fin47's review of
  * `accept1-1`; docs/archive/defects/ensure-bundles-build-shows-no-progress-and-fails-past-spawnsyncs-buffer.md).
  */
+/**
+ * @param {string[]} args
+ * @param {number} timeoutMs
+ * @param {{ script?: string, stream?: boolean, stdio?: import('node:child_process').StdioOptions }} [options]
+ * @typedef {{ status: number | string, output: string, streamed?: boolean }} BundleRun the exit status, or what ended it
+ * @returns {BundleRun}
+ */
 export function runBundleScript(args, timeoutMs, { script = BUNDLE_SCRIPT, stream = false, stdio = ['ignore', 'inherit', 'inherit'] } = {}) {
   if (stream) {
     const r = spawnSync(process.execPath, [script, ...args], { stdio, windowsHide: true, timeout: timeoutMs });
@@ -43,13 +50,14 @@ export function runBundleScript(args, timeoutMs, { script = BUNDLE_SCRIPT, strea
 }
 
 /** The bundle step itself (`pnpm code-intel:bundle`), streamed: `ensureBundle`'s build unless a caller names its own. */
+/** @param {number} [timeoutMs] @param {{ script?: string, stdio?: import('node:child_process').StdioOptions }} [opts] */
 export function buildBundle(timeoutMs = 900_000, opts = {}) {
   return runBundleScript([], timeoutMs, { ...opts, stream: true });
 }
 
-const tail = (text) => String(text ?? '').trim().split('\n').slice(-6).join('\n');
+const tail = (/** @type {unknown} */ text) => String(text ?? '').trim().split('\n').slice(-6).join('\n');
 /** A failed step's own words for a message: the captured tail, or where a streamed step's output already went. */
-const outputOf = (r) => (r.streamed === true ? '(its output is above, streamed as it ran)' : tail(r.output));
+const outputOf = (/** @type {{ streamed?: boolean, output?: string }} */ r) => (r.streamed === true ? '(its output is above, streamed as it ran)' : tail(r.output));
 
 /** What `init-proof` loses without the bundle — the refusal's second sentence unless the caller names its own. */
 const PROOF_CONSEQUENCE = 'Without it code-intelligence-setup fails and records nothing (REQ-WORKSPACE-084), so every scenario that expects it recorded would fail on a cause outside this proof.';
@@ -60,6 +68,9 @@ const PROOF_CONSEQUENCE = 'Without it code-intelligence-setup fails and records 
  * `consequence` says what the caller would have judged without it. Answers what was done: `'present'` or `'built'`.
  * The live run has the same precondition since 2026-10-03
  * (`docs/archive/defects/the-live-run-runs-without-the-code-intelligence-bundle-and-passes-without-saying-so.md`).
+ */
+/**
+ * @param {{ skipBuild: boolean, consequence?: string, check?: () => BundleRun, build?: () => BundleRun }} options
  */
 export function ensureBundle({ skipBuild, consequence = PROOF_CONSEQUENCE, check = () => runBundleScript(['--check'], 60_000), build = () => buildBundle() }) {
   const first = check();
@@ -79,6 +90,7 @@ export function ensureBundle({ skipBuild, consequence = PROOF_CONSEQUENCE, check
  * The app log's own account of a failed setup task: the coordinator's `initialization: <id> → failure — …` line and the
  * runtime launcher's "not present in this installation" line, each without the log's prefix. `null` when neither is there.
  */
+/** @param {string} log @param {string} [taskId] */
 export function setupFailureOf(log, taskId = INITIALIZATION_TASK_ID) {
   const failure = new RegExp(`initialization: ${taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → failure\\b.*`);
   const absent = /rotaris: the bundled code-intelligence runtime is not present in this installation.*/;
@@ -91,6 +103,7 @@ export function setupFailureOf(log, taskId = INITIALIZATION_TASK_ID) {
 }
 
 /** `message`, with the app log's setup failure quoted after it when the log holds one. */
+/** @param {string} message @param {string} log @param {string} [taskId] */
 export function withSetupFailure(message, log, taskId = INITIALIZATION_TASK_ID) {
   const failure = setupFailureOf(log, taskId);
   return failure === null ? message : `${message}\nthe app logged why ${taskId} failed:\n${failure}`;

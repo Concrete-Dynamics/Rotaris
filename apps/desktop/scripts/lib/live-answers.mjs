@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * What `slice-proof` accepts from a live model's answers, and only what a requirement fixes about them.
  *
@@ -80,6 +81,11 @@ const stampOf = (l) => {
  * time from the run's first model request (the classification's, REQ-ORCH-005) to the intent line, `elapsedMs`: the product
  * answered as specified, and `intentOutcome` asks once more. A timeout at any other bound, or one that lands on another
  * category, is not REQ-ORCH-007's answer and is no such verdict.
+ */
+/**
+ * @param {string} log
+ * @param {{ prompt: string, accept: readonly string[] } & Record<string, any>} intent
+ * @returns {{ problem: string | null, timedOut?: boolean, outOfSet?: boolean } & Record<string, any>}
  */
 export function intentVerdict(log, intent) {
   const lines = log.split('\n');

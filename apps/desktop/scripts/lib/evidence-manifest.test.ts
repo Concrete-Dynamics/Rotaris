@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MANIFEST_FILE, inventory, verifyEvidenceManifest, writeEvidenceManifest } from './evidence-manifest.mjs';
 
-const made = [];
+const made: string[] = [];
 function scratch() {
   const dir = mkdtempSync(join(tmpdir(), 'evidence-manifest-'));
   made.push(dir);
@@ -15,7 +15,7 @@ afterEach(() => {
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-const digest = (text) => createHash('sha256').update(text).digest('hex');
+const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 const environment = { platform: 'win32', marker: 'pinned' };
 
 describe('evidence manifest — the inventory', () => {

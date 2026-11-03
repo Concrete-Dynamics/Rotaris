@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The store-resolution proof — OQ-281 (ruled 2026-10-14 by the consortium under the owner's delegation, R-072) in the built
  * application: a place that holds no store (REQ-SESSION-202) is refused, said, and resolved in Settings › Project.

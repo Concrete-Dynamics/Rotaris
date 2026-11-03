@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 // The notices generator (REQ-STARTUP-141/142/143; ADR-0054; first-release-plan.md §4.3). It computes the shipped
 // closure of a build OFFLINE — from the installed workspace, the bundled code-intelligence runtime's own metadata and
 // the version-controlled tables beside this file — validates it, and renders `THIRD-PARTY-LICENSES.txt`.

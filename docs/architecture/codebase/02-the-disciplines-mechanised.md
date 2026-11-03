@@ -16,8 +16,8 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   no key that decides the perimeter (R-091, `docs/architecture/hardening.md` §3.1; since 2026-11-02, hrd1 A2).
 - **No Node built-ins in renderer code** — `no-restricted-imports` over `ui`, `ui-core`, renderer, preload.
 - **Lint reads the types** (since 2026-11-01, R-091) — every `.ts`/`.tsx` is parsed against its project
-  (`parserOptions.projectService`; the root `tools/*.test.ts`, which no tsconfig includes yet, against the root
-  tsconfig's options as a default project) under `typescript-eslint`'s `recommendedTypeChecked`, and four rules are
+  (`parserOptions.projectService`, through the root solution `tsconfig.json`; until 2026-11-03 the root `tools/*.test.ts`,
+  which no tsconfig included, were parsed against a default project) under `typescript-eslint`'s `recommendedTypeChecked`, and four rules are
   named at `error`: `no-floating-promises` (a promise neither awaited, caught nor marked `void`),
   `no-misused-promises` (an `async` callback handed where a `() => void` is expected — the clock ports' `after`; the
   capture seams wrap theirs in `capture/host.ts`'s `settled`, which reports the failure), `await-thenable`, and
@@ -27,7 +27,18 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   `require-await` (an `async` port with a synchronous body is how a throw becomes a rejection here),
   `no-unnecessary-condition` (308 findings, the sampled ones TypeScript's narrowing kept across an `await` or a
   callback; the `strict-type-checked` plan's), and the `no-unsafe-*` family in tests (vitest's asymmetric matchers are
-  `any`; the tools' tests import untyped `.mjs` until E2). The `.js`/`.mjs` files keep the untyped rules.
+  `any`; a listed typecheck exception's exports are still inferred). The `.js`/`.mjs` files keep the untyped rules, and the
+  proof scripts are linted since 2026-11-03 (until then `apps/desktop/scripts/**` was ignored whole; its two fixture
+  workspaces stay out).
+- **Every test and every tool is typechecked** (since 2026-11-03, R-091, hardening.md §3.5 row 4) — the root
+  `tsconfig.json` is a solution that `pnpm typecheck` builds (`tsc -b --force`: every project checked whole, nothing
+  reused from a previous run) over two projects: `tsconfig.app.json`, the product (`packages/*/src`, `apps/*/src`,
+  `tools/release-naming/src`), and `tsconfig.scripts.json`, the tooling — the proof scripts and their library, the
+  tools, the build and test configuration and every test beside them — with `allowJs`, `checkJs` and `strict`, so the
+  `.mjs` are typed by their JSDoc and a test that imports one reads its types. A file too far gone for that opens with
+  `// @ts-nocheck — <why>` and is listed in `tools/typecheck-exceptions.json`, which `tools/typecheck-exceptions.test.ts`
+  holds to the files carrying the line and caps at the 96 it started with: the list only shrinks. Before, 117 of 517
+  test files and every `.mjs` were in no typecheck, and 113 `@ts-expect-error` stood on `.mjs` imports.
 - **A warning fails the gate, and so does a disable that disables nothing** (since 2026-11-01, R-091) — `eslint .
   --max-warnings 0` in `pnpm lint`, and `linterOptions.reportUnusedDisableDirectives: 'error'`. A disable says why on its
   own line (`-- <reason>`).

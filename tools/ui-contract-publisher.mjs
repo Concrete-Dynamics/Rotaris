@@ -20,21 +20,22 @@ export const CONTRACT_ATTRIBUTE = 'data-ui-contract';
 export const CONTRACT_PUBLISHER = 'packages/ui/src/design-system/layout-contract.ts';
 
 /**
- * @param rel repository-relative path, forward slashes
- * @param text the file's source
- * @returns one `path:line what` string per hand-written contract; empty for the publisher itself
+ * @param {string} rel repository-relative path, forward slashes
+ * @param {string} text the file's source
+ * @returns {string[]} one `path:line what` string per hand-written contract; empty for the publisher itself
  */
 export function handWrittenContracts(rel, text) {
   if (rel === CONTRACT_PUBLISHER) return [];
   const kind = rel.endsWith('.tsx') ? ts.ScriptKind.TSX : rel.endsWith('.ts') ? ts.ScriptKind.TS : null;
   if (kind === null) return [];
   const source = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, kind);
+  /** @type {string[]} */
   const found = [];
-  const at = (node, what) => {
+  const at = (/** @type {import('typescript').Node} */ node, /** @type {string} */ what) => {
     const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
     found.push(`${rel}:${line + 1} ${what}`);
   };
-  const visit = (node) => {
+  const visit = (/** @type {import('typescript').Node} */ node) => {
     if (ts.isJsxAttribute(node) && node.name.getText(source) === CONTRACT_ATTRIBUTE) at(node, `JSX attribute ${CONTRACT_ATTRIBUTE}`);
     else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === CONTRACT_ATTRIBUTE) at(node, `string '${CONTRACT_ATTRIBUTE}'`);
     else if (ts.isPropertyAccessExpression(node) && node.name.text === 'uiContract') at(node, 'dataset.uiContract');

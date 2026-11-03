@@ -3,7 +3,6 @@
  * survey). A reader that stopped matching its record would turn its check into "not asked" over a green run.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the readers are plain ESM beside the script that uses them.
 import { DIRECT_WORK_STATEMENT, HANDOFF_ARTIFACT_CAP, SWARM_HEADING, attachReading, handoffArtifact, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './delegation-readings.mjs';
 
 const body = (system: string, user: string, tools: { name: string; description?: string }[]) => ({

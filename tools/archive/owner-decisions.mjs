@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 // The archive's second kind (R-092; `docs/README.md`, "The archive"; `docs/architecture/hardening.md` §6 row 3): a
 // ruled escalation (ESC-n), structural ruling (SR-n) or gate decision (GD-n) of the owner-decisions register whose
 // ruling the specification has absorbed is history, and it moves whole from its live part to the part's mirror under

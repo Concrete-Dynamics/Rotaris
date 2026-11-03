@@ -52,10 +52,10 @@ for (const file of specFiles) {
   const lines = readFileSync(join(specDir, file), 'utf8').split(/\r?\n/);
   lines.forEach((line, i) => {
     const m = BULLET.exec(line) ?? HEADING.exec(line) ?? SECTION.exec(line);
-    if (!m) return;
+    if (!m?.[1]) return;
     const id = m[1];
     if (ids.has(id)) return; // first definition wins; duplicates are the registrar's problem
-    const domain = id.split('-')[1];
+    const domain = id.split('-')[1] ?? '';
     ids.set(id, { domain, file, line: i + 1, withdrawn: WITHDRAWN.test(m[2] ?? '') });
   });
 }
@@ -124,7 +124,7 @@ for (const registerFile of registerFiles) {
       newLine = null;
     }
     const m = PD_BULLET.exec(line) ?? PD_HEADING.exec(line) ?? PD_SECTION.exec(line);
-    if (m) {
+    if (m?.[1]) {
       const id = m[1];
       if (RETIRED.test(id)) {
         throw new Error(`symbol artifact: ${id} (docs/product/${file}:${i + 1}) is in a retired domain; PD-TUI and PD-CLI are closed`);
@@ -135,7 +135,7 @@ for (const registerFile of registerFiles) {
       current = id;
       entryOpen = true;
       directives.set(id, {
-        domain: id.split('-')[1],
+        domain: id.split('-')[1] ?? '',
         file,
         line: i + 1,
         withdrawn: WITHDRAWN.test(m[2] ?? ''),

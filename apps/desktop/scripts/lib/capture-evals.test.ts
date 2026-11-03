@@ -4,7 +4,6 @@
  * probe can only ever read its own answer, and a schedule that still cannot tell two apart fails instead of choosing.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the scripts that run it.
 import { parseEvals, readEval } from './capture-evals.mjs';
 
 const readNotice = `(() => { const n = document.querySelector('[data-testid="notice"]'); return n ? { title: n.textContent } : null; })()`;
@@ -31,7 +30,7 @@ describe('two probes at one offset each read their own answer (REQ-CHAT-032)', (
   });
 
   it('a read without its expression is refused: the offset alone does not name a probe', () => {
-    expect(() => readEval(evals, 5900, undefined)).toThrow(/needs the expression it reads/);
+    expect(() => readEval(evals, 5900, undefined!)).toThrow(/needs the expression it reads/);
     expect(() => readEval(evals, 5900, '  ')).toThrow(/needs the expression it reads/);
   });
 

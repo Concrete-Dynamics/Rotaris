@@ -29,6 +29,7 @@ rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
+/** @type {Record<string, unknown>} */
 const results = { generatedAt: new Date().toISOString(), platform: process.platform };
 
 // ── 1. The unit suite ──────────────────────────────────────────────────────────────────────────────────────────
@@ -39,13 +40,13 @@ if (!process.argv.includes('--skip-tests')) {
     ? spawnSync('cmd.exe', ['/d', '/s', '/c', `pnpm ${args.join(' ')}`], { cwd: repo, encoding: 'utf8', timeout: 240_000 })
     : spawnSync('pnpm', args, { cwd: repo, encoding: 'utf8', timeout: 240_000 });
   writeFileSync(join(output, 'tests.log'), `${test.stdout ?? ''}\n${test.stderr ?? ''}`);
-  results.unitTests = { passed: test.status === 0 };
+  results['unitTests'] = { passed: test.status === 0 };
   if (test.status !== 0) { console.error(test.stdout, test.stderr); throw new Error(`unit suite exited ${test.status ?? test.signal ?? 'unknown'}`); }
 }
 
 // ── 2. The page ────────────────────────────────────────────────────────────────────────────────────────────────
-const require = createRequire(import.meta.url);
-const esbuild = require('esbuild');
+const requireFromHere = createRequire(import.meta.url);
+const esbuild = requireFromHere('esbuild');
 // Under `out/`, which the lint's ignore list already covers (`**/out/**`): the bundle is not source and must not be linted.
 const page = join(output, 'out');
 mkdirSync(page, { recursive: true });
@@ -101,7 +102,7 @@ const resultsFile = join(output, 'results.json');
 const overran = run.overran ? `${overrunMessage('the terminal proof\'s Electron launch', run, `${run.stdout}\n${run.stderr}`)}\n(see electron.log)` : null;
 const read = existsSync(resultsFile) ? JSON.parse(readFileSync(resultsFile, 'utf8')) : { passed: false, failures: [`no results.json (exit ${run.status ?? run.signal})`], results: {} };
 const electronResults = overran === null ? read : { ...read, passed: false, failures: [overran, ...(read.failures ?? [])] };
-results.electron = { exit: run.status, ...electronResults };
+results['electron'] = { exit: run.status, ...electronResults };
 writeFileSync(join(output, 'summary.json'), `${JSON.stringify(results, null, 2)}\n`);
 
 const items = Object.entries(electronResults.results ?? {}).filter(([, v]) => v && typeof v === 'object' && 'pass' in v);

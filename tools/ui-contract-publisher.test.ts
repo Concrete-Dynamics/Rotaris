@@ -6,7 +6,6 @@
  * `ui-audit` (docs/archive/defects/the-window-controls-contract-is-an-object-and-kills-every-ui-audit.md).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { CONTRACT_PUBLISHER, handWrittenContracts } from './ui-contract-publisher.mjs';
 
 const TSX = 'packages/ui/src/Example.tsx';

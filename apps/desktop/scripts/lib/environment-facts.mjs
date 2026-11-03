@@ -28,7 +28,10 @@ const electronManifest = join(repo, 'node_modules', 'electron', 'package.json');
 /** The identifier `pnpm build-id` writes before packaging — and no development tree that never packaged holds one. */
 export const buildIdFile = join(app, 'resources', 'build-id.txt');
 
-/** A path inside the tree, written relative to its root with forward slashes. */
+/**
+ * A path inside the tree, written relative to its root with forward slashes.
+ * @param {string} path
+ */
 export function treePath(path) {
   return relative(repo, path).replaceAll('\\', '/');
 }
@@ -54,12 +57,18 @@ export function presentSourceRoots() {
   return roots;
 }
 
-/** One directory's entries as `{ name, dir }` — the walk `newestSourceMtime` reads. */
+/**
+ * One directory's entries as `{ name, dir }` — the walk `newestSourceMtime` reads.
+ * @param {string} dir
+ */
 export function listDirectory(dir) {
   return readdirSync(dir, { withFileTypes: true }).map((entry) => ({ name: entry.name, dir: entry.isDirectory() }));
 }
 
-/** A file's modification time, in milliseconds. */
+/**
+ * A file's modification time, in milliseconds.
+ * @param {string} file
+ */
 export function mtimeOf(file) {
   return statSync(file).mtimeMs;
 }
@@ -92,7 +101,8 @@ export function newestSourceMtime(roots, { list, mtime }) {
     }
   };
   for (const root of roots) visit(root);
-  return best;
+  // Assigned inside `visit`, which the narrowing above does not follow.
+  return /** @type {{ path: string, mtimeMs: number } | null} */ (best);
 }
 
 /** git's answer for the repository: the commit, and whether the working tree differs from it (null when git cannot say). */

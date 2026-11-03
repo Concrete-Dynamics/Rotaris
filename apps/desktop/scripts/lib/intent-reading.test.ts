@@ -5,7 +5,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { IntentResultSchema } from '@rotaris/contracts';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { auditIntent, classificationTiming, classifierNote, classifierReading, cutTraffic, reasoningTail } from './intent-reading.mjs';
 
 const EDIT = 'c691fa97-0318-4eca-8636-82b578d7ce17';

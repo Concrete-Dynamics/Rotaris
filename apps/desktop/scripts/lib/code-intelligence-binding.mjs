@@ -23,16 +23,21 @@ const SERVER = 'code_intelligence';
 const DISCOVERY = new RegExp(`mcp: discovery of '${SERVER}'(?: \\(project (.+?)\\))? (?:listed|failed) |mcp ${SERVER}(?: \\(project (.+?)\\))?: tool discovery failed `);
 const CONNECTED = new RegExp(`mcp ${SERVER}: connected for the session \\((.*)\\) in \\d+ ms$`);
 
-/** Every launch line of the code-intelligence server in `log`, in order: its kind and the project it names (null: none named). */
+/**
+ * Every launch line of the code-intelligence server in `log`, in order: its kind and the project it names (null: none named).
+ * @param {string} log
+ */
 export function codeIntelligenceLaunches(log) {
+  /** @type {Array<{ kind: 'discovery' | 'connected', project: string | null }>} */
   const out = [];
   for (const line of String(log).split(/\r?\n/)) {
     const d = DISCOVERY.exec(line);
     if (d) { out.push({ kind: 'discovery', project: d[1] ?? d[2] ?? null }); continue; }
     const c = CONNECTED.exec(line);
     if (c) {
-      const at = c[1].lastIndexOf(', project ');
-      out.push({ kind: 'connected', project: at === -1 ? null : c[1].slice(at + ', project '.length) });
+      const named = c[1] ?? '';
+      const at = named.lastIndexOf(', project ');
+      out.push({ kind: 'connected', project: at === -1 ? null : named.slice(at + ', project '.length) });
     }
   }
   return out;
@@ -41,6 +46,9 @@ export function codeIntelligenceLaunches(log) {
 /**
  * The verdict: at least one launch line, and every one names `treeRoot` (compared after `normalize`, which the caller may
  * use to resolve symbolic links). The detail lists what each line named, so a red says which launch escaped the tree.
+ * @param {string} log
+ * @param {string} treeRoot
+ * @param {(path: string) => string} [normalize]
  */
 export function bindingVerdict(log, treeRoot, normalize = (p) => p) {
   const launches = codeIntelligenceLaunches(log);

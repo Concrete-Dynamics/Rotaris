@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * REQ-SHELL-128..160 — rendered theme/scale proof through the same driver used
  * for interactive built-app debugging. Each capture waits finite animations,

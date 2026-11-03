@@ -16,9 +16,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the section is plain ESM beside the proof that runs it.
 import { autoOpenedStreams, launchEnvironment, packagedChecks, packagedTerminalStreaming } from './packaged.mjs';
-// @ts-expect-error — plain ESM beside the packaging script.
 import { FORBIDDEN, KEPT } from '../lib/seam-check.mjs';
 
 type Launch = Record<string, unknown>;
@@ -65,7 +63,7 @@ describe('the packaged terminal-streaming section reports a launch that found no
       expect(checks.agentSeesTheSameThing).toBe(false);
       expect(checks.bothCallsFromTheShippedClient).toBe(false);
       if (on === lost) expect(checks.enabledSurfaceSawTheStream).toBe(false);
-      if (off.stores === 0) expect(checks.disabledSurfaceSawNothing).toBe(false);
+      if (off!.stores === 0) expect(checks.disabledSurfaceSawNothing).toBe(false);
     }
     // Both halves measured: the checks still pass where the product met REQ-TOOLS-126/127.
     const both = packagedChecks(measured(true, ['s1']), measured(false, [])) as Record<string, boolean>;

@@ -6,7 +6,6 @@
  */
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the proof library is plain ESM beside the scripts that run it.
 import { CLIP_TOLERANCE, clipRect, textSample } from './text-sample.mjs';
 
 const require = createRequire(import.meta.url);
@@ -115,7 +114,7 @@ describe('REQ-SHELL-145: the verdict no longer turns on a sliver (the defect, me
     const png = capture(1599, 1000, ground, [{ box: box(1512, 966, 60, 6), colour: text }]);
     const whole = strip(1006, item(1006));
     const sample = textSample(whole);
-    expect(textContrast(png, { rect: sample.rect }, dpr).ratio).toBeGreaterThan(4.5);
+    expect(textContrast(png, { rect: sample.rect! }, dpr).ratio).toBeGreaterThan(4.5);
   });
 
   it('a text a scroll container cuts off is not read against what is painted past the clip', () => {
@@ -125,7 +124,7 @@ describe('REQ-SHELL-145: the verdict no longer turns on a sliver (the defect, me
       { box: box(160, 60, 120, 18), colour: [250, 250, 250] },
     ]);
     const row = { rect: box(10, 40, 200, 16), shown: clipRect(box(10, 40, 200, 16), [box(0, 0, 100, 200)]), fontSize: 11 };
-    const read = textContrast(png, { rect: textSample(row).rect }, dpr).ratio;
+    const read = textContrast(png, { rect: textSample(row).rect! }, dpr).ratio;
     const whole = textContrast(png, { rect: row.rect }, dpr).ratio;
     expect(read).toBeCloseTo(textContrast(png, { rect: box(10, 40, 90, 16) }, dpr).ratio);
     expect(whole).toBeGreaterThan(read);

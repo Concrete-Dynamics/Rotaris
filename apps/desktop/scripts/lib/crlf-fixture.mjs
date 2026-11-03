@@ -11,7 +11,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 /** Lines joined by CRLF, with a final CRLF: the shape a Windows editor saves. */
-export const crlf = (lines) => `${lines.join('\r\n')}\r\n`;
+export const crlf = (/** @type {readonly string[]} */ lines) => `${lines.join('\r\n')}\r\n`;
 
 /** A small JavaScript function indented with tabs, the shape most edits meet. */
 export const GREET_LINES = [
@@ -72,7 +72,12 @@ export const BLANK_LINES = [
 export const LIST_LINES = ['alpha', 'beta', 'alpha'];
 
 /** Writes each `{ path: lines }` under `root` as a CRLF file, the directories made; returns the paths written. */
+/**
+ * @param {string} root
+ * @param {Record<string, readonly string[]>} files
+ */
 export function writeCrlfFixture(root, files) {
+  /** @type {string[]} */
   const written = [];
   for (const [path, lines] of Object.entries(files)) {
     const file = join(root, path);
@@ -87,13 +92,15 @@ export function writeCrlfFixture(root, files) {
  * How a file's lines end: `{ crlf, lfOnly, lfOnlyLines, final }` — the count of `\r\n` breaks, the count of `\n` breaks with no
  * `\r` before them and their 1-based line numbers, and whether the file ends in a break. A file every edit kept CRLF has
  * `lfOnly` 0.
+ * @param {string} text
  */
 export function lineEndings(text) {
   const lines = String(text).split('\n');
+  /** @type {number[]} */
   const lfOnlyLines = [];
   let crlfCount = 0;
   for (let i = 0; i < lines.length - 1; i += 1) {
-    if (lines[i].endsWith('\r')) crlfCount += 1;
+    if ((lines[i] ?? '').endsWith('\r')) crlfCount += 1;
     else lfOnlyLines.push(i + 1);
   }
   return { crlf: crlfCount, lfOnly: lfOnlyLines.length, lfOnlyLines, final: String(text).endsWith('\n') };

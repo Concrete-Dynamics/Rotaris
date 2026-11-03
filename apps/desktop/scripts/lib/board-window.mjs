@@ -15,10 +15,12 @@
  * Nothing here is product code. It runs only from the proofs; `board-window.test.ts` pins it.
  */
 export function readLongTasks() {
-  const since = window.__rotarisArmedAt ?? 0;
-  const b = window.__rotarisBoard;
+  const page = /** @type {any} */ (window);
+  const since = page.__rotarisArmedAt ?? 0;
+  const b = page.__rotarisBoard;
   const from = b && typeof b.paintFrom === 'number' ? b.paintFrom : null;
-  const inWindow = (window.__rotarisLongTasks ?? []).filter((t) => t.at >= since);
+  /** @type {Array<{ at: number, ms: number }>} */
+  const inWindow = (page.__rotarisLongTasks ?? []).filter((/** @type {{ at: number }} */ t) => t.at >= since);
   const counted = inWindow.filter((t) => from === null || t.at + t.ms > from);
   const tasks = counted.map((t) => t.ms);
   return {
@@ -49,8 +51,9 @@ export const READ_LONGTASKS = `(${readLongTasks.toString().replace(/\s*\n\s*/g, 
  * (docs/archive/defects/requirements-proofs-drop-stage-reads-a-revealed-cards-focus-two-frames-after-asking-for-it.md).
  * The focus is still required; what is no longer assumed is that it arrives within two frames.
  */
+/** @param {string} id @param {number} boundMs */
 export async function revealUntilFocused(id, boundMs) {
-  const board = window.__rotarisBoard;
+  const board = /** @type {any} */ (window).__rotarisBoard;
   const revealed = board.reveal(id);
   const started = performance.now();
   let frames = 0;

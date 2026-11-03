@@ -7,7 +7,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { childKeyAt as engineChildKeyAt, childModelKeys as engineChildModelKeys, ENTRY_KEY_UNDETERMINED, entryModelKeys as engineEntryModelKeys } from '@rotaris/engine';
-// @ts-expect-error — the reader's helpers are plain ESM beside the scripts that run them.
 import { childKeyAt, childModelKeys, ENTRY_KEY_UNDETERMINED as SCRIPT_UNDETERMINED, entryKeyLabel, entryModelKeys } from './autopsy-entry-model.mjs';
 
 const snapshot = (model: string, models: Record<string, unknown> = {}) => ({ default_persona: 'orchestrator', personas: { orchestrator: { model } }, models });

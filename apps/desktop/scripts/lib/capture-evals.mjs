@@ -18,11 +18,12 @@
  * @returns {{ at: number, text: string }[]}
  */
 export function parseEvals(log) {
+  /** @type {{ at: number, text: string }[]} */
   const evals = [];
   // Split on LF and drop a CR: `.` does not match a CR, so a Windows pipe's line would otherwise not match at all.
   for (const line of log.split('\n')) {
     const m = /capture: eval-at (\d+) (.*)$/.exec(line.replace(/\r$/, ''));
-    if (m) evals.push({ at: Number(m[1]), text: m[2] });
+    if (m) evals.push({ at: Number(m[1]), text: m[2] ?? '' });
   }
   return evals;
 }
@@ -39,7 +40,8 @@ export function readEval(evals, at, expression) {
   const head = `${expression.trim()} → `;
   const found = evals.filter((e) => e.at === at && e.text.startsWith(head));
   if (found.length > 1) throw new Error(`${found.length} evals of one expression logged at ${at} ms — the schedule is ambiguous: ${expression.trim().slice(0, 120)}`);
-  if (found.length === 0) return undefined;
-  const raw = found[0].text.slice(head.length);
+  const [only] = found;
+  if (only === undefined) return undefined;
+  const raw = only.text.slice(head.length);
   try { return JSON.parse(raw); } catch { return raw; }
 }

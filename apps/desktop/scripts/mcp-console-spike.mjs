@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * Spike 4 (ADR-0033 consequence 3, REQ-MCP-113): console-window suppression, measured on the PACKAGED build.
  *

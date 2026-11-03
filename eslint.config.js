@@ -108,38 +108,38 @@ const WORKSPACE_PACKAGES = ['packages', 'apps', 'tools'].flatMap((group) =>
 const DEV_FILES = ['**/*.test.{ts,tsx}', '**/*.test-support.ts', '**/vitest.config.ts', '**/electron.vite.config.ts', 'eslint.config.js', 'tools/**', 'apps/desktop/scripts/**', '.agents/**'];
 // `includeInternal`: the workspace's own `@rotaris/*` packages count as internal (`import-x/internal-regex` below), and a
 // package importing one its manifest does not declare is as extraneous as a third-party one.
+/** @type {(packageDir: string[], devDependencies: boolean | string[]) => ['error', Record<string, unknown>]} */
 const extraneous = (packageDir, devDependencies) => ['error', { packageDir, devDependencies, optionalDependencies: false, peerDependencies: true, includeInternal: true }];
 
 export default tseslint.config(
   {
     // The proof directories hold scratch workspaces a real model may write code into (the slice's third prompt did).
-    ignores: ['.proof/**', '**/node_modules/**', '.live-run/**', '**/dist/**', '**/out/**', '**/release/**', 'docs/**', '.slice-proof/**', '.overview-proof/**', '.fetch-proof/**', '.git-proof/**', '.resilience-proof/**', '.checkpoint-proof/**', '.sessions-proof/**', '.mcp-proof/**', '.part-h-proof/**', '.part-j-proof/**', '.config-proof/**', '.theme-proof/**', 'packages/kernel/src/generated/**', 'apps/desktop/scripts/**', 'packages/*/spike/**', '.mission-proof/**', '.artifacts-proof/**', '.code-intel-proof/**', '.library-proof/**', 'apps/desktop/resources/**', 'apps/desktop/.cache/**', '.traceability-proof/**', '.requirements-proof/**' /* Part AK2 — the board proof's evidence directory (the plan's Reservations, ruled 2026-09-09: both files); delivery-proof never had a line here */,
+    ignores: ['.proof/**', '**/node_modules/**', '.live-run/**', '**/dist/**', '**/out/**', '**/release/**', 'docs/**', '.slice-proof/**', '.overview-proof/**', '.fetch-proof/**', '.git-proof/**', '.resilience-proof/**', '.checkpoint-proof/**', '.sessions-proof/**', '.mcp-proof/**', '.part-h-proof/**', '.part-j-proof/**', '.config-proof/**', '.theme-proof/**', 'packages/kernel/src/generated/**', 'packages/*/spike/**', '.mission-proof/**', '.artifacts-proof/**', '.code-intel-proof/**', '.library-proof/**', 'apps/desktop/resources/**', 'apps/desktop/.cache/**', '.traceability-proof/**', '.requirements-proof/**' /* Part AK2 — the board proof's evidence directory (the plan's Reservations, ruled 2026-09-09: both files); delivery-proof never had a line here */,
       // Part AP
       '.requirements-runs-proof/**', '.chat-controls-proof/**',
       // The driver (2026-09-11): the scratch profile a driven app runs against, and its proof's evidence.
       '.drive/**', '.driver-proof/**', '.layout-proof/**',
       // `pnpm test:coverage`'s report (R-091, hardening F1): generated HTML and lcov, never linted.
-      'coverage/**'],
+      'coverage/**',
+      // The proof scripts are linted since R-091 (hardening.md §3.5 row 4); what they hand the model or the traceability
+      // proof as a workspace is material, not tooling, and stays out as `tsconfig.scripts.json` leaves it out.
+      'apps/desktop/scripts/fixtures/todo-app/**', 'apps/desktop/scripts/fixtures/requirements-store/**'],
   },
   // Type-aware (R-091, hardening.md §3.5 row 1): every TypeScript file is parsed against its project, so the rules
   // that need types (a dropped promise, a switch that misses a member) run in the gate. The stylistic set stays out.
   // Since R-091: a disable directive that suppresses nothing fails the gate, as a warning does (`--max-warnings 0`).
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
   ...tseslint.configs.recommendedTypeChecked,
-  // The JavaScript files (the tools' and skills' `.mjs`, this file) belong to no project: they keep the untyped
-  // `recommended` rules and are type-checked by nothing here (E2's `checkJs` brings them in).
+  // The JavaScript files (the tools' and proof scripts' `.mjs`, this file) keep the untyped `recommended` rules: their
+  // types are checked by `pnpm typecheck` (`tsconfig.scripts.json`, `checkJs`), not by the type-aware lint.
   { files: ['**/*.{js,mjs,cjs}'], ...tseslint.configs.disableTypeChecked },
   {
     files: ['**/*.{ts,tsx,mts,cts}'],
     languageOptions: {
       parserOptions: {
-        projectService: {
-          // The root `tools/*.test.ts` are in no tsconfig's `include` yet: they are linted against the root
-          // tsconfig's options until E2 (typecheck coverage) brings them into a project.
-          allowDefaultProject: ['tools/*.test.ts'],
-          defaultProject: 'tsconfig.json',
-          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 64,
-        },
+        // Every TypeScript file belongs to a project the root solution references (`tsconfig.json`; R-091, hardening.md
+        // §3.5 row 4), the tests and tools included, so none is linted against a default project.
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -216,9 +216,9 @@ export default tseslint.config(
   })),
   {
     // The `any`-flow rules hold product code, not tests: vitest's asymmetric matchers (`expect.any`,
-    // `expect.stringContaining`) are typed `any`, a test reads a stored record back through `JSON.parse`, and the
-    // tools' tests import the tools' untyped `.mjs`, so every value they take from one is `any` until E2 (typecheck
-    // coverage) brings `checkJs` over the `.mjs` (hardening.md §3.5 row 4).
+    // `expect.stringContaining`) are typed `any`, and a test reads a stored record back through `JSON.parse`. The tools'
+    // `.mjs` are typed since E2 (`tsconfig.scripts.json`, hardening.md §3.5 row 4), but a listed typecheck exception's
+    // exports are still inferred, often as `any`.
     files: ['**/*.test.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-unsafe-argument': 'off',
@@ -226,6 +226,31 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+  {
+    // The tooling's typecheck exceptions (R-091, hardening.md §3.5 row 4): a file `tsconfig.scripts.json` cannot check yet
+    // opens with `// @ts-nocheck — <why>`, listed in `tools/typecheck-exceptions.json`, whose test holds the two together
+    // and lets the list only shrink. Everywhere else the recommended ban stands.
+    files: ['apps/desktop/scripts/**/*.{mjs,cjs,js}', 'tools/**/*.{mjs,js}'],
+    rules: {
+      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-nocheck': 'allow-with-description' }],
+    },
+  },
+  {
+    // A CommonJS file loads its modules with `require`: Electron's preload and main of the terminal proof's page, the
+    // packaging hooks electron-builder loads, the fd gate `--require` puts in front of it.
+    files: ['**/*.cjs'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    // The proof libraries hand the renderer functions as source (`READ_LONGTASKS`, a wait condition, a probe), and their
+    // tests rebuild them with `new Function` exactly as the page evaluates them, which is the thing under test.
+    files: ['apps/desktop/scripts/**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-implied-eval': 'off',
     },
   },
   {

@@ -7,7 +7,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseSteps } from '../../src/main/capture/host.js';
-// @ts-expect-error — the schedule is plain ESM beside the proof that runs it.
 import { ARTIFACTS_TAB, BEFORE_PUBLISH, BEFORE_PUBLISH_AT, LOADED_ARTIFACTS, PUBLISH_SCHEDULE, emptyBeforePublish } from './library-refresh.mjs';
 
 const schedule = PUBLISH_SCHEDULE as Record<string, string>;

@@ -13,13 +13,18 @@ const RELAYED = /capture: renderer console: (.*)$/;
 // React error 185 (the number written after its '#', which the colour check would read as a literal colour).
 const UPDATE_DEPTH = /Minified React error [#]185\b|Maximum update depth exceeded/;
 
-/** The relayed renderer console lines of a launch's log that name React's update-depth error, in log order. */
+/**
+ * The relayed renderer console lines of a launch's log that name React's update-depth error, in log order.
+ * @param {string} log
+ */
 export function updateDepthErrors(log) {
+  /** @type {Array<{ line: number, text: string }>} */
   const out = [];
   const lines = String(log).split('\n');
   for (let i = 0; i < lines.length; i += 1) {
-    const relayed = RELAYED.exec(lines[i]);
-    if (relayed !== null && UPDATE_DEPTH.test(relayed[1])) out.push({ line: i + 1, text: lines[i].trim() });
+    const line = lines[i] ?? '';
+    const relayed = RELAYED.exec(line);
+    if (relayed !== null && UPDATE_DEPTH.test(relayed[1] ?? '')) out.push({ line: i + 1, text: line.trim() });
   }
   return out;
 }
@@ -59,7 +64,10 @@ export function unexpectedRendererErrors(errors) {
   return errors.filter((l) => !REPLICA_RUN_START_DECLINE.test(l));
 }
 
-/** How many of a launch's relayed renderer console lines are the replica's run-start decline. */
+/**
+ * How many of a launch's relayed renderer console lines are the replica's run-start decline.
+ * @param {string[]} errors
+ */
 export function replicaRunStartDeclines(errors) {
   return errors.length - unexpectedRendererErrors(errors).length;
 }

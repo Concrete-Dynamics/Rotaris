@@ -9,6 +9,7 @@ import { citationsIn, RETIRED_DOMAINS } from '../requirement-coverage/coverage.m
 /** ADR-0006: no Date.now, performance.now, setTimeout or setInterval in engine
  * code. Every duration reads from the MonotonicClock port and every timer is
  * obtained from the Timers port, so a controlled clock can drive the product. */
+/** @type {import('eslint').Rule.RuleModule} */
 const noBareTimers = {
   meta: {
     type: 'problem',
@@ -46,6 +47,7 @@ const noBareTimers = {
 
 /** ADR-0002/ADR-0044: `electron` is imported only in the five composition roots
  * of apps/desktop and in packages/shell/src/electron (its adapters). */
+/** @type {import('eslint').Rule.RuleModule} */
 const noElectronOutsideRoots = {
   meta: {
     type: 'problem',
@@ -79,7 +81,12 @@ const MONEY_NAME = /cost|price|amount/i;
 const ARITHMETIC = new Set(['+', '-', '*', '/', '%', '**']);
 const CONVERSIONS = new Set(['Number', 'parseFloat', 'parseInt']);
 
-/** The name an operand is known by — an identifier, or the last property of a member access — or null. */
+/**
+ * The name an operand is known by — an identifier, or the last property of a member access — or null.
+ * `any`: the node is ESTree or typescript-estree's (`TSNonNullExpression`, `TSAsExpression`), and `estree` types the first only.
+ * @param {any} node
+ * @returns {string | null}
+ */
 function nameOf(node) {
   if (!node) return null;
   if (node.type === 'Identifier') return node.name;
@@ -87,8 +94,10 @@ function nameOf(node) {
   if (node.type === 'TSNonNullExpression' || node.type === 'TSAsExpression') return nameOf(node.expression);
   return null;
 }
+/** @param {any} node */
 const isMoney = (node) => { const name = nameOf(node); return name !== null && MONEY_NAME.test(name); };
 
+/** @type {import('eslint').Rule.RuleModule} */
 const moneyOnlyInMoneyTs = {
   meta: {
     type: 'problem',
@@ -101,33 +110,34 @@ const moneyOnlyInMoneyTs = {
     },
   },
   create(context) {
+    /** @type {(node: import('estree').Node, messageId: string, data?: Record<string, string>) => void} */
     const report = (node, messageId, data = {}) => context.report({ node, messageId, data });
     return {
       Literal(node) {
-        if (typeof node.bigint === 'string') report(node, 'bigint');
+        if ('bigint' in node && typeof node.bigint === 'string') report(node, 'bigint');
       },
       CallExpression(node) {
         const c = node.callee;
         if (c.type === 'Identifier' && c.name === 'BigInt') { report(node, 'bigint'); return; }
         const conversion = c.type === 'Identifier' ? c.name : c.type === 'MemberExpression' && c.object.type === 'Identifier' && c.object.name === 'Number' && c.property.type === 'Identifier' ? c.property.name : null;
-        if (conversion !== null && CONVERSIONS.has(conversion) && isMoney(node.arguments[0])) report(node, 'conversion', { name: nameOf(node.arguments[0]) });
+        if (conversion !== null && CONVERSIONS.has(conversion) && isMoney(node.arguments[0])) report(node, 'conversion', { name: nameOf(node.arguments[0]) ?? '' });
       },
       BinaryExpression(node) {
         if (!ARITHMETIC.has(node.operator)) return;
         const money = isMoney(node.left) ? node.left : isMoney(node.right) ? node.right : null;
-        if (money !== null) report(node, 'operator', { name: nameOf(money), op: node.operator });
+        if (money !== null) report(node, 'operator', { name: nameOf(money) ?? '', op: node.operator });
       },
       AssignmentExpression(node) {
         const op = node.operator.slice(0, -1);
         if (node.operator === '=' || !ARITHMETIC.has(op)) return;
         const money = isMoney(node.left) ? node.left : isMoney(node.right) ? node.right : null;
-        if (money !== null) report(node, 'operator', { name: nameOf(money), op: node.operator });
+        if (money !== null) report(node, 'operator', { name: nameOf(money) ?? '', op: node.operator });
       },
       UnaryExpression(node) {
-        if ((node.operator === '+' || node.operator === '-') && isMoney(node.argument)) report(node, 'conversion', { name: nameOf(node.argument) });
+        if ((node.operator === '+' || node.operator === '-') && isMoney(node.argument)) report(node, 'conversion', { name: nameOf(node.argument) ?? '' });
       },
       UpdateExpression(node) {
-        if (isMoney(node.argument)) report(node, 'operator', { name: nameOf(node.argument), op: node.operator });
+        if (isMoney(node.argument)) report(node, 'operator', { name: nameOf(node.argument) ?? '', op: node.operator });
       },
     };
   },
@@ -200,7 +210,7 @@ export function citationFindings(text, context, art, pending = {}) {
     const at = written.get(id);
     const explicit = at !== undefined;
     const index = at ?? first;
-    const [kind, domain] = id.split('-');
+    const [kind, domain = ''] = id.split('-');
     const symbol = kind === 'PD' ? art.PD[id] : art.REQ[id];
     if (!symbol) {
       out.push({ id, index, kind: 'undefined', data: { id, where: kind === 'PD' ? 'docs/product/directives/' : 'docs/spec/' } });

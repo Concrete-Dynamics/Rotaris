@@ -5,11 +5,10 @@
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { RENAME_FILES, RENAME_FROM, RENAME_TO, namesIdentifier, renameReading } from './rename-reading.mjs';
 
 const fixture = resolve(import.meta.dirname, '..', 'fixtures', 'todo-app');
-const original = Object.fromEntries((RENAME_FILES as string[]).map((f) => [f, readFileSync(join(fixture, f), 'utf8')]));
+const original = Object.fromEntries((RENAME_FILES).map((f) => [f, readFileSync(join(fixture, f), 'utf8')]));
 const renamed = (only?: string[]) => Object.fromEntries(Object.entries(original).map(([f, t]) => [f, only === undefined || only.includes(f) ? t.replace(/\bremaining\(/g, `${RENAME_TO}(`).replace(/([{,]\s*)remaining(\s*[,}])/g, `$1${RENAME_TO}$2`) : t]));
 const call = (ordinal: number, tool_name: string, args: Record<string, unknown> = {}, agent_name = 'Coding Agent 1', status = 'ok') => ({ ordinal, tool_name, agent_name, status, args, result: 'ok' });
 const RENAME = { name_path: RENAME_FROM, relative_path: 'src/todos.js', new_name: RENAME_TO };
@@ -17,10 +16,10 @@ const child = (edited: string[]) => ({ canonical_name: 'Coding Agent 1', persona
 
 describe('rename reading (live-run `rename`, OQ-245, PD-MCP-004, REQ-MCP-015)', () => {
   it('the fixture declares, calls and imports the symbol in exactly the three files, and its test title is not a use', () => {
-    for (const f of RENAME_FILES as string[]) expect(namesIdentifier(original[f], RENAME_FROM), f).toBe(true);
+    for (const f of RENAME_FILES) expect(namesIdentifier(original[f], RENAME_FROM), f).toBe(true);
     expect(namesIdentifier("test('the three filters and the remaining count', () => {", RENAME_FROM)).toBe(false);
     expect(namesIdentifier(`export function ${RENAME_TO}(todos) {`, RENAME_FROM)).toBe(false);
-    for (const f of RENAME_FILES as string[]) expect(namesIdentifier(renamed()[f], RENAME_FROM), f).toBe(false);
+    for (const f of RENAME_FILES) expect(namesIdentifier(renamed()[f], RENAME_FROM), f).toBe(false);
   });
 
   it('no rename_symbol call is "not reached", whatever the files say', () => {
@@ -30,7 +29,7 @@ describe('rename reading (live-run `rename`, OQ-245, PD-MCP-004, REQ-MCP-015)', 
   });
 
   it('a rename after a reference search that reached every file, listed in the report and the artifact', () => {
-    const all = [...(RENAME_FILES as string[])];
+    const all = [...(RENAME_FILES)];
     const r = renameReading({ calls: [call(1, 'find_referencing_symbols', { name_path: RENAME_FROM, relative_path: 'src/todos.js' }), call(2, 'rename_symbol', RENAME)], files: renamed(), children: [child(all)], artifacts: [{ edited_files: JSON.stringify(all.map((path) => ({ path }))) }] });
     expect(r).toMatchObject({ reached: true, searchedFirst: true, cold: false, leftBehind: [], carrying: all, mendedAfter: [], reportMissing: [], artifactMissing: [], coldLeftBehind: false });
   });
@@ -49,7 +48,7 @@ describe('rename reading (live-run `rename`, OQ-245, PD-MCP-004, REQ-MCP-015)', 
   });
 
   it('PD-MCP-004 as it should read live: a cold rename, its one row and no search row, that reached every file is no finding', () => {
-    const all = [...(RENAME_FILES as string[])];
+    const all = [...(RENAME_FILES)];
     const r = renameReading({ calls: [call(1, 'rename_symbol', RENAME)], files: renamed(), children: [child(all)], artifacts: [{ edited_files: JSON.stringify(all) }] });
     expect(r).toMatchObject({ reached: true, searchedFirst: false, cold: true, leftBehind: [], carrying: all, mendedAfter: [], reportMissing: [], artifactMissing: [], coldLeftBehind: false });
   });

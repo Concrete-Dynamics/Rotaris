@@ -5,7 +5,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runPipelineCommand } from './cli.mjs';
-// @ts-expect-error — plain ESM beside the scripts that run it.
 import { assemblePortable, TOKEN_SLOT_BYTES, TOKEN_SLOT_MAGIC } from '../../apps/desktop/scripts/lib/portable.mjs';
 import { keyFingerprint, keyRecordRow } from './signing.mjs';
 

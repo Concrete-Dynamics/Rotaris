@@ -9,13 +9,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the module is plain ESM beside the scripts that run it.
 import { LaunchFailure, createRunEnding, launchFailure, sessionOfFailedLaunch } from './run-ending.mjs';
 
 type Check = { passed: boolean; what: string; detail: string | null };
 
 /** A miniature run: its checks, its results, and a log of the ending's steps in the order they ran. */
-function miniRun({ throwing = {} as Record<string, boolean> } = {}) {
+function miniRun({ throwing = {} }: { throwing?: Record<string, boolean> } = {}) {
   const checks: Check[] = [];
   const steps: string[] = [];
   const warnings: string[] = [];
@@ -39,6 +38,7 @@ function miniRun({ throwing = {} as Record<string, boolean> } = {}) {
     exit: (code: number) => { steps.push(`exit ${code}`); exitCode = code; },
     warn: (line: string) => { warnings.push(line); },
   });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the written results.json, read back by key as the run wrote it
   return { checks, steps, warnings, results, preserved, preserve, check, end, written: () => written as Record<string, any> | null, exitCode: () => exitCode };
 }
 

@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The artifact names `pnpm package` hands electron-builder, rendered from the DECLARED product version
  * (REQ-STARTUP-031, REQ-STARTUP-158; first-release-plan.md §4.1/§4.2/§4.5).

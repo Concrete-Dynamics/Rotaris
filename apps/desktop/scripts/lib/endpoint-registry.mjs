@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The live-run endpoint registry and its key store, shared by `live-run.mjs` and `slice-proof.mjs`.
  *
@@ -103,6 +104,10 @@ export function endpointStore(dir = registryHome()) {
 /**
  * One registered endpoint: the one named, else the registry's default. Null when nothing is named and the registry
  * has no default; a name the registry does not hold is an error that says how to list what it does hold.
+ */
+/**
+ * @param {any} reg the registry as `registry()` read it
+ * @param {string | null} [name]
  */
 export function selectEndpoint(reg, name = null) {
   const chosen = name ?? reg.default;

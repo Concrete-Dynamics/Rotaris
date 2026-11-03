@@ -89,7 +89,7 @@ export function stampTime(name) {
  */
 export function sweepVerdict(dir, name, { now, probe, ownPid }) {
   const owner = readOwner(dir);
-  const leftover = (reason) => existsSync(join(dir, KEPT_FILE))
+  const leftover = (/** @type {string} */ reason) => existsSync(join(dir, KEPT_FILE))
     ? /** @type {const} */ ({ action: 'drop-credentials', reason: `${reason}; kept by --keep` })
     : /** @type {const} */ ({ action: 'remove', reason });
   if (owner !== null) {

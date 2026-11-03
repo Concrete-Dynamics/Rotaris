@@ -8,13 +8,9 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { commit, compress, indexLine, plan, qualifying, rebase, settledAs, stillLive, tightenIndexLines, titleOf } from './migrate.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { checkRecord } from '../check-record-links.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { checkTree } from '../check-open-question-claims.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { measure } from '../check-doc-budget.mjs';
 
 const PART1 = 'docs/architecture/open-questions/01-fixture-questions.md';
@@ -290,7 +286,7 @@ describe('archive:migrate — a re-run', () => {
 
   it('continues an archive file that would pass the budget in the next, and the index lines name the file that holds each', () => {
     const { moves } = migrate(root, { budget: { lines: 12, bytes: 32 * 1024 } });
-    expect(moves.map((m: { n: number; to: string }) => [m.n, m.to])).toEqual([
+    expect(moves.map((m) => ['n' in m ? m.n : m.id, m.to])).toEqual([
       [2, ARCHIVE1],
       [4, 'docs/archive/architecture/open-questions/01-fixture-questions-continued-2.md'],
       [5, ARCHIVE2],

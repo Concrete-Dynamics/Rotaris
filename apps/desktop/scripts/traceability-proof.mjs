@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * Part AJ proof — the traceability engine (ADR-0040's first execution; spike 7).
  *

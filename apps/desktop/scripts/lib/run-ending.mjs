@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * How a live run ends, whatever ends it: the last scenario, a ceiling, a launch that overran or exited non-zero, an error
  * the harness itself threw, or a signal.
@@ -82,7 +83,7 @@ export function createRunEnding(parts) {
   const step = (what, fn) => {
     try { fn(); return true; } catch (cause) { warn(`warning: the run's ending could not ${what} (${messageOf(cause)})`); return false; }
   };
-  return function end(code, error = null) {
+  return function end(/** @type {number} */ code, /** @type {unknown} */ error = null) {
     if (ending) { warn(`warning: the run was ended again while it was ending (${error === null ? `code ${code}` : messageOf(error)}); the first ending stands`); return; }
     ending = true;
     if (error !== null && !(error instanceof LaunchFailure)) {

@@ -17,12 +17,9 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// @ts-expect-error - the tools directory is plain ESM, run by node without a build step.
 import { flagsRead } from './flags.mjs';
-// @ts-expect-error - the tools directory is plain ESM, run by node without a build step.
 import { firstDifferingLine } from './generate.mjs';
 
-// @ts-expect-error - the tools directory is plain ESM, run by node without a build step.
 import { AREAS, HOSTS, PROOFS, recordPath, scriptPath } from './registry.mjs';
 
 const repo = join(import.meta.dirname, '..', '..');
@@ -38,7 +35,7 @@ const expectedIds = [
   'ui-audit',
   'ui-review',
 ].sort();
-const byId = new Map<string, { neighbours: string[] }>(PROOFS.map((proof: { id: string }) => [proof.id, proof]));
+const byId = new Map<string, { neighbours: string[] }>(PROOFS.map((proof) => [proof.id, proof]));
 
 describe('the proof registry covers the suite and holds its own shape', () => {
   it('records every proof script exactly once, and neither hides one nor names a script that is not there', () => {

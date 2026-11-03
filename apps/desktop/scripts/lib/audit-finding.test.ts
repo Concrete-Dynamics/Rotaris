@@ -5,9 +5,7 @@
  * (docs/archive/defects/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the audit library is plain ESM beside the scripts that run it.
 import { auditFinding, countByKind, countContractsByRelation } from './audit-finding.mjs';
-// @ts-expect-error — the audit library is plain ESM beside the scripts that run it.
 import { evaluateContracts } from './layout-relations.mjs';
 
 /** The counterfactual of R-062: the window controls' contract as an object, which the probe reads as unreadable. */

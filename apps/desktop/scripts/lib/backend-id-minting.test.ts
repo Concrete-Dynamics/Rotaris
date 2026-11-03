@@ -6,12 +6,11 @@
  */
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the proof library is plain ESM beside the scripts that run it.
 import { backendIdChecks, backendIdSources, stableBackendIds } from './backend-id-minting.mjs';
 
 type Sources = { todo: string; run: string; sessions: string; todoView: string; agentTodo: string; elsewhere: Record<string, string> };
 const check = backendIdChecks as (sources: Sources) => Record<string, boolean>;
-const stable = stableBackendIds as (checks: Record<string, boolean>) => boolean;
+const stable = stableBackendIds;
 
 const repo = resolve(import.meta.dirname, '..', '..', '..', '..');
 const sources = (backendIdSources as (repo: string) => Sources)(repo);

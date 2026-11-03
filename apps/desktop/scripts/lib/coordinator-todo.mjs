@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * OQ-213 as ruled under the owner's delegation (R-072, 2026-10-07), building REQ-ORCH-029's "work spanning more than one step
  * is accompanied by a todo list it keeps current", as the live run reads it from each preserved session's records: the root's

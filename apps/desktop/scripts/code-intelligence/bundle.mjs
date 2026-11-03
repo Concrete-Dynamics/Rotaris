@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * `pnpm code-intel:bundle` — the bundled code-intelligence runtime as a BUILD step (ADR-0035, ADR-0054; REQ-MCP-011,
  * REQ-MCP-033, REQ-STARTUP-015, REQ-STARTUP-159). Part T, 2026-09-06.

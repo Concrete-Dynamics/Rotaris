@@ -15,6 +15,7 @@
  */
 
 /** A decimal amount as the store records it (`money.ts`'s exact decimal string) that is zero, in any spelling of zero. */
+/** @param {unknown} cost */
 export function isZeroAmount(cost) {
   return typeof cost === 'string' && /^0+(\.0+)?$/.test(cost.trim());
 }
@@ -22,6 +23,7 @@ export function isZeroAmount(cost) {
 /**
  * `{ zeroCostWithTokens, reason }` for one `sessions` row: `true` only when a figure existed (the qualifier is not
  * `unknown`), the recorded total is zero and tokens were counted.
+ * @param {Record<string, any>} row
  */
 export function zeroCostCoherence(row) {
   const tokens = Number(row.tokens_input ?? 0) + Number(row.tokens_output ?? 0);
@@ -35,6 +37,7 @@ export function zeroCostCoherence(row) {
 }
 
 /** The line the autopsy prints under "### coherence"; the live run reads its first `true|false` token. */
+/** @param {Record<string, any>} row */
 export function zeroCostLine(row) {
   const r = zeroCostCoherence(row);
   return `  zero cost with tokens: ${r.zeroCostWithTokens} (${r.reason})`;
@@ -50,6 +53,7 @@ const NOT_STOPPED = new Set(['idle', 'running', 'background', 'waiting']);
  * The "null summary on stopped run" line, answering `unasked` for a session that never stopped. It printed
  * `stopped && summary === ''`, so a session left `running` read `false` and the live run's check passed a question
  * about how a stopped run ends on a run that had not ended (live-run finding H-c, the duress run of 2026-09-29).
+ * @param {Record<string, any>} row
  */
 export function nullSummaryReading(row) {
   const status = String(row.execution_status ?? '');
@@ -59,6 +63,7 @@ export function nullSummaryReading(row) {
 }
 
 /** The line the autopsy prints; the live run reads its first `true|false|unasked` token. */
+/** @param {Record<string, any>} row */
 export function nullSummaryLine(row) {
   const r = nullSummaryReading(row);
   return `  null summary on stopped run: ${r.reading} (${r.reason})`;

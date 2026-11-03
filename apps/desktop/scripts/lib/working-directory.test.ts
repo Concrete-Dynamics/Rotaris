@@ -4,6 +4,7 @@
  * `settings-proof` ran four such launches in `apps/desktop`, and each opened the checkout and indexed it.
  */
 import { execFileSync } from 'node:child_process';
+import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -145,7 +146,7 @@ describe('sameDirectory / assertOpened — one directory, however each side spel
     const parent = join(scratch, 'a-parent-with-a-long-name');
     mkdirSync(parent, { recursive: true });
     // `%~sI` is cmd's short-name expansion; verbatim, since Node would otherwise escape the quotes cmd reads.
-    const shortParent = execFileSync('cmd.exe', ['/d', '/s', '/c', `"for %I in ("${parent}") do @echo %~sI"`], { encoding: 'utf8', windowsVerbatimArguments: true }).trim();
+    const shortParent = execFileSync('cmd.exe', ['/d', '/s', '/c', `"for %I in ("${parent}") do @echo %~sI"`], { encoding: 'utf8', windowsVerbatimArguments: true } as ExecFileSyncOptionsWithStringEncoding).trim();
     if (shortParent.toLowerCase() === parent.toLowerCase()) context.skip('the volume keeps no 8.3 short names');
     const short = join(shortParent, 'working-directory');
     const long = join(parent, 'working-directory');

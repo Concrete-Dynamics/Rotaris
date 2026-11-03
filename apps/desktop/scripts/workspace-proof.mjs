@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * `pnpm workspace-proof` — reaching a project folder from inside the application, measured against the built app.
  *

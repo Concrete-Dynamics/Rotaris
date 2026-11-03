@@ -23,6 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const design = fileURLToPath(new URL('../docs/design/', import.meta.url));
 export const icons = fileURLToPath(new URL('../node_modules/@phosphor-icons/web/src/', import.meta.url));
 const port = Number(process.env.MOCKUP_PORT ?? 8791);
+/** @type {Record<string, string>} */
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.json': 'application/json' };
 
 /* The design system declares its faces against names this repository does not carry (packages/ui/src/fonts.css
@@ -129,9 +130,11 @@ window.addEventListener('DOMContentLoaded', () => {
  * The request handler: a path under the icon font's root or the design folder, never outside either. The guard compares
  * the joined path against the root WITH its trailing separator, so `/../package.json` (or a sibling folder sharing the
  * root's prefix) is refused rather than read.
+ * @param {import('node:http').IncomingMessage} request
+ * @param {import('node:http').ServerResponse} response
  */
 export function handle(request, response) {
-  const requested = decodeURIComponent((request.url ?? '/').split('?')[0]);
+  const requested = decodeURIComponent((request.url ?? '/').split('?')[0] ?? '/');
   const iconRequest = requested.startsWith('/icons/');
   const root = iconRequest ? icons : design;
   const relative = iconRequest ? requested.slice('/icons/'.length) : requested === '/' ? 'mockup/rotaris-ui-mockup.dc.html' : requested.slice(1);

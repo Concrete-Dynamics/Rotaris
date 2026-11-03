@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The portable-skills proof (ADR-0063; REQ-WORKSPACE-051..069, 072, 073, 151).
  *

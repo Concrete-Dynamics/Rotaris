@@ -24,7 +24,7 @@ const jiti = createJiti(import.meta.url, { alias: {
 } });
 
 const args = process.argv.slice(2);
-const flag = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
+const flag = (/** @type {string} */ name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
 const label = flag('label') ?? 'ds41';
 const modelId = flag('model-id') ?? label;
 const baseUrl = flag('base-url') ?? process.env.ROTARIS_LOCAL_MODEL_BASE_URL;
@@ -34,7 +34,7 @@ if (!baseUrl) {
   console.error('local-model:apply: no endpoint. Pass --base-url or set ROTARIS_LOCAL_MODEL_BASE_URL; it is yours, and never committed.');
   process.exit(2);
 }
-const config = await jiti.import('@rotaris/config');
+const config = /** @type {typeof import('@rotaris/config')} */ (await jiti.import('@rotaris/config'));
 const spec = { label, modelId, baseUrl, apiKeyEnv, ...(maxOutputTokens ? { maxOutputTokens } : {}) };
 if (args.includes('--print')) {
   const layer = config.localModelLayer(spec);
@@ -46,7 +46,7 @@ if (args.includes('--print')) {
 }
 let configDir = flag('config-dir');
 if (!configDir) {
-  const platform = await jiti.import('@rotaris/platform');
+  const platform = /** @type {typeof import('@rotaris/platform')} */ (await jiti.import('@rotaris/platform'));
   configDir = platform.resolveUserDirs().config;
 }
 const r = await config.applyLocalModel(configDir, spec);

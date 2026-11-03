@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * `pnpm package` — ADR-0056's build, with its evidence (IC-6).
  *
@@ -437,8 +438,8 @@ report.portableRun = await stepAsync('the portable prepares itself, starts and p
     }
   }
   // The rename-aside probe renames the artifact, which moves its change time; everything else must be as it was.
-  const after = snapshotOf(media).map(({ ctimeMs, ...rest }) => rest);
-  if (JSON.stringify(after) !== JSON.stringify(before.map(({ ctimeMs, ...rest }) => rest)) || digest() !== report.portable.sha256) throw new Error('the artifact or its directory changed across the two launches (REQ-STARTUP-165 (a))');
+  const after = snapshotOf(media).map(({ ctimeMs: _ctimeMs, ...rest }) => rest);
+  if (JSON.stringify(after) !== JSON.stringify(before.map(({ ctimeMs: _ctimeMs, ...rest }) => rest)) || digest() !== report.portable.sha256) throw new Error('the artifact or its directory changed across the two launches (REQ-STARTUP-165 (a))');
   for (const r of runs) process.stdout.write(`[package] portable ${r.label}: stub exited ${r.stubExit.code} after ${r.stubMs} ms, painted by ${r.paintedMs} ms, classified ${r.flavour}${r.renameAside ? `, renamed aside while running: ${r.renameAside.ok}` : ''}\n`);
   return { token: report.portable.token, root, runs };
 });

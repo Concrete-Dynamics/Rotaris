@@ -13,7 +13,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the module is plain ESM beside the scripts that run it.
 import { drainGroup, endOverrun, exitWithin, logTail, overrunMessage, spawnBounded } from './bounded-launch.mjs';
 
 const POSIX = process.platform !== 'win32';
@@ -26,7 +25,7 @@ function child(body: string, { detached = false } = {}): Promise<ChildProcess & 
   const proc = spawn(process.execPath, ['-e', body], { stdio: ['ignore', 'pipe', 'inherit'], detached });
   return new Promise((resolve, reject) => {
     let out = '';
-    proc.stdout!.setEncoding('utf8').on('data', (chunk: string) => { out += chunk; if (out.includes('ready')) resolve(Object.assign(proc, { said: out })); });
+    proc.stdout.setEncoding('utf8').on('data', (chunk: string) => { out += chunk; if (out.includes('ready')) resolve(Object.assign(proc, { said: out })); });
     proc.once('error', reject);
     proc.once('exit', (code) => { if (!out.includes('ready')) reject(new Error(`the child exited ${code} before it was ready`)); });
   });
@@ -221,7 +220,7 @@ describe('R-062: ending a proof launch within its bound', () => {
       expect(member).toBeGreaterThan(0);
       expect(r).toMatchObject({ status: 0, overran: null });
       expect(r.group).toMatchObject({ endedBy: 'SIGKILL' });
-      expect(r.group.lingered.some((l: string) => l.includes('lingering-member'))).toBe(true);
+      expect(r.group!.lingered.some((l: string) => l.includes('lingering-member'))).toBe(true);
       expect(await goneWithin(member, 5_000)).toBe(true);
     } finally {
       try { process.kill(member, 'SIGKILL'); } catch { /* gone */ }
@@ -243,8 +242,8 @@ describe('R-062: ending a proof launch within its bound', () => {
       expect(step).toBeGreaterThan(0);
       // The launch's own group left at once: the step leads another group, which the group drain does not reach.
       expect(r.group).toMatchObject({ endedBy: null, lingered: [] });
-      expect(r.group.ownGroups).toMatchObject({ endedBy: 'SIGKILL' });
-      expect(r.group.ownGroups.lingered.some((l: string) => l.includes('own-group-step'))).toBe(true);
+      expect(r.group!.ownGroups).toMatchObject({ endedBy: 'SIGKILL' });
+      expect(r.group!.ownGroups!.lingered.some((l: string) => l.includes('own-group-step'))).toBe(true);
       expect(await goneWithin(step, 5_000)).toBe(true);
     } finally {
       try { process.kill(step, 'SIGKILL'); } catch { /* gone */ }
@@ -255,7 +254,7 @@ describe('R-062: ending a proof launch within its bound', () => {
     const mark = `/tmp/bounded-launch-mark-${process.pid}-${Date.now()}-quick`;
     const leader = "const { spawn } = require('node:child_process'); const g = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 400)'], { stdio: 'ignore', detached: true }); g.unref(); process.exit(0);";
     const r = await spawnBounded(process.execPath, ['-e', leader], { timeoutMs: 10_000, groupGraceMs: 300, env: { ...process.env, XDG_DATA_HOME: mark } });
-    expect(r.group.ownGroups === null || r.group.ownGroups.endedBy === null).toBe(true);
+    expect(r.group!.ownGroups === null || r.group!.ownGroups.endedBy === null).toBe(true);
   }, 30_000);
 
   /*
@@ -273,7 +272,7 @@ describe('R-062: ending a proof launch within its bound', () => {
     try {
       const r = await spawnBounded(process.execPath, ['-e', 'process.exit(0)'], { timeoutMs: 10_000, groupGraceMs: 300, env: { ...process.env } });
       expect(r.group).toMatchObject({ endedBy: null, lingered: [] });
-      expect(r.group.ownGroups).toBeNull();
+      expect(r.group!.ownGroups).toBeNull();
       expect(alive(bystander.pid!)).toBe(true);
     } finally {
       if (saved === undefined) delete process.env['XDG_DATA_HOME']; else process.env['XDG_DATA_HOME'] = saved;
@@ -290,7 +289,7 @@ describe('R-062: ending a proof launch within its bound', () => {
       `const { spawnBounded } = await import(${JSON.stringify(module)}); const r = await spawnBounded(process.execPath, ['-e', ${JSON.stringify(leader)}], { timeoutMs: 10_000, groupGraceMs: 300 }); console.log('drained ' + r.group.endedBy);`,
     ], { stdio: ['ignore', 'pipe', 'ignore'] });
     let out = '';
-    proof.stdout!.setEncoding('utf8').on('data', (c: string) => { out += c; });
+    proof.stdout.setEncoding('utf8').on('data', (c: string) => { out += c; });
     const exit = await new Promise<number | null>((resolve) => proof.once('exit', (code) => resolve(code)));
     expect({ exit, out: out.trim() }).toEqual({ exit: 0, out: 'drained SIGKILL' });
   });

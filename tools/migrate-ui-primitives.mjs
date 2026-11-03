@@ -21,7 +21,9 @@ const INTRINSIC = new Map([
   ['table', 'DesignTable'],
 ]);
 
+/** @param {string} directory @returns {string[]} */
 function files(directory) {
+  /** @type {string[]} */
   const found = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
@@ -32,8 +34,9 @@ function files(directory) {
   return found;
 }
 
+/** @param {import('typescript').JsxAttributes} attributes */
 function literalClass(attributes) {
-  const attribute = attributes.properties.find((candidate) => ts.isJsxAttribute(candidate) && candidate.name.text === 'className');
+  const attribute = attributes.properties.find((candidate) => ts.isJsxAttribute(candidate) && ts.isIdentifier(candidate.name) && candidate.name.text === 'className');
   if (!attribute || !ts.isJsxAttribute(attribute) || attribute.initializer === undefined) return '';
   if (ts.isStringLiteral(attribute.initializer)) return attribute.initializer.text;
   if (!ts.isJsxExpression(attribute.initializer) || attribute.initializer.expression === undefined) return '';
@@ -42,6 +45,7 @@ function literalClass(attributes) {
   return '';
 }
 
+/** @param {string} tag @param {import('typescript').JsxAttributes} attributes */
 function replacement(tag, attributes) {
   const intrinsic = INTRINSIC.get(tag);
   if (intrinsic !== undefined) return intrinsic;
@@ -57,6 +61,7 @@ function replacement(tag, attributes) {
   return undefined;
 }
 
+/** @param {string} path */
 function modulePath(path) {
   let result = relative(dirname(path), join(designRoot, 'index.js')).split(sep).join('/');
   if (!result.startsWith('.')) result = `./${result}`;
@@ -70,7 +75,7 @@ for (const path of files(sourceRoot)) {
   const edits = [];
   const imports = new Set();
 
-  const visit = (node) => {
+  const visit = (/** @type {import('typescript').Node} */ node) => {
     if (ts.isJsxElement(node)) {
       const open = node.openingElement;
       if (ts.isIdentifier(open.tagName)) {
@@ -98,7 +103,7 @@ for (const path of files(sourceRoot)) {
   const importsText = [...imports].sort().map((name) => `${name.replace(/^Design/, '')} as ${name}`).join(', ');
   const importText = `\nimport { ${importsText} } from '${modulePath(path)}';`;
   const declarations = source.statements.filter(ts.isImportDeclaration);
-  const insertAt = declarations.length === 0 ? 0 : declarations.at(-1).end;
+  const insertAt = declarations.at(-1)?.end ?? 0;
   edits.push({ start: insertAt, end: insertAt, text: importText });
   edits.sort((a, b) => b.start - a.start || b.end - a.end);
   let next = original;

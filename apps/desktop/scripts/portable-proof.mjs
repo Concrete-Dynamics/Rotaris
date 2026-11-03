@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * `pnpm portable-proof` — the portable's launcher stub and its assembly (ADR-0054 alternative P4, first-release-plan.md
  * §4.5; REQ-STARTUP-013, REQ-STARTUP-031, REQ-STARTUP-150, REQ-STARTUP-165 (a)–(e)), executed on the host that runs it.

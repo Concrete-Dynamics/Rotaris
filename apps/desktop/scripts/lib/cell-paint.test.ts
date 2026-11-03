@@ -5,11 +5,11 @@
  * single line the capture seam's step grammar cannot split.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the proof library is plain ESM beside the scripts that run it.
 import { CELL_PAINT_TOLERANCE, cellPaintFindings, cellPaintProbe, cellsShortOfRow, controlsOutsideCell, runMarksElision, runShownWhole, runShowsLeadingChars } from './cell-paint.mjs';
+import type { Run } from './cell-paint.mjs';
 
 const run = (text: string, left: number, right: number, clipLeft: number | null = null, clipRight: number | null = null) => ({ text, left, right, clipLeft, clipRight });
-const cell = (column: string, left: number, right: number, runs: ReturnType<typeof run>[]) => ({ column, left, right, runs });
+const cell = (column: string, left: number, right: number, runs: Run[]) => ({ column, left, right, runs });
 
 // The bound worktree row as the unrepaired build painted it at 1440x900 (rounded): the State cell 504..580, `ready` reaching
 // 614 under the Ahead figure; measured 504.19..580.53 and 613.84 by `pnpm git-proof` on 2026-10-04.
@@ -123,7 +123,7 @@ describe('cell paint — overrun and cut (REQ-GIT-109)', () => {
   });
 
   it('builds a one-line probe the capture seam cannot split (no `;;`, no `>>`) that parses as an expression', () => {
-    const probe = cellPaintProbe('[data-testid="git-worktrees"] table') as string;
+    const probe = cellPaintProbe('[data-testid="git-worktrees"] table');
     expect(probe).not.toMatch(/\n/u);
     expect(probe).not.toContain(';;');
     expect(probe).not.toContain('>>');

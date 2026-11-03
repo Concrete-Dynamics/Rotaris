@@ -8,7 +8,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderSummary, sessionMetrics, type SummaryFacts } from '@rotaris/engine';
 import type { SessionRow } from '@rotaris/store';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { preserveSummary, summaryReading } from './summary-sections.mjs';
 
 const row = (over: Partial<SessionRow> = {}): SessionRow => ({

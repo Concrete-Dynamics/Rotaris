@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The chat-controls proof (Part AO): manual compression, the transcript clear and the prompt-file commands in the
  * built product — REQ-CHAT-073, REQ-CHAT-078..084, REQ-CHAT-160/161; REQ-MONITOR-090..094, 096, 097, 271; ADR-0060
@@ -31,7 +32,7 @@
  *
  * Evidence under `.proof/chat-controls-proof/`: one `.log` and `.png` per launch, `results.json`. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -145,7 +146,6 @@ async function launch(name, s, extra, timeoutMs = 150_000) {
   }
   return { png, log, inspects, evals, texts };
 }
-const match = (r, selector, at, index = 0) => (r.inspects[`${selector}@${at}`]?.matches ?? [])[index] ?? null;
 const evalAt = (r, at) => r.evals.find((e) => e.at === at)?.value;
 const text = (r, needle, at) => r.texts[`${needle}@${at}`] === true;
 

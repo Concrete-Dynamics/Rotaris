@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The transcript proof (Part Z): ADR-0045's first execution and ADR-0046 steps 3, 4 and 5, measured in the
  * PRODUCT rather than in the spike. Scripted client, scratch store, five launches against one scratch profile:
@@ -358,7 +359,6 @@ const SCROLL = `document.querySelector('[data-testid="transcript-scroll"]')`;
 // The bound slots by their top against the viewport, and those whose allotted height — the distance to the next slot —
 // is not the height they draw: a row positioned by its estimate rather than by its measurement. Statements, for splicing.
 const SLOTS_READ = `const v = s.getBoundingClientRect(); const slots = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: Math.round((r.top - v.top) * 10) / 10, height: Math.round(r.height * 10) / 10 }; }).sort((a, b) => a.top - b.top); const unmeasured = slots.slice(0, -1).map((x, i) => ({ key: x.key, draws: x.height, allotted: Math.round((slots[i + 1].top - x.top) * 10) / 10 })).filter((x) => Math.abs(x.draws - x.allotted) > 0.5);`;
-const GROUPS = `[...document.querySelectorAll('[data-shape="group"]')]`;
 if (wanted('behaviour')) {
 const behaviour = await launch('behaviour', {
   ROTARIS_CAPTURE_RESUME: 'S1200',

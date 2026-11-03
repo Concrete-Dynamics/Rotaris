@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The update-depth proof — live-run finding D8 in the built app
  * (`docs/archive/defects/the-renderer-throws-maximum-update-depth-exceeded-while-two-children-stream.md`).

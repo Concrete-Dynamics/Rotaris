@@ -173,8 +173,8 @@ export function lanesTrapReading(log) {
   let relayed = false;
   for (const line of String(log).split('\n')) {
     const evaluated = /capture: eval-at (\d+) (.*) → (.*)$/.exec(line);
-    if (evaluated && (evaluated[2].includes('__rotarisLanesTrap'))) {
-      try { readings.push({ at: Number(evaluated[1]), value: JSON.parse(evaluated[3]) }); } catch { readings.push({ at: Number(evaluated[1]), value: { unreadable: evaluated[3] } }); }
+    if (evaluated && ((evaluated[2] ?? '').includes('__rotarisLanesTrap'))) {
+      try { readings.push({ at: Number(evaluated[1]), value: JSON.parse(evaluated[3] ?? '') }); } catch { readings.push({ at: Number(evaluated[1]), value: { unreadable: evaluated[3] } }); }
       continue;
     }
     const at = line.indexOf(`capture: renderer console: ${LANES_TRAP_PREFIX} `);

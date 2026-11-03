@@ -33,15 +33,17 @@ import {
 export const PUBLISHED_PLATFORMS = Object.freeze(['windows-x64']);
 
 /** Every artifact a release of `version` publishes for `platforms`, named by the authority, in matrix order. */
+/** @param {string} version @param {readonly string[]} [platforms] @returns {import('./assets.d.mts').ReleaseAsset[]} */
 export function expectedAssets(version, platforms = PUBLISHED_PLATFORMS) {
   return platforms.flatMap((platform) => {
     const kinds = KINDS_BY_PLATFORM[/** @type {keyof typeof KINDS_BY_PLATFORM} */ (platform)];
     if (!kinds) throw new Error(`"${platform}" is not a platform key of REQ-STARTUP-030`);
-    return kinds.map((kind) => ({ platform, kind, name: artifactName(version, kind) }));
+    return kinds.map((kind) => ({ platform: /** @type {import('@rotaris/release-naming').PlatformKey} */ (platform), kind, name: artifactName(version, kind) }));
   });
 }
 
 /** The SHA-256 of a file in lower-case hexadecimal, read 1 MiB at a time so an installer is never held whole. */
+/** @param {string} path @returns {string} */
 export function sha256File(path) {
   const hash = createHash('sha256');
   const chunk = Buffer.allocUnsafe(1024 * 1024);
@@ -62,6 +64,7 @@ export function sha256File(path) {
  * What a release directory holds, read against the names the authority renders: the assets it expects and found, the
  * ones it expects and did not find, and every other file. The manifest and its signature are neither asset nor foreign.
  */
+/** @param {string} dir @param {string} version @param {readonly string[]} [platforms] */
 export function readReleaseDirectory(dir, version, platforms = PUBLISHED_PLATFORMS) {
   const expected = expectedAssets(version, platforms);
   const present = new Set(readdirSync(dir).filter((name) => statSync(join(dir, name)).isFile()));
@@ -72,6 +75,7 @@ export function readReleaseDirectory(dir, version, platforms = PUBLISHED_PLATFOR
   return { assets, missing, foreign };
 }
 
+/** @param {readonly string[]} foreign @param {string} version */
 function foreignProblems(foreign, version) {
   return foreign.map((name) => `REQ-STARTUP-152: "${name}" is not an artifact name tools/release-naming renders for ${version}; a release publishes nothing the naming scheme does not name`);
 }
@@ -82,6 +86,7 @@ function foreignProblems(foreign, version) {
  * refuses the step with nothing written. An expected asset that is absent is not this step's refusal: the manifest
  * covers what the release publishes, and `verifyReleaseDirectory` is where an incomplete release fails.
  */
+/** @param {string} dir @param {string} version @param {readonly string[]} [platforms] */
 export function writeChecksumManifest(dir, version, platforms = PUBLISHED_PLATFORMS) {
   const { assets, foreign } = readReleaseDirectory(dir, version, platforms);
   if (foreign.length > 0) return { ok: false, problems: foreignProblems(foreign, version) };
@@ -98,6 +103,7 @@ export function writeChecksumManifest(dir, version, platforms = PUBLISHED_PLATFO
  * when the directory is a complete release of `version` whose manifest is the authority's exact rendering of its
  * assets. The signature half is `verifyReleaseSignature` (`signing.mjs`).
  */
+/** @param {string} dir @param {string} version @param {readonly string[]} [platforms] @returns {string[]} */
 export function verifyReleaseDirectory(dir, version, platforms = PUBLISHED_PLATFORMS) {
   const problems = [];
   const { assets, missing, foreign } = readReleaseDirectory(dir, version, platforms);

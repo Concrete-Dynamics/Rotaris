@@ -16,6 +16,10 @@
 /**
  * The gate's `invalid_request` refusals among `calls`, and those of them no `tool_error` issue references. A call is
  * `{ ordinal, tool_name, status, callId, failureKind }` as `readToolCalls` reads it; an issue is `{ kind, evidence_ref }`.
+ * @template {Record<string, any>} C
+ * @param {C[]} calls
+ * @param {Array<Record<string, any>>} issues
+ * @returns {{ refused: C[], unfiled: C[] }}
  */
 export function refusalIssues(calls, issues) {
   const filed = new Set(issues.filter((issue) => issue.kind === 'tool_error').map((issue) => String(issue.evidence_ref ?? '')));

@@ -7,7 +7,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { checkProduct, markersIn } from './check-plural-markers.mjs';
 
 describe('check-plural-markers (REQ-SHELL-044)', () => {

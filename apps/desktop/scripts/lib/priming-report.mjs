@@ -24,12 +24,13 @@ const OPENING = /credential(?:s| lease): leased for (.+?) \(workspace (.+?)\)(?:
 /**
  * The first opening report in `log`, or null: the providers it names as authenticated (`no provider` names none),
  * its workspace root, and its unresolved part as written (null where the map was empty).
+ * @param {string} log
  */
 export function openingReport(log) {
   for (const line of log.split('\n')) {
     const m = OPENING.exec(line);
     if (!m) continue;
-    const authenticated = m[1] === 'no provider' ? [] : m[1].split(', ');
+    const authenticated = m[1] === 'no provider' ? [] : (m[1] ?? '').split(', ');
     return { line: line.trim(), authenticated, workspace: m[2], unresolved: m[3] ?? null };
   }
   return null;
@@ -42,6 +43,8 @@ export function openingReport(log) {
  * REQ-PROVIDER-068's report also names "the providers renewed". The wire carries them (`credentials.leased`'s
  * `report.renewed`) but `LeaseReportLog`'s line does not, so that clause is not read here; for the API key this proof
  * leases nothing is renewed in any case (a credential with no expiry is never renewed, REQ-PROVIDER-068).
+ * @param {string} log
+ * @param {string} provider
  */
 export function primingProblem(log, provider) {
   const report = openingReport(log);

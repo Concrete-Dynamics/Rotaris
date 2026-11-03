@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The live run's reading of the two improvement passes it lets finish (fin42; the 2026-10-13 survey's N58): the per-run
  * analyst (REQ-LIBRARY-123/124/125/127) after the `ask` scenario's run, and the retrospective (PD-LIBRARY-002) its follow-on

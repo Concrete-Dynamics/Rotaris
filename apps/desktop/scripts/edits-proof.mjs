@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The edits proof (fin42, N52): the edit directives `PD-TOOLS-014` to `PD-TOOLS-018` driven through the built application on a
  * CRLF, tab-indented fixture. Until this proof they were pinned by unit cases alone (`tools.test.ts`, `diff.test.ts`), every

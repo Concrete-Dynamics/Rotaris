@@ -21,11 +21,11 @@ let code;
 try {
   const { module } = await runnerImport(join(HERE, 'src', 'guard.ts'), { configFile: false, logLevel: 'silent', root: REPO });
   code = module.guardCommandLine(process.argv.slice(2), REPO, {
-    out: (text) => process.stdout.write(text),
-    err: (text) => process.stderr.write(text),
+    out: (/** @type {string} */ text) => process.stdout.write(text),
+    err: (/** @type {string} */ text) => process.stderr.write(text),
   });
 } catch (cause) {
-  process.stderr.write(`error: the release guard could not run, so nothing may be built (REQ-STARTUP-028): ${cause && cause.stack ? cause.stack : cause}\n`);
+  process.stderr.write(`error: the release guard could not run, so nothing may be built (REQ-STARTUP-028): ${cause instanceof Error && cause.stack ? cause.stack : String(cause)}\n`);
   code = 1;
 }
 process.exitCode = code;

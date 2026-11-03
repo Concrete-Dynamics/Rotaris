@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * Part AL2 — the run-host half of `pnpm terminal-proof`'s REQ-SHELL-166 section, as a Node child of the Electron half.
  *
@@ -111,7 +112,6 @@ async function handle(req) {
       out({ id: req.id, ok: true });
       process.exit(0);
     }
-    // eslint-disable-next-line no-fallthrough
     default:
       out({ id: req.id, error: `unknown op ${req.op}` });
   }

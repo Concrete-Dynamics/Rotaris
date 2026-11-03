@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The live run's scenarios at a permission mode that asks (fin42; N53 and N54 of the 2026-10-13 survey). `live-run.mjs`
  * forces `permission_mode: autonomous` on its sandbox, so until these no approval dialog, away mark, session approval or plan

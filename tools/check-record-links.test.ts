@@ -7,7 +7,6 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { anchorsOf, checkCode, checkCodeFile, checkFile, checkProse, checkProseFile, checkRecord, codeFiles, defectPointers, extractLinks, isRetired, partialDefectPaths, PROSE_EXEMPT, prosePointers, githubSlug, isRelative, RETIRED_REASON, withoutCode } from './check-record-links.mjs';
 
 let root: string;
@@ -197,7 +196,7 @@ describe('check-record-links — a defect-note path in the code must name a note
   it('walks apps/, packages/ and tools/ for code, skipping what a build or an install writes, and nothing else', () => {
     for (const dir of ['apps/desktop/src', 'apps/desktop/out/main', 'packages/ui/node_modules/x', 'packages/ui/src', 'tools', 'docs/defects']) mkdirSync(join(root, dir), { recursive: true });
     for (const file of ['apps/desktop/src/main.ts', 'apps/desktop/out/main/index.js', 'packages/ui/node_modules/x/index.js', 'packages/ui/src/shell.css', 'packages/ui/src/notes.md', 'tools/check.mjs', note('d.ts')]) writeFileSync(join(root, file), `// ${note('gone.md')}\n`);
-    const rel = (codeFiles(root) as string[]).map((f) => f.slice(root.length + 1).split('\\').join('/'));
+    const rel = (codeFiles(root)).map((f) => f.slice(root.length + 1).split('\\').join('/'));
     expect(rel).toEqual(['apps/desktop/src/main.ts', 'packages/ui/src/shell.css', 'tools/check.mjs']);
     const { problems, pointers, files } = checkCode(root);
     expect([problems.length, pointers, files]).toEqual([3, 3, 3]);
@@ -335,7 +334,7 @@ describe("check-record-links — a defect-note path in the record's prose must n
     writeFileSync(join(root, 'AGENTS.md'), `\`${note('gone.md')}\`\n`);
     const { problems, pointers, kept } = checkProse(root);
     expect([brief(problems), pointers, kept]).toEqual([[[1, note('gone.md'), 'no note at this path']], 3, 1]);
-    expect(problems[0].file).toBe(join(root, 'AGENTS.md'));
+    expect(problems[0]!.file).toBe(join(root, 'AGENTS.md'));
     expect(PROSE_EXEMPT.get('docs/product/requests.md')).toMatch(/orchestrator's alone to edit/);
   });
 });

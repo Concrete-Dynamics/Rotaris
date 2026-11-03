@@ -12,7 +12,6 @@
  */
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { readRecord, readRecordWithArchive } from './record-parts.mjs';
 
 const root = join(import.meta.dirname, '..');
@@ -61,7 +60,7 @@ function misplaced(entry: string, spec: string, citations: readonly Citation[]):
   for (const p of rest) {
     if (!p) continue;
     const cited = p.cited - first.cited;
-    const stands = p.stands - first.stands;
+    const stands = p.stands! - first.stands!;
     if (cited !== stands) found.push(`${p.name}: cited ${first.name} +${cited}, stands ${first.name} +${stands}`);
   }
   return found;

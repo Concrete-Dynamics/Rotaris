@@ -4,9 +4,7 @@
  * shapes the session writer stores since fin23 (`SessionWriter.settleToolCall`, `run/cut.ts`).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { ERROR_RECORD_CAP, errorRecordCuts } from './error-record-cuts.mjs';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { runWideReadings } from './tool-frictions.mjs';
 
 const ords = (calls: { ordinal: number }[]) => calls.map((c) => c.ordinal);

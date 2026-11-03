@@ -29,6 +29,7 @@
  *
  * `sessions`: `{ scenario, nonWriterFileTasks?: number, publishers?: string[], rootNames: string[], calls: { ordinal, tool_name, agent_name, status, result, failureKind, args?, endedAt? }[] }[]`.
  */
+/** @param {Array<Record<string, any>>} sessions */
 export function routingMissReading(sessions) {
   const scopeRefusals = [];
   const unknownTools = [];
@@ -46,7 +47,7 @@ export function routingMissReading(sessions) {
       const result = String(c.result ?? '');
       if (c.tool_name === 'delegate' && /rejected — write_scope was given to '[^']+', which cannot write files/.test(result)) {
         const persona = /write_scope was given to '([^']+)'/.exec(result)?.[1] ?? '?';
-        const next = calls.slice(i + 1).find((n) => n.tool_name === 'delegate' && n.agent_name === c.agent_name);
+        const next = calls.slice(i + 1).find((/** @type {Record<string, any>} */ n) => n.tool_name === 'delegate' && n.agent_name === c.agent_name);
         const accepted = next !== undefined && !/rejected — /.test(String(next.result ?? ''));
         const scope = next?.args?.write_scope;
         const rerouted = accepted && (next.args?.persona !== persona || !Array.isArray(scope) || scope.length === 0);
@@ -86,9 +87,11 @@ export const PUBLISHES_ARTIFACTS = 'publishes artifacts';
  * @returns {string[]}
  */
 export function publishersOf(description) {
+  /** @type {string[]} */
   const out = [];
   for (const m of String(description ?? '').matchAll(/([A-Za-z0-9][\w.-]*) \(([^()]*)\)/g)) {
-    if (m[2].split(', ').includes(PUBLISHES_ARTIFACTS) && !out.includes(m[1])) out.push(m[1]);
+    const [, name = '', roles = ''] = m;
+    if (roles.split(', ').includes(PUBLISHES_ARTIFACTS) && !out.includes(name)) out.push(name);
   }
   return out;
 }

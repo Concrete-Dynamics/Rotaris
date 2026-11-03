@@ -22,6 +22,7 @@ export const MANIFEST_FILE = 'evidence-manifest.json';
 export const MANIFEST_VERSION = 1;
 
 /** A file's sha256, read in chunks so a store of fifty megabytes is not loaded whole to be hashed. */
+/** @param {string} file */
 function sha256File(file) {
   const hash = createHash('sha256');
   const fd = openSync(file, 'r');

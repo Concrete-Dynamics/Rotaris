@@ -23,11 +23,18 @@ export const GROWTH_FLOOR_MS = 25;
 export const GROWTH_CEILING = 3.0;
 const WORK_RANGE = { above: 1.5, below: 2.6 };
 
-const round2 = (n) => Math.round(n * 100) / 100;
+const round2 = (/** @type {number} */ n) => Math.round(n * 100) / 100;
 
 /**
  * `{ ok, asserted, message }`. `ok` is false when the work ratio is out of range, or when the timing ratio was asserted
  * and is not inside `(lower, ceiling)`. `asserted` says whether the timing ratio was asserted at all.
+ * @param {string} label
+ * @param {{ work: { full: number, half: number }, ratio: number, wallRatio?: number, clock?: string,
+ *   host?: { loadAverage?: number[], cpus?: number } | null,
+ *   fullRunsMs?: number[], halfRunsMs?: number[], fullMinMs?: number, halfMinMs?: number,
+ *   fullCpuRunsMs?: number[], halfCpuRunsMs?: number[], fullCpuMinMs?: number, halfCpuMinMs?: number }} pair
+ * @param {number} lower
+ * @param {{ floorMs?: number, ceiling?: number }} [options]
  */
 export function growthVerdict(label, pair, lower, { floorMs = GROWTH_FLOOR_MS, ceiling = GROWTH_CEILING } = {}) {
   const workRatio = round2(pair.work.full / Math.max(pair.work.half, 1));
@@ -41,7 +48,7 @@ export function growthVerdict(label, pair, lower, { floorMs = GROWTH_FLOOR_MS, c
   const readings = `${cpu ? 'thread CPU ' : ''}${JSON.stringify(side.full ?? [])} full (minimum ${side.fullMin} ms) against ${JSON.stringify(side.half ?? [])} half (minimum ${side.halfMin} ms)`;
   const load = pair.host ? `, load average ${pair.host.loadAverage?.[0]} on ${pair.host.cpus} CPUs` : '';
   const beside = cpu ? `; wall clock ${JSON.stringify(pair.fullRunsMs ?? [])} full against ${JSON.stringify(pair.halfRunsMs ?? [])} half, ratio ${pair.wallRatio}${load}` : load;
-  if (side.fullMin < floorMs || side.halfMin < floorMs) {
+  if (Number(side.fullMin) < floorMs || Number(side.halfMin) < floorMs) {
     return { ok: true, asserted: false, message: `${label} growth ratio ${pair.ratio} recorded, NOT asserted: ${side.fullMin} ms against ${side.halfMin} ms${cpu ? ' of thread CPU' : ''} is below the ${floorMs} ms floor at which a ${cpu ? 'clock' : 'wall clock'} can tell two passes apart (work ratio ${workRatio} asserted instead)${beside}` };
   }
   const ok = pair.ratio > lower && pair.ratio < ceiling;

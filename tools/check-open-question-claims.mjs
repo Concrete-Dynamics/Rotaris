@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 // An open question is the owner's: the build raises it and proceeds under a stated reading until the owner rules
 // (`AGENTS.md`, "When the owner asks for something"; until R-072 "A question the specification leaves open is raised, never ruled by you"). Two kinds of sentence
 // outlived that rule's bookkeeping, and nothing read either (acceptance finding F16 of finacc3, 2026-10-06,

@@ -7,7 +7,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileToolState, writeFileTool } from '@rotaris/agent-tools';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { argumentFields, fenceRootOf, outsideFence, runWideReadings, todoActiveReadings, writeSelectorReadings } from './tool-frictions.mjs';
 
 const ords = (calls: { ordinal: number }[]) => calls.map((c) => c.ordinal);

@@ -26,6 +26,7 @@ export const SETUP_ANSWERED = Object.freeze([
 /**
  * True when a launch's log shows the product starting the setup task in the background anyway — the precondition the
  * section above establishes did not hold, and the proof says so instead of misreading what follows.
+ * @param {string} log
  */
 export function backgroundSetupStarted(log) {
   return new RegExp(`initialization: running ${INITIALIZATION_TASK_ID}\\b`).test(log);

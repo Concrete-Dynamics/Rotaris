@@ -5,7 +5,6 @@
  * (docs/archive/defects/pnpm-package-announced-a-seam-free-build-it-had-not-made.md).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — plain ESM beside the scripts that run it.
 import { closingLines, reached, STEPS } from './package-verdict.mjs';
 
 const REPORT = 'apps/desktop/release/load-proof.json';
@@ -23,7 +22,7 @@ const STEP_NAMES = [
 ];
 /** A run that entered the first `n` steps. */
 const ran = (n: number, extra: Record<string, unknown> = {}) => ({ ok: false, ms: 1, counterfactual: null, steps: STEP_NAMES.slice(0, n).map((name) => ({ name })), ...extra });
-const lines = (report: ReturnType<typeof ran>, why?: string) => closingLines({ report, why, reportPath: REPORT }) as { stdout: string[]; stderr: string[] };
+const lines = (report: ReturnType<typeof ran>, why?: string) => closingLines({ report, why, reportPath: REPORT });
 
 describe('the SEAM-FREE line says what `out/` holds only when the build ran', () => {
   it('is not printed for a package refused before electron-vite build: at the bundle, the manifest, the notices step', () => {

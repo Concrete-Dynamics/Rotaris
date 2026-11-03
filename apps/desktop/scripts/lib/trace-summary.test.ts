@@ -10,7 +10,6 @@
  * browser's and V8's `(idle)` inside a task is not the thread waiting — and functions named by their bundle module.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the summariser is plain ESM beside the scripts that run it.
 import { BUCKET_NAMES, CPU_PROFILE_CATEGORIES, accountWindow, applyWindows, attributeProfile, bucketOf, bundleRegions, frameName, median, moduleAt, moduleOfName, profileDifference, readCpuProfile, readTrace, selfTimes, spread, summariseAppendProfile, summariseAppendTrace } from './trace-summary.mjs';
 
 const PID = 7;
@@ -91,7 +90,7 @@ describe('trace-summary: REQ-CHAT-055 measurement round — the account of an ap
     const own = selfTimes(events, PID, TID);
     const account = accountWindow(own, applyWindows(events).windows[0]);
     expect(account.ms).toBe(40);
-    const sum = BUCKET_NAMES.reduce((s: number, name: string) => s + account[name], 0) + account.other;
+    const sum = BUCKET_NAMES.reduce((s: number, name) => s + account[name], 0) + account.other;
     expect(sum).toBeCloseTo(account.busy, 3);
     expect(account.busy + account.idle).toBeCloseTo(40, 3);
     // Style: the forced recalculation (0.5) plus the frame's (1.0, of which 0.4 is Blink's own child) = 1.5 ms.
@@ -142,9 +141,9 @@ describe('trace-summary: REQ-CHAT-055 measurement round — the account of an ap
     const summary = summariseAppendTrace([...oneWindow(), ...second]);
     expect(summary.thread).toEqual({ pid: PID, tid: TID });
     expect(summary.windows.map((w: { seq: number }) => w.seq)).toEqual([12, 14]);
-    expect(summary.aggregate.windows).toBe(2);
-    expect(summary.aggregate.median.ms).toBe(40);
-    expect(summary.aggregate.mean.layout).toBeCloseTo(3.0, 2);
+    expect(summary.aggregate!.windows).toBe(2);
+    expect(summary.aggregate!.median.ms).toBe(40);
+    expect(summary.aggregate!.mean.layout).toBeCloseTo(3.0, 2);
     expect(summary.topFunctions[0]).toEqual({ function: 'onIncrement@10:2', selfMs: 2 });
     expect(summary.topFunctions[1]).toEqual({ function: '(anonymous)@99:1', selfMs: 2 });
     expect(summary.windows[0]).not.toHaveProperty('functions');
@@ -199,12 +198,12 @@ describe('trace-summary: which functions the script time went to (the 2026-09-29
       { ...chunk(10_300, [], [5], [1]), pid: 99 },
     ];
     const profile = readCpuProfile(events, { pid: PID, tid: TID });
-    expect([...profile.nodes.keys()]).toEqual([1, 5, 6]);
-    expect(profile.samples.map((s: { t: number; node: number }) => [s.t, s.node])).toEqual([[10_000, 5], [10_300, 6], [10_500, 5], [11_000, 5]]);
+    expect([...profile!.nodes.keys()]).toEqual([1, 5, 6]);
+    expect(profile!.samples.map((s: { t: number; node: number }) => [s.t, s.node])).toEqual([[10_000, 5], [10_300, 6], [10_500, 5], [11_000, 5]]);
     // Positive gaps 300, 200, 500: the interval is their median, and a sample stands for the gap to the next one.
-    expect(profile.intervalUs).toBe(300);
-    expect(profile.samples.map((s: { dur: number }) => s.dur)).toEqual([300, 200, 500, 300]);
-    expect(profile.cappedUs).toBe(0);
+    expect(profile!.intervalUs).toBe(300);
+    expect(profile!.samples.map((s: { dur: number }) => s.dur)).toEqual([300, 200, 500, 300]);
+    expect(profile!.cappedUs).toBe(0);
     expect(readCpuProfile(events, { pid: PID, tid: 1234 })).toBeNull();
     expect(readCpuProfile(events, null)).toBeNull();
   });
@@ -212,9 +211,9 @@ describe('trace-summary: which functions the script time went to (the 2026-09-29
   it('caps a gap of many intervals rather than charging it to the function sampled before it, and says how much it removed', () => {
     const events = [profileEvent(0), chunk(1, NODES, [5, 5, 5, 5, 5], [0, 100, 100, 5_000, 100])];
     const profile = readCpuProfile(events, { pid: PID, tid: TID });
-    expect(profile.intervalUs).toBe(100);
-    expect(profile.samples.map((s: { dur: number }) => s.dur)).toEqual([100, 100, 400, 100, 100]);
-    expect(profile.cappedUs).toBe(4_600);
+    expect(profile!.intervalUs).toBe(100);
+    expect(profile!.samples.map((s: { dur: number }) => s.dur)).toEqual([100, 100, 400, 100, 100]);
+    expect(profile!.cappedUs).toBe(4_600);
   });
 
   it('names a function by the bundle module its line lies in, and a made-up frame by itself', () => {
@@ -284,16 +283,16 @@ describe('trace-summary: which functions the script time went to (the 2026-09-29
     const options = { seqs: new Set([3]), bundle, bundleUrl: BUNDLE };
     const empty = summariseAppendProfile(launch(1), options);
     const loaded = summariseAppendProfile(launch(4), options);
-    expect(empty.increments).toBe(1);
-    expect(empty.intervalUs).toBe(500);
-    expect(empty.perIncrement.script).toBe(1);
-    expect(loaded.perIncrement.script).toBe(2.5);
-    expect(loaded.functions[0]).toEqual({ function: '(anonymous) packages/ui/src/app.ts:5', selfMs: 2 });
-    expect(loaded.modules).toEqual([{ module: 'packages/ui/src/app.ts', selfMs: 2.5 }]);
+    expect(empty!.increments).toBe(1);
+    expect(empty!.intervalUs).toBe(500);
+    expect(empty!.perIncrement.script).toBe(1);
+    expect(loaded!.perIncrement.script).toBe(2.5);
+    expect(loaded!.functions[0]).toEqual({ function: '(anonymous) packages/ui/src/app.ts:5', selfMs: 2 });
+    expect(loaded!.modules).toEqual([{ module: 'packages/ui/src/app.ts', selfMs: 2.5 }]);
     const difference = profileDifference(empty, loaded);
-    expect(difference.functions[0]).toEqual({ name: '(anonymous) packages/ui/src/app.ts:5', emptyMs: 0.5, loadedMs: 2, differenceMs: 1.5 });
-    expect(difference.modules[0]).toMatchObject({ name: 'packages/ui/src/app.ts', differenceMs: 1.5 });
-    expect(difference.totals.find((t: { name: string }) => t.name === 'script')).toMatchObject({ emptyMs: 1, loadedMs: 2.5, differenceMs: 1.5 });
+    expect(difference!.functions[0]).toEqual({ name: '(anonymous) packages/ui/src/app.ts:5', emptyMs: 0.5, loadedMs: 2, differenceMs: 1.5 });
+    expect(difference!.modules[0]).toMatchObject({ name: 'packages/ui/src/app.ts', differenceMs: 1.5 });
+    expect(difference!.totals.find((t: { name: string }) => t.name === 'script')).toMatchObject({ emptyMs: 1, loadedMs: 2.5, differenceMs: 1.5 });
     expect(profileDifference(null, loaded)).toBeNull();
     // A trace with no profile of the marks' thread has nothing to say.
     expect(summariseAppendProfile(launch(1).filter((e) => e.name !== 'Profile'), options)).toBeNull();

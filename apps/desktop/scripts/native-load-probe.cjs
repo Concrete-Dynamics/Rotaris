@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 'use strict';
 /**
  * ADR-0056 rule 4 — the load, not a version comparison. Run by build-hooks.cjs as

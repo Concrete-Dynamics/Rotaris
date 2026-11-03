@@ -44,8 +44,8 @@ protocol's own and is never written or read here. Exit 0 when the command did wh
 not verify, 2 on a usage error — a directory without a manifest to verify is one.
 `;
 
-const files = (count) => `${count} file${count === 1 ? '' : 's'}`;
-const describe = (manifest) => `${manifest.kind}${manifest.label ? `: ${manifest.label}` : ''}`;
+const files = (/** @type {number} */ count) => `${count} file${count === 1 ? '' : 's'}`;
+const describe = (/** @type {{ kind: string, label?: string | null }} */ manifest) => `${manifest.kind}${manifest.label ? `: ${manifest.label}` : ''}`;
 
 /**
  * @param {string[]} args
@@ -122,6 +122,7 @@ export function main(argv, io = { out: (text) => process.stdout.write(text), err
 }
 
 /** True when this module is the process entry; the four lines `preflight.mjs` keeps too (a relative argv[1] must resolve to match on Windows). */
+/** @param {string | undefined} argv1 @param {string} [metaUrl] */
 function isMainModule(argv1, metaUrl = import.meta.url) {
   return argv1 !== undefined && metaUrl === pathToFileURL(resolve(argv1)).href;
 }

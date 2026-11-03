@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The Electron half of `pnpm terminal-proof` (Part AM, ADR-0047's first execution). Opens the bundled proof page in
  * a 900×620 window (REQ-SHELL-081's initial size), drives it with REAL input events through `webContents.sendInputEvent`
@@ -220,7 +221,7 @@ app.whenReady().then(async () => {
     const gy = Math.round(grid.y + grid.height / 2);
     const before = (await state()).stream.grid.viewportY;
     await wheel(gx, gy, 100);
-    let after = await state();
+    const after = await state();
     const domDelta = after.log.wheel.at(-1)?.deltaY ?? 0;
     const expected = domDelta > 0 ? 3 : -3;
     expect('wheel.notch', after.stream.grid.viewportY - before === expected, { before, after: after.stream.grid.viewportY, domDelta });

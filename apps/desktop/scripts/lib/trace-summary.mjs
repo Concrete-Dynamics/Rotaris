@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * What a Chromium trace says about one apply-to-paint sample (REQ-CHAT-055's measurement point, ADR-0045).
  *
@@ -42,7 +43,9 @@ export const BUCKETS = Object.freeze({
   script: ['FunctionCall', 'RunMicrotasks', 'EvaluateScript', 'v8.callFunction', 'V8.Execute', 'TimerFire', 'EventDispatch'],
   hitTest: ['HitTest'],
 });
-export const BUCKET_NAMES = Object.freeze(Object.keys(BUCKETS));
+/** @typedef {keyof typeof BUCKETS} Bucket */
+/** @type {readonly Bucket[]} */
+export const BUCKET_NAMES = Object.freeze(/** @type {Bucket[]} */ (Object.keys(BUCKETS)));
 const SCRIPT_BUCKET = 'script';
 const LAYOUT_LIKE = new Set([...BUCKETS.style, ...BUCKETS.layout]);
 
@@ -156,6 +159,10 @@ const toMs = (us) => Math.round(us) / 1000;
  *    rather than only its duration; `layoutTotal` is the largest layout-object count any layout in the window saw,
  *    which is the size of the whole tree, not of the work;
  *  - `tasks`: top-level tasks begun inside the window and the longest one.
+ * @typedef {{ seq: number, ms: number, busy: number, idle: number, forcedLayout: number, forcedLayouts: number,
+ *   frames: number, scrolls: number, layoutDirty: number, layoutTotal: number, styleElements: number, tasks: number,
+ *   longestTask: number, functions: Map<string, number> } & Record<Bucket | 'other', number>} WindowAccount
+ * @returns {WindowAccount}
  */
 export function accountWindow(own, window) {
   const buckets = zeroBuckets();
@@ -235,6 +242,9 @@ export function spread(values) {
 /**
  * The account of every apply window in a trace: each window, the medians and means across them, the top script
  * functions by self time, and which applies the trace did not see to the end.
+ * @returns {{ thread: unknown, windows: Array<Omit<WindowAccount, 'functions'>>, unfinished: number[],
+ *   aggregate: { windows: number, median: Record<string, number | null>, mean: Record<string, number | null> } | null,
+ *   topFunctions: Array<{ function: string, selfMs: number }> }}
  */
 export function summariseAppendTrace(events, options = {}) {
   const { thread, windows, unfinished } = applyWindows(events, options);
@@ -321,6 +331,9 @@ export function readCpuProfile(events, thread, { maxGapFactor = 4 } = {}) {
  * The source module each line of a bundle came from, read off the region markers the bundler writes around every
  * module it inlines (`//#region ../../packages/ui/src/transcript/pool.ts`), so that a sampled frame names the file it
  * belongs to rather than a line of a seventy-thousand-line bundle. Lines are 0-based, as V8's call frames count them.
+ * @typedef {{ lines: string[], regions: Array<{ line: number, module: string }> }} Bundle
+ * @param {string} text
+ * @returns {Bundle}
  */
 export function bundleRegions(text) {
   const lines = text.split('\n');
@@ -350,6 +363,10 @@ export function moduleAt(bundle, line) {
  * A sampled frame's name: its function (or `(anonymous)`), the module it came from when the frame is in `bundle`'s
  * script, and its 1-based line in the bundle so two anonymous functions of one module stay apart. A frame V8 made up —
  * `(program)`, `(idle)`, `(garbage collector)`, `(root)` — is its own name.
+ * @param {{ functionName?: string, url?: string, lineNumber?: number }} frame
+ * @param {Bundle | null} [bundle]
+ * @param {string | null} [bundleUrl]
+ * @returns {string}
  */
 export function frameName(frame, bundle = null, bundleUrl = null) {
   const fn = frame.functionName || '(anonymous)';
@@ -431,6 +448,8 @@ export function moduleOfName(key) {
  * launch's own samples carry (`seqs` — the attach increment is not among them), and the span is theirs, from the
  * first one's arrival to the last one's shown frame, which is the span the trace account's per-increment figures
  * read too. `bundle`/`bundleUrl` name the modules; `top` bounds the lists. Figures are milliseconds per increment.
+ * @param {unknown[]} events
+ * @param {{ seqs?: Set<number> | null, bundle?: Bundle | null, bundleUrl?: string | null, top?: number }} [options]
  */
 export function summariseAppendProfile(events, { seqs = null, bundle = null, bundleUrl = null, top = 40 } = {}) {
   const { thread, windows } = applyWindows(events);

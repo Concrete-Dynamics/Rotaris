@@ -23,13 +23,14 @@ import { PUBLISHED_PLATFORMS } from './assets.mjs';
 
 /** REQ-STARTUP-033's three fixed forms. */
 export const FIRST_RELEASE_CHANGELOG = 'First release — no previous tag to compare against.';
-export const noCommitsChangelog = (previousTag) => `No commits since ${previousTag}.`;
-export const changesSinceHeading = (previousTag) => `Changes since ${previousTag}:`;
+export const noCommitsChangelog = (/** @type {string} */ previousTag) => `No commits since ${previousTag}.`;
+export const changesSinceHeading = (/** @type {string} */ previousTag) => `Changes since ${previousTag}:`;
 
 /** `PD-STARTUP-001`'s one line in place of element (4) for the platforms it leaves out. */
 export const WINDOWS_ONLY_LINE = 'This release publishes Windows builds only.';
 
 /** REQ-STARTUP-033: the changelog against the previous tag, from the commit subjects since it (merge commits excluded). */
+/** @param {string | null} previousTag @param {readonly string[]} subjects @returns {string} */
 export function changelog(previousTag, subjects) {
   if (previousTag === null) return FIRST_RELEASE_CHANGELOG;
   if (subjects.length === 0) return noCommitsChangelog(previousTag);
@@ -40,6 +41,7 @@ export function changelog(previousTag, subjects) {
  * The previous tag: among the tags in REQ-STARTUP-027's grammar, the newest that sorts strictly before `tag` in
  * REQ-STARTUP-109's order (so `v0.2.0` follows `v0.2.0rc1`), or null when there is none. Other tags are not releases.
  */
+/** @param {readonly string[]} tags @param {string} tag @returns {string | null} */
 export function previousReleaseTag(tags, tag) {
   const current = parseReleaseTag(tag);
   let best = null;
@@ -53,6 +55,7 @@ export function previousReleaseTag(tags, tag) {
 }
 
 /** REQ-STARTUP-034: the release's name, and whether it is flagged prerelease (REQ-STARTUP-029's channel). */
+/** @param {string} tag @returns {{ tag: string, version: string, name: string, prerelease: boolean }} */
 export function releaseMetadata(tag) {
   const parsed = parseReleaseTag(tag);
   return { tag: parsed.tag, version: parsed.version, name: `Rotaris ${parsed.version}`, prerelease: parsed.channel === 'prerelease' };
@@ -63,6 +66,7 @@ export function releaseMetadata(tag) {
  * is passed in both directions (`--prerelease=true` for an `a`/`b`/`rc` tag, `--prerelease=false` for a plain one), so
  * the flag the release carries is the channel's and never the host's default.
  */
+/** @param {{ name: string, prerelease: boolean }} meta @param {string} bodyFile @returns {string[]} */
 export function draftReleaseArguments(meta, bodyFile) {
   return ['--draft', '--verify-tag', '--title', meta.name, '--notes-file', bodyFile, `--prerelease=${meta.prerelease === true}`];
 }
@@ -71,6 +75,12 @@ export function draftReleaseArguments(meta, bodyFile) {
  * REQ-STARTUP-034 read back: what the release host recorded (`gh release view <tag> --json tagName,name,isDraft,isPrerelease`)
  * against the metadata the release was created from. `stage` is `draft` right after the draft job created it, `published`
  * once the owner has made it public (first-release-plan.md §5). One sentence per disagreement; none when they agree.
+ */
+/**
+ * @param {{ tag: string, name: string, prerelease: boolean }} meta
+ * @param {{ tagName?: unknown, name?: unknown, isDraft?: unknown, isPrerelease?: unknown }} view
+ * @param {'draft' | 'published'} stage
+ * @returns {string[]}
  */
 export function releaseStateProblems(meta, view, stage) {
   const problems = [];
@@ -88,6 +98,11 @@ export function releaseStateProblems(meta, view, stage) {
  * REQ-STARTUP-035's body. `entries` is the release's manifest, parsed (`parseChecksumManifest`): the table is its rows,
  * so a digest in the body is the digest the manifest lists. `platformsWithAssets` names the published platforms that
  * contributed at least one asset; a published platform missing from it is element (4)'s.
+ */
+/**
+ * @param {{ tag: string, entries: readonly import('@rotaris/release-naming').ChecksumEntry[], platformsWithAssets: readonly string[],
+ *   changelogText: string, publishedPlatforms?: readonly string[] }} input
+ * @returns {string}
  */
 export function releaseBody({ tag, entries, platformsWithAssets, changelogText, publishedPlatforms = PUBLISHED_PLATFORMS }) {
   const { version } = parseReleaseTag(tag);
@@ -117,6 +132,7 @@ export function releaseBody({ tag, entries, platformsWithAssets, changelogText, 
 }
 
 /** Git, read-only, in `repo`; the trimmed standard output, or a thrown error naming the command. */
+/** @param {string} repo @param {string[]} args */
 function git(repo, args) {
   const r = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${(r.stderr || '').trim() || `exit ${r.status}`}`);
@@ -124,6 +140,7 @@ function git(repo, args) {
 }
 
 /** REQ-STARTUP-033 read from `repo`'s history: the previous release tag and the subjects since it, merges excluded. */
+/** @param {string} repo @param {string} tag @returns {string} */
 export function changelogFromGit(repo, tag) {
   const tags = git(repo, ['tag', '--list']).split('\n').map((t) => t.trim()).filter(Boolean);
   const previous = previousReleaseTag(tags, tag);

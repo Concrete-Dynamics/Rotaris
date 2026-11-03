@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The artifacts proof (Part Y): the session artifact store, the Artifacts tab and the inspector behind the
  * REAL run host, the real store and the real window. Five launches against one scratch profile:
@@ -151,7 +152,6 @@ async function launch(name, extra, { files = {}, timeout = 180_000 } = {}) {
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   return { log, elapsedMs, png };
 }
-const lines = (log, re) => log.split('\n').filter((l) => re.test(l));
 /** The probe lines the capture harness logs: `capture: probe <selector> → <json>` and `probe-at <ms> <selector> → <json>`. */
 function probe(log, selector, at = null) {
   const marker = at === null ? `capture: probe ${selector} → ` : `capture: probe-at ${at} ${selector} → `;

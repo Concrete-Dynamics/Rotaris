@@ -18,6 +18,7 @@ const fs = require('node:fs');
 
 const LIMIT = Number(process.env['ROTARIS_FD_GATE'] ?? 200);
 let inFlight = 0;
+/** @type {Array<(value?: unknown) => void>} */
 const waiting = [];
 
 function acquire() {
@@ -32,28 +33,36 @@ function release() {
 
 // The wrapper keeps the original's own properties (`fs.realpath.native`, `fs.readFile[promisify.custom]` …): fs-extra and
 // graceful-fs read them, and a bare wrapper made electron-builder fail with "realpath.native is not a function".
+/**
+ * @template {Function} W
+ * @param {W} wrapper
+ * @param {Function} original
+ * @returns {W}
+ */
 function keepProperties(wrapper, original) {
   for (const key of Reflect.ownKeys(original)) {
     if (key === 'length' || key === 'name' || key === 'prototype') continue;
-    Object.defineProperty(wrapper, key, Object.getOwnPropertyDescriptor(original, key));
+    Object.defineProperty(wrapper, key, /** @type {PropertyDescriptor} */ (Object.getOwnPropertyDescriptor(original, key)));
   }
   return wrapper;
 }
+/** @param {Record<string, any>} target @param {string} name */
 function gatePromise(target, name) {
   const original = target[name];
   if (typeof original !== 'function') return;
-  target[name] = keepProperties(async function gated(...args) {
+  target[name] = keepProperties(/** @this {unknown} @param {...unknown} args */ async function gated(...args) {
     await acquire();
     try { return await original.apply(this, args); } finally { release(); }
   }, original);
 }
+/** @param {Record<string, any>} target @param {string} name */
 function gateCallback(target, name) {
   const original = target[name];
   if (typeof original !== 'function') return;
-  target[name] = keepProperties(function gated(...args) {
+  target[name] = keepProperties(/** @this {unknown} @param {...any} args */ function gated(...args) {
     const cb = typeof args[args.length - 1] === 'function' ? args.pop() : null;
     void acquire().then(() => {
-      original.call(this, ...args, (...result) => { release(); if (cb) cb(...result); });
+      original.call(this, ...args, (/** @type {unknown[]} */ ...result) => { release(); if (cb) cb(...result); });
     });
   }, original);
 }

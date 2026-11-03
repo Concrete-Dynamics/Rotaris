@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * Ending a launch within a bound — what a proof uses so that no launch outlives its time.
  *
@@ -292,6 +293,15 @@ export async function drainGroup(child, { graceMs = GROUP_GRACE_MS, ownGroupGrac
  *
  * On POSIX the launch leads its own process group, so the SIGKILL reaches every helper it started. SIGTERM goes to the
  * process alone: that is what a person's `kill` does, and what the product's own quit path is expected to answer.
+ */
+/**
+ * @typedef {{ endedBy: string | null, lingered: string[], afterMs: number, ownGroups: { endedBy: string | null, lingered: string[] } | null }} GroupDrain
+ * @param {string} command
+ * @param {readonly string[]} args
+ * @param {{ timeoutMs?: number, graceMs?: number, groupGraceMs?: number, cwd?: string | undefined, env?: NodeJS.ProcessEnv | undefined,
+ *   windowsHide?: boolean, onSpawn?: ((child: import('node:child_process').ChildProcess) => void) | null }} [options]
+ * @returns {Promise<{ status: number | null, signal: NodeJS.Signals | null, stdout: string, stderr: string, elapsedMs: number,
+ *   overran: Record<string, any> | null, group?: GroupDrain | null, error?: Error }>}
  */
 export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000, groupGraceMs = GROUP_GRACE_MS, cwd, env, windowsHide = true, onSpawn = null } = {}) {
   if (!(timeoutMs > 0)) throw new Error('spawnBounded needs a positive timeoutMs');

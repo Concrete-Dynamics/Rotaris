@@ -10,7 +10,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { REQ } from '@rotaris/kernel';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { specFiles } from './definitions.mjs';
 
 const REPO = join(import.meta.dirname, '..', '..');

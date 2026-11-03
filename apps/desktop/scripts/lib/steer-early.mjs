@@ -58,7 +58,7 @@ const TYPED = 'capture: typed "go left"';
 export function steerEarlyReading(log, unpressed) {
   const missed = unpressed(log, Object.values(STEER_EARLY_WHATS));
   if (missed.length > 0) return `${missed.map((m) => `"${m.what}" ${m.reason}`).join('; ')}`;
-  const at = (line) => log.indexOf(line);
+  const at = (/** @type {string} */ line) => log.indexOf(line);
   const held = at(HELD);
   const released = at(RELEASED);
   const steer = at(`capture: clicked "${STEER_EARLY_WHATS.steer}"`);

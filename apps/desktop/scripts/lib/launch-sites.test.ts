@@ -94,9 +94,9 @@ function launches(file: string, text: string): Launch[] {
   for (const m of text.matchAll(/\b(?:spawn|spawnSync|spawnBounded)\(\s*(electron|exe)\s*,\s*/g)) {
     // The call's text up to its first `);` is enough to see an `ELECTRON_RUN_AS_NODE` option; bracket-matching the
     // whole call would have to parse the regular expressions some options hold.
-    const end = text.indexOf(');', m.index!);
-    const call = text.slice(m.index!, end === -1 ? undefined : end + 2);
-    const at = m.index! + m[0].length;
+    const end = text.indexOf(');', m.index);
+    const call = text.slice(m.index, end === -1 ? undefined : end + 2);
+    const at = m.index + m[0].length;
     const args = text[at] === '[' ? elements(text.slice(at + 1, matching(text, at))) : resolveIdentifier(text, /^\w+/.exec(text.slice(at))![0]);
     found.push({ file, binary: m[1]!, args, call });
   }
@@ -244,7 +244,7 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     // forty lines of its own, so a script whose second launch forgot the check does not pass on its first one's.
     const unchecked = files.flatMap((f) => {
       const text = readFileSync(join(SCRIPTS, f), 'utf8');
-      const at = [...text.matchAll(/\bspawnBounded\(\s*(?:electron|exe)\s*,/g)].map((m) => m.index!);
+      const at = [...text.matchAll(/\bspawnBounded\(\s*(?:electron|exe)\s*,/g)].map((m) => m.index);
       return at.flatMap((start, i) => {
         const window = text.slice(start, at[i + 1] ?? text.length).split('\n').slice(0, 40).join('\n');
         return /\.overran\b/.test(window) ? [] : [`${f}:${text.slice(0, start).split('\n').length}`];

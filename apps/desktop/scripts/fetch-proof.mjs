@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The fetch proof (Part N): ADR-0023's second first execution — the `fetch` tool behind the real run host, its
  * egress policy read from the workspace's SAVED configuration at each call (REQ-SANDBOX-038). Scripted client,
@@ -33,13 +34,13 @@
  * reads the run host's `fetch: egress policy read … in N ms` line for the per-call load's cost.
  * Evidence under `.proof/fetch-proof/`: one log per launch, `results.json`. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
-import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');

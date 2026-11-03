@@ -11,27 +11,30 @@ import { repo } from './lib/harness.mjs';
 import { countByKind, countContractsByRelation } from './lib/audit-finding.mjs';
 
 const argv = process.argv.slice(2).filter((value) => value !== '--');
-const flag = (name) => argv.find((value) => value.startsWith(`--${name}=`))?.slice(name.length + 3);
+const flag = (/** @type {string} */ name) => argv.find((value) => value.startsWith(`--${name}=`))?.slice(name.length + 3);
 const allowedStatuses = new Set(['proposed', 'approved', 'implemented', 'verified-resolved', 'partial']);
 const allowedCategories = new Set(['design-quality', 'originality', 'craft', 'functionality', 'deterministic']);
 const allowedSeverities = new Set(['high', 'medium', 'low']);
 
+/** @param {string} path */
 function validateCritique(path) {
+  /** @type {any} */
   const value = JSON.parse(readFileSync(path, 'utf8'));
+  /** @type {string[]} */
   const errors = [];
   if (value.version !== 1) errors.push('version must be 1');
   if (typeof value.revision !== 'string' || value.revision === '') errors.push('revision is required');
   if (!Number.isInteger(value.iteration) || value.iteration < 1 || value.iteration > 3) errors.push('iteration must be 1..3');
   if (typeof value.summary !== 'string') errors.push('summary must be a string');
   if (!Array.isArray(value.findings)) errors.push('findings must be an array');
-  else value.findings.forEach((finding, index) => {
+  else value.findings.forEach((/** @type {any} */ finding, /** @type {number} */ index) => {
     const at = `findings[${index}]`;
     if (typeof finding.id !== 'string' || finding.id === '') errors.push(`${at}.id is required`);
     if (!allowedStatuses.has(finding.status)) errors.push(`${at}.status is outside the evidence lifecycle`);
     if (!allowedCategories.has(finding.category)) errors.push(`${at}.category is outside the review categories`);
     if (!allowedSeverities.has(finding.severity)) errors.push(`${at}.severity is outside high, medium, low`);
     for (const key of ['surface', 'observation', 'recommendation']) if (typeof finding[key] !== 'string' || finding[key] === '') errors.push(`${at}.${key} is required`);
-    if (!Array.isArray(finding.evidence) || finding.evidence.length === 0 || finding.evidence.some((item) => typeof item !== 'string')) errors.push(`${at}.evidence requires file references`);
+    if (!Array.isArray(finding.evidence) || finding.evidence.length === 0 || finding.evidence.some((/** @type {unknown} */ item) => typeof item !== 'string')) errors.push(`${at}.evidence requires file references`);
   });
   if (errors.length > 0) {
     process.stderr.write(`Critique validation failed:\n${errors.join('\n')}\n`);
@@ -85,6 +88,7 @@ const files = readdirSync(output, { withFileTypes: true }).filter((entry) => ent
  * pack keeps the revision it was shot at, because that is its provenance; the chain is found by
  * looking across revisions for the newest `iteration-(N-1)/critique.json`.
  */
+/** @param {number} n */
 function previousIterationCritique(n) {
   if (n <= 1) return null;
   const root = join(repo, '.ui-review');

@@ -14,7 +14,9 @@ import { dmgVolumeName, PREPARED_TARGETS, preparedConfiguration } from './platfo
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const require = createRequire(import.meta.url);
-const yaml = require('js-yaml') as { load(text: string): Record<string, unknown> };
+/** electron-builder's own modules, resolved from where electron-builder resolves them (as `artifact-names.test.ts` does). */
+const builderRequire = createRequire(require.resolve('electron-builder/package.json'));
+const yaml = builderRequire('js-yaml') as { load: (text: string) => Record<string, unknown> };
 const base = yaml.load(readFileSync(join(APP, 'electron-builder.yml'), 'utf8'));
 type Section = Record<string, unknown>;
 
@@ -115,8 +117,8 @@ describe('linux-x86_64 — REQ-STARTUP-024, ESC-11', () => {
 
 describe('electron-builder\'s own schema', () => {
   it('accepts both prepared configurations, and refuses a key it does not know', async () => {
-    const { validateConfiguration } = require('app-builder-lib/out/util/config/config.js') as { validateConfiguration(config: unknown, logger: unknown): Promise<void> };
-    const { DebugLogger } = require('builder-util') as { DebugLogger: new (enabled: boolean) => unknown };
+    const { validateConfiguration } = builderRequire('app-builder-lib/out/util/config/config.js') as { validateConfiguration: (config: unknown, logger: unknown) => Promise<void> };
+    const { DebugLogger } = builderRequire('builder-util') as { DebugLogger: new (enabled: boolean) => unknown };
     for (const platform of Object.keys(PREPARED_TARGETS)) {
       await expect(validateConfiguration(preparedConfiguration(base, platform, '0.1.0rc1'), new DebugLogger(false))).resolves.toBeUndefined();
     }

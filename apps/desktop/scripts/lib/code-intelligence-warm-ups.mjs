@@ -26,7 +26,7 @@
  */
 export function warmUpRefusals(warmUps, tiers, server) {
   const out = [];
-  const nameOf = (capability) => {
+  const nameOf = (/** @type {string} */ capability) => {
     for (const map of Object.values(tiers)) if (Object.prototype.hasOwnProperty.call(map, capability)) return map[capability];
     return undefined;
   };
@@ -73,7 +73,7 @@ export function warmUpRefusals(warmUps, tiers, server) {
  */
 export function projectFileRefusals(projectFiles, tiers, served) {
   const out = [];
-  const isCapability = (capability) => Object.values(tiers).some((map) => Object.prototype.hasOwnProperty.call(map, capability));
+  const isCapability = (/** @type {string} */ capability) => Object.values(tiers).some((map) => Object.prototype.hasOwnProperty.call(map, capability));
   for (const [capability, entry] of Object.entries(projectFiles)) {
     for (const key of Object.keys(entry ?? {})) if (!['language', 'covering', 'written'].includes(key)) out.push(`project file of '${capability}' carries an unknown key '${key}' (PD-MCP-004 revision 2)`);
     if (!isCapability(capability)) out.push(`project file of '${capability}': the capability is no capability of the tiers (PD-MCP-004 revision 2)`);

@@ -9,11 +9,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PD, REQ, SUPERSEDED_BY } from '@rotaris/kernel';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { BASELINE, baselineOf, baselineText, branchCitations, branchReport, branchText, buildReport, byDomain, checkBaseline, checkText, citationsIn, definitionSpan, driftReport, driftText, kindOf, MAX_RANGE, parseBlame, parseLastTouch, parseRemoved, readDrift, readTree, sectionsOf, summaryText, uncitedBySection } from './coverage.mjs';
 import { REDIRECTING } from '../build-id/build-id.mjs';
 
-const ids = (text: string): string[] => [...(citationsIn(text) as Set<string>)].sort();
+const ids = (text: string): string[] => [...(citationsIn(text))].sort();
 
 describe('requirement coverage — the citation forms', () => {
   it('reads a lone identifier, and a directive', () => {
@@ -223,7 +222,7 @@ describe('requirement coverage — the git output drift reads (ReqToCode §4.7, 
 
   it('drifts a requirement whose definition changed after every implementation file citing it, and no other', () => {
     const row = (id: string, implementation: string[], test: string[] = []) => ({ id, domain: 'DEMO', spec: 'd.md', line: 1, section: '',
-      cites: { implementation, test, proof: [] }, directives: [], status: 'tested' });
+      cites: { implementation, test, proof: [] }, directives: [], status: 'tested' as const });
     const day = (d: string) => Date.parse(`${d}T00:00:00Z`) / 1000;
     const at = (commit: string, d: string): Touch => ({ commit, time: day(d) });
     const report = driftReport({
@@ -309,8 +308,8 @@ describe('requirement coverage — --since and --drift over a fixture repository
 });
 
 describe('requirement coverage — the ratchet on the uncited (--check; ReqToCode §3.7, R-092)', () => {
-  type Row = { id: string; domain: string; status: string };
-  const row = (id: string, status = 'uncited'): Row => ({ id, domain: id.split('-')[1] ?? '', status });
+  type Row = { id: string; domain: string; status: 'uncited' | 'implementation-only' | 'tested' };
+  const row = (id: string, status: Row['status'] = 'uncited'): Row => ({ id, domain: id.split('-')[1] ?? '', status });
   // The tree the baseline was written from: DEMO has two uncited of three, OTHER none of one.
   const written = [row('REQ-DEMO-001'), row('REQ-DEMO-002'), row('REQ-DEMO-003', 'tested'), row('REQ-OTHER-001', 'implementation-only')];
   const baseline = JSON.parse(baselineText(baselineOf(written)));

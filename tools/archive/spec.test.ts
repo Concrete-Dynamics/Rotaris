@@ -13,11 +13,8 @@ import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { commit, plan, stillLive } from './migrate.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { movedText, qualifying, qualifyingIds, regionOf } from './spec.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { checkRecord } from '../check-record-links.mjs';
 
 const REPO = join(import.meta.dirname, '..', '..');
@@ -142,7 +139,7 @@ afterEach(() => {
 
 describe('archive:migrate — superseded and withdrawn requirements', () => {
   it('reads what qualifies from the artifact: withdrawn in place, or superseded; a narrowed one does not', () => {
-    expect(Object.fromEntries(qualifyingIds(root))).toEqual({
+    expect(Object.fromEntries(qualifyingIds(root)!)).toEqual({
       'REQ-X-001': { file: '01-domain/01-requirements.md', state: 'withdrawn' },
       'REQ-X-002': { file: '01-domain/01-requirements.md', state: 'superseded by PD-X-001' },
       'REQ-X-003': { file: '01-domain/01-requirements.md', state: 'withdrawn' },

@@ -76,7 +76,11 @@ export function measured(span, step) {
   return /** @type {T} */ (result);
 }
 
-/** The real steps, on this machine; `via` names the wrapper they run for (`worktree:new`, `worktree:land`). @returns {Deps} */
+/**
+ * The real steps, on this machine; `via` names the wrapper they run for (`worktree:new`, `worktree:land`).
+ * @param {{ via?: string | null }} [options]
+ * @returns {Deps}
+ */
 export function defaultDeps({ via = null } = {}) {
   return {
     log: (line) => process.stdout.write(`${line}\n`),

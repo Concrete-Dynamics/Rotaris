@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error -- a plain ES module beside the proof script, typed by its use here
 import { hostLoad, judgeWithRerun, loadRange, loadWords, overloadedLaunches, rerunCall } from './append-rerun.mjs';
 
 /**

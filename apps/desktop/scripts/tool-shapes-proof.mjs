@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The tool-shapes proof: two single shapes of a tool call that the live run could not be sure to ask, driven through the
  * BUILT application with the scripted client (free: no provider, no key, no network). Each is the built-app half of a gap

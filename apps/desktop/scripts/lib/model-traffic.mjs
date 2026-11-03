@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The recording proxy — what the model was actually sent, and what actually came back.
  *
@@ -91,6 +92,7 @@ export function emptyCompletion(requestBody) {
  *
  * `upstreamUrl` is the endpoint's own base (e.g. `https://host/v1`); its path is prefixed onto every incoming
  * path, so the product may treat the returned URL as a base exactly as it treats the real one.
+ * @param {{ upstreamUrl: string, redact?: (text: string) => string, faults?: unknown[] }} options
  */
 export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faults: declared = [] }) {
   let faults = declared.map((rule) => ({ ...rule }));

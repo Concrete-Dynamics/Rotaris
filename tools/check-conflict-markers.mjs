@@ -26,7 +26,11 @@ const BASE = '|'.repeat(7);
 const SEPARATOR = '='.repeat(7);
 const CLOSE = '>'.repeat(7);
 
-/** True when `line` starts with `marker` followed by a space or nothing — git's own shape. */
+/**
+ * True when `line` starts with `marker` followed by a space or nothing — git's own shape.
+ * @param {string} line
+ * @param {string} marker
+ */
 function isMarker(line, marker) {
   return line.startsWith(marker) && (line.length === marker.length || line[marker.length] === ' ');
 }
@@ -38,11 +42,12 @@ function isMarker(line, marker) {
  * @returns {{ line: number, marker: string }[]}
  */
 export function markersIn(text) {
+  /** @type {{ line: number, marker: string }[]} */
   const found = [];
   let open = false;
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].replace(/\r$/, '');
+    const line = (lines[i] ?? '').replace(/\r$/, '');
     if (isMarker(line, OPEN)) {
       found.push({ line: i + 1, marker: OPEN });
       open = true;
@@ -65,8 +70,23 @@ const CANDIDATE = `^(${OPEN}|${CLOSE}|\\|{7})( |$)`;
  * Runs git in `root` with colour off, whatever the user's or the host's configuration says: `color.ui=always` or
  * `color.grep=always` wraps every path `git grep -l` names in ANSI escapes, no such file exists, and a reader that
  * skipped the unreadable name answered green over a staged block (the first verifier's finding on this gate).
+ * @overload
  * @param {string} root
  * @param {string[]} args
+ * @returns {string}
+ */
+/**
+ * @overload
+ * @param {string} root
+ * @param {string[]} args
+ * @param {'buffer'} encoding
+ * @returns {Buffer}
+ */
+/**
+ * @param {string} root
+ * @param {string[]} args
+ * @param {BufferEncoding | 'buffer'} [encoding]
+ * @returns {string | Buffer}
  */
 function git(root, args, encoding = 'utf8') {
   return execFileSync('git', ['-c', 'color.ui=false', '-c', 'color.grep=false', ...args], {
@@ -78,6 +98,7 @@ function git(root, args, encoding = 'utf8') {
 }
 
 /** True when a `.git` (a directory or a gitdir file) stands in `dir` or any directory above it. */
+/** @param {string} dir */
 function hasGitAbove(dir) {
   for (let d = resolve(dir); ; d = dirname(d)) {
     if (existsSync(join(d, '.git'))) return true;
@@ -91,6 +112,7 @@ function hasGitAbove(dir) {
  * throws: a checkout git will not operate on (another uid's, "dubious ownership"; a repository format it does not
  * know; a `.git` naming a git directory that is gone) once read as "not a checkout", and the gate answered skipped
  * over a staged block (the second verifier's finding on this gate).
+ * @param {string} root
  */
 function isCheckout(root) {
   let out;
@@ -106,16 +128,21 @@ function isCheckout(root) {
   return true;
 }
 
-/** Why a git call failed, in one line: its stderr when it wrote one, else the error's own message. */
+/**
+ * Why a git call failed, in one line: its stderr when it wrote one, else the error's own message.
+ * @param {unknown} error
+ * @returns {string}
+ */
 function reasonOf(error) {
   const stderr = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr).trim() : '';
-  return stderr !== '' ? stderr.split('\n')[0] : String(error instanceof Error ? error.message : error);
+  return stderr !== '' ? (stderr.split('\n')[0] ?? '') : String(error instanceof Error ? error.message : error);
 }
 
 /** Bytes git reads to decide whether a buffer is binary (`FIRST_FEW_BYTES` in git's `xdiff-interface.c`). */
 const FIRST_FEW_BYTES = 8000;
 
 /** Git's own test for a binary buffer: a NUL in its first 8000 bytes. The `diff` and `text` attributes play no part. */
+/** @param {Buffer} buffer */
 function isBinary(buffer) {
   return buffer.subarray(0, FIRST_FEW_BYTES).includes(0);
 }
@@ -125,6 +152,9 @@ function isBinary(buffer) {
  * green answer (nothing matched); any other failure in a checkout throws, so a broken checkout cannot read as
  * "skipped" or as clean. `--text` greps every file whatever its attributes say; the binary ones are dropped by
  * content when read (`isBinary`), not by `-I`, which also drops every `-diff` path.
+ * @param {string} root
+ * @param {boolean} cached
+ * @returns {string[]}
  */
 function candidates(root, cached) {
   try {
@@ -136,9 +166,13 @@ function candidates(root, cached) {
   }
 }
 
-/** The paths with an unmerged entry in the index (stages 1 to 3, no stage 0). */
+/**
+ * The paths with an unmerged entry in the index (stages 1 to 3, no stage 0).
+ * @param {string} root
+ */
 function unmergedPaths(root) {
   const out = git(root, ['ls-files', '-u', '-z']);
+  /** @type {Set<string>} */
   const paths = new Set();
   for (const record of out.split('\0')) {
     const tab = record.indexOf('\t');
@@ -153,12 +187,16 @@ function unmergedPaths(root) {
  * `{ where, path, unreadable }`, never a silent skip; the one exception is an unmerged path, which has no stage-0
  * entry to read from the index and whose working copy is read instead. A candidate whose content is binary (a NUL in
  * its first 8000 bytes) holds no text marker and is passed over.
+ * @typedef {{ where: 'working copy' | 'index', path: string, line: number, marker: string }
+ *   | { where: 'working copy' | 'index', path: string, unreadable: string }} Problem
  * @param {string} root
+ * @returns {Problem[] | null}
  */
 export function checkRepository(root) {
   if (!isCheckout(root)) return null;
   const working = candidates(root, false);
   const index = candidates(root, true);
+  /** @type {Problem[]} */
   const problems = [];
   for (const path of working) {
     let bytes;

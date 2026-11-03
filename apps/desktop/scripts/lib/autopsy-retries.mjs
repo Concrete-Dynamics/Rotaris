@@ -10,7 +10,12 @@
  * finding H8 of the duress live run at 27a5127). `packages/engine/src/autopsy.ts` keys the same way.
  */
 
-/** The key and the printed label of one call by `agent`, or null when its args carry no command. */
+/**
+ * The key and the printed label of one call by `agent`, or null when its args carry no command.
+ * @param {any} args the call's arguments as the store holds them, whatever their shape
+ * @param {string} [agent]
+ * @returns {{ key: string, label: string } | null}
+ */
 export function retryKeyOf(args, agent = '') {
   if (args === null || typeof args !== 'object' || Array.isArray(args)) return null;
   const command = typeof args.command === 'string' ? args.command.replace(/\s+/g, ' ').trim() : '';
@@ -22,8 +27,11 @@ export function retryKeyOf(args, agent = '') {
 /**
  * Every group of two or more calls with one key, most repeated first: `{ agent, label, times }`, at most `limit` of them.
  * Each call is `{ agent, args }`: the store's `agent_name` and the `terminal` call's args.
+ * @param {Array<{ agent?: unknown, args?: unknown } | null | undefined>} calls
+ * @param {number} [limit]
  */
 export function retriedCommands(calls, limit = 10) {
+  /** @type {Map<string, { agent: string, label: string, times: number }>} */
   const groups = new Map();
   for (const call of calls) {
     const agent = typeof call?.agent === 'string' ? call.agent : '';

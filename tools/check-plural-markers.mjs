@@ -38,6 +38,7 @@ export const ALLOWED = [
 ];
 
 /** The nearest enclosing call's callee, spelled without optional chaining (`s.log?.info` → `s.log.info`). */
+/** @param {import('typescript').Node} node */
 function calleeOf(node) {
   for (let p = node.parent; p && !ts.isSourceFile(p); p = p.parent) {
     if (ts.isCallExpression(p)) return p.expression.getText().replace(/\?\./g, '.').replace(/\?$/, '');
@@ -46,12 +47,17 @@ function calleeOf(node) {
   return '';
 }
 
-/** Every string piece in one source that carries a marker: `{ line, text, callee }`. */
+/**
+ * Every string piece in one source that carries a marker: `{ line, text, callee }`.
+ * @param {string} text
+ * @param {string} fileName
+ */
 export function markersIn(text, fileName) {
   const kind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, kind);
+  /** @type {Array<{ line: number, text: string, callee: string }>} */
   const found = [];
-  const visit = (node) => {
+  const visit = (/** @type {import('typescript').Node} */ node) => {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node) || ts.isJsxText(node)) {
       const value = ts.isJsxText(node) ? node.getText() : node.text;
       if (MARKER.test(value.replace(/https?\(s\)|http\(s\)/g, ''))) {
@@ -64,10 +70,12 @@ export function markersIn(text, fileName) {
   return found;
 }
 
+/** @param {string} root */
 function sources(root) {
   const roots = [...readdirSync(join(root, 'packages')).map((name) => join(root, 'packages', name, 'src')), join(root, 'apps', 'desktop', 'src')];
+  /** @type {string[]} */
   const out = [];
-  const walk = (dir) => {
+  const walk = (/** @type {string} */ dir) => {
     let entries;
     try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const entry of entries) {
@@ -81,6 +89,7 @@ function sources(root) {
 }
 
 /** The product's offending strings and the ALLOWED entries that excused nothing. */
+/** @param {string} root @param {typeof ALLOWED} [allowed] */
 export function checkProduct(root, allowed = ALLOWED) {
   const problems = [];
   const used = new Set();

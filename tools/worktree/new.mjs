@@ -35,7 +35,7 @@ export function parseNewArgs(args) {
   /** @type {{ branch: string | null, dir: string | null, help: boolean, unknown: string[] }} */
   const parsed = { branch: null, dir: null, help: false, unknown: [] };
   for (let i = 0; i < args.length; i += 1) {
-    const a = args[i];
+    const a = /** @type {string} */ (args[i]);
     if (a === '--help' || a === '-h') {
       parsed.help = true;
       continue;

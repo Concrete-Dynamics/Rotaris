@@ -30,12 +30,14 @@ const WRITERS = new Set(['write_file', 'haet_edit', 'haet', 'edit', 'replace_con
  * Whether a file's text still uses `name` as an identifier — a call, or a name in an import or export list. A string or a
  * comment that merely says the word (the fixture's test title, "the remaining count") is not a use, and a rename leaves it.
  */
+/** @param {unknown} text @param {string} name */
 export function namesIdentifier(text, name) {
   const n = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`\\b${n}\\s*\\(|[{,]\\s*${n}\\s*(?:,|\\}|as\\b)|\\bfunction\\s+${n}\\b`).test(String(text ?? ''));
 }
 
 /** The workspace-relative path a writing call names, from the argument names the native tools and the EDIT tier use. */
+/** @param {Record<string, unknown> | null | undefined} args */
 function pathOf(args) {
   const p = args?.path ?? args?.relative_path ?? args?.file_path ?? null;
   return typeof p === 'string' ? p.replace(/\\/g, '/').replace(/^\.\//, '') : null;
@@ -53,8 +55,8 @@ export function renameReading({ calls, files, children, artifacts = [] }) {
   const renames = calls.filter((c) => c.tool_name === 'rename_symbol');
   const leftBehind = RENAME_FILES.filter((f) => files[f] != null && namesIdentifier(files[f], RENAME_FROM));
   const carrying = RENAME_FILES.filter((f) => files[f] != null && namesIdentifier(files[f], RENAME_TO));
-  if (renames.length === 0) return { reached: false, renames: 0, leftBehind, carrying };
-  const first = renames[0];
+  const [first] = renames;
+  if (first === undefined) return { reached: false, renames: 0, leftBehind, carrying };
   const agent = first.agent_name ?? null;
   const byAgent = calls.filter((c) => c.agent_name === agent);
   const searchedFirst = byAgent.some((c) => c.tool_name === 'find_referencing_symbols' && c.ordinal < first.ordinal);
@@ -66,7 +68,7 @@ export function renameReading({ calls, files, children, artifacts = [] }) {
   let report = null;
   try { report = child?.report ? JSON.parse(child.report) : null; } catch { report = null; }
   const reportFiles = Array.isArray(report?.edited_files) ? report.edited_files.map(String) : null;
-  const artifactLists = artifacts.map((a) => { try { return JSON.parse(a.edited_files ?? '[]').map((f) => (typeof f === 'string' ? f : f?.path)).filter((f) => typeof f === 'string'); } catch { return []; } });
+  const artifactLists = artifacts.map((a) => { try { return JSON.parse(a.edited_files ?? '[]').map((/** @type {any} */ f) => (typeof f === 'string' ? f : f?.path)).filter((/** @type {unknown} */ f) => typeof f === 'string'); } catch { return []; } });
   const reportMissing = reportFiles === null ? [...carrying] : carrying.filter((f) => !reportFiles.includes(f));
   const artifactMissing = artifactLists.length === 0 ? [...carrying] : carrying.filter((f) => !artifactLists.some((list) => list.includes(f)));
   const cold = !searchedFirst && first.status === 'ok';

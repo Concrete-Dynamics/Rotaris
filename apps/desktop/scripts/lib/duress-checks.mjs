@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The readings behind the live run's `duress` checks (`apps/desktop/scripts/live-run.mjs`, scenario 9), pure so that
  * `duress-checks.test.ts` can pin each one against the shape the first execution recorded (pack
@@ -100,6 +101,11 @@ export function trafficCall(record) {
  * model advertises none. The defaults are REQ-CONFIG-132's (60 %, 265,000). A model's explicit
  * `context_compression_threshold` would take precedence; the live run never writes one.
  */
+/**
+ * @typedef {{ capacity: number, thresholdPercentage: number, tokens: number, advertised: number | null }} CompressionTrigger
+ * @param {{ contextTokens?: number | null, thresholdPercentage?: number, defaultThreshold?: number }} [model]
+ * @returns {CompressionTrigger}
+ */
 export function compressionTrigger({ contextTokens = null, thresholdPercentage = 60, defaultThreshold = 265_000 } = {}) {
   const fallback = defaultThreshold > 0 ? defaultThreshold : 265_000;
   const capacity = typeof contextTokens === 'number' && contextTokens > 0 ? Math.min(contextTokens, fallback) : fallback;
@@ -114,6 +120,10 @@ const pct = (part, whole) => (whole > 0 ? Math.round((100 * part) / whole) : 0);
  * agent sent is read from the recorded traffic, because compression answers to the size of what one agent is about to
  * send, not to how many iterations the run completed — the first execution's only iteration never ended, so the old
  * note blamed "0 iteration(s)" for a run whose largest prompt was 64,038 tokens against a trigger of 157,286.
+ */
+/**
+ * @param {{ largestPrompt: number | null, trigger: CompressionTrigger, calls?: { withUsage: number, total: number } | null }} reading
+ * @returns {string}
  */
 export function compressionNote({ largestPrompt, trigger, calls = null }) {
   const window = trigger.advertised === null ? `the ${n(trigger.capacity)}-token default capacity (the model advertises no input limit)` : `the model's ${n(trigger.advertised)}-token window`;
@@ -199,6 +209,13 @@ export function toolIntervals(calls) {
  * when the wait ran out, large when it had stopped moving — even with a request open the whole time. The requests the
  * quit cut off are counted in `openAtQuit`, the longest of them in `longestOpenAtQuitMs`.
  */
+/**
+ * @typedef {{ waitMs: number, endpointMs: number, toolsMs: number, launchMs: number, productMs: number, quietTailMs: number,
+ *   requests: number, openAtQuit: number, longestOpenAtQuitMs: number }} WaitAttribution
+ * @param {{ startedAt: number, endedAt: number, requests: Array<{ start: number, end: number | null, outcome?: string }>,
+ *   tools: Array<{ start: number, end: number | null }>, quitAt?: number | null }} spans
+ * @returns {WaitAttribution}
+ */
 export function attributeWait({ startedAt, endedAt, requests, tools, quitAt = null }) {
   const clip = (list) => list
     .filter((i) => Number.isFinite(i.start) && Number.isFinite(i.end) && i.end > i.start)
@@ -243,6 +260,10 @@ export const PRODUCT_SHARE_BOUND = 0.1;
  *   `product` the wait ran out and either the run had stopped moving or the product held more than a tenth of it — a
  *             failure, naming the share.
  * Without recorded traffic nothing can be attributed, so an overrun stays a failure and says why.
+ */
+/**
+ * @param {{ timedOut: boolean, attribution: WaitAttribution, budgetMs: number, traffic: boolean, usage?: unknown, raise?: string }} reading
+ * @returns {{ outcome: string, detail: string }}
  */
 export function deadlineReading({ timedOut, attribution: a, budgetMs, traffic, usage, raise = 'LIVE_RUN_DURESS_MS' }) {
   const s = (ms) => `${n(ms / 1000)} s`;

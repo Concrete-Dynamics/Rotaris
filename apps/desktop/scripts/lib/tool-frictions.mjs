@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The live run's reading of two tool frictions the owner ruled on 2026-10-06 (R-071), read from the tool-call record as
  * `readToolCalls` returns it (`{ ordinal, tool_name, status, args, result }`), in `apps/desktop/scripts/live-run.mjs`'s
@@ -142,6 +143,12 @@ function createShaped(args) {
  * which the directive's first execution reads as its own ("a path the fence refuses is not read as anything, and is
  * refused as before"). The gate records the repaired arguments, so an inferred call's `args` carry `operation: 'create'`;
  * it is found by its result. `outside` defaults to nothing being outside.
+ */
+/**
+ * @template {Record<string, any>} C
+ * @param {C[]} calls
+ * @param {{ outside?: (path: string) => boolean }} [options]
+ * @returns {{ inferred: C[], refusedInferable: C[], refusedFenced: C[] }}
  */
 export function writeSelectorReadings(calls, { outside = () => false } = {}) {
   const writes = calls.filter((call) => call.tool_name === 'write_file');

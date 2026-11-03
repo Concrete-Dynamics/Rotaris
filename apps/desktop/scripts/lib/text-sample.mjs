@@ -18,6 +18,10 @@
  * The part of `rect` inside every one of `clips`, or `null` when nothing of it is left. Every box is
  * `{ x, y, width, height }` in CSS pixels. The function is self-contained, because `theme-proof` injects its source
  * into the page.
+ * @typedef {{ x: number, y: number, width: number, height: number }} Box
+ * @param {Box} rect
+ * @param {Box[]} clips
+ * @returns {Box | null}
  */
 export function clipRect(rect, clips) {
   let left = rect.x;
@@ -43,15 +47,18 @@ export const CLIP_TOLERANCE = 0.5;
  * A text counts as shown along an axis when at least one em of it is on screen, or the whole of it where it is
  * shorter than an em. An em is the font size, which holds at least one whole glyph. A fragment smaller than that is
  * a glyph's edge, not the text's colour. A metadata record written before `shown` existed reads as wholly shown.
+ * @param {{ rect: Box, shown?: Box | null, fontSize?: number }} text
+ * @returns {{ rect: Box, skip?: undefined } | { skip: string, rect?: undefined }}
  */
 export function textSample(text) {
   const shown = text.shown === undefined ? text.rect : text.shown;
   if (shown === null) return { skip: 'no part of it is on screen' };
-  const em = Number.isFinite(text.fontSize) && text.fontSize > 0 ? text.fontSize : 0;
+  const fontSize = text.fontSize ?? Number.NaN;
+  const em = Number.isFinite(fontSize) && fontSize > 0 ? fontSize : 0;
   const needWidth = Math.min(text.rect.width, em) - CLIP_TOLERANCE;
   const needHeight = Math.min(text.rect.height, em) - CLIP_TOLERANCE;
   if (shown.width < needWidth || shown.height < needHeight) {
-    const size = (box) => `${box.width.toFixed(1)}×${box.height.toFixed(1)}`;
+    const size = (/** @type {Box} */ box) => `${box.width.toFixed(1)}×${box.height.toFixed(1)}`;
     return { skip: `less than a glyph of it is on screen (${size(shown)} of ${size(text.rect)} CSS px)` };
   }
   return { rect: shown };

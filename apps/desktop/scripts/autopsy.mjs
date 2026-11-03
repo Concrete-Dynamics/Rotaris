@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * R-043 — the run-autopsy snapshot printer: the store_snapshot.py habit as a
  * product reader. Read-only: it opens the workspace store read-only, runs one

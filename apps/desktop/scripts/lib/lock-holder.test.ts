@@ -6,7 +6,6 @@
  */
 import { spawn } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the scripts that run it.
 import { describeLingeringHolder, lockHolderAfterExit, NEVER_A_WINDOWS_PID, pidExists, plantedDeadPid } from './lock-holder.mjs';
 
 /** A scripted probe over a fake clock: the holder answers until `goneAt` ms. */

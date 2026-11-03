@@ -9,10 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { forgetSpelling, migrateStore, openStore, type StoreHandle } from '@rotaris/store';
-// @ts-expect-error — the reader is plain ESM beside the scripts that run it.
 import { SESSION_FACT_TABLES, sessionCascade } from './session-cascade.mjs';
-
-type Premise = { tables: string[]; cascaded: string[]; facts: string[]; problems: string[] };
 
 describe('the session delete\'s cascade premise, read from the schema (REQ-SESSION-166, PD-ORCH-005)', () => {
   let dir: string;
@@ -29,7 +26,7 @@ describe('the session delete\'s cascade premise, read from the schema (REQ-SESSI
   });
 
   it('REQ-SESSION-166: holds on the store this build migrates — the store that made the sixteen-table pin fail', () => {
-    const premise = sessionCascade(db) as Premise;
+    const premise = sessionCascade(db);
     expect(premise.problems).toEqual([]);
     expect(premise.facts).toEqual(['delivery_runs']);
     expect(premise.cascaded[0]).toBe('sessions');
@@ -41,9 +38,9 @@ describe('the session delete\'s cascade premise, read from the schema (REQ-SESSI
   });
 
   it('REQ-SESSION-166: a table a later migration adds under the cascade\'s shape leaves the premise holding', () => {
-    const before = (sessionCascade(db) as Premise).cascaded.length;
+    const before = (sessionCascade(db)).cascaded.length;
     db.exec('CREATE TABLE future_session_rows (session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE, n INTEGER)');
-    const premise = sessionCascade(db) as Premise;
+    const premise = sessionCascade(db);
     expect(premise.problems).toEqual([]);
     expect(premise.cascaded).toHaveLength(before + 1);
     expect(premise.cascaded).toContain('future_session_rows');
@@ -51,14 +48,14 @@ describe('the session delete\'s cascade premise, read from the schema (REQ-SESSI
 
   it('REQ-SESSION-166: a reference to sessions without ON DELETE CASCADE breaks the premise, naming the table', () => {
     db.exec('CREATE TABLE kept_rows (session_id TEXT NOT NULL REFERENCES sessions(session_id), n INTEGER)');
-    const premise = sessionCascade(db) as Premise;
+    const premise = sessionCascade(db);
     expect(premise.problems).toHaveLength(1);
     expect(premise.problems[0]).toMatch(/^kept_rows references sessions .* ON DELETE NO ACTION/);
   });
 
   it('REQ-SESSION-166: a session_id with no reference, outside the deliberate fact table, breaks the premise', () => {
     db.exec('CREATE TABLE orphan_rows (session_id TEXT NOT NULL, n INTEGER)');
-    const premise = sessionCascade(db) as Premise;
+    const premise = sessionCascade(db);
     expect(premise.facts).toEqual(['delivery_runs', 'orphan_rows']);
     expect(premise.problems).toHaveLength(1);
     expect(premise.problems[0]).toMatch(/^orphan_rows carries session_id with no reference/);
@@ -68,7 +65,7 @@ describe('the session delete\'s cascade premise, read from the schema (REQ-SESSI
     expect(SESSION_FACT_TABLES).toEqual(['delivery_runs']);
     db.exec('DROP TABLE delivery_runs');
     db.exec('CREATE TABLE delivery_runs (req_id TEXT, unit TEXT, session_id TEXT REFERENCES sessions(session_id) ON DELETE CASCADE)');
-    const premise = sessionCascade(db) as Premise;
+    const premise = sessionCascade(db);
     expect(premise.problems).toEqual(['delivery_runs references sessions, so a session delete takes the record REQ-TRACE-476 keeps']);
   });
 });

@@ -8,9 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { commit, plan } from './migrate.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { MANIFEST, entriesOf, hashOf, manifestProblems } from './manifest.mjs';
 
 const PART = 'docs/archive/architecture/open-questions/01-part.md';
@@ -61,9 +59,9 @@ afterEach(() => {
 
 describe('the archive\'s manifest', () => {
   it('splits a file at its column-0 anchors, keeps its opening as an entry, and takes a file without one whole', () => {
-    expect(entriesOf('p.md', PART_TEXT).map(([key]: [string]) => key)).toEqual(['p.md', 'p.md#oq-1', 'p.md#oq-2']);
+    expect(entriesOf('p.md', PART_TEXT).map(([key]) => key)).toEqual(['p.md', 'p.md#oq-1', 'p.md#oq-2']);
     expect(entriesOf('n.md', NOTE_TEXT)).toEqual([['n.md', NOTE_TEXT]]);
-    expect(entriesOf('d.md', '<a id="x"></a>\none\n<a id="x"></a>\ntwo\n').map(([key]: [string]) => key)).toEqual(['d.md#x', 'd.md#x~2']);
+    expect(entriesOf('d.md', '<a id="x"></a>\none\n<a id="x"></a>\ntwo\n').map(([key]) => key)).toEqual(['d.md#x', 'd.md#x~2']);
   });
 
   it('is written by a run, one hash per entry, the README and the manifest itself left out', () => {

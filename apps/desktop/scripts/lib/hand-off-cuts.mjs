@@ -10,7 +10,11 @@
  */
 const MARKER = /\[hand-off cut: (\d+) of (\d+) characters of (.+?)'s answer are given here/g;
 
+/**
+ * @param {Array<{ scenario: string, rootIds?: string[], messages?: Array<{ task_id: string, body?: string | null }> }>} sessions
+ */
 export function handOffCutReading(sessions) {
+  /** @type {Array<{ scenario: string, child: string, answer: string | undefined, given: number, total: number }>} */
   const cuts = [];
   for (const s of sessions) {
     const roots = new Set(s.rootIds ?? []);

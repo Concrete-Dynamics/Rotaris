@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 'use strict';
 /**
  * ADR-0056 rules 1, 1a, 3 and 4 — the build's own evidence (IC-6).
@@ -29,7 +30,7 @@
  * Under either the build MUST fail, at the named rule. That failing is the whole of what IC-6 asks.
  */
 const { createHash } = require('node:crypto');
-const { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } = require('node:fs');
+const { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
@@ -183,6 +184,7 @@ function checkRule1a(b, platform, arch, marker, unpackedRoot, asarEntries) {
 }
 
 function listAsar(asarPath) {
+  // eslint-disable-next-line import-x/no-extraneous-dependencies -- electron-builder's own archive reader, loaded in its hook from its tree; `apps/desktop` declares electron-builder
   const asar = require('@electron/asar');
   return asar.listPackage(asarPath, { isPack: false }).map((e) => String(e).replace(/\\/g, '/').replace(/^\//, ''));
 }

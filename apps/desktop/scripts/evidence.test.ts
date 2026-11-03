@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { main, parseArgs } from './evidence.mjs';
 
-const made = [];
+const made: string[] = [];
 function scratch() {
   const dir = mkdtempSync(join(tmpdir(), 'evidence-cli-'));
   made.push(dir);
@@ -15,9 +15,9 @@ afterEach(() => {
 });
 
 function capture() {
-  const out = [];
-  const err = [];
-  return { out, err, io: { out: (text) => { out.push(text); }, err: (text) => { err.push(text); } } };
+  const out: string[] = [];
+  const err: string[] = [];
+  return { out, err, io: { out: (text: string) => { out.push(text); }, err: (text: string) => { err.push(text); } } };
 }
 
 describe('evidence — arguments', () => {

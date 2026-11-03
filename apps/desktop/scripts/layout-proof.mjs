@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The layout proof (`pnpm layout-proof`) — the Workspace view's grid, measured at the sizes the specification names.
  *

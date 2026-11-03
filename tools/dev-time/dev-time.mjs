@@ -141,14 +141,14 @@ export function parseKindLabel(text) {
  * One git command in `cwd`, answered as its trimmed output or the reason it gave none. The variables an enclosing
  * git process sets (a hook running `pnpm dev-time`) are removed first, as `tools/build-id/build-id.mjs` does, so the
  * facts describe the asked-for directory, never the repository some ancestor pointed git at.
- * @param {string} cwd @param {string[]} args @param {{ git?: string, env?: NodeJS.ProcessEnv }} [how]
+ * @param {string} cwd @param {string[]} args @param {{ git?: string | undefined, env?: NodeJS.ProcessEnv | undefined }} [how]
  * @returns {{ ok: true, out: string } | { ok: false, why: string }}
  */
 function gitOut(cwd, args, { git: executable = 'git', env = process.env } = {}) {
   const clean = { ...env };
   for (const name of REDIRECTING) delete clean[name];
   const r = spawnSync(executable, ['--no-optional-locks', '-C', cwd, ...args], { encoding: 'utf8', env: clean, windowsHide: true, timeout: 60_000 });
-  if (r.error) return { ok: false, why: `${executable} could not be run (${r.error.code ?? r.error.message})` };
+  if (r.error) return { ok: false, why: `${executable} could not be run (${/** @type {NodeJS.ErrnoException} */ (r.error).code ?? r.error.message})` };
   if (r.status !== 0) {
     const said = (r.stderr || r.stdout || '').trim().split(/\r?\n/).filter(Boolean).at(-1);
     return { ok: false, why: said ?? `git ${args.join(' ')} exited ${r.status ?? r.signal}` };
@@ -159,7 +159,7 @@ function gitOut(cwd, args, { git: executable = 'git', env = process.env } = {}) 
 /**
  * The repository facts a record carries. Soft everywhere: a directory that is no repository (or no git at all)
  * answers nulls, never an error — a recorded command outside a repository is still a measurement.
- * @param {{ cwd?: string, git?: string, env?: NodeJS.ProcessEnv }} [options]
+ * @param {{ cwd?: string | undefined, git?: string | undefined, env?: NodeJS.ProcessEnv | undefined }} [options]
  * @returns {{ root: string | null, repo: string | null, branch: string | null, head: string | null, dirty: boolean | null }}
  */
 export function gitFacts({ cwd = process.cwd(), git, env } = {}) {
@@ -268,6 +268,7 @@ export function appendRecord(storeDir, record) {
 let storeWarned = false;
 
 /** Say a measurement was not recorded — once per process, on stderr — and never as a failure of the measured work. */
+/** @param {string} message */
 function warnNotRecorded(message) {
   if (storeWarned) return;
   storeWarned = true;
@@ -302,10 +303,10 @@ export function shellCommand(tokens, platform = process.platform) {
   if (tokens.length === 0) throw new TypeError('shellCommand needs at least one token');
   const pretty = tokens.join(' ');
   if (platform === 'win32') {
-    const quote = (piece) => (/[\s"]/.test(piece) ? `"${piece.replaceAll('"', '""')}"` : piece);
+    const quote = (/** @type {string} */ piece) => (/[\s"]/.test(piece) ? `"${piece.replaceAll('"', '""')}"` : piece);
     return { file: tokens.map(quote).join(' '), args: [], pretty, shell: true };
   }
-  return { file: tokens[0], args: tokens.slice(1), pretty };
+  return { file: /** @type {string} */ (tokens[0]), args: tokens.slice(1), pretty };
 }
 
 /**
@@ -397,7 +398,7 @@ function runChild(command, { cwd, env, spawn }) {
  * hold the command as spelled, never a build log. The child carries `ROTARIS_DEV_TIME_WRAPPED`, so a harness inside
  * a command this tool measures does not record the same span a second time. A store that cannot be written answers
  * `saved: false`; the command's own code is passed through regardless.
- * @param {{ storeDir: string, kind: string, label: string, command: { file: string, args: string[], pretty: string, shell?: boolean }, cwd?: string, env?: NodeJS.ProcessEnv, spawn?: typeof spawnSync }} options
+ * @param {{ storeDir: string, kind: string, label: string, command: { file: string, args: string[], pretty: string, shell?: boolean }, cwd?: string | undefined, env?: NodeJS.ProcessEnv | undefined, spawn?: typeof spawnSync }} options
  * @returns {{ record: Record<string, unknown>, code: number, saved: boolean }}
  */
 export function runMeasured({ storeDir, kind, label, command, cwd = process.cwd(), env = process.env, spawn = spawnSync }) {
@@ -429,7 +430,7 @@ export function runMeasured({ storeDir, kind, label, command, cwd = process.cwd(
  * stops the run with its code, as the gate's `&&` does; `keepGoing` runs the rest anyway and answers the first
  * failure's code. The total is recorded for a failed run too — the run happened, and its next green is what closes
  * the red.
- * @param {{ storeDir: string, stages?: readonly string[], keepGoing?: boolean, cwd?: string, env?: NodeJS.ProcessEnv, commandFor?: (script: string, args: string[]) => { file: string, args: string[], pretty: string, shell?: boolean }, spawn?: typeof spawnSync }} options
+ * @param {{ storeDir: string, stages?: readonly string[], keepGoing?: boolean, cwd?: string | undefined, env?: NodeJS.ProcessEnv | undefined, commandFor?: (script: string, args: string[]) => { file: string, args: string[], pretty: string, shell?: boolean }, spawn?: typeof spawnSync }} options
  * @returns {{ code: number, total: Record<string, unknown> | null, saved: boolean }}
  */
 export function runGate({
@@ -476,7 +477,7 @@ export function runGate({
  * record shape the CLI writes, with the clock handed in as a duration (`startedAt` is derived from `endedAt` when
  * it is not given) — and the same rule: it never fails the work it measures. Answers the record it built (null when
  * the capture is switched off) and whether it was saved.
- * @param {{ storeDir?: string, kind: string, label: string, command?: string | null, cwd?: string, env?: NodeJS.ProcessEnv, startedAt?: Date | null, durationMs: number, exitCode?: number | null, signal?: string | null, error?: string | null, via?: string | null, now?: () => Date }} options
+ * @param {{ storeDir?: string | undefined, kind: string, label: string, command?: string | null, cwd?: string | undefined, env?: NodeJS.ProcessEnv | undefined, startedAt?: Date | null, durationMs: number, exitCode?: number | null, signal?: string | null, error?: string | null, via?: string | null, now?: () => Date }} options
  * @returns {{ record: Record<string, unknown> | null, saved: boolean }}
  */
 export function recordSpan({
@@ -552,7 +553,7 @@ let entryClockArmed = false;
  * vitest (`VITEST`), never twice, never when the capture is switched off, never for a command `pnpm dev-time` is
  * already measuring (the marker it sets) and never for a name that is not a script this repository measures — and
  * since the record is written at exit, a script that crashes is recorded as failed.
- * @param {{ storeDir?: string, env?: NodeJS.ProcessEnv }} [options]
+ * @param {{ storeDir?: string | undefined, env?: NodeJS.ProcessEnv | undefined }} [options]
  * @returns {{ kind: string, label: string } | null} what was armed, or null
  */
 export function armEntryClock({ storeDir, env = process.env } = {}) {
@@ -580,7 +581,10 @@ export function armEntryClock({ storeDir, env = process.env } = {}) {
   return identity;
 }
 
-/** Where a record stands on the timeline: the instant its end can be read, `NaN` when neither end parses. */
+/**
+ * Where a record stands on the timeline: the instant its end can be read, `NaN` when neither end parses.
+ * @param {{ endedAt: string, startedAt: string }} record
+ */
 function recordEndMs(record) {
   for (const at of [record.endedAt, record.startedAt]) {
     const ms = Date.parse(at);
@@ -636,7 +640,7 @@ export function redsClosed(records) {
  * The file a manual span is held in for one worktree. Keyed by the worktree's top level (or the working directory
  * outside a repository), so two worktrees — or a session that `cd`s within one — share their span, and two
  * repositories never collide.
- * @param {string} storeDir @param {{ cwd?: string, git?: string, env?: NodeJS.ProcessEnv }} [options]
+ * @param {string} storeDir @param {{ cwd?: string | undefined, git?: string | undefined, env?: NodeJS.ProcessEnv | undefined }} [options]
  */
 export function pendingFile(storeDir, { cwd = process.cwd(), git, env } = {}) {
   const top = gitOut(cwd, ['rev-parse', '--show-toplevel'], { git, env });
@@ -649,7 +653,7 @@ export function pendingFile(storeDir, { cwd = process.cwd(), git, env } = {}) {
  * Open a manual span — work no single command covers (a repair, a rebase). Refused when one is already open for the
  * worktree: the open span is named rather than silently replaced, so two numbers can never stand for one piece of
  * work.
- * @param {{ storeDir: string, kind: string, label: string, cwd?: string, git?: string, env?: NodeJS.ProcessEnv, now?: () => Date }} options
+ * @param {{ storeDir: string, kind: string, label: string, cwd?: string | undefined, git?: string | undefined, env?: NodeJS.ProcessEnv | undefined, now?: () => Date }} options
  * @returns {{ file: string, span: Record<string, unknown> } | { problem: string }}
  */
 export function startSpan({ storeDir, kind, label, cwd = process.cwd(), git, env, now = () => new Date() }) {
@@ -685,7 +689,7 @@ function readSpan(file) {
 /**
  * Close the worktree's open span and record it. The duration is wall-clock (the span crosses processes; a
  * monotonic pair cannot), clamped at zero so a backwards clock correction cannot mint a negative measurement.
- * @param {{ storeDir: string, cwd?: string, git?: string, env?: NodeJS.ProcessEnv, now?: () => Date }} options
+ * @param {{ storeDir: string, cwd?: string | undefined, git?: string | undefined, env?: NodeJS.ProcessEnv | undefined, now?: () => Date }} options
  * @returns {{ record: Record<string, unknown>, file: string } | { problem: string }}
  */
 export function stopSpan({ storeDir, cwd = process.cwd(), git, env, now = () => new Date() }) {
@@ -719,7 +723,7 @@ export function stopSpan({ storeDir, cwd = process.cwd(), git, env, now = () => 
 
 /**
  * Drop the worktree's open span without recording it — for work abandoned, where a duration would be a lie.
- * @param {{ storeDir: string, cwd?: string, git?: string, env?: NodeJS.ProcessEnv }} options
+ * @param {{ storeDir: string, cwd?: string | undefined, git?: string | undefined, env?: NodeJS.ProcessEnv | undefined }} options
  * @returns {{ span: { kind: string, label: string, startedAt: string }, file: string } | { problem: string }}
  */
 export function cancelSpan({ storeDir, cwd = process.cwd(), git, env }) {
@@ -794,7 +798,7 @@ export function aggregate(records) {
     const failed = failedRecord(record);
     if (failed) failures += 1;
     const key = `${record.kind}:${record.label}`;
-    const entry = labels.get(key) ?? { kind: record.kind, label: record.label, count: 0, durationMs: 0, failures: 0, durations: [] };
+    const entry = labels.get(key) ?? { kind: record.kind, label: record.label, count: 0, durationMs: 0, failures: 0, durations: /** @type {number[]} */ ([]) };
     entry.count += 1;
     entry.durationMs += ms;
     entry.failures += failed ? 1 : 0;
@@ -899,7 +903,7 @@ export function formatReport({ aggregate: totals, store, missing, skips, days, p
     ]);
     const widths = header.map((title, i) => Math.max(title.length, ...rows.map((row) => row[i]?.length ?? 0)));
     const rightAligned = [2, 3, 4, 5, 6, 7, 8];
-    const pad = (cell, i) => (rightAligned.includes(i) ? cell.padStart(widths[i] ?? 0) : cell.padEnd(widths[i] ?? 0));
+    const pad = (/** @type {string} */ cell, /** @type {number} */ i) => (rightAligned.includes(i) ? cell.padStart(widths[i] ?? 0) : cell.padEnd(widths[i] ?? 0));
     lines.push(`  ${header.map(pad).join('  ')}`);
     for (const row of rows) lines.push(`  ${row.map(pad).join('  ')}`);
   }

@@ -5,7 +5,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { verdictLine } from './verdict-line.mjs';
 
 describe('the live run\'s verdict line', () => {

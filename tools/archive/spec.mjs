@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 // The archive's fifth kind (R-092; `docs/README.md`, "The archive"; `docs/architecture/hardening.md` §6 row 6): the text
 // of a withdrawn or superseded requirement, beyond its definition, is history, and it moves verbatim to
 // `docs/archive/spec/<NN-domain>/<part>.md`. The specification is never rewritten (`AGENTS.md`), so what stays is fixed:

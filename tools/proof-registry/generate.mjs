@@ -17,20 +17,21 @@ import { AREAS, HOSTS, INDEX_PATH, PROOFS, recordPath } from './registry.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** A table cell: one line, and a pipe written so it does not split the row. */
-const cell = (value) => value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
-const dash = (value) => (value === '' ? '—' : value);
+const cell = (/** @type {string} */ value) => value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+const dash = (/** @type {string} */ value) => (value === '' ? '—' : value);
 
-const platformsOf = (proof) => {
+/** @typedef {(typeof PROOFS)[number]} Proof */
+const platformsOf = (/** @type {Proof} */ proof) => {
   const all = HOSTS.every((host) => proof.platforms.includes(host));
   const hosts = all ? 'all hosts' : proof.platforms.join(', ');
   if (proof.platformNotes.length === 0) return hosts;
   return `${hosts} — ${proof.platformNotes.join('; ')}`;
 };
 
-const flagsOf = (proof) => proof.flags.map((flag) => `\`${flag}\``).join(', ');
-const neighboursOf = (proof) => proof.neighbours.map((id) => `\`${id}\``).join(', ');
-const requiresOf = (proof) => proof.requires.join('; ');
-const recordLinkOf = (proof) => recordPath(proof.id).split('/').pop();
+const flagsOf = (/** @type {Proof} */ proof) => proof.flags.map((flag) => `\`${flag}\``).join(', ');
+const neighboursOf = (/** @type {Proof} */ proof) => proof.neighbours.map((id) => `\`${id}\``).join(', ');
+const requiresOf = (/** @type {Proof} */ proof) => proof.requires.join('; ');
+const recordLinkOf = (/** @type {Proof} */ proof) => recordPath(proof.id).split('/').pop();
 
 /** The whole index, as the file holds it. Exported so the check and the guard read the same string. */
 export function render() {

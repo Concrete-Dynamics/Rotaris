@@ -16,7 +16,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// @ts-expect-error — plain ESM beside the scripts that run it.
 import { ABOUT_ASSETS, aboutAssetProblems, afterNoticesStep, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './about-assets.mjs';
 import { BUILD_ID_ASSET, THIRD_PARTY_LICENSES_ASSET } from '../../src/main/about.js';
 import { SETUP_MANIFEST_FILE } from '@rotaris/config';

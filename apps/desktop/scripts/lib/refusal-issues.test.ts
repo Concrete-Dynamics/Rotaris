@@ -4,7 +4,6 @@
  * 2026-10-01 recorded (session `57095770`).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { refusalIssues } from './refusal-issues.mjs';
 
 const call = (ordinal: number, callId: string | null, failureKind: string | null, status = 'failed') => ({ ordinal, tool_name: 'write_file', status, callId, failureKind });

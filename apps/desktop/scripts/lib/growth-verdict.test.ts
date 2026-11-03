@@ -4,7 +4,6 @@
  * ratio 2.14 (`docs/archive/defects/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the proof library is plain ESM beside the scripts that run it.
 import { GROWTH_CEILING, GROWTH_FLOOR_MS, growthVerdict } from './growth-verdict.mjs';
 
 type Verdict = { ok: boolean; asserted: boolean; message: string };

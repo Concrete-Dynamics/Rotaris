@@ -3,7 +3,6 @@
  * live run at a68f121 recorded (session e6747bd0: call 115, architect given a write scope; call 164, a docs-writer's `run_command`).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { publishersOf, routingMissReading } from './routing-misses.mjs';
 
 const call = (ordinal: number, tool_name: string, agent_name: string, status: string, result: string, failureKind: string | null = null, args: Record<string, unknown> = {}, endedAt: number | null = null) => ({ ordinal, tool_name, agent_name, status, result, failureKind, args, endedAt });

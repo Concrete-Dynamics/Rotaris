@@ -12,14 +12,20 @@
  * The paced windows among a scenario's traffic records: one per call whose `paced` figure says the proxy held back at
  * least one argument piece, `{ at, events, firstAt, lastAt, spanMs }` with the instants in epoch milliseconds, longest first.
  */
+/**
+ * @typedef {{ at: string, events: number, firstAt: number, lastAt: number, spanMs: number }} PacedWindow
+ * @param {Array<any>} records the traffic records as the sink holds them, whatever their shape
+ * @returns {PacedWindow[]}
+ */
 export function pacedWindows(records) {
   return records
     .filter((r) => r !== null && typeof r === 'object' && r.paced !== undefined && Number(r.paced.events) > 0 && Number.isFinite(r.paced.firstAt) && Number.isFinite(r.paced.lastAt))
     .map((r) => ({ at: String(r.at ?? ''), events: Number(r.paced.events), firstAt: r.paced.firstAt, lastAt: r.paced.lastAt, spanMs: r.paced.lastAt - r.paced.firstAt }))
-    .sort((a, b) => b.spanMs - a.spanMs);
+    .sort((/** @type {PacedWindow} */ a, /** @type {PacedWindow} */ b) => b.spanMs - a.spanMs);
 }
 
 /** REQ-MONITOR-117's evaluation interval for a threshold: a sixth of it, never under 1 s or over 5 s. */
+/** @param {number} thresholdMs */
 export function evaluationIntervalMs(thresholdMs) {
   return Math.max(1_000, Math.min(thresholdMs / 6, 5_000));
 }
@@ -28,6 +34,7 @@ export function evaluationIntervalMs(thresholdMs) {
  * Whether a window can show anything: arguments streamed for less than the threshold and one evaluation interval leave no
  * build's watch a silence of the threshold to find, so such a window is no evidence either way.
  */
+/** @param {{ spanMs: number }} window @param {number} thresholdMs */
 export function conclusive(window, thresholdMs) {
   return window.spanMs >= thresholdMs + evaluationIntervalMs(thresholdMs);
 }
@@ -40,8 +47,15 @@ export function conclusive(window, thresholdMs) {
  * that read the silence just before the first piece, or just after the last. Each is returned with the window it falls
  * in. `issues` are `{ kind, recorded_at, actor, message }` as the live run reads them.
  */
+/**
+ * @template {Record<string, any>} I
+ * @param {Array<I | null | undefined>} issues
+ * @param {PacedWindow[]} windows
+ * @param {number} thresholdMs
+ */
 export function stallsWhileStreaming(issues, windows, thresholdMs) {
   const slack = evaluationIntervalMs(thresholdMs);
+  /** @type {Array<{ issue: I, window: PacedWindow }>} */
   const found = [];
   for (const issue of issues) {
     if (issue?.kind !== 'stall') continue;

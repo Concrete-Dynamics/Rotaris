@@ -7,12 +7,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the scripts that run it.
 import { CRLF_DIR, CRLF_FILES, CRLF_PROMPT, crlfVerdicts, runCrlfScenario } from './crlf-scenario.mjs';
-// @ts-expect-error — the fixture is plain ESM beside the scripts that run it.
 import { GREET_LINES, LIST_LINES, RENDER_LINES, crlf, lineEndings } from './crlf-fixture.mjs';
 
-type Verdict = { verdict: 'check' | 'note'; passed?: boolean; what: string; detail?: string };
+type Verdict = { verdict: 'check' | 'note'; passed?: boolean; what: string; detail?: string | undefined };
 type Call = { ordinal: number; tool_name: string; agent_name: string; status: string; args: Record<string, unknown>; result: string; isError: boolean };
 const G = `${CRLF_DIR}/greet.js`;
 const R = `${CRLF_DIR}/render.js`;
@@ -49,7 +47,7 @@ function wholeRun(): { calls: Call[]; files: Record<string, string | null> } {
 describe('the crlf scenario (PD-TOOLS-014 to PD-TOOLS-018 live)', () => {
   it('generates three CRLF files and names each tool and shape in its prompt', () => {
     expect(Object.keys(CRLF_FILES)).toEqual([G, R, L]);
-    for (const lines of Object.values(CRLF_FILES) as string[][]) expect(lineEndings(crlf(lines))).toMatchObject({ lfOnly: 0, final: true });
+    for (const lines of Object.values(CRLF_FILES)) expect(lineEndings(crlf(lines))).toMatchObject({ lfOnly: 0, final: true });
     for (const word of ['haet_edit', 'write_file edit', 'operation insert', 'replace_all true', 'Do not use the terminal']) expect(CRLF_PROMPT).toContain(word);
     expect(LIST_LINES).toEqual(['alpha', 'beta', 'alpha']);
     expect(lineEndings('a\r\nb\nc')).toEqual({ crlf: 1, lfOnly: 1, lfOnlyLines: [2], final: false });
@@ -84,7 +82,7 @@ describe('the crlf scenario (PD-TOOLS-014 to PD-TOOLS-018 live)', () => {
     run.calls[8] = { ...run.calls[8]!, args: { ...run.calls[8]!.args, new_string: 'alpha-1\r\nalpha-2' }, result: `Replaced 2 occurrences in ${L}.` };
     expect(failed(crlfVerdicts(run))).toEqual([]);
     // One LF break left for the tool to carry is enough to owe the sentence.
-    run.calls[8] = { ...run.calls[8]!, args: { ...run.calls[8]!.args, new_string: 'alpha-1\r\nalpha-2\nalpha-3' } };
+    run.calls[8] = { ...run.calls[8], args: { ...run.calls[8].args, new_string: 'alpha-1\r\nalpha-2\nalpha-3' } };
     expect(failed(crlfVerdicts(run))).toEqual(["crlf: each multi-line replace_all says it wrote the file's CRLF endings (PD-TOOLS-017)"]);
   });
 
@@ -104,7 +102,7 @@ describe('the crlf scenario (PD-TOOLS-014 to PD-TOOLS-018 live)', () => {
     run.calls[4] = { ...run.calls[4]!, args: { operation: 'edit', path: R, old_string: '\tif (item.visible) {\n\t\tout.push(`<li>${item.label}</li>`);\n\t}', new_string: '…' }, result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+3 -3). Match level: 4 (similarity: 0.91). Verify the result.${CRLF_EDIT}` };
     run.files[R] = crlf([...RENDER_LINES.slice(0, 3), '\tif (item.visible) {', '\t\tout.push(`<li class="shown">${item.label}</li>`);', '\t}', ...RENDER_LINES.slice(6)]);
     expect(failed(crlfVerdicts(run))).toContain('crlf: a render.js window edit whose old_string was a uniform indent off matches at level 3, never level 4 (PD-TOOLS-019)');
-    run.calls[4] = { ...run.calls[4]!, args: { ...run.calls[4]!.args, old_string: '\tif (item.visible) {\r\n\t\tout.push(`<li>${item.label}</li>`);\r\n\t}\r' } };
+    run.calls[4] = { ...run.calls[4], args: { ...run.calls[4].args, old_string: '\tif (item.visible) {\r\n\t\tout.push(`<li>${item.label}</li>`);\r\n\t}\r' } };
     expect(failed(crlfVerdicts(run))).toContain('crlf: a render.js window edit whose old_string was a uniform indent off matches at level 3, never level 4 (PD-TOOLS-019)');
   });
 
@@ -114,7 +112,7 @@ describe('the crlf scenario (PD-TOOLS-014 to PD-TOOLS-018 live)', () => {
     const typo = crlfVerdicts(run);
     expect(failed(typo)).toEqual([]);
     expect(notes(typo)).toContain("crlf: the render.js window edit landed at match level 4, its block at the file's depth");
-    run.calls[4] = { ...run.calls[4]!, result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+1 -1). Match level: 3. new_string was shifted by the same leading prefix "\\t" (1 character added) to the file's indentation.${CRLF_EDIT}` };
+    run.calls[4] = { ...run.calls[4], result: `Edited ${R}: 3 lines replaced by 3 at line 4 (+1 -1). Match level: 3. new_string was shifted by the same leading prefix "\\t" (1 character added) to the file's indentation.${CRLF_EDIT}` };
     const shifted = crlfVerdicts(run);
     expect(failed(shifted)).toEqual([]);
     expect(shifted.filter((v: Verdict) => v.verdict === 'check').map((v: Verdict) => v.what)).toContain("crlf: a level-3 render.js window edit lands its block at the file's depth (PD-TOOLS-019, PD-TOOLS-015)");
@@ -142,7 +140,7 @@ describe('the crlf scenario (PD-TOOLS-014 to PD-TOOLS-018 live)', () => {
     const near3 = `old_string was not found exactly in ${G}. It matches lines 3-5 at match level 3 (indentation shift). Every line of the file carries the leading prefix "\\t" (1 character) in addition to old_string's indentation.`;
     run.calls[1] = { ...run.calls[1]!, result: `${near3} Your content_hash is still current and nothing was written.` };
     expect(failed(crlfVerdicts(run))).toContain('crlf: each haet_edit near miss at match level 3 with an LF old_string names the line endings (PD-TOOLS-014 revision 3, PD-TOOLS-019)');
-    run.calls[1] = { ...run.calls[1]!, result: `${near3} The line endings differ too: CRLF in the file and LF in old_string. The quoted text carries the file's line endings. Your content_hash is still current and nothing was written.` };
+    run.calls[1] = { ...run.calls[1], result: `${near3} The line endings differ too: CRLF in the file and LF in old_string. The quoted text carries the file's line endings. Your content_hash is still current and nothing was written.` };
     expect(failed(crlfVerdicts(run))).toEqual([]);
   });
 });

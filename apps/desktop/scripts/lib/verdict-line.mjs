@@ -6,6 +6,7 @@
  *
  * Pure, verification only.
  */
+/** @param {{ noted?: boolean, passed?: boolean, what: string, detail?: unknown }} c */
 export function verdictLine(c) {
   const mark = c.noted ? 'NOTE' : c.passed ? 'PASS' : 'FAIL';
   return `  ${mark}  ${c.what}${c.detail === null || c.detail === undefined ? '' : `  — ${c.detail}`}`;

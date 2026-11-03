@@ -41,6 +41,7 @@ const uncommented = (text) =>
 
 const source = uncommented(readFileSync(logPath, 'utf8'));
 
+/** @type {string[]} */
 const problems = [];
 /** @param {string} message */
 const fail = (message) => problems.push(message);
@@ -56,9 +57,9 @@ const rows = [];
 for (const match of source.matchAll(ROW)) {
   const line = source.slice(0, match.index).split('\n').length;
   rows.push({
-    anchor: match[1],
-    printed: match[2],
-    number: Number.parseInt(match[2], 10),
+    anchor: match[1] ?? '',
+    printed: match[2] ?? '',
+    number: Number.parseInt(match[2] ?? '', 10),
     line,
   });
 }
@@ -103,7 +104,7 @@ for (const [number, group] of byNumber) {
 // 3 — contiguous from 1, no gap. A gap is a row somebody deleted, which the log
 // forbids outright, or a number claimed in a worktree that never landed.
 const numbers = [...byNumber.keys()].sort((a, b) => a - b);
-const highest = numbers[numbers.length - 1];
+const highest = numbers.at(-1) ?? Number.NaN;
 const missing = [];
 for (let n = 1; n <= highest; n += 1) if (!byNumber.has(n)) missing.push(n);
 if (numbers[0] !== 1) fail(`the lowest identifier is R-${String(numbers[0]).padStart(3, '0')}, not R-001.`);
@@ -122,15 +123,15 @@ const countSection = /^##\s+Count\s*$([\s\S]*?)^---\s*$/m.exec(source);
 if (countSection === null) {
   fail('there is no `## Count` section ending in a `---` rule. The declared range lives there.');
 } else {
-  const declared = /\bR-(\d+)\s+to\s+R-(\d+)\b/.exec(countSection[1]);
+  const declared = /\bR-(\d+)\s+to\s+R-(\d+)\b/.exec(countSection[1] ?? '');
   if (declared === null) {
     fail(
       'the Count section declares no range. Write it as `R-001 to R-NNN` so that this gate can ' +
         'read the claim rather than trust it.',
     );
   } else {
-    const from = Number.parseInt(declared[1], 10);
-    const to = Number.parseInt(declared[2], 10);
+    const from = Number.parseInt(declared[1] ?? '', 10);
+    const to = Number.parseInt(declared[2] ?? '', 10);
     if (from !== 1) fail(`the Count section declares the range starting at R-${declared[1]}, not R-001.`);
     if (to !== highest) {
       fail(
@@ -173,10 +174,11 @@ for (const file of markdownUnder(join(root, 'docs'))) {
     // A bare `#r-nnn` only means a request row inside the log; elsewhere the
     // filename has to be there, or it is some other document's own anchor.
     if (!isLog && !match[0].startsWith('requests.md')) continue;
-    if (defined.has(match[1])) continue;
+    const cited = match[1] ?? '';
+    if (defined.has(cited)) continue;
     const line = text.slice(0, match.index).split('\n').length;
     fail(
-      `${relative(root, file).split(sep).join('/')}:${line} cites ${match[1].toUpperCase()}, ` +
+      `${relative(root, file).split(sep).join('/')}:${line} cites ${cited.toUpperCase()}, ` +
         'which the request log does not define.',
     );
   }

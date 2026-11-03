@@ -32,15 +32,16 @@ const REFERENCES_TO_SESSIONS = "SELECT \"from\" AS fromColumn, \"to\" AS toColum
  *   `session_id` column; `cascaded` is `sessions` and every table referencing it, in schema order; `facts` is the rest;
  *   `problems` is empty when the premise holds, else one sentence per table that breaks it.
  */
+/** @param {import('better-sqlite3').Database} db */
 export function sessionCascade(db) {
-  const tables = db.prepare(TABLES_WITH_SESSION_ID).all().map((t) => t.name);
-  const referencing = db.prepare(TABLES_REFERENCING_SESSIONS).all().map((t) => t.name);
+  const tables = /** @type {Array<{ name: string }>} */ (db.prepare(TABLES_WITH_SESSION_ID).all()).map((t) => t.name);
+  const referencing = /** @type {Array<{ name: string }>} */ (db.prepare(TABLES_REFERENCING_SESSIONS).all()).map((t) => t.name);
   const cascaded = ['sessions', ...referencing.filter((t) => t !== 'sessions')];
   const facts = tables.filter((t) => !cascaded.includes(t));
   const problems = [];
   if (!tables.includes('sessions')) problems.push('the store has no sessions table carrying session_id');
   for (const table of referencing) {
-    for (const fk of db.prepare(REFERENCES_TO_SESSIONS).all(table)) {
+    for (const fk of /** @type {Array<{ fromColumn: string, toColumn: string | null, onDelete: string }>} */ (db.prepare(REFERENCES_TO_SESSIONS).all(table))) {
       // `to` is NULL when the reference names the parent's primary key implicitly, which for `sessions` is session_id.
       const shape = fk.fromColumn === 'session_id' && (fk.toColumn === 'session_id' || fk.toColumn === null) && fk.onDelete === 'CASCADE';
       if (!shape) problems.push(`${table} references sessions as ${fk.fromColumn} → ${fk.toColumn ?? '(primary key)'} ON DELETE ${fk.onDelete}, not session_id → session_id ON DELETE CASCADE, so a session delete does not take its rows`);

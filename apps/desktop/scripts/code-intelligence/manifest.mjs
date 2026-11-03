@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * `pnpm code-intel:manifest` — the binding manifest of REQ-MCP-116, GENERATED from the bundled runtime (ADR-0035: "the
  * manifest IS the runtime's answer"). Part T, 2026-09-06.

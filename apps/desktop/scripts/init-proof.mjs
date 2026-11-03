@@ -71,6 +71,11 @@ const WORKSPACE_NO_TASK = [
   '',
 ].join('\n');
 
+/**
+ * @param {string} name
+ * @param {string} files the workspace's `agents.yaml`
+ * @param {{ code?: boolean, folder?: string }} [options]
+ */
 function scenario(name, files, { code = false, folder = 'workspace' } = {}) {
   const root = join(output, name);
   const workspace = join(root, folder);
@@ -87,6 +92,12 @@ function scenario(name, files, { code = false, folder = 'workspace' } = {}) {
   return { root, workspace, local, configDir, workspaceFile: join(workspace, '.rotaris', 'agents.yaml') };
 }
 
+/**
+ * @param {string} name
+ * @param {ReturnType<typeof scenario>} s
+ * @param {Record<string, string>} [extra]
+ * @param {number} [timeout]
+ */
 async function launch(name, s, extra, timeout = 120_000) {
   const png = join(output, `${name}.png`);
   const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
@@ -109,6 +120,7 @@ async function launch(name, s, extra, timeout = 120_000) {
 }
 
 /** The one `capture: eval-at … → <json>` line a launch logged for the named expression. */
+/** @param {string} log @param {string} marker */
 function evalOf(log, marker) {
   const line = log.split('\n').find((l) => l.includes('capture: eval-at') && l.includes(marker));
   if (!line) throw new Error(`no eval-at reading for ${marker}`);
@@ -236,7 +248,7 @@ if (!/Project setup did not finish/.test(log4)) throw new Error(`the background 
 // PD-WORKSPACE-005 (OQ-171): the banner reaches every open window, so it names the project it is about — its folder's name
 // after the headline, and the folder itself at the head of the detail area.
 const bannerLine = log4.split('\n').findIndex((line) => line.includes('"Project setup did not finish'));
-if (bannerLine < 0 || !log4.split('\n')[bannerLine].includes('"Project setup did not finish: atlas-billing"')) throw new Error(`the background banner did not name its project (PD-WORKSPACE-005):\n${log4}`);
+if (bannerLine < 0 || !(log4.split('\n')[bannerLine] ?? '').includes('"Project setup did not finish: atlas-billing"')) throw new Error(`the background banner did not name its project (PD-WORKSPACE-005):\n${log4}`);
 if (!log4.includes(`Project folder: ${s4.workspace}`)) throw new Error(`the background banner's detail did not open on the project's folder (PD-WORKSPACE-005):\n${log4}`);
 // PD-WORKSPACE-005 revision 2 (OQ-262): the banner carries `open-project-init` naming the project's folder, labelled "Try again"
 // (REQ-WORKSPACE-103); `notice-proof` section 6c presses it from a window that does not hold the project.
@@ -257,7 +269,7 @@ const log5 = await launch('settings-card', s5, {
 const card = JSON.parse(evalOf(log5, 'probe:"card"'));
 if (card.state !== 'completed') throw new Error(withSetupFailure(`the Project card read state ${JSON.stringify(card.state)}, expected completed`, log5));
 if (card.headline !== 'Project initialized') throw new Error(`the card headline read ${JSON.stringify(card.headline)}`);
-if (!card.lines.some((l) => /every initialization task/i.test(l))) throw new Error(`the completed sentence is missing: ${JSON.stringify(card.lines)}`);
+if (!card.lines.some((/** @type {string} */ l) => /every initialization task/i.test(l))) throw new Error(`the completed sentence is missing: ${JSON.stringify(card.lines)}`);
 if (!card.lines.includes('No code memories were created — this workspace is a documentation-only project.')) throw new Error(`REQ-WORKSPACE-101's sentence is missing: ${JSON.stringify(card.lines)}`);
 if (card.reason !== 'Every initialization task for this workspace is already resolved.') throw new Error(`the disabled action did not name its condition: ${JSON.stringify(card.reason)}`);
 results.settingsCard = card;

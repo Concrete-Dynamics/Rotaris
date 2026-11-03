@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The approval waits of one session as the record and main's log show them — read by `approvals-proof.mjs` (scripted model,
  * strict) and by `live-run.mjs`'s `away` and `approvals` scenarios (a real model, a NOTE where the model never reached a
@@ -16,7 +17,11 @@ export const awayReason = (seconds) => `The user is treated as away because an e
 /** REQ-TOOLS-052's timeout reason, the end of the first unanswered wait's decision. */
 export const timeoutReason = (seconds) => `Denied because no answer arrived within ${seconds} seconds.`;
 
-/** Every dialog main showed, in order, with the instant it logged the presentation. */
+/**
+ * Every dialog main showed, in order, with the instant it logged the presentation.
+ * @param {string} log
+ * @returns {Array<{ at: number, requestId: string, tool: string, rule: string }>}
+ */
 export function presentedDialogs(log) {
   return [...String(log).matchAll(/^\[main (\S+)\].*approval (\w+) presented \(([\w-]+), rule ([^)]+)\)/gm)]
     .map((m) => ({ at: Date.parse(m[1]), requestId: m[2], tool: m[3], rule: m[4] }));
@@ -115,9 +120,13 @@ export function awayLiveVerdicts(stretch, { seconds, sessionLog = '', answer = '
  * PD-TOOLS-004, read from one session: the dialogs shown for `tool`, the session grants the user gave it (`user-session`),
  * the later calls a session rule allowed unasked (`session-rule`), and the calls of `tool` per path with their status.
  */
+/**
+ * @param {{ audit: Array<Record<string, any>>, calls: Array<Record<string, any>>, log: string, tool?: string }} session
+ */
 export function sessionScopedWrites({ audit, calls, log, tool = 'write_file' }) {
   const shown = presentedDialogs(log).filter((p) => p.tool === tool);
   const ofTool = audit.filter((a) => a.tool_name === tool);
+  /** @type {Record<string, Array<{ ordinal: number, status: string, operation: string | null }>>} */
   const byPath = {};
   for (const c of calls.filter((c) => c.tool_name === tool)) {
     const path = typeof c.args?.path === 'string' ? c.args.path.replace(/^\.\//, '') : '(no path)';
@@ -136,6 +145,10 @@ export function sessionScopedWrites({ audit, calls, log, tool = 'write_file' }) 
  * The live run's `approvals` scenario read from one session (PD-TOOLS-004 against a real model at the asking default): the
  * first `write_file` dialog is answered "Approve for this session", so every later `write_file` call of the same persona to
  * the same path must pass without a dialog, allowed by the session rule. A model that never wrote the path twice is a NOTE.
+ */
+/**
+ * @param {ReturnType<typeof sessionScopedWrites>} writes
+ * @param {{ path: string, fileText?: string | null, wanted?: string[] }} expectation
  */
 export function approvalsLiveVerdicts(writes, { path, fileText = null, wanted = [] }) {
   const out = [];

@@ -93,12 +93,14 @@ export const PREPARED_TARGETS = Object.freeze({
 });
 
 /** The macOS volume name REQ-STARTUP-022 fixes: `Rotaris <version>`, the declared text, never the normalised one. */
+/** @param {string} version */
 export function dmgVolumeName(version) {
   return `Rotaris ${parseReleaseVersion(version).version}`;
 }
 
+/** @param {Record<string, any>} target @param {string} dotted @param {unknown} value */
 function setPath(target, dotted, value) {
-  const [section, field] = dotted.split('.');
+  const [section = '', field = ''] = dotted.split('.');
   target[section] = { ...(target[section] ?? {}), [field]: value };
 }
 
@@ -108,9 +110,12 @@ function setPath(target, dotted, value) {
  * name — written as literals from the declared `version`. A new object; `base` is not touched. A name already present
  * in `base` is refused, as `configurationWithNames` refuses one, so no `${version}` template can return through here.
  * `windows-x64` is not prepared, it is live: its configuration is `artifact-names.mjs`'s.
+ * @param {Record<string, any>} base the parsed `electron-builder.yml`
+ * @param {string} platform
+ * @param {string} version
  */
 export function preparedConfiguration(base, platform, version) {
-  const target = PREPARED_TARGETS[platform];
+  const target = PREPARED_TARGETS[/** @type {keyof typeof PREPARED_TARGETS} */ (platform)];
   if (!target) throw new Error(`"${platform}" has no prepared configuration; the prepared platform keys are ${Object.keys(PREPARED_TARGETS).join(', ')}`);
   const declared = parseReleaseVersion(version).version;
   const out = { ...base };
@@ -119,7 +124,7 @@ export function preparedConfiguration(base, platform, version) {
   }
   const name = artifactName(declared, target.kind);
   for (const key of target.nameKeys) {
-    const [section, field] = key.split('.');
+    const [section = '', field = ''] = key.split('.');
     const present = base[section] && base[section][field];
     if (present !== undefined && present !== null) throw new Error(`REQ-STARTUP-031: the configuration already sets ${key} ("${present}"); the artifact names are rendered from the declared version and composed nowhere else`);
     setPath(out, key, name);

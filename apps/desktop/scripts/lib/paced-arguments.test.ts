@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { conclusive, evaluationIntervalMs, pacedWindows, stallsWhileStreaming } from './paced-arguments.mjs';
 
 /** The live run's `faults-args` reading (docs/archive/defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md). */

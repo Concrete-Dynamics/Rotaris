@@ -8,7 +8,6 @@ import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { parseSteps } from '../../src/main/capture/host.ts';
-// @ts-expect-error — plain ESM beside the proofs, run by node without a build step.
 import { COUNTING_LANES, LANES_TRAP_INSTALLED, LANES_TRAP_PREFIX, LANES_TRAP_READ, lanesTrapGuard, lanesTrapReading, lanesTrapSource, lanesTrapSteps } from './lanes-trap.mjs';
 
 interface Fiber { tag: number; type: unknown; lanes: number; childLanes: number; child: Fiber | null; sibling: Fiber | null; stateNode?: unknown; alternate?: Fiber; memoizedState?: unknown; memoizedProps?: unknown }
@@ -21,7 +20,7 @@ function fakeWindow() {
   const app: Fiber = { tag: 0, type: { displayName: 'AppShell' }, lanes: 0, childLanes: 0, child: leaf, sibling: null, memoizedState: null, memoizedProps: props };
   app.alternate = { ...app };
   const host: Fiber = { tag: 3, type: null, lanes: 0, childLanes: 0, child: app, sibling: null };
-  const root = { pendingLanes: 0, current: host as Fiber };
+  const root = { pendingLanes: 0, current: host };
   host.stateNode = root;
   const container: Record<string, unknown> = { '__reactContainer$abc123': host };
   const warnings: string[] = [];

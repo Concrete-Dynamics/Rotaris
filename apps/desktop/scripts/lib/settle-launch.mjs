@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The live run's wait on one launch (`live-run.mjs`'s `runElectron`), bounded by the launch's own bound even when
  * something the launch started keeps its pipes open.
@@ -26,6 +27,8 @@ export const KILL_REAP_MS = 10_000;
 /**
  * Settle a spawned launch: resolves once it has exited and its pipes have closed or drained for `drainMs`, or once its
  * `timeoutMs` bound ran out, `kill` was sent, and the exit (or `reapMs`) followed. `kill` defaults to SIGKILL to the process.
+ * @param {any} child a spawned child, or a stand-in with its events and pipes
+ * @param {{ timeoutMs?: number, drainMs?: number, reapMs?: number, kill?: (child: any) => unknown }} [options]
  */
 export function settleLaunch(child, { timeoutMs, drainMs = PIPE_DRAIN_MS, reapMs = KILL_REAP_MS, kill = (c) => c.kill('SIGKILL') } = {}) {
   if (!(timeoutMs > 0)) throw new Error('settleLaunch needs a positive timeoutMs');

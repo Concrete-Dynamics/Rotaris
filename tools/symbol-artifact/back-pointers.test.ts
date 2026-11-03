@@ -25,7 +25,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EXTENDED_BY, NARROWED_BY, SUPERSEDED_BY } from '@rotaris/kernel';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { partsOf } from '../record-parts.mjs';
 
 const repo = join(import.meta.dirname, '..', '..');
@@ -59,7 +58,7 @@ function backPointers(): BackPointer[] {
     let requirement: string | null = null;
     // A split domain's index, then its parts (docs/README.md, "The document budget"): a note follows its requirement
     // across them as it did in the single file.
-    for (const path of [join(specDir, domain), ...(partsOf(join(specDir, domain)) as string[])]) {
+    for (const path of [join(specDir, domain), ...(partsOf(join(specDir, domain)))]) {
       const file = relative(specDir, path).split(sep).join('/');
       readFileSync(path, 'utf8')
         .split(/\r?\n/)

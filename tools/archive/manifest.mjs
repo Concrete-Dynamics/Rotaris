@@ -44,7 +44,7 @@ export function entriesOf(path, text) {
   const seen = new Map();
   for (const line of lines) {
     const m = ANCHOR.exec(line);
-    if (m) {
+    if (m?.[1] !== undefined) {
       const n = (seen.get(m[1]) ?? 0) + 1;
       seen.set(m[1], n);
       blocks.push([`${path}#${m[1]}${n > 1 ? `~${n}` : ''}`, [line]]);

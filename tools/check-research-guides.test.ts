@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { resolve } from 'node:path';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { DESIGN_HEADINGS, GUIDE_NAME, REQUIRED_HEADINGS, ageInDays, guideFiles, headings, inspect } from './check-research-guides.mjs';
 
 const guide = (sections: string[], date = '**Review date:** 2026-11-01') =>

@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The driver's client half — what a proof or the `drive` CLI holds.
  *
@@ -10,8 +11,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
-import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { app as appDirectory, cleanEnvironment, electron, hostSwitches, mainEntry, proofIsolationEnv } from './harness.mjs';
 import { drainGroup, endedHow, endOverrun, exitWithin, hasExited, logTail, trackLaunch } from './bounded-launch.mjs';
 
@@ -133,6 +133,10 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
  * checkout's `apps/desktop` and set up code intelligence in the product's source
  * (`docs/archive/defects/workspace-proof-and-updater-proof-launches-with-no-workspace-argument-open-the-checkout.md`).
  */
+/**
+ * @param {{ root: string, workspace?: string, cwd?: string, extra?: Record<string, string | undefined>, electronArgs?: string[],
+ *   detached?: boolean, dialect?: string, timeoutMs?: number }} options
+ */
 export async function startApp({ root, workspace, cwd = appDirectory, extra = {}, electronArgs = [], detached = false, dialect = 'scripted', timeoutMs = 60_000 }) {
   mkdirSync(root, { recursive: true });
   const endpointFile = join(root, 'endpoint.json');
@@ -213,6 +217,10 @@ export function within(pending, ms) {
  * (`stopOverrunMessage`) rather than moving on with an application still running beside the next launch. No step here
  * waits without a bound, so the whole ending is at most `2 × quitMs + 2 × graceMs` and the SIGKILL's reaping.
  */
+/**
+ * @param {{ child: any, driver: any }} started
+ * @param {{ graceMs?: number, quitMs?: number, screenshot?: string }} [options]
+ */
 export async function stopApp(started, { graceMs = 15_000, quitMs = 10_000, screenshot } = {}) {
   let pictured = null;
   if (screenshot) {
@@ -252,6 +260,13 @@ export function stopOverrunMessage(name, stopped, log) {
  * seen — the waiting primitive for a condition that is not one selector: a store row, a probe's attribute, an absence.
  * An aborted `signal` ends the wait at its next poll, so a caller that has given up on a launch does not leave it polling.
  */
+/**
+ * @template T
+ * @param {() => T | Promise<T>} probe
+ * @param {(value: any) => boolean} accept given the value `probe` answered, or `{ error }` when it threw
+ * @param {{ timeoutMs?: number, intervalMs?: number, what?: string, signal?: AbortSignal }} [options]
+ * @returns {Promise<T | { error: string }>}
+ */
 export async function until(probe, accept, { timeoutMs = 15_000, intervalMs = 150, what = 'the condition', signal } = {}) {
   const started = Date.now();
   let last;
@@ -271,6 +286,11 @@ export async function until(probe, accept, { timeoutMs = 15_000, intervalMs = 15
  * a match that never settled — is thrown at once. Resolves with the driver's reply and every press that missed, so a
  * proof can say a click needed a second press rather than hide it
  * (`docs/archive/defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`).
+ */
+/**
+ * @param {any} driver
+ * @param {string} selector
+ * @param {{ text?: string, timeoutMs?: number, attempts?: number }} [options]
  */
 export async function clickLanded(driver, selector, { text, timeoutMs = 15_000, attempts = 3 } = {}) {
   const missed = [];

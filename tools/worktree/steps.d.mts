@@ -15,4 +15,6 @@ export interface Deps {
 
 export function electronBinary(dir: string): string;
 export function needsSetup(dir: string): boolean;
-export function defaultDeps(): Deps;
+export function defaultDeps(options?: { via?: string | null }): Deps;
+/** Time one step and record it (R-075); the step's result passed through, a throw recorded as failed and rethrown. */
+export function measured<T>(span: { kind: string; label: string; command?: string | null; cwd?: string | undefined; via?: string | null }, step: () => T): T;

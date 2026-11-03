@@ -1,20 +1,8 @@
 {
+  // The solution (R-091, hardening.md §3.5 row 4): `pnpm typecheck` runs `tsc -b` over the projects below, and an
+  // editor or `typescript-eslint`'s project service finds a file's project through them. It extends the base so that a
+  // tool reading only this file (the import resolvers in `eslint.config.js`) still sees the workspace's `paths`.
   "extends": "./tsconfig.base.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "lib": ["ES2023", "DOM", "DOM.Iterable"]
-  },
-  "include": [
-    "packages/*/src/**/*.ts",
-    "packages/*/src/**/*.tsx",
-    "apps/*/src/**/*.ts",
-    "apps/*/src/**/*.tsx",
-    "apps/*/electron.vite.config.ts",
-    "apps/*/*.test.ts",
-    "tools/*/src/**/*.ts",
-    "tools/*/*.ts",
-    "vitest.config.ts",
-    "eslint.config.js"
-  ],
-  "exclude": ["**/node_modules", "**/dist", "**/out"]
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.scripts.json" }]
 }

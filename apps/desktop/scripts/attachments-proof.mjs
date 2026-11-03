@@ -17,6 +17,7 @@ const channels = readFileSync(join(repo, 'packages/contracts/src/channels.ts'), 
 const sessions = readFileSync(join(repo, 'packages/engine/src/sessions.ts'), 'utf8');
 const store = readFileSync(join(repo, 'packages/store/src/schema.ts'), 'utf8');
 const ui = readFileSync(join(repo, 'packages/ui/src/WorkspaceView.tsx'), 'utf8');
+/** @type {Record<string, boolean>} */
 const results = {
   testsPassed: test.status === 0,
   contentValidated: readFileSync(join(repo, 'packages/ui/src/attachments.ts'), 'utf8').includes('sniffImageMediaType'),
@@ -26,7 +27,7 @@ const results = {
   digestRevalidated: sessions.includes('projectAttachments') && readFileSync(join(repo, 'packages/engine/src/attachments.ts'), 'utf8').includes('does not match its recorded digest'),
   lowerBoundChanges: ui.includes('composerTokenEstimate(text, attachments)') && ui.includes('setAttachments((xs)'),
 };
-results.passed = Object.values(results).every(Boolean);
+results['passed'] = Object.values(results).every(Boolean);
 writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 2));
-if (!results.passed) { console.error(JSON.stringify(results, null, 2)); process.exit(1); }
+if (!results['passed']) { console.error(JSON.stringify(results, null, 2)); process.exit(1); }
 console.log(`attachments-proof PASSED (${join(output, 'results.json')})`);

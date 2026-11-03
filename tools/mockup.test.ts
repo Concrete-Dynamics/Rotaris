@@ -9,7 +9,6 @@ import { request } from 'node:http';
 import type { AddressInfo, Server } from 'node:net';
 import { isAbsolute } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { design, icons, serve } from './mockup.mjs';
 
 let server: Server;
@@ -38,8 +37,8 @@ function get(path: string): Promise<{ status: number; body: string }> {
 describe('pnpm mockup — served from the repository root', () => {
   it('builds both roots as absolute platform paths', () => {
     expect(process.cwd()).not.toBe('/');
-    expect(isAbsolute(design as string)).toBe(true);
-    expect(isAbsolute(icons as string)).toBe(true);
+    expect(isAbsolute(design)).toBe(true);
+    expect(isAbsolute(icons)).toBe(true);
   });
 
   it('answers / with the mockup and the injected shim', async () => {

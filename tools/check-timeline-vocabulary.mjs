@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * REQ-ORCH-139: a run names its timeline events "only from the timeline-event vocabulary … set out in Data & Formats, and
  * MUST NOT use any name outside those vocabularies". This gate reads every timeline write in the product's source —
@@ -160,7 +161,14 @@ export function specVocabulary(root) {
   return [...section.matchAll(/`([a-z_.]+)`/g)].map((m) => m[1]);
 }
 
-/** The offending writes, the AWAITING and PASS_THROUGH entries that excuse nothing, and spec words missing here. */
+/**
+ * The offending writes, the AWAITING and PASS_THROUGH entries that excuse nothing, and spec words missing here.
+ * @param {string} root
+ * @param {Record<string, string>} [vocabulary]
+ * @param {Record<string, { file: string, fact: string }>} [awaiting]
+ * @param {ReadonlyArray<{ file: string, expression: string, reason: string }>} [passThrough]
+ * @param {Record<string, string>} [forbidden]
+ */
 export function checkProduct(root, vocabulary = VOCABULARY, awaiting = AWAITING, passThrough = PASS_THROUGH, forbidden = FORBIDDEN) {
   const problems = [];
   const written = new Set();

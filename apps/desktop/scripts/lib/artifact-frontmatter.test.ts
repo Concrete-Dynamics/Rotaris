@@ -5,7 +5,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { renderFrontmatter, type ArtifactRecord } from '@rotaris/engine';
-// @ts-expect-error — the reader is plain ESM beside the scripts that use it.
 import { frontmatterOfRow, leadingFrontmatter } from './artifact-frontmatter.mjs';
 
 const base = {

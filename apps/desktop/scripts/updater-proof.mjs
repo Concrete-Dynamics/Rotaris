@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * `pnpm updater-proof` — the updater in the BUILT application, on the one path a development host can execute:
  * a launch that is not a released artifact performs no update check and issues no request (REQ-STARTUP-106,

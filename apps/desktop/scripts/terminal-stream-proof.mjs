@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * Part AL proof — the terminal stream in the run host (ADR-0021 first executed), headless, against a REAL PTY.
  *

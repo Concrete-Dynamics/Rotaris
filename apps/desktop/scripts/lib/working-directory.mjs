@@ -29,6 +29,7 @@ const gitEnvironment = () => Object.fromEntries(Object.entries(process.env).filt
  * The repository `directory` lies in, as git's own discovery answers it, or `null` when it lies in none. A missing `git`
  * reads as none: the app's own read then finds no repository either.
  */
+/** @param {string} directory @returns {string | null} */
 export function enclosingRepository(directory) {
   const asked = spawnSync('git', ['-C', directory, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', env: gitEnvironment() });
   return asked.status === 0 ? asked.stdout.trim() : null;
@@ -41,6 +42,7 @@ export function enclosingRepository(directory) {
  * on Windows it keeps the letter case and the 8.3 short names it was given
  * (`docs/archive/defects/assertopened-compares-the-working-directory-as-javascripts-realpath-spells-it.md`).
  */
+/** @param {string} path @param {NodeJS.Platform} [platform] */
 export function spelledAsTheAppDoes(path, platform = process.platform) {
   const { resolve, sep } = platform === 'win32' ? win32 : posix;
   let spelled = resolve(path);
@@ -55,6 +57,7 @@ export function spelledAsTheAppDoes(path, platform = process.platform) {
  * Whether `a` and `b` name one directory under `platform`'s rule: each spelled as the app spells it, then compared, on
  * Windows without regard to letter case (the rule `samePath` applies), elsewhere exactly.
  */
+/** @param {string} a @param {string} b @param {NodeJS.Platform} [platform] */
 export function sameDirectory(a, b, platform = process.platform) {
   const [x, y] = [spelledAsTheAppDoes(a, platform), spelledAsTheAppDoes(b, platform)];
   return platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
@@ -65,6 +68,7 @@ export function sameDirectory(a, b, platform = process.platform) {
  * when the directory lies in a git repository: a launch run there with no workspace argument would open that repository's
  * tree, and index it.
  */
+/** @param {string} path */
 export function emptyWorkingDirectory(path) {
   rmSync(path, { recursive: true, force: true });
   mkdirSync(path, { recursive: true });
@@ -79,15 +83,17 @@ export function emptyWorkingDirectory(path) {
 }
 
 /** The workspace the launch's first main window opened, from its log line "main window N loaded for <path> (origin …)", or `null`. */
+/** @param {string} log @returns {string | null} */
 export function openedWorkspace(log) {
   const line = /main window \d+ loaded for (.+) \(origin [^)]+\)\s*$/m.exec(log);
-  return line ? line[1] : null;
+  return line?.[1] ?? null;
 }
 
 /**
  * Throws unless the launch `name` opened `directory` and nothing else, compared as one directory under `platform`'s rule
  * (`sameDirectory`), and returns the path as the log spells it.
  */
+/** @param {string} log @param {string} directory @param {string} name @param {NodeJS.Platform} [platform] */
 export function assertOpened(log, directory, name, platform = process.platform) {
   const opened = openedWorkspace(log);
   if (opened === null) throw new Error(`${name}: the log names no workspace its main window opened`);
@@ -101,6 +107,7 @@ export function assertOpened(log, directory, name, platform = process.platform) 
  * launches: a name that appeared is a launch that opened the checkout.
  */
 export const SETUP_RESIDUE = Object.freeze(['.rotaris', '.serena']);
+/** @param {string} directory */
 export function setupResidue(directory) {
   return SETUP_RESIDUE.filter((name) => existsSync(join(directory, name)));
 }

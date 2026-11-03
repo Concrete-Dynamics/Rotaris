@@ -37,17 +37,25 @@ const RESTATEMENTS = Object.freeze([
 /** How many restatements the reader knows, for a check's label. */
 export const KNOWN_RESTATEMENTS = RESTATEMENTS.length;
 
-/** The line's source (`null` for main's own) and its message, or `null` for a line that is not an application-log record. */
+/**
+ * The line's source (`null` for main's own) and its message, or `null` for a line that is not an application-log record.
+ * @param {string} line
+ * @returns {{ source: string | null, message: string } | null}
+ */
 export function appLogRecord(line) {
   const m = LINE.exec(line);
   if (!m) return null;
-  const body = m[1];
+  const body = m[1] ?? '';
   for (const source of SOURCES) if (body.startsWith(`${source}: `)) return { source, message: body.slice(source.length + 2) };
   return { source: null, message: body };
 }
 
-/** Every restatement in `log`, as `{ line, fact, owner, text }` (`line` 1-based); empty when each fact is said once. */
+/**
+ * Every restatement in `log`, as `{ line, fact, owner, text }` (`line` 1-based); empty when each fact is said once.
+ * @param {string} log
+ */
 export function restatedFacts(log) {
+  /** @type {Array<{ line: number, fact: string, owner: string, text: string }>} */
   const found = [];
   String(log).split('\n').forEach((text, i) => {
     const record = appLogRecord(text.replace(/\r$/, ''));

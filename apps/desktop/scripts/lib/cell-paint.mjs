@@ -109,7 +109,7 @@ export function cellPaintFindings(measured, options = {}) {
   if (!Array.isArray(measured.rows) || measured.rows.length === 0) throw new Error('the cell measurement holds no rows');
   const elide = new Set(options.elide ?? []);
   const tol = options.tolerance ?? CELL_PAINT_TOLERANCE;
-  const round = (n) => Math.round(n * 100) / 100;
+  const round = (/** @type {number} */ n) => Math.round(n * 100) / 100;
   /** @type {Finding[]} */
   const findings = [];
   for (const row of measured.rows) {
@@ -224,7 +224,7 @@ export function controlsOutsideCell(measured, key, column, tolerance = CELL_PAIN
  */
 export function cellsShortOfRow(measured, tolerance = CELL_PAINT_TOLERANCE) {
   const out = [];
-  const round = (n) => Math.round(n * 100) / 100;
+  const round = (/** @type {number} */ n) => Math.round(n * 100) / 100;
   for (const row of measured.rows ?? []) {
     if (typeof row.top !== 'number' || typeof row.bottom !== 'number') continue;
     for (const c of /** @type {Array<Cell & { top?: number, bottom?: number }>} */ (row.cells)) {

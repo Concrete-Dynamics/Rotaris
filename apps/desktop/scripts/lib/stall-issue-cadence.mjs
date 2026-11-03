@@ -21,7 +21,11 @@
  * Nothing here is product code. It runs only from the live run.
  */
 
-/** An issue's metadata as an object: the store keeps it as JSON text. */
+/**
+ * An issue's metadata as an object: the store keeps it as JSON text.
+ * @param {Record<string, any>} issue
+ * @returns {Record<string, any>}
+ */
 function metadataOf(issue) {
   let meta = issue.metadata;
   if (typeof meta === 'string') {
@@ -31,6 +35,7 @@ function metadataOf(issue) {
 }
 
 /** The silence a `stall` issue states: its metadata's `silent_seconds`, else the figure in REQ-ORCH-089's words. */
+/** @param {Record<string, any>} issue @returns {number | null} */
 export function stallSilenceSeconds(issue) {
   const meta = metadataOf(issue);
   if (Number.isFinite(meta.silent_seconds)) return meta.silent_seconds;
@@ -39,6 +44,7 @@ export function stallSilenceSeconds(issue) {
 }
 
 /** Whose watch wrote the issue: its actor, and the task its metadata names (a child's `bg_…`, the root's own id). */
+/** @param {Record<string, any>} issue */
 function watchOf(issue) {
   const meta = metadataOf(issue);
   const task = typeof meta.task_id === 'string' ? meta.task_id : '';
@@ -59,6 +65,8 @@ const REPEAT_FLOOR_MS = 30_000;
  * - `tooSoon`: `{ actor, previous, next, gapMs, throttleMs }` for each repeat whose gap from the issue before it in the
  *   same stall is shorter than the throttle, less `toleranceMs` for the store's clock against the watch's.
  * - `unread`: `stall` issues with no silence or no time to read; they are not judged.
+ * @param {Array<Record<string, any>>} issues the `issues` rows as the live run reads them
+ * @param {{ thresholdMs?: number | null, toleranceMs?: number, sameStallMs?: number }} [options]
  */
 export function stallIssueCadence(issues, { thresholdMs = null, toleranceMs = 1_500, sameStallMs = 3_000 } = {}) {
   const stalls = [];

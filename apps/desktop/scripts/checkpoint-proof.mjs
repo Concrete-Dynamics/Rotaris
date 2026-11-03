@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The checkpoint proof (Part P): ADR-0039's first execution end to end — the run loop's capture at iteration close
  * through main to the workspace service, the rows in the store, the card and the restore flow (REQ-GIT-003/004/029..
@@ -31,7 +32,7 @@
  * Evidence under `.proof/checkpoint-proof/`: one PNG and one log per launch, the confirmation dialog's PNG, `results.json`
  * with the capture, preview and restore times and the Git invocation counts. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';

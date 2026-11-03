@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The requirements proof — Part AK (ADR-0041's first execution; the delivery store) extended by Part AK′ (its second
  * execution; the board). Renamed from `delivery-proof.mjs` on 2026-09-09, as the plan reserved.

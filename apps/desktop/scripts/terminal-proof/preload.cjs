@@ -6,6 +6,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('__terminalProofBridge', Object.freeze({
-  onFrame: (fn) => { ipcRenderer.on('proof:frame', (_event, frame) => fn(frame)); },
-  command: (request) => ipcRenderer.invoke('proof:command', request),
+  onFrame: (/** @type {(frame: unknown) => void} */ fn) => { ipcRenderer.on('proof:frame', (_event, frame) => fn(frame)); },
+  command: (/** @type {unknown} */ request) => ipcRenderer.invoke('proof:command', request),
 }));

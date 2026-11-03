@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * A tiny hand-written MCP server speaking newline-delimited JSON-RPC over stdio, for the two spikes of
  * ADR-0033 (protocol negotiation over `OwnedStdioTransport`; console-window suppression) and for the MCP

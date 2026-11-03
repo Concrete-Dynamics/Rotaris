@@ -6,7 +6,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the verdict is plain ESM beside the proof that runs it.
 import { MAX_SKIPPED_SHARE, contrastCoverage, skipKind } from './contrast-coverage.mjs';
 
 type Text = { inSurface: boolean; skip: string | null };
@@ -35,7 +34,7 @@ describe("theme-proof's contrast coverage (REQ-SHELL-145, REQ-SHELL-160)", () =>
     const verdict = contrastCoverage([{ name: 'view-1', texts: [...shell, ...measured(30)] }, { name: 'view-3', texts: [...shell, ...skipped(12, MOVING)] }]);
     expect(verdict.pass).toBe(false);
     expect(verdict.failures[0]).toMatch(/^view-3: no text inside the surface was measured \(12 discovered there, 12 skipped\)$/);
-    expect(verdict.surfaces[1].surface.byReason).toEqual({ animating: 12 });
+    expect(verdict.surfaces[1]!.surface.byReason).toEqual({ animating: 12 });
   });
 
   it('fails a surface whose share of skipped texts passes the bound, though some were measured', () => {

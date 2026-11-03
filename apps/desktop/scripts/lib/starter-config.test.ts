@@ -9,10 +9,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { starterDocument } from '@rotaris/config';
-// @ts-expect-error — the reader is plain ESM beside the scripts that run it.
 import { STARTER_HEADER, STARTER_NULL_KEYS, STARTER_PERSONA, starterMissing } from './starter-config.mjs';
 
-const keys = STARTER_NULL_KEYS as readonly string[];
+const keys = STARTER_NULL_KEYS;
 /**
  * F1's observed file, byte for byte as acceptance round 1's slice-proof left it (2026-10-03, 137 bytes): initialization's
  * record alone, created by the per-field writer before the sign-in.
@@ -26,7 +25,7 @@ describe('the starter agents.yaml read by its content (REQ-CONFIG-025, REQ-WORKS
 
   it('holds the comment header to the product\'s own three lines (REQ-WORKSPACE-038)', () => {
     expect(STARTER_HEADER).toHaveLength(3);
-    expect(starterDocument().startsWith(`${(STARTER_HEADER as readonly string[]).join('\n')}\ndefault_persona: `)).toBe(true);
+    expect(starterDocument().startsWith(`${(STARTER_HEADER).join('\n')}\ndefault_persona: `)).toBe(true);
   });
 
   it('names the comment header when it lacks REQ-WORKSPACE-038\'s clauses — the four-line header shipped before 2026-10-03', () => {
@@ -38,7 +37,7 @@ describe('the starter agents.yaml read by its content (REQ-CONFIG-025, REQ-WORKS
     ].join('\n');
     const body = starterDocument().slice(starterDocument().indexOf('default_persona: '));
     expect(starterMissing(`${shipped}\n${body}`)).toEqual(['the comment header']);
-    expect(starterMissing(`${(STARTER_HEADER as readonly string[]).slice(0, 2).join('\n')}\n${body}`)).toEqual(['the comment header']);
+    expect(starterMissing(`${(STARTER_HEADER).slice(0, 2).join('\n')}\n${body}`)).toEqual(['the comment header']);
   });
 
   it('names REQ-CONFIG-025\'s twelve null keys, in its order, and the shipped persona', () => {

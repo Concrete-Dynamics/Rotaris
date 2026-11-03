@@ -15,6 +15,7 @@ const drawingRoots = [join(root, 'packages', 'ui', 'src'), join(root, 'apps', 'd
 const baselinePath = join(import.meta.dirname, 'ui-language-baseline.json');
 const writing = process.argv.includes('--write-baseline');
 const forbiddenTags = new Set(['button', 'input', 'textarea', 'select', 'table']);
+/** @type {string[]} */
 const raw = [];
 /**
  * A design Tag whose class spells its foundation or a tone (`tag`, `tag-run`). The Tag joins a caller's class to `tag
@@ -23,9 +24,15 @@ const raw = [];
  * a class REPLACED the foundation, every caller spelled it by hand, and one spelled `tag-failure`, which the language does
  * not define (docs/archive/defects/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md).
  */
+/** @type {string[]} */
 const tagTones = [];
 const TAG_COMPONENTS = new Set(['Tag', 'DesignTag']);
 /** Every literal piece of an attribute's value: string literals and the static parts of templates, at any depth. */
+/**
+ * @param {import('typescript').Node} node
+ * @param {string[]} [out]
+ * @returns {string[]}
+ */
 function literalPieces(node, out = []) {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) out.push(node.text);
   else if (ts.isTemplateExpression(node)) { out.push(node.head.text); for (const span of node.templateSpans) { literalPieces(span.expression, out); out.push(span.literal.text); } }
@@ -34,9 +41,12 @@ function literalPieces(node, out = []) {
 }
 /** A `data-ui-contract` written anywhere but `layoutContractAttributes` — the design system included. */
 const contracts = [];
+/** @type {Record<string, number>} */
 const debt = {};
 
+/** @param {string} directory @returns {string[]} */
 function walk(directory) {
+  /** @type {string[]} */
   const found = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
@@ -47,6 +57,7 @@ function walk(directory) {
   return found;
 }
 
+/** @param {string} path @param {string} category @param {string} signature */
 function addDebt(path, category, signature) {
   const key = `${relative(root, path).split(sep).join('/')}|${category}|${signature}`;
   debt[key] = (debt[key] ?? 0) + 1;
@@ -61,14 +72,14 @@ for (const path of drawingRoots.flatMap((drawingRoot) => walk(drawingRoot))) {
   if (rel.includes('/design-system/')) continue;
   if (extension === '.tsx') {
     const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-    const visit = (node) => {
+    const visit = (/** @type {import('typescript').Node} */ node) => {
       const tagName = ts.isJsxElement(node) ? node.openingElement.tagName : ts.isJsxSelfClosingElement(node) ? node.tagName : undefined;
       if (tagName && ts.isIdentifier(tagName) && forbiddenTags.has(tagName.text)) {
         const at = source.getLineAndCharacterOfPosition(tagName.getStart(source));
         raw.push(`${relative(root, path).split(sep).join('/')}:${at.line + 1} <${tagName.text}>`);
       }
       if (tagName && ts.isIdentifier(tagName) && TAG_COMPONENTS.has(tagName.text)) {
-        const attributes = ts.isJsxElement(node) ? node.openingElement.attributes : node.attributes;
+        const attributes = ts.isJsxElement(node) ? node.openingElement.attributes : /** @type {import('typescript').JsxSelfClosingElement} */ (node).attributes;
         for (const attribute of attributes.properties) {
           if (!ts.isJsxAttribute(attribute) || attribute.name.getText(source) !== 'className' || attribute.initializer === undefined) continue;
           const spelled = literalPieces(attribute.initializer).flatMap((piece) => piece.split(/\s+/)).filter((token) => token === 'tag' || token.startsWith('tag-'));

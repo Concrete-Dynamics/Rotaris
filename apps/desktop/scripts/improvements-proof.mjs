@@ -19,6 +19,7 @@ if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === 
 rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 mkdirSync(output, { recursive: true });
 
+/** @param {string} name @param {string} command @param {string[]} args @param {number} [timeout] */
 const run = (name, command, args, timeout = 300_000) => {
   const child = spawnSync(command, args, {
     cwd: repo,
@@ -70,7 +71,7 @@ const launches = [
     'apps/desktop/src/main/improvement-export.test.ts',
     'packages/engine/src/run/run.test.ts',
   ]],
-].map(([name, files]) => run(name, process.execPath, [vitest, 'run', ...files, '--reporter=verbose']));
+].map(([name, files]) => run(/** @type {string} */ (name), process.execPath, [vitest, 'run', .../** @type {string[]} */ (files), '--reporter=verbose']));
 
 writeFileSync(resolve(output, 'results.json'), `${JSON.stringify({ launches }, null, 2)}\n`);
 console.log(`improvements proof PASSED — six launches; evidence under ${relative(repo, output)}`);

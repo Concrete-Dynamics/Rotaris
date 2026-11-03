@@ -3,7 +3,6 @@
  * §8 step 6). The driver answers a renderer exception with `{ error }`; that must become a finding, not a crash.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the audit library is plain ESM beside the scripts that run it.
 import { readAuditAnswer } from './audit-answer.mjs';
 
 describe('design README §7 (R-007): ui-audit reads the driver answer without dying on it', () => {

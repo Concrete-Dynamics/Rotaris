@@ -36,9 +36,9 @@ const frontmatter = (file: string): { fields: Record<string, string>; body: stri
   const block = /^---\n([\s\S]*?)\n---\n/.exec(text);
   if (!block) return { fields: {}, body: text };
   const fields: Record<string, string> = {};
-  for (const line of block[1].split('\n')) {
+  for (const line of block[1]!.split('\n')) {
     const m = /^([a-z-]+):\s*(.*)$/.exec(line);
-    if (m) fields[m[1]] = m[2];
+    if (m?.[1] !== undefined) fields[m[1]] = m[2] ?? '';
   }
   return { fields, body: text.slice(block[0].length) };
 };

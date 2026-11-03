@@ -1,0 +1,45 @@
+{
+  // The tooling (R-091, hardening.md §3.5 row 4): the proof scripts and their library, the repository's tools, the
+  // build and test configuration, and every test beside them. Its JavaScript is type-checked (`checkJs`); a file
+  // too far gone for that today opens with `// @ts-nocheck` and is listed in `tools/typecheck-exceptions.json`, which
+  // `tools/typecheck-exceptions.test.ts` lets only shrink.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "strict": true,
+    // The release pipeline and two proof libraries import TypeScript sources by their `.ts` path, as Node's type
+    // stripping runs them; nothing here is emitted.
+    "allowImportingTsExtensions": true,
+    // The proof scripts hand callbacks to the renderer (`evaluate`), which run against the DOM.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": [
+    "apps/desktop/scripts/**/*.ts",
+    "apps/desktop/scripts/**/*.mjs",
+    "apps/desktop/scripts/**/*.cjs",
+    "apps/*/electron.vite.config.ts",
+    // The build-time flag the run host and main read (`__ROTARIS_SEAMS__`), for the product modules a proof imports.
+    "apps/desktop/src/main/seams.d.ts",
+    "apps/*/*.test.ts",
+    "tools/**/*.ts",
+    // The hand-written declarations beside some tools' modules (`dev-time`, `worktree`, the release pipeline, …): what
+    // their importers read, so linted against this project.
+    "tools/**/*.d.mts",
+    "tools/**/*.mjs",
+    "tools/**/*.js",
+    "vitest.config.ts",
+    "eslint.config.js"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/dist",
+    "**/out",
+    // Workspaces a proof or a live run hands to the model, and the traceability proof's fixture project: material, not tooling.
+    "apps/desktop/scripts/fixtures/todo-app/**",
+    "apps/desktop/scripts/fixtures/requirements-store/**",
+    // A product package (the shell and main import it): the application's project holds it.
+    "tools/release-naming/src/**"
+  ]
+}

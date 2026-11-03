@@ -16,7 +16,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { readRecordWithArchive } from './record-parts.mjs';
 
 /** One question's entry: its number, the line it opens on, and its text up to the next entry or heading. */
@@ -52,7 +51,7 @@ function raisedOn(text: string): string | undefined {
 
 /** Every date the entry gives a ruling: "**Ruled 2026-10-14 under …", "Ruled 2026-10-14 under R-072, below.". */
 function ruledOn(text: string): string[] {
-  return [...text.matchAll(/\bRuled (20\d\d-\d\d-\d\d)\b/g)].map((m) => m[1]);
+  return [...text.matchAll(/\bRuled (20\d\d-\d\d-\d\d)\b/g)].map((m) => m[1] ?? '');
 }
 
 /** Each entry ruled before it was raised: `OQ-<n> (line <l>): raised <date>, ruled <date>`. */
@@ -110,7 +109,7 @@ function rowDatesAgainstEntries(requests: string, record: string): string[] {
   const out: string[] = [];
   for (let i = 1; i < parts.length; i += 2) {
     const heading = parts[i];
-    const date = /\b[Rr]uled\b[^\n]*?(20\d\d-\d\d-\d\d)/.exec(heading)?.[1];
+    const date = /\b[Rr]uled\b[^\n]*?(20\d\d-\d\d-\d\d)/.exec(heading!)?.[1];
     if (date === undefined) continue;
     const body = parts[i + 1] ?? '';
     // A question named in the possessive ("OQ-262's no-holder clause revised") is one the ruling refers to, not one it rules.

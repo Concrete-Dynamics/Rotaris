@@ -9,7 +9,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { AREAS, NEVER_AUTOMATIC, RULES, classifyPath, collectGitPaths, diffCitations, formatCitations, formatPlan, isMainModule, matchingRules, narrowTests, parseArgs, pathMatches, planFor, proofsInMap, proofScriptOf, readCitations, resolveCompareRef } from './plan.mjs';
 import { REDIRECTING } from '../build-id/build-id.mjs';
 
@@ -47,7 +46,7 @@ describe('verification planner — matching', () => {
 describe('verification planner — complete suites', () => {
   it('a run-loop file takes the whole The run suite, not only part-h-proof', () => {
     const proofs = proofsOf(['packages/engine/src/run/run.ts']);
-    expect(proofs).toEqual([...AREAS.run.proofs].sort());
+    expect(proofs).toEqual([...AREAS.run!.proofs].sort());
     expect(proofs).toContain('part-h-proof');
     expect(proofs).toContain('resilience-proof');
     expect(proofs).toContain('checkpoint-proof');
@@ -56,7 +55,7 @@ describe('verification planner — complete suites', () => {
 
   it('an agent-tools file takes the whole Tools suite, not only fetch-proof', () => {
     const proofs = proofsOf(['packages/agent-tools/src/tools/fetch.ts']);
-    expect(proofs).toEqual([...AREAS.tools.proofs].sort());
+    expect(proofs).toEqual([...AREAS.tools!.proofs].sort());
     expect(proofs).toContain('edits-proof');
     expect(proofs).toContain('mcp-proof');
     expect(proofs).not.toContain('part-h-proof');
@@ -77,7 +76,7 @@ describe('verification planner — complete suites', () => {
       'packages/engine/src/run/run.ts',
       'packages/ui/src/MissionView.tsx',
     ]);
-    expect(proofs).toEqual([...new Set([...AREAS.run.proofs, 'mission-proof'])].sort());
+    expect(proofs).toEqual([...new Set([...AREAS.run!.proofs, 'mission-proof'])].sort());
   });
 
   it('changing a proof script schedules that proof', () => {
@@ -93,7 +92,7 @@ describe('verification planner — review and unknown', () => {
     expect(plan.unknown).toEqual(['no-such-area/mystery.ts']);
     expect(plan.review.map((r: { path: string }) => r.path)).toEqual(['no-such-area/mystery.ts']);
     expect(plan.proofs).toEqual([]);
-    expect(plan.review[0].reason).toMatch(/unmapped path/);
+    expect(plan.review[0]!.reason).toMatch(/unmapped path/);
   });
 
   it('contracts commands.ts is a shared seam: classified, still review, no silent suite', () => {
@@ -106,7 +105,7 @@ describe('verification planner — review and unknown', () => {
 
   it('run-host dispatch is a shared seam and takes both The run and Tools suites', () => {
     const plan = planFor(['apps/desktop/src/run-host/dispatch.ts']);
-    expect(plan.proofs).toEqual([...new Set([...AREAS.run.proofs, ...AREAS.tools.proofs])].sort());
+    expect(plan.proofs).toEqual([...new Set([...AREAS.run!.proofs, ...AREAS.tools!.proofs])].sort());
     expect(reviewOf(['apps/desktop/src/run-host/dispatch.ts'])).toEqual(['apps/desktop/src/run-host/dispatch.ts']);
   });
 
@@ -146,13 +145,13 @@ describe('verification planner — review and unknown', () => {
   });
 
   it('display-prefs stays Theme and layout after shell was split out', () => {
-    expect(proofsOf(['apps/desktop/src/renderer/display-prefs.ts'])).toEqual([...AREAS.themeLayout.proofs].sort());
+    expect(proofsOf(['apps/desktop/src/renderer/display-prefs.ts'])).toEqual([...AREAS.themeLayout!.proofs].sort());
     expect(reviewOf(['apps/desktop/src/renderer/display-prefs.ts'])).toEqual([]);
   });
 
   it('session-view takes transcript and mission (the persona window shares it)', () => {
     expect(proofsOf(['apps/desktop/src/renderer/session-view.ts'])).toEqual(
-      [...new Set([...AREAS.transcript.proofs, ...AREAS.mission.proofs])].sort(),
+      [...new Set([...AREAS.transcript!.proofs, ...AREAS.mission!.proofs])].sort(),
     );
   });
 
@@ -381,7 +380,7 @@ describe('verification planner — the requirements this diff cites (R-092, hard
 
   it('with --drift, names the drifted among everything the touched files cite, and no other', () => {
     const c = diffCitations(branch, { drifted: [drifted(D1), drifted(OTHER)] });
-    expect(c.drifted.map((d: { id: string }) => d.id)).toEqual([D1]);
+    expect(c.drifted!.map((d: { id: string }) => d.id)).toEqual([D1]);
     expect(formatCitations(c).join('\n')).toContain(`${D1}  defined 2026-02-01 docs/spec/d.md:3; latest citing 2026-01-01 packages/a/src/x.ts`);
     expect(formatCitations(diffCitations(branch, { drifted: [] })).join('\n')).toContain('drifted: nothing');
   });

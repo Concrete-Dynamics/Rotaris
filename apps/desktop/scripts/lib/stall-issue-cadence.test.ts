@@ -5,7 +5,6 @@
  * (`docs/archive/defects/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md`).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { stallIssueCadence, stallSilenceSeconds } from './stall-issue-cadence.mjs';
 
 const T0 = Date.parse('2026-10-06T10:00:00.000Z');
@@ -23,7 +22,7 @@ describe('stallIssueCadence (PD-MONITOR-005 revision 2, REQ-MONITOR-119/120)', (
   it('the faults-stall root as revision 2 writes it: one issue at 90 s before the 120 s idle bound reads as one stall, nothing too soon', () => {
     const r = stallIssueCadence([stall(90.4)]);
     expect(r.stalls).toHaveLength(1);
-    expect(r.stalls[0].silences).toEqual([90]);
+    expect(r.stalls[0]!.silences).toEqual([90]);
     expect(r.tooSoon).toEqual([]);
   });
 

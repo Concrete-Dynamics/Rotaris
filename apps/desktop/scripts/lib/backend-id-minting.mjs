@@ -27,13 +27,16 @@ import { join } from 'node:path';
 const UUID_SLICE = /randomUUID\(\)\s*\.replaceAll\([^)]*\)\s*\.slice\(\s*0\s*,\s*8\s*\)/;
 
 /** A source imports `mintTodoId` from the todo module (`./todo.js` beside it, `./run/todo.js` from the engine root) and calls it. */
+/** @param {string} source @param {string} from */
 function mintsThroughMinter(source, from) {
   const imported = new RegExp(`import\\s*\\{[^}]*\\bmintTodoId\\b[^}]*\\}\\s*from\\s*'${from.replaceAll('.', '\\.')}'`).test(source);
   return imported && /\bmintTodoId\(/.test(source.replace(/import\s*\{[^}]*\}\s*from\s*'[^']*';?/g, ''));
 }
 
 /** Every non-test TypeScript source under `root`, keyed by its path relative to `repo`. */
+/** @param {string} repo @param {string} root @returns {Record<string, string>} */
 function sourcesUnder(repo, root) {
+  /** @type {Record<string, string>} */
   const out = {};
   for (const entry of readdirSync(join(repo, root), { recursive: true, withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
@@ -48,6 +51,11 @@ function sourcesUnder(repo, root) {
  * the agent `todo` tool, and every other source under `packages/engine/src` and `packages/agent-tools/src` (`elsewhere`),
  * which `noSecondMinter` scans for the UUID-slicing form.
  */
+/**
+ * @typedef {{ todo: string, run: string, sessions: string, todoView: string, agentTodo: string, elsewhere?: Record<string, string> }} BackendIdSources
+ * @param {string} repo
+ * @returns {BackendIdSources}
+ */
 export function backendIdSources(repo) {
   const named = {
     todo: 'packages/engine/src/run/todo.ts',
@@ -57,18 +65,20 @@ export function backendIdSources(repo) {
     agentTodo: 'packages/agent-tools/src/tools/todo.ts',
   };
   const elsewhere = { ...sourcesUnder(repo, 'packages/engine/src'), ...sourcesUnder(repo, 'packages/agent-tools/src') };
-  const sources = { elsewhere };
+  /** @type {Record<string, string>} */
+  const read = {};
   for (const [key, path] of Object.entries(named)) {
-    sources[key] = readFileSync(join(repo, path), 'utf8');
+    read[key] = readFileSync(join(repo, path), 'utf8');
     delete elsewhere[path];
   }
-  return sources;
+  return /** @type {BackendIdSources} */ ({ elsewhere, ...read });
 }
 
 /**
  * Each check by name, `true` where it holds. `sources` is what `backendIdSources` returns: `todo` (`run/todo.ts`), `run`
  * (`run/run.ts`), `sessions` (`sessions.ts`) and `todoView` (`todo-view.ts`) under `packages/engine/src/`; `agentTodo`
  * (`packages/agent-tools/src/tools/todo.ts`); and `elsewhere`, every other source by path (may be empty).
+ * @param {BackendIdSources} sources
  */
 export function backendIdChecks(sources) {
   const { todo, run, sessions, todoView, agentTodo, elsewhere = {} } = sources;
@@ -97,6 +107,7 @@ export function backendIdChecks(sources) {
 }
 
 /** The proof's `stableBackendIds` field: every named check holds. */
+/** @param {Record<string, boolean>} checks */
 export function stableBackendIds(checks) {
   return Object.values(checks).every(Boolean);
 }

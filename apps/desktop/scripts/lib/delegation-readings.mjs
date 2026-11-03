@@ -47,10 +47,10 @@ export const WRITING_TOOLS = Object.freeze(['write_file', 'haet_edit', 'haet', '
  */
 export function swarmReading(first) {
   if (first === null) return { kind: 'absent', faults: [], offered: [] };
-  const offered = first.tools.map((t) => t.name);
+  const offered = first.tools.map((/** @type {{ name: string }} */ t) => t.name);
   const layer = first.system.includes(SWARM_HEADING);
   const direct = first.system.includes(DIRECT_WORK_STATEMENT);
-  const writing = offered.filter((t) => WRITING_TOOLS.includes(t));
+  const writing = offered.filter((/** @type {string} */ t) => WRITING_TOOLS.includes(t));
   /** @type {string[]} */
   const faults = [];
   if (direct) {
@@ -74,7 +74,7 @@ export function swarmReading(first) {
  * @param {readonly string[]} known every delegation target of the configuration, to find one named outside the list
  */
 export function delegatesToReading(requests, list, delegates, known) {
-  const description = requests.map((r) => r?.tools.find((t) => t.name === 'delegate')?.description ?? null).find((d) => d !== null) ?? null;
+  const description = requests.map((r) => r?.tools.find((/** @type {{ name: string, description?: string }} */ t) => t.name === 'delegate')?.description ?? null).find((d) => d !== null) ?? null;
   const outside = delegates.filter((d) => typeof d.args?.persona === 'string' && d.args.persona !== '' && d.args.session_id === undefined && !list.includes(d.args.persona));
   const admittedOutside = outside.filter((d) => !/is not a persona .* may delegate to: its delegates_to lists/.test(d.result));
   if (description === null) return { kind: 'not-offered', outside: outside.length, admittedOutside: admittedOutside.length, named: [] };
@@ -106,7 +106,7 @@ export function followUpReading(delegates, children, timeline) {
     if (children.filter((c) => c.canonical_name === child.canonical_name).length !== 1) faults.push(`#${d.ordinal}: ${child.canonical_name} has more than one child row`);
     if (!timeline.some((t) => t.name === 'child_resumed' && t.metadata?.follow_up === true && t.metadata?.task_id === id)) faults.push(`#${d.ordinal}: no child_resumed entry says ${id} was followed up`);
   }
-  return { kind: accepted.length > 0 ? 'followed' : 'refused', asked: asked.length, accepted: accepted.map((d) => d.ordinal), refused: refused.map((d) => ({ ordinal: d.ordinal, reason: d.result.split('\n')[0].slice(0, 200) })), faults };
+  return { kind: accepted.length > 0 ? 'followed' : 'refused', asked: asked.length, accepted: accepted.map((d) => d.ordinal), refused: refused.map((d) => ({ ordinal: d.ordinal, reason: (d.result.split('\n')[0] ?? '').slice(0, 200) })), faults };
 }
 
 /**
@@ -152,6 +152,11 @@ export function attachReading(delegates, selections, children) {
  * published — unless a plan cycle opened after that iteration, when there is no such root — and otherwise the last of all.
  * `artifacts` rows carry `superseded_by` and `conversation_id`; `iterations` (by number) `opened_at` and `root_task_id`;
  * `planCycles` (by cycle) `opened_at`.
+ * @template {{ superseded_by?: unknown, conversation_id?: unknown }} A
+ * @param {A[]} artifacts
+ * @param {Array<{ opened_at: string, root_task_id?: string | null }>} iterations
+ * @param {Array<{ opened_at: string }>} planCycles
+ * @returns {A | null}
  */
 export function handoffArtifact(artifacts, iterations, planCycles) {
   const open = artifacts.filter((a) => a.superseded_by === null || a.superseded_by === undefined);

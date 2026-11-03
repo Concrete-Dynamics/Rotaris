@@ -4,10 +4,9 @@
  * cancel would leave (the hard-timeout reading of live-run P2 at a68f121).
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the scripts that run it.
 import { CUT_COMMAND, CUT_PROMPT, OPEN_WITHOUT_MARKER_MS, cutVerdicts, isCutCommand, openCutCall, quitLandedFirst } from './cut-scenario.mjs';
 
-type Verdict = { verdict: 'check' | 'note'; passed?: boolean; what: string; detail?: string };
+type Verdict = { verdict: 'check' | 'note'; passed?: boolean; what: string; detail?: string | undefined };
 const running = (ordinal: number, command: string, tool = 'terminal') => ({ ordinal, tool_name: tool, status: 'running', entry: { args: { command, timeout: 90 } } });
 const diagnostic = (fields: string) => `[terminal_diagnostic] {"detail":"…",${fields}}`;
 const interruptedResult = `Terminal execution was cancelled by the run before the command completed; the session was reset and shell state was lost.\n${diagnostic('"kill_status":"session_reset","outcome_severity":"warning","timeout":false')}`;

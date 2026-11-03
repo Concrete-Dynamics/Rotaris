@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * T3 / REQ-STARTUP-122/123/167: published v0.1.0rc1 bytes through the updater's actual verifier.
  * Run: node tools/release-pipeline/update-path-proof.mjs [--release-dir=PATH]

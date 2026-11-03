@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -377,7 +378,7 @@ results.noticeAtMinimum = {
 // about a thousand characters with a 120-character unbroken run (PD-ORCH-002 revision 3, OQ-204), so the next cycle's "You
 // asked for" line is longer than its cap and the reading at the minimum below measures it; three words never were.
 const STATED_CHANGES = `use fewer steps, ${'and name in each step the files it reads and the files it writes, so the review can follow it, '.repeat(9)}then check ${'x'.repeat(120)} at the end`;
-const log3 = await launch('revised', {
+await launch('revised', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '16000',
   ROTARIS_CAPTURE_EVAL_AT: `(() => { const el = document.querySelector('[data-testid="plan-gate-changes"], #plan-gate-changes'); if (el) { const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(STATED_CHANGES)}); el.dispatchEvent(new Event('input', { bubbles: true })); } return el ? 'stated' : 'absent'; })()@6000`,

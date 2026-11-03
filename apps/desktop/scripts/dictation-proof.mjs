@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The dictation proof (OQ-455..459): the composer's microphone in the built application, against a scratch profile.
  *

@@ -7,7 +7,6 @@
  * which the event arrives late, deterministically, with no clock in the test.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the fence is plain CommonJS beside the Electron half that requires it.
 import { inputFence, until } from './fence.cjs';
 
 /** A page that counts one keydown, but only once it has been read `lateBy` times. */

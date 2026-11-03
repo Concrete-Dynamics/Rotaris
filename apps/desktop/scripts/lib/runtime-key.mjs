@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * One `runtime:` key of a workspace's `.rotaris/agents.yaml`, written as the harness needs it for one launch — the stored
  * value Settings' Save writes (PD-CONFIG-003), so a launch reads it as a user who raised the control would have it.
@@ -9,6 +10,7 @@
  * Shared by `live-run.mjs`'s faults-args launch (`child_stall_timeout`) and its duress launch (`child_timeout`, OQ-214
  * reopened and ruled 2026-10-07 under R-072). Verification only; the product's own writer is `packages/config`'s.
  */
+/** @param {string} yaml @param {string} key @param {string | number} value @returns {string} */
 export function withRuntimeKey(yaml, key, value) {
   return withSectionKey(yaml, 'runtime', key, value);
 }

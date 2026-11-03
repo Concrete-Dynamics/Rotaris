@@ -47,6 +47,7 @@ export const REPORT_MARK = '[Background task completed]';
 export const DELEGATED_MARK = 'task_id: bg_';
 
 /** The text of one OpenAI-shaped message's content, a string or a list of parts. */
+/** @param {unknown} content */
 function textOf(content) {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.map((p) => (typeof p === 'string' ? p : typeof p?.text === 'string' ? p.text : '')).join('');
@@ -59,17 +60,22 @@ function textOf(content) {
  * re-prompt is counted by `sent`, the request it leads to: every later request of the same conversation repeats it as its last
  * user message behind the model's tool calls and their results. A body that will not parse reads as no messages.
  */
+/** @param {unknown} body */
 export function requestOf(body) {
+  /** @type {any} */
   let parsed = {};
   try { parsed = JSON.parse(String(body ?? '')); } catch { parsed = {}; }
-  const messages = Array.isArray(parsed.messages) ? parsed.messages.map((m) => ({ role: String(m?.role ?? ''), text: textOf(m?.content) })) : [];
-  const system = messages.filter((m) => m.role === 'system').map((m) => m.text).join('\n');
-  const users = messages.filter((m) => m.role === 'user');
-  const final = messages.at(-1);
-  return { root: system.includes(ROOT_MARK), system, messages, lastUser: users.at(-1)?.text ?? '', firstUser: users[0]?.text ?? '', sent: final?.role === 'user' ? final.text : null };
+  const messages = Array.isArray(parsed.messages) ? parsed.messages.map((/** @type {any} */ m) => ({ role: String(m?.role ?? ''), text: textOf(m?.content) })) : [];
+  /** @type {Array<{ role: string, text: string }>} */
+  const read = messages;
+  const system = read.filter((m) => m.role === 'system').map((m) => m.text).join('\n');
+  const users = read.filter((m) => m.role === 'user');
+  const final = read.at(-1);
+  return { root: system.includes(ROOT_MARK), system, messages: read, lastUser: users.at(-1)?.text ?? '', firstUser: users[0]?.text ?? '', sent: final?.role === 'user' ? final.text : null };
 }
 
 /** The answer a continuation carries after `HELD_LABEL`, or null when it carries none. */
+/** @param {string} text */
 export function heldAnswerOf(text) {
   const at = String(text).indexOf(HELD_LABEL);
   if (at < 0) return null;
@@ -96,7 +102,7 @@ export function planReading({ log, bodies, systemRows, iterations, answers = [] 
   const held = carries.map((r) => heldAnswerOf(r.firstUser)).filter((a) => a !== null);
   const reprompts = roots.filter((r) => r.sent === ANSWER_REPROMPT).length;
   return {
-    warnings, corrections: corrections.length, shownSaid: corrections.some((r) => r.sent.startsWith(SHOWN)),
+    warnings, corrections: corrections.length, shownSaid: corrections.some((r) => (r.sent ?? '').startsWith(SHOWN)),
     heldRows, carries: carries.length, heldAnswers: held,
     // The held answer is one the person was shown: an answer of the session, or the start of one cut at 6,000 characters.
     heldIsAnAnswer: held.length > 0 && held.every((a) => a.trim() !== '' && answers.some((x) => x.trim() === a.trim() || x.trim().startsWith(a.trim()))),
@@ -126,6 +132,7 @@ export function answerReading({ log, bodies, systemRows, issues, fired, activati
   // writes no stuck activation. A child's empty turn still is one (REQ-ORCH-096), so a child's activation is not the root's.
   const children = new Set(childNames);
   const stuckActivations = activations.filter((a) => {
+    /** @type {any} */
     let metadata = {};
     try { metadata = JSON.parse(a.metadata); } catch { metadata = {}; }
     return a.name === 'loop_supervisor_activation' && metadata.trigger === 'stuck' && !children.has(a.actor);

@@ -17,6 +17,10 @@ export const hostLoad = () => loadavg().map((v) => Math.round(v * 100) / 100);
  * `at`, `kept` and the given `fields`). Returns the directory. Never throws for an `output` that does not exist yet: the
  * record is still written.
  */
+/**
+ * @param {{ output: string, into: string, label: string, record: string, fields?: Record<string, unknown>, only?: (name: string) => boolean, at?: Date }} options
+ * @returns {string}
+ */
 export function keepEvidence({ output, into, label, record, fields = {}, only = () => true, at = new Date() }) {
   const dir = join(into, `${at.toISOString().replace(/[:.]/g, '-')}-${label}`);
   mkdirSync(dir, { recursive: true });
@@ -37,6 +41,11 @@ export function keepEvidence({ output, into, label, record, fields = {}, only = 
  * Copies every file of `output` into `<reds>/<stamp>-<scenario>/`, beside a `red.json` that names the scenario, the error
  * (passed through `redact`, so no secret reaches it), the commit, the load and the results gathered so far. Returns the
  * directory. Never throws for an `output` that does not exist yet: the red is still recorded.
+ */
+/**
+ * @param {{ output: string, reds: string, scenario: string, error: unknown, results?: unknown, commit?: string | null,
+ *   redact?: (text: string) => string, at?: Date, load?: number[] }} options
+ * @returns {string}
  */
 export function keepRed({ output, reds, scenario, error, results = null, commit = null, redact = (t) => t, at = new Date(), load = hostLoad() }) {
   const message = redact(error instanceof Error ? (error.stack ?? error.message) : String(error));

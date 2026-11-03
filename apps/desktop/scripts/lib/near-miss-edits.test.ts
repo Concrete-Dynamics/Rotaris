@@ -3,7 +3,6 @@
  * (wave3's level-3 miss #292, its `cat -A` probe #293, its retry #294) and the shape the directive targets.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { nearMissReading } from './near-miss-edits.mjs';
 
 const NEAR = 'old_string was not found exactly in docs/verification.md. It matches lines 168-170 at match level 3 (indentation shift). …';

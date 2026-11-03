@@ -30,7 +30,7 @@ export const DESIGN_HEADINGS = ['How this applies here', 'Where this disagrees w
  * @param {string} text
  */
 export function headings(text) {
-  return [...text.matchAll(/^#{2,3}\s+(?:\d+(?:\.\d+)*\.?\s+)?(.+?)\s*$/gm)].map((m) => m[1].trim());
+  return [...text.matchAll(/^#{2,3}\s+(?:\d+(?:\.\d+)*\.?\s+)?(.+?)\s*$/gm)].map((m) => (m[1] ?? '').trim());
 }
 
 /**
@@ -50,7 +50,7 @@ export function inspect(path, text, kind) {
     const required = kind.design ? [...REQUIRED_HEADINGS, ...DESIGN_HEADINGS] : REQUIRED_HEADINGS;
     for (const heading of required) if (!present.has(heading)) problems.push(`${path}: no "${heading}" section`);
   }
-  return { problems, reviewDate: date ? date[1] : null };
+  return { problems, reviewDate: date?.[1] ?? null };
 }
 
 /**

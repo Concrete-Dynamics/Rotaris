@@ -10,13 +10,9 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, wr
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { commit, plan, stillLive } from './migrate.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { passagesOf } from './adr-history.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { firstSentenceEnd } from './text.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { checkRecord } from '../check-record-links.mjs';
 
 const ADR = 'docs/architecture/adr/0007-a-record.md';
@@ -128,13 +124,13 @@ describe('ADR history — what is history', () => {
   });
 
   it('finds a revision\'s explanation, a correction that holds only the falsified reason, and a whole struck sentence', () => {
-    const found = passagesOf(read(ADR), { index: true }).map((p: { kind: string; date: string; line: number }) => [p.kind, p.date, p.line]);
+    const found = passagesOf(read(ADR), { index: true }).map((p) => [p.kind, p.date, p.line]);
     expect(found).toEqual([
       ['revision', '2026-09-02', 6],
       ['correction', '2026-10-01', 19],
       ['struck', '2026-09-29', 29],
     ]);
-    expect(passagesOf(read(PART), { index: false }).map((p: { kind: string; date: string }) => [p.kind, p.date])).toEqual([['correction', '2026-09-29']]);
+    expect(passagesOf(read(PART), { index: false }).map((p) => [p.kind, p.date])).toEqual([['correction', '2026-09-29']]);
   });
 
   it('leaves what is decision: a correction under Decision, one that holds its replacement, a struck word, a one-sentence revision', () => {
@@ -151,7 +147,7 @@ describe('ADR history — what is history', () => {
 describe('ADR history — the move', () => {
   it('replaces each passage with one History line and moves it verbatim under its anchor', () => {
     const { moves } = migrate();
-    expect(moves.map((m: { id: string; from: string; to: string }) => [m.id, m.from, m.to])).toEqual([
+    expect(moves.map((m) => ['id' in m ? m.id : m.n, m.from, m.to])).toEqual([
       ['ADR-0007 revision 2026-09-02', ADR, `${HISTORY}#revision-2026-09-02`],
       ['ADR-0007 correction 2026-10-01', ADR, `${HISTORY}#correction-2026-10-01`],
       ['ADR-0007 struck 2026-09-29', ADR, `${HISTORY}#struck-2026-09-29`],

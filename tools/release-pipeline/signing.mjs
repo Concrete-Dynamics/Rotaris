@@ -39,6 +39,10 @@ export { RELEASE_SIGNING_KEYS };
  * A key's fingerprint: `sha256:` and the SHA-256 of its SubjectPublicKeyInfo DER, in lower-case hexadecimal. Taken from
  * the public half, so a private key and its public half have the same fingerprint. Throws on a PEM that is not an
  * Ed25519 key.
+ * @typedef {import('./signing.d.mts').KeyRecord} KeyRecord
+ * @typedef {import('./signing.d.mts').KeyRecordRow} KeyRecordRow
+ * @param {string} pem
+ * @returns {string}
  */
 export function keyFingerprint(pem) {
   let key;
@@ -67,6 +71,9 @@ export function carriedKeyFingerprints(keys = RELEASE_SIGNING_KEYS) {
 /**
  * The detached signature over the manifest's exact bytes: raw Ed25519, 64 bytes. `privatePem` is the PKCS#8 PEM
  * `openssl genpkey -algorithm ed25519` writes. Throws, naming what is wrong, for anything else.
+ * @param {Uint8Array} manifest
+ * @param {string} privatePem
+ * @returns {Buffer}
  */
 export function signManifest(manifest, privatePem) {
   let key;
@@ -85,6 +92,10 @@ export function signManifest(manifest, privatePem) {
  * The key record read and checked for shape: `{ schemaVersion: 1, releases: [{ version, keys: ["sha256:<hex>", …] }] }`,
  * each version in REQ-STARTUP-029's grammar and named once. `{ record }` or `{ problems }`, never a throw.
  */
+/**
+ * @param {string} path
+ * @returns {{ record: KeyRecord } | { problems: string[] }}
+ */
 export function readKeyRecord(path) {
   if (!existsSync(path)) return { problems: [`the key record ${path} does not exist (REQ-STARTUP-168 (b))`] };
   let parsed;
@@ -96,7 +107,12 @@ export function readKeyRecord(path) {
   return checkKeyRecordShape(parsed, path);
 }
 
-/** The shape check of `readKeyRecord`, over an already-parsed value. */
+/**
+ * The shape check of `readKeyRecord`, over an already-parsed value.
+ * @param {any} parsed the parsed JSON, whatever its shape: this is the check of it
+ * @param {string} [where]
+ * @returns {{ record: KeyRecord } | { problems: string[] }}
+ */
 export function checkKeyRecordShape(parsed, where = 'the key record') {
   const problems = [];
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return { problems: [`${where} is not a JSON object`] };
@@ -110,7 +126,7 @@ export function checkKeyRecordShape(parsed, where = 'the key record') {
     if (typeof row.version !== 'string' || tryParseReleaseVersion(row.version) === null) { problems.push(`${at}: "version" ${JSON.stringify(row.version)} is not a product version (REQ-STARTUP-029)`); continue; }
     if (seen.has(row.version)) problems.push(`${at}: ${row.version} is recorded twice`);
     seen.add(row.version);
-    if (!Array.isArray(row.keys) || row.keys.some((k) => typeof k !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(k))) {
+    if (!Array.isArray(row.keys) || row.keys.some((/** @type {unknown} */ k) => typeof k !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(k))) {
       problems.push(`${at}: "keys" must be an array of "sha256:<64 lower-case hex>" fingerprints`);
       continue;
     }
@@ -119,18 +135,29 @@ export function checkKeyRecordShape(parsed, where = 'the key record') {
   return problems.length > 0 ? { problems } : { record: { schemaVersion: KEY_RECORD_SCHEMA_VERSION, releases } };
 }
 
-/** The row a release of `version` commits for the build this tree produces. */
+/**
+ * The row a release of `version` commits for the build this tree produces.
+ * @param {string} version
+ * @param {readonly string[]} [keys]
+ * @returns {KeyRecordRow}
+ */
 export function keyRecordRow(version, keys = RELEASE_SIGNING_KEYS) {
   return { version: parseReleaseVersion(version).version, keys: carriedKeyFingerprints(keys) };
 }
 
-const sameSet = (a, b) => a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n');
+const sameSet = (/** @type {readonly string[]} */ a, /** @type {readonly string[]} */ b) => a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n');
 
 /**
  * Before the build: the tree for `version` may be released only if its build carries at least one key — an empty set
  * can verify no later release, so every installation of it would be stranded at its first update (first-release-plan.md
  * §4.6: "the release still compiles the key in") — and only if the record's row for `version` is exactly the set it
  * carries, so the record says what shipped. Every problem, none when both hold.
+ */
+/**
+ * @param {KeyRecord} record
+ * @param {string} version
+ * @param {readonly string[]} [keys]
+ * @returns {string[]}
  */
 export function checkBuildAgainstRecord(record, version, keys = RELEASE_SIGNING_KEYS) {
   const problems = [];
@@ -148,6 +175,12 @@ export function checkBuildAgainstRecord(record, version, keys = RELEASE_SIGNING_
 /**
  * REQ-STARTUP-168 (b): every recorded release older than `version` is a build REQ-STARTUP-107 may offer this release to,
  * so each must carry the key the release is signed with. The problems name each build that would be stranded.
+ */
+/**
+ * @param {KeyRecord} record
+ * @param {string} version
+ * @param {string} signingFingerprint
+ * @returns {string[]}
  */
 export function checkOfferable(record, version, signingFingerprint) {
   const target = parseReleaseVersion(version);
@@ -168,6 +201,10 @@ const VERDICT_TEXT = {
  * The signature half of §5's gate: the manifest's signature verifies through the updater's verifier against the keys
  * the build carries (REQ-STARTUP-038, REQ-STARTUP-167), and the key that verified it is carried by every recorded
  * release that may be offered this one (REQ-STARTUP-168 (b)). Every problem, none when the release may be published.
+ */
+/**
+ * @param {{ manifest: Uint8Array, signature: Uint8Array, version: string, record: KeyRecord, keys?: readonly string[] }} input
+ * @returns {string[]}
  */
 export function verifyReleaseSignature({ manifest, signature, version, record, keys = RELEASE_SIGNING_KEYS }) {
   const verdict = verifyDetachedSignature(manifest, signature, keys);

@@ -3,7 +3,6 @@ import { ESLint } from 'eslint';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-// @ts-expect-error -- a plain JavaScript module without declarations
 import { citationFindings, loadArtifact } from './index.js';
 import { REQ, SUPERSEDED_BY } from '@rotaris/kernel';
 

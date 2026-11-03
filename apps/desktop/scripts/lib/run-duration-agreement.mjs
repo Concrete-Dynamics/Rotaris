@@ -8,22 +8,31 @@
  * at its capture, and this reads the three back from the launch log: the header's whole seconds from its `data-seconds`
  * and its text (`M:SS` or `H:MM:SS`), the row's from the meta line's elapsed figure (`Ns`, `Nm Ns`).
  */
-export const DURATION_PROBES = Object.freeze(['[data-testid="run-timing"]', '[data-testid="inspector-name"]', '[data-testid="inspector-meta"]']);
+export const DURATION_PROBES = Object.freeze(/** @type {const} */ (['[data-testid="run-timing"]', '[data-testid="inspector-name"]', '[data-testid="inspector-meta"]']));
 
-const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** The first element a capture probe logged for `selector`, or null when the probe is absent or found nothing. */
+const escape = (/** @type {string} */ text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * The first element a capture probe logged for `selector`, or null when the probe is absent or found nothing.
+ * @param {string} log
+ * @param {string} selector
+ * @returns {{ text?: string, data?: Record<string, string> } | null}
+ */
 export function probedElement(log, selector) {
   const line = new RegExp(`capture: probe ${escape(selector)} → (\\[.*\\])\\s*$`, 'm').exec(log)?.[1];
   if (line === undefined) return null;
   try { return JSON.parse(line)[0] ?? null; } catch { return null; }
 }
 
-/** `M:SS` / `H:MM:SS` → whole seconds, or null. */
+/**
+ * `M:SS` / `H:MM:SS` → whole seconds, or null.
+ * @param {string | null | undefined} text
+ */
 export function headerSeconds(text) {
   const m = /(?:(\d+):)?(\d+):(\d{2})\s*$/.exec(String(text ?? '').trim());
   return m === null ? null : Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]);
 }
 /** The meta line's elapsed figure (`<state> · 2m 13s · …`) → whole seconds, or null. */
+/** @param {string | null | undefined} meta */
 export function rowSeconds(meta) {
   const m = /·\s*(?:(\d+)m\s+)?(\d+)s\s*(?:·|$)/.exec(String(meta ?? ''));
   return m === null ? null : Number(m[1] ?? 0) * 60 + Number(m[2]);
@@ -32,6 +41,8 @@ export function rowSeconds(meta) {
 /**
  * The reading for one launch: `agree` true when the header's text, its `data-seconds` and the run-level row's elapsed
  * figure name one number of seconds; null fields when a probe found nothing (the caller says so rather than passing).
+ * @param {string} log
+ * @param {string} entryPersona
  */
 export function runDurationReading(log, entryPersona) {
   const header = probedElement(log, DURATION_PROBES[0]);
@@ -53,6 +64,8 @@ export function runDurationReading(log, entryPersona) {
  * when the header says it is frozen (`data-frozen` `1`); a header that is live, or carries no mark, is a NOTE with
  * `reason: 'not-terminal'`, as is a capture whose inspector shows another agent (`'another-agent'`). A probe that found
  * nothing is still a failure: the instrument did not read.
+ * @param {ReturnType<typeof runDurationReading>} reading
+ * @returns {{ verdict: 'pass' | 'fail' | 'note', reason?: string }}
  */
 export function runDurationVerdict(reading) {
   if (reading.header !== null && reading.frozen !== '1') return { verdict: 'note', reason: 'not-terminal' };

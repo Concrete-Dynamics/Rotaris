@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * REQ-CHAT-055's append comparison in `transcript-proof.mjs`: the host's load beside each launch, and the one re-run a
  * red taken above the CPU count earns.

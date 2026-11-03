@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * restore-kill-proof — the kill-in-the-gap case of ADR-0058's restore (docs/architecture/README.md B2), measured with real
  * processes and a real kill: what a restore leaves behind when the process running it dies between its two renames (step 8
@@ -41,6 +42,7 @@ if (!Number.isInteger(trials) || trials < 1) throw new Error('--trials must be a
 // Under `out/`, which the lint's ignore list covers (`**/out/**`). `better-sqlite3` stays external: the bundle sits inside
 // the repository, so Node resolves the binding from the repository's `node_modules`, the one the tests load.
 const require = createRequire(import.meta.url);
+// eslint-disable-next-line import-x/no-extraneous-dependencies -- electron-vite's bundler, which `apps/desktop` declares; the child is compiled with the build's own esbuild
 const esbuild = require('esbuild');
 const child = join(output, 'out', 'restore-kill-child.cjs');
 const alias = Object.fromEntries(['kernel', 'platform', 'contracts', 'store'].map((name) => [`@rotaris/${name}`, join(repo, 'packages', name, 'src', 'index.ts')]));

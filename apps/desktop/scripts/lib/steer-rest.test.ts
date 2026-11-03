@@ -7,11 +7,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseSteps } from '../../src/main/capture/host.js';
-// @ts-expect-error — the schedule is plain ESM beside the proof that runs it.
 import { NO_STEER_DIALOG, SEND_SETTLED, STEER_CLICKS, STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, STEER_TYPE, STEER_WHATS, steerPendingAtPause } from './steer-rest.mjs';
 
-const clicks = parseSteps(STEER_REST_CLICKS as string);
-const typed = parseSteps(STEER_REST_TYPE as string)[0]!;
+const clicks = parseSteps(STEER_REST_CLICKS);
+const typed = parseSteps(STEER_REST_TYPE)[0]!;
 const step = (what: string) => {
   const found = clicks.find((s) => (s.arg ?? s.selector) === what);
   if (!found) throw new Error(`no step logs as ${what}`);
@@ -73,8 +72,8 @@ describe('the steer was pending when the pause was asked for', () => {
 describe("part-j-proof's steer schedule, scenario 2 (REQ-MONITOR-133, REQ-MONITOR-137)", () => {
   // docs/archive/defects/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md: the launch
   // pressed Steer the run at a fixed 1900 ms, which a run starting later than that misses.
-  const steps = parseSteps(STEER_CLICKS as string);
-  const text = parseSteps(STEER_TYPE as string)[0]!;
+  const steps = parseSteps(STEER_CLICKS);
+  const text = parseSteps(STEER_TYPE)[0]!;
   const w = STEER_WHATS as { steer: string; send: string };
   const at = (what: string) => {
     const found = steps.find((s) => (s.arg ?? s.selector) === what);

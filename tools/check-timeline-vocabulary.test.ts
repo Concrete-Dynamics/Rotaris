@@ -8,9 +8,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { AWAITING, checkProduct, FORBIDDEN, specVocabulary, timelineWritesIn, VOCABULARY } from './check-timeline-vocabulary.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { readRecord } from './record-parts.mjs';
 
 const repo = join(import.meta.dirname, '..');
@@ -65,7 +63,7 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
   it('A29: the three fallback names no list has are written nowhere — the vocabulary\'s words replaced them', () => {
     for (const name of ['model_fallback', 'unresponsive_model_fallback', 'child_timeout_fallback']) {
       expect(Object.hasOwn(VOCABULARY as object, name)).toBe(false);
-      expect(Object.hasOwn(AWAITING as object, name)).toBe(false);
+      expect(Object.hasOwn(AWAITING, name)).toBe(false);
     }
   });
 
@@ -81,7 +79,7 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
   it('PD-TOOLS-002: `permission_mode_downgraded` is withdrawn — FORBIDDEN, citing the directive, and neither a word nor AWAITING', () => {
     expect(FORBIDDEN).toEqual({ permission_mode_downgraded: 'PD-TOOLS-002' });
     expect(Object.hasOwn(VOCABULARY as object, 'permission_mode_downgraded')).toBe(false);
-    expect(Object.hasOwn(AWAITING as object, 'permission_mode_downgraded')).toBe(false);
+    expect(Object.hasOwn(AWAITING, 'permission_mode_downgraded')).toBe(false);
   });
 
   it('OQ-157\'s ruling (2026-10-06): AWAITING is empty — the vocabulary is closed again — and its names are pinned here, so adding one is a deliberate edit of this test', () => {
@@ -169,7 +167,7 @@ describe('check-timeline-vocabulary (REQ-ORCH-139)', () => {
       const vocabulary = { fallback_model: 'REQ-ORCH-139' };
       const awaiting = { held_word: { file: 'packages/engine/src/a.ts', fact: 'x' }, gone_word: { file: 'packages/engine/src/a.ts', fact: 'y' } };
       const passThrough = [{ file: 'packages/engine/src/b.ts', expression: 'name', reason: 'r' }];
-      const { problems, stale, drift } = checkProduct(root, vocabulary, awaiting, passThrough) as { problems: string[]; stale: string[]; drift: string[] };
+      const { problems, stale, drift } = checkProduct(root, vocabulary, awaiting, passThrough);
       expect(problems).toEqual([
         "packages/engine/src/a.ts:4: 'model_fallback' is in no timeline vocabulary (REQ-ORCH-139)",
         'packages/engine/src/a.ts:5: a timeline name passed as `someName`, which this gate cannot read — write the name, or add a PASS_THROUGH entry with its reason',

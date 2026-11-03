@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The code-intelligence proof (Part T): ADR-0035's first execution behind the real run host — the bundled runtime
  * (`pnpm code-intel:bundle`, run here when `bundle.mjs --check` finds it absent or stale, its output streamed as it builds), the pre-bootstrap

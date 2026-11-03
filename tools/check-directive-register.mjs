@@ -64,6 +64,7 @@ const where = (offset) => {
   return `offset ${offset}`;
 };
 
+/** @type {string[]} */
 const problems = [];
 /** @param {string} message */
 const fail = (message) => problems.push(message);
@@ -73,6 +74,7 @@ const fail = (message) => problems.push(message);
 const UNITS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
   'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen',
   'eighteen', 'nineteen'];
+/** @type {Record<string, number>} */
 const TENS = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
 
 /**
@@ -100,8 +102,8 @@ function wordToNumber(word) {
   if (unit > 0) return unit;
   const compound = /^([a-z]+)[-\s]([a-z]+)$/.exec(w);
   if (compound !== null) {
-    const tens = TENS[compound[1]];
-    const ones = UNITS.indexOf(compound[2]);
+    const tens = TENS[compound[1] ?? ''];
+    const ones = UNITS.indexOf(compound[2] ?? '');
     if (tens !== undefined && ones > 0 && ones < 10) return tens + ones;
     return null;
   }
@@ -117,18 +119,19 @@ function wordToNumber(word) {
 //   ### PD-SHELL-001 — a chosen project folder may be opened …
 const ENTRY = /^<a id="pd-([a-z]+)-(\d+)"><\/a>\s*\n\s*\n###\s+PD-([A-Z]+)-(\d+)\s/gm;
 
-/** @type {{ anchor: string, domain: string, number: number, printed: string, line: number }[]} */
+/** @type {{ anchor: string, domain: string, number: number, printed: string, line: string }[]} */
 const entries = [];
 for (const match of source.matchAll(ENTRY)) {
   const line = where(match.index);
+  const [, anchorDomain = '', anchorNumber = '', domain = '', number = ''] = match;
   entries.push({
-    anchor: `pd-${match[1]}-${match[2]}`,
-    domain: match[3],
-    number: Number.parseInt(match[4], 10),
-    printed: `PD-${match[3]}-${match[4]}`,
+    anchor: `pd-${anchorDomain}-${anchorNumber}`,
+    domain,
+    number: Number.parseInt(number, 10),
+    printed: `PD-${domain}-${number}`,
     line,
   });
-  if (match[1].toUpperCase() !== match[3] || match[2] !== match[4]) {
+  if (anchorDomain.toUpperCase() !== domain || anchorNumber !== number) {
     fail(
       `${line}: the anchor says pd-${match[1]}-${match[2]} and the heading prints ` +
         `PD-${match[3]}-${match[4]}. A link to one reaches the other.`,
@@ -197,7 +200,7 @@ for (const entry of entries) {
 }
 for (const [domain, numbers] of [...byDomain].sort((a, b) => a[0].localeCompare(b[0]))) {
   const sorted = [...new Set(numbers)].sort((a, b) => a - b);
-  const highest = sorted[sorted.length - 1];
+  const highest = sorted.at(-1) ?? Number.NaN;
   if (sorted[0] !== 1) fail(`domain ${domain}'s lowest directive is PD-${domain}-${String(sorted[0]).padStart(3, '0')}, not PD-${domain}-001.`);
   const missing = [];
   for (let n = 1; n <= highest; n += 1) if (!sorted.includes(n)) missing.push(n);
@@ -215,14 +218,14 @@ const countSection = /^##\s+Count\s*$([\s\S]*?)^---\s*$/m.exec(source);
 if (countSection === null) {
   fail('there is no `## Count` section ending in a `---` rule. The declared total lives there.');
 } else {
-  const declared = /\*\*([A-Za-z][A-Za-z -]*|\d+)\.\*\*/.exec(countSection[1]);
+  const declared = /\*\*([A-Za-z][A-Za-z -]*|\d+)\.\*\*/.exec(countSection[1] ?? '');
   if (declared === null) {
     fail(
       'the Count section declares no total. Write it as `**Nineteen.**` — a bolded number word ending ' +
         'in a full stop — so that this gate can read the claim rather than trust it.',
     );
   } else {
-    const total = wordToNumber(declared[1]);
+    const total = wordToNumber(declared[1] ?? '');
     if (total === null) {
       fail(
         `the Count section says **${declared[1]}.**, which this gate cannot read as a number. ` +
@@ -269,8 +272,9 @@ for (const file of markdownUnder(join(root, 'docs'))) {
       fail(`${at} cites #${match[2]} in ${match[1]}.md, which holds ${match[1].toUpperCase()} alone.`);
       continue;
     }
-    if (defined.has(match[2])) continue;
-    fail(`${at} cites ${match[2].toUpperCase()}, which the directive register does not define.`);
+    const cited = match[2] ?? '';
+    if (defined.has(cited)) continue;
+    fail(`${at} cites ${cited.toUpperCase()}, which the directive register does not define.`);
   }
 }
 
@@ -287,5 +291,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-const domains = [...byDomain.keys()].sort().map((d) => `${d}×${byDomain.get(d).length}`).join(', ');
+const domains = [...byDomain.keys()].sort().map((d) => `${d}×${byDomain.get(d)?.length ?? 0}`).join(', ');
 console.log(`check-directive-register: ${entries.length} entries (${domains}), no duplicate and no gap`);

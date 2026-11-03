@@ -7,8 +7,8 @@
  */
 
 /**
- * @param normalized measured debt, `{ "path|category|signature": count }`
- * @param baseline the committed allowance, same shape
+ * @param {Record<string, number>} normalized measured debt, `{ "path|category|signature": count }`
+ * @param {Record<string, number>} baseline the committed allowance, same shape
  * @returns `{ growth, stale }` — entries above the baseline, and entries the baseline still
  *          reserves that the code no longer spends. Both are verdict-bearing: growth is a new
  *          debt, stale is a payment the baseline has not been lowered to record.
@@ -23,7 +23,10 @@ export function compareDebt(normalized, baseline) {
   return { growth, stale };
 }
 
-/** The committed file's shape, sorted so a diff reads as a burn-down rather than a reshuffle. */
+/**
+ * The committed file's shape, sorted so a diff reads as a burn-down rather than a reshuffle.
+ * @param {Record<string, number>} normalized
+ */
 export function baselineDocument(normalized) {
   return { version: 1, debt: Object.fromEntries(Object.entries(normalized).sort(([a], [b]) => a.localeCompare(b))) };
 }

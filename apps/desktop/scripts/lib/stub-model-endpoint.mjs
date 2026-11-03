@@ -25,7 +25,10 @@ export const STUB_REPLY = 'The stub model read the result.';
 export const STUB_INTENT = { intent: 'moderate_feature', confidence: 0.9, reason: 'The stub endpoint classifies every request alike.' };
 export const STUB_LOOP = { loop_detected: false, reason: 'The stub endpoint sees no loop.', corrective_message: '' };
 
-/** What one request is answered with: `{ kind: 'text', text }` or `{ kind: 'tool', name, args }`. */
+/**
+ * What one request is answered with: `{ kind: 'text', text }` or `{ kind: 'tool', name, args }`.
+ * @param {any} body the request's parsed JSON, whatever a client sent
+ */
 export function answerFor(body) {
   const format = body && typeof body === 'object' ? body.response_format : undefined;
   if (format !== undefined && format !== null) {
@@ -37,11 +40,12 @@ export function answerFor(body) {
   const tools = Array.isArray(body?.tools) ? body.tools : [];
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const last = messages.at(-1);
-  const offersTerminal = tools.some((t) => t?.function?.name === 'terminal');
+  const offersTerminal = tools.some((/** @type {any} */ t) => t?.function?.name === 'terminal');
   if (offersTerminal && last?.role !== 'tool') return { kind: 'tool', name: 'terminal', args: JSON.stringify({ command: STUB_TERMINAL_COMMAND }) };
   return { kind: 'text', text: STUB_REPLY };
 }
 
+/** @param {string} model @param {Record<string, unknown>} delta @param {string | null} finish @param {Record<string, number>} [usage] */
 const chunk = (model, delta, finish, usage) => JSON.stringify({
   id: 'stub', object: 'chat.completion.chunk', created: 0, model,
   choices: [{ index: 0, delta, finish_reason: finish }], ...(usage ? { usage } : {}),
@@ -56,8 +60,9 @@ export async function startStubModelEndpoint() {
   const counts = { requests: 0, toolsRequests: 0, terminalCalls: 0, classifications: 0 };
   let calls = 0;
   const server = createServer((req, res) => {
+    /** @type {Buffer[]} */
     const chunks = [];
-    req.on('data', (c) => chunks.push(c));
+    req.on('data', (/** @type {Buffer} */ c) => chunks.push(c));
     req.on('end', () => {
       if (req.method !== 'POST' || !(req.url ?? '').endsWith('/chat/completions')) {
         res.writeHead(404, { 'content-type': 'application/json' });

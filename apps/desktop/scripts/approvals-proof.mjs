@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The approvals proof: the permission gate's approval waits in the BUILT app, under the `ask` preset, against the scripted
  * model — what the unit tests of `gate.ts`, `presence.ts` and `run-host/tools.test.ts` measure, driven through real dialogs.

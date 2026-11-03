@@ -21,15 +21,21 @@ const AMBIGUOUS = /^Found \d+ occurrences of old_str\b/;
  */
 const PROBE_WINDOW = 3;
 
-const pathOf = (call) => {
+const pathOf = (/** @type {Record<string, any>} */ call) => {
   const args = call.args ?? {};
   return typeof args.path === 'string' ? args.path : typeof args.file_path === 'string' ? args.file_path : null;
 };
 
+/** @param {Array<{ scenario: string, calls: Array<Record<string, any>> }>} sessions */
 export function nearMissReading(sessions) {
+  /** @typedef {{ scenario: string, ordinal: number, agent: string | null, path: string | null, level: number }} NearMiss */
+  /** @type {NearMiss[]} */
   const misses = [];
+  /** @type {NearMiss[]} */
   const probed = [];
+  /** @type {NearMiss[]} */
   const retried = [];
+  /** @type {NearMiss[]} */
   const ambiguous = [];
   for (const { scenario, calls } of sessions) {
     calls.forEach((call, i) => {
@@ -42,8 +48,9 @@ export function nearMissReading(sessions) {
       const next = later.findIndex((c) => EDIT_TOOLS.has(c.tool_name));
       const between = next === -1 ? later.slice(0, PROBE_WINDOW) : later.slice(0, next);
       if (between.some((c) => c.tool_name === 'terminal')) probed.push(miss);
-      if (next !== -1 && later[next].isError !== true && pathOf(later[next]) === miss.path) retried.push(miss);
-      if (next !== -1 && later[next].isError === true && pathOf(later[next]) === miss.path && AMBIGUOUS.test(String(later[next].result ?? ''))) ambiguous.push(miss);
+      const edit = next === -1 ? undefined : later[next];
+      if (edit !== undefined && edit.isError !== true && pathOf(edit) === miss.path) retried.push(miss);
+      if (edit !== undefined && edit.isError === true && pathOf(edit) === miss.path && AMBIGUOUS.test(String(edit.result ?? ''))) ambiguous.push(miss);
     });
   }
   return { misses, probed, retried, ambiguous };

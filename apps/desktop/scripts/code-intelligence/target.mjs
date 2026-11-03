@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The target architecture of the bundled code-intelligence runtime (OQ-400, ruled 2026-10-15 under R-072; ADR-0035,
  * ADR-0054; REQ-STARTUP-015, REQ-STARTUP-159). Pure helpers `bundle.mjs` reads; `target.test.ts` beside them.

@@ -83,7 +83,12 @@ function codeMask(source) {
   return mask;
 }
 
-/** The statement holding `at` mentions the script's own argv, in code. */
+/**
+ * The statement holding `at` mentions the script's own argv, in code.
+ * @param {string} source
+ * @param {ArrayLike<number>} mask
+ * @param {number} at
+ */
 function statementReadsArgv(source, mask, at) {
   let i = at;
   while (i > 0) {
@@ -108,17 +113,17 @@ export function flagsRead(source) {
   const mask = codeMask(source);
   /** @type {Set<string>} */
   const tokens = new Set();
-  const inCode = (index) => mask[index] === 1;
+  const inCode = (/** @type {number} */ index) => mask[index] === 1;
 
   const includes = new RegExp(String.raw`(?:process\.argv|(?<![.\w])argv)\.includes\(\s*(['"])(${FLAG})\1`, 'g');
   let match;
   while ((match = includes.exec(source)) !== null) {
-    if (inCode(match.index)) tokens.add(match[2]);
+    if (inCode(match.index)) tokens.add(match[2] ?? '');
   }
 
   const compared = new RegExp(String.raw`(?:\.startsWith\(\s*|(?:===|!==)\s*)(['"\`])(${FLAG})=?\1`, 'g');
   while ((match = compared.exec(source)) !== null) {
-    if (inCode(match.index) && statementReadsArgv(source, mask, match.index)) tokens.add(match[2]);
+    if (inCode(match.index) && statementReadsArgv(source, mask, match.index)) tokens.add(match[2] ?? '');
   }
 
   const helpers = new RegExp(String.raw`(?:^|\n)const (${NAME}) = (?:async )?\((${NAME})\b[^)]*\) =>`, 'g');
@@ -144,7 +149,7 @@ export function flagsRead(source) {
     let call;
     while ((call = calls.exec(source)) !== null) {
       if (!inCode(call.index)) continue;
-      tokens.add(prefixes ? `--${call[2]}` : call[2]);
+      tokens.add(prefixes ? `--${call[2]}` : (call[2] ?? ''));
     }
   }
 

@@ -13,23 +13,22 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as ChildProcess from 'node:child_process';
 
 const spawned = vi.hoisted(() => [] as { command: string; cwd: unknown }[]);
 vi.mock('node:child_process', async (importOriginal) => {
-  const original = await importOriginal<typeof import('node:child_process')>();
+  const original = await importOriginal<typeof ChildProcess>();
   const record = `require('node:fs').writeFileSync(require('node:path').join(require('node:path').dirname(process.env.ROTARIS_DRIVER), 'cwd.txt'), process.cwd())`;
   return {
     ...original,
-    spawn: (command: string, args: readonly string[], options: import('node:child_process').SpawnOptions) => {
+    spawn: (command: string, _args: readonly string[], options: ChildProcess.SpawnOptions) => {
       spawned.push({ command, cwd: options.cwd });
       return original.spawn(process.execPath, ['-e', record], options);
     },
   };
 });
 
-// @ts-expect-error — the modules are plain ESM beside the scripts that run them.
 const { startApp } = await import('./driver.mjs');
-// @ts-expect-error — as above.
 const { app } = await import('./harness.mjs');
 
 const cleanups: (() => void)[] = [];

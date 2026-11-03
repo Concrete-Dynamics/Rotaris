@@ -4,7 +4,6 @@
  * named instead of being read as a press.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the scripts that run it.
 import { unpressedClicks } from './capture-clicks.mjs';
 
 const toggle = '.toggle[aria-labelledby="keep-going-label"]';

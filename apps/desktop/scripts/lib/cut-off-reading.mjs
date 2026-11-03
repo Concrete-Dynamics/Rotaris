@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * What a live run that cut a child off at its per-agent timeout shows, read from the store and the recorded traffic — the
  * `cutoff` scenario of `live-run.mjs` (fin42; the 2026-10-13 survey's N50). Three things no live run had measured since

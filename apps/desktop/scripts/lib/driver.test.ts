@@ -13,7 +13,6 @@ import { createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the module is plain ESM beside the scripts that run it.
 import { choose, clickLanded, connect, connectOrEnd, stopApp, stopOverrunMessage, until, within } from './driver.mjs';
 
 const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };

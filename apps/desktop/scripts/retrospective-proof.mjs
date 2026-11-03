@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The retrospective proof (`pnpm retrospective-proof`) — ADR-0065's first execution in the BUILT application.
  *

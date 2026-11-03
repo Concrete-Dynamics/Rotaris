@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The delegation proof: three delegation features no built-app run had driven, through the BUILT application with the
  * scripted client (free: no provider, no key, no network). The 2026-10-13 survey (item N57) found each built and covered by

@@ -11,7 +11,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { migrateStore, openStore } from '@rotaris/store';
-// @ts-expect-error — the reader's helpers are plain ESM beside the scripts that run them.
 import { isZeroAmount, nullSummaryLine, nullSummaryReading, zeroCostCoherence, zeroCostLine } from './autopsy-coherence.mjs';
 
 describe('the autopsy\'s zero-cost coherence line (REQ-MONITOR-166, PD-MONITOR-001)', () => {

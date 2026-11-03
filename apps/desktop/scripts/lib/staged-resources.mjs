@@ -40,7 +40,11 @@ const LEDGER_NEXT = 'owned.json.next';
 const NOTHING = null;
 const WRITING = 'writing';
 
-/** A rename, or a copy and a removal where the two paths are on different filesystems. */
+/**
+ * A rename, or a copy and a removal where the two paths are on different filesystems.
+ * @param {string} from
+ * @param {string} to
+ */
 function move(from, to) {
   try { renameSync(from, to); } catch (e) {
     if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EXDEV') throw e;
@@ -65,6 +69,7 @@ function ledger(stash) {
     return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
   } catch { return {}; }
 }
+/** @param {string} stash @param {Record<string, null | 'writing' | { sha256: string, mtimeMs: number }>} entries */
 function record(stash, entries) {
   writeFileSync(join(stash, LEDGER_NEXT), JSON.stringify(entries));
   renameSync(join(stash, LEDGER_NEXT), join(stash, LEDGER));

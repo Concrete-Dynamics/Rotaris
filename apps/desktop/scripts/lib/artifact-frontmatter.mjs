@@ -5,7 +5,10 @@
  * included — rather than to a handful of lines. `artifact-frontmatter.test.ts` pins this against the engine's own function.
  */
 
-/** The engine's `yamlScalar`: JSON quoting, with U+2028 and U+2029 written as their escapes. */
+/**
+ * The engine's `yamlScalar`: JSON quoting, with U+2028 and U+2029 written as their escapes.
+ * @param {unknown} value
+ */
 function yamlScalar(value) {
   return JSON.stringify(value).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
@@ -15,7 +18,7 @@ function yamlScalar(value) {
  * @returns {string} the block, both fences and the closing line break included
  */
 export function frontmatterOfRow(row) {
-  const s = (name) => /** @type {string | null} */ (row[name] ?? null);
+  const s = (/** @type {string} */ name) => /** @type {string | null} */ (row[name] ?? null);
   const front = [
     `id: ${yamlScalar(s('id'))}`,
     `slug: ${yamlScalar(s('slug'))}`,
@@ -24,7 +27,7 @@ export function frontmatterOfRow(row) {
     `status: ${yamlScalar(s('status'))}`,
     `created_at: ${yamlScalar(s('created_at'))}`,
   ];
-  for (const [column, key] of [['edited_at', 'edited_at'], ['source_task_id', 'source_task_id'], ['canonical_name', 'canonical_name'], ['source_persona', 'source_persona']]) {
+  for (const [column, key] of /** @type {Array<[string, string]>} */ ([['edited_at', 'edited_at'], ['source_task_id', 'source_task_id'], ['canonical_name', 'canonical_name'], ['source_persona', 'source_persona']])) {
     if (s(column) !== null) front.push(`${key}: ${yamlScalar(s(column))}`);
   }
   if ((s('created_by') ?? '') !== '') front.push(`created_by: ${yamlScalar(s('created_by'))}`);
@@ -36,7 +39,10 @@ export function frontmatterOfRow(row) {
   return `${['---', ...front, '---'].join('\n')}\n`;
 }
 
-/** The document's leading block, both fences and the closing line break included; '' when it opens with none. */
+/**
+ * The document's leading block, both fences and the closing line break included; '' when it opens with none.
+ * @param {string} document
+ */
 export function leadingFrontmatter(document) {
   return /^---\n[\s\S]*?\n---\n/.exec(document)?.[0] ?? '';
 }

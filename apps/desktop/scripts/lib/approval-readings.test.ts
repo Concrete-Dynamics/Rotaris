@@ -4,9 +4,7 @@
  * broken gate would leave.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the scripts that run it.
 import { approvalRequests, approvalsLiveVerdicts, awayLiveVerdicts, awayReason, awayStretch, presentedDialogs, sessionScopedWrites, timeoutReason } from './approval-readings.mjs';
-// @ts-expect-error — the scenarios are plain ESM beside the scripts that run them.
 import { APPROVALS_ANSWERS } from './approval-scenarios.mjs';
 import { approvalAnswerer } from '../../src/main/capture/approval-answers.ts';
 
@@ -65,8 +63,8 @@ describe('presentedDialogs and approvalRequests', () => {
 describe('awayStretch (PD-TOOLS-005 revisions 1 and 2, PD-TOOLS-011)', () => {
   it('reads the recorded stretch: the timeout, the mark, the queued wait ended, the asks denied at once, the exemption, the return', () => {
     const r = awayStretch(recorded());
-    expect(r.first.request.request_id).toBe('A');
-    expect(r.first.waitedMs).toBe(12_000);
+    expect(r.first!.request.request_id).toBe('A');
+    expect(r.first!.waitedMs).toBe(12_000);
     expect(r.away.metadata.after_seconds).toBe(12);
     expect(r.seconds).toBe(12);
     expect(r.ended.map((e: { request: { request_id: string }; lagMs: number; shown: unknown }) => [e.request.request_id, e.lagMs, e.shown])).toEqual([['B', 6, null]]);
@@ -153,7 +151,7 @@ describe('sessionScopedWrites and approvalsLiveVerdicts (PD-TOOLS-004)', () => {
     expect(w.shown).toHaveLength(1);
     expect(w.grants).toHaveLength(1);
     expect(w.unasked).toHaveLength(1);
-    expect(w.byPath['NOTES.md'].map((c: { operation: string }) => c.operation)).toEqual(['create', 'edit']);
+    expect(w.byPath['NOTES.md']!.map((c) => c.operation)).toEqual(['create', 'edit']);
     const out = approvalsLiveVerdicts(w, { path: 'NOTES.md', fileText: '# Notes\nsecond line\n', wanted: ['second line'] });
     expect(out.filter((v: { passed: boolean }) => !v.passed)).toEqual([]);
   });

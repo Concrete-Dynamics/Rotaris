@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The composer proof (Part AB): the composer's chips, its drafts, its history recall and the run header
  * (REQ-CHAT-004, -006, -007, -008, -009, -010, -014, -015, -016, -017, -038, -039, -155, -156, -158;
@@ -34,7 +35,7 @@
  *
  * Evidence under `.proof/composer-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';

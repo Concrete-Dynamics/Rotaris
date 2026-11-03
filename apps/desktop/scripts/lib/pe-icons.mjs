@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * Whether a Windows executable carries an icon, read from its own resources (O-4, first-release-plan.md §4.9) — the
  * evidence `pnpm package` gives that the installer, the packaged executable and the portable carry the owner's icon,

@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/renderer-console.mjs';
 
@@ -130,7 +131,6 @@ const results = {};
 // until then (docs/archive/defects/notice-proof-and-two-mission-proof-checks-still-fail-on-the-replicas-run-start-decline.md).
 const unexpected = unexpectedRendererErrors;
 const expect = (cond, message) => { if (!cond) throw new Error(message); };
-const stateOf = (rowText) => (/(running|waiting|queued|done|failed|cancelled)/.exec(rowText) ?? [])[1] ?? null;
 const seconds = (label) => { const m = /(?:(\d+)m )?(\d+)s/.exec(label); return m ? Number(m[1] ?? 0) * 60 + Number(m[2]) : null; };
 
 // OQ-213: a coordinator that delegates more than once keeps its own todo list first, or its second delegation is refused; and

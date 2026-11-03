@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * `pnpm exit-trace-proof` — the exit trace's crash handlers fired in the BUILT application (PD-MONITOR-002), free: the
  * scripted client, no provider, no network.

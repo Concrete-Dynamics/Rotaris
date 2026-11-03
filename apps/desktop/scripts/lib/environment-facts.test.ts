@@ -18,7 +18,7 @@ describe('environment facts — the tree', () => {
 describe('environment facts — the build', () => {
   const src = join(repo, 'src');
   const generated = join(src, 'generated');
-  const list = (dir) => (dir === src
+  const list = (dir: string) => (dir === src
     ? [{ name: 'a.ts', dir: false }, { name: 'a.test.ts', dir: false }, { name: 'generated', dir: true }]
     : dir === generated ? [{ name: 'requirements.ts', dir: false }] : []);
 

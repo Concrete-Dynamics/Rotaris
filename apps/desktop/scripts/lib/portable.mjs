@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The portable's assembly — ADR-0054 alternative P4, first-release-plan.md §4.5, REQ-STARTUP-013/031/165.
  *
@@ -205,9 +206,15 @@ export async function assemblePortable({ stub, tree, entry, version, out, chunkB
 }
 
 /** Parse an index's text into `{ token, entry, dirs, files: [{ path, mode, size, chunks }] }`, refusing what the stub would. */
+/**
+ * @typedef {{ offset: number, compressed: number, decoded: number }} IndexChunk
+ * @typedef {{ mode: number, size: number, path: string, chunks: IndexChunk[] }} IndexFile
+ * @param {string} text
+ */
 export function parseIndex(text) {
   const lines = text.split('\n');
   if (lines[0] !== INDEX_HEADER) throw new Error('an index of an unknown format');
+  /** @type {{ token: string, entry: string, dirs: string[], files: IndexFile[] }} */
   const index = { token: '', entry: '', dirs: [], files: [] };
   for (const line of lines.slice(1)) {
     if (line === '') continue;

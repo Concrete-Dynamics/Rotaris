@@ -6,13 +6,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parseSteps } from '../../src/main/capture/host.js';
-// @ts-expect-error — the schedule is plain ESM beside the proof that runs it.
 import { SEND_UNSETTLED, STEER_EARLY_CLICKS, STEER_EARLY_TYPE, STEER_EARLY_WHATS, SUBSCRIBE_HOLD_MS, steerEarlyReading } from './steer-early.mjs';
-// @ts-expect-error — plain ESM, as above.
 import { unpressedClicks } from './capture-clicks.mjs';
 
-const clicks = parseSteps(STEER_EARLY_CLICKS as string);
-const typed = parseSteps(STEER_EARLY_TYPE as string)[0]!;
+const clicks = parseSteps(STEER_EARLY_CLICKS);
+const typed = parseSteps(STEER_EARLY_TYPE)[0]!;
 const whats = STEER_EARLY_WHATS as { steer: string; send: string };
 const step = (what: string) => {
   const found = clicks.find((s) => (s.arg ?? s.selector) === what);
@@ -49,7 +47,7 @@ describe('reading the launch back from its log', () => {
   const pressed = `capture: clicked "${whats.steer}"`;
   const typedLine = 'capture: typed "go left"';
   const sent = `capture: clicked "${whats.send}"`;
-  const read = (lines: string[]) => steerEarlyReading(lines.join('\n'), unpressedClicks) as string | null;
+  const read = (lines: string[]) => steerEarlyReading(lines.join('\n'), unpressedClicks);
 
   it('answers null for a dialog opened before the held reply was released, and text typed after it went', () => {
     expect(read([held, pressed, released, typedLine, sent])).toBeNull();

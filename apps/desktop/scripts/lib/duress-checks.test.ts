@@ -6,7 +6,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-// @ts-expect-error — the readers are plain ESM beside the script that runs them.
 import { PRODUCT_SHARE_BOUND, PROGRESSING_TAIL_MS, attributeWait, childrenThatRanCommands, toolIntervals, waitsOnChildren, commandsReading, compressionNote, compressionTrigger, deadlineReading, overrunReading, saysSomething, silentFailedChildren, trafficCall, usageOf, waitRanOutAt } from './duress-checks.mjs';
 
 type Report = Record<string, unknown>;

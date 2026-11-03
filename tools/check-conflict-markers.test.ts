@@ -9,7 +9,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { checkRepository, markersIn } from './check-conflict-markers.mjs';
 
 const OPEN = '<'.repeat(7);
@@ -72,12 +71,12 @@ describe('checkRepository — over the working copy and the index of a git check
     writeFileSync(join(root, 'example.md'), indented);
     git('add', '.');
     const problems = checkRepository(root);
-    expect(problems.filter((p: { where: string }) => p.where === 'index')).toEqual([
+    expect(problems!.filter((p: { where: string }) => p.where === 'index')).toEqual([
       { where: 'index', path: 'first-executions.md', line: 5, marker: OPEN },
       { where: 'index', path: 'first-executions.md', line: 7, marker: SEP },
       { where: 'index', path: 'first-executions.md', line: 9, marker: CLOSE },
     ]);
-    expect(problems.filter((p: { where: string }) => p.where === 'working copy').map((p: { path: string }) => p.path)).toEqual([
+    expect(problems!.filter((p: { where: string }) => p.where === 'working copy').map((p: { path: string }) => p.path)).toEqual([
       'first-executions.md',
       'first-executions.md',
       'first-executions.md',
@@ -96,14 +95,14 @@ describe('checkRepository — over the working copy and the index of a git check
     writeFileSync(join(root, 'a.md'), block);
     git('add', 'a.md');
     writeFileSync(join(root, 'a.md'), '# Record\n');
-    expect(checkRepository(root).map((p: { where: string; path: string }) => `${p.where} ${p.path}`)).toEqual([
+    expect(checkRepository(root)!.map((p: { where: string; path: string }) => `${p.where} ${p.path}`)).toEqual([
       'index a.md',
       'index a.md',
       'index a.md',
     ]);
     git('add', 'a.md');
     writeFileSync(join(root, 'a.md'), block);
-    expect(checkRepository(root).map((p: { where: string }) => p.where)).toEqual(['working copy', 'working copy', 'working copy']);
+    expect(checkRepository(root)!.map((p: { where: string }) => p.where)).toEqual(['working copy', 'working copy', 'working copy']);
   });
 
   it('fails a staged block when git is configured to colour its output always', () => {
@@ -114,12 +113,12 @@ describe('checkRepository — over the working copy and the index of a git check
     writeFileSync(join(root, 'first-executions.md'), block);
     git('add', 'first-executions.md');
     const problems = checkRepository(root);
-    expect(problems.filter((p: { where: string }) => p.where === 'index')).toEqual([
+    expect(problems!.filter((p: { where: string }) => p.where === 'index')).toEqual([
       { where: 'index', path: 'first-executions.md', line: 5, marker: OPEN },
       { where: 'index', path: 'first-executions.md', line: 7, marker: SEP },
       { where: 'index', path: 'first-executions.md', line: 9, marker: CLOSE },
     ]);
-    expect(problems.filter((p: { where: string }) => p.where === 'working copy')).toHaveLength(3);
+    expect(problems!.filter((p: { where: string }) => p.where === 'working copy')).toHaveLength(3);
   });
 
   it('reads the working copy of an unmerged path and reports nothing it could not read', () => {
@@ -136,8 +135,8 @@ describe('checkRepository — over the working copy and the index of a git check
     git('commit', '-q', '-am', 'ours');
     expect(() => git('merge', '-q', 'theirs')).toThrow();
     const problems = checkRepository(root);
-    expect(problems.filter((p: object) => 'unreadable' in p)).toEqual([]);
-    expect(problems.map((p: { where: string; path: string; line: number }) => `${p.where} ${p.path}:${p.line}`)).toEqual([
+    expect(problems!.filter((p: object) => 'unreadable' in p)).toEqual([]);
+    expect(problems!.map((p: { where: string; path: string; line?: number }) => `${p.where} ${p.path}:${p.line}`)).toEqual([
       'working copy a.md:3',
       'working copy a.md:5',
       'working copy a.md:7',
@@ -175,7 +174,7 @@ describe('checkRepository — over the working copy and the index of a git check
     const lock = ["lockfileVersion: '9.0'", `${OPEN} HEAD`, 'a: 1', SEP, 'a: 2', `${CLOSE} origin/main`, ''].join('\n');
     writeFileSync(join(root, 'pnpm-lock.yaml'), lock);
     git('add', '.');
-    expect(checkRepository(root).map((p: { where: string; path: string; line: number }) => `${p.where} ${p.path}:${p.line}`)).toEqual([
+    expect(checkRepository(root)!.map((p: { where: string; path: string; line?: number }) => `${p.where} ${p.path}:${p.line}`)).toEqual([
       'working copy pnpm-lock.yaml:2',
       'working copy pnpm-lock.yaml:4',
       'working copy pnpm-lock.yaml:6',
@@ -189,7 +188,7 @@ describe('checkRepository — over the working copy and the index of a git check
     writeFileSync(join(root, 'blob.bin'), Buffer.concat([Buffer.from(`${OPEN} HEAD\nx\n${CLOSE} b\n`), Buffer.from([0, 1, 2])]));
     writeFileSync(join(root, 'a.md'), block);
     git('add', '.');
-    expect([...new Set(checkRepository(root).map((p: { path: string }) => p.path))]).toEqual(['a.md']);
+    expect([...new Set(checkRepository(root)!.map((p: { path: string }) => p.path))]).toEqual(['a.md']);
   });
 
   it("reads the index side of a root below the repository top as that root's own paths", () => {
@@ -198,7 +197,7 @@ describe('checkRepository — over the working copy and the index of a git check
     mkdirSync(join(root, 'sub'));
     writeFileSync(join(root, 'sub', 'a.md'), block);
     git('add', '.');
-    expect(checkRepository(join(root, 'sub')).map((p: { where: string; path: string; line: number }) => `${p.where} ${p.path}:${p.line}`)).toEqual([
+    expect(checkRepository(join(root, 'sub'))!.map((p: { where: string; path: string; line?: number }) => `${p.where} ${p.path}:${p.line}`)).toEqual([
       'working copy a.md:5',
       'working copy a.md:7',
       'working copy a.md:9',

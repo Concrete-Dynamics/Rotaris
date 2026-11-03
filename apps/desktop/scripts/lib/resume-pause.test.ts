@@ -6,26 +6,25 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parseSteps } from '../../src/main/capture/host.js';
-// @ts-expect-error — the schedule is plain ESM beside the live run that uses it.
 import { ARM_ALONE, PAUSE, PRESSED, RUNNING, RUNNING_AT_PAUSE, TWO_RUNNING_WAIT_MS, pauseEvalSteps, pauseReading } from './resume-pause.mjs';
 
 const WAIT = 840_000;
 
 describe("the resume scenario's Pause waits for two running children, bounded (PD-ORCH-005 clauses 3, 4 and 13)", () => {
   it('the press needs two running rows, or one once the bound has run out, and the arming step first; never the first running row alone', () => {
-    const [two, alone] = (PAUSE as string).split(', ');
+    const [two, alone] = (PAUSE).split(', ');
     expect(two).toBe(`body[data-pause-armed="1"] .workspace:has(${RUNNING as string} ~ ${RUNNING as string}) button[aria-label="Pause the run"]`);
     expect(alone).toBe(`body[data-pause-armed="1"][data-pause-alone="1"] .workspace:has(${RUNNING as string}) button[aria-label="Pause the run"]`);
     // The selector before the repair matched the moment one child ran; no branch does that now without the bound's mark.
-    expect((PAUSE as string).split(', ').every((branch) => branch.includes(' ~ ') || branch.startsWith('body[data-pause-armed="1"][data-pause-alone="1"] '))).toBe(true);
+    expect((PAUSE).split(', ').every((branch) => branch.includes(' ~ ') || branch.startsWith('body[data-pause-armed="1"][data-pause-alone="1"] '))).toBe(true);
     // No press before the arming step has put its listener in place, so no press goes unread.
-    expect((PAUSE as string).split(', ').every((branch) => branch.startsWith('body[data-pause-armed="1"]'))).toBe(true);
+    expect((PAUSE).split(', ').every((branch) => branch.startsWith('body[data-pause-armed="1"]'))).toBe(true);
   });
 
   it('parses as one waiting click and two waiting evals, each logging its own expression', () => {
-    const [click] = parseSteps(`${PAUSE as string}@~${WAIT}`);
+    const [click] = parseSteps(`${PAUSE}@~${WAIT}`);
     expect(click).toMatchObject({ selector: PAUSE, arg: null, at: WAIT, until: true });
-    const evals = parseSteps((pauseEvalSteps(WAIT) as string[]).join(';;'));
+    const evals = parseSteps((pauseEvalSteps(WAIT)).join(';;'));
     expect(evals).toEqual([
       { selector: ARM_ALONE, arg: RUNNING, at: WAIT, until: true },
       { selector: RUNNING_AT_PAUSE, arg: PRESSED, at: WAIT, until: true },

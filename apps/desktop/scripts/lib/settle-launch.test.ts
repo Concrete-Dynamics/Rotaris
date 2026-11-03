@@ -7,7 +7,6 @@
  */
 import { spawn } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the module is plain ESM beside the scripts that run it.
 import { settleLaunch } from './settle-launch.mjs';
 
 /** How long the grandchild keeps the pipes: far past every bound below, so a wait on it is unmistakable. */

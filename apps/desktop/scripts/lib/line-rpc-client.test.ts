@@ -7,7 +7,6 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-// @ts-expect-error — the client is plain ESM beside the scripts that run it.
 import { lineRpcClient, stderrTail, STDERR_TAIL_CHARS } from './line-rpc-client.mjs';
 
 class FakeChild extends EventEmitter {
@@ -18,7 +17,7 @@ class FakeChild extends EventEmitter {
   signalCode: string | null = null;
   /** The request lines the client wrote, parsed. */
   readonly received: Array<{ id?: number; method: string; params?: unknown }> = [];
-  readonly kill = vi.fn((signal: string = 'SIGTERM') => { this.die(null, signal); return true; });
+  readonly kill = vi.fn((signal: NodeJS.Signals | number = 'SIGTERM') => { this.die(null, String(signal)); return true; });
 
   constructor() {
     super();

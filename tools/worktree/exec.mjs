@@ -50,10 +50,10 @@ export function shellCommand(tokens, platform = process.platform) {
   if (tokens.length === 0) throw new TypeError('shellCommand needs at least one token');
   const pretty = tokens.join(' ');
   if (platform === 'win32') {
-    const quote = (piece) => (/[\s"]/.test(piece) ? `"${piece.replaceAll('"', '""')}"` : piece);
+    const quote = (/** @type {string} */ piece) => (/[\s"]/.test(piece) ? `"${piece.replaceAll('"', '""')}"` : piece);
     return { file: tokens.map(quote).join(' '), args: [], pretty, shell: true };
   }
-  return { file: tokens[0], args: tokens.slice(1), pretty };
+  return { file: /** @type {string} */ (tokens[0]), args: tokens.slice(1), pretty };
 }
 
 /**

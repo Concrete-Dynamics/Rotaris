@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The workspace-context injection proof (first-release-plan §3.2 and §3.3; REQ-WORKSPACE-041..050 as narrowed and
  * extended by PD-WORKSPACE-002, OQ-64 as ruled 2026-09-27).

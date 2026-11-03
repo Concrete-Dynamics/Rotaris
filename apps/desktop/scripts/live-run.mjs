@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The live run (`pnpm live-run --confirm`): the built application, a real OpenAI-compatible endpoint, a real key
  * and a real workspace, end to end. It is the check to make after a major feature lands — the one thing the
@@ -422,7 +423,7 @@ if (DURESS_FIXTURE !== null && wanted.some((name) => name !== 'duress')) {
 // Shared with `slice-proof.mjs` since 2026-10-02 (R-068): `lib/endpoint-registry.mjs` holds the registry, the key store
 // and the provider id the product mints for a label; this script keeps only its prompts and its own flags.
 const keyStore = endpointStore();
-const { dpapiFileFor, plainFileFor, keyFileFor, hasKey, registry, writeRegistry, storeKey, storedKey } = keyStore;
+const { dpapiFileFor, plainFileFor, keyFileFor, hasKey, registry, writeRegistry, storeKey } = keyStore;
 
 /** A hidden prompt: PowerShell's own on Windows, `stty -echo` elsewhere. The secret never reaches a command line. */
 function promptSecret(what) {

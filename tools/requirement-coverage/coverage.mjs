@@ -113,7 +113,7 @@ export function citationsIn(text) {
     let prev = Number(m[3]);
     out.add(`${kind}-${domain}-${m[3]}`);
     for (const s of (m[4] ?? '').matchAll(STEP)) {
-      const sep = s[1].trim();
+      const sep = (s[1] ?? '').trim();
       const num = Number(s[4]);
       if (s[2] !== undefined) {
         // A full identifier in the run: a range only within one series.
@@ -160,7 +160,7 @@ export function sectionsOf(text) {
   const heads = [];
   text.split(/\r?\n/).forEach((line, i) => {
     const m = /^(#{2,4})\s+(?!REQ-)(.+?)\s*$/.exec(line);
-    if (m) heads.push([i + 1, m[2]]);
+    if (m?.[2] !== undefined) heads.push([i + 1, m[2]]);
   });
   return (line) => {
     let found = '';
@@ -481,7 +481,7 @@ export function parseBlame(text) {
   let final = 0;
   for (const row of text.split('\n')) {
     const head = /^([0-9a-f]{40}) \d+ (\d+)(?: \d+)?$/.exec(row);
-    if (head) { commit = head[1]; final = Number(head[2]); continue; }
+    if (head) { commit = head[1] ?? ''; final = Number(head[2]); continue; }
     const time = /^committer-time (\d+)$/.exec(row);
     if (time) { times.set(commit, Number(time[1])); continue; }
     if (row.startsWith('\t')) out[final - 1] = { commit, time: 0, text: row.slice(1) };
@@ -529,7 +529,7 @@ export function parseLastTouch(text) {
   let current = { commit: '', time: 0 };
   for (const row of text.split('\n')) {
     const head = /^@@([0-9a-f]{40}) (\d+)$/.exec(row);
-    if (head) { current = { commit: head[1], time: Number(head[2]) }; continue; }
+    if (head) { current = { commit: head[1] ?? '', time: Number(head[2]) }; continue; }
     if (row && !out.has(row)) out.set(row, current);
   }
   return out;
@@ -667,7 +667,7 @@ export const BASELINE = 'tools/requirement-coverage/baseline.json';
 /**
  * The baseline the tree's report gives: every domain with a live shipping requirement, its requirements cited nowhere
  * (sorted) and their count; the domains in name order, so the file's diff names exactly what moved.
- * @param {Row[]} rows
+ * @param {Array<Pick<Row, 'id' | 'domain' | 'status'>>} rows
  * @returns {Baseline}
  */
 export function baselineOf(rows) {
@@ -701,7 +701,7 @@ export const baselineText = (baseline) => `${JSON.stringify({
  *   - `malformed`: a domain whose recorded count is not the length of its list (an edit `--write-baseline` never makes).
  * It holds when all three are empty: the same requirements, uncited, in every domain.
  * @param {unknown} baseline the parsed file
- * @param {Row[]} rows
+ * @param {Array<Pick<Row, 'id' | 'domain' | 'status'>>} rows
  */
 export function checkBaseline(baseline, rows) {
   const now = baselineOf(rows).domains;

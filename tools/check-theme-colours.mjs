@@ -4,8 +4,10 @@ import { extname, join, relative } from 'node:path';
 const roots = ['packages', 'apps'];
 const sourceExtensions = new Set(['.ts', '.tsx', '.css', '.js', '.mjs', '.cjs']);
 const literal = /oklch\(\s*[\d.]|#[0-9a-fA-F]{3,8}\b|rgba?\(\s*[\d.]/;
+/** @type {string[]} */
 const violations = [];
 
+/** @param {string} directory */
 function walk(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);

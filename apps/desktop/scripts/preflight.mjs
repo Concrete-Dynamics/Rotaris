@@ -84,7 +84,12 @@ export function parseArgs(args) {
   return { help, json, ids, unknown };
 }
 
-/** `>=24.0.0` admits every node whose major is at least 24; any other shape is no constraint. */
+/**
+ * `>=24.0.0` admits every node whose major is at least 24; any other shape is no constraint.
+ * @param {string} version
+ * @param {string | null | undefined} engines
+ * @returns {Outcome}
+ */
 export function nodeCheck(version, engines) {
   const required = /^>=\s*(\d+)/.exec(String(engines ?? '').trim());
   const major = Number(/^v?(\d+)/.exec(String(version))?.[1] ?? 0);
@@ -98,7 +103,7 @@ export function nodeCheck(version, engines) {
   };
 }
 
-/** @param {() => { status: number | null, stdout: string }} run */
+/** @param {() => { status: number | null, stdout: string }} run @returns {Outcome} */
 export function gitCheck(run) {
   const r = run();
   if (r.status !== 0) {
@@ -107,7 +112,7 @@ export function gitCheck(run) {
   return { name: 'git', status: 'pass', message: `git on PATH (${String(r.stdout).trim()})` };
 }
 
-/** @param {{ path: string, present: boolean, version: string | null | undefined }} facts */
+/** @param {{ path: string, present: boolean, version: string | null | undefined }} facts @returns {Outcome} */
 export function electronCheck({ path, present, version }) {
   if (!present) {
     return {
@@ -121,6 +126,7 @@ export function electronCheck({ path, present, version }) {
 
 /**
  * @param {{ path: string, exists: boolean, buildMtimeMs: number, newest: { label: string, mtimeMs: number } | null }} facts
+ * @returns {Outcome}
  */
 export function buildCheck({ path, exists, buildMtimeMs, newest }) {
   if (!exists) {
@@ -134,6 +140,7 @@ export function buildCheck({ path, exists, buildMtimeMs, newest }) {
 
 /**
  * @param {{ ok: boolean, requiredBy?: string[], needing?: string[] }} facts
+ * @returns {Outcome}
  */
 export function bundleCheck({ ok, requiredBy = [], needing = [] }) {
   if (requiredBy.length > 0) {
@@ -152,7 +159,7 @@ export function bundleCheck({ ok, requiredBy = [], needing = [] }) {
   return { name: 'bundle', status: 'note', message: `the code-intelligence bundle is absent or stale — needed by ${who}: run pnpm code-intel:bundle` };
 }
 
-/** @param {{ error: string | null }} facts */
+/** @param {{ error: string | null }} facts @returns {Outcome} */
 export function scratchCheck({ error }) {
   if (error !== null) {
     return { name: 'scratch', status: 'fail', message: `the scratch directory .proof/ is not writable: ${error}` };
@@ -160,7 +167,7 @@ export function scratchCheck({ error }) {
   return { name: 'scratch', status: 'pass', message: 'the scratch directory .proof/ is writable' };
 }
 
-/** @param {NodeJS.ProcessEnv} env */
+/** @param {NodeJS.ProcessEnv} env @returns {Outcome} */
 export function environmentCheck(env) {
   const names = Object.keys(env).filter((key) => key.startsWith('ROTARIS_')).sort();
   if (names.length === 0) {
@@ -214,7 +221,8 @@ export function displayTargets(display) {
  * (a display number past the TCP port range) are each a miss. It runs in a child node, from its own source, because
  * the preflight is synchronous — so it closes over nothing.
  * @param {DisplayTarget[]} targets
- * @param {{ connect: (options: DisplayTarget['connect']) => import('node:net').Socket }} net
+ * @param {{ connect: (options: DisplayTarget['connect']) => { setTimeout: (ms: number) => unknown, destroy: () => unknown,
+ *   once: (event: string, listener: (...args: any[]) => void) => unknown } }} net
  * @param {(json: string) => void} write
  */
 export function connectTargets(targets, net, write) {
@@ -223,7 +231,7 @@ export function connectTargets(targets, net, write) {
   /** @param {number} i */
   const next = (i) => {
     if (i >= targets.length) { write(JSON.stringify({ reached: null, tried })); return; }
-    const t = targets[i];
+    const t = /** @type {DisplayTarget} */ (targets[i]);
     let s;
     try {
       s = net.connect(t.connect);
@@ -287,6 +295,7 @@ export function probeDisplay(display) {
  * A set DISPLAY on Linux passes only when a connect reached it (`probe`, from `probeDisplay`): a named display
  * no client can reach makes every launch exit SIGTRAP, and that is the machine, not the proof.
  * @param {{ platform: string, display: string | undefined, xvfb: boolean, probe?: DisplayProbe | null }} facts
+ * @returns {Outcome}
  */
 export function displayCheck({ platform, display, xvfb, probe = null }) {
   if (platform === 'linux') {
@@ -308,8 +317,9 @@ export function displayCheck({ platform, display, xvfb, probe = null }) {
 /**
  * A host a proof cannot run to its end on is refused before the launch, not measured
  * halfway. Null when the host is one the record names.
- * @param {{ id: string, platforms: string[], platformNotes: string[] }} entry
+ * @param {{ id: string, platforms: readonly string[], platformNotes: readonly string[] }} entry
  * @param {string} platform
+ * @returns {Outcome | null}
  */
 export function platformCheck(entry, platform) {
   if (entry.platforms.includes(platform)) return null;
@@ -337,18 +347,22 @@ function editDistance(a, b) {
   for (let i = 1; i <= a.length; i += 1) {
     const cur = [i];
     for (let j = 1; j <= b.length; j += 1) {
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      cur[j] = Math.min((prev[j] ?? 0) + 1, (cur[j - 1] ?? 0) + 1, (prev[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1));
     }
     prev = cur;
   }
   return prev[b.length];
 }
 
-/** The up-to-three registry ids closest to a typo, within an edit distance of 3. */
+/**
+ * The up-to-three registry ids closest to a typo, within an edit distance of 3.
+ * @param {string} input
+ * @param {string[]} [ids]
+ */
 export function suggestIds(input, ids = PROOFS.map((p) => p.id)) {
   const wanted = input.toLowerCase();
   return ids
-    .map((id) => [id, editDistance(wanted, id)])
+    .map((id) => /** @type {[string, number]} */ ([id, editDistance(wanted, id)]))
     .filter(([, distance]) => distance <= 3)
     .sort((a, b) => a[1] - b[1] || String(a[0]).localeCompare(String(b[0])))
     .slice(0, 3)
@@ -359,6 +373,7 @@ export function suggestIds(input, ids = PROOFS.map((p) => p.id)) {
  * The endpoint a proof that signs in needs: the registry's default with a stored key,
  * or `ROTARIS_LIVE_API_KEY` in the environment, mirroring `lib/endpoint-registry.mjs`.
  * @param {{ id: string, store: { file: string, registry: () => any, hasKey: (name: string) => boolean }, env?: NodeJS.ProcessEnv }} facts
+ * @returns {Outcome}
  */
 export function endpointCheck({ id, store, env = process.env }) {
   const reg = store.registry();
@@ -394,7 +409,9 @@ export function endpointCheck({ id, store, env = process.env }) {
 /**
  * What one named proof adds to the universal checks, from its registry record.
  * @param {string} id
- * @param {{ platform?: string, bundle?: { ok: boolean }, getStore?: () => any, env?: NodeJS.ProcessEnv, needing?: string[] }} [opts]
+ * @param {{ platform?: string, bundle?: { ok: boolean }, getStore?: () => any, env?: NodeJS.ProcessEnv, needing?: string[],
+ *   cargo?: () => { status: number | null, stdout: string | Buffer } }} [opts]
+ * @returns {Outcome[]}
  */
 export function proofChecks(id, { platform = process.platform, bundle = { ok: true }, getStore = () => endpointStore(), env = process.env, needing = [], cargo = () => spawnSync('cargo', ['--version'], { encoding: 'utf8', shell: process.platform === 'win32' }) } = {}) {
   const entry = PROOFS.find((p) => p.id === id);
@@ -435,7 +452,7 @@ export function realIo(env = process.env) {
   return {
     /** @param {string} path */
     readFile: (path) => readFileSync(path, 'utf8'),
-    exists: existsSync,
+    exists: (/** @type {string} */ path) => existsSync(path),
     /** @param {string} dir */
     list: (dir) => readdirSync(dir, { withFileTypes: true }).map((e) => ({ name: e.name, dir: e.isDirectory() })),
     /** @param {string} file */
@@ -465,6 +482,7 @@ export function realIo(env = process.env) {
     xvfb: () => findOnPath('xvfb-run', env) !== null,
     /** @param {string} display */
     display: (display) => probeDisplay(display),
+    /** @returns {{ file: string, registry: () => any, hasKey: (name: string) => boolean }} the store, as far as `endpointCheck` reads it */
     store: () => endpointStore(),
   };
 }
@@ -473,7 +491,7 @@ export function realIo(env = process.env) {
  * @param {{ ids?: string[], platform?: string, env?: NodeJS.ProcessEnv, io?: ReturnType<typeof realIo> }} [opts]
  */
 export function runPreflight({ ids = [], platform = process.platform, env = process.env, io = realIo(env) } = {}) {
-  /** @type {Outcome[]} */
+  /** @type {Array<Outcome & { scope?: string }>} */
   const checks = [];
   let engines = '';
   try {
@@ -547,6 +565,7 @@ export function formatReport(report) {
 }
 
 /** True when this module is the process entry. `resolve` so a relative `process.argv[1]` matches `import.meta.url` on Windows. */
+/** @param {string | undefined} argv1 @param {string} [metaUrl] */
 export function isMainModule(argv1, metaUrl = import.meta.url) {
   return argv1 !== undefined && metaUrl === pathToFileURL(resolve(argv1)).href;
 }

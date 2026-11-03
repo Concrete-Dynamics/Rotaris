@@ -11,12 +11,11 @@
  * The rest is the record: bodies both ways, the status, and the credential never reaching the file.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-// @ts-expect-error — the proxy is plain ESM beside the scripts that run it.
 import { emptyCompletion, startRecordingProxy } from './model-traffic.mjs';
 import { usageOf } from './duress-checks.mjs';
 import { AiSdkModelClient, type StreamPart } from '@rotaris/model';
@@ -48,7 +47,7 @@ afterEach(async () => {
 });
 
 /** An upstream on loopback, mounted under `/v1` so the proxy's base-path prefixing is exercised too. */
-async function upstream(handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void): Promise<string> {
+async function upstream(handler: (req: IncomingMessage, res: ServerResponse) => void): Promise<string> {
   const server = createServer(handler);
   opened.servers.push(server);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
@@ -99,7 +98,7 @@ describe('the live run\'s recording proxy', () => {
     expect(answer.status).toBe(200);
     expect(JSON.parse(text)).toEqual({ choices: [{ message: { content: 'hello' } }] });
 
-    const [record] = records(sink);
+    const record = records(sink)[0]!;
     expect(record['status']).toBe(200);
     expect(record['path']).toBe('/chat/completions');
     expect(record['upstream']).toBe(`${target}/chat/completions`);
@@ -130,7 +129,7 @@ describe('the live run\'s recording proxy', () => {
     // The product received the whole answer, its usage included: the cap is the record's, never the client's.
     expect(text.length).toBeGreaterThan(1_000_000);
     expect(text).toContain('"completion_tokens":10191');
-    const [record] = records(sink);
+    const record = records(sink)[0]!;
     expect(record['outcome']).toBe('complete');
     expect(String(record['responseBody'])).toMatch(/…\[truncated: \d+ bytes total\]$/);
     expect(String(record['responseBody'])).not.toContain('completion_tokens');
@@ -142,7 +141,7 @@ describe('the live run\'s recording proxy', () => {
     const target = await upstream((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200); res.end('{"choices":[]}'); }); });
     const { sink } = await proxyTo(target);
     await (await fetch(`${(opened.proxies[0] as Proxy).url}/chat/completions`, { method: 'POST', body: '{}' })).text();
-    const [record] = records(sink);
+    const record = records(sink)[0]!;
     expect(record['usage']).toBeUndefined();
   });
 
@@ -152,7 +151,7 @@ describe('the live run\'s recording proxy', () => {
     await fetch(`${(opened.proxies[0] as Proxy).url}/chat/completions`, {
       method: 'POST', headers: { authorization: 'Bearer sk-secret-value-1234567890', 'x-api-key': 'sk-another-secret-000000' }, body: '{}',
     });
-    const [record] = records(sink);
+    const record = records(sink)[0]!;
     const headers = record['requestHeaders'] as Record<string, string>;
     expect(headers['authorization']).toBe('[redacted]');
     expect(headers['x-api-key']).toBe('[redacted]');
@@ -188,7 +187,7 @@ describe('the live run\'s recording proxy', () => {
     expect(rest).toContain('[DONE]');
 
     // And the record still holds the whole stream, joined.
-    const [record] = records(sink);
+    const record = records(sink)[0]!;
     expect(record['responseBody']).toContain('first');
     expect(record['responseBody']).toContain('[DONE]');
   });
@@ -256,7 +255,7 @@ describe('the live run\'s recording proxy', () => {
       expect(reached).toBe(2);
       const all = records(sink);
       expect(all.map((r) => r['status'])).toEqual([200, 429, 200]);
-      expect(all[1]['fault']).toMatchObject({ kind: 'status', at: 2, status: 429 });
+      expect(all[1]!['fault']).toMatchObject({ kind: 'status', at: 2, status: 429 });
       // The rule is spent: it fired once, at the call it named.
       expect(proxy.stats().faultsFired).toEqual([{ kind: 'status', at: 2, path: '/chat/completions' }]);
     });
@@ -277,7 +276,7 @@ describe('the live run\'s recording proxy', () => {
         const answer = await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' });
         return await answer.text();
       })()).rejects.toThrow();
-      expect(records(sink)[0]['fault']).toMatchObject({ kind: 'cut', at: 1 });
+      expect(records(sink)[0]!['fault']).toMatchObject({ kind: 'cut', at: 1 });
     });
 
     it('stalls: the bytes stop, the connection stays open, and nothing closes it', async () => {
@@ -336,10 +335,10 @@ describe('the live run\'s recording proxy', () => {
 
       const written = records(sink);
       expect(written).toHaveLength(1);
-      expect(written[0]['outcome']).toBe('stalled');
-      expect(written[0]['fault']).toMatchObject({ kind: 'stall', at: 1 });
+      expect(written[0]!['outcome']).toBe('stalled');
+      expect(written[0]!['fault']).toMatchObject({ kind: 'stall', at: 1 });
       // What had arrived before the silence is part of the record; that is the evidence a reader needs.
-      expect(String(written[0]['responseBody'])).toContain('one');
+      expect(String(written[0]!['responseBody'])).toContain('one');
       ac.abort();
     }, 20_000);
 
@@ -387,10 +386,10 @@ describe('the live run\'s recording proxy', () => {
       const tookMs = Date.now() - started;
       expect(first).toBe(body);
       expect(tookMs).toBeGreaterThanOrEqual(3 * 60 - 10);
-      const paced = records(sink)[0]['paced'] as { events: number; firstAt: number; lastAt: number };
+      const paced = records(sink)[0]!['paced'] as { events: number; firstAt: number; lastAt: number };
       expect(paced.events).toBe(3);
       expect(paced.lastAt - paced.firstAt).toBeGreaterThanOrEqual(2 * 60 - 10);
-      expect(records(sink)[0]['fault']).toMatchObject({ kind: 'pace', at: 'every', delayMs: 60 });
+      expect(records(sink)[0]!['fault']).toMatchObject({ kind: 'pace', at: 'every', delayMs: 60 });
       // A second call of the same launch is paced too; a call with no piece is passed whole and fires nothing.
       expect(await (await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' })).text()).toBe(body);
       expect(proxy.stats().faultsFired).toHaveLength(2);
@@ -411,7 +410,7 @@ describe('the live run\'s recording proxy', () => {
       const started = Date.now();
       expect(await (await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' })).text()).toBe('{"ok":true}');
       expect(Date.now() - started).toBeLessThan(2_000);
-      expect(records(sink)[0]['paced']).toEqual({ events: 0, firstAt: null, lastAt: null });
+      expect(records(sink)[0]!['paced']).toEqual({ events: 0, firstAt: null, lastAt: null });
       expect(proxy.stats().faultsFired).toEqual([]);
     });
 
@@ -454,7 +453,7 @@ describe('the live run\'s recording proxy', () => {
       const all = records(sink);
       expect(all.map((r) => (r['fault'] as { kind?: string } | undefined)?.kind ?? null)).toEqual([null, 'empty', null, 'empty', null]);
       expect(all[1]).toMatchObject({ status: 200, outcome: 'complete', fault: { kind: 'empty', at: 1, when: 'ROOT-MARK' } });
-      expect(String(all[1]['requestBody'])).toContain('ROOT-MARK');
+      expect(String(all[1]!['requestBody'])).toContain('ROOT-MARK');
       expect(proxy.stats().faultsFired).toEqual([{ kind: 'empty', at: 1, path: '/chat/completions' }, { kind: 'empty', at: 2, path: '/chat/completions' }]);
     });
 
@@ -495,7 +494,7 @@ describe('the live run\'s recording proxy', () => {
       const target = await upstream((_req, res) => { res.writeHead(200); res.end('{"ok":true}'); });
       const { proxy, sink } = await proxyTo(target, [{ kind: 'status', at: 99, status: 500 }]);
       expect((await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' })).status).toBe(200);
-      expect(records(sink)[0]['fault']).toBeUndefined();
+      expect(records(sink)[0]!['fault']).toBeUndefined();
       expect(proxy.stats().faultsFired).toEqual([]);
     });
   });
@@ -542,11 +541,11 @@ describe('the live run\'s recording proxy', () => {
       await new Promise((r) => setTimeout(r, 50));
       const written = records(sink);
       expect(written).toHaveLength(1);
-      expect(written[0]['outcome']).toBe('aborted');
-      expect(written[0]['status']).toBe(200);
+      expect(written[0]!['outcome']).toBe('aborted');
+      expect(written[0]!['status']).toBe(200);
       // What had arrived before the client let go is part of the record.
-      expect(String(written[0]['responseBody'])).toContain('one');
-      expect(written[0]['requestBody']).toBe('{"m":"x"}');
+      expect(String(written[0]!['responseBody'])).toContain('one');
+      expect(written[0]!['requestBody']).toBe('{"m":"x"}');
       // The proxy's own letting go of the endpoint is not the hop failing.
       expect(proxy.stats().failed).toBe(0);
     });
@@ -568,8 +567,8 @@ describe('the live run\'s recording proxy', () => {
       await new Promise((r) => setTimeout(r, 50));
       const written = records(sink);
       expect(written).toHaveLength(1);
-      expect(written[0]['outcome']).toBe('aborted');
-      expect(written[0]['status']).toBeNull();
+      expect(written[0]!['outcome']).toBe('aborted');
+      expect(written[0]!['status']).toBeNull();
       expect(proxy.stats().failed).toBe(0);
     });
 
@@ -608,7 +607,7 @@ describe('the live run\'s recording proxy', () => {
         void held.then(() => res.end('data: [DONE]\n\n'));
       });
       const { proxy, sink: first } = await proxyTo(target);
-      const second = join(opened.dirs[0], 'next-scenario.jsonl');
+      const second = join(opened.dirs[0]!, 'next-scenario.jsonl');
 
       const answer = await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' });
       const reader = (answer.body as ReadableStream<Uint8Array>).getReader();
@@ -640,10 +639,10 @@ describe('the live run\'s recording proxy', () => {
       await proxy.close();
       const written = records(sink);
       expect(written).toHaveLength(1);
-      expect(written[0]['outcome']).toBe('in-flight at close');
-      expect(written[0]['status']).toBe(200);
-      expect(written[0]['requestBody']).toBe('{"m":"last"}');
-      expect(String(written[0]['responseBody'])).toContain('one');
+      expect(written[0]!['outcome']).toBe('in-flight at close');
+      expect(written[0]!['status']).toBe(200);
+      expect(written[0]!['requestBody']).toBe('{"m":"last"}');
+      expect(String(written[0]!['responseBody'])).toContain('one');
       expect(proxy.stats().recorded).toBe(1);
       expect(await within(upstreamClosed, 5_000)).toBeUndefined();
       await tail;
@@ -676,8 +675,8 @@ describe('the live run\'s recording proxy', () => {
       await new Promise((r) => setTimeout(r, 100));
       const written = records(sink);
       expect(written).toHaveLength(1);
-      expect(written[0]['outcome']).toBe('upstream-error');
-      expect(String(written[0]['responseBody'])).toContain('one');
+      expect(written[0]!['outcome']).toBe('upstream-error');
+      expect(String(written[0]!['responseBody'])).toContain('one');
       expect(proxy.stats().failed).toBe(1);
     });
   });
@@ -685,13 +684,13 @@ describe('the live run\'s recording proxy', () => {
   it('records the hop failing, and answers 502 rather than hanging', async () => {
     // An upstream that is not listening: the port is bound and released before the proxy is pointed at it.
     const target = await upstream((_req, res) => res.end());
-    await new Promise((r) => opened.servers[0].close(() => r(undefined)));
+    await new Promise((r) => opened.servers[0]!.close(() => r(undefined)));
     opened.servers = [];
     const { proxy, sink } = await proxyTo(target);
 
     const answer = await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' });
     expect(answer.status).toBe(502);
-    const [record] = records(sink);
+    const record = records(sink)[0]!;
     expect(record['status']).toBeNull();
     expect(typeof record['error']).toBe('string');
     expect(proxy.stats().failed).toBe(1);

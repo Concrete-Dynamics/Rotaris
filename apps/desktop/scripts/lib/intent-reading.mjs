@@ -25,6 +25,7 @@ const STAMP = /^\[[a-z-]+ (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z)\]/;
 export const CUT_REASON = /timed out after/;
 
 /** One launch's intent from its launch audit's payload (`launch_audits.payload`), or null where it holds none. */
+/** @param {unknown} payloadJson */
 export function auditIntent(payloadJson) {
   if (typeof payloadJson !== 'string' || payloadJson === '') return null;
   try {
@@ -46,6 +47,7 @@ export function auditIntent(payloadJson) {
  * `session <id> started` line and of the first `intent:` line after it. Null where either is missing (a log the scenario
  * overwrote, a run that never started).
  */
+/** @param {unknown} log @param {unknown} sessionId */
 export function classificationTiming(log, sessionId) {
   if (typeof log !== 'string' || typeof sessionId !== 'string' || sessionId === '') return null;
   const lines = log.split('\n');
@@ -53,8 +55,8 @@ export function classificationTiming(log, sessionId) {
   if (startAt < 0) return null;
   const intentAt = lines.findIndex((l, i) => i > startAt && INTENT_LINE.test(l));
   if (intentAt < 0) return null;
-  const started = Date.parse(STAMP.exec(lines[startAt])?.[1] ?? '');
-  const classified = Date.parse(STAMP.exec(lines[intentAt])?.[1] ?? '');
+  const started = Date.parse(STAMP.exec(lines[startAt] ?? '')?.[1] ?? '');
+  const classified = Date.parse(STAMP.exec(lines[intentAt] ?? '')?.[1] ?? '');
   if (Number.isNaN(started) || Number.isNaN(classified)) return null;
   return { startedAt: started, classifiedAt: classified, elapsedMs: classified - started };
 }
@@ -69,6 +71,7 @@ export const REASONING_TAIL_CHARS = 300;
  * endpoint's field) or `delta.reasoning_content` (the other spelling endpoints use). The model's text is quoted, never interpreted:
  * nothing here reads a category out of it (OQ-332 rejected taking the category a cut's reasoning named).
  */
+/** @param {unknown} body @param {number} [chars] */
 export function reasoningTail(body, chars = REASONING_TAIL_CHARS) {
   if (typeof body !== 'string' || body === '') return '';
   const pieces = [];
@@ -94,6 +97,10 @@ export function reasoningTail(body, chars = REASONING_TAIL_CHARS) {
  * ended nearest its end. `bytes` is the length of what it received; 0 is OQ-258's queueing endpoint. `tail` is the end of the
  * reasoning it received (`reasoningTail`, OQ-332), '' where it received none. Null where no record fits.
  */
+/**
+ * @param {ReadonlyArray<Record<string, any> | null | undefined> | null | undefined} records
+ * @param {{ startedAt: number, classifiedAt: number, elapsedMs: number } | null} timing
+ */
 export function cutTraffic(records, timing) {
   if (!Array.isArray(records) || timing === null) return null;
   const candidates = records
@@ -111,6 +118,7 @@ export function cutTraffic(records, timing) {
  * `cutsWithBytes` (cuts the endpoint had answered into, so not a queueing endpoint's) and `carried` (intents carried over,
  * unclassified, PD-ORCH-005 revision 7 clause 40).
  */
+/** @param {Array<Record<string, any>> | null | undefined} launches */
 export function classifierReading(launches) {
   const rows = [];
   for (const launch of launches ?? []) {
@@ -131,14 +139,15 @@ export function classifierReading(launches) {
   };
 }
 
-const seconds = (ms) => (ms === null ? 'time unread' : `${(ms / 1000).toFixed(1)} s`);
+const seconds = (/** @type {number | null} */ ms) => (ms === null ? 'time unread' : `${(ms / 1000).toFixed(1)} s`);
 
 /**
  * One row as the NOTE's detail prints it: `edit small_feature 0.92 via json_schema, 3.4 s`; a cut also gives its bytes received
  * and, where the endpoint streamed reasoning into it, that reasoning's tail (OQ-332).
  */
+/** @param {Record<string, any>} row */
 export function classifierRowText(row) {
-  const cutText = (traffic) => (traffic === null
+  const cutText = (/** @type {Record<string, any> | null} */ traffic) => (traffic === null
     ? ', traffic unread'
     : `, ${traffic.bytes} byte(s) received before the cut${traffic.tail ? `, its reasoning ending "${traffic.tail}"` : ''}`);
   const how = row.fallback
@@ -152,6 +161,7 @@ export function classifierRowText(row) {
  * endpoint's. Its title gives the counts OQ-258 reads; it names the reopening limb where the cuts the endpoint had answered into
  * reach 3 in 10 launches (scaled to the launches read), for the record to decide whether the endpoint was queueing.
  */
+/** @param {Record<string, any>} reading */
 export function classifierNote(reading) {
   const { classified, fallbacks, cuts, cutsWithBytes, carried } = reading;
   const limb = classified > 0 && cutsWithBytes * 10 >= 3 * classified;

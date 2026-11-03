@@ -18,8 +18,9 @@ export const RELATION_KINDS = Object.freeze([
 /** One CSS pixel, unless the relation states its own tolerance. */
 export const DEFAULT_TOLERANCE = 1;
 
-const round = (value) => Math.round(value * 100) / 100;
+const round = (/** @type {number} */ value) => Math.round(value * 100) / 100;
 
+/** @param {{ x: number, y: number, width: number, height: number, top: number, right: number, bottom: number, left: number }} box @param {string} name @returns {number} */
 function edgeOf(box, name) {
   if (name === 'right') return box.right;
   if (name === 'center') return box.x + box.width / 2;
@@ -30,9 +31,9 @@ function edgeOf(box, name) {
 }
 
 /**
- * @param relation one member of `UiLayoutRelation`
- * @param m measurement: `{ own, target, viewport, scroll, computed, hit }` — whichever the kind needs
- * @returns `{ pass, detail }`
+ * @param {any} relation one member of `UiLayoutRelation`, or whatever a page's contract held
+ * @param {any} m measurement: `{ own, target, viewport, scroll, computed, hit }` — whichever the kind needs
+ * @returns {{ pass: boolean, detail: string }}
  */
 export function evaluateRelation(relation, m) {
   if (relation === null || typeof relation !== 'object' || typeof relation.kind !== 'string') {
@@ -114,13 +115,20 @@ export function evaluateRelation(relation, m) {
  * contract boxes are examined, which is what keeps this from reporting every decorative overflow
  * in the product.
  */
+/**
+ * @param {Array<Record<string, any>>} geometryItems
+ * @param {Array<Record<string, any>>} styleItems
+ * @param {number} [tolerance]
+ * @returns {Array<{ element: string, id: string | null, component: string | null, axis: string, detail: string }>}
+ */
 export function shrunkBoxes(geometryItems, styleItems, tolerance = DEFAULT_TOLERANCE) {
   if (geometryItems.length !== styleItems.length) {
     return [{ element: '(audit)', id: null, component: null, axis: 'both', detail: `the probe returned ${geometryItems.length} boxes and ${styleItems.length} style rows; they are read pairwise` }];
   }
+  /** @type {ReturnType<typeof shrunkBoxes>} */
   const rows = [];
   geometryItems.forEach((item, index) => {
-    const style = styleItems[index];
+    const style = styleItems[index] ?? {};
     const axes = [
       { axis: 'y', overflow: style.overflowY, content: item.scrollHeight, box: item.clientHeight },
       { axis: 'x', overflow: style.overflowX, content: item.scrollWidth, box: item.clientWidth },
@@ -136,11 +144,14 @@ export function shrunkBoxes(geometryItems, styleItems, tolerance = DEFAULT_TOLER
   return rows;
 }
 
-/** Every measurement the probe collected, judged. */
+/**
+ * Every measurement the probe collected, judged.
+ * @param {Array<Record<string, any>>} measured
+ */
 export function evaluateContracts(measured) {
   return measured.flatMap((entry) => {
     if (entry.unreadable === true) return [{ id: entry.id, kind: 'schema', target: null, pass: false, detail: entry.reason ?? 'contract JSON is unreadable' }];
-    return entry.relations.map(({ relation, measurement }) => ({
+    return entry.relations.map((/** @type {{ relation: any, measurement: any }} */ { relation, measurement }) => ({
       id: entry.id,
       kind: relation.kind,
       target: relation.target ?? null,

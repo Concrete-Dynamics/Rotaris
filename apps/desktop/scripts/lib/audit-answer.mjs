@@ -9,7 +9,7 @@
  * Here that answer becomes a value the caller records as a named `AUDIT-ERROR` finding, with the view and the
  * expression, and the sweep moves on to the next view.
  *
- * @param answer whatever `driver.eval` resolved with
+ * @param {unknown} answer whatever `driver.eval` resolved with
  * @returns `{ ok: true, value }` with the parsed audit, or `{ ok: false, error }` saying what came back instead
  */
 export function readAuditAnswer(answer) {

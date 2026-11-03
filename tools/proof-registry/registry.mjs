@@ -662,12 +662,12 @@ export const PROOFS = [
 ];
 
 /** The script a record names: uniform by construction, and checked by `registry.test.ts` against the tree. */
-export const scriptPath = (id) => `apps/desktop/scripts/${id}.mjs`;
+export const scriptPath = (/** @type {string} */ id) => `apps/desktop/scripts/${id}.mjs`;
 
 /** The record document a proof's id names. */
-export const recordPath = (id) => `docs/proofs/${id}.md`;
+export const recordPath = (/** @type {string} */ id) => `docs/proofs/${id}.md`;
 
 /** The generated human index. */
 export const INDEX_PATH = 'docs/proofs/README.md';
 
-export const proofById = (id) => PROOFS.find((proof) => proof.id === id);
+export const proofById = (/** @type {string} */ id) => PROOFS.find((proof) => proof.id === id);

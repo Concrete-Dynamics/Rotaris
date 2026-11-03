@@ -69,6 +69,8 @@ import { planOwnerDecisions, qualifying as ownerQualifying } from './owner-decis
 import { planSpec, qualifying as specQualifying } from './spec.mjs';
 import { decoded, hasId, overlay, rebase, relativeLink, rewriteLinkTargets, splitTarget, within } from './text.mjs';
 
+/** @typedef {import('./text.mjs').Tree} Tree */
+
 export { rebase, relativeLink, rewriteLinkTargets };
 
 /** The record this script archives, relative to the repository root. */
@@ -142,7 +144,7 @@ export function compress(numbers) {
   const unique = numbers.filter((n, i) => numbers.indexOf(n) === i);
   for (let i = 0; i < unique.length; ) {
     let j = i;
-    while (j + 1 < unique.length && unique[j + 1] === unique[j] + 1) j++;
+    while (j + 1 < unique.length && unique[j + 1] === (unique[j] ?? Number.NaN) + 1) j++;
     if (j - i >= 2) out.push(`OQ-${unique[i]} – OQ-${unique[j]}`);
     else for (let k = i; k <= j; k++) out.push(`OQ-${unique[k]}`);
     i = j + 1;
@@ -159,9 +161,9 @@ function chainOf(/** @type {string} */ livePart, /** @type {Tree} */ tree) {
   const base = basename(mirror);
   return tree
     .list(dir)
-    .filter((name) => name === base || CONTINUED.exec(name)?.[1] + '.md' === base)
+    .filter((/** @type {string} */ name) => name === base || CONTINUED.exec(name)?.[1] + '.md' === base)
     .sort(archiveOrder)
-    .map((name) => join(dir, name));
+    .map((/** @type {string} */ name) => join(dir, name));
 }
 
 /** The opening of an archive file: its heading and the sentence that says what it holds and who writes it. */
@@ -306,7 +308,7 @@ function planOpenQuestions(root, tree, budget) {
       if (r) {
         out.push(r.line);
         i = r.end - 1;
-      } else out.push(lines[i]);
+      } else out.push(lines[i] ?? '');
     }
     out = tightenIndexLines(out);
     out = withHolds(out, part);
@@ -323,8 +325,8 @@ export function tightenIndexLines(/** @type {string[]} */ lines) {
   for (const line of lines) {
     if (INDEX_LINE.test(line)) {
       let k = out.length;
-      while (k > 0 && out[k - 1].trim() === '') k--;
-      if (k > 0 && k < out.length && INDEX_LINE.test(out[k - 1])) out.length = k;
+      while (k > 0 && (out[k - 1] ?? '').trim() === '') k--;
+      if (k > 0 && k < out.length && INDEX_LINE.test(out[k - 1] ?? '')) out.length = k;
     }
     out.push(line);
   }
@@ -350,7 +352,8 @@ function withHolds(/** @type {string[]} */ lines, /** @type {string} */ part) {
   const at = lines.findIndex((l, i) => i < 10 && l.includes(marker));
   if (at < 0) return lines;
   const link = relativeLink(part, /** @type {string} */ (archivePathOf(part)));
-  const head = lines[at].slice(0, lines[at].indexOf(marker) + marker.length);
+  const line = lines[at] ?? '';
+  const head = line.slice(0, line.indexOf(marker) + marker.length);
   const next = [...lines];
   next[at] = `${head} Holds ${compress(live) || 'no live entry'}; ${compress(archived)} archived in [the archive](${link}).`;
   return next;
@@ -363,9 +366,9 @@ function holdsRow(/** @type {string} */ index, /** @type {string} */ part, /** @
   const target = relativeLink(index, part);
   const text = tree.read(index);
   const rows = text.split('\n');
-  const at = rows.findIndex((r) => r.startsWith('| ') && r.includes(`](${target})`));
+  const at = rows.findIndex((/** @type {string} */ r) => r.startsWith('| ') && r.includes(`](${target})`));
   if (at < 0) return;
-  const cells = rows[at].split(' | ');
+  const cells = (rows[at] ?? '').split(' | ');
   if (cells.length < 3) return;
   const link = relativeLink(index, /** @type {string} */ (archivePathOf(part)));
   cells[cells.length - 1] = `${compress(live) || '—'}; ${compress(archived)} [archived](${link}) |`;

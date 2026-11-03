@@ -56,8 +56,8 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     // POSIX-spelled; a POSIX launch's pair is absolute and under its own profile.
     expect(windowsEnv['XDG_DATA_HOME']).not.toContain('\\');
     expect(windowsEnv['XDG_CONFIG_HOME']).not.toContain('\\');
-    expect(env['XDG_DATA_HOME'].startsWith(`${LOCAL}/`)).toBe(true);
-    expect(posix.isAbsolute(env['XDG_DATA_HOME']) && posix.isAbsolute(env['XDG_CONFIG_HOME'])).toBe(true);
+    expect(env['XDG_DATA_HOME']!.startsWith(`${LOCAL}/`)).toBe(true);
+    expect(posix.isAbsolute(env['XDG_DATA_HOME']!) && posix.isAbsolute(env['XDG_CONFIG_HOME']!)).toBe(true);
   });
 
   it('refuses to plan a POSIX launch from a profile no POSIX machine resolves, rather than isolating it nowhere', () => {
@@ -130,7 +130,7 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     expect(asOperator.data.startsWith(OPERATOR.home)).toBe(true);
 
     const unnamed = proofIsolationEnv({ profileRoot: POSIX_PROFILE, local: LOCAL, preferences: PREFERENCES, platform: 'darwin' });
-    const dirs = resolveUserDirs({ platform: 'darwin', env: unnamed, home: unnamed['HOME'] });
+    const dirs = resolveUserDirs({ platform: 'darwin', env: unnamed, home: unnamed['HOME']! });
     expect(dirs.config.startsWith(`${POSIX_PROFILE}/`)).toBe(true);
     expect(dirs.data.startsWith(`${POSIX_PROFILE}/`)).toBe(true);
     expect(dirs.data).not.toContain(OPERATOR.home);
@@ -138,7 +138,7 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     const scratch = '/scratch/own-home';
     const withHome = proofIsolationEnv({ profileRoot: POSIX_PROFILE, local: LOCAL, preferences: PREFERENCES, home: scratch, platform: 'darwin' });
     expect(withHome['HOME']).toBe(scratch);
-    expect(resolveUserDirs({ platform: 'darwin', env: withHome, home: withHome['HOME'] }).data.startsWith(scratch)).toBe(true);
+    expect(resolveUserDirs({ platform: 'darwin', env: withHome, home: withHome['HOME']! }).data.startsWith(scratch)).toBe(true);
   });
 
   it("the harness's own directory rules agree with the product's, on all three platforms", () => {
@@ -185,7 +185,7 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     // A caller with a scratch home of its own passes the same one to the directory rules.
     const home = '/scratch/own-home';
     const launched = proofIsolationEnv({ local: LOCAL, preferences: PREFERENCES, home, platform: 'darwin' });
-    const dirs = resolveUserDirs({ platform: 'darwin', env: launched, home: launched['HOME'] });
+    const dirs = resolveUserDirs({ platform: 'darwin', env: launched, home: launched['HOME']! });
     expect(configDirFor(LOCAL, 'darwin', home)).toBe(dirs.config);
     expect(configDirFor(LOCAL, 'darwin', home)).toBe('/scratch/own-home/Library/Application Support/rotaris');
     expect(workspacesRootFor(LOCAL, 'darwin', home)).toBe(dataLayout(dirs, 'darwin').workspaces);
@@ -201,6 +201,6 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     const dirs = resolveUserDirs({ platform: 'linux', env, home: OPERATOR.home });
     expect(dirs.data.length).toBeGreaterThan(40);
     // The reason `XDG_RUNTIME_DIR` exists in the pair at all: the data root alone overflows the 108-byte cap.
-    expect(env['XDG_RUNTIME_DIR'].length).toBeLessThan(80);
+    expect(env['XDG_RUNTIME_DIR']!.length).toBeLessThan(80);
   });
 });

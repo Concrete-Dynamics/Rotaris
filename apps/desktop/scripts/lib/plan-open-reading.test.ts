@@ -3,12 +3,11 @@
  * look for are the engine's own, and each reading is taken from what the model was sent, the log and the transcript.
  */
 import { describe, expect, it } from 'vitest';
-import { ANSWER_REPROMPT as productReprompt, BUILT_IN_PERSONAS, CLASSIFIER_SYSTEM_PROMPT, completionNotification, entryInstructionsFor, planCarryText, planCorrectionText, planHeldRowText, RungMemory, type LoopActivation } from '@rotaris/engine';
+import { ANSWER_REPROMPT as productReprompt, BUILT_IN_PERSONAS, CLASSIFIER_SYSTEM_PROMPT, completionNotification, entryInstructionsFor, planCarryText, planCorrectionText, planHeldRowText, RungMemory } from '@rotaris/engine';
 import { renderDelegateObservation } from '@rotaris/agent-tools';
 import type { ChildRow } from '@rotaris/store';
 import type { AgentBackend, TurnInput } from '@rotaris/model';
 import { createLoopClassifier } from '../../src/run-host/loop.js';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { ANSWER_REPROMPT, CARRY_HEAD, CLASSIFIER_MARK, DELEGATED_MARK, HELD_ROW, NOT_COMPLETE, REPORT_MARK, ROOT_MARK, SHOWN, STUCK_TRIGGER, UNANSWERED_ROW, answerReading, heldAnswerOf, planReading, requestOf, waitReading } from './plan-open-reading.mjs';
 
 const SYSTEM = `${ROOT_MARK} You coordinate.`;
@@ -102,7 +101,7 @@ describe('answer reading (live-run `empty-answer`, PD-ORCH-009 revision 2)', () 
     const b: AgentBackend = { ownsTheLoop: false, runTurn: async (input) => { inputs.push(input); return { status: 'succeeded', text: '{"loop_detected":true,"reason":"r","corrective_message":"m"}', usage: { input: 1, output: 1 } }; } };
     const M = { providerId: 'p', modelId: 'small', dialect: 'chat' as const };
     const classifier = createLoopClassifier({ backend: b, runModel: M, thinking: 'unset', credentialFor: () => async () => 'k', memory: new RungMemory(), configuredModel: null, slots: { small: M, fallback: null, summary: null }, modelTimeoutMs: 30_000 })!;
-    await classifier.classify({ trigger: 'stuck', reason: 'the agent reported that it cannot make progress', excerpt: '', events: [], activationCount: 1 } as LoopActivation, new AbortController().signal);
+    await classifier.classify({ trigger: 'stuck', reason: 'the agent reported that it cannot make progress', excerpt: '', events: [], activationCount: 1 }, new AbortController().signal);
     const prompt = inputs[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
     expect(prompt.startsWith(STUCK_TRIGGER)).toBe(true);
   });

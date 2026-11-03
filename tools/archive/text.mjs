@@ -123,7 +123,7 @@ export function rebase(text, from, to, tree, moved = new Map()) {
     return (rel === '' ? '' : rel + (path.endsWith('/') ? '/' : '')) + fragment;
   };
   const linked = rewriteLinkTargets(text, (target) => (isRelative(target) ? reach(target) : target));
-  return linked.replace(SPAN, (span, ticks, body) => {
+  return linked.replace(SPAN, (_span, ticks, body) => {
     const next = body.replace(RELATIVE_IN_CODE, (/** @type {string} */ p) => {
       const { path } = splitTarget(p);
       const reached = resolve(dirname(from), path);
@@ -201,7 +201,7 @@ export function firstSentenceEnd(text) {
         } else if (text[j] === '*' && it) {
           it = false;
           j += 1;
-        } else if (text[j] !== undefined && /["”’)\]]/.test(text[j])) j += 1;
+        } else if (text[j] !== undefined && /["”’)\]]/.test(text[j] ?? '')) j += 1;
         else break;
       }
       if (b || it) continue;

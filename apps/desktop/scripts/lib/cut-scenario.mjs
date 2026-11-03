@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The live run's `cut` scenario (fin42; N51 of the 2026-10-13 survey): PD-TOOLS-013 against a real model, a foreground
  * terminal call cut in flight on purpose. Revision 1 (the terminal) and revision 2 (every call its run cancels) were built and
@@ -50,6 +51,11 @@ export function isCutCommand(command) {
  * `since` (an ISO instant) keeps only the rows of sessions created once this launch began: a `running` sleep an earlier,
  * crashed scenario left in the store is not this launch's to quit on.
  */
+/**
+ * @param {Array<Record<string, any>>} rows
+ * @param {{ markerExists: boolean, now: number, firstSeen: Map<string, number>, since?: string | null }} options
+ * @returns {{ ordinal: number, command: string } | null}
+ */
 export function openCutCall(rows, { markerExists, now, firstSeen, since = null }) {
   for (const row of rows) {
     if (row.tool_name !== 'terminal' || row.status !== 'running') continue;
@@ -64,6 +70,11 @@ export function openCutCall(rows, { markerExists, now, firstSeen, since = null }
 }
 
 /** `[{ verdict: 'check'|'note', passed?, what, detail? }]` for the cut call, its issues and `summary.md`. */
+/**
+ * @typedef {{ verdict: 'check' | 'note', passed?: boolean, what: string, detail?: string | undefined }} Verdict
+ * @param {{ quitSent: boolean, calls: Array<Record<string, any>>, issues: Array<Record<string, any>>, summary: string | null }} input
+ * @returns {Verdict[]}
+ */
 export function cutVerdicts({ quitSent, calls, issues, summary }) {
   const sleeps = calls.filter((c) => c.tool_name === 'terminal' && isCutCommand(c.args?.command));
   if (!quitSent) {

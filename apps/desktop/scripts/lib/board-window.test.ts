@@ -6,7 +6,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the module is plain ESM beside the scripts that run it.
 import { READ_LONGTASKS, readLongTasks, REVEAL_UNTIL_FOCUSED, revealUntilFocused } from './board-window.mjs';
 
 type Page = { __rotarisArmedAt?: number; __rotarisLongTasks?: { at: number; ms: number }[]; __rotarisBoard?: Record<string, unknown> };

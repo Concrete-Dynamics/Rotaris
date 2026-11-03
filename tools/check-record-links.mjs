@@ -109,12 +109,12 @@ export function extractLinks(text, raw = text) {
     const textStart = match.index + 1;
     links.push({
       line: lineOf(match.index),
-      text: raw.slice(textStart, textStart + match[1].length),
-      target: unwrap(match[2]),
+      text: raw.slice(textStart, textStart + (match[1] ?? '').length),
+      target: unwrap(match[2] ?? ''),
     });
   }
   for (const match of text.matchAll(LINK_DEFINITION)) {
-    links.push({ line: lineOf(match.index), text: match[1], target: unwrap(match[2]) });
+    links.push({ line: lineOf(match.index), text: match[1] ?? '', target: unwrap(match[2] ?? '') });
   }
   links.sort((a, b) => a.line - b.line);
   return links;
@@ -175,7 +175,7 @@ export function anchorsOf(text) {
       s.replace(/[^\n]/g, ' '),
     );
   for (const match of fencesOnly.matchAll(/^ {0,3}#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$/gm)) {
-    let heading = match[1];
+    let heading = match[1] ?? '';
     const custom = /\{#([^}\s]+)\}\s*$/.exec(heading);
     if (custom !== null) {
       anchors.add(custom[1]);
@@ -475,13 +475,13 @@ export function prosePointers(text) {
   /** @type {{ line: number, target: string }[]} */
   const pointers = [];
   for (const span of unfenced.replace(/<!--[\s\S]*?-->/g, blank).matchAll(SPAN)) {
-    const at = span.index + span[1].length;
-    for (const pointer of [...defectPointers(span[2]), ...relativeDefectPointers(span[2])]) pointers.push({ line: lineOf(at) + pointer.line - 1, target: pointer.target });
+    const at = span.index + (span[1] ?? '').length;
+    for (const pointer of [...defectPointers(span[2] ?? ''), ...relativeDefectPointers(span[2] ?? '')]) pointers.push({ line: lineOf(at) + pointer.line - 1, target: pointer.target });
   }
   /** @type {{ line: number, target: string }[]} */
   const marks = [];
   for (const mark of unfenced.replace(SPAN, blank).matchAll(HISTORICAL_MARK)) {
-    for (const target of mark[1].trim().split(/\s+/).filter((t) => t !== '')) marks.push({ line: lineOf(mark.index), target });
+    for (const target of (mark[1] ?? '').trim().split(/\s+/).filter((t) => t !== '')) marks.push({ line: lineOf(mark.index), target });
   }
   return { pointers, marks };
 }

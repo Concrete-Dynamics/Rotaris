@@ -9,11 +9,8 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, wr
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { commit, plan, stillLive } from './migrate.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { entriesOf, hasLanded, headingIds, idsIn, indexLine, isRuled, qualifying, specificationCarries } from './owner-decisions.mjs';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { checkRecord } from '../check-record-links.mjs';
 
 const PART = 'docs/architecture/owner-decisions/01-escalations.md';
@@ -127,12 +124,12 @@ describe('owner decisions — what qualifies', () => {
     const spec = specificationCarries(root);
     const entries = entriesOf(read(PART));
     const byId = (id: string) => entries.find((e: { ids: string[] }) => e.ids[0] === id);
-    expect(isRuled(byId('ESC-1'))).toBe(true);
-    expect(hasLanded(byId('ESC-1'), spec).landed).toBe(true);
-    expect(isRuled(byId('ESC-2'))).toBe(true);
-    expect(hasLanded(byId('ESC-2'), spec)).toEqual({ landed: false, evidence: ['ESC-2: no sentence of docs/spec/ carries it'] });
-    expect(isRuled(byId('ESC-3'))).toBe(false);
-    expect(hasLanded(byId('ESC-4'), spec).landed).toBe(true);
+    expect(isRuled(byId('ESC-1')!)).toBe(true);
+    expect(hasLanded(byId('ESC-1')!, spec).landed).toBe(true);
+    expect(isRuled(byId('ESC-2')!)).toBe(true);
+    expect(hasLanded(byId('ESC-2')!, spec)).toEqual({ landed: false, evidence: ['ESC-2: no sentence of docs/spec/ carries it'] });
+    expect(isRuled(byId('ESC-3')!)).toBe(false);
+    expect(hasLanded(byId('ESC-4')!, spec).landed).toBe(true);
     expect(qualifying(root).map((q: { ids: string[] }) => q.ids.join(','))).toEqual(['ESC-1', 'ESC-4,ESC-5,ESC-7,ESC-8']);
   });
 

@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The rows proof (Part AA; ADR-0051's SECOND execution). The ONE row renderer drawn in the real product, in both
  * of its surfaces at once, over the fixture array the plan's seam calls for — Part Z owns the projection that

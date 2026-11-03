@@ -47,15 +47,18 @@ const USAGE = 'usage: pnpm release:pipeline preflight <tag> | portable <dir> <ta
 class Usage extends Error {}
 
 /** The tag argument through REQ-STARTUP-027's grammar; a tag outside it is a refusal, not a usage error. */
+/** @param {string} text */
 function tagOf(text) {
   return parseReleaseTag(text);
 }
 
+/** @param {readonly string[]} args @param {number} n */
 function arity(args, n) {
   if (args.length !== n) throw new Usage(USAGE);
 }
 
 /** `body`'s metadata, re-derived from the tag it records: the channel is the grammar's, never the file's say-so. */
+/** @param {string} out */
 function metadataIn(out) {
   const recorded = JSON.parse(readFileSync(join(out, 'release.json'), 'utf8'));
   return releaseMetadata(String(recorded.tag));
@@ -73,7 +76,7 @@ export function runPipelineCommand(argv, options = {}) {
   const keyRecordPath = options.keyRecord ?? KEY_RECORD;
   const repo = options.repo ?? REPO;
   const keyOptions = options.keys === undefined ? {} : { keys: options.keys };
-  const refuse = (problems) => {
+  const refuse = (/** @type {readonly string[]} */ problems) => {
     for (const p of problems) err(`error: ${p}`);
     return 1;
   };
@@ -82,7 +85,9 @@ export function runPipelineCommand(argv, options = {}) {
     if ('problems' in read) throw Object.assign(new Error('key record'), { problems: read.problems });
     return read.record;
   };
-  const [command, ...args] = argv;
+  const [command, ...rest] = argv;
+  // Every case checks its count with `arity` before it reads an argument, so each one it reads is present.
+  const args = /** @type {[string, string, string] & string[]} */ (/** @type {unknown} */ (rest));
   try {
     switch (command) {
       case 'preflight': {

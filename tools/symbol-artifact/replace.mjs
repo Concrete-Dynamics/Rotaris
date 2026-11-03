@@ -21,6 +21,7 @@ import { basename, dirname, join } from 'node:path';
 export const LADDER_MS = [50, 100, 200, 400];
 
 /** A transient replacement condition: Windows against an open handle, and shared storage with no opener at all. */
+/** @param {string | undefined} code */
 function transient(code) {
   return code === 'EPERM' || code === 'EACCES' || code === 'EBUSY';
 }
@@ -29,6 +30,7 @@ function transient(code) {
  * A synchronous sleep. These callers are scripts whose whole job is one file and which have no event loop to
  * yield to; `Atomics.wait` is the runtime's own blocking wait and needs nothing installed.
  */
+/** @param {number} ms */
 function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }

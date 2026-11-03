@@ -19,10 +19,10 @@
  * repair round of 2026-10-03).
  */
 const SERVER = 'code_intelligence';
-const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escape = (/** @type {string} */ text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const LISTED = new RegExp(`mcp: discovery of '${SERVER}'(?: \\(project (.+?)\\))? listed (\\d+) tool\\(s\\) in (\\d+) ms`);
-const failedNow = (server) => new RegExp(`mcp ${escape(server)}(?: \\(project (.+?)\\))?: tool discovery failed(?: in (\\d+) ms)? \\((.*)$`);
-const failedBefore = (server) => new RegExp(`mcp: discovery of '${escape(server)}'(?: \\(project (.+?)\\))? failed \\((.*)$`);
+const failedNow = (/** @type {string} */ server) => new RegExp(`mcp ${escape(server)}(?: \\(project (.+?)\\))?: tool discovery failed(?: in (\\d+) ms)? \\((.*)$`);
+const failedBefore = (/** @type {string} */ server) => new RegExp(`mcp: discovery of '${escape(server)}'(?: \\(project (.+?)\\))? failed \\((.*)$`);
 const FAILED = failedNow(SERVER);
 const FAILED_BEFORE = failedBefore(SERVER);
 
@@ -31,18 +31,20 @@ const FAILED_BEFORE = failedBefore(SERVER);
  * (`mcp <name> (project …): tool discovery failed in N ms (…)`, the one record since 2026-10-03) or the run host's line
  * of the packs before it (`mcp: discovery of '<name>' … failed (…)`).
  */
+/** @param {string} server */
 export function discoveryFailed(server) {
   return new RegExp(`${failedNow(server).source}|${failedBefore(server).source}`);
 }
 const SETUP_FAILED = /mcp setup: (\S+) failed — (.*)$/;
 
-const clip = (text, max = 240) => (text.length > max ? `${text.slice(0, max)}…` : text);
+const clip = (/** @type {string} */ text, max = 240) => (text.length > max ? `${text.slice(0, max)}…` : text);
 
 /**
  * `{ outcome, detail }`: `listed` when every discovery of the server listed its tools, `failed` when any failed, `empty` when
  * none failed and one listed no tool (code intelligence offered nothing, so it did not run in any sense a reader needs),
  * `setup-failed` when none ran and a setup step failed, `absent` when none ran. The detail names each line read.
  */
+/** @param {string} log */
 export function codeIntelligenceDiscovery(log) {
   const listed = [];
   const failed = [];
@@ -53,11 +55,11 @@ export function codeIntelligenceDiscovery(log) {
     const l = LISTED.exec(line);
     if (l) { listed.push(`listed ${l[2]} tool(s) in ${l[3]} ms${l[1] ? ` (project ${l[1]})` : ''}`); if (Number(l[2]) === 0) empty = true; continue; }
     const f = FAILED.exec(line);
-    if (f) { failed.push(`failed${f[2] ? ` in ${f[2]} ms` : ''}${f[1] ? ` (project ${f[1]})` : ''}: ${clip(f[3])}`); continue; }
+    if (f) { failed.push(`failed${f[2] ? ` in ${f[2]} ms` : ''}${f[1] ? ` (project ${f[1]})` : ''}: ${clip(f[3] ?? '')}`); continue; }
     const b = FAILED_BEFORE.exec(line);
-    if (b) { failedBeforeLines.push(`failed${b[1] ? ` (project ${b[1]})` : ''}: ${clip(b[2])}`); continue; }
+    if (b) { failedBeforeLines.push(`failed${b[1] ? ` (project ${b[1]})` : ''}: ${clip(b[2] ?? '')}`); continue; }
     const s = SETUP_FAILED.exec(line);
-    if (s) setup.push(`setup step ${s[1]} failed — ${clip(s[2])}`);
+    if (s) setup.push(`setup step ${s[1]} failed — ${clip(s[2] ?? '')}`);
   }
   // A pack before 2026-10-03 carries each failure twice (the warning and the run host's restatement); the run-host line
   // is read only where no warning is, so one failure is named once.
@@ -75,6 +77,7 @@ export function codeIntelligenceDiscovery(log) {
  * 2026-10-06 it matched the line without its ` (project …)` part, read nothing and recorded `NaN`
  * (docs/archive/defects/code-intel-proof-reads-the-discovery-line-without-its-project-and-records-nan.md).
  */
+/** @param {string} log */
 export function codeIntelligenceListing(log) {
   for (const line of String(log ?? '').split(/\r?\n/)) {
     const l = LISTED.exec(line);
@@ -89,6 +92,7 @@ export function codeIntelligenceListing(log) {
  * `enabled: false` still make `code-intelligence-setup` applicable?"). plan-gate-proof's guard that its fixture turned
  * code intelligence off reads this.
  */
+/** @param {string} log */
 export function codeIntelligenceDiscovered(log) {
   return ['listed', 'empty', 'failed'].includes(codeIntelligenceDiscovery(log).outcome);
 }
@@ -98,6 +102,7 @@ export function codeIntelligenceDiscovered(log) {
  * launch that discovered nothing (no run started; its detail names a failed setup step, if one did), `pass` when every
  * discovery listed tools, and `fail` otherwise — a failed discovery, or one that listed none.
  */
+/** @param {string} scenario @param {string} log */
 export function codeIntelligenceStatement(scenario, log) {
   const reading = codeIntelligenceDiscovery(log);
   if (reading.outcome === 'absent') return { verdict: 'note', label: `${scenario}: code-intelligence discovery did not run in this launch`, detail: reading.detail, reading };

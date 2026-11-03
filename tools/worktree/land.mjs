@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 // `pnpm worktree:land` — the landing sequence `AGENTS.md` ("The agent workflow") states, wrapped: fetch
 // origin/main, rebase onto it (a conflict aborts and hands back — never resolved by the tool), a landing
 // worktree at the rebased head, verify:plan read against origin/main, `pnpm check` on that exact head (a red

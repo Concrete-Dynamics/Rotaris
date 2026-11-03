@@ -17,7 +17,7 @@ function uvCalls(text: string): string[][] {
     const out: string[] = [];
     let depth = 0;
     let element = '';
-    for (let i = m.index! + m[0].length; i < text.length; i += 1) {
+    for (let i = m.index + m[0].length; i < text.length; i += 1) {
       const c = text[i]!;
       if (c === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) {
         const end = text.indexOf(text[i + 1] === '/' ? '\n' : '*/', i + 2);

@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
-// @ts-expect-error — plain ESM beside its test, loaded by package.mjs as it is.
 import { assemblePortable, FOOTER_MAGIC, patchTokenSlot, readPortable, slotToken, TOKEN_SLOT_BYTES, TOKEN_SLOT_MAGIC } from './portable.mjs';
 
 /** A stand-in stub: bytes around one token slot, the way the release build of `launcher/` lays it out. */
@@ -51,8 +50,8 @@ describe('the portable assembly (ADR-0054 P4, REQ-STARTUP-165)', () => {
       const bytes = Buffer.concat(f.chunks.map((c: { offset: number; compressed: number }) => inflateRawSync(artifact.subarray(read.stubBytes + c.offset, read.stubBytes + c.offset + c.compressed))));
       expect(bytes.equals(readFileSync(join(t.payload, ...f.path.split('/'))))).toBe(true);
     }
-    expect(read.files[0].chunks).toHaveLength(5);
-    expect(read.files[2].chunks).toHaveLength(0);
+    expect(read.files[0]!.chunks).toHaveLength(5);
+    expect(read.files[2]!.chunks).toHaveLength(0);
   });
 
   it('the token is a function of the payload: the same tree assembles byte for byte alike, one changed byte names another artifact', async () => {
@@ -88,7 +87,7 @@ describe('the portable assembly (ADR-0054 P4, REQ-STARTUP-165)', () => {
     expect(() => readPortable(out)).toThrow(/footer/);
     const slotAt = bytes.indexOf(TOKEN_SLOT_MAGIC);
     const other = Buffer.from(bytes);
-    other[slotAt + TOKEN_SLOT_MAGIC.length + 1] ^= 1;
+    other[slotAt + TOKEN_SLOT_MAGIC.length + 1]! ^= 1;
     writeFileSync(out, other);
     expect(() => readPortable(out)).toThrow(/carries the token/);
   });

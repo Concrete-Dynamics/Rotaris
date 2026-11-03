@@ -2,7 +2,6 @@
  * PD-TOOLS-006 revision 9 (OQ-256): the live run's count of hand-off answers a child received cut, read by the block's marker.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the reader is plain ESM beside the script that runs it.
 import { handOffCutReading } from './hand-off-cuts.mjs';
 
 const marker = (given: number, total: number, name: string) => `… [hand-off cut: ${given} of ${total} characters of ${name}'s answer are given here and ${total - given} are omitted, under the 100,000-character hand-off budget. The rest is in neither the workspace nor the artifact store; say in your report which parts of this answer you did not receive.]`;

@@ -26,6 +26,7 @@
  * 2026-10-15 the description read the form's pending value, so the first reading stated the unsaved edit as stored
  * (`docs/archive/defects/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md`).
  */
+/** @param {{ id: string, value: string | number, at?: number }} field */
 export function runtimeFieldSteps({ id, value, at = 8_000 }) {
   if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`a Settings field id is a bare id: ${id}`);
   if (!/^\d+$/.test(String(value))) throw new Error(`a Runtime number field takes whole digits: ${value}`);
@@ -43,6 +44,7 @@ export function runtimeFieldSteps({ id, value, at = 8_000 }) {
 }
 
 /** The renderer expression that reads one field's `aria-description` (null when the field or the attribute is absent). */
+/** @param {string} id */
 function describedBy(id) {
   return `document.getElementById('${id}')?.getAttribute('aria-description') ?? null`;
 }
@@ -52,19 +54,20 @@ function describedBy(id) {
  * form) and at the end (`All changes saved` when Save wrote it), the field's value at the end, and its `aria-description`
  * after the edit and after Save. Null where the log holds no such probe.
  */
+/** @param {string} log @param {{ id: string, at?: number }} field */
 export function fieldSaveReading(log, { id, at = 8_000 }) {
-  const probe = (prefix, selector) => {
+  const probe = (/** @type {string} */ prefix, /** @type {string} */ selector) => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const m = new RegExp(`capture: ${prefix} ${escaped} → (\\[.*\\])\\s*$`, 'm').exec(log);
     if (m === null) return null;
-    try { return JSON.parse(m[1]); } catch { return null; }
+    try { return JSON.parse(m[1] ?? ''); } catch { return null; }
   };
-  const status = (rows) => (rows === null ? null : rows[0]?.text ?? null);
-  const description = (ms) => {
+  const status = (/** @type {Array<{ text?: string }> | null} */ rows) => (rows === null ? null : rows[0]?.text ?? null);
+  const description = (/** @type {number} */ ms) => {
     const escaped = `capture: eval-at ${ms} ${describedBy(id)} → `.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const m = new RegExp(`${escaped}(.*)$`, 'm').exec(log);
     if (m === null) return null;
-    try { const value = JSON.parse(m[1].trim()); return typeof value === 'string' ? value : null; } catch { return null; }
+    try { const value = JSON.parse((m[1] ?? '').trim()); return typeof value === 'string' ? value : null; } catch { return null; }
   };
   return {
     afterEdit: status(probe(`probe-at ${at + 2_200}`, '.save-bar__status')),

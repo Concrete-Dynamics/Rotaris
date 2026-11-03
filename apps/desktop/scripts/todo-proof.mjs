@@ -20,6 +20,7 @@ const engine = readFileSync(join(repo, 'packages/engine/src/todo-view.ts'), 'utf
 // `mintTodoId` and the agent todo tool's `hexId` (`lib/backend-id-minting.mjs`); what they yield is measured by
 // `run/todo.test.ts` and `tools/tools.test.ts` above.
 const idChecks = backendIdChecks(backendIdSources(repo));
+/** @type {Record<string, unknown>} */
 const results = {
   testsPassed: test.status === 0,
   sourceNamed: /sourceLabel/.test(pane) && /Child plan/.test(engine) && /Agent plan/.test(engine) && /Planner plan/.test(engine),
@@ -29,10 +30,10 @@ const results = {
   unchangedRefreshPreserved: /seen !== fingerprint/.test(pane),
   writeThroughSources: /source === 'planner'/.test(readFileSync(join(repo, 'packages/engine/src/run/run.ts'), 'utf8')) && /source === 'child'/.test(readFileSync(join(repo, 'packages/engine/src/sessions.ts'), 'utf8')),
 };
-results.passed = Object.values(results).every(Boolean);
-results.stableBackendIdChecks = idChecks;
+results['passed'] = Object.values(results).every(Boolean);
+results['stableBackendIdChecks'] = idChecks;
 writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 2));
-if (!results.passed) {
+if (!results['passed']) {
   console.error(JSON.stringify(results, null, 2));
   process.exit(1);
 }

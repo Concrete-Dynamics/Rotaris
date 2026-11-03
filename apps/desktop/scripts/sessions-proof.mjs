@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The sessions proof (Part U): the session browser's actions end to end — the explicit repair (REQ-SESSION-057/059/060),
  * the delete with its checkpoint-ref cleanup (REQ-SESSION-166, REQ-GIT-069/151), the four-record export (REQ-SESSION-199,
@@ -35,7 +36,7 @@
  * Evidence under `.proof/sessions-proof/`: one PNG and one log per launch, the delete confirmation's PNG, the exported files,
  * `results.json` with the delete times and the export sizes and times. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
@@ -98,7 +99,6 @@ async function launch(name, extra, timeoutMs = 150_000) {
   }
   return { png, log, probes, probesAt, shots };
 }
-const text = (probes, selector) => (probes[selector] ?? []).map((p) => p.text);
 const at = (r, ms, selector) => r.probesAt.filter((p) => p.at === ms && p.selector === selector).flatMap((p) => p.found);
 const atText = (r, ms, selector) => at(r, ms, selector).map((p) => p.text).join('\n');
 const rowAt = (r, ms, sid) => at(r, ms, '.session-browser tr[data-session-id]').find((p) => p.data['data-session-id'] === sid) ?? null;

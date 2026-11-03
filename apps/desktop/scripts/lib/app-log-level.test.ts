@@ -8,7 +8,6 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the module is plain ESM beside the scripts that run it.
 import { READABLE_LEVELS, appLogLevelRefusal } from './app-log-level.mjs';
 
 const script = join(import.meta.dirname, '..', 'live-run.mjs');

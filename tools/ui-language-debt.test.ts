@@ -4,7 +4,6 @@
  * payment. The tree scan that produces the counts is `pnpm lint`'s own business.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the tools directory is plain ESM, run by node without a build step.
 import { baselineDocument, compareDebt } from './ui-language-debt.mjs';
 
 const KEY = 'packages/ui/src/shell.css|css-metric|gap:12';

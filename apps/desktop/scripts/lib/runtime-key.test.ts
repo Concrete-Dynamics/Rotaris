@@ -3,7 +3,6 @@
  * `runtime.child_timeout` as PD-CONFIG-003's Save stores it, and faults-args its `child_stall_timeout`, through one helper.
  */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — the helper is plain ESM beside the script that runs it.
 import { withPersonaKey, withRuntimeKey, withSectionKey } from './runtime-key.mjs';
 
 const BASE = ['# workspace', 'runtime:', '  permission_mode: autonomous', '  child_stall_timeout: 90', 'circuit_breaker:', '  child_timeout: 5', 'rotaris:', '  delegation_strategy: single', ''].join('\n');

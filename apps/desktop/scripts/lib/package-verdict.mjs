@@ -29,7 +29,7 @@ export function reached(report, prefix) {
  * The lines `pnpm package` closes on, for the terminal: stdout's and stderr's, in order.
  * @param {{
  *   report: { ok: boolean, ms: number, steps: { name: string }[], counterfactual: string | null, assets?: { notices?: string, line?: string } },
- *   why?: string,
+ *   why?: string | undefined,
  *   reportPath: string,
  * }} options
  * @returns {{ stdout: string[], stderr: string[] }}

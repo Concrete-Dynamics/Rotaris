@@ -1,3 +1,4 @@
+// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 // The archive's third kind (R-092; `docs/README.md`, "The archive"; `docs/architecture/hardening.md` §6 row 4): the
 // passages of an Architecture Decision Record that are history rather than decision move to
 // `docs/archive/architecture/adr/<nnnn>-history.md`, each under its own anchor, and the record keeps one line where

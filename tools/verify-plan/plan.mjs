@@ -375,7 +375,7 @@ export async function readCitations(root, ref, opts = {}) {
 
 /**
  * @param {Plan} plan
- * @param {{ base?: string, count?: number, citations?: CitationsSection }} [meta]
+ * @param {{ base?: string | undefined, count?: number, citations?: CitationsSection }} [meta]
  */
 export function formatPlan(plan, meta = {}) {
   const lines = [];
@@ -480,7 +480,7 @@ export function parseArgs(args) {
   const unknown = [];
 
   for (let i = 0; i < args.length; i += 1) {
-    const a = args[i];
+    const a = /** @type {string} */ (args[i]);
     if (a === '--help' || a === '-h') { help = true; continue; }
     if (a === '--json') { json = true; continue; }
     if (a === '--strict') { strict = true; continue; }
@@ -502,9 +502,9 @@ export function parseArgs(args) {
     }
     if (a === '--files') {
       if (files === null) files = [];
-      while (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+      while (i + 1 < args.length && !(args[i + 1] ?? '').startsWith('--')) {
         i += 1;
-        files.push(normalizePath(args[i]));
+        files.push(normalizePath(args[i] ?? ''));
       }
       continue;
     }

@@ -65,6 +65,12 @@ the runner level would stop the gate costing a whole rerun, but it hides the sig
 is open, not a repair. The shapes case is a different question: its `spawnSync` already has 60 s, so its red is not
 obviously a timeout, and what it read has to come from the log before a change is chosen.
 
+**Observed again, 2026-11-03 (the harness-repairs branch landing at `0148853`, Windows 11 ARM64, Node 26.13.0).** The
+landing's full `pnpm check` went red on the same one case, line 1031's shell-ending command, which took 7924.6 ms against
+the 5 s bound in a 618 s test run with two other sessions' builders on the host; 512 files and 7,489 cases passed beside
+it. `pnpm vitest run packages/agent-tools/src/terminal/terminal.test.ts` alone, straight after on the same tree: 93 passed,
+42 skipped, 369.7 s. Recorded, not investigated; the landing was run again.
+
 ## Specs
 
 - None contradicted as far as is known. If a grandchild really survives the window's kill, the product contradicts

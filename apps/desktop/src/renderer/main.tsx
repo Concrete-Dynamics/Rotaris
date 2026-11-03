@@ -306,7 +306,9 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
       const current = composerDraft.current ?? '';
       const next = insertTranscript(current, current.length, current.length, text).value;
       drafts.publish(next);
-      drafts.write(next);
+      // The write answers and never rejects (a gone channel answers null). This append runs only once the composer has
+      // unmounted (DictationControl), so no error line is there to raise a refusal in (PD-CHAT-011); nothing awaits it.
+      void drafts.write(next);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `drafts` is rebuilt each render over a stable module-level ref
   }), [backend]);

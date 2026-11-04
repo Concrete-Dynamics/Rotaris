@@ -87,7 +87,7 @@ place); the error notice carries OQ-281's `open-settings`/`project` action (`mai
 `RESOLVED_IN_PROJECT_SETTINGS`) and is withdrawn when an open succeeds, and `corruptRefusal`'s detail names the two remedies and
 the route by hand. **Step 4** is "Set the damaged store aside and start a new one…" (`main/store-resolution.ts` `establishFlow`
 and `setAsideBox`; `packages/store/src/establish.ts` `establishInEmptyPlace(…, 'corrupt')`): Cancel the default, the question
-quoting SQLite's report and saying that it recovers nothing, that every session in the damaged store will no longer be listed and
+quoting SQLite's report and saying that how many sessions it holds cannot be read, that it recovers nothing, that every session in the damaged store will no longer be listed and
 that this machine holds no other copy; the store's directory is moved aside whole under the restore's own `displaced` stamp
 (`claimAsideName`), so the database, its log and its index are kept byte for byte, and the kept place is named on success. **Step
 5** is the same question's last sentence and Settings' restore beside the action: the restore is named as the remedy that returns

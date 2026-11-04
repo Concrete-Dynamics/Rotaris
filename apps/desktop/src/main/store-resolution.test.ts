@@ -128,11 +128,11 @@ describe('the restore while the open holds a store that failed its integrity che
 describe('"Set the damaged store aside and start a new one" (OQ-477, ADR-0058 part 11 step 4)', () => {
   const setAside = { 'workspace.store.establish.assess': { kind: 'workspace.store.establishable', place: '/data/workspaces/v1-aaaa', kept: '/data/workspaces/v1-aaaa.displaced-S', stamp: 'S', report: REPORT } } as const;
 
-  it('asks first in the ruling\'s words: what was found, that it recovers nothing and no other copy is here, the restore named; Cancel the default', () => {
+  it('asks first in the ruling\'s words: what was found, that its session count cannot be read, that it recovers nothing and no other copy is here, the restore named; Cancel the default', () => {
     expect(setAsideBox('/data/workspaces/v1-aaaa', '/data/workspaces/v1-aaaa.displaced-S', REPORT)).toEqual({
       type: 'warning', title: 'Set the damaged store aside and start a new one',
       message: 'The session store for this workspace (/data/workspaces/v1-aaaa) failed its integrity check: *** in database main ***; Tree 4 page 4: btreeInitPage() returns error code 11.',
-      detail: 'Starting a new store recovers nothing: every session in the damaged store will no longer be listed, and this machine holds no other copy of them. The damaged store is moved aside to /data/workspaces/v1-aaaa.displaced-S, unchanged, and kept. If you hold a backup of this workspace, restoring it instead returns the sessions it holds.',
+      detail: 'How many sessions it holds cannot be read. Starting a new store recovers nothing: every session in the damaged store will no longer be listed, and this machine holds no other copy of them. The damaged store is moved aside to /data/workspaces/v1-aaaa.displaced-S, unchanged, and kept. If you hold a backup of this workspace, restoring it instead returns the sessions it holds.',
       buttons: ['Cancel', 'Set aside and start a new store'], defaultId: 0, cancelId: 0, noLink: true,
     });
   });

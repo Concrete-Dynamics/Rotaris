@@ -185,14 +185,15 @@ export function establishBox(place: string, kept: string): BoxOptions {
 
 /**
  * OQ-477: the confirmation for "Set the damaged store aside and start a new one…", in the ruling's words — what was found, with
- * SQLite's report; that it recovers nothing and this machine holds no other copy; where it is kept; and the restore named as
- * the remedy that returns history (ADR-0058 part 11, steps 4 and 5), with no backup looked for.
+ * SQLite's report; that how many sessions it holds cannot be read ("the same" the restore's first question says of it); that it
+ * recovers nothing and this machine holds no other copy; where it is kept; and the restore named as the remedy that returns
+ * history (ADR-0058 part 11, steps 4 and 5), with no backup looked for.
  */
 export function setAsideBox(place: string, kept: string, report: readonly string[]): BoxOptions {
   return {
     type: 'warning', title: 'Set the damaged store aside and start a new one',
     message: `The session store for this workspace (${place}) failed its integrity check: ${report.join('; ')}.`,
-    detail: `Starting a new store recovers nothing: every session in the damaged store will no longer be listed, and this machine holds no other copy of them. The damaged store is moved aside to ${kept}, unchanged, and kept. If you hold a backup of this workspace, restoring it instead returns the sessions it holds.`,
+    detail: `How many sessions it holds cannot be read. Starting a new store recovers nothing: every session in the damaged store will no longer be listed, and this machine holds no other copy of them. The damaged store is moved aside to ${kept}, unchanged, and kept. If you hold a backup of this workspace, restoring it instead returns the sessions it holds.`,
     buttons: ['Cancel', 'Set aside and start a new store'], defaultId: 0, cancelId: 0, noLink: true,
   };
 }

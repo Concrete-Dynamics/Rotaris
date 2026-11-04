@@ -11,6 +11,13 @@ unit test of the gate's test stage, a different one each time, with the rest gre
 | 393cd271 | 41801065291 | `packages/workspace/src/git/checkpoints.test.ts` › REQ-GIT-034/003 (nothing to record on a clean tree, HEAD tracking `.rotaris/` paths) | `expected 'failed' to be 'nothing-to-record'`, 2311 ms; 542 passed, 5 skipped |
 | 747b3911 | 41789009893 | `tools/worktree/land.test.ts` › re-rebases and gates again when origin/main moves under the push | 539 passed, 5 skipped |
 
+*Corrected 2026-11-04 (acceptance hrda, AF-02):* not every one of those reds is a test. Four of them (de779d29 at 00:37Z,
+e53dc799, 42fc3235 and 1d663de6) never reached the test stage: `pnpm lint`'s `eslint .` ran out of JavaScript heap at
+Node's default limit, and every CI run from f7f5dc02 (11:24Z) on died the same way. That mode has a cause of its own and
+a note of its own,
+[the CI gate's lint runs out of JavaScript heap](the-ci-gates-lint-runs-out-of-javascript-heap-at-nodes-default-heap-limit.md);
+this note keeps the runs that reached the tests.
+
 Every one of these heads passed the same `pnpm check` green on the landing host before its fast-forward push (the
 landing's own gate, 7 to 9 minutes idle), so the product under test is not what differs: the GitHub-hosted runner is
 two cores with a slower disk, the test stage runs its process-bound cases (git subprocesses, the landing's scratch

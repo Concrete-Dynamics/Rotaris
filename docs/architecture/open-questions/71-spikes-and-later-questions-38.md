@@ -188,6 +188,8 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 
 **What is open.** `ProcessLink` (`packages/shell/src/process-link.ts`) reads every message from a child with `ProcessMessageSchema.safeParse` and drops one it cannot read with no trace: nothing is logged and the request it may have answered stays pending. A run host or workspace service speaking another contract version (`v`), or a reply kind main does not know, therefore reads in main as `NoReplyWithinBound` at the request's bound, with nothing in the log that says a message arrived and was refused. No requirement or decision says whether such a drop is recorded; the brief that raised this assumed it was ("dropped and logged").
 
-**What the build proceeds under.** The drop as built: silent, the request left to its deadline, the next valid message answered. `packages/shell/src/process-link.test.ts` pins that, citing this entry.
+The renderer's boundary is the same shape. `dispatchCommand` (`apps/desktop/src/main/command-dispatch.ts`) answers a request `CommandRequestSchema` cannot read, or one past OQ-467's bounds, `command.malformed` as a value and writes no line, where a throwing handler leaves one `error` line and a refused sender one `warning` line. `pnpm driver-proof` step 9e measured it on 2026-11-04: an unknown kind and a 2,000,000-character prompt sent by the page itself each left no line of the product's.
+
+**What the build proceeds under.** Both as built: the process link's drop silent, the request left to its deadline and the next valid message answered (`packages/shell/src/process-link.test.ts`), and a malformed command answered with no line (`driver-proof` step 9e), each citing this entry.
 
 **What decides it.** A ruling on whether a refused process message leaves one line (at which level, naming what, under PD-MONITOR-002's rule that the log never carries a payload) or stays silent, and whether a burst of them is bounded.

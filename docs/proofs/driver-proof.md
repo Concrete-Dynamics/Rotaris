@@ -18,3 +18,18 @@ driver's `webPreferences` op (`webContents.getLastWebPreferences()`) and assert 
 (`apps/desktop/src/main/secure-web-preferences.ts`); step 9d asks OQ-459's policy from the application's own page —
 the microphone and the clipboard write `granted`, a camera, a location and a notification refused, `getDisplayMedia` and
 `getUserMedia({ video })` `NotAllowedError` — and notes the HID, serial and USB devices the page holds.
+
+Since 2026-11-04 (R-091 bundle F3, `docs/architecture/hardening.md` §3.5 row 7 and §3.1 row 6) step 9e measures the command
+boundary in the built app. The page sends two requests through its own preload channel (`window.rotaris.command`, the sender
+check included): a kind the contract does not have, answered `{ ok: false, code: 'command.malformed' }` with the headline
+"The request could not be read: the kind is not valid", and a `session.start` whose prompt is 2,000,000 characters, answered
+`command.malformed` with "The prompt is longer than 1,048,576 characters" (OQ-467's bound), the value echoed neither in the
+answer nor in the log. Each step's one line in the application log is the driver's own for the eval that sent it: a malformed
+request is refused as a value and the product writes none ([OQ-485](../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-485)
+asks whether it should). The driver's `commandThrowing` op (`apps/desktop/src/main/driver.ts`, compiled out of a packaged
+build with the rest of the driver) then sends `theme.get` through main's own `dispatchCommand` over a table in which every
+handler throws, since no product handler throws on purpose: the answer is `command.failed`, "The command failed", its detail
+the thrown message through the redaction pass (`token=***`), and the log holds exactly one `error` line,
+`command theme.get failed: its handler threw; answered command.failed (ADR-0019)`, followed by the redacted stack, and the
+secret nowhere (ADR-0019, REQ-TOOLS-171). First execution 2026-11-04 on Windows 11 ARM64: all four checks of 9e passed in
+the second run; the first run's slice of the log missed each step's first line (the harness's, repaired before the second).

@@ -52,6 +52,18 @@ export function namesAuxiliary(which: string): boolean {
   return which === 'approval' || which === 'terminal' || which === 'auth-recovery' || which.startsWith('persona:');
 }
 
+/**
+ * The message `commandThrowing`'s handlers throw (R-091, F3). It carries an assignment of a secret-looking key on purpose:
+ * the dispatcher answers the message through the one redaction pass (REQ-TOOLS-171), so the answer and the log line must
+ * read `token=***` and never the value.
+ */
+export const THROWING_HANDLER_MESSAGE = 'driver: this handler throws on purpose; token=sk-driver-not-a-secret';
+
+/** A handler table of the same kinds in which every handler throws `cause` — what `commandThrowing` dispatches over. */
+export function everyHandlerThrows<T extends object>(handlers: T, cause: Error): T {
+  return Object.fromEntries(Object.keys(handlers).map((kind) => [kind, (): never => { throw cause; }])) as T;
+}
+
 export interface DriverDeps {
   /**
    * The main window the driver acts on; `null` when the selector names none, which every op reports rather than
@@ -71,6 +83,13 @@ export interface DriverDeps {
   log: (message: string) => void;
   /** The product's own command path — the same function the renderer's channel reaches. */
   command: (request: unknown, win: BrowserWindow) => Promise<CommandOutcome>;
+  /**
+   * Verification only (R-091, `docs/architecture/hardening.md` §3.5 row 7, F3): the product's own dispatcher — the
+   * `dispatchCommand` behind `runCommand`, with main's own window resolution, settling and log — over a handler table in
+   * which every handler throws `cause` (`everyHandlerThrows`). No product handler throws on purpose, so this is the one way
+   * the built app reaches the dispatcher's `command.failed` answer (ADR-0019); everything else on the path is the product's.
+   */
+  commandThrowing: (request: unknown, win: BrowserWindow, cause: Error) => Promise<CommandOutcome>;
   /** Verification only: arm REQ-SHELL-011's deferred offer for the selected main window. */
   deferProjectOffer: (win: BrowserWindow, delayMs: number) => void;
   /**
@@ -542,6 +561,8 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
       }
       case 'command':
         return deps.command(request.request, windowOrThrow(target));
+      case 'commandThrowing':
+        return deps.commandThrowing(request.request, windowOrThrow(target), new Error(THROWING_HANDLER_MESSAGE));
       case 'deferProjectOffer': {
         const { win, main } = resolvedOrThrow(target);
         // REQ-SHELL-011's offer belongs to a main window; an auxiliary one has none to defer.

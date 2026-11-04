@@ -14,6 +14,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-11-04**
+
+**The driver's `commandThrowing` (hardening F3, R-091; ADR-0019; 2026-11-04, `../hardening.md` §3.5 row 7).** `02-process-view/01-what-each-process-owns.md` names the driver seam's new op: main's own `dispatchCommand` over a handler table in which every handler throws (`everyHandlerThrows`, `main/driver.ts`), the one way the built app reaches `command.failed`, which `driver-proof` step 9e measures beside a malformed and an oversized command sent through the page's own channel. `runCommand` is that dispatch over the product's own table (`dispatchOver(handlers)` in `main/index.ts`); no channel, message, process or ownership changed, and a packaged build compiles the op out with the rest of the driver.
+
 Last reconciled with the code: **2026-11-03**
 
 **Each process kind typechecked against its own host (hardening E2, R-091; 2026-11-03).** The root `tsconfig.json` became a

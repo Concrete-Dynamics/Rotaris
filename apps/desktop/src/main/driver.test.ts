@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { FakeClock } from '@rotaris/kernel';
-import { namesAuxiliary, PAINT_BOUND_MS, PAINTED_SCRIPT, startDriver, type AuxiliaryWindow, type Driver, type DriverDeps } from './driver.js';
+import { everyHandlerThrows, namesAuxiliary, PAINT_BOUND_MS, PAINTED_SCRIPT, startDriver, THROWING_HANDLER_MESSAGE, type AuxiliaryWindow, type Driver, type DriverDeps } from './driver.js';
+import { dispatchCommand } from './command-dispatch.js';
+import type { CommandHandlers, MainWindowState } from './commands/context.js';
 
 /**
  * The driver seam over a real loopback socket, with a stand-in window and the clock ports faked. Verification tooling:
@@ -55,6 +57,7 @@ async function harness(paints: 'at-once' | 'never' = 'at-once', auxiliary: () =>
   const ended: string[] = [];
   const deferred: number[] = [];
   const commanded: number[] = [];
+  const thrown: { request: unknown; window: number; cause: Error }[] = [];
   const { win, state } = fakeWindow(paints, 7, answer);
   const deps: DriverDeps = {
     // The one main window, by index 0, by a suffix of its workspace path, or as the active window.
@@ -65,6 +68,7 @@ async function harness(paints: 'at-once' | 'never' = 'at-once', auxiliary: () =>
     monotonic: clock,
     log: () => undefined,
     command: (_request, target) => { commanded.push(target.webContents.id); return Promise.resolve({ ok: true }); },
+    commandThrowing: (request, target, cause) => { thrown.push({ request, window: target.webContents.id, cause }); return Promise.resolve({ ok: false, code: 'command.failed', headline: 'The command failed' }); },
     deferProjectOffer: (target) => { deferred.push(target.webContents.id); },
     quit: () => { ended.push('quit'); },
     exit: () => { ended.push('exit'); },
@@ -90,7 +94,7 @@ async function harness(paints: 'at-once' | 'never' = 'at-once', auxiliary: () =>
     const id = nextId++;
     return new Promise((resolve) => { waiting.set(id, resolve); socket.write(`${JSON.stringify({ id, token, op, ...args })}\n`); });
   };
-  return { send, clock, ended, state, endpointFile, dir, deferred, commanded };
+  return { send, clock, ended, state, endpointFile, dir, deferred, commanded, thrown };
 }
 
 /** Let the socket and the seam's promise chain run. */
@@ -326,5 +330,40 @@ describe("the driver's webPreferences (R-091; docs/architecture/hardening.md §3
       webSecurity: true, allowRunningInsecureContent: null, experimentalFeatures: null, enableBlinkFeatures: '', webviewTag: null,
     });
     expect(reply.ok).toBe(true);
+  });
+});
+
+describe("the driver's commandThrowing (R-091, docs/architecture/hardening.md §3.5 row 7, F3)", () => {
+  it('relays the request and the selected window with an Error carrying the fixed message, and answers what main answers', async () => {
+    const h = await harness();
+    const reply = await h.send('commandThrowing', { request: { kind: 'theme.set', name: 'nocturne' } });
+    expect(reply).toEqual({ id: 1, ok: true, value: { ok: false, code: 'command.failed', headline: 'The command failed' } });
+    expect(h.thrown).toHaveLength(1);
+    expect(h.thrown[0]!.request).toEqual({ kind: 'theme.set', name: 'nocturne' });
+    expect(h.thrown[0]!.window).toBe(7);
+    expect(h.thrown[0]!.cause).toBeInstanceOf(Error);
+    expect(h.thrown[0]!.cause.message).toBe(THROWING_HANDLER_MESSAGE);
+    expect(h.commanded).toEqual([]);
+  });
+
+  it("over main's own dispatcher, every kind's handler throws and is answered command.failed with the message redacted, in one error line", async () => {
+    const product = { 'theme.set': () => ({ ok: true as const }), 'theme.get': () => ({ ok: true as const }) };
+    const table = everyHandlerThrows(product, new Error(THROWING_HANDLER_MESSAGE));
+    expect(Object.keys(table)).toEqual(['theme.set', 'theme.get']);
+    const lines: { message: string; level: string }[] = [];
+    const outcome = await dispatchCommand({ kind: 'theme.set', name: 'nocturne' }, 7, {
+      handlers: table as unknown as CommandHandlers,
+      forCommand: () => ({ wcId: 7, workspace: 'C:/ws', workspaceId: 'ws-1' }) as unknown as MainWindowState,
+      awaitWorkspace: () => Promise.resolve(),
+      settle: (o) => o,
+      log: (message, level) => { lines.push({ message, level }); },
+    });
+    expect(outcome).toEqual({ ok: false, code: 'command.failed', headline: 'The command failed', detail: 'driver: this handler throws on purpose; token=***' });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.level).toBe('error');
+    expect(lines[0]!.message.split('\n')[0]).toBe('command theme.set failed: its handler threw; answered command.failed (ADR-0019)');
+    expect(lines[0]!.message).not.toContain('sk-driver-not-a-secret');
+    // The product's own table is untouched.
+    expect(product['theme.set']()).toEqual({ ok: true });
   });
 });

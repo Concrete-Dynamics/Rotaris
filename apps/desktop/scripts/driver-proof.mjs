@@ -36,6 +36,12 @@
  * (`main/secure-web-preferences.ts`), and asks OQ-459's policy from the application's own page:
  * the microphone and the clipboard write granted, a camera, a display capture, a location and a notification refused.
  *
+ * Since 2026-11-04 (R-091, hardening F3, step 9e) it measures the command boundary in the built app: the page sends a
+ * request of an unknown kind and a 2,000,000-character prompt through its own preload channel, each answered
+ * `command.malformed` as a value (the second naming the prompt and OQ-467's bound) with no line of the product's
+ * (OQ-485), and the driver's `commandThrowing` reaches the dispatcher's `command.failed` answer with one `error` line and
+ * the thrown message redacted (ADR-0019, REQ-TOOLS-171).
+ *
  * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `shots/`, `run-app.log`, `cut-app.log`, `results.json`.
  * `--skip-build` skips the build.
  */
@@ -215,6 +221,48 @@ try {
   check('OQ-459: a display capture and a camera are refused to the own page', display === 'NotAllowedError' && camera === 'NotAllowedError', `getDisplayMedia ${display}; getUserMedia(video) ${camera}`);
   const devices = await d.eval(`Promise.all([navigator.hid?.getDevices(), navigator.serial?.getPorts(), navigator.usb?.getDevices()].map((p) => (p ?? Promise.resolve([])).then((l) => l.length, (e) => e.name)))`);
   note('OQ-459: devices the page already holds (HID, serial, USB)', JSON.stringify(devices));
+
+  // 9e. The command boundary, measured in the built app (R-091, docs/architecture/hardening.md §3.5 row 7, F3; ADR-0044,
+  // ADR-0019). Steps (1) and (2) are sent by the page itself through the preload's `command` — the renderer's own channel,
+  // its sender check included — and step (3) through the driver's `commandThrowing`, main's own dispatcher with every
+  // handler throwing, since no product handler throws on purpose. Each asserts the outcome's shape and the one line the step
+  // leaves in the application log: for (1) and (2) the driver's own line for the eval that sent it, and none of the
+  // product's, since a malformed request is refused as a value and leaves no line (OQ-485 asks whether it should); for (3)
+  // the dispatcher's `error` line.
+  // The log's complete lines: the empty text after its last newline is no line, or a slice taken from the count before a
+  // step would start at it and miss the step's first line (measured: the first run of this step read none of its lines).
+  const logLines = () => (existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '').split(/\r?\n/).slice(0, -1);
+  const productCommandLine = (line) => !line.includes('driver: ') && /\bcommand\b|malformed/i.test(line);
+  const viaPage = (request) => `window.rotaris.command(${request}).then((outcome) => outcome, (e) => ({ rejected: String(e?.message ?? e) }))`;
+  const evalLine = /driver: eval .*ok\s*$/;
+  const stepLines = async (before, what) => until(() => logLines().slice(before), (lines) => lines.some((line) => evalLine.test(line)), { timeoutMs: 10_000, what }).catch(() => logLines().slice(before));
+
+  // (1) A kind the contract does not have.
+  const before1 = logLines().length;
+  const unknownKind = await d.eval(viaPage(`{ kind: 'driver-proof.no-such-kind' }`));
+  const lines1 = await stepLines(before1, 'the driver\'s line for the unknown kind\'s eval');
+  check('9e(1): a request of an unknown kind is answered command.malformed, a value, with no line of the product\'s', unknownKind?.ok === false && unknownKind.code === 'command.malformed' && /^The request could not be read/.test(unknownKind.headline ?? '') && lines1.filter((line) => evalLine.test(line)).length === 1 && lines1.filter(productCommandLine).length === 0, `outcome ${JSON.stringify(unknownKind)}; the step's lines: ${lines1.filter((line) => evalLine.test(line) || productCommandLine(line)).length} (${lines1.filter(productCommandLine).length} of the product's)`);
+
+  // (2) A prompt past the contract's bound (OQ-467: FREE_TEXT_MAX, 1,048,576 characters): refused before any handler, the
+  // headline naming the field and the bound, and the value echoed neither in the outcome nor in the log.
+  const OVERSIZED = 'driver-proof-oversized-9e';
+  const before2 = logLines().length;
+  const oversized = await d.eval(viaPage(`{ kind: 'session.start', prompt: '${OVERSIZED}' + 'x'.repeat(2_000_000) }`));
+  const lines2 = await stepLines(before2, 'the driver\'s line for the oversized prompt\'s eval');
+  const echoed = logLines().filter((line) => line.includes(OVERSIZED)).length + (JSON.stringify(oversized ?? null).includes(OVERSIZED) ? 1 : 0);
+  check('9e(2): a 2,000,000-character prompt is answered command.malformed naming the prompt and the bound, never echoed', oversized?.ok === false && oversized.code === 'command.malformed' && oversized.headline === 'The prompt is longer than 1,048,576 characters' && echoed === 0 && lines2.filter((line) => evalLine.test(line)).length === 1 && lines2.filter(productCommandLine).length === 0, `outcome ${JSON.stringify(oversized)}; the value echoed ${echoed} time(s); ${lines2.filter(productCommandLine).length} line(s) of the product's`);
+
+  // (3) A handler that throws: the invoke does not hang or reject, the answer is `command.failed` with the thrown message
+  // through the redaction pass (its `token=` value masked), and the application log holds one `error` line naming the kind.
+  const before3 = logLines().length;
+  const failedLine = /command theme\.get failed: its handler threw; answered command\.failed \(ADR-0019\)/;
+  const thrown = await d.commandThrowing({ kind: 'theme.get' });
+  const lines3 = await until(() => logLines().slice(before3), (lines) => lines.some((line) => failedLine.test(line)), { timeoutMs: 10_000, what: 'the dispatcher\'s error line' }).catch(() => logLines().slice(before3));
+  const failedLines = lines3.filter((line) => failedLine.test(line));
+  const leaked = logLines().filter((line) => line.includes('sk-driver-not-a-secret')).length;
+  check('9e(3): a handler that throws is answered command.failed, its message redacted, with one error line naming the kind', thrown?.ok === false && thrown.code === 'command.failed' && thrown.headline === 'The command failed' && thrown.detail === 'driver: this handler throws on purpose; token=***' && failedLines.length === 1 && /\]\s+error\s+command theme\.get failed/.test(failedLines[0] ?? '') && leaked === 0, `outcome ${JSON.stringify(thrown)}; ${failedLines.length} line(s): ${failedLines[0] ?? 'none'}; the secret in the log ${leaked} time(s)`);
+  const afterwards = await d.command({ kind: 'theme.get' });
+  check('9e: the product answers its own handler again after the boundary steps', afterwards?.ok === true, `theme.get ${JSON.stringify(afterwards)}`);
 
   // 10. The photograph.
   const shot = join(output, 'screen.png');

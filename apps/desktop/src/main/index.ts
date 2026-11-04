@@ -11,7 +11,7 @@ import { RunFailurePublisher, runEndingPublication } from './run-failure-notice.
 import { reauthCommands } from './commands/reauth.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
-import { startDriver, type AuxiliaryWindow } from './driver.js';
+import { everyHandlerThrows, startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
@@ -1901,7 +1901,12 @@ async function main(): Promise<void> {
     const parent = BrowserWindow.getAllWindows().find((b) => !b.isDestroyed() && b.webContents.id === id)?.getParentWindow();
     return parent && !parent.isDestroyed() ? parent.webContents.id : undefined;
   };
-  const runCommand = (raw: unknown, senderId = activeWindow()?.wcId ?? -1): Promise<CommandOutcome> => dispatchCommand(raw, senderId, {
+  /**
+   * R-091 (hardening F3): the dispatch over a handler table — the product's own table for `runCommand`, and, for the driver
+   * seam's `commandThrowing` alone, a table in which every handler throws (`everyHandlerThrows`), so the built app's
+   * `command.failed` path is measured with main's own window resolution, settling and log.
+   */
+  const dispatchOver = (table: typeof handlers) => (raw: unknown, senderId = activeWindow()?.wcId ?? -1): Promise<CommandOutcome> => dispatchCommand(raw, senderId, {
     /**
      * A2 — REQ-SHELL-020: a command is answered for the window that RAISED it, so every workspace-scoped read
      * resolves against the sender rather than against "the main window". `MainWindows.forCommand` holds the
@@ -1923,13 +1928,14 @@ async function main(): Promise<void> {
      * A4: `dispatchCommand` reads the request, calls the handler the table names and catches what it throws
      * (`command.failed`, ADR-0019): nothing throws out of here.
      */
-    handlers,
+    handlers: table,
     forCommand: (id) => mainWindows.forCommand(id, parentOf),
     awaitWorkspace: (wcId) => mainWindows.awaitWorkspace(wcId),
     // OQ-281 / REQ-SESSION-202: in a window whose store the open refused, "no workspace" is said as the condition held.
     settle: (outcome, w) => (w.workspaceId !== undefined || w.workspace === '(no workspace)' ? outcome : answerUnderHeldRefusal(outcome, w, storeRefusals.get(canonicalPath(w.workspace))?.held)),
     log: (m, level) => { log(m, level); },
   });
+  const runCommand = dispatchOver(handlers);
   /**
    * R-091 (Electron security checklist 17; ADR-0044): the channel answers only the application's own page, in a window the
    * application opened (`command-sender.ts`). A frame that is any other page is refused in every build; a sender no window
@@ -2021,6 +2027,7 @@ async function main(): Promise<void> {
       monotonic: clocks.monotonic,
       log,
       command: (request, selectedWindow) => runCommand(request, selectedWindow.webContents.id),
+      commandThrowing: (request, selectedWindow, cause) => dispatchOver(everyHandlerThrows(handlers, cause))(request, selectedWindow.webContents.id),
       deferProjectOffer: (selectedWindow, delayMs) => mainWindows.deferProjectOffer(selectedWindow.webContents.id, delayMs),
       // The application's quit is the default (`driver.ts`, `quit`); the immediate exit is asked for by name.
       quit: () => { log('driver: quitting through the application\'s quit'); app.quit(); },

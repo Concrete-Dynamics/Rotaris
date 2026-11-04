@@ -109,6 +109,11 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
     screenshot: (path) => send('screenshot', { path }),
     resize: (width, height) => send('resize', { width, height }),
     command: (request) => send('command', { request }),
+    /**
+     * R-091 (hardening F3): `request` through main's own dispatcher with every handler throwing (`main/driver.ts`,
+     * `commandThrowing`) — the built app's `command.failed` answer, which no product handler reaches on purpose.
+     */
+    commandThrowing: (request) => send('commandThrowing', { request }),
     /** The host's close of the selected window (`BrowserWindow.close()`: Alt+F4, the taskbar), guarded as a person's close. */
     closeWindow: () => send('closeWindow'),
     /**

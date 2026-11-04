@@ -84,6 +84,7 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
  * `/worktree`, available only once that read has answered, read UNREACHED as if the product had failed to open it
  * (docs/archive/defects/ui-audits-worktree-dialog-reads-unreached-until-the-git-view-has-read-the-enclosing-checkout.md).
  * `.rotaris/` is ignored so the configuration load's amendment (REQ-CONFIG-013) is a no-op and the tree stays clean.
+ * @param {...string} args
  */
 const git = (...args) => execFileSync('git', args, { cwd: workspace, stdio: 'ignore', env: { ...process.env, GIT_AUTHOR_NAME: 'ui-audit', GIT_AUTHOR_EMAIL: 'ui-audit@rotaris.local', GIT_COMMITTER_NAME: 'ui-audit', GIT_COMMITTER_EMAIL: 'ui-audit@rotaris.local' } });
 git('init', '-q', '-b', 'main');
@@ -527,9 +528,10 @@ try {
           await d.type(overlay.typed, { enter: false });
           if (overlay.enter === true) {
             const row = `.slash-popup__row[data-command=${JSON.stringify(overlay.typed.slice(1))}]`;
+            /** @type {{ ok: boolean, waitedMs: number | null, reason: string | null }} */
             const available = await d.waitFor(`${row}[data-available="1"]`, { timeoutMs: SLASH_AVAILABLE_MS })
-              .then((found) => ({ ok: true, waitedMs: found.waitedMs }))
-              .catch(async () => ({ ok: false, reason: await d.eval(`document.querySelector(${JSON.stringify(`${row} .slash-popup__reason`)})?.textContent ?? null`).catch(() => null) }));
+              .then((found) => ({ ok: true, waitedMs: Number(found.waitedMs), reason: null }))
+              .catch(async () => ({ ok: false, waitedMs: null, reason: await d.eval(`document.querySelector(${JSON.stringify(`${row} .slash-popup__reason`)})?.textContent ?? null`).catch(() => null) }));
             if (!available.ok) {
               note('UNREACHED', `overlay: ${overlay.name}`, size.label, { root: overlay.root, opener: overlay.typed, unavailable: available.reason ?? `no ${overlay.typed} row read available in the slash popup within ${SLASH_AVAILABLE_MS} ms` });
               await d.chord('Escape');

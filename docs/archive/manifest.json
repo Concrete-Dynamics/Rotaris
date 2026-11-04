@@ -959,6 +959,7 @@
     "defects/exit-0-output-flagged-on-the-word-failed-twice.md": "003874b4b5c7416147c1eb73d228593e37a9873a4247309098a0e206cb3d7b16",
     "defects/exit-trace-proof-expects-posix-signal-semantics-on-windows.md": "36d24fb6000fa6ef3f7129d339dfbe974b51566a000e2b5acc2b74bf1e94441c",
     "defects/expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md": "c7b0563d769c85d50e13b1c95a399d38012b075fd306b41e7141349729c61af4",
+    "defects/fetch-proofs-cancelled-launch-reads-windows-sigterm-as-a-failed-quit.md": "51c7ea3eb07312489976fe8577d85ff6187cf8bb4c7acd17cfe59c804355cc0f",
     "defects/four-not-measured-statements-stand-after-later-runs-answered-them.md": "cd27fc976d1aa45ce5c46221a918252776de6ae39735faee67eb93547d0ac89b",
     "defects/git-diff-with-differences-read-as-a-failure.md": "b8007268fb9014d29f16cef539fcc3fd02c2a99783605ecc2f3801e643993457",
     "defects/glob-compiles-a-brace-group-into-an-invalid-regex.md": "479ede9aee2f5c80c01863173f837d59d13fbe790123114676191e4dec7a8014",

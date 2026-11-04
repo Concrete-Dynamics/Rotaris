@@ -18,7 +18,8 @@
  *                    run level (REQ-SANDBOX-021); its `terminal_timeout` issue names the fetch, never a terminal command
  *                    (REQ-SESSION-136, finacc3 A2-08).
  *   9. cancelled   — `/cut` (never answers) under a 60 s deadline; once the server holds the request the application is
- *                    quit by SIGTERM, a quit outside any window: the fetch is recorded `interrupted`, `InterruptedError`,
+ *                    quit outside any window — SIGTERM on POSIX, the driver's orderly quit on Windows, where SIGTERM is
+ *                    `TerminateProcess` (`lib/orderly-quit.mjs`): the fetch is recorded `interrupted`, `InterruptedError`,
  *                    "cancelled by the run", and files neither `tool_error` nor `terminal_timeout` (PD-TOOLS-013
  *                    revision 2, OQ-238). Until revision 2 it read `network_error` and filed a `tool_error` warning.
  *
@@ -41,6 +42,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { orderlyQuit } from './lib/orderly-quit.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -229,17 +231,21 @@ try {
   for (const tool of ['write_file', 'terminal', 'delegate']) if (!offered.includes(tool)) throw new Error(`swarm-granted: the granted run was not offered ${tool}: ${offered.join(', ')}`);
   results.swarmGranted = { directWorkInstructions: true, swarmLayer: false, offered: offered.length, loadMs: swarmGranted.loadMs };
 
-  // 9. PD-TOOLS-013 revision 2 (OQ-238): a fetch the run cancels — here the application's quit by SIGTERM while the server
-  // holds the request — reads `interrupted`, `InterruptedError`, and files no issue. A quit leaves the session at rest, not
-  // `completed`, so this scenario reads the store itself rather than through `launch`.
+  // 9. PD-TOOLS-013 revision 2 (OQ-238): a fetch the run cancels — here the application's quit while the server holds the
+  // request — reads `interrupted`, `InterruptedError`, and files no issue. A quit leaves the session at rest, not
+  // `completed`, so this scenario reads the store itself rather than through `launch`. The quit is the application's own on
+  // every platform: SIGTERM on POSIX, the driver's on Windows, where SIGTERM ends the process with exit 1 and runs no quit
+  // (`lib/orderly-quit.mjs`; AF-13 of plan hrda, 2026-11-04).
   {
     saveConfiguration({ permission_mode: 'autonomous', tool_call_timeout: 60 });
     seen.length = 0;
     let app = null;
     let quitAt = null;
-    onCut = () => { setTimeout(() => { quitAt = Date.now(); try { if (app?.pid) process.kill(app.pid, 'SIGTERM'); } catch { /* already gone */ } }, 300); };
+    const quit = orderlyQuit({ endpoint: join(output, 'cancelled.driver.json') });
+    let quitSent = Promise.resolve();
+    onCut = () => { setTimeout(() => { quitAt = Date.now(); quitSent = quit.send(app); }, 300); };
     const result = await spawnElectron({
-      ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
+      ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }), ...quit.env,
       ROTARIS_MODEL_DIALECT: 'scripted', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ROTARIS_INTENT_SCRIPT: 'explicit_trivial',
       ROTARIS_SCRIPT: `fetch:${origin}/cut,answer`,
@@ -248,11 +254,13 @@ try {
       ROTARIS_CAPTURE_PNG: join(output, 'cancelled.png'),
     }, (child) => { app = child; });
     onCut = null;
+    await quitSent;
     const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
     writeFileSync(join(output, 'cancelled.log'), log);
     if (result.overran) throw new Error(overrunMessage('cancelled', result, log));
     if (quitAt === null) throw new Error(`cancelled: the server never held /cut, so no quit was sent (saw ${JSON.stringify(seen)})`);
-    if (result.status !== 0) throw new Error(`cancelled: the quit by SIGTERM exited ${result.status ?? result.signal ?? 'unknown'}`);
+    if (quit.failure() !== null) throw new Error(`cancelled: ${quit.method} could not be sent: ${quit.failure()}; see cancelled.log`);
+    if (result.status !== 0) throw new Error(`cancelled: ${quit.method} exited ${result.status ?? result.signal ?? 'unknown'}`);
     const db = new Database(oneDatabase(local), { readonly: true });
     const session = db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
     const rows = db.prepare("SELECT status, is_error, elapsed_ms, entry FROM tool_calls WHERE session_id = ? AND tool_name = 'fetch' ORDER BY ordinal").all(session.session_id);
@@ -267,7 +275,7 @@ try {
     const own = issues.filter((i) => i.evidence_ref === `tool_call_evidence#${entry.call_id}`);
     if (own.length !== 0) throw new Error(`cancelled: the cut fetch filed ${JSON.stringify(own)}`);
     if (seen.join(',') !== '/cut') throw new Error(`cancelled: the server saw ${JSON.stringify(seen)}`);
-    results.cancelled = { failureKind: entry.failure_kind, errorClass: diagnostic.error_class, elapsedMs: Math.round(rows[0].elapsed_ms ?? 0), sessionStatus: session.execution_status, issues: own.length, seen: [...seen] };
+    results.cancelled = { quit: quit.method, failureKind: entry.failure_kind, errorClass: diagnostic.error_class, elapsedMs: Math.round(rows[0].elapsed_ms ?? 0), sessionStatus: session.execution_status, issues: own.length, seen: [...seen] };
   }
 
   const loads = Object.values(results).map((r) => r.loadMs).filter((ms) => typeof ms === 'number');

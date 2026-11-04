@@ -1,5 +1,21 @@
 ## fetch-proof's cancelled launch reads Windows' SIGTERM as a failed quit
 
+## Outcome — repaired 2026-11-04 (plan hrda, bundle `hrda-accept1-5`, acceptance finding AF-13)
+
+Scenario 9 quits through `orderlyQuit` (`apps/desktop/scripts/lib/orderly-quit.mjs`): SIGTERM on POSIX, as before; on
+Windows the launch names a driver endpoint (`ROTARIS_DRIVER`) and the quit is the driver's `quit`, `app.quit()`, the form
+`mcp-proof`'s scenario 2c took. A driver the proof cannot reach is reported as a quit not sent, never as the product's
+exit status. The proof's assertions are unchanged: exit 0, the fetch `failed` / `interrupted`, `InterruptedError`, "cancelled
+by the run", no issue for it, the server saw `/cut` alone.
+
+Confirmed first on branch `hrda-accept1-5` at `9c0e8cc4` plus task 1's two commits (Windows 11 ARM64, Node 26.13.0, CPU 37 %,
+13 Electron processes of `Rotaris-wt-hrda-a1-4` and `Rotaris-wt-integ-hrda-hrda-a1-3`): `node apps/desktop/scripts/fetch-proof.mjs
+--skip-build` threw "cancelled: the quit by SIGTERM exited 1". After the change, the same command at CPU 68 % with 12 Electron
+processes of `Rotaris-wt-accept` and `Rotaris-wt-hrda-a1-4` passed all nine launches and wrote `results.json`: `cancelled`
+read quit "the driver orderly quit", `interrupted`, `InterruptedError`, 421 ms, session `paused`, 0 issues, seen `/cut`; the
+policy read's median 3.9 ms over eight calls. Pinned by `apps/desktop/scripts/lib/orderly-quit.test.ts` (Windows quits through
+the driver and sends no signal; POSIX sends SIGTERM and names no driver; an unreachable driver is a quit not sent).
+
 Windows-only; for the Windows session; seen on Windows 11 ARM64 (build 26200), Node 24.18.0 arm64,
 `C:/dev/Rotaris-crw-wt-loc1-confinementr` at `143b2010` and `C:/dev/Rotaris-crw-wt-loc1-confinementr-base` at `0d89e971`
 (2026-10-20/21, plan loc1, bundle `loc1-confinement-retro`). Recorded, not repaired: this plan repairs no Windows-only red.

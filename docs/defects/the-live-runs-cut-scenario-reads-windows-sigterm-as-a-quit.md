@@ -18,4 +18,4 @@ None contradicted by the product as far as this reading shows: the quit it asks 
 
 - `apps/desktop/scripts/lib/cut-scenario.mjs` — `runCutScenario`, the SIGTERM.
 - `apps/desktop/scripts/live-run.mjs` — the launch's exit check, which throws and ends the run.
-- `docs/defects/fetch-proofs-cancelled-launch-reads-windows-sigterm-as-a-failed-quit.md` — the same reading in another proof.
+- `docs/archive/defects/fetch-proofs-cancelled-launch-reads-windows-sigterm-as-a-failed-quit.md` — the same reading in another proof, repaired 2026-11-04 by `apps/desktop/scripts/lib/orderly-quit.mjs` (the driver's quit on Windows).

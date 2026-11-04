@@ -448,6 +448,22 @@ describe('an MCP call checked against the input schema the model was given (REQ-
     expect(wrongType.text).toContain('allow_multiple_occurrences: ');
   });
 
+  /*
+   * PD-STARTUP-011 / REQ-STARTUP-134: the run host's MCP host hands a tool's result to the run and writes it to no line of the
+   * application log, an answer, an `isError` answer and the arguments the model sent alike.
+   */
+  it('PD-STARTUP-011: a tool\'s result, answered or failed, and the model\'s arguments reach no application-log line', async () => {
+    for (const isError of [false, true]) {
+      const r = rig(EDIT_MEMORY, () => ({ isError, text: 'the memory now reads: deploy key is hunter2-in-notes' }));
+      const result = await r.dispatch({ memory_name: 'm', needle: 'needle-from-the-model', repl: 'b', mode: 'literal' });
+      expect(result.text).toContain('hunter2-in-notes');
+      for (const { message } of r.lines) {
+        expect(message).not.toContain('hunter2');
+        expect(message).not.toContain('needle-from-the-model');
+      }
+    }
+  });
+
   it('a valid call is sent unchanged: no default filled in, no property the schema does not name dropped', async () => {
     const r = rig(EDIT_MEMORY);
     const args = { memory_name: 'm', needle: 'a', repl: 'b', mode: 'literal', extra: { kept: true } };

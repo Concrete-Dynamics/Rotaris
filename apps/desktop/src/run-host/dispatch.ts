@@ -1,5 +1,5 @@
 import { SKILLS_DISABLED_MESSAGE, type ImprovementArtifactRecord, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
-import { asSessionId, millis, toIsoUtc, type WorkspaceId } from '@rotaris/kernel';
+import { asSessionId, millis, sessionContentInLog, toIsoUtc, type WorkspaceId } from '@rotaris/kernel';
 import { openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { ADOPTION_ROLE, analyzeImprovement, captureRetrospectiveJob, CATALOGUE, interpretAdoption, relativeTime, timelineId, workspaceUsage } from '@rotaris/engine';
 import { renderUnavailability } from '@rotaris/agent-tools';
@@ -415,7 +415,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       const model = modelRefOf(run.cfg, name, run.scripted);
       if (model === null || name === null) return { kind: 'refused', code: 'adoption.no-model', headline: `No model is configured for the ${ADOPTION_ROLE} role` };
       const answer = await interpretAdoption(req.detection, { backend: run.model.backend, model, thinking: thinkingOf(run.cfg.models[name]), timers: clocks.timers, credentialFor: run.model.config.credentialFor }, new AbortController().signal);
-      log(`adoption: interpretation for ${req.workspaceRoot} on ${model.providerId}/${model.modelId}: ${answer.ok ? `${answer.text.length} characters` : answer.reason}`, answer.ok ? 'info' : 'warn');
+      // PD-STARTUP-011 / REQ-STARTUP-134: the interpretation is model output — its source, kind and byte length, never its text.
+      log(`adoption: interpretation for ${req.workspaceRoot} on ${model.providerId}/${model.modelId}: ${answer.ok ? sessionContentInLog('model output', `the ${ADOPTION_ROLE} role's model`, answer.text) : answer.reason}`, answer.ok ? 'info' : 'warn');
       return answer.ok ? { kind: 'adoption.interpreted', text: answer.text, model: `${model.providerId}/${model.modelId}` } : { kind: 'refused', code: 'adoption.interpretation', headline: 'The model gave no usable interpretation', detail: answer.reason };
     }
     case 'improvement.cancel': {

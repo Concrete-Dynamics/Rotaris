@@ -179,7 +179,14 @@ logs to the same stream without end, which had starved the quit and REQ-MONITOR-
 line below the threshold is not written; a line at or above it is run through the one redaction pass (`redact()`,
 REQ-TOOLS-171) before it is formatted, main's own and a forwarded one alike (2026-11-01), which is why the product's
 credential lines begin `credential lease:` and `credential store:` — `credentials: <value>` reads as an assignment — and
-the run host's configuration line names the entry model's `auth_provider` as `sign-in=<id>` (2026-11-02), which `auth_provider=` would mask. The threshold is `info`, and the environment variable `ROTARIS_APP_LOG_LEVEL`,
+the run host's configuration line names the entry model's `auth_provider` as `sign-in=<id>` (2026-11-02), which `auth_provider=` would mask. No
+line quotes session content (REQ-STARTUP-134 by kind, [`PD-STARTUP-011`](../../../product/directives/pd-startup-011.md#pd-startup-011),
+2026-11-04): a writer that would quote prompt or transcript text, model output, a tool's result or a file's contents writes
+`sessionContentInLog`'s `<kind> from <source>, <n> bytes, not quoted` instead (`@rotaris/kernel`), held by a test beside the
+writer — the intent classifier's warning and fallback reason and the pre-flight's `intent:` line, the adoption
+interpretation's line, the run host's MCP host and the MCP transport — while a folder path, a provider's error text and a
+child process's own lines (a tool server's stderr, at `debug`; a hook's output in its failure warning) stay as written;
+the stream is not filtered a second time. The threshold is `info`, and the environment variable `ROTARIS_APP_LOG_LEVEL`,
 read once when main's module is evaluated, is the only thing that moves it; no message kind, command, configuration key
 or setting reaches it, and it is a different thing from the per-session `session.log`, whose level is
 `session_log_level` (REQ-CONFIG-121). The live-run harness sets the variable from its `--app-log-level` flag, and since

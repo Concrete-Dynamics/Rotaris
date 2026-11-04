@@ -4,11 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RunHostRequest } from '@rotaris/contracts';
 import { DISCOVERY_READS_IN_FLIGHT, SKILLS_DEFAULTS, type AsyncDiscoveryPorts, type DiscoveryPorts, type LoadedConfiguration } from '@rotaris/config';
-import { FakeClock } from '@rotaris/kernel';
+import { FakeClock, utf8ByteLength } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore } from '@rotaris/store';
 import type { AvailabilityVerdict } from '@rotaris/agent-tools';
 import { configureRun, type ConfigureDeps } from './configuration.js';
 import { dispatch } from './dispatch.js';
+import { ADOPTION_ROLE } from '@rotaris/engine';
 import type * as Engine from '@rotaris/engine';
 import type * as Configuration from './configuration.js';
 import type { RunHost } from './host.js';
@@ -31,8 +32,11 @@ let launchedSetup: unknown = null;
  * The retrospective's analysis and capture are replaced by stand-ins that report what the dispatch handed them: the analysis
  * resolves the credential it was given, as a model request would, and the capture names the collector it was handed.
  */
+/** The adoption interpreter's answer, model output a case reads back through the application log (PD-STARTUP-011). */
+const adoption = vi.hoisted(() => ({ answer: 'The repository keeps its requirements in docs/spec/secret-plan.md, numbered REQ-X.' }));
 vi.mock('@rotaris/engine', async (importOriginal) => ({
   ...(await importOriginal<typeof Engine>()),
+  interpretAdoption: async () => ({ ok: true, text: adoption.answer }),
   analyzeImprovement: async (job: { artifact_id: string }, deps: { credentialFor: (m: unknown) => () => Promise<string>; model: unknown }) => ({ artifact_id: job.artifact_id, credential: await deps.credentialFor(deps.model)() }),
   captureRetrospectiveJob: (_dal: unknown, input: { collectorModel: string }) => ({ artifact_id: 'impart_0000000r', collector_model: input.collectorModel, considered_session_ids: [] }),
 }));
@@ -372,6 +376,26 @@ describe('a retrospective authenticates as a run does: leased first, its setup c
     lines.length = 0;
     expect(await dispatch({ kind: 'improvement.analyze', job } as unknown as RunHostRequest, host)).toMatchObject({ kind: 'improvement.analyzed' });
     expect(lines.filter(([m]) => m.startsWith('retrospective: configuration:'))).toEqual([]);
+  });
+});
+
+/*
+ * PD-STARTUP-011 / REQ-STARTUP-134: the adoption interpreter's answer is model output. The run host's `adoption:` line in the
+ * application log names its source, kind and byte length, and the answer itself goes back to the caller and nowhere else.
+ */
+describe('adoption.interpret logs the interpretation as source, kind and length, never its text (PD-STARTUP-011)', () => {
+  it('writes one line naming the model output\'s length, and no line quoting it', async () => {
+    const lines: string[] = [];
+    const setup = { cfg: { personas: { [ADOPTION_ROLE]: { model: 'm' } }, models: { m: { provider: '', model_id: 'interpreter' } } }, scripted: true, model: { backend: {}, config: { credentialFor: () => async () => '' } } };
+    const host = {
+      log: (m: string) => { lines.push(m); },
+      clocks: { timers: { after: () => ({ cancel: () => undefined }) } },
+      retrospectiveSetup: async () => ({ kind: 'configured', setup, bearers: {} }),
+    } as unknown as RunHost;
+    const r = await dispatch({ kind: 'adoption.interpret', workspaceRoot: '/work/ws', detection: {} } as unknown as RunHostRequest, host);
+    expect(r).toMatchObject({ kind: 'adoption.interpreted', text: adoption.answer });
+    expect(lines.filter((l) => l.startsWith('adoption: '))).toEqual([`adoption: interpretation for /work/ws on scripted/interpreter: model output from the ${ADOPTION_ROLE} role's model, ${utf8ByteLength(adoption.answer)} bytes, not quoted`]);
+    for (const line of lines) expect(line).not.toContain('secret-plan');
   });
 });
 

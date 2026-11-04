@@ -258,6 +258,32 @@ describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
   });
 });
 
+/*
+ * PD-STARTUP-011 / REQ-STARTUP-134, by kind: a tool server's standard error is its own diagnostic stream and is forwarded to
+ * the application log as the process wrote it (after redaction, at `debug`); what it answers on its protocol stream — a
+ * tool's result — is session content and reaches no log line, in whole or in part.
+ */
+describe('the MCP host forwards a server\'s diagnostics and never its tool output (PD-STARTUP-011)', () => {
+  it('logs the stderr line and no line carrying the result the server returned', async () => {
+    const before = lines.length;
+    const RESULT = 'FILE CONTENTS: api_url=https://internal.example/x and the user prompt quoted back';
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
+    registries.push(s);
+    const description = fixture('--stderr', 'server diagnostic: warming up');
+    await s.connect('echoing', description);
+    const r = await s.call('echoing', description, 'echo', { text: RESULT }, millis(5_000));
+    expect(r.text).toBe(RESULT);
+    expect(await until(() => lines.slice(before).some((l) => l.includes('server diagnostic: warming up')))).not.toBeNull();
+    await s.closeAll();
+    const fresh = lines.slice(before);
+    expect(fresh.find((l) => l.includes('server diagnostic: warming up'))?.startsWith('D ')).toBe(true);
+    for (const line of fresh) {
+      expect(line).not.toContain('FILE CONTENTS');
+      expect(line).not.toContain('internal.example');
+    }
+  });
+});
+
 describe('OwnedStdioTransport (ADR-0033, ADR-0007)', () => {
   it("captures the child's stderr to the log after redaction", async () => {
     const t = new OwnedStdioTransport({ command: process.execPath, args: [FIXTURE, '--stderr', 'token=ghp_abcdefghijklmnop'], cwd: dir, env, timers: clocks.timers, log, label: 'noisy' });

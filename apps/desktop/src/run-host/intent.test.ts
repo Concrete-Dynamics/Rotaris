@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock } from '@rotaris/kernel';
+import { FakeClock, utf8ByteLength } from '@rotaris/kernel';
 import { BUDGET_CELLS, CATALOGUE, RungMemory, type PreflightContext } from '@rotaris/engine';
 import type { AgentBackend, ModelRef } from '@rotaris/model';
 import { runPreflight, type PreflightDeps } from './intent.js';
@@ -37,6 +37,27 @@ describe('run-host/intent — the pre-flight', () => {
     expect(p.grant).toBe('direct-work');
     expect(p.route).toBe('work');
     expect(p.playbookFor('orchestrator')).not.toBe('');
+  });
+
+  /*
+   * PD-STARTUP-011 / REQ-STARTUP-134: the pre-flight writes the application log's `intent:` line and forwards the classifier's
+   * warnings to it. A classifier that answered prose is model output: the lines name its source, kind and byte length, and
+   * never quote it.
+   */
+  it('PD-STARTUP-011: the intent line and the classifier\'s warnings name a prose answer\'s source, kind and length, never its text', async () => {
+    const ANSWER = 'I read the repository and the password is in config/secrets.yaml.';
+    const lines: string[] = [];
+    const warned: string[] = [];
+    const answering: AgentBackend = { ownsTheLoop: false, runTurn: async () => ({ status: 'succeeded', text: ANSWER, usage: { input: 1, output: 1 } }) };
+    const p = await runPreflight(ctx({ warn: (m) => warned.push(m) }), { ...deps, backend: answering, log: (m) => lines.push(m) });
+    expect(p.intent).toMatchObject({ category: 'moderate_feature', fallback: true });
+    const intentLine = lines.find((l) => l.startsWith('intent: '));
+    expect(intentLine).toContain(`model output from the intent classifier's model small, ${utf8ByteLength(ANSWER)} bytes, not quoted`);
+    expect(warned.some((w) => w.includes('without JSON') && w.includes(`${utf8ByteLength(ANSWER)} bytes`))).toBe(true);
+    for (const line of [...lines, ...warned]) {
+      expect(line).not.toContain('password');
+      expect(line).not.toContain('secrets.yaml');
+    }
   });
 
   it('without one it classifies, as before: the call is made (and here fails, so REQ-ORCH-007\'s fallback is in effect)', async () => {

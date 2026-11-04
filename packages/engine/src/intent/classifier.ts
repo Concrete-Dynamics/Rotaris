@@ -1,5 +1,5 @@
 import { FALLBACK_INTENT, INTENT_CATEGORIES, isIntentCategory, type IntentCategory, type IntentResult } from '@rotaris/contracts';
-import { millis, type Timers } from '@rotaris/kernel';
+import { millis, sessionContentInLog, type Timers } from '@rotaris/kernel';
 import type { AgentBackend, ModelError, ModelRef, OutputSpec } from '@rotaris/model';
 import type { HelperModel } from '../run/resilience.js';
 
@@ -265,11 +265,13 @@ export async function classifyIntent(input: ClassifyInput, slots: ClassifierSlot
       if (read.kind === 'no-json') {
         // The provider accepted the structured rung and ignored it: a rejection by another door.
         deps.memory.reject(selected.model.modelId, rung);
-        deps.warn(`intent classifier: ${selected.model.modelId} answered the ${rung} rung without JSON (${cut(report.text.replace(/\s+/g, ' ').trim(), 60)}); the rung is remembered as unsupported for this session (REQ-ORCH-010)`);
+        // PD-STARTUP-011 / REQ-STARTUP-134: the answer is model output, so the line names its source, kind and length.
+        deps.warn(`intent classifier: ${selected.model.modelId} answered the ${rung} rung without JSON (${sessionContentInLog('model output', `the intent classifier's model ${selected.model.modelId}`, report.text)}); the rung is remembered as unsupported for this session (REQ-ORCH-010)`);
         lastFailure = 'the model answered a structured rung without JSON';
         continue;
       }
-      return fallback(`the classifier's response could not be mapped to a category (${cut(report.text.replace(/\s+/g, ' ').trim(), 60)})`);
+      // The reason reaches the application log (`run-host/intent.ts`'s `intent:` line): source, kind and length, never the answer.
+      return fallback(`the classifier's response could not be mapped to a category (${sessionContentInLog('model output', `the intent classifier's model ${selected.model.modelId}`, report.text)})`);
     }
     if (timedOut) return fallback(`the classification call timed out after ${(deps.timeoutMs ?? CLASSIFICATION_TIMEOUT_MS) / 1000} s`);
     if (controller.signal.aborted) return fallback('the classification was cancelled');

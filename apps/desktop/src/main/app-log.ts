@@ -105,6 +105,10 @@ export interface AppLogDeps {
  * URL with a key in its query or a later log line from writing one as given
  * (`docs/archive/defects/mains-application-log-lines-bypass-the-redaction-pass.md`). The pass runs after the threshold, so
  * a line left out costs nothing, and before the message is split into lines, so a PEM block spanning several is masked whole.
+ *
+ * Session content is not this function's to find (PD-STARTUP-011, REQ-STARTUP-134 by kind): the obligation sits on each
+ * writer, which says a prompt, a model's or a tool's output or a file's contents as `sessionContentInLog` words them
+ * (source, kind and byte length) and is held by a test beside it. Nothing here filters the stream a second time.
  */
 export function createAppLog(deps: AppLogDeps): AppLog {
   const floor = RANK[deps.threshold];

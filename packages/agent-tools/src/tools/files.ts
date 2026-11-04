@@ -1,11 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { z } from 'zod';
 import { countNoun, similarity, textOf } from '@rotaris/kernel';
 import { lineChanges, linePairs, renderDiff } from './diff.js';
 import { lineCount, splitLines } from './lines.js';
-import { checkFence, relPosix, realPathOf, type FenceConfig } from './fence.js';
+import { checkFence, pathKey, relPosix, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type Observation, type ToolExecutor } from './types.js';
 import { compileSearchPattern, IGNORE_COMPONENTS } from './search.js';
 
@@ -102,14 +102,140 @@ function plainSpelling(dir: string | undefined): string | undefined {
 }
 
 /**
+ * The steps of a fenced write, each followed by a re-verification of the path. `onStep` is called at each one before that
+ * verification: the seam a test uses to change the path between the fence's check and the write (hardening.md §3.4 row 5).
+ * `verified` is the one step after which nothing is verified before the rename: the window the platform leaves (below).
+ */
+export type WriteStep = 'checked' | 'opened' | 'written' | 'verified' | 'renamed';
+export interface WriteSeams {
+  readonly onStep?: (step: WriteStep) => void;
+}
+
+/** A fenced write refused because a directory on the path no longer resolves where the fence found it. */
+export class PathChangedError extends Error {
+  constructor(readonly target: string, readonly found: string) {
+    super(`'${target}' changed while it was being written: it now resolves to '${found}'`);
+    this.name = 'PathChangedError';
+  }
+}
+
+/** Win32 drops a name's trailing dots and spaces (`notes.` makes `notes`), so a made directory's real path may lack them. */
+function writtenSpelling(p: string): string {
+  if (process.platform !== 'win32') return pathKey(p);
+  return pathKey(p.split(/[\\/]/).map((s) => s.replace(/[. ]+$/, '') || s).join('/'));
+}
+
+/** The refusal for `target` when its directory no longer resolves where the fence found it, else null. */
+function changedSince(dir: string, target: string): PathChangedError | null {
+  const found = realPathOf(dir);
+  return writtenSpelling(found) === writtenSpelling(dir) ? null : new PathChangedError(target, join(found, basename(target)));
+}
+
+/** The directory still resolves where the fence found it, or the write is refused naming where it resolves now. */
+function verifyDirectory(dir: string, target: string): void {
+  const changed = changedSince(dir, target);
+  if (changed !== null) throw changed;
+}
+
+interface FileIdentity {
+  readonly dev: bigint;
+  readonly ino: bigint;
+}
+
+function identityAt(p: string): FileIdentity | null {
+  try {
+    const st = lstatSync(p, { bigint: true });
+    return { dev: st.dev, ino: st.ino };
+  } catch {
+    return null;
+  }
+}
+
+function sameFile(a: FileIdentity | null, b: FileIdentity | null): boolean {
+  return a !== null && b !== null && a.dev === b.dev && a.ino === b.ino;
+}
+
+/** Removes the file at `p` only while it is the one this write made: nothing another writer put there is touched. */
+function discardOwn(p: string, own: FileIdentity | null): void {
+  if (!sameFile(identityAt(p), own)) return;
+  try {
+    unlinkSync(p);
+  } catch {
+    // Left behind: a temporary name no reader opens.
+  }
+}
+
+/** The directories a refused write made, deepest first, while empty: through the swapped link, so they are taken back where they were made. */
+function removeMadeDirectories(dir: string, madeDir: string | undefined): void {
+  if (madeDir === undefined) return;
+  for (let d = dir; d === madeDir || d.startsWith(`${madeDir}${sep}`); d = dirname(d)) {
+    try {
+      rmdirSync(d);
+    } catch {
+      return;
+    }
+  }
+}
+
+/** POSIX's O_NOFOLLOW where the platform has it: a link at the temporary name is never opened through. */
+const OPEN_NEW = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | ((constants as { O_NOFOLLOW?: number }).O_NOFOLLOW ?? 0);
+
+/**
  * Temp-then-rename in the target's directory; the previous content is never partially replaced. Returns the first directory
  * it had to make for the target (absolute), or undefined when the target's directory was already there.
+ *
+ * `target` is the real path the fence checked (REQ-TOOLS-129), and the write goes to that object or nowhere (R-091,
+ * `hardening.md` §3.4 row 5, bundle D3). Until 2026-11-04 the content was written by path after the check, so a directory on
+ * the path swapped for a link between the two carried the write outside the root. Now the directory's real path is read
+ * again before anything is made, after the temporary file is opened (exclusively, never through a link), after the content
+ * is written through that handle and before the rename, each time against the spelling the fence checked; a mismatch refuses
+ * the write with `PathChangedError`, the temporary file and any directory the write made are taken back, and nothing is
+ * renamed. The temporary file is held to the handle by identity (device and file id), so the file renamed is the file
+ * written. Node has no `renameat`, so one window remains, between the last verification and the rename. A directory swapped
+ * there takes the temporary file with it, so the rename finds nothing at its name and the write is refused; only a link to
+ * the temporary file made at its name through the swapped path (a hard link) lets the rename through, and that is found after
+ * it: the file is removed and the write refused, but a file of that name it replaced outside is not restored. On Windows a
+ * directory holding the open temporary file cannot be moved at all (EPERM). A swap after the rename is no refusal: the write
+ * reached the object the fence checked.
  */
-export function atomicWrite(target: string, content: string): string | undefined {
-  const madeDir = plainSpelling(mkdirSync(dirname(target), { recursive: true }));
-  const tmp = join(dirname(target), `.${basename(target)}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`);
-  writeFileSync(tmp, content, 'utf8');
-  renameSync(tmp, target);
+export function atomicWrite(target: string, content: string, seams: WriteSeams = {}): string | undefined {
+  const dir = dirname(target);
+  seams.onStep?.('checked');
+  verifyDirectory(dir, target);
+  const madeDir = plainSpelling(mkdirSync(dir, { recursive: true }));
+  const tmp = join(dir, `.${basename(target)}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`);
+  let fd: number | undefined;
+  let own: FileIdentity | null = null;
+  try {
+    verifyDirectory(dir, target);
+    fd = openSync(tmp, OPEN_NEW, 0o666);
+    const st = fstatSync(fd, { bigint: true });
+    own = { dev: st.dev, ino: st.ino };
+    seams.onStep?.('opened');
+    verifyDirectory(dir, target);
+    writeFileSync(fd, content, 'utf8');
+    closeSync(fd);
+    fd = undefined;
+    seams.onStep?.('written');
+    verifyDirectory(dir, target);
+    if (!sameFile(identityAt(tmp), own)) throw new PathChangedError(target, tmp);
+    seams.onStep?.('verified');
+    renameSync(tmp, target);
+  } catch (cause) {
+    if (fd !== undefined) closeSync(fd);
+    discardOwn(tmp, own);
+    // A step that failed because the directory moved under it (the rename finding no temporary file) is that refusal too.
+    const changed = cause instanceof PathChangedError ? cause : changedSince(dir, target);
+    if (changed === null) throw cause;
+    removeMadeDirectories(dir, madeDir);
+    throw changed;
+  }
+  seams.onStep?.('renamed');
+  const changed = changedSince(dir, target);
+  if (changed !== null && sameFile(identityAt(target), own)) {
+    discardOwn(target, own);
+    throw changed;
+  }
   return madeDir;
 }
 
@@ -117,9 +243,12 @@ export function atomicWrite(target: string, content: string): string | undefined
  * The undo of a create (REQ-TOOLS-132, REQ-TOOLS-135): the path held no file before it, so the file is removed rather than
  * written empty, and then each directory the create made for it, deepest first, while it is empty. A directory that was
  * already there is never one the create made, and one that has gained another entry since stays, with every directory above
- * it. Returns the directories removed, deepest first.
+ * it. Returns the directories removed, deepest first. The file's directory is verified first as `atomicWrite` verifies it, so
+ * a directory swapped for a link since the fence's check removes nothing through it.
  */
-function removeCreated(resolved: string, madeDir: string | undefined): string[] {
+function removeCreated(resolved: string, madeDir: string | undefined, seams: WriteSeams = {}): string[] {
+  seams.onStep?.('checked');
+  verifyDirectory(dirname(resolved), resolved);
   unlinkSync(resolved);
   const removed: string[] = [];
   if (madeDir === undefined) return removed;
@@ -266,6 +395,17 @@ function readTarget(fence: FenceConfig, path: string, access: 'read' | 'write'):
   const v = checkFence(fence, path, access);
   if (!v.ok) return { ok: false, obs: errorObservation(v.message) };
   return { ok: true, resolved: v.resolved, rel: v.rel };
+}
+
+/**
+ * A write refused because its path changed after the fence's check (`PathChangedError`): where it now leads is fenced again,
+ * so a path that now leads outside the root answers REQ-TOOLS-129's fixed message, and one that leads elsewhere inside (or
+ * outside under the opt-out) says the path changed. Either way nothing was written.
+ */
+function changedPathObservation(fence: FenceConfig, rel: string, changed: PathChangedError): Observation {
+  const v = checkFence(fence, changed.found, 'write');
+  if (!v.ok) return errorObservation(v.message);
+  return errorObservation(`${rel} changed while it was being written: it now resolves to '${changed.found}'. Nothing was written; read it again before retrying.`);
 }
 
 const readSchema = z.object({
@@ -929,7 +1069,8 @@ function createOnlyTarget(fence: FenceConfig, args: Readonly<Record<string, unkn
   return t.ok ? { resolved: t.resolved, rel: t.rel } : null;
 }
 
-export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExecutor<z.infer<typeof writeSchema>> {
+/** `seams` places a test's step between the fence's check and the write (`WriteSeams`); the product passes none. */
+export function writeFileTool(state: FileToolState, fence: FenceConfig, seams: WriteSeams = {}): ToolExecutor<z.infer<typeof writeSchema>> {
   return {
     name: 'write_file',
     /*
@@ -995,7 +1136,13 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
       const mustHaveRead = () => (!state.wasRead(resolved) ? errorObservation(`You must read ${rel} before editing it. Call read_file(path="${rel}") first, then retry your edit.`) : null);
       const commit = (after: string, message: string): Observation => {
         // The directory a create had to make is known only once it is made, so the entry is completed after the write.
-        const madeDir = atomicWrite(resolved, after);
+        let madeDir: string | undefined;
+        try {
+          madeDir = atomicWrite(resolved, after, seams);
+        } catch (cause) {
+          if (cause instanceof PathChangedError) return changedPathObservation(fence, rel, cause);
+          throw cause;
+        }
         if (before !== null) state.pushUndo(resolved, { previous: before });
         else state.pushUndo(resolved, madeDir === undefined ? { previous: null, written: sha256(after) } : { previous: null, madeDir, written: sha256(after) });
         state.markRead(resolved);
@@ -1118,10 +1265,11 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
             }
             let dirs: string[];
             try {
-              dirs = removeCreated(resolved, entry.madeDir);
+              dirs = removeCreated(resolved, entry.madeDir, seams);
             } catch (cause) {
               // Nothing changed, so the write stays undoable.
               state.pushUndo(resolved, entry);
+              if (cause instanceof PathChangedError) return changedPathObservation(fence, rel, cause);
               return errorObservation(`Could not remove ${rel}: ${cause instanceof Error ? cause.message : String(cause)}`);
             }
             const outermost = dirs[dirs.length - 1];
@@ -1134,7 +1282,14 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
             return observation(`Removed ${rel}: it did not exist before the create this undoes (${countNoun(lineCount(before), 'line')} removed).${also}`, { diff: renderDiff(rel, before, '') });
           }
           const after = entry.previous;
-          atomicWrite(resolved, after);
+          try {
+            atomicWrite(resolved, after, seams);
+          } catch (cause) {
+            if (!(cause instanceof PathChangedError)) throw cause;
+            // Nothing was restored, so the write stays undoable.
+            state.pushUndo(resolved, entry);
+            return changedPathObservation(fence, rel, cause);
+          }
           return observation(`Restored ${rel} to its previous content (${countNoun(lineCount(after), 'line')}).`, { diff: renderDiff(rel, before, after) });
         }
         default:
@@ -1153,7 +1308,8 @@ const haetEditSchema = z.object({
   replace_all: z.boolean().default(false),
 }).refine((a) => a.path !== undefined || a.file_path !== undefined, { message: 'path is required' });
 
-export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'haet_edit' | 'haet' = 'haet_edit'): ToolExecutor<z.infer<typeof haetEditSchema>> {
+/** `seams` places a test's step between the fence's check and the write (`WriteSeams`); the product passes none. */
+export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'haet_edit' | 'haet' = 'haet_edit', seams: WriteSeams = {}): ToolExecutor<z.infer<typeof haetEditSchema>> {
   return {
     name,
     description: 'Hash-anchored exact edit: replace old_string with new_string in a file whose current SHA-256 equals content_hash (from haet_read). Reports the new content_hash. A miss that differs from the file only in trailing whitespace or a uniform indentation shift is refused, names the lines and quotes the file\'s text; a retry with that text needs the same content_hash and no read. An edit keeps a CRLF file\'s line endings.',
@@ -1237,8 +1393,14 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
         after = carried.after;
         message = `${replacementMessage(rel, before, after, a.old_string, start)}${carried.crlfAdded ? CRLF_SENTENCE : ''}`;
       }
+      // The undo entry follows the write: a write refused because its path changed after the fence leaves no entry to undo.
+      try {
+        atomicWrite(resolved, after, seams);
+      } catch (cause) {
+        if (cause instanceof PathChangedError) return changedPathObservation(fence, rel, cause);
+        throw cause;
+      }
       state.pushUndo(resolved, { previous: before });
-      atomicWrite(resolved, after);
       state.markRead(resolved);
       return observation(`${message} content_hash: ${sha256(after)}`, { diff: renderDiff(rel, before, after) });
     },

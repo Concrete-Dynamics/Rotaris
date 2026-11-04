@@ -107,7 +107,8 @@ export function watchParent(deps: {
  * - `uncaught`: a throw from a timer `afterMs` after the start (default 3,000), which no request path catches;
  * - `rejection`: a rejected promise nothing awaits, as late;
  * - `silent`: the process starts and never answers a request, so main's ready bound is missed (OQ-462 (2)).
- * `exit-trace-proof` drives the first two through the last-resort handler and `resilience-proof` the third; a spec naming
+ * `exit-trace-proof` drives all three: the first two through the last-resort handler (its `last-resort` launches), the
+ * third as a missed ready bound (its `not-ready` launches); a spec naming
  * another process, or none, is no fault. Answers whether this process stays silent.
  */
 export function injectChildFault(spec: string | undefined, self: 'run-host' | 'workspace-service', timers: Timers): { readonly silent: boolean } {

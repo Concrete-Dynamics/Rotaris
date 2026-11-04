@@ -51,7 +51,9 @@ Invariants:
   (OQ-466), and a packaged build refuses a sender no main window stands behind; both are `command.untrustedSender`.
   A new window that sends commands is built by main with `parent` set or is registered in `MainWindows`.
 - A request that does not parse is `command.malformed`, its headline from `malformedHeadline` (`limits.ts`): a bound
-  names the field and the figure, never the value (OQ-467, PD-CHAT-011). Nothing throws out of `runCommand`: an uncaught
+  names the field and the figure, never the value (OQ-467, PD-CHAT-011). It leaves one `warning` line naming the sender,
+  the class (`malformedClass`), the kind where it is one of the union, and that headline; a sender's burst of one class is
+  folded into one count line per 60 s (`RefusalFold`, OQ-485). Nothing throws out of `runCommand`: an uncaught
   exception in main raises the platform's native error box and wedges the loop (`ADR-0019`). `runCommand`
   is `dispatchCommand` (`main/command-dispatch.ts`) — resolve the window, read the request, call the handler — and
   holds no case; a handler that throws is answered `command.failed`, its message redacted and cut to 500 characters.

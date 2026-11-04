@@ -111,3 +111,17 @@ export function malformedHeadline(issues: readonly Issue[]): string {
   const field = first ? fieldName(first.path) : '';
   return field === '' ? 'The request could not be read' : `The request could not be read: the ${field} is not valid`;
 }
+
+/** OQ-485: the three classes a `command.malformed` refusal falls in, each folded on its own in main's warning line. */
+export type MalformedClass = 'unknown kind' | 'past a bound' | 'unreadable';
+
+/**
+ * OQ-485 (ruled 2026-11-04): the class of a `command.malformed` refusal, read from zod's issues by the same walk as the
+ * headline: a bound anywhere (`past a bound`), the request's own `kind` matching no member of the union (`unknown kind`),
+ * or any other shape (`unreadable`). Like the headline, it reads no value.
+ */
+export function malformedClass(issues: readonly Issue[]): MalformedClass {
+  if (firstBound(issues, [])) return 'past a bound';
+  const ownKind = (issue: Issue): boolean => issue.code === 'invalid_union' && 'note' in issue && issue.note === 'No matching discriminator' && (issue.path.length === 0 || (issue.path.length === 1 && issue.path[0] === 'kind'));
+  return issues.some(ownKind) ? 'unknown kind' : 'unreadable';
+}

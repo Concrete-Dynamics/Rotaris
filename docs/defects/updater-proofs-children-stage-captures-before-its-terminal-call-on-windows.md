@@ -42,6 +42,10 @@ start and `set >`'s write, not measured here.
 **Again on Windows ARM64 (2026-10-31).** At `1cb6e96d`, alone on the host: the same one check of 15, with
 `terminal-environment.txt` again at 0 bytes.
 
+**Again on Windows ARM64 (2026-11-04).** On hardening plan hrda's branch `hrda-boundary-refusal-line` over `3bf27f00`, in the
+configuration-and-startup suite (CPU load 42 % from other sessions, no other tree's Electron running): the same one check of
+15, "ROTARIS_APP_LOG_LEVEL ABSENT, ROTARIS_INTENT_SCRIPT ABSENT", the other 14 passing.
+
 ## Specs
 
 None is contradicted: REQ-STARTUP-106 and REQ-STARTUP-147 are what the stage measures, and it reads nothing because the

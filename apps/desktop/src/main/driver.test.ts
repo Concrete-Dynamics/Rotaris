@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { FakeClock } from '@rotaris/kernel';
 import { everyHandlerThrows, namesAuxiliary, PAINT_BOUND_MS, PAINTED_SCRIPT, startDriver, THROWING_HANDLER_MESSAGE, type AuxiliaryWindow, type Driver, type DriverDeps } from './driver.js';
-import { dispatchCommand } from './command-dispatch.js';
+import { commandRefusals, dispatchCommand } from './command-dispatch.js';
 import type { CommandHandlers, MainWindowState } from './commands/context.js';
 
 /**
@@ -357,6 +357,7 @@ describe("the driver's commandThrowing (R-091, docs/architecture/hardening.md §
       awaitWorkspace: () => Promise.resolve(),
       settle: (o) => o,
       log: (message, level) => { lines.push({ message, level }); },
+      refusals: commandRefusals(new FakeClock(), (message, level) => { lines.push({ message, level }); }),
     });
     expect(outcome).toEqual({ ok: false, code: 'command.failed', headline: 'The command failed', detail: 'driver: this handler throws on purpose; token=***' });
     expect(lines).toHaveLength(1);

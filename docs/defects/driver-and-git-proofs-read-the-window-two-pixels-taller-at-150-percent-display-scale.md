@@ -18,6 +18,10 @@ The difference is the same every time, so it is no timing red. It is the shape t
 launches (a content height that rounds to an even device pixel at 1.5×), now met by two more proofs; whether the product or
 each proof's exact comparison is to change is left to the Windows session with those notes.
 
+**Sighted again 2026-11-04** (hardening plan hrda, bundle `hrda-boundary-refusal-line`, on its branch over `3bf27f00`;
+CPU load 86 to 99 % from other sessions, no other tree's Electron running): `driver-proof` step 8 read `1000×682` once more,
+its other 42 checks passing.
+
 ## Specs
 
 None named here: REQ-SHELL-022 states the 1000×680 minimum, and whether a 1000×682 reading at 150 % meets it is the proofs'

@@ -24,12 +24,23 @@ boundary in the built app. The page sends two requests through its own preload c
 check included): a kind the contract does not have, answered `{ ok: false, code: 'command.malformed' }` with the headline
 "The request could not be read: the kind is not valid", and a `session.start` whose prompt is 2,000,000 characters, answered
 `command.malformed` with "The prompt is longer than 1,048,576 characters" (OQ-467's bound), the value echoed neither in the
-answer nor in the log. Each step's one line in the application log is the driver's own for the eval that sent it: a malformed
-request is refused as a value and the product writes none ([OQ-485](../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-3.md#oq-485)
-asks whether it should). The driver's `commandThrowing` op (`apps/desktop/src/main/driver.ts`, compiled out of a packaged
+answer nor in the log. Beside the driver's own line for the eval that sent it, each step leaves exactly one line of the
+product's, the dispatcher's `warning`, read as the whole line: `refused a command from window <id> (unknown kind): The request
+could not be read: the kind is not valid; answered command.malformed (OQ-485)`, and `… (past a bound, kind session.start): The
+prompt is longer than 1,048,576 characters; …`, the unknown kind's text and the prompt absent from the product's lines
+([OQ-485](../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-3.md#oq-485), ruled and built
+2026-11-04). *Until then the step asserted that the product wrote none, since a malformed request was refused as a value
+with no line, and OQ-485 asked whether it should.* The driver's `commandThrowing` op (`apps/desktop/src/main/driver.ts`, compiled out of a packaged
 build with the rest of the driver) then sends `theme.get` through main's own `dispatchCommand` over a table in which every
 handler throws, since no product handler throws on purpose: the answer is `command.failed`, "The command failed", its detail
 the thrown message through the redaction pass (`token=***`), and the log holds exactly one `error` line,
 `command theme.get failed: its handler threw; answered command.failed (ADR-0019)`, followed by the redacted stack, and the
 secret nowhere (ADR-0019, REQ-TOOLS-171). First execution 2026-11-04 on Windows 11 ARM64: all four checks of 9e passed in
 the second run; the first run's slice of the log missed each step's first line (the harness's, repaired before the second).
+
+**Re-measured 2026-11-04 for OQ-485 (hardening plan hrda, bundle `hrda-boundary-refusal-line`).** On the branch over
+`3bf27f00`, Windows 11 ARM64, Node 26.13.0, Electron 44.3.0, CPU load 86 to 99 % before the launch from other sessions, no
+other tree's Electron running: 9e(1) and 9e(2) each read exactly one `warning` line of the product's, the two lines above, with
+the kind's text and the 2,000,000-character prompt absent, and 9e(3) and the step after it pass as before. Of the proof's 43
+checks 42 passed; the one red is step 8's `1000×682`, the 150 % reading
+[its note](../defects/driver-and-git-proofs-read-the-window-two-pixels-taller-at-150-percent-display-scale.md) records.

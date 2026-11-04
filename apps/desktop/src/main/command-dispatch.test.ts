@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { FREE_TEXT_MAX, type CommandOutcome } from '@rotaris/contracts';
+import { FakeClock } from '@rotaris/kernel';
+import { FREE_TEXT_MAX, NAME_MAX, type CommandOutcome } from '@rotaris/contracts';
 import type { AppLogLevel } from './app-log.js';
-import { COMMAND_FAILED_DETAIL_MAX, commandFailed, dispatchCommand, type CommandDispatch } from './command-dispatch.js';
+import { COMMAND_FAILED_DETAIL_MAX, commandFailed, commandRefusals, dispatchCommand, type CommandDispatch } from './command-dispatch.js';
 import type { CommandHandlers, MainWindowState } from './commands/context.js';
 
 const WINDOW = { wcId: 7, workspace: 'C:/ws', workspaceId: 'ws-1' } as unknown as MainWindowState;
@@ -9,15 +10,21 @@ const WINDOW = { wcId: 7, workspace: 'C:/ws', workspaceId: 'ws-1' } as unknown a
 /** A handler table holding the kinds a case names; a dispatch never reaches a kind the case did not file. */
 function deps(handlers: Partial<Record<string, (req: unknown, at: unknown) => CommandOutcome | Promise<CommandOutcome>>>, window: MainWindowState | null = WINDOW) {
   const lines: { message: string; level: AppLogLevel }[] = [];
+  const clock = new FakeClock();
+  const log = (message: string, level: AppLogLevel): void => { lines.push({ message, level }); };
   const d: CommandDispatch<MainWindowState> = {
     handlers: handlers as unknown as CommandHandlers,
     forCommand: () => window ?? undefined,
     awaitWorkspace: () => Promise.resolve(),
     settle: (outcome) => outcome,
-    log: (message, level) => { lines.push({ message, level }); },
+    log,
+    refusals: commandRefusals(clock, log),
   };
-  return { d, lines };
+  return { d, lines, clock };
 }
+
+/** Put in every value a malformed request carries: a line that holds it has carried a value. */
+const MARKER = 'PAYLOAD-MARKER-485';
 
 describe('the dispatcher catches what a handler throws (ADR-0019, .claude/rules/contracts-and-ipc.md)', () => {
   it('answers a handler that throws with command.failed and one error line naming the kind and the stack, never the payload', async () => {
@@ -61,5 +68,59 @@ describe('the dispatcher catches what a handler throws (ADR-0019, .claude/rules/
     const outcome = await dispatchCommand({ kind: 'session.prompt', sessionId: 's-1', prompt }, 7, d);
     expect(outcome).toEqual({ ok: false, code: 'command.malformed', headline: 'The prompt is longer than 1,048,576 characters' });
     expect(JSON.stringify(outcome)).not.toContain('secret-marker');
+  });
+});
+
+describe('OQ-485: a malformed request leaves one warning line, never a value, bursts folded (PD-MONITOR-002)', () => {
+  it('an unknown kind: one warning line naming the window, the class and the headline, the kind\'s text never echoed', async () => {
+    const { d, lines } = deps({});
+    await expect(dispatchCommand({ kind: `${MARKER}.kind`, prompt: MARKER }, 7, d)).resolves.toEqual({ ok: false, code: 'command.malformed', headline: 'The request could not be read: the kind is not valid' });
+    expect(lines).toEqual([{ level: 'warn', message: 'refused a command from window 7 (unknown kind): The request could not be read: the kind is not valid; answered command.malformed (OQ-485)' }]);
+  });
+
+  it('a request past a bound: one warning line naming the kind of the union and the field and the bound, the value never echoed', async () => {
+    const { d, lines } = deps({ 'session.prompt': () => { throw new Error('reached the handler'); } });
+    await dispatchCommand({ kind: 'session.prompt', sessionId: 's-1', prompt: `${MARKER}${'x'.repeat(FREE_TEXT_MAX)}` }, 7, d);
+    expect(lines).toEqual([{ level: 'warn', message: 'refused a command from window 7 (past a bound, kind session.prompt): The prompt is longer than 1,048,576 characters; answered command.malformed (OQ-485)' }]);
+    expect(JSON.stringify(lines)).not.toContain(MARKER);
+  });
+
+  it('a shape it cannot read: one warning line naming the field; a sender other than the window is named with it', async () => {
+    const { d, lines } = deps({});
+    await dispatchCommand({ kind: 'session.resume', sessionId: 42 }, 12, d);
+    await dispatchCommand(MARKER, 13, d);
+    expect(lines).toEqual([
+      { level: 'warn', message: 'refused a command from window 12 for window 7 (unreadable, kind session.resume): The request could not be read: the sessionId is not valid; answered command.malformed (OQ-485)' },
+      { level: 'warn', message: 'refused a command from window 13 for window 7 (unreadable): The request could not be read; answered command.malformed (OQ-485)' },
+    ]);
+  });
+
+  it('a burst is folded per sender and per class into one count line when the 60 s window closes, and a new window opens after it', async () => {
+    const { d, lines, clock } = deps({});
+    const longId = { kind: 'session.resume', sessionId: `${MARKER}${'i'.repeat(NAME_MAX)}` };
+    for (let i = 0; i < 500; i += 1) await dispatchCommand(longId, 7, d);
+    await dispatchCommand({ kind: 'no.such.kind' }, 7, d); // another class: a line of its own
+    await dispatchCommand(longId, 8, d); // another sender: a window of its own
+    expect(lines.map((l) => l.message)).toEqual([
+      'refused a command from window 7 (past a bound, kind session.resume): The sessionId is longer than 1,024 characters; answered command.malformed (OQ-485)',
+      'refused a command from window 7 (unknown kind): The request could not be read: the kind is not valid; answered command.malformed (OQ-485)',
+      'refused a command from window 8 for window 7 (past a bound, kind session.resume): The sessionId is longer than 1,024 characters; answered command.malformed (OQ-485)',
+    ]);
+    clock.advance(59_999);
+    expect(lines).toHaveLength(3);
+    clock.advance(1);
+    expect(lines.slice(3)).toEqual([{ level: 'warn', message: 'refused 499 more commands from window 7 (past a bound) within 60 s of the first; answered command.malformed (OQ-485)' }]);
+    await dispatchCommand(longId, 7, d);
+    expect(lines).toHaveLength(5);
+    expect(JSON.stringify(lines)).not.toContain(MARKER);
+  });
+
+  it('a request that parses leaves no line, and a sender with no main window is refused before the request is read', async () => {
+    const { d, lines } = deps({ 'theme.get': () => ({ ok: true, value: 'light' }) });
+    await dispatchCommand({ kind: 'theme.get' }, 7, d);
+    const none = deps({}, null);
+    await dispatchCommand({ kind: MARKER }, 7, none.d);
+    expect(lines).toEqual([]);
+    expect(none.lines).toEqual([]);
   });
 });

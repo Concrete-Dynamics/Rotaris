@@ -21,6 +21,10 @@ which is the product question behind the proof's red.
 Every check after launch 1″ (`instructions`, `display`, `reopen`, `live-apply`, the run-start hint and the Personas and
 reload launches) is not reached on this host, so `settings-proof` gives no reading of them here.
 
+**Sighted again 2026-11-04** (hardening plan hrda, bundle `hrda-boundary-refusal-line`, on its branch over `3bf27f00`, run
+as part of the configuration-and-startup suite `pnpm verify:plan` named; CPU load 68 % from other sessions, no other tree's
+Electron running): "the window was not shrunk to REQ-SHELL-022's 1000×680 (capture: resize at 400 → content 1000×682)".
+
 ## Specs
 
 `REQ-SHELL-022` (the minimum content size) may be contradicted on a 150 % display, or only the seam's read-back may be:

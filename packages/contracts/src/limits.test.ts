@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { CommandRequestSchema } from './commands.js';
-import { DICTATION_AUDIO_MAX_BASE64, FREE_TEXT_MAX, isJsonBounded, jsonBounded, jsonLength, LIST_MAX, malformedHeadline, NAME_MAX, PATH_MAX } from './limits.js';
+import { DICTATION_AUDIO_MAX_BASE64, FREE_TEXT_MAX, isJsonBounded, jsonBounded, jsonLength, LIST_MAX, malformedClass, malformedHeadline, NAME_MAX, PATH_MAX, type MalformedClass } from './limits.js';
 import { RunHostRequestSchema } from './process-protocol.js';
 
 /*
@@ -127,6 +127,24 @@ describe('OQ-467: each class of bound — at, over, under', () => {
     const headline = headlineOf({ kind: 'config.setField', patch: { [key]: 1 } });
     expect(headline).toBe('The patch[key] is longer than 1,024 characters');
     expect(headline).not.toContain('kkkk');
+  });
+
+  it('OQ-485: the class of a refusal — past a bound, an unknown kind of the request\'s own, or unreadable', () => {
+    const classOf = (req: unknown): MalformedClass => {
+      const r = parse(req);
+      if (r.success) throw new Error('parsed');
+      return malformedClass(r.error.issues);
+    };
+    expect(classOf({ kind: 'session.start', prompt: 'x'.repeat(FREE_TEXT_MAX + 1) })).toBe('past a bound');
+    expect(classOf({ kind: 'initialization.skip', ids: Array.from({ length: LIST_MAX + 1 }, (_, i) => `id${i}`) })).toBe('past a bound');
+    expect(classOf({ kind: 'config.setField', patch: { ['k'.repeat(NAME_MAX + 1)]: 1 } })).toBe('past a bound');
+    expect(classOf({ kind: 'no.such.kind' })).toBe('unknown kind');
+    expect(classOf({ kind: 42 })).toBe('unknown kind');
+    expect(classOf({})).toBe('unknown kind');
+    expect(classOf({ kind: 'session.resume', sessionId: 42 })).toBe('unreadable');
+    expect(classOf({ kind: 'session.control', request: { op: 'no.such.op', sessionId: 's' } })).toBe('unreadable');
+    expect(classOf(null)).toBe('unreadable');
+    expect(classOf('session.start')).toBe('unreadable');
   });
 
   it('the headline never carries the value, and an issue that is not a bound names its field', () => {

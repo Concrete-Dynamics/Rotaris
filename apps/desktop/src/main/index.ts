@@ -60,7 +60,7 @@ import { installPermissionHandlers, type ApplicationPages, type PermissionSessio
 import { installWebContentsGuard } from './web-contents-guard.js'; // R-091, OQ-466
 import { rendererLossNotice } from './renderer-loss-notice.js'; // R-091, hardening §3.2 row 5
 import { secureWebPreferences } from './secure-web-preferences.js'; // R-091: one set of web preferences for every window
-import { dispatchCommand } from './command-dispatch.js'; // R-091: nothing throws out of runCommand (ADR-0019)
+import { commandRefusals, dispatchCommand } from './command-dispatch.js'; // R-091: nothing throws out of runCommand (ADR-0019); OQ-485
 import { refuseCommandSender } from './command-sender.js'; // R-091: who may send a command (checklist 17)
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
@@ -2021,6 +2021,8 @@ async function main(): Promise<void> {
     const parent = BrowserWindow.getAllWindows().find((b) => !b.isDestroyed() && b.webContents.id === id)?.getParentWindow();
     return parent && !parent.isDestroyed() ? parent.webContents.id : undefined;
   };
+  // OQ-485: one fold for the application's malformed-command lines, shared by both dispatch tables, so a sender's burst is bounded across them.
+  const commandRefusalLines = commandRefusals(clocks.timers, log);
   /**
    * R-091 (hardening F3): the dispatch over a handler table — the product's own table for `runCommand`, and, for the driver
    * seam's `commandThrowing` alone, a table in which every handler throws (`everyHandlerThrows`), so the built app's
@@ -2054,6 +2056,7 @@ async function main(): Promise<void> {
     // OQ-281 / REQ-SESSION-202: in a window whose store the open refused, "no workspace" is said as the condition held.
     settle: (outcome, w) => (w.workspaceId !== undefined || w.workspace === '(no workspace)' ? outcome : answerUnderHeldRefusal(outcome, w, storeRefusals.get(canonicalPath(w.workspace))?.held)),
     log: (m, level) => { log(m, level); },
+    refusals: commandRefusalLines,
   });
   const runCommand = dispatchOver(handlers);
   /**

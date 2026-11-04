@@ -38,8 +38,9 @@
  *
  * Since 2026-11-04 (R-091, hardening F3, step 9e) it measures the command boundary in the built app: the page sends a
  * request of an unknown kind and a 2,000,000-character prompt through its own preload channel, each answered
- * `command.malformed` as a value (the second naming the prompt and OQ-467's bound) with no line of the product's
- * (OQ-485), and the driver's `commandThrowing` reaches the dispatcher's `command.failed` answer with one `error` line and
+ * `command.malformed` as a value (the second naming the prompt and OQ-467's bound) — since OQ-485 was built (2026-11-04)
+ * with exactly one `warning` line of the product's each, read as the whole line, the kind's text and the prompt absent
+ * (until then with none) — and the driver's `commandThrowing` reaches the dispatcher's `command.failed` answer with one `error` line and
  * the thrown message redacted (ADR-0019, REQ-TOOLS-171).
  *
  * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `shots/`, `run-app.log`, `cut-app.log`, `results.json`.
@@ -226,22 +227,29 @@ try {
   // ADR-0019). Steps (1) and (2) are sent by the page itself through the preload's `command` — the renderer's own channel,
   // its sender check included — and step (3) through the driver's `commandThrowing`, main's own dispatcher with every
   // handler throwing, since no product handler throws on purpose. Each asserts the outcome's shape and the one line the step
-  // leaves in the application log: for (1) and (2) the driver's own line for the eval that sent it, and none of the
-  // product's, since a malformed request is refused as a value and leaves no line (OQ-485 asks whether it should); for (3)
-  // the dispatcher's `error` line.
+  // leaves in the application log: for (1) and (2) the driver's own line for the eval that sent it and exactly one line of
+  // the product's, the dispatcher's `warning` for the refusal (OQ-485, ruled and built 2026-11-04; until then none, which
+  // this step asserted), matched as the whole line so that a second line, or one carrying a value, is a red; for (3) the
+  // dispatcher's `error` line. Each refusal is the first of its class from this window, so neither is folded.
   // The log's complete lines: the empty text after its last newline is no line, or a slice taken from the count before a
   // step would start at it and miss the step's first line (measured: the first run of this step read none of its lines).
   const logLines = () => (existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '').split(/\r?\n/).slice(0, -1);
   const productCommandLine = (line) => !line.includes('driver: ') && /\bcommand\b|malformed/i.test(line);
   const viaPage = (request) => `window.rotaris.command(${request}).then((outcome) => outcome, (e) => ({ rejected: String(e?.message ?? e) }))`;
   const evalLine = /driver: eval .*ok\s*$/;
+  // OQ-485: the dispatcher's line for a malformed command, whole — the window, the class (with the kind where it is one of
+  // the union), the headline, and nothing else.
+  const escaped = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const refusalLine = (what, headline) => new RegExp(`^\\[main [^\\]]+\\] warning\\s+refused a command from window \\d+ \\(${escaped(what)}\\): ${escaped(headline)}; answered command\\.malformed \\(OQ-485\\)$`);
   const stepLines = async (before, what) => until(() => logLines().slice(before), (lines) => lines.some((line) => evalLine.test(line)), { timeoutMs: 10_000, what }).catch(() => logLines().slice(before));
 
   // (1) A kind the contract does not have.
   const before1 = logLines().length;
   const unknownKind = await d.eval(viaPage(`{ kind: 'driver-proof.no-such-kind' }`));
   const lines1 = await stepLines(before1, 'the driver\'s line for the unknown kind\'s eval');
-  check('9e(1): a request of an unknown kind is answered command.malformed, a value, with no line of the product\'s', unknownKind?.ok === false && unknownKind.code === 'command.malformed' && /^The request could not be read/.test(unknownKind.headline ?? '') && lines1.filter((line) => evalLine.test(line)).length === 1 && lines1.filter(productCommandLine).length === 0, `outcome ${JSON.stringify(unknownKind)}; the step's lines: ${lines1.filter((line) => evalLine.test(line) || productCommandLine(line)).length} (${lines1.filter(productCommandLine).length} of the product's)`);
+  const product1 = lines1.filter(productCommandLine);
+  const kindEchoed = logLines().filter((line) => !line.includes('driver: ') && line.includes('no-such-kind')).length;
+  check('9e(1): a request of an unknown kind is answered command.malformed, a value, with exactly one warning line of the product\'s, its kind not echoed (OQ-485)', unknownKind?.ok === false && unknownKind.code === 'command.malformed' && unknownKind.headline === 'The request could not be read: the kind is not valid' && lines1.filter((line) => evalLine.test(line)).length === 1 && product1.length === 1 && refusalLine('unknown kind', 'The request could not be read: the kind is not valid').test(product1[0] ?? '') && kindEchoed === 0, `outcome ${JSON.stringify(unknownKind)}; ${product1.length} line(s) of the product's: ${product1[0] ?? 'none'}; the kind's text in the product's lines ${kindEchoed} time(s)`);
 
   // (2) A prompt past the contract's bound (OQ-467: FREE_TEXT_MAX, 1,048,576 characters): refused before any handler, the
   // headline naming the field and the bound, and the value echoed neither in the outcome nor in the log.
@@ -250,7 +258,8 @@ try {
   const oversized = await d.eval(viaPage(`{ kind: 'session.start', prompt: '${OVERSIZED}' + 'x'.repeat(2_000_000) }`));
   const lines2 = await stepLines(before2, 'the driver\'s line for the oversized prompt\'s eval');
   const echoed = logLines().filter((line) => line.includes(OVERSIZED)).length + (JSON.stringify(oversized ?? null).includes(OVERSIZED) ? 1 : 0);
-  check('9e(2): a 2,000,000-character prompt is answered command.malformed naming the prompt and the bound, never echoed', oversized?.ok === false && oversized.code === 'command.malformed' && oversized.headline === 'The prompt is longer than 1,048,576 characters' && echoed === 0 && lines2.filter((line) => evalLine.test(line)).length === 1 && lines2.filter(productCommandLine).length === 0, `outcome ${JSON.stringify(oversized)}; the value echoed ${echoed} time(s); ${lines2.filter(productCommandLine).length} line(s) of the product's`);
+  const product2 = lines2.filter(productCommandLine);
+  check('9e(2): a 2,000,000-character prompt is answered command.malformed naming the prompt and the bound, never echoed, with exactly one warning line of the product\'s (OQ-485)', oversized?.ok === false && oversized.code === 'command.malformed' && oversized.headline === 'The prompt is longer than 1,048,576 characters' && echoed === 0 && lines2.filter((line) => evalLine.test(line)).length === 1 && product2.length === 1 && refusalLine('past a bound, kind session.start', 'The prompt is longer than 1,048,576 characters').test(product2[0] ?? ''), `outcome ${JSON.stringify(oversized)}; the value echoed ${echoed} time(s); ${product2.length} line(s) of the product's: ${product2[0] ?? 'none'}`);
 
   // (3) A handler that throws: the invoke does not hang or reject, the answer is `command.failed` with the thrown message
   // through the redaction pass (its `token=` value masked), and the application log holds one `error` line naming the kind.

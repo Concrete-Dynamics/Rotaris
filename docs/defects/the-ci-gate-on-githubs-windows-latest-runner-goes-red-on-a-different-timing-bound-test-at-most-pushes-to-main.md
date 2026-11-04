@@ -13,7 +13,7 @@ unit test of the gate's test stage, a different one each time, with the rest gre
 
 *Corrected 2026-11-04 (acceptance hrda, AF-02):* not every one of those reds is a test. Four of them (de779d29 at 00:37Z,
 e53dc799, 42fc3235 and 1d663de6) never reached the test stage: `pnpm lint`'s `eslint .` ran out of JavaScript heap at
-Node's default limit, and every CI run from f7f5dc02 (11:24Z) on died the same way. That mode had a cause of its own,
+Node's default limit, and every CI run from f7f5dc02 (11:24Z) on that reached the lint died the same way. That mode had a cause of its own,
 repaired the same day, and has a note of its own,
 [the CI gate's lint runs out of JavaScript heap](../archive/defects/the-ci-gates-lint-runs-out-of-javascript-heap-at-nodes-default-heap-limit.md);
 this note keeps the runs that reached the tests.

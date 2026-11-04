@@ -1112,7 +1112,7 @@
     "defects/the-capture-seam-drops-newlines-from-a-typed-prompt.md": "ddc4c0b8a56a8050e238507aa2e0b8257f1b0b011d44c760a8c604fefed7741b",
     "defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md": "ae6b8ee323a1ffbba667bea0ed6cbe5a36892a1c96d5c9d3a41aebd1a5b854ab",
     "defects/the-captures-console-relay-listens-with-the-deprecated-console-message-arguments.md": "29126d0f4808bfdbba1a3218ad1e381bd3d7dde84488fcf18c538cd5ea2020fa",
-    "defects/the-ci-gates-lint-runs-out-of-javascript-heap-at-nodes-default-heap-limit.md": "46c9951d05523605c66fafeacd6c226b6610ef5f592c16723366e2c47bb7bc3a",
+    "defects/the-ci-gates-lint-runs-out-of-javascript-heap-at-nodes-default-heap-limit.md": "3228bdc543f62ff61b7f8457837de821450def996dca6ae644aec0c5a6c320ca",
     "defects/the-code-intelligence-bundle-pins-serena-agent-and-not-its-dependencies.md": "8bfe8f294ef528435afee5171a0b6c82854fa7c12ed679950f267e8558ac36c9",
     "defects/the-code-intelligence-server-dies-when-the-app-runs-as-root.md": "7b77c81b00d485c6cf56f0a173f6579c4d45dfd8b893846e5068e621649c9f21",
     "defects/the-command-dispatcher-catches-nothing-so-a-handler-that-throws-rejects-the-renderers-invoke.md": "30f0504ece63c43e3592a04bdda77c3b177c3c51cfaf7c3c9c6f775b422ba007",

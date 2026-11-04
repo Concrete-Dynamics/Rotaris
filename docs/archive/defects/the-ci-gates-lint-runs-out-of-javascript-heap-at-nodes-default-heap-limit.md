@@ -24,9 +24,10 @@ limit Allocation failed - JavaScript heap out of memory` and exit 134. The heap 
 3,950 to 3,980 MB at about 156 s, the default limit V8 sets on the runner's 16 GB. The test stage, the requirement
 coverage summary and the coverage step never run, so such a run says nothing about the tests at all.
 
-It is not one cause beginning at f7f5dc02, as the finding first read it: the mode began about 22 hours earlier and ran
-intermittently before it ran every time. Of the 36 failed CI runs from 2026-11-03 21:46Z to 2026-11-04 17:22Z, 13 died
-this way:
+It is not one cause beginning at f7f5dc02, as the finding first read it: the mode began about 11 hours earlier and ran
+intermittently before it ran every time the lint was reached. Of the 36 failed CI runs from 2026-11-03 21:46Z to
+2026-11-04 17:22Z, 14 died this way (a branch's push and pull-request runs count as two); the Dependabot `dev-tooling`
+pair at 17:18Z stopped at the typecheck, before the lint:
 
 | Run | Head | Branch, event | Mode |
 | --- | --- | --- | --- |
@@ -44,6 +45,7 @@ this way:
 | 41829796480 | ad1a6698 | main, push (12:30Z) | heap |
 | 41854850371, 41854902433 | 84422b11 | `docs/mcp-server-directive`, push and pull request (15:09Z) | heap |
 | 41876152753, 41876164187 | c23e0d1d | Dependabot `electron` group, push and pull request (17:17Z) | heap |
+| 41876269408, 41876280142 | 83160d96 | Dependabot `dev-tooling` group, push and pull request (17:18Z) | `pnpm typecheck`, before the lint |
 | 41876948455, 41876960447 | 2a6ebdef | Dependabot `production` group, push and pull request (17:22Z) | heap |
 
 No failed run in that window before de779d29 died this way. The lint's heap was measured on this branch's base (ad1a6698) on the Windows 11

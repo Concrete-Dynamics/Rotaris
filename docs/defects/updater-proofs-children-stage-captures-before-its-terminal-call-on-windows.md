@@ -46,6 +46,8 @@ start and `set >`'s write, not measured here.
 configuration-and-startup suite (CPU load 42 % from other sessions, no other tree's Electron running): the same one check of
 15, "ROTARIS_APP_LOG_LEVEL ABSENT, ROTARIS_INTENT_SCRIPT ABSENT", the other 14 passing.
 
+**Sighting, 2026-11-04 (hrda).** Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits; one proof at a time after `pnpm build`, no other tree's Electron running, host CPU 100 % at launch: the same one check of the stage red, "and it still carries the launch's other variables … ROTARIS_APP_LOG_LEVEL ABSENT, ROTARIS_INTENT_SCRIPT ABSENT"; every other check green. Recorded, not repaired.
+
 ## Specs
 
 None is contradicted: REQ-STARTUP-106 and REQ-STARTUP-147 are what the stage measures, and it reads nothing because the

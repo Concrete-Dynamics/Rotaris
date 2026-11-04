@@ -36,6 +36,8 @@ Seen again 2026-11-03 in `secure-windows-and-fuses`' review (the hardening orche
 driver-proof`'s exit-trace launches, both the orderly quit and the crash quit, found the application still running past
 the bound after it had logged its exit, the shape above.
 
+Seen again 2026-11-04 (hrda) in `pnpm exit-trace-proof`'s `orderly` launch, Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits, no other tree's Electron running, at 100 % CPU (the proof sweep's other launches and other sessions' work): "orderly did not exit within 15000 ms of the driver's quit: neither SIGTERM (15024 ms) nor SIGKILL (5021 ms) was reaped". Re-run alone at 20 % CPU, the same launch's quit exited 0 and its checks were green. Recorded, not repaired.
+
 ## Specs
 
 PD-ORCH-005 clause 9 and REQ-SHELL-121 (the application's quit ends the process), if the lingering process is the

@@ -13,6 +13,8 @@ which may be the same cause.
 
 Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fencehardeni` at `1d663de6` plus the bundle's two commits (Windows 11 ARM64, Node 26.13.0, Electron 44.3.0; one proof at a time, no other tree's Electron running, CPU 9 % before the launch): "the window was not measured at 1000x680: 1000x682". The bundle changes only the fence and the file tools' write.
 
+**Sighting, 2026-11-04 (hrda).** Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits; one proof at a time after `pnpm build`, no other tree's Electron running, host CPU about 24 % at launch: the same red, "the window was not measured at 1000x680: 1000x682". The bundle changes no window or capture seam. Recorded, not repaired.
+
 ## Specs
 
 None named here: the proof sizes the window at its minimum and measures it, and whether 1000x682 meets that is the

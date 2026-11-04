@@ -16,6 +16,8 @@ so "run refused before start: no workspace is open", no store was made under `pa
 the refusal is intermittent; the dot-prefixed directory is the store's staging place, and EPERM on Windows is what a rename
 or removal meets while another handle (an indexer, a scanner, a process of the launch before) holds the directory.
 
+**Sighting, 2026-11-04 (hrda).** Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits; one proof at a time after `pnpm build`, no other tree's Electron running, host CPU about 37 % at launch: the same red, "expected one workspace database below …\part-j-proof\pause\local; found 0". Recorded, not repaired.
+
 ## Specs
 
 None named here: a workspace opens with its store, and whether a transient Windows file lock refusing that open is the

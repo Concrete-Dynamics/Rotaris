@@ -90,3 +90,5 @@ proof (34 kills, `taskkill /F` of a driven or scripted launch, at the workspace'
 host ended within 84 ms to 2.5 s, with Chromium's 0 or the watch's 69). The proof now describes a survivor — its CPU time, its
 threads by state and wait reason, its children — so the next red says what the run host was doing. Until that is read, the
 watch is a measured improvement and not the repair.
+
+**Sighting, 2026-11-04 (hrda).** Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits, no other tree's Electron running; `pnpm exit-trace-proof --skip-build` run alone at 20 % CPU: 75 of 76 checks green, the one red `main-killed`'s "16552: still running 10 s after the kill; 17824: gone 96 ms after the kill, exit 0" (survivor CPU 0.36 s, 29 threads, a child `electron.exe` 33168). Recorded, not repaired.

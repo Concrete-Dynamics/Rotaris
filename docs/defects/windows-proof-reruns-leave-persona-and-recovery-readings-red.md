@@ -38,6 +38,8 @@ These proofs verify REQ-MONITOR-086/281 (run-wide compression display), REQ-MONI
 
 Seen again on 2026-11-04 at the landing of R-091 bundle D3 (fence-hardening), rebased head `aacd3806`, Windows 11 ARM64, Node 26.13.0, the desktop free of other trees: `resilience-proof` read `child-timeout-inspector` (alpha measured against null), `fatal` (546 px) and `auth-fallback` (no 1000x680 reading) red in the sweep with 71 % CPU before its launch, and again alone at 16 % CPU with no other Electron process; the other 20 scenarios were green both times. Recorded, not repaired.
 
+Seen again on 2026-11-04 (hrda). Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits; one proof at a time after `pnpm build`, no other tree's Electron running, host CPU about 54 % at launch: `resilience-proof` red on the same three scenarios, `child-timeout-inspector` (alpha measured against null), `fatal` (546 px) and `auth-fallback` (no `1000x680` reading). Recorded, not repaired.
+
 ## Relevant files
 
 - `apps/desktop/scripts/compression-proof.mjs` — run-wide count launch and persona probes.

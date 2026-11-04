@@ -11,6 +11,8 @@ rounding to an even pixel. `resilience-proof`'s `auth-fallback` minimum-size lau
 (the Windows session's [`windows-proof-reruns-leave-persona-and-recovery-readings-red.md`](windows-proof-reruns-leave-persona-and-recovery-readings-red.md)),
 which may be the same cause.
 
+Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fencehardeni` at `1d663de6` plus the bundle's two commits (Windows 11 ARM64, Node 26.13.0, Electron 44.3.0; one proof at a time, no other tree's Electron running, CPU 9 % before the launch): "the window was not measured at 1000x680: 1000x682". The bundle changes only the fence and the file tools' write.
+
 ## Specs
 
 None named here: the proof sizes the window at its minimum and measures it, and whether 1000x682 meets that is the

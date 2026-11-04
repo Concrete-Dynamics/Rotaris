@@ -21,6 +21,8 @@ the ninth with the same "cancelled: the quit by SIGTERM exited 1" (load 42 % at 
 `mcp-proof`'s scenario 2c measures the same kind of quit and sends the driver's orderly quit on win32 for this reason (its
 `quitMethod`). That bundle recorded it under another name, which its review folded into this note at landing (one defect, one note).
 
+Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fencehardeni` at `1d663de6` plus the bundle's two commits (Windows 11 ARM64, Node 26.13.0, Electron 44.3.0; one proof at a time, no other tree's Electron running, CPU 17 % before the launch): "cancelled: the quit by SIGTERM exited 1", as above. The bundle changes only the fence and the file tools' write.
+
 ## Specs
 
 None contradicted by the product. The proof's quit instrument assumes a POSIX signal; PD-TOOLS-013 revision 2's reading is not

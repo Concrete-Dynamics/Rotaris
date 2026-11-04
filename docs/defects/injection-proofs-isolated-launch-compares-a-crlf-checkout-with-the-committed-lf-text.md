@@ -21,6 +21,8 @@ with the same "isolated: PRESENCE" message (CPU load 62 % at the start, thirteen
 came from Git for Windows' own system configuration (`core.autocrlf=true` in `C:/Program Files/Git/etc/gitconfig`). That bundle
 recorded it under another name, which its review folded into this note at landing (one defect, one note).
 
+Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fencehardeni` at `1d663de6` plus the bundle's two commits (Windows 11 ARM64, Node 26.13.0, Electron 44.3.0; one proof at a time, no other tree's Electron running, CPU 10 % before the launch): "isolated: PRESENCE — workspace:AGENTS.md's block (…/.rotaris/worktrees/<id>/AGENTS.md) was not received whole", as above. The bundle changes only the fence and the file tools' write.
+
 ## Specs
 
 None contradicted by the product, as far as the reading goes; whether an injected instruction file's CRLF endings should be

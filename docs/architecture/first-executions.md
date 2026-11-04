@@ -60,3 +60,4 @@ one now names its part. **A new row is appended to the last part**; when that wo
 | [34](first-executions/34-the-register-33.md) | The register *(continued, from "2026-10-23")* |
 | [35](first-executions/35-the-register-34.md) | The register *(continued, from "2026-11-01")* |
 | [36](first-executions/36-the-register-35.md) | The register *(continued, from "2026-11-02")* |
+| [37](first-executions/37-the-register-36.md) | The register *(continued, from "2026-11-04")* |

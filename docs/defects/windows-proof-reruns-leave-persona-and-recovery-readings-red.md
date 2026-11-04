@@ -30,6 +30,8 @@ one "no reply to hello within 5000 ms" (the hello-bound note) and the minimum-si
 host was available to rerun it alone, so these are loaded-host readings not yet separated from the product; the bundle
 changed no quit, launch or child path. No repair is claimed.
 
+Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fencehardeni` at `1d663de6` plus the bundle's two commits (Windows 11 ARM64, Node 26.13.0, Electron 44.3.0; one proof at a time, no other tree's Electron running, CPU 20 % before the launch): `resilience-proof` red on 3 scenarios, `child-timeout-inspector` (alpha measured against null), `fatal` (546 px) and `auth-fallback` (no `1000x680` reading). The bundle changes only the fence and the file tools' write.
+
 ## Specs
 
 These proofs verify REQ-MONITOR-086/281 (run-wide compression display), REQ-MONITOR-052/066 (the active model and input ceiling), and REQ-NOTIFY-072 (the recovery dialog).

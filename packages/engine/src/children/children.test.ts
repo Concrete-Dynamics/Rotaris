@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, millis, mintMachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, millis, mintMachineId, utf8ByteLength, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { CHILD_STATES, CHILD_TRANSITIONS, FOLLOW_UP_STATE, isDelegationTarget, isLegalChildMove, isLegalFollowUp, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type ApprovalPayload, type PermissionPreset, type SessionRecord, type TranscriptIncrement } from '@rotaris/contracts';
@@ -2819,7 +2819,11 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(observed[1]).toMatch(/^Task 'named': queued/);
       expect(rows.map((c) => c.canonical_name)).toEqual(['named']);
       expect(itemOf(rows, 'named')).toBe('0000000a');
-      expect(warnings.some((w) => w.includes("'unnamed'") && w.includes('(REQ-ORCH-029)'))).toBe(true);
+      // PD-STARTUP-011 / REQ-STARTUP-134: the refusal's warning is an application-log line, so it names the refusal (the tool's
+      // result, quoting the plan) by source, kind and byte length, and neither the model's task name nor an item of the plan.
+      const refusal = observed[0]!.slice("Task 'unnamed': rejected — ".length);
+      expect(warnings.filter((w) => w.includes('was refused for its todo item'))).toEqual([`a delegation to coding-agent was refused for its todo item (REQ-ORCH-029): tool output from the delegate tool's refusal, ${utf8ByteLength(refusal)} bytes, not quoted`]);
+      for (const w of warnings) { expect(w).not.toContain("'unnamed'"); expect(w).not.toContain('Implement it'); }
     });
 
     it('(d) binds implementation delegations only: a read-only role still delegates unnamed after the list', async () => {
@@ -2877,7 +2881,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(observed[2]).toMatch(/^Task 'other': queued/);
       expect(observed[3]).toMatch(/^Task 'again': queued/);
       expect(rows.map((c) => [c.canonical_name, c.todo_item])).toEqual([['first', '0000000a'], ['other', '0000000b'], ['again', '0000000a']]);
-      expect(warnings.some((w) => w.includes("'second'") && w.includes('(REQ-ORCH-028)'))).toBe(true);
+      // PD-STARTUP-011 / REQ-STARTUP-134: the warning names the refusal's length, not the model's task name or the item it held.
+      expect(warnings.some((w) => w.startsWith('a delegation to coding-agent was refused for its todo item (REQ-ORCH-028): tool output from the delegate tool') && w.includes(`${utf8ByteLength(observed[1]!.slice("Task 'second': rejected — ".length))} bytes, not quoted`))).toBe(true);
+      for (const w of warnings) { expect(w).not.toContain("'second'"); expect(w).not.toContain('Implement it'); }
     });
 
     it('(c) a read-only child naming an item never holds it', async () => {

@@ -3,7 +3,7 @@
  * look for are the engine's own, and each reading is taken from what the model was sent, the log and the transcript.
  */
 import { describe, expect, it } from 'vitest';
-import { ANSWER_REPROMPT as productReprompt, BUILT_IN_PERSONAS, CLASSIFIER_SYSTEM_PROMPT, completionNotification, entryInstructionsFor, planCarryText, planCorrectionText, planHeldRowText, RungMemory } from '@rotaris/engine';
+import { ANSWER_REPROMPT as productReprompt, BUILT_IN_PERSONAS, CLASSIFIER_SYSTEM_PROMPT, completionNotification, entryInstructionsFor, planCarryText, planCorrectionText, planHeldRowText, planNotDoneInLog, RungMemory } from '@rotaris/engine';
 import { renderDelegateObservation } from '@rotaris/agent-tools';
 import type { ChildRow } from '@rotaris/store';
 import type { AgentBackend, TurnInput } from '@rotaris/model';
@@ -32,7 +32,8 @@ describe('plan-open reading (live-run `plan-open`, PD-ORCH-015)', () => {
   });
 
   it('a correction after an answer, recorded in the root\'s own conversation: one iteration, nothing re-queued', () => {
-    const log = 'warn iteration 1: the coordinator answered with 1 item of its plan not done: X; a correction is sent into its conversation (1 of 1, REQ-ORCH-078, PD-ORCH-015)';
+    // The product's own warning (`Run.turn`): since PD-STARTUP-011 the open items are named by length, the tail read unchanged.
+    const log = `warn iteration 1: ${planNotDoneInLog(['X'])}; a correction is sent into its conversation (1 of 1, REQ-ORCH-078, PD-ORCH-015)`;
     const bodies = [
       body([{ role: 'user', content: TASK }]),
       body([{ role: 'user', content: TASK }, { role: 'assistant', content: ANSWER }, { role: 'user', content: planCorrectionText(OPEN, true) }]),

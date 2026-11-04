@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, utf8ByteLength, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
@@ -90,7 +90,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
   const agentStates = (sid: SessionId) => decodeStoredTodo(dal.getSession(sid)!.todo).agent!.phases.flatMap((p) => p.tasks.map((t) => t.state));
 
   it('a coordinator that answers with an item of its plan pending does not end the run successful; the next iteration is told the item, finishes it, and the run completes', async () => {
-    const { sessions, client } = sessionsWith([
+    const { sessions, client, warnings } = sessionsWith([
       // The root ignores its correction (PD-ORCH-015), so the task is re-queued.
       writePlan('c1', ['COMPLETED', 'PENDING']), answer('Here is each command\'s outcome.'), answer('Still done.'),
       writePlan('c2', ['COMPLETED', 'COMPLETED']), answer('Done: every item of the plan is complete.'),
@@ -112,6 +112,10 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     expect(firstUser(client.requests[0]!)).not.toContain('Report each command');
     const ends = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string; summary: string });
     expect(ends[0]).toMatchObject({ iteration: 1, outcome: 'partial', summary: 'the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line' });
+    // PD-STARTUP-011 / REQ-STARTUP-134: the re-queue's warning reaches the application log, so it names the open item's length
+    // and never its text, while the iteration's record above and the person's transcript keep the words.
+    expect(warnings.filter((w) => w.includes('returned to the pending queue'))).toEqual([`iteration 1: the coordinator answered with 1 item of its plan not done (model output from the coordinator's plan, ${utf8ByteLength('Report each command\'s outcome in one line')} bytes, not quoted); its task is returned to the pending queue (REQ-ORCH-029)`]);
+    for (const w of warnings) expect(w).not.toContain('Report each command');
   });
 
   it('a coordinator that never finishes its plan does not end the run successful: the task is given up at the retry limit and the session reads failed', async () => {
@@ -644,7 +648,9 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       expect(corrected.startsWith('Your answer has been shown to the person.')).toBe(true);
       expect(corrected).toContain('Report each command\'s outcome in one line');
       expect(corrected).toContain('Record each item\'s true state with the todo tool: COMPLETED where the work is done, ABANDONED where you will not do it.');
-      expect(corrections(warnings)).toEqual(['iteration 1: the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line; a correction is sent into its conversation (1 of 1, REQ-ORCH-078, PD-ORCH-015)']);
+      // PD-STARTUP-011 / REQ-STARTUP-134: the warning is an application-log line, so the open item, the coordinator's own words, is its length.
+      expect(corrections(warnings)).toEqual([`iteration 1: the coordinator answered with 1 item of its plan not done (model output from the coordinator's plan, ${utf8ByteLength('Report each command\'s outcome in one line')} bytes, not quoted); a correction is sent into its conversation (1 of 1, REQ-ORCH-078, PD-ORCH-015)`]);
+      for (const w of warnings) expect(w).not.toContain('Report each command');
       // PD-ORCH-009 revision 2: the correction's silent turn follows an answer, so it is not asked for one.
       expect(client.requests.some((r) => lastUser(r) === ANSWER_REPROMPT)).toBe(false);
       expect(dal.issuesOf(sid).filter((i) => i.kind === 'incomplete_execution')).toEqual([]);

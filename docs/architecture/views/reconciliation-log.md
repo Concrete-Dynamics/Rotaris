@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-04**
 
+**The run's plan and delegation warnings no longer quote the coordinator's words (R-091 acceptance plan `hrda`, the bundle's review; PD-STARTUP-011, REQ-STARTUP-134; 2026-11-04).** `02-process-view/05-message-families-4.md`'s application-log paragraph names two more writers held to the content rule: the run's warnings for a plan left open, which say the open items' length through `planNotDoneInLog`, and the warning for a delegation refused for its todo item, which says the refusal's length. No package, edge, process, message or ownership changed.
+
 **No application-log line quotes session content (R-091 acceptance plan `hrda`; PD-STARTUP-011, REQ-STARTUP-134; 2026-11-04).** `02-process-view/05-message-families-4.md`'s application-log paragraph gains the content rule by kind at each writer: `sessionContentInLog`'s `<kind> from <source>, <n> bytes, not quoted` in place of a prompt, a model's or a tool's output or a file's contents, held by a test beside each writer, and a folder path, a provider's error text and a child process's own lines kept as written.
 
 **A window with no workspace has a diagnostics base under the per-user data directory (R-091 acceptance plan `hrda`; PD-STARTUP-011, REQ-STARTUP-131, REQ-STARTUP-145, REQ-SHELL-163; 2026-11-04).** `02-process-view/08-files-and-directories-on-disk.md`'s run-directory row gains the third resolution of `<base>`, `<per-user data directory>/diagnostics/rotaris`, fixed when the window is built; the "nowhere to be written" inactive case is gone, and every main window being built for a folder today, no launch reaches it (OQ-541).

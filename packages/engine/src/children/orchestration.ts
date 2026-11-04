@@ -1,4 +1,4 @@
-import { textOf, type Clocks, countNoun, HAND_OFF_BUDGET, millis, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
+import { textOf, type Clocks, countNoun, HAND_OFF_BUDGET, millis, sessionContentInLog, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import { interruptionPhrase, isTerminalChildState, reportStatusToState, resumeStateFor, TASK_ID_PATTERN, type ChildState, type Interruption, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
@@ -529,7 +529,9 @@ export class IterationChildren implements DelegationOps {
     if (lookup === undefined) return { ok: true, item: named !== '' ? named : inherited };
     const implementation = persona !== undefined && this.implementationRole(persona, parentPersona);
     const admission = admitTodoItem({ named, inherited, plan: lookup(parentId), implementation, persona: persona?.name ?? req.persona, holderOf: (item) => this.holderOf(parentId, item, null) });
-    if (!admission.ok) this.deps.warn(`a delegation of '${req.taskName}' to ${persona?.name ?? req.persona} was refused for its todo item (${admission.requirement}): ${admission.reason}`);
+    // PD-STARTUP-011 / REQ-STARTUP-134: the warning reaches the application log. The task name is the model's and the refusal,
+    // the delegate tool's result, quotes the caller's plan, so the line names the refusal's source, kind and length.
+    if (!admission.ok) this.deps.warn(`a delegation to ${persona?.name ?? req.persona} was refused for its todo item (${admission.requirement}): ${sessionContentInLog('tool output', "the delegate tool's refusal", admission.reason)}`);
     return admission;
   }
 

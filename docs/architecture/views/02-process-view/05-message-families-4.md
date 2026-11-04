@@ -184,7 +184,8 @@ line quotes session content (REQ-STARTUP-134 by kind, [`PD-STARTUP-011`](../../.
 2026-11-04): a writer that would quote prompt or transcript text, model output, a tool's result or a file's contents writes
 `sessionContentInLog`'s `<kind> from <source>, <n> bytes, not quoted` instead (`@rotaris/kernel`), held by a test beside the
 writer — the intent classifier's warning and fallback reason and the pre-flight's `intent:` line, the adoption
-interpretation's line, the run host's MCP host and the MCP transport — while a folder path, a provider's error text and a
+interpretation's line, the run's warnings for a plan left open (`planNotDoneInLog`) and for a delegation refused for its
+todo item, the run host's MCP host and the MCP transport — while a folder path, a provider's error text and a
 child process's own lines (a tool server's stderr, at `debug`; a hook's output in its failure warning) stay as written;
 the stream is not filtered a second time. The threshold is `info`, and the environment variable `ROTARIS_APP_LOG_LEVEL`,
 read once when main's module is evaluated, is the only thing that moves it; no message kind, command, configuration key

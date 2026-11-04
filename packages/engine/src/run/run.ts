@@ -6,7 +6,7 @@ import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import { QUEUED_PROMPT_TASK_NAME, type Committed, type SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
-import { classifyStop, HELD_ANSWER_LIMIT, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planHeldRowText, planNotDoneSummary, statusForResult, stopCondition, summarise, TODO_LIST_OWED_TEXT, type StopReason, type TerminalResult } from './stop-conditions.js';
+import { classifyStop, HELD_ANSWER_LIMIT, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planHeldRowText, planNotDoneInLog, planNotDoneSummary, statusForResult, stopCondition, summarise, TODO_LIST_OWED_TEXT, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { mintTodoId, taskLine, taskTitle, Todo, type Task, type TodoDocument } from './todo.js';
 import { cut } from './cut.js';
@@ -1304,7 +1304,8 @@ export class Run {
         if (held === '') delete task.heldAnswer;
         else task.heldAnswer = held;
         leftPlanOpen = true;
-        this.deps.warn(`iteration ${iteration}: ${summary}; its task is ${outcome === 'abandoned' ? 'given up on at the retry limit' : 'returned to the pending queue'} (REQ-ORCH-029)`);
+        // PD-STARTUP-011 / REQ-STARTUP-134: the open items are the coordinator's own words, so the log line names their length.
+        this.deps.warn(`iteration ${iteration}: ${planNotDoneInLog(open)}; its task is ${outcome === 'abandoned' ? 'given up on at the retry limit' : 'returned to the pending queue'} (REQ-ORCH-029)`);
         // PD-ORCH-015, building REQ-ORCH-067's iteration-end visibility: the person is told, under the answer, why it is held.
         writer.appendRow('system', planHeldRowText(iteration, open, outcome === 'abandoned'), true);
         if (outcome === 'abandoned') { this.lastFailure = summary; this.failedModel = null; }
@@ -2039,7 +2040,7 @@ export class Run {
         const open = this.openRootPlan(planTask);
         if (open.length === 0) return null;
         corrections += 1;
-        this.deps.warn(`iteration ${iteration}: ${planNotDoneSummary(open)}; a correction is sent into its conversation (${corrections} of ${correctionLimit}, REQ-ORCH-078, PD-ORCH-015)`);
+        this.deps.warn(`iteration ${iteration}: ${planNotDoneInLog(open)}; a correction is sent into its conversation (${corrections} of ${correctionLimit}, REQ-ORCH-078, PD-ORCH-015)`);
         const supervisor = this.deps.supervisorFor?.(this.rootId);
         // PD-ORCH-009 revision 4 (OQ-284, ruled 2026-10-14 under R-072): the correction is the one message the run adds for the
         // turn it follows, so a stuck trigger that turn armed is withdrawn (a repetition, cycle or raw-count one is kept).

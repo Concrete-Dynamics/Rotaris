@@ -8,7 +8,7 @@
  * guessed success (REQ-EVENTS-026, REQ-SESSION-187).
  */
 
-import { countNoun } from '@rotaris/kernel';
+import { countNoun, sessionContentInLog } from '@rotaris/kernel';
 import {
   ACTIVE_STATUSES, EXECUTION_STATUSES, STOP_REASONS, TERMINAL_RESULTS, isActiveStatus, isBusy, presentationStatus,
   type ExecutionStatus, type PresentationStatus, type StopReason, type TerminalResult,
@@ -119,6 +119,15 @@ export function openPlanItems(plan: PlanItems | null, excused: ReadonlySet<strin
 /** REQ-ORCH-067's iteration summary for a task returned to the queue because the coordinator's plan was left open. */
 export function planNotDoneSummary(open: readonly string[]): string {
   return `the coordinator answered with ${countNoun(open.length, 'item')} of its plan not done: ${open.join('; ')}`;
+}
+
+/**
+ * `planNotDoneSummary` as an application-log line says it (PD-STARTUP-011, REQ-STARTUP-134 by kind): the count, and the open
+ * items — the coordinator's own words, written with its todo tool, so model output — as their source, kind and byte length,
+ * never their text. The summary itself goes on to the iteration's record and the person's transcript as before.
+ */
+export function planNotDoneInLog(open: readonly string[]): string {
+  return `the coordinator answered with ${countNoun(open.length, 'item')} of its plan not done (${sessionContentInLog('model output', "the coordinator's plan", open.join('; '))})`;
 }
 
 /**

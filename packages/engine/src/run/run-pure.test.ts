@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Aggregates } from './aggregates.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
-import { classifyStop, EXECUTION_STATUSES, HELD_ANSWER_LIMIT, isBusy, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planHeldRowText, planNotDoneSummary, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
+import { classifyStop, EXECUTION_STATUSES, HELD_ANSWER_LIMIT, isBusy, openPlanIds, openPlanItems, planCarryText, planCorrectionText, planHeldRowText, planNotDoneInLog, planNotDoneSummary, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo } from './todo.js';
 
@@ -125,6 +125,9 @@ describe('engine/run — the coordinator\'s own plan and the run\'s completion (
   it('the iteration summary counts and names the open items', () => {
     expect(planNotDoneSummary(['Report each command\'s outcome in one line'])).toBe('the coordinator answered with 1 item of its plan not done: Report each command\'s outcome in one line');
     expect(planNotDoneSummary(['x', 'y'])).toBe('the coordinator answered with 2 items of its plan not done: x; y');
+    // PD-STARTUP-011 / REQ-STARTUP-134: the application log's wording names the items' source, kind and byte length, never them.
+    expect(planNotDoneInLog(['x', 'yé'])).toBe("the coordinator answered with 2 items of its plan not done (model output from the coordinator's plan, 6 bytes, not quoted)");
+    expect(planNotDoneInLog(['Report each command\'s outcome in one line'])).not.toContain('Report');
   });
 });
 

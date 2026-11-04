@@ -60,10 +60,10 @@ export function windowsCommands(
   };
 }
 
-/** PD-SHELL-003 — commands from the product-drawn main-window frame. */
+/** PD-SHELL-003 — commands from the product-drawn main-window frame; and R-091's `window.reload`, from any window. */
 export function windowCommands(
-  ctx: Pick<CommandContext, 'windowFor'>,
-): Pick<CommandHandlers, 'window.state' | 'window.minimize' | 'window.toggleMaximize' | 'window.close'> {
+  ctx: Pick<CommandContext, 'windowFor' | 'reloadWindow'>,
+): Pick<CommandHandlers, 'window.state' | 'window.minimize' | 'window.toggleMaximize' | 'window.close' | 'window.reload'> {
   const forMain = (senderId: number, act: () => CommandOutcome): CommandOutcome => (
     ctx.windowFor(senderId) === undefined
       ? { ok: false, code: 'window.notMain', headline: 'Only a main window controls its frame' }
@@ -79,5 +79,10 @@ export function windowCommands(
     }),
     // BrowserWindow.close emits the existing guarded close event; destroy would bypass it.
     'window.close': (_req, { w, senderId }) => forMain(senderId, () => { w.win.close(); return { ok: true as const }; }),
+    // R-091 (hardening §3.2 row 4): the render-failure boundary's "Reload this window" — from ANY window of the application,
+    // since every window's root is wrapped, and always for the sender itself, never the main window it answers for.
+    'window.reload': (_req, { senderId }) => (ctx.reloadWindow(senderId)
+      ? { ok: true as const }
+      : { ok: false, code: 'window.gone', headline: 'This window can no longer be reloaded' }),
   };
 }

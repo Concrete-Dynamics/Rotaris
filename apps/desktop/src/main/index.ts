@@ -1936,6 +1936,14 @@ async function main(): Promise<void> {
     openHookReview, restoreFlow, establishFlow, checkpointOp, quitting, authFallback,
     withdrawnByClose: (sessionId) => quit.withdrawnByClose(sessionId),
     storeRefusal: (workspace) => storeRefusals.get(canonicalPath(workspace))?.held,
+    // R-091 (hardening §3.2 row 4): `window.reload`, the render-failure boundary's one action — the sender's own page, loaded again.
+    reloadWindow: (senderId) => {
+      const target = BrowserWindow.getAllWindows().find((b) => !b.isDestroyed() && b.webContents.id === senderId);
+      if (target === undefined || target.webContents.isDestroyed()) return false;
+      log(`window ${senderId} reloaded at its renderer's request ("Reload this window", R-091)`);
+      target.webContents.reload();
+      return true;
+    },
   };
   /**
    * Every command this product answers, filed under its kind. `CommandHandlers` is total over

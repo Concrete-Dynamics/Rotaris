@@ -7,7 +7,7 @@
  * `render-process-gone` for a renderer lost, `child-process-gone` for a utility child lost, and `process.on('exit')` last
  * (`docs/archive/defects/process-exit-left-no-diagnosable-trace.md`). The orderly half was measured when it landed; the crash
  * handlers were "argued, not measured", and no proof or live launch killed a process until this one
- * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Eleven driven launches:
+ * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Twelve driven launches:
  *
  *   1. orderly — launched and quit through the driver: the log carries `quit: exiting with status 0` and
  *                `main process exiting with status 0`, and NO `error` line for a renderer or a child gone. The control for
@@ -51,6 +51,11 @@
  *                window still paints, main ends the child at the 5 s bound with no unhandled rejection, the run host's miss
  *                raises "The run host did not start" and refuses every later request at once, the service's refuses its
  *                open with the transient "The project could not be opened" and no notice, and the application quits 0.
+ *   9. render-fault — R-091 (hardening §3.2 row 4): a component in the main window throws while it is drawn (the renderer
+ *                seam `window.__rotarisRenderFault`, compiled out of a packaged build): the window draws the error boundary's
+ *                fallback with "Reload this window" instead of going blank, main writes ONE `error` line carrying the error and
+ *                the component stack, and the reload draws the shell again under the persistent error notice
+ *                "This window stopped drawing", whose detail carries the error and the stack.
  *
  * What it cannot fire: `unhandledRejection` and `uncaughtException` in main. Neither can be raised in main from outside the
  * process, and adding a seam that throws inside main to prove a one-line log call is not justified (the repaired note's
@@ -470,6 +475,44 @@ for (const [name, spec, missLine, noticeTitle] of [
   if (stopped.overran) throw new Error(stopOverrunMessage(name, stopped, logOf(started)));
   check(`${name}: the application then quits, exit 0`, stopped.exit?.code === 0, JSON.stringify(stopped.exit));
   results[name] = { spec, missed: missed ? `${missed.level} ${missed.message}` : null, exit: stopped.exit };
+}
+
+// ── 9. render-fault: a component throws while the main window is drawn (R-091, hardening §3.2 row 4) ─────────────────────
+/*
+ * Until 2026-11-04 no window had an error boundary and no root was given React's error options: a component that threw while
+ * it was drawn unmounted the whole tree to a blank window, said nothing, and left nothing in main's log. The seam
+ * `window.__rotarisRenderFault` (`renderer/render-failure.tsx`, mounted under `__ROTARIS_SEAMS__`, so a packaged build has
+ * none) makes a component inside the main window's boundary throw on its next render. The window must draw the boundary's
+ * fallback with its one action; main must write ONE `error` line for it, carrying the component stack; and after "Reload this
+ * window" the shell is drawn again, showing the persistent error notice whose detail carries the error and the stack.
+ * Component names in the stack are the minified build's, so the reading is the stack's presence, not a name in it.
+ */
+{
+  const FAULT = 'exit-trace-proof: a component threw while it was drawn';
+  const rendererErrors = (log) => mainLines(log).filter((l) => l.level === 'error' && /^notice from the renderer: error "This window stopped drawing"/.test(l.message));
+  const started = await startApp({ root: join(output, 'render-fault'), workspace, timeoutMs: 90_000 });
+  await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 });
+  const armed = await until(() => started.driver.eval('typeof window.__rotarisRenderFault').catch(() => null), (t) => t === 'function', { timeoutMs: 15_000, what: 'the render fault seam' }).catch(() => null);
+  check('render-fault: the seam is mounted in a build with seams', armed === 'function', String(armed));
+  const before = rendererErrors(logOf(started)).length;
+  await started.driver.eval(`window.__rotarisRenderFault(${JSON.stringify(FAULT)})`).catch(() => null);
+  const drawn = await until(() => started.driver.eval(`(() => { const f = document.querySelector('[data-ui-component="RenderFailureFallback"]'); return f === null ? null : { shell: document.querySelector('.app-shell') !== null, role: f.getAttribute('role'), title: f.querySelector('.empty-state-title')?.textContent ?? null, action: [...f.querySelectorAll('button')].map((b) => b.textContent) }; })()`).catch(() => null), (d) => d !== null, { timeoutMs: 15_000, what: 'the fallback of the boundary' }).catch(() => null);
+  check('render-fault: the window draws the fallback of the boundary in place of the shell, not a blank window', drawn?.shell === false && drawn.role === 'alert' && drawn.title === 'This window stopped drawing' && JSON.stringify(drawn.action) === JSON.stringify(['Reload this window']), JSON.stringify(drawn));
+  const errorLines = await until(() => rendererErrors(logOf(started)), (found) => found.length > before, { timeoutMs: 15_000, what: 'the error line main writes for the fault' }).catch(() => rendererErrors(logOf(started)));
+  const log = logOf(started);
+  const stackLines = log.split('\n').filter((line) => /^\[main [^\]]+\] error\s/.test(line));
+  check('render-fault: main writes ONE error line for the fault, carrying the error and the component stack', errorLines.length - before === 1 && stackLines.some((l) => l.includes(FAULT)) && stackLines.some((l) => /Component stack:/.test(l)), errorLines.map((l) => l.message).join(' | ') || 'no line');
+  await started.driver.click('[data-ui="render-failure-reload"]').catch(() => null);
+  const reloaded = await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 }).then(() => true, () => false);
+  const reloadLine = mainLines(logOf(started)).find((l) => /^window \d+ reloaded at its renderer's request/.test(l.message));
+  check('render-fault: "Reload this window" asks main, which reloads the window, and the shell is drawn again', reloaded && reloadLine !== undefined, reloadLine ? `${reloadLine.level} ${reloadLine.message}` : 'no reload line');
+  const notice = await until(() => started.driver.eval(READ_NOTICE).catch(() => null), (n) => n?.title === 'This window stopped drawing', { timeoutMs: 15_000, what: 'the notice for the fault' }).catch(() => null);
+  check('render-fault: the reloaded window shows the persistent error notice, the error and the component stack in its detail (REQ-NOTIFY-005, REQ-NOTIFY-023)', notice?.severity === 'error' && notice.dismiss === true && (notice.detail ?? '').includes(FAULT) && /Component stack:/.test(notice.detail ?? ''), JSON.stringify(notice)?.slice(0, 400));
+  check('render-fault: still one error line for the one fault after the reload', rendererErrors(logOf(started)).length - before === 1);
+  const stopped = await stopApp(started);
+  if (stopped.overran) throw new Error(stopOverrunMessage('render-fault', stopped, logOf(started)));
+  check('render-fault: the application then quits, exit 0', stopped.exit?.code === 0, JSON.stringify(stopped.exit));
+  results['render-fault'] = { fallback: drawn, errorLines: errorLines.map((l) => `${l.level} ${l.message}`), reload: reloadLine?.message ?? null, notice, exit: stopped.exit };
 }
 
 results.checks = checks;

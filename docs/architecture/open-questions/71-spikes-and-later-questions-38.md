@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-523 – OQ-540, OQ-485 and OQ-473.
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-523 – OQ-540, OQ-485, OQ-473 and OQ-475.
 
 <a id="oq-523"></a>
 
@@ -203,3 +203,13 @@ The renderer's boundary is the same shape. `dispatchCommand` (`apps/desktop/src/
 **What the build proceeds under.** The ruling as written: 5 s for both (`RUN_HOST_READY_BOUND_MS`, `WORKSPACE_SERVICE_READY_BOUND_MS` in `apps/desktop/src/main/child-supervision.ts`), the bound counted from the `hello` request main sends after `app.ready` and the provider service, not from the child's own start.
 
 **What decides it.** A ruling on the bound — kept, lengthened, or counted from the child's `spawn` — or on one fresh fork after a missed ready only (never after a run host that ran, ADR-0002 consequence 1), which the specification does not address.
+
+<a id="oq-475"></a>
+
+**OQ-475 — Does an error React recovered from on its own owe the person a notice, or only a line in the log?** *(REQ-NOTIFY-001, REQ-NOTIFY-003, REQ-NOTIFY-023, PD-MONITOR-002. Raised 2026-11-04 by [R-091](../../product/requests.md#r-091)'s hardening bundle B2, building [hardening §3.2 row 4](../hardening/02-the-findings.md#32-failure-handling-outside-main); numbered from the bundle's range OQ-475 – OQ-476.)*
+
+**What is open.** Every window's root is now made with React's three error options, and each reports through `notice.report` (`apps/desktop/src/renderer/render-failure.tsx`). Two are failures the person sees — an error the window's boundary caught (its fallback is drawn) and one no boundary caught (the window's tree is removed) — and REQ-NOTIFY-003 makes a failure a persistent notice. The third, `onRecoverableError`, is React's report of an error it recovered from by drawing the tree again: the window looks as it did and nothing was lost. It is none of REQ-NOTIFY-003's three (a failure, a refusal, an outcome carrying a recovery action), so the specification asks no notice of it; but a renderer has no path to main's application log other than `notice.report`, and a recovered error that is only written to the window's console is the silence this bundle was built to end. The specification has no word on a renderer's own diagnostics.
+
+**What the build proceeds under.** A persistent notice at `warning`, titled "This window recovered from a drawing error", its detail the error and both stacks, and so ONE `warning` line in main's log (`RENDER_RECOVERED_TITLE`, `renderFailureReport`); the two failures at `error`, as the hardening plan asks.
+
+**What decides it.** A ruling on whether a recovered error is shown to the person at all — the notice at `warning`, at `info`, or none — and, if none, whether the renderer gains a log-only path to main (a command that writes one line and raises nothing), which would be a new member of the command union.

@@ -222,3 +222,51 @@ describe('shell.openThirdPartyLicenses over an opener that never answers (REQ-SH
     expect(clock.pendingCount()).toBe(0);
   });
 });
+
+/**
+ * R-091 (hardening §3.2 row 4; REQ-NOTIFY-005, REQ-NOTIFY-023): a renderer's own failure reaches main as `notice.report` at
+ * `error` (`renderer/render-failure.ts`). Main raises the persistent notice with the detail block it was given and writes ONE
+ * `error` line carrying that detail — until 2026-11-04 every renderer report was one `info` line naming only the title, so a
+ * component that threw left nothing at `error` in the log. The text crossed from a renderer and is redacted on the way in.
+ */
+describe('notice.report: a renderer\'s error is one error line in main\'s log and a persistent error notice (R-091)', () => {
+  const reportFacet = () => {
+    const reported: unknown[] = [];
+    const lines: { message: string; level: string }[] = [];
+    const notices = { report: async (n: unknown) => { reported.push(n); return { id: 7, shown: true }; } };
+    const f = shellCommands({
+      capturing: false, currentTheme: () => ({ name: 'rotaris-dim' }) as never, log: (message: string, level = 'info') => { lines.push({ message, level }); }, notices: notices as never, preferences, processes: [],
+      requirementsPreferenceKey: (k: string) => k, runHost: {} as never, services: new Map() as never, setTheme: (() => ({})) as never,
+      themeBackground: () => '#000', updater: {} as never,
+    } as unknown as Parameters<typeof shellCommands>[0]);
+    return { f, reported, lines };
+  };
+
+  it('an error report raises the notice with its detail and writes exactly one error line carrying the stack', async () => {
+    const { f, reported, lines } = reportFacet();
+    const detail = 'Error: proof: a component threw\n\nComponent stack:\n    at RenderFaultSeam\n    at RenderFailureBoundary';
+    const out = await f['notice.report']({ kind: 'notice.report', severity: 'error', title: 'This window stopped drawing', message: 'Part of this window failed while it was drawn.', detail, persistent: true }, at);
+    expect(out).toEqual({ ok: true, value: { id: 7 } });
+    expect(reported).toEqual([{ severity: 'error', title: 'This window stopped drawing', message: 'Part of this window failed while it was drawn.', detail, persistent: true }]);
+    const errors = lines.filter((l) => l.level === 'error');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.message).toBe(`notice from the renderer: error "This window stopped drawing" → #7\n${detail}`);
+    expect(lines).toHaveLength(1);
+  });
+
+  it('a warning is one warn line with its detail, anything below one info line without it', async () => {
+    const { f, lines } = reportFacet();
+    await f['notice.report']({ kind: 'notice.report', severity: 'warning', title: 'Nothing was retried', detail: 'the draft is empty', persistent: true }, at);
+    await f['notice.report']({ kind: 'notice.report', severity: 'info', title: 'Saved', detail: 'not written', persistent: true }, at);
+    expect(lines).toEqual([
+      { message: 'notice from the renderer: warning "Nothing was retried" → #7\nthe draft is empty', level: 'warn' },
+      { message: 'notice from the renderer: info "Saved" → #7', level: 'info' },
+    ]);
+  });
+
+  it('a credential in the text a renderer sent is masked before it is stored (REQ-TOOLS-171)', async () => {
+    const { f, reported } = reportFacet();
+    await f['notice.report']({ kind: 'notice.report', severity: 'error', title: 'This window stopped drawing', message: 'api_key=sk-live-123', detail: 'Authorization: Bearer abc.def', persistent: true }, at);
+    expect(reported).toEqual([{ severity: 'error', title: 'This window stopped drawing', message: 'api_key=***', detail: 'Authorization: Bearer ***', persistent: true }]);
+  });
+});

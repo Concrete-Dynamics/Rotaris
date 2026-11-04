@@ -14,7 +14,7 @@ function harness(maximized = false, mainSender = true) {
     unmaximize,
     close,
   };
-  const handlers = windowCommands({ windowFor: () => mainSender ? ({ win } as never) : undefined });
+  const handlers = windowCommands({ windowFor: () => mainSender ? ({ win } as never) : undefined, reloadWindow: () => true });
   const at = { w: { win }, senderId: 7, awaitWorkspace: async () => undefined } as never;
   return { handlers, at, minimize, maximize, unmaximize, close };
 }
@@ -58,5 +58,17 @@ describe('PD-SHELL-003 main window commands', () => {
     expect(h.minimize).not.toHaveBeenCalled();
     expect(h.maximize).not.toHaveBeenCalled();
     expect(h.close).not.toHaveBeenCalled();
+  });
+});
+
+/** R-091 (hardening §3.2 row 4): the render-failure boundary's "Reload this window" reloads the sender, any window. */
+describe('window.reload', () => {
+  it('reloads the window that sent it, a dialog as well as a main window, and refuses a sender with no live window', () => {
+    const reloaded: number[] = [];
+    const handlers = windowCommands({ windowFor: () => undefined, reloadWindow: (senderId) => { reloaded.push(senderId); return senderId !== 404; } });
+    const from = (senderId: number) => ({ w: {}, senderId, awaitWorkspace: async () => undefined }) as never;
+    expect(handlers['window.reload']({ kind: 'window.reload' }, from(12))).toEqual({ ok: true });
+    expect(handlers['window.reload']({ kind: 'window.reload' }, from(404))).toEqual({ ok: false, code: 'window.gone', headline: 'This window can no longer be reloaded' });
+    expect(reloaded).toEqual([12, 404]);
   });
 });

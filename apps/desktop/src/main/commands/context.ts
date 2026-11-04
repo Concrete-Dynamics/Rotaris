@@ -30,6 +30,7 @@ import type { ProcessLink, UpdateRelay } from '@rotaris/shell';
 import type { MainWindows, MainWindowView } from '../main-windows.js';
 import type { PersonaWindows, TerminalWindows } from '../windows.js';
 import type { NoticeStore } from '../notices.js';
+import type { AppLogLevel } from '../app-log.js';
 import type { LibraryRevision } from '../library.js';
 import type { AuthFallback } from '../auth-fallback.js';
 import type { AuthRecovery } from '../auth-recovery.js';
@@ -82,7 +83,8 @@ export type CommandHandlers = { [K in CommandRequest['kind']]: CommandHandler<K>
 
 /** Everything main holds that a command may need. A facet names the slice it uses and nothing else. */
 export interface CommandContext {
-  readonly log: (m: string) => void;
+  /** Main's application log (PD-MONITOR-002); `info` unless a level is named. */
+  readonly log: (m: string, level?: AppLogLevel) => void;
   readonly clocks: Clocks;
   readonly capturing: boolean;
   readonly layout: ReturnType<typeof dataLayout>;
@@ -100,6 +102,11 @@ export interface CommandContext {
   // The windows, and the payloads each auxiliary window was opened for.
   readonly mainWindows: MainWindows<BrowserWindow, PersonaWindows, TerminalWindows, ApprovalPayload, ApprovalDialogState>;
   readonly windowFor: (senderId: number) => MainWindowState | undefined;
+  /**
+   * R-091 (hardening §3.2 row 4): loads the page of the window `senderId` names again — `window.reload`, the render-failure
+   * boundary's one action. False when the sender has no live window.
+   */
+  readonly reloadWindow: (senderId: number) => boolean;
   readonly ownerOfAuxiliary: (senderId: number) => MainWindowState | undefined;
   readonly dialogs: Map<number, ApprovalDialogState>;
   readonly dialogPayloads: Map<number, { payload: ApprovalPayload; othersWaiting: number }>;

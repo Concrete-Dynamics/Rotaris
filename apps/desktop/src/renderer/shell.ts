@@ -231,6 +231,8 @@ export const acknowledge = (kind: 'ok' | 'fail' | 'info' | 'warn', title: string
  * navigates (ADR-0051). "Opening MUST be acknowledged and a failure to open MUST be reported rather than
  * passing silently" is why every outcome ends in the stack and none is dropped.
  */
+/** R-091 (hardening §3.2 row 4): the render-failure boundary's "Reload this window" — main reloads the window that asks. */
+export const reloadThisWindow = (): void => { void bridge.command({ kind: 'window.reload' }); };
 export const openLink = (href: string): void => {
   void bridge.command({ kind: 'shell.openExternal', url: href }).then((r) => {
     if (r.ok) acknowledge('ok', 'Opened in your browser', href);

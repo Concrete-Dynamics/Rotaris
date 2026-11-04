@@ -100,6 +100,9 @@ export default defineConfig({
   },
   renderer: {
     plugins: [symbolArtifact, react()],
+    // R-091 (hardening §3.2 row 4): the renderer's one seam, the render fault (`renderer/render-failure.tsx`), compiled out
+    // of a packaged build on the same flag as main's.
+    define: { __ROTARIS_SEAMS__: JSON.stringify(seams) },
     resolve: {
       // One React. pnpm's hoisted layout hands packages/ui a node_modules/.pnpm path for react while the
       // app resolves node_modules/react — one version, two real paths, two copies in the bundle, and

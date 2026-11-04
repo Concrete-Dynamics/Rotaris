@@ -1,4 +1,4 @@
-import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
+import { Component, forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 import { Button } from './core.js';
 import { Dialog } from './feedback.js';
 import { Card } from './surfaces.js';
@@ -57,4 +57,48 @@ export interface ConfirmDialogProps {
 }
 export function ConfirmDialog({ open = true, title, children, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, onConfirm, onCancel }: ConfirmDialogProps) {
   return <Dialog open={open} title={title} onClose={onCancel} actions={<><Button variant="secondary" autoFocus onClick={onCancel}>{cancelLabel}</Button><Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button></>}>{children}</Dialog>;
+}
+
+/**
+ * R-091 (hardening §3.2 row 4; REQ-NOTIFY-001's "failed with one concrete next step named", REQ-NOTIFY-005): the words of a
+ * window whose drawing failed. The headline names what did not work in plain words; the error itself is not here but in the
+ * persistent notice its root's error options raise through main (`renderer/render-failure.ts`), whose detail block carries
+ * the stack. Exported so the renderer's report and a test read the same sentences.
+ */
+export const RENDER_FAILURE_WORDS = {
+  title: 'This window stopped drawing',
+  hint: 'Something in this window failed while it was being drawn. Reloading draws it again; the error is described in the notice.',
+  action: 'Reload this window',
+} as const;
+
+export interface RenderFailureFallbackProps {
+  /** Asks main to load this window's page again (`window.reload`). */
+  readonly onReload: () => void;
+}
+/** What a window shows in place of a tree that threw while drawing: the language's empty state, with the one action. */
+export function RenderFailureFallback({ onReload }: RenderFailureFallbackProps) {
+  return <div className="render-failure" role="alert" data-ui-component="RenderFailureFallback"><EmptyState icon="ph-warning-octagon" title={RENDER_FAILURE_WORDS.title} hint={RENDER_FAILURE_WORDS.hint} action={<Button variant="primary" onClick={onReload} data-ui="render-failure-reload">{RENDER_FAILURE_WORDS.action}</Button>} /></div>;
+}
+
+export interface RenderFailureBoundaryProps {
+  readonly children?: ReactNode;
+  /** The fallback's one action: asks main to reload this window (`window.reload`). */
+  readonly onReload: () => void;
+}
+interface RenderFailureBoundaryState { readonly failed: boolean }
+/**
+ * R-091 (hardening §3.2 row 4): the error boundary every window's root is wrapped in. A component that throws while it is
+ * drawn no longer unmounts the whole tree to a blank window: React hands the error here and the window draws
+ * `RenderFailureFallback` instead. Reporting is not this component's: React calls the root's `onCaughtError` for every error
+ * a boundary catches, and the root sends it to main (`renderer/render-failure.ts`), so an error is reported exactly once.
+ * The boundary stays in its failed state until the window is reloaded — a tree that threw is not drawn again on its own.
+ */
+export class RenderFailureBoundary extends Component<RenderFailureBoundaryProps, RenderFailureBoundaryState> {
+  override state: RenderFailureBoundaryState = { failed: false };
+  static getDerivedStateFromError(): RenderFailureBoundaryState {
+    return { failed: true };
+  }
+  override render(): ReactNode {
+    return this.state.failed ? <RenderFailureFallback onReload={this.props.onReload} /> : this.props.children;
+  }
 }

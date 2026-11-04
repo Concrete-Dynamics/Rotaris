@@ -387,6 +387,13 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('window.toggleMaximize') }),
   z.object({ kind: z.literal('window.close') }),
   /**
+   * R-091 (hardening §3.2 row 4; REQ-NOTIFY-001's failed-with-a-next-step, ADR-0044): the one action of the render-failure
+   * boundary's fallback, "Reload this window". Main loads the SENDER's page again — any window of the application, a dialog's
+   * as well as a main window's — and answers `window.gone` when the sender has no live window. Nothing on the wire names a
+   * window: the sender is the window (REQ-SHELL-020).
+   */
+  z.object({ kind: z.literal('window.reload') }),
+  /**
    * ADR-0048's application modality, second execution (Part W; REQ-SHELL-051/054): a main window's application-modal
    * surface (the command palette, the keyboard help) registers itself open or closed, and main's registry disables
    * input in every other window of that main window's family for the duration. From a main window only; a persona

@@ -1,6 +1,6 @@
 import { captureSupport, startCapture } from './dictation-capture.js';
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createReportingRoot, RenderFaultSeam } from './render-failure.js';
 import { useStore } from 'zustand';
 import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
@@ -17,7 +17,7 @@ import '@phosphor-icons/web/fill';
 
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
-import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, retryRun, setMode, setNextModel, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, reloadThisWindow, replica, retryRun, setMode, setNextModel, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 import { joinOrAsk, settleGuard, type CloseGuardHost, type PendingGuardQuestion } from './guard-question.js';
 import { openWorkspaceFolder, useWindowWidth, useWorkspaceUsage } from './strip-facts.js';
 import { reportNoticeActionRefusal } from './notice-action-refusal.js';
@@ -1681,7 +1681,7 @@ async function boot(): Promise<void> {
   if (role === TERMINAL_WINDOW_ROLE) { await bootTerminal(); return; } // Part AL2 — the terminal window (REQ-SHELL-079..111)
   // Part AA's proof harness (verification only; main serves this role only under ROTARIS_CAPTURE_PNG + ROTARIS_ROWS_PROOF).
   if (role === 'rows-proof') {
-    createRoot(document.getElementById('root')!).render(<StrictMode><RowProof onOpenLink={openLink} onAcknowledge={acknowledge} /><Acknowledgements store={acknowledgements} /></StrictMode>);
+    createReportingRoot(document.getElementById('root')!, 'rows-proof', bridge.command, reloadThisWindow).render(<StrictMode><RowProof onOpenLink={openLink} onAcknowledge={acknowledge} /><Acknowledgements store={acknowledgements} /></StrictMode>);
     return;
   }
   const hello = await bridge.command({ kind: 'shell.hello' });
@@ -1689,8 +1689,11 @@ async function boot(): Promise<void> {
   // sandboxed renderer has no `node:os` (ADR-0051). It is optional on the way in: a reply from an
   // older main, or the fallback below, simply collapses nothing and draws the absolute path.
   const info = hello.ok ? (hello.value as { version: string; workspace: string; home: string | undefined; processes: string[]; circuitBreakerArmed: boolean; circuitBreakerHostOff: boolean }) : { version: '?', workspace: '(no workspace)', home: undefined, processes: [], circuitBreakerArmed: false, circuitBreakerHostOff: false };
-  createRoot(document.getElementById('root')!).render(
+  // R-091 (hardening §3.2 row 4): the boundary around the whole shell and the root's error options that report through
+  // `notice.report` (`render-failure.tsx`); the fault seam is verification only, compiled out of a packaged build.
+  createReportingRoot(document.getElementById('root')!, 'main', bridge.command, reloadThisWindow).render(
     <StrictMode>
+      {__ROTARIS_SEAMS__ ? <RenderFaultSeam /> : null}
       <App version={info.version} workspace={info.workspace} home={info.home} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerAtBoot={info.circuitBreakerArmed} circuitBreakerHostOff={info.circuitBreakerHostOff} initialPopOut={initialPopOut} />
     </StrictMode>,
   );

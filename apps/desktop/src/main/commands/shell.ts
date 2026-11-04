@@ -4,7 +4,7 @@ import { buildIdentifier, thirdPartyLicensesPath } from '../about.js';
 import { productVersion } from '../version.js';
 import { composerDraftKey, PANE_LAYOUT_PANES, PANE_LAYOUT_VIEWS, paneLayoutKeys, type PaneLayoutView } from '@rotaris/platform';
 import { homedir } from 'node:os';
-import { millis } from '@rotaris/kernel';
+import { millis, redact } from '@rotaris/kernel';
 import { openFile } from '../open-folder.js';
 import { type CommandContext, type CommandHandlers } from './context.js';
 
@@ -198,9 +198,20 @@ export function shellCommands(
       await notices.settled();
       return { ok: true, value: { v: CONTRACT_SCHEMA_VERSION, current: notices.current() } };
     },
+    /*
+     * R-091 (hardening §3.2 row 4): a renderer's own failure — a component that threw while drawing, which its root's error
+     * options report (`renderer/render-failure.ts`) — arrives here at `error`. The line is written at the notice's own level
+     * (`error`, `warning` → `warn`, anything else `info`), with the detail for a warning or an error, so a renderer's failure is
+     * ONE `error` line in main's log carrying its stack, beside the notice. The text crossed from a renderer, so it passes the
+     * one redaction pass (REQ-TOOLS-171) here too before it is stored or written; the pass is idempotent.
+     */
     'notice.report': async (req) => {
-      const r = await notices.report({ severity: req.severity, title: req.title, ...(req.message === undefined ? {} : { message: req.message }), ...(req.detail === undefined ? {} : { detail: req.detail }), persistent: req.persistent, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) });
-      log(`notice from the renderer: ${req.severity} "${req.title}" → #${r.id}`);
+      const message = req.message === undefined ? undefined : redact(req.message);
+      const detail = req.detail === undefined ? undefined : redact(req.detail);
+      const r = await notices.report({ severity: req.severity, title: redact(req.title), ...(message === undefined ? {} : { message }), ...(detail === undefined ? {} : { detail }), persistent: req.persistent, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) });
+      const level = req.severity === 'error' ? 'error' : req.severity === 'warning' ? 'warn' : 'info';
+      log(`notice from the renderer: ${req.severity} "${req.title}" → #${r.id}${level !== 'info' && detail !== undefined && detail !== '' ? `
+${detail}` : ''}`, level);
       return { ok: true, value: { id: r.id } };
     },
   };

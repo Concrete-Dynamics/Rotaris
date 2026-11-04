@@ -56,6 +56,15 @@ Invariants:
   warning, which uses the same surface and severity.
 - A renderer that must raise a persistent notice sends `notice.report` — it does not draw one. That missing
   entry for a renderer was defect fifty-seven.
+- **A window's own failure to draw is a renderer's notice too** (since 2026-11-04, R-091, hardening §3.2 row 4). Every root is
+  made by `createReportingRoot` (`apps/desktop/src/renderer/render-failure.tsx`): wrapped in `RenderFailureBoundary`
+  (`packages/ui/src/design-system/patterns.tsx`), whose fallback is the language's empty state with one action, "Reload this
+  window" (`window.reload`, §1), and created with React's `onCaughtError`, `onUncaughtError` and `onRecoverableError`, each
+  sending ONE `notice.report` (`renderFailureReport`: the failure's plain headline; the error, the window, the component stack
+  and the script stack in `detail`, redacted and bounded; at most five per document). The boundary reports nothing itself —
+  React calls the root's option for every error a boundary catches — so an error is reported once. Main writes the line at
+  the notice's own level (`notice from the renderer: …`, `commands/shell.ts`). A new root is made the same way; a bare
+  `createRoot` in the renderer is a window that goes blank on a throw.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.
 - **An action is dispatched in one place**, `dispatchNoticeAction` in `apps/desktop/src/renderer/main.tsx`; a member
   whose target is not built is logged there and nothing else. `retry-run` has its target since 2026-10-02 (REQ-NOTIFY-045,

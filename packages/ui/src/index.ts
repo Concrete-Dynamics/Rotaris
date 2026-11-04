@@ -93,6 +93,9 @@ export {
   TableCard as DesignTableCard,
   EmptyState as DesignEmptyState,
   LogPanel as DesignLogPanel,
+  RenderFailureBoundary,
+  RenderFailureFallback,
+  RENDER_FAILURE_WORDS,
 } from './design-system/index.js';
 export type { UiLayoutContract, UiLayoutRelation } from './design-system/index.js';
 export { dictationSaveProblem } from './settings/config-state.js';

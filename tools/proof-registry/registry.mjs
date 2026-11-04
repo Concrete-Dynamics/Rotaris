@@ -365,7 +365,7 @@ export const PROOFS = [
   {
     id: 'exit-trace-proof',
     area: 'Configuration and startup',
-    summary: 'the exit trace\'s crash handlers in the built app (PD-MONITOR-002), the quit paths beside them, how a utility process ends on its own (R-091), and a child lost or never ready (OQ-462)',
+    summary: 'the exit trace\'s crash handlers in the built app (PD-MONITOR-002), the quit paths beside them, how a utility process ends on its own (R-091), a child lost or never ready (OQ-462), and a window that throws while it is drawn (R-091)',
     neighbours: ['part-j-proof', 'workspace-proof'],
     requires: [],
     platforms: ALL_HOSTS,

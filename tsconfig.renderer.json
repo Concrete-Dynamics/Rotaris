@@ -15,7 +15,9 @@
     "packages/ui-core/src/**/*.ts",
     "packages/ui-core/src/**/*.tsx",
     "apps/desktop/src/renderer/**/*.ts",
-    "apps/desktop/src/renderer/**/*.tsx"
+    "apps/desktop/src/renderer/**/*.tsx",
+    // The build-time verification flag the renderer section defines too (R-091, hardening §3.2 row 4: the render fault seam).
+    "apps/desktop/src/main/seams.d.ts"
   ],
   "exclude": ["**/node_modules", "**/dist", "**/out", "**/*.test.ts", "**/*.test.tsx", "**/*.test-support.ts", "**/*.test-support.tsx"]
 }

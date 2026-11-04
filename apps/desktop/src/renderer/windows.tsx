@@ -1,9 +1,9 @@
 import { StrictMode, useEffect, useMemo, useState } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createReportingRoot, type ReportingRoot } from './render-failure.js';
 import { useStore } from 'zustand';
 import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type AuthRecoveryPayload, type AuthRecoveryResult, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { Acknowledgements, ApprovalDialog, AuthRecoveryDialog, ArtifactInspector, createTerminalWindowStreams, type ArtifactLoaded, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
-import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, replica, terminalHost, terminalStreams } from './shell.js';
+import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, reloadThisWindow, replica, terminalHost, terminalStreams } from './shell.js';
 import { entryOf, useCancelOverlaid, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
 import { followCoalesced } from './coalesced-follow.js';
 
@@ -24,10 +24,12 @@ import { followCoalesced } from './coalesced-follow.js';
  */
 async function mountWindow<T>(
   request: Parameters<typeof bridge.command>[0],
-  draw: (payload: T, root: ReturnType<typeof createRoot>) => void | Promise<void>,
+  draw: (payload: T, root: ReportingRoot) => void | Promise<void>,
 ): Promise<void> {
   const r = await bridge.command(request);
-  const root = createRoot(document.getElementById('root')!);
+  // R-091 (hardening §3.2 row 4): every window beside the main one is drawn inside the render-failure boundary, its root
+  // made with the error options that report through `notice.report` (`render-failure.tsx`); the role names the window.
+  const root = createReportingRoot(document.getElementById('root')!, new URLSearchParams(window.location.search).get('role') ?? 'window', bridge.command, reloadThisWindow);
   // A window main opened for something it can no longer name draws the refusal, not an empty dialog.
   if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
   await draw(r.value as T, root);

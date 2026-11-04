@@ -29,7 +29,7 @@ describe('the hand-off of an opened workspace to the run host (W-18, ADR-0002 co
   it('a reply that never comes within the bound is a warning and an unacknowledged hand-off, never a rejection', async () => {
     const clock = new FakeClock();
     const host = runHostPort();
-    const link = new ProcessLink<RunHostRequest>(host.port, clock);
+    const link = new ProcessLink<RunHostRequest>(host.port, clock, { boundary: 'run host', warn: () => {} });
     const lines: { message: string; level: string }[] = [];
     const handOff = handOffOpenedWorkspace({ request: (r, b) => link.request(r, b), log: (message, level) => lines.push({ message, level }) }, REQUEST, millis(5_000));
     expect(host.requests).toEqual([{ id: 1, kind: 'workspace.opened' }]);
@@ -49,7 +49,7 @@ describe('the hand-off of an opened workspace to the run host (W-18, ADR-0002 co
   it('a link closed before the reply is the same unacknowledged hand-off', async () => {
     const clock = new FakeClock();
     const host = runHostPort();
-    const link = new ProcessLink<RunHostRequest>(host.port, clock);
+    const link = new ProcessLink<RunHostRequest>(host.port, clock, { boundary: 'run host', warn: () => {} });
     const lines: string[] = [];
     const handOff = handOffOpenedWorkspace({ request: (r, b) => link.request(r, b), log: (message) => lines.push(message) }, REQUEST, millis(5_000));
     link.close();
@@ -60,7 +60,7 @@ describe('the hand-off of an opened workspace to the run host (W-18, ADR-0002 co
   it('a reply within the bound is returned as it came, acknowledged only when it is workspace.ack', async () => {
     const clock = new FakeClock();
     const host = runHostPort();
-    const link = new ProcessLink<RunHostRequest>(host.port, clock);
+    const link = new ProcessLink<RunHostRequest>(host.port, clock, { boundary: 'run host', warn: () => {} });
     const lines: string[] = [];
     const deps = { request: (r: WorkspaceOpenedRequest, b: ReturnType<typeof millis>) => link.request(r, b), log: (message: string) => { lines.push(message); } };
     const acked = handOffOpenedWorkspace(deps, REQUEST, millis(5_000));

@@ -168,7 +168,7 @@ line, ` | ` between its lines), not `McpHost.prepare`'s, which says a success on
 drop-rules launch and every live-run launch assert there is none. Main's own lines are `info`, except its reports of a loss — a crash, a renderer or child process
 gone for any reason but `clean-exit`, a child exiting with any status but 0, a `shutdown` a child refused or left
 unanswered, still running, when its bound elapsed at quit, a failed hand-over, a refused launch — which are `error`, and
-a dialog it could not present, which is `warning`. An exit status of 0 is not proof of an orderly `shutdown`: Electron
+a dialog it could not present, which is `warning`. So is a message main refuses at a process boundary (OQ-485, built 2026-11-04): one a child sends that `ProcessMessageSchema` cannot read is dropped as before, its request left to its bound, and leaves `refused a message from the run host (<class>): …` (or `the workspace service for <root>`), the class `wrong version`, `unknown kind` or `unreadable` with at most three capped issue paths and the pending `id`, never a value; `ProcessLink` writes it through the `warn` main injects, and `RefusalFold` (`packages/shell/src/refusal-fold.ts`) folds a class's burst into one count line per 60 s window, at its close or the link's end. An exit status of 0 is not proof of an orderly `shutdown`: Electron
 reports 0 for a child it tears down at quit, too, which is why the unanswered `shutdown` has a line of its own. The quit
 races each `shutdown` against that child's exit (`shutdownAtQuit`, `main/exit.ts`), watched from the fork: a child that
 exits has ended even when its answer was lost to the exit, so only one still running when its bound elapses, or one that

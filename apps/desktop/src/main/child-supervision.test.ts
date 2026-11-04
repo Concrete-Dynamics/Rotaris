@@ -46,7 +46,7 @@ function supervised(kind: 'run-host' | 'workspace-service', opts: { answers: boo
   const { child, port } = fakeChild(opts);
   const name = kind === 'run-host' ? 'rotaris-run-host' : 'rotaris-workspace:C:\\work\\alpha';
   const who = kind === 'run-host' ? { process: 'run-host' as const } : { process: 'workspace-service' as const, workspace: 'C:\\work\\alpha' };
-  const link = new ProcessLink(port, clock);
+  const link = new ProcessLink(port, clock, { boundary: 'run host', warn: () => {} });
   const exit = watchChildExit(child);
   const endable = endedByMain.endable(name, child);
   child.on('exit', (code) => {

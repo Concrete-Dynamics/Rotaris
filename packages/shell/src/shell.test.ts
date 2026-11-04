@@ -79,14 +79,14 @@ describe('shell — the process link (ADR-0002 consequence 11)', () => {
     const clock = new FakeClock();
     const { a, b } = pair();
     b.onMessage((m) => { const e = m as { id: number }; b.postMessage({ v: CONTRACT_SCHEMA_VERSION, id: e.id, reply: { kind: 'pong' } }); });
-    const link = new ProcessLink(a, clock);
+    const link = new ProcessLink(a, clock, { boundary: 'run host', warn: () => {} });
     await expect(link.request({ kind: 'ping' }, millis(1000))).resolves.toEqual({ kind: 'pong' });
     link.close();
   });
   it('every request is bounded: an unanswered one rejects at the deadline rather than hanging', async () => {
     const clock = new FakeClock();
     const { a } = pair();
-    const link = new ProcessLink(a, clock);
+    const link = new ProcessLink(a, clock, { boundary: 'run host', warn: () => {} });
     const p = link.request({ kind: 'ping' }, millis(2000));
     clock.advance(2000);
     await expect(p).rejects.toThrow(/within 2000 ms/);
@@ -97,7 +97,7 @@ describe('shell — the process link (ADR-0002 consequence 11)', () => {
     const { a, b } = pair();
     const posted: unknown[] = [];
     b.onMessage((m) => { posted.push(m); });
-    const link = new ProcessLink(a, clock);
+    const link = new ProcessLink(a, clock, { boundary: 'run host', warn: () => {} });
     const waiting = link.request({ kind: 'ping' }, millis(30_000));
     expect(link.endedWith).toBeNull();
     const refusal = { kind: 'refused', code: 'runHost.gone', headline: 'The run host has stopped' } as const;
@@ -113,7 +113,7 @@ describe('shell — the process link (ADR-0002 consequence 11)', () => {
   it('a throwing event listener does not break dispatch to the rest', async () => {
     const clock = new FakeClock();
     const { a, b } = pair();
-    const link = new ProcessLink(a, clock);
+    const link = new ProcessLink(a, clock, { boundary: 'run host', warn: () => {} });
     const got: unknown[] = [];
     link.onEvent(() => { throw new Error('a dead sink threw'); });
     link.onEvent((e) => { got.push(e); });

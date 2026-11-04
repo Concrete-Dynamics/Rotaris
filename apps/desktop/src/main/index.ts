@@ -366,7 +366,7 @@ async function main(): Promise<void> {
   const runHostEndable = endedByMain.endable(RUN_HOST_SERVICE_NAME, runHostChild);
   // Watched from the fork so the quit can race its `shutdown` against it and never miss the event (`exit.ts`).
   const runHostExit = watchChildExit(runHostChild);
-  const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers);
+  const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers, { boundary: 'run host', warn: (m) => { log(m, 'warn'); } }); // OQ-485: a refused message leaves one warning line
   // ADR-0030: the run host's one ask — the bearers for the providers a run names. Never logged.
   // ADR-0039 / ADR-0002 c.4: the run host's three checkpoint asks are relayed to the workspace service of that root and answered back.
   runHost.onAsk(async (a) => {
@@ -479,7 +479,7 @@ async function main(): Promise<void> {
     let svc = services.get(key);
     if (!svc) {
       const child = utilityProcess.fork(join(__dirname, 'workspace-service.js'), [], { serviceName: `rotaris-workspace:${key}` });
-      svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers), exit: watchChildExit(child) };
+      svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers, { boundary: `workspace service for ${key}`, warn: (m) => { log(m, 'warn'); } }) /* OQ-485 */, exit: watchChildExit(child) };
       services.set(key, svc);
       // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown`, or Electron tearing the service down at quit (see the
       // run host's exit above); any other status is the service lost, and an `error`. OQ-462 (1): a service main did not

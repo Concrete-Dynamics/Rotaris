@@ -33,6 +33,6 @@ artifact with no source session, the stand-in line, and one `warning` line "retr
 'a-role-this-build-does-not-know' names no existing role"; its sixth check, a prompt refused "The run was refused before it started"
 with "names no role this build knows", green on both. The whole proof read 83 of 84 on Windows 11 ARM64 (78 of 84 on the base); the
 one red both times is launch 1's machine-wide-base check, Windows-only and recorded in
-[`../../../defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md`](../../../defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md).
+[`../../../archive/defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md`](../../../archive/defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md).
 **Not measured in the built app:** the analysis with the presenter lapsed — the gesture is always attended there — which
 `launch.test.ts` carries.

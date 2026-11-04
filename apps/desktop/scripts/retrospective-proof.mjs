@@ -532,15 +532,21 @@ await (async () => {
   }
 })();
 
-// ── 2b. PD-LIBRARY-002 revision 2 (OQ-235): the capture was handed the workspace root's files and no other base's.
+// ── 2b. PD-LIBRARY-002 revision 2 (OQ-235): the capture was handed the workspace root's files and no other base's. The machine-wide
+//    base is read only where an /etc hierarchy exists (`packages/config/src/instructions.ts`, `hasEtcHierarchy` in
+//    `packages/config/src/skills/roots.ts`), so on win32 the enabled set names two bases and the read line "1 of 2"; elsewhere three
+//    and "1 of 3". Until 2026-11-04 the check required the machine base on every platform and was red on every Windows run
+//    (docs/archive/defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md).
 {
   const log = readFileSync(join(output, 'pass.log'), 'utf8');
   const read = log.split('\n').find((line) => /retrospective: \d+ of \d+ enabled instruction file\(s\) at the workspace root/.test(line)) ?? null;
   const offered = log.split('\n').find((line) => /retrospective: \d+ of \d+ instruction file\(s\) enabled for /.test(line)) ?? null;
+  const machineBaseRead = process.platform !== 'win32';
+  const enabledCount = machineBaseRead ? 3 : 2;
   check('the retrospective reads the workspace root\'s instruction files and none from the user-global or machine-wide bases (PD-LIBRARY-002 revision 2, OQ-235)',
-    read !== null && /: 1 of 3 enabled instruction file\(s\) at the workspace root \(workspace:AGENTS\.md\) for /.test(read)
-      && offered !== null && /user-agents:AGENTS\.md/.test(offered) && /machine-codex:AGENTS\.md/.test(offered),
-    `enabled: ${offered === null ? 'no line' : offered.replace(/^.*?retrospective: /, '')} | read: ${read === null ? 'no line' : read.replace(/^.*?retrospective: /, '')}`);
+    read !== null && new RegExp(`: 1 of ${enabledCount} enabled instruction file\\(s\\) at the workspace root \\(workspace:AGENTS\\.md\\) for `).test(read)
+      && offered !== null && /user-agents:AGENTS\.md/.test(offered) && (machineBaseRead ? /machine-codex:AGENTS\.md/.test(offered) : !/machine-codex:/.test(offered)),
+    `enabled: ${offered === null ? 'no line' : offered.replace(/^.*?retrospective: /, '')} | read: ${read === null ? 'no line' : read.replace(/^.*?retrospective: /, '')} (the machine-wide base is ${machineBaseRead ? 'read on this platform' : 'never read on win32, which has no /etc hierarchy'})`);
 }
 
 // ── 3. What the store actually holds, read after the process that owned it has gone.

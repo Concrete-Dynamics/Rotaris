@@ -352,7 +352,7 @@ written to the log at its capture, whatever the presenter.
 > existing role", and a prompt in the same launch refused "The run was refused before it started" with "names no role this build
 > knows". The whole proof read 83 of 84 on Windows 11 ARM64 (8 CPUs, CPU load 68 to 100 % with another tree's Electron running);
 > its one red, launch 1's machine-wide-base check, is Windows-only and recorded
-> ([`../../defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md`](../../defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md)).
+> ([`../../archive/defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md`](../../archive/defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md)).
 > **What was not measured.** The analysis reached with the presenter lapsed: the gesture is always attended in the built app, so
 > `launch.test.ts` carries the unattended case; no live run was owed. The row is in
 > [`../architecture/first-executions.md`](../../architecture/first-executions.md).

@@ -971,6 +971,7 @@
     "defects/resilience-proof-cannot-launch-the-app-as-root.md": "a40b3c92376b6ed92f6ccef3c547a9a716dc5c7b2a560152b4ec473f328bab12",
     "defects/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md": "a3fc41d3238c3f935191ca60ee3c301372c7a0ef4365a2b60355e24a1229145d",
     "defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md": "3899c969873ae940e658477c5a9ffa34f7fcb00fa558a09ff1444badac52406d",
+    "defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md": "5f3971142e2f6a5693985146b2748ec282292649b13761b5cdf6443b54840014",
     "defects/role-gutter-truncation-rule-is-inert.md": "9e02cf6526c2e8f402b7c4be3ba95235d5d5281278795e4c13817c3861ee0f23",
     "defects/role-model-save-writes-null-and-breaks-the-load.md": "043556350c66ece71033f47528b44b36bf1d9103c53a5c385950c9750d3ddbf0",
     "defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md": "731d19f706437ca6eae38fa87a4e7829fe2f9d5889ae4135dd6e82a1efde8d23",

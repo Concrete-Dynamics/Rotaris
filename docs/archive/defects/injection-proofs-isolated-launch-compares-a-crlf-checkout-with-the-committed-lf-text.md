@@ -34,3 +34,26 @@ Seen again on 2026-11-04 at the landing of R-091 bundle D3 (fence-hardening), re
 
 - `apps/desktop/scripts/injection-proof.mjs` — `assertReceived` (`blockOf`) and the `isolated` launch's `isoText` (the committed text).
 - the scratch workspace's Git repository, created by the proof, which inherits the host's `core.autocrlf`.
+
+## Outcome — repaired 2026-11-04 (acceptance plan hrda, bundle `hrda-accept1-6`, finding AF-14)
+
+Confirmed first on the bundle's branch at `a10ad853` (Windows 11 ARM64, Node 26.13.0, Git for Windows' system
+`core.autocrlf=true`; CPU 42 %, twelve Electron processes of `C:/dev/Rotaris-wt-accept` and `C:/dev/Rotaris-wt-hrda-a1-5`
+alive): `node apps/desktop/scripts/injection-proof.mjs --skip-build --skip-latency` exited 1 with "isolated: PRESENCE —
+workspace:AGENTS.md's block (…\.rotaris\worktrees\<id>\AGENTS.md) was not received whole", and `od -c` read `\r\n` after the
+worktree file's first line.
+
+The proof now expects the text the worktree holds, and accepts it only when it is the committed text as a Git checkout writes
+it: byte for byte, or with every LF written as CRLF (`apps/desktop/scripts/lib/checkout-text.mjs`, `checkoutOf`). A worktree
+file that is no checkout of the commit (the base working copy under either ending, a half-converted file, a missing one) fails
+the launch by name before the PRESENCE check, so the launch still proves that the run read the committed text from the
+execution root and not the base's working copy. Nothing in the product changed: it read what REQ-WORKSPACE-050 names.
+
+Pinned by `apps/desktop/scripts/lib/checkout-text.test.ts` (a CRLF checkout yields the block the merge sends, and the
+committed LF text the proof compared before is not found in it; the working copy and a half-converted file are refused).
+Shown by the same command after the change: exit 0, "the isolated run read its workspace files from …\.rotaris\worktrees\<id>"
+(CPU 100 % at the start, the same two trees' Electron alive).
+
+The merge's own handling of a CRLF file (a carriage return kept at the end of the block, and two blank lines after a file
+that ends in one) is a separate note:
+[`the-instruction-merge-strips-only-lf-trailing-newlines-so-a-crlf-file-keeps-a-carriage-return-and-an-extra-blank-line.md`](../../defects/the-instruction-merge-strips-only-lf-trailing-newlines-so-a-crlf-file-keeps-a-carriage-return-and-an-extra-blank-line.md).

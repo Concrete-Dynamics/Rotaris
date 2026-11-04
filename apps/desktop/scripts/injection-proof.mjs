@@ -34,7 +34,8 @@
  *   3. switched  — a scripted run. ABSENCE: the switched-off file contributes nothing, not even its source comment.
  *                  OQ-64 AS RULED: the override switched off returns its base, `AGENTS.md`, to the merge.
  *   4. isolated  — New session with isolation on: the run executes in `.rotaris/worktrees/<sid>`, and its workspace
- *                  blocks come from THAT tree — the committed text, under the worktree's paths — while the policy
+ *                  blocks come from THAT tree — the committed text as its checkout wrote it (CRLF under Git for
+ *                  Windows' `core.autocrlf=true`), under the worktree's paths — while the policy
  *                  (the two switches of launch 2) and every other base stay the base workspace's (REQ-WORKSPACE-050).
  *                  The code-intelligence server is launched against the worktree (REQ-MCP-034), and so are the two
  *                  fixture servers the orchestrator carries (PD-MCP-002): `fs_probe`'s filesystem fill-in and both
@@ -72,6 +73,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { app, buildDesktop, configDirFor, electron, evidenceDirectory, homeSeams, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
+import { checkoutOf } from './lib/checkout-text.mjs';
 
 const output = evidenceDirectory('injection-proof');
 rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
@@ -315,7 +317,15 @@ const isoSystem = contextCalls(isolated.records, 'isolated')[0].system;
 // REQ-WORKSPACE-050: the workspace files from the EXECUTION root — the committed text, under the worktree's paths —
 // with the base's policy still governing them by identity, and every other base exactly as the base run had it.
 const isoPath = (id) => (WORKSPACE_IDS.includes(id) ? join(worktree, files[id].slice(workspace.length + 1)) : files[id]);
-const isoText = (id) => (WORKSPACE_IDS.includes(id) ? body(id, 'committed') : baseText(id));
+// The committed text as the worktree's checkout wrote it: under `core.autocrlf=true` (Git for Windows' system default)
+// with CRLF endings, which the product reads as they are. A file that is no checkout of the commit fails here.
+const checkedOut = {};
+for (const id of WORKSPACE_IDS) {
+  const onDisk = existsSync(isoPath(id)) ? readFileSync(isoPath(id), 'utf8') : null;
+  checkedOut[id] = onDisk === null ? null : checkoutOf(body(id, 'committed'), onDisk);
+  if (checkedOut[id] === null) fail(`isolated: the worktree's ${isoPath(id)} is not the committed text of ${id} (read ${JSON.stringify(onDisk)})`);
+}
+const isoText = (id) => (WORKSPACE_IDS.includes(id) ? checkedOut[id] : baseText(id));
 assertReceived('isolated', isoSystem, afterExpected, [SWITCHED_OFF, OVERRIDE_OFF], isoText, isoPath);
 for (const id of WORKSPACE_IDS) {
   if (sourcesOf(isoSystem).includes(files[id])) fail(`isolated: ${id} was read from the base workspace rather than the worktree`);

@@ -971,6 +971,7 @@
     "defects/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md": "91c12de744fb4e0d8fb9898f5d565ae3f47bb7c9c0431e230c09fcadc6abf7b6",
     "defects/init-proof-reads-a-missing-code-intelligence-bundle-as-a-task-that-recorded-nothing.md": "1c4bb34584bd62b2dd2ee9850c34d2b5c4d823b52908779ac05c29c010ad9b30",
     "defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md": "1d84cbcc94ba070dc20a96c94a4a8b075c4f9f862d9e3f58aa88d7016686d017",
+    "defects/injection-proofs-isolated-launch-compares-a-crlf-checkout-with-the-committed-lf-text.md": "2bed40fd7be1d5bd86c74eb4f4e591a6bec09a17544ff0c9f283f69755f0ea5a",
     "defects/intent-classifier-persona-has-no-default-entry.md": "b51676d251795a88f510d1beeca73fabf14a9179512138741b12de1403d9cbf8",
     "defects/isolated-runs-read-instruction-files-from-the-base-workspace.md": "f06c02555427c7fa1925a9be481c5565dc5bd28dd91c72239d0482f9ccceb884",
     "defects/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md": "bf9f8ae9fef6c61b685a79cf0849d99c1363eb4dd18d25a7581d106b246c248d",

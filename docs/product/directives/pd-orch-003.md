@@ -96,6 +96,9 @@ narrows `REQ-ORCH-154`, and the symbol generator rejects two directives over one
 precedence stays unambiguous. *(Since 2026-10-13 ([OQ-237](../../architecture/open-questions.md)) only the supersession half of this
 still holds: `REQ-ORCH-153`, superseded, may be neither narrowed nor extended, but a second narrowing of `REQ-ORCH-154` in a
 disjoint case that names `PD-ORCH-002` would build. The first reason, the precedence this directive does not need, stands.)*
+*(2026-11-04, [OQ-491](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-491), ruled under
+[R-072](../requests.md#r-072): `PD-ORCH-002` at revision 4 narrows `REQ-ORCH-153` and never superseded it, so the supersession half no
+longer holds either; a narrowing of `REQ-ORCH-153` in a disjoint case that names `PD-ORCH-002` would build. The first reason stands.)*
 
 > **Narrows:** REQ-ORCH-152
 

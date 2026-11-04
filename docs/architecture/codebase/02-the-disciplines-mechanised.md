@@ -71,7 +71,7 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   line above says `withdrawn`, `superseded` (or names the directive) or `retired`, the mark of a deliberate historical
   citation. The typed `REQ[…]` symbol gave the paper's property at two sites; this gives it at every citation (R-092,
   ReqToCode §4.6, `docs/architecture/hardening.md` §6). Its one held identifier, `REQ-ORCH-153`, waits on
-  [OQ-491](../open-questions/69-spikes-and-later-questions-36.md#oq-491) through the rule's `pending` option. The
+  [OQ-491](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-491) through the rule's `pending` option. The
   proof scripts under `apps/desktop/scripts/` are outside `eslint .` until they are linted; their citations were made
   to pass when the rule landed. `tools/requirement-coverage/` is left out, as the report leaves itself out: its
   identifiers are made-up fixtures (`rules.test.ts` pins the exclusion; since 2026-11-01, hrd2 H1).

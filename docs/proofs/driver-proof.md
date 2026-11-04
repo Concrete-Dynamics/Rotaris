@@ -25,7 +25,7 @@ check included): a kind the contract does not have, answered `{ ok: false, code:
 "The request could not be read: the kind is not valid", and a `session.start` whose prompt is 2,000,000 characters, answered
 `command.malformed` with "The prompt is longer than 1,048,576 characters" (OQ-467's bound), the value echoed neither in the
 answer nor in the log. Each step's one line in the application log is the driver's own for the eval that sent it: a malformed
-request is refused as a value and the product writes none ([OQ-485](../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-485)
+request is refused as a value and the product writes none ([OQ-485](../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-3.md#oq-485)
 asks whether it should). The driver's `commandThrowing` op (`apps/desktop/src/main/driver.ts`, compiled out of a packaged
 build with the rest of the driver) then sends `theme.get` through main's own `dispatchCommand` over a table in which every
 handler throws, since no product handler throws on purpose: the answer is `command.failed`, "The command failed", its detail

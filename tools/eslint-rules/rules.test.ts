@@ -216,9 +216,11 @@ describe('lint — R-092 (ReqToCode §4.6): every cited requirement or directive
   });
 
   it('an identifier the record holds open (`pending`) waits on its question for its lifecycle, never for its existence', async () => {
-    const held = id('REQ', 'ORCH', '153');
-    expect(SUPERSEDED_BY[held as keyof typeof SUPERSEDED_BY]).toBe('PD-ORCH-002');
-    expect(await cites('packages/engine/src/fine.ts', `// the plan gate (${held})\n`)).toEqual([]);
+    // The identifier OQ-491 held until its ruling (2026-11-04) is narrowed and live, cited with no `pending` entry; a
+    // superseded identifier stands in for the held case.
+    expect(await cites('packages/engine/src/fine.ts', `// the plan gate (${id('REQ', 'ORCH', '153')})\n`)).toEqual([]);
+    const held = id('REQ', 'CHAT', '098');
+    expect(SUPERSEDED_BY[held as keyof typeof SUPERSEDED_BY]).toBe('PD-CHAT-002');
     const art = loadArtifact();
     expect(citationFindings(`// ${held}`, '', art).map((f: { kind: string }) => f.kind)).toEqual(['superseded']);
     expect(citationFindings(`// ${held}`, '', art, { [held]: 'OQ-491' })).toEqual([]);

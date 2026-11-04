@@ -300,9 +300,8 @@ export default tseslint.config(
     files: ['packages/**/*.{ts,tsx,js,mjs,cjs}', 'apps/**/*.{ts,tsx,js,mjs,cjs}', 'tools/**/*.{ts,tsx,js,mjs,cjs}'],
     ignores: ['tools/requirement-coverage/**'],
     rules: {
-      // OQ-491: PD-ORCH-002 declares it supersedes REQ-ORCH-153 while its rule narrows one clause of it; the plan
-      // gate's code cites REQ-ORCH-153 for the clauses the directive leaves alone. Leaves with OQ-491's ruling.
-      'rotaris/requirement-citations-resolve': ['error', { pending: { 'REQ-ORCH-153': 'OQ-491' } }],
+      // OQ-491's pending entry for REQ-ORCH-153 left with its ruling (2026-11-04): PD-ORCH-002 revision 4 narrows it.
+      'rotaris/requirement-citations-resolve': 'error',
     },
   },
 );

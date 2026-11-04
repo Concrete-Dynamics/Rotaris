@@ -180,6 +180,8 @@ other directive under it, so nothing more is corrected. Outside the bound and re
 it replaces quoted beside it and the two back-pointers relabelled; no other directive reaches either, and no behaviour moves.
 Whether another directive that alone reaches a requirement carries the same shape is still not swept.
 
+*Noted 2026-11-04 under [OQ-491](69-spikes-and-later-questions-36-continued-4.md#oq-491), ruled under [R-072](../../../product/requests.md#r-072): `PD-ORCH-002` at revision 4 narrows REQ-ORCH-153 and never superseded it, so the supersession half of `PD-ORCH-003`'s "it would also be refused", which this ruling says still holds, no longer holds either; the aside's first reason stands, and the rule stated here (Supersedes single, a disjoint narrowing naming the earlier directive) is unchanged.*
+
 <a id="oq-238"></a>
 
 **OQ-238 — Does every call its run cancels read `interrupted`, or only the terminal's?** *(PD-ORCH-005 clause 3, a call the

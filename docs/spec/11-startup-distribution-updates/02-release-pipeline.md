@@ -18,7 +18,11 @@ Part 2 of 10 of [domain 11](../11-startup-distribution-updates.md), which indexe
 
 **REQ-STARTUP-031** — Artifact names SHALL come from a single authority shared with the updater, with these exact shapes: `Rotaris-{v}-windows-x64-setup.exe` (installer), `Rotaris-{v}-windows-x64-portable.exe` (portable), `Rotaris-{v}-macos-arm64.dmg`, and `Rotaris-{v}-linux-x86_64.AppImage`. Requesting an unknown artifact kind SHALL error listing the known kinds. Per-platform kinds: windows-x64 → setup, portable; macos-arm64 → dmg; linux-x86_64 → appimage. No console archive kind exists, the console binaries it carried having been withdrawn with REQ-STARTUP-002.
 
+> **Extended by [`PD-STARTUP-012`](../../product/directives/pd-startup-012.md#pd-startup-012), 2026-11-04.** The single authority also renders `Rotaris-{v}-{platform}-sbom.cdx.json`, the name of a release's SBOM, by a function of its own and never as an artifact kind; the four shapes, the per-platform kinds and the unknown-kind error above are unchanged.
+
 **REQ-STARTUP-032** — Each release SHALL publish a checksum manifest named `SHA256SUMS.txt`: one line per asset in the form `<sha256hex>  <filename>` (two-space separator), sorted by filename, compatible with `sha256sum -c`. Each release SHALL also publish, beside that manifest, a detached signature over the manifest's exact published bytes, named `SHA256SUMS.txt.sig` (REQ-STARTUP-167). The manifest SHALL list every other published asset and SHALL list neither itself nor that signature: the signature is what establishes the manifest rather than something the manifest establishes, and a manifest cannot carry a digest computed over a file derived from the manifest itself. The signature is detached, so the manifest's bytes are the same bytes whether they are read by the update path or by `sha256sum -c` (REQ-STARTUP-152).
+
+> *Read with [`PD-STARTUP-012`](../../product/directives/pd-startup-012.md#pd-startup-012), 2026-11-04: a release's SBOM is a published asset, so this manifest lists it and the signature covers it; this requirement holds as written.*
 
 **REQ-STARTUP-167** — The checksum manifest of REQ-STARTUP-032 SHALL be signed, and the update path SHALL install nothing whose manifest signature it has not verified. This requirement is the product's single definition of publisher authenticity for updates; a document that needs to say what an update establishes about who published it cites this identifier rather than restating it.
 
@@ -49,6 +53,8 @@ A release published without a signature this build can verify SHALL NOT be insta
 > attempted and did not fail. In its place the body states, in one line, that this release publishes Windows
 > builds only. The other six elements, their order and their wording are unchanged, element (5)'s
 > `sha256sum -c` hint and element (6)'s naming of Gatekeeper included.
+
+> *Read with [`PD-STARTUP-012`](../../product/directives/pd-startup-012.md#pd-startup-012), 2026-11-04: a release's SBOM is a published asset and takes its row in element (3)'s table; this requirement holds as written.*
 
 **REQ-STARTUP-036** — *Withdrawn.* Its whole surface was the publication of two packages of one language ecosystem to that ecosystem's package index, which describes a different product; where and how the product is published is an architecture decision, not a behavior a user observes. Nothing a user can see is lost: the artifacts a release publishes are exactly those of REQ-STARTUP-031, a release carries one product version (REQ-STARTUP-158), and a prerelease tag publishes those same artifacts under a release flagged prerelease (REQ-STARTUP-029, REQ-STARTUP-034).
 

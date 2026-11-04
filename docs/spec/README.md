@@ -134,7 +134,7 @@ how any other implementation achieves it.
   `*(Text archived: …)*` line stays under the definition. The definition line, its `*Withdrawn.*` marker and a
   directive's back-pointer never move, so every identifier stays defined here and every count above holds; the archive
   defines none, and `pnpm symbols` never reads it. The first run, 2026-11-02, moved nothing: each of the 275 that qualify
-  is wholly its definition line ([OQ-490](../architecture/open-questions/69-spikes-and-later-questions-36.md#oq-490)).
+  is wholly its definition line ([OQ-490](../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-490)).
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
   `docs/clean-room/specification-gate.md` *(removed 2026-10-26)*
 

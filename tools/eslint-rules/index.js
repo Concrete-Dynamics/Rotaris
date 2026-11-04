@@ -160,8 +160,8 @@ const moneyOnlyInMoneyTs = {
  *   deliberate historical one. An identifier only implied by a range is checked for existence alone: a range that
  *   spans a withdrawn identifier cites its live neighbours, not the withdrawn one.
  * - The option `pending` names identifiers whose lifecycle the record has left open, each with the open question
- *   holding it (`{ 'REQ-ORCH-153': 'OQ-491' }`); their lifecycle check waits on the ruling, and existence is still
- *   checked. An entry leaves with the ruling that closes its question. */
+ *   holding it (`{ 'REQ-ORCH-153': 'OQ-491' }` until that question's ruling, 2026-11-04); their lifecycle check waits
+ *   on the ruling, and existence is still checked. An entry leaves with the ruling that closes its question. */
 const ARTIFACT = fileURLToPath(new URL('../../packages/kernel/src/generated/requirements.ts', import.meta.url));
 const IDENTIFIER_TEXT = /\b(?:REQ|PD)-[A-Z]+-\d+/g;
 

@@ -75,7 +75,7 @@ host's open asks nothing. Three things differ from the paragraph, each kept besi
   the file unwritten, and the counterfactual close removes the log and changes the file.
 - **The service raises it as REQ-SESSION-089's refusal**, `workspace.store-corrupt` naming the store and the report,
   held by main for the listing beside the other store refusals. Steps 2 to 5 of the ladder below are not built, and the
-  restore is not admitted for a window whose open holds this refusal: [OQ-477](../../open-questions/69-spikes-and-later-questions-36.md#oq-477).
+  restore is not admitted for a window whose open holds this refusal: [OQ-477](../../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-477).
   `PRAGMA foreign_key_check`, which `quick_check` does not cover, runs after an open that migrated, and what it finds is
   logged, not refused.
 

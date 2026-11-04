@@ -4,6 +4,9 @@
 
 ### PD-ORCH-002 — the plan gate renders Markdown by default with inline editing and progressive revision feedback
 
+*Revision 4 (2026-11-04, [R-072](../requests.md#r-072), ruling [OQ-491](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-491)) — **the disposition**: `REQ-ORCH-153` is narrowed,
+never superseded; only the disposition block changes, and no clause of the rule.*
+
 *Revision 3 (2026-10-07, [R-072](../requests.md#r-072), ruling [OQ-204](../../architecture/open-questions.md)) — **when the gate
 cannot hold every part**: one paragraph is added after revision 2's **Expanded** clause, and nothing is replaced.*
 
@@ -82,14 +85,21 @@ for these three in particular.
 > required. The mechanism itself held: expanded drew no transcript, collapsing gave back 311 px and answered
 > nothing. Recorded in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
 
-> **Supersedes:** REQ-ORCH-153
-> **Narrows:** REQ-ORCH-154, REQ-SHELL-168, REQ-CHAT-010
+**The disposition — revision 4.** Revision 4 (2026-11-04, R-072, ruling OQ-491) changes only the disposition block, and no clause of the rule. PD-ORCH-002 SHALL narrow REQ-ORCH-153, and SHALL NOT supersede it: the disposition reads `> **Narrows:** REQ-ORCH-153, REQ-ORCH-154, REQ-SHELL-168, REQ-CHAT-010`, with revision 3's line quoted beside it as "Revision 3 said, and no longer governs: > **Supersedes:** REQ-ORCH-153". The narrowed case of REQ-ORCH-153 is exactly its presentation clause as this directive's rule and revisions 2 and 3 already state it: the plan awaiting a decision presented as rendered Markdown by default with an immediate source-editing toggle, deduplicated implied tasks, the progressively disclosed revision field, the de-emphasized composer, the expanded and collapsed states and revision 3's bounds. Outside that case REQ-ORCH-153 SHALL govern in full: the planning grants enforced where a call is dispatched, no child holding a writing tool and no hook command or check suite while the gate is held, the records the product itself keeps writable, the indefinite wait with no default, exactly three answers, `awaiting_plan_decision`, the hold surviving a restart and raising no terminal status. The back-pointer at REQ-ORCH-153 SHALL be amended in place from "Superseded by" to "Narrowed by", keeping its sentence that all gating, capability withholding and three-answer mechanics remain governed by the requirement, and PD-ORCH-003's "it would also be refused" passage SHALL carry a dated note in place that REQ-ORCH-153 is narrowed, its first reason standing. A later directive on the plan gate's presentation SHALL be a revision of this one, and a disjoint narrowing of REQ-ORCH-153 SHALL name PD-ORCH-002 (OQ-237).
+
+**Why, and what it costs — revision 4.** The register defines Supersedes as "the named requirement no longer governs" and Narrows as "still governs, except in the case the directive names"; this directive's rule names one clause and restates no other, so under Supersedes the gate's whole safeguard against unread writes would govern nowhere, while the specification's own back-pointer already reads as a narrowing and 151 citations in 57 files cite REQ-ORCH-153 for those clauses. Correcting the label matches the record to the product and to R-092's tooling, which marks `@deprecated` only an identifier that truly no longer governs; nothing the person at the desktop sees changes. The cost is bookkeeping in one commit: `pnpm symbols` moves REQ-ORCH-153 from `SUPERSEDED_BY` to `NARROWED_BY` and drops its `@deprecated` tag, the `pending` entry leaves `eslint.config.js`, the superseded count and the live coverage total move by one in their tests and the coverage baseline, PD-ORCH-003's passage and OQ-237's ruling take dated notes rather than edits, and R-092's archive migration must leave REQ-ORCH-153's text live in `docs/spec/`. Given up on purpose: the disposition's reading, which would restate a dozen normative sentences in a directive and move every citation, copying the specification for no behaviour gained. Once narrowed, REQ-ORCH-153 may take a second disjoint narrowing that the generator cannot verify stays apart, the constraint OQ-237 already imposes. Raised by [OQ-491](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-491).
+
+> **Narrows:** REQ-ORCH-153, REQ-ORCH-154, REQ-SHELL-168, REQ-CHAT-010
+
+> **Revision 3 said, and no longer governs:** "> **Supersedes:** REQ-ORCH-153" *(beside the Narrows line above, which then named REQ-ORCH-154, REQ-SHELL-168 and REQ-CHAT-010)*
 
 *Raised by the owner, 2026-09-16; logged as [R-030](../requests.md#r-030). Revised 2026-09-17; logged as
 [R-032](../requests.md#r-032). Revision 3 logged as [R-072](../requests.md#r-072) (OQ-204), ruled by the consortium under the
 owner's delegation, both advocates' recommendation followed. `REQ-CHAT-010` joins the dispositions at revision 2: its 180 px transcript
 minimum is a floor under an area this directive now takes in full while the gate is expanded, and a
-requirement a mechanism contradicts is named by the directive or it is an ungoverned deviation from it.*
+requirement a mechanism contradicts is named by the directive or it is an ungoverned deviation from it. Revision 4 logged as
+[R-072](../requests.md#r-072) ([OQ-491](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-491), raised by [R-092](../requests.md#r-092)'s citation rule), ruled 2026-11-04 by the consortium under the owner's
+delegation, both advocates' recommendation followed.*
 
 > **First execution of revision 3, 2026-10-07, built under [R-072](../requests.md#r-072):** the paragraph held as written.
 > `.plan-gate__prior` takes the todo's cap (`max-height: var(--rt-space-16)`), `overflow: auto` and `overflow-wrap: anywhere`

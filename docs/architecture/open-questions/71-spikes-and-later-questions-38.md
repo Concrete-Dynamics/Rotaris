@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-485, OQ-473, OQ-475, OQ-476, OQ-480; OQ-523 – OQ-540 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-473, OQ-475, OQ-476; OQ-523 – OQ-540, OQ-485, OQ-480 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
 
 - OQ-523 — Is a `--rt-viz-2` persona label one stop from `--rt-run` a “state colour” under PD-CHAT-005?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-523)
 - OQ-524 — Is Workspace compact mode measured by the view's own width or by the viewport, when REQ-SHELL-059 and REQ-MONITOR-051 name different ones?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-524)
@@ -20,18 +20,7 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 - OQ-538 — Should a tile that cannot hold a figure in this build, Cloud credit, keep the first place in the Overview's right column?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-3.md#oq-538)
 - OQ-539 — Which token strokes a single-series Sparkline, when §1.3, the Sparkline specimen and the mockup give three answers?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-3.md#oq-539)
 - OQ-540 — Does Sparkline gain an empty variant, so REQ-MONITOR-166's explicit empty sparkline needs no local drawing?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-3.md#oq-540)
-
-<a id="oq-485"></a>
-
-**OQ-485 — Does main leave a line in the application log for a message it refuses at a process boundary?** *(ADR-0002 consequence 11, ADR-0044, PD-MONITOR-002, `docs/architecture/hardening.md` §3.5 row 7. Raised 2026-11-04 by hrd2's bundle F3 (`thin-packages`), building the process link's tests; numbered in the hardening orchestration's range.)*
-
-**What is open.** `ProcessLink` (`packages/shell/src/process-link.ts`) reads every message from a child with `ProcessMessageSchema.safeParse` and drops one it cannot read with no trace: nothing is logged and the request it may have answered stays pending. A run host or workspace service speaking another contract version (`v`), or a reply kind main does not know, therefore reads in main as `NoReplyWithinBound` at the request's bound, with nothing in the log that says a message arrived and was refused. No requirement or decision says whether such a drop is recorded; the brief that raised this assumed it was ("dropped and logged").
-
-The renderer's boundary is the same shape. `dispatchCommand` (`apps/desktop/src/main/command-dispatch.ts`) answers a request `CommandRequestSchema` cannot read, or one past OQ-467's bounds, `command.malformed` as a value and writes no line, where a throwing handler leaves one `error` line and a refused sender one `warning` line. `pnpm driver-proof` step 9e measured it on 2026-11-04: an unknown kind and a 2,000,000-character prompt sent by the page itself each left no line of the product's.
-
-**What the build proceeds under.** Both as built: the process link's drop silent, the request left to its deadline and the next valid message answered (`packages/shell/src/process-link.test.ts`), and a malformed command answered with no line (`driver-proof` step 9e), each citing this entry.
-
-**What decides it.** A ruling on whether a refused process message leaves one line (at which level, naming what, under PD-MONITOR-002's rule that the log never carries a payload) or stays silent, and whether a burst of them is bounded.
+- OQ-485 — Does main leave a line in the application log for a message it refuses at a process boundary?; ruled 2026-11-04; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-3.md#oq-485)
 
 <a id="oq-473"></a>
 
@@ -63,12 +52,4 @@ The renderer's boundary is the same shape. `dispatchCommand` (`apps/desktop/src/
 
 **What decides it.** A ruling on `killed`: left as it is, told by a notice without a reload, or reloaded within the same bound as a crash.
 
-<a id="oq-480"></a>
-
-**OQ-480 — May a diagnostics run directory carry the application log, and where does a window with no workspace write?** *(REQ-STARTUP-129, REQ-STARTUP-131, REQ-STARTUP-132, REQ-STARTUP-134, REQ-SHELL-163, PD-MONITOR-002. Raised 2026-11-03 by [R-091](../../product/requests.md#r-091)'s hardening bundle D2 `log-sinks`, building the `light` level for the application log; numbered from the sub-range the plan gave the bundle, so it sits out of order here.)*
-
-**What is open.** Two things the requirements do not settle. **(1) The stream.** The hardening finding is that a packaged Windows build writes its application log to a standard output nobody reads (`docs/architecture/hardening/02-the-findings.md` §3.4), and the plan closes it through the diagnostics `light` level. REQ-STARTUP-132 lists the run directory's artifacts — `manifest.json`, `metrics-NN.jsonl`, `spans-NN.jsonl`, snapshots, `summary.json`, `summary.md` — and the application log is not among them. REQ-STARTUP-134 forbids session content in any diagnostics file: no transcript or prompt text, no model or tool output, no file contents, no credentials. Main's log lines pass the one redaction pass (REQ-TOOLS-171), which masks credentials, but a line can still quote a path, a refused provider's error text or a child's stderr. Whether the list is closed, whether an application-log stream may join it, and what the content rule asks of the lines it carries, is open. **(2) The base.** REQ-STARTUP-131's default base is `<workspace>/.rotaris/diagnostics/rotaris`, and REQ-STARTUP-131 lets a window open with diagnostics inactive only when the base itself is unwritable. A main window can hold no workspace (`(no workspace)` in `main-windows.ts`); with no output folder chosen it has no base at all.
-
-**What the build proceeds under.** (1) A window built while `diagnostics/level` is `light` or `deep` writes `app-log-NN.jsonl` beside its `manifest.json`: every line the application log records (PD-MONITOR-002's threshold, after the redaction pass) as one JSON record `{at, level, source, message}`, within REQ-STARTUP-133's four segments of 8 MiB; the manifest's `captured` list names it, so a reader knows the metric and span streams are unbuilt rather than lost. The lines are what the standard output carries, nothing filtered further. (2) A window with no workspace and no chosen folder opens with its capture inactive, and the card says why (`apps/desktop/src/main/diagnostics.ts`).
-
-**What decides it.** A ruling on whether REQ-STARTUP-132's list admits the application-log stream (a directive extending it, or the stream withdrawn and the log sent elsewhere), what REQ-STARTUP-134's content rule asks of it, and where a window with no workspace writes.
+- OQ-480 — May a diagnostics run directory carry the application log, and where does a window with no workspace write?; ruled 2026-11-04; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-4.md#oq-480)

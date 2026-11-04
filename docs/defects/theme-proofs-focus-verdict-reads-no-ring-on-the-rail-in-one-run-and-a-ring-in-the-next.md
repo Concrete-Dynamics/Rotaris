@@ -19,6 +19,13 @@ ring in one run and not in the next, so the reading depends on something other t
 that has lost the operating system's foreground to another tree's window paints no `:focus-visible` ring, which would
 fit, but was not measured. The bundle's diff touches no style, no focus handling and no theme token.
 
+*Seen again 2026-11-04* by R-091's hardening bundle B2 (`hrd1-renderer-failure`, on `d2ceb85a` and `0d815666`, Windows 11 ARM64,
+Node 26.13.0), whose diff adds a class that wraps no element and no style any surface draws: two runs on the same tree failed
+different cases on `focus` alone — first `rotaris-dim` at 1.75 and 2, `nocturne` at 1, 1.5, 1.75 and 2, `high-contrast` at 1,
+1.5, 1.75 and 2 (CPU 96 % measured after it, other trees' Electron processes open); then `rotaris-dim` at 1 and 1.5 and
+`nocturne` at 1.25 and nothing else (13 Electron processes of other trees open, CPU 32 % at its start). The cases that fail move
+from run to run, as this note describes; nothing was established about why.
+
 ## Specs
 
 None contradicted by the code as far as shown. REQ-SHELL-145/160 (the focus ring's contrast) are what the section

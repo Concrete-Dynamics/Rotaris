@@ -66,7 +66,8 @@ function translateGlob(p: string): string {
 export interface GlobOptions {
   /**
    * Match without regard to case. The `glob` tool matches case-sensitively; a write scope compares paths the
-   * way the file tools identify them, which is lower-cased (`FileToolState.key`, the fence's `isInside`).
+   * way the file tools identify them, which is lower-cased (`FileToolState.key`; the fence itself folds only
+   * where the file system does, since 2026-11-04).
    */
   readonly caseInsensitive?: boolean;
 }

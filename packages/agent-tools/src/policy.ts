@@ -3,7 +3,7 @@ import { type Decision, type DecisionSource, type PermissionPreset, presetRank, 
 import { isRemoteUrl } from './egress.js';
 import { canonicalToolName, META_TOOL_NAMES, NETWORK_CLASS, READ_ONLY_CLASS } from './registry.js';
 import { decompose, escalationMatcherFires, patternMatcherFires, pipeToShellMatcherFires, type Segment, tokenizePattern } from './scanner.js';
-import { resolveInWorkspace } from './tools/fence.js';
+import { isInside as fenceIsInside, resolveInWorkspace } from './tools/fence.js';
 
 /**
  * ADR-0017: the policy is an immutable ordered value whose matchers are compiled once at build.
@@ -348,11 +348,13 @@ function pathArguments(args: Readonly<Record<string, unknown>>): string[] {
   return out;
 }
 
+/**
+ * REQ-TOOLS-018/130: the gate's workspace-root scoping compares as the fence does, under the platform's path rule. Until
+ * 2026-11-04 this was a private copy that lower-cased every path on every platform, so on Linux a sibling of the root
+ * differing from it by case alone satisfied `inside_workspace` (R-091, `hardening.md` §3.4 row 5).
+ */
 function isInside(root: string, real: string): boolean {
-  const norm = (s: string) => s.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-  const r = norm(root);
-  const p = norm(real);
-  return p === r || p.startsWith(`${r}/`);
+  return fenceIsInside(root, real);
 }
 
 function pathScopeMatches(scope: PathScope, req: PermissionRequest, env: EvaluationEnv): boolean {

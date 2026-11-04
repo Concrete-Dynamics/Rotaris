@@ -9,9 +9,10 @@
  * Seeded: each property runs `numRuns: 500` from `SEED`, so a run is the same 500 cases every time. A failure prints
  * the counterexample with its seed and path; `fc.assert(…, { seed, path })` with the printed values replays it alone.
  *
- * Held out where the file system does not fold: a path that leaves the root and comes back through a case variant of a
- * name on its way (`../WS/x` beside `ws`). The fence folds case on every platform, so it reads that path as inside; the
- * finding is hardening.md §3.4 row 5, which bundle D3 closes, and its repair removes `caseOnlyDifference` here.
+ * Nothing is held out. Until 2026-11-04 a path that leaves the root and comes back through a case variant of a name on
+ * its way (`../WS/x` beside `ws`) was held out where the file system does not fold, because the fence folded case on
+ * every platform and read it as inside; bundle D3 (hardening.md §3.4 row 5) gave the fence the platform's rule
+ * (`pathRuleFor`, `fence.test.ts` covers every platform's), and the predicate that held it out went with the repair.
  */
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -32,11 +33,6 @@ function oracleInside(root: string, candidate: string, folds = FOLDS): boolean {
   const r = f(root.endsWith(sep) ? root.slice(0, -1) : root);
   const c = f(candidate);
   return c === r || c.startsWith(`${r}${sep}`);
-}
-
-/** Inside only by a fold the platform's file system does not make: held out where it does not fold (header). */
-function caseOnlyDifference(root: string, candidate: string): boolean {
-  return !FOLDS && oracleInside(root, candidate, true) && !oracleInside(root, candidate, false);
 }
 
 function anyCase(word: string): fc.Arbitrary<string> {
@@ -101,7 +97,6 @@ describe('agent-tools — the fence, as properties (REQ-TOOLS-129, REQ-TOOLS-130
     fc.assert(
       fc.property(relativePath(segment(basename(lexicalRoot))), (p) => {
         const candidate = resolve(lexicalRoot, p);
-        fc.pre(!caseOnlyDifference(lexicalRoot, candidate));
         expect(isInside(lexicalRoot, candidate), candidate).toBe(oracleInside(lexicalRoot, candidate));
       }),
       RUNS,
@@ -132,7 +127,6 @@ describe('agent-tools — the fence, as properties (REQ-TOOLS-129, REQ-TOOLS-130
       fc.assert(
         fc.property(relativePath(segments), (p) => {
           const candidate = resolve(root, p);
-          fc.pre(!caseOnlyDifference(root, candidate));
           const verdict = checkFence(cfg, p, 'write');
           expect(verdict.ok, `${p} → ${verdict.resolved}`).toBe(oracleInside(root, candidate));
         }),

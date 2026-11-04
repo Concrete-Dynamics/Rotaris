@@ -15,8 +15,8 @@ import { isNativeFileWritingTool } from './report.js';
  *
  * Matching is by the dialect of the `glob` tool (`globToRegExp`), against the workspace-relative POSIX path the
  * file tools' fence computes, and without regard to case — the file tools identify a path lower-cased
- * (`FileToolState.key`, the fence's `isInside`), so a claim that honoured case would let `SRC/a.ts` past a claim
- * on `src/**` while the file tools treat the two as one file.
+ * (`FileToolState.key`; the fence itself folds only where the file system does, since 2026-11-04), so a claim
+ * that honoured case would let `SRC/a.ts` past a claim on `src/**` while the file tools treat the two as one file.
  */
 
 export type ScopeVerdict =

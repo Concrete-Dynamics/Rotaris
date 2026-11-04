@@ -14,7 +14,7 @@ export type DiagnosticsLevel = (typeof DIAGNOSTICS_LEVELS)[number];
 export type DiagnosticsCapture =
   | { readonly state: 'off' }
   | { readonly state: 'active'; readonly level: Exclude<DiagnosticsLevel, 'off'>; readonly runDirectory: string }
-  /** REQ-STARTUP-131: the window opened with diagnostics inactive, and the card says why rather than the launch failing. */
+  /** REQ-STARTUP-131: the base was unwritable, so the window opened with diagnostics inactive, and the card says why rather than the launch failing. */
   | { readonly state: 'inactive'; readonly level: Exclude<DiagnosticsLevel, 'off'>; readonly reason: string };
 
 /** REQ-SHELL-163's card, as `diagnostics.state` answers it for the window that asked. */
@@ -22,10 +22,11 @@ export interface DiagnosticsCardState {
   /** The stored level: what windows built from now on capture at (REQ-STARTUP-129). */
   readonly level: DiagnosticsLevel;
   /**
-   * The folder in force: the chosen one, else this window's default location (REQ-STARTUP-131,
-   * `<workspace>/.rotaris/diagnostics/rotaris`), or null where the window holds no workspace and none is chosen.
+   * The folder in force: the chosen one, else this window's default location fixed when it was built — its workspace's
+   * `<workspace>/.rotaris/diagnostics/rotaris` (REQ-STARTUP-131), or `<per-user data directory>/diagnostics/rotaris` for a
+   * window built with no workspace (PD-STARTUP-011). Every window has one.
    */
-  readonly folder: string | null;
+  readonly folder: string;
   /** Whether `folder` is the person's choice (`diagnostics/outputDir`) rather than the default. */
   readonly folderChosen: boolean;
   /** This window's own capture, fixed when the window was built: a later choice never alters it (REQ-SHELL-163). */

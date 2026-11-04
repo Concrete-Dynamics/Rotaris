@@ -1,13 +1,14 @@
 import { shell } from 'electron';
 import type { CommandOutcome, DiagnosticsCardState } from '@rotaris/contracts';
-import { diagnosticsBase, type DiagnosticsCaptures } from '../diagnostics.js';
+import type { DiagnosticsCaptures } from '../diagnostics.js';
 import { openFolder } from '../open-folder.js';
 import type { CommandContext, CommandHandlers, MainWindowState } from './context.js';
 
 /**
  * DIAGNOSTICS — Settings › About's diagnostics card (REQ-SHELL-163) over the one source REQ-STARTUP-129 names, the
  * preference store. Every answer is for the window that asked: its own capture, fixed when it was built, and the folder in
- * force for it. A level or a folder chosen here is stored and reaches the windows built afterwards; the asking window's
+ * force for it — the chosen one, else the default fixed when it was built, the per-user one for a window built with no
+ * workspace (PD-STARTUP-011). A level or a folder chosen here is stored and reaches the windows built afterwards; the asking window's
  * capture is not touched (`diagnostics.ts`).
  */
 export function diagnosticsCommands(
@@ -24,8 +25,8 @@ export function diagnosticsCommands(
     },
     /** REQ-SHELL-163: the folder comes from the platform chooser, limited to directories; a cancel changes nothing. */
     'diagnostics.chooseOutputDir': async (_req, { w }) => {
-      const current = diagnosticsBase({ outputDir: preferences.read('diagnostics/outputDir'), workspace: workspaceOf(w) });
-      const chosen = await chooseDirectory(w.win, { title: 'Choose the diagnostics output folder', properties: ['openDirectory', 'createDirectory'], ...(current === null ? {} : { defaultPath: current }) });
+      const current = diagnostics.folderFor(w.wcId, preferences.read('diagnostics/outputDir'), workspaceOf(w));
+      const chosen = await chooseDirectory(w.win, { title: 'Choose the diagnostics output folder', properties: ['openDirectory', 'createDirectory'], defaultPath: current });
       if (chosen !== null) {
         await preferences.write('diagnostics/outputDir', chosen);
         log(`diagnostics: the output folder is now ${chosen} for windows built from now on`);
@@ -53,7 +54,7 @@ export function workspaceOf(w: Pick<MainWindowState, 'workspace'>): string | nul
   return w.workspace === '(no workspace)' || w.workspace === '' ? null : w.workspace;
 }
 
-/** REQ-SHELL-163's card for one window: the stored choices, the folder in force for it, and its own capture. */
-export function cardState(w: Pick<MainWindowState, 'wcId' | 'workspace'>, level: DiagnosticsCardState['level'], outputDir: string | undefined, diagnostics: Pick<DiagnosticsCaptures, 'stateOf'>): DiagnosticsCardState {
-  return { level, folder: diagnosticsBase({ outputDir, workspace: workspaceOf(w) }), folderChosen: outputDir !== undefined, capture: diagnostics.stateOf(w.wcId) };
+/** REQ-SHELL-163's card for one window: the stored choices, the folder in force for it (PD-STARTUP-011), and its own capture. */
+export function cardState(w: Pick<MainWindowState, 'wcId' | 'workspace'>, level: DiagnosticsCardState['level'], outputDir: string | undefined, diagnostics: Pick<DiagnosticsCaptures, 'stateOf' | 'folderFor'>): DiagnosticsCardState {
+  return { level, folder: diagnostics.folderFor(w.wcId, outputDir, workspaceOf(w)), folderChosen: outputDir !== undefined, capture: diagnostics.stateOf(w.wcId) };
 }

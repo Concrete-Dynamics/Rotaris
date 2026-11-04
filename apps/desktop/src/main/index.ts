@@ -165,6 +165,8 @@ const diagnostics = new DiagnosticsCaptures({
   pid: process.pid,
   app: () => ({ name: 'Rotaris', version: productVersion() }),
   platform: { os: process.platform, arch: process.arch, runtime: `electron${process.versions.electron ?? ''}` },
+  // PD-STARTUP-011: a window built with no workspace and no chosen folder writes under the per-user data directory.
+  perUserData: dirs.data,
   warn: (m) => { log(m, 'warn'); },
   info: (m) => { log(m); },
 });

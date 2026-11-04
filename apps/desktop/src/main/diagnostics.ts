@@ -19,7 +19,10 @@ import type { AppLogRecord } from './app-log.js';
  *   registry and the registry, holding no capture, returns at once.
  * - **The run directory** (REQ-STARTUP-131): `<base>/<yyyymmddTHHMMSSZ>-<pid>/`, created exclusively, the first free `-2`,
  *   `-3`, … taken when the name is held; a base that cannot be written leaves the window open with the capture inactive,
- *   and the card says why.
+ *   and the card says why. The base is the chosen folder, else the window's workspace's default, else — a window built
+ *   with no workspace — `<per-user data directory>/diagnostics/rotaris` (PD-STARTUP-011, REQ-STARTUP-145), fixed when the
+ *   window is built and unmoved by a workspace opened later; so every window has a base, and the one inactive case is
+ *   that base being unwritable.
  * - **The manifest** (REQ-STARTUP-132, REQ-STARTUP-157): schema 3, the app's identity, the creation time, the platform
  *   triple, the full effective configuration with every bound and cadence of REQ-STARTUP-133, and a self-checksum.
  * - **The bound** (REQ-STARTUP-133): the stream is at most four segment files of at most 8 MiB, the oldest replaced.
@@ -29,8 +32,8 @@ import type { AppLogRecord } from './app-log.js';
  * not build): the metric and span streams, the heartbeat and the triggers, snapshots and their `snapshots/` directory,
  * `summary.json` and `summary.md` at close, and `deep`'s allocation captures. `deep` is accepted and stored, since the
  * control offers it, and captures what `light` does; what it adds is unbuilt, the owed list of
- * `docs/architecture/codebase/20-where-the-next-work-lands.md` naming each requirement. Whether the application log belongs in the run directory at all, which REQ-STARTUP-132's list of
- * artifacts does not name, is OQ-480 (`docs/architecture/open-questions.md`).
+ * `docs/architecture/codebase/20-where-the-next-work-lands.md` naming each requirement. The application log's place in the run
+ * directory, which REQ-STARTUP-132's list of artifacts did not name, is PD-STARTUP-011's (ruled on OQ-480).
  */
 
 const MIB = 1024 * 1024;
@@ -54,7 +57,7 @@ export const DIAGNOSTICS_BOUNDS = {
   deep: { allocationIntervalMs: 300_000, tracingWindowMs: 2000, slowThresholdMs: 1000, sitesPerCapture: 20, sitesInSummary: 10 },
 } as const;
 
-/** The application log's stream in a run directory: `app-log-NN.jsonl` (OQ-480). */
+/** The application log's stream in a run directory: `app-log-NN.jsonl` (PD-STARTUP-011). */
 export const APP_LOG_STREAM = 'app-log';
 export const MANIFEST_FILE = 'manifest.json';
 export const MANIFEST_SCHEMA = 3;
@@ -62,6 +65,14 @@ export const MANIFEST_SCHEMA = 3;
 /** REQ-STARTUP-131's default base for a window's workspace. */
 export function defaultDiagnosticsBase(workspace: string): string {
   return join(workspace, '.rotaris', 'diagnostics', 'rotaris');
+}
+
+/**
+ * PD-STARTUP-011's default base for a window built with no workspace: `<per-user data directory>/diagnostics/rotaris`, the
+ * per-user data directory being REQ-STARTUP-145's, whose machine-local clause it inherits.
+ */
+export function perUserDiagnosticsBase(perUserData: string): string {
+  return join(perUserData, 'diagnostics', 'rotaris');
 }
 
 /** REQ-STARTUP-131: the window's start in UTC, `yyyymmddTHHMMSSZ`. */
@@ -256,10 +267,13 @@ export interface DiagnosticsChoice {
   readonly workspace: string | null;
 }
 
-/** The folder a window built now would write under: the chosen one, else its workspace's default, else none. */
-export function diagnosticsBase(choice: Pick<DiagnosticsChoice, 'outputDir' | 'workspace'>): string | null {
+/**
+ * The folder a window built now would write under: the chosen one, else its workspace's default (REQ-STARTUP-131), else —
+ * a window that holds no workspace — the per-user default under `perUserData` (PD-STARTUP-011). Never none.
+ */
+export function diagnosticsBase(choice: Pick<DiagnosticsChoice, 'outputDir' | 'workspace'>, perUserData: string): string {
   if (choice.outputDir !== undefined) return choice.outputDir;
-  return choice.workspace === null ? null : defaultDiagnosticsBase(choice.workspace);
+  return choice.workspace === null ? perUserDiagnosticsBase(perUserData) : defaultDiagnosticsBase(choice.workspace);
 }
 
 export interface DiagnosticsCapturesDeps {
@@ -268,6 +282,11 @@ export interface DiagnosticsCapturesDeps {
   /** The app's identity, asked when a capture starts (the installed version is read lazily in main). */
   readonly app: () => ManifestInput['app'];
   readonly platform: ManifestInput['platform'];
+  /**
+   * REQ-STARTUP-145's per-user data directory, under which a window built with no workspace and no chosen folder writes
+   * (PD-STARTUP-011). Main passes the one it resolved at start (`resolveUserDirs().data`).
+   */
+  readonly perUserData: string;
   /** A line for the application log, at `warning`: a capture that could not start or stopped. */
   readonly warn: (message: string) => void;
   /** A line for the application log, at `info`: a capture that started, naming its directory. */
@@ -285,16 +304,22 @@ interface Running { readonly level: Exclude<DiagnosticsLevel, 'off'>; readonly r
 export class DiagnosticsCaptures {
   readonly #running = new Map<number, Running>();
   readonly #inactive = new Map<number, { readonly level: Exclude<DiagnosticsLevel, 'off'>; readonly reason: string }>();
+  /**
+   * The workspace each window was built for (null: none), kept whatever its level, so the default folder the card shows
+   * stays the one fixed when the window was built and is not moved by a workspace opened later (PD-STARTUP-011). A map
+   * entry, nothing on disk and no timer, so `off` stays zero work in REQ-STARTUP-130's sense.
+   */
+  readonly #builtFor = new Map<number, string | null>();
 
   constructor(private readonly deps: DiagnosticsCapturesDeps) {}
 
   /** REQ-STARTUP-129 to REQ-STARTUP-132: start `windowId`'s capture as `choice` stands now, or nothing at `off`. */
   open(windowId: number, choice: DiagnosticsChoice): DiagnosticsCapture {
     this.close(windowId);
+    this.#builtFor.set(windowId, choice.workspace);
     if (choice.level === 'off') return { state: 'off' };
     const level = choice.level;
-    const base = diagnosticsBase(choice);
-    if (base === null) return this.#inactivate(windowId, level, 'This window holds no workspace and no diagnostics output folder is chosen, so its diagnostics have nowhere to be written.');
+    const base = diagnosticsBase(choice, this.deps.perUserData);
     const started = this.deps.now();
     let runDirectory: string;
     try {
@@ -320,6 +345,17 @@ export class DiagnosticsCaptures {
     this.#running.get(windowId)?.stream.close();
     this.#running.delete(windowId);
     this.#inactive.delete(windowId);
+    this.#builtFor.delete(windowId);
+  }
+
+  /**
+   * REQ-SHELL-163's "folder currently in force" for `windowId`: `outputDir` when one is chosen, else the default fixed when
+   * the window was built (PD-STARTUP-011) — its workspace's, or the per-user one for a window built with none. A window this
+   * registry was never told of (none in the product; every main window is opened here when built) reads `workspaceNow`.
+   */
+  folderFor(windowId: number, outputDir: string | undefined, workspaceNow: string | null): string {
+    const built = this.#builtFor.get(windowId);
+    return diagnosticsBase({ outputDir, workspace: built === undefined ? workspaceNow : built }, this.deps.perUserData);
   }
 
   /** One recorded line of the application log, to every running capture. */

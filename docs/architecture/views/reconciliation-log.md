@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-04**
 
+**A window with no workspace has a diagnostics base under the per-user data directory (R-091 acceptance plan `hrda`; PD-STARTUP-011, REQ-STARTUP-131, REQ-STARTUP-145, REQ-SHELL-163; 2026-11-04).** `02-process-view/08-files-and-directories-on-disk.md`'s run-directory row gains the third resolution of `<base>`, `<per-user data directory>/diagnostics/rotaris`, fixed when the window is built; the "nowhere to be written" inactive case is gone, and every main window being built for a folder today, no launch reaches it (OQ-541).
+
 **A malformed renderer command leaves one warning line, bursts folded (OQ-485, ADR-0044, OQ-467; hardening plan hrda; 2026-11-04).** `04-seams/01-1-a-renderer-command.md`'s `command.malformed` bullet and `02-process-view/05-message-families-4.md`'s application-log paragraph gain the dispatcher's `warning` line — the sender, `malformedClass`'s class, the kind only where it is a member of the union, `malformedHeadline`'s text — and its per-sender, per-class fold through the process link's `RefusalFold`; until now a malformed command was answered with no line.
 
 **A message refused at a process boundary leaves one warning line, bursts folded (OQ-485, ADR-0002, PD-MONITOR-002; hardening plan hrda; 2026-11-04).** `02-process-view/05-message-families-4.md`'s application-log paragraph gains the process link's `warning` line for a message `ProcessMessageSchema` refuses — its three classes, what it names and never carries — and `RefusalFold`'s 60 s per-class bound; until now the drop was silent and the paragraph said nothing of it.

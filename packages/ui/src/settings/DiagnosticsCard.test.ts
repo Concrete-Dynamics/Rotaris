@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { DiagnosticsCardState } from '@rotaris/contracts';
 import { AboutSettings } from './About.js';
-import { DIAGNOSTICS_TAKES_EFFECT, DiagnosticsCard, captureSentence } from './DiagnosticsCard.js';
+import { DIAGNOSTICS_LOG_EXCLUDES, DIAGNOSTICS_LOG_INCLUDES, DIAGNOSTICS_LOG_SCOPE, DIAGNOSTICS_TAKES_EFFECT, DiagnosticsCard, captureSentence } from './DiagnosticsCard.js';
 
 /**
  * REQ-SHELL-163: the About tab's diagnostics card — three named, keyboard-reachable controls; the level offers exactly the
@@ -29,7 +29,7 @@ describe('REQ-SHELL-163: the diagnostics card', () => {
   it('shows the folder in force as selectable text in a control named "Diagnostics output folder"', () => {
     const field = /<input[^>]*aria-label="Diagnostics output folder"[^>]*>/.exec(draw(OFF))?.[0] ?? '';
     expect(field).toContain('readOnly=""');
-    expect(field).toContain(`value="${OFF.folder ?? ''}"`);
+    expect(field).toContain(`value="${OFF.folder}"`);
     expect(field).not.toContain('tabindex="-1"');
   });
 
@@ -50,6 +50,26 @@ describe('REQ-SHELL-163: the diagnostics card', () => {
   it('says what this window\'s capture is doing, an inactive one with its reason', () => {
     expect(captureSentence({ ...OFF, capture: { state: 'active', level: 'deep', runDirectory: 'D:\\r' } })).toBe('This window captures at deep into D:\\r.');
     expect(captureSentence({ ...OFF, capture: { state: 'inactive', level: 'light', reason: 'the folder is read-only.' } })).toContain('the folder is read-only.');
+  });
+
+  it('says in words what a run directory holds, at every level (PD-STARTUP-011)', () => {
+    for (const level of ['off', 'light', 'deep'] as const) {
+      const html = decoded(draw({ ...OFF, level }));
+      expect(html).toContain(DIAGNOSTICS_LOG_SCOPE);
+      expect(html).toContain(DIAGNOSTICS_LOG_INCLUDES);
+      expect(html).toContain(DIAGNOSTICS_LOG_EXCLUDES);
+    }
+    expect(DIAGNOSTICS_LOG_SCOPE).toMatch(/this application's log for every open window/);
+    expect(DIAGNOSTICS_LOG_INCLUDES).toMatch(/folder paths and error messages/);
+    expect(DIAGNOSTICS_LOG_EXCLUDES).toMatch(/no conversation, model output or file contents/);
+  });
+
+  it('shows the per-user default as the folder in force for a window with no workspace (PD-STARTUP-011)', () => {
+    const perUser = '/home/u/.local/share/rotaris/diagnostics/rotaris';
+    const html = decoded(draw({ ...OFF, level: 'light', folder: perUser, folderChosen: false }));
+    expect(/<input[^>]*aria-label="Diagnostics output folder"[^>]*>/.exec(html)?.[0]).toContain(`value="${perUser}"`);
+    expect(html).toMatch(/Output folder \(the default\)/);
+    expect(html).not.toMatch(/No folder/);
   });
 
   it('is drawn on the About page when the root offers it, and not otherwise', () => {

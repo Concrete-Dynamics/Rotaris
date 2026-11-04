@@ -9,7 +9,10 @@ import { Button as DesignButton, Input as DesignInput, Select as DesignSelect } 
  * as selectable text which, activated, opens the platform folder chooser main shows; and the open of this window's run
  * directory, enabled only while this window has one. Since the level offers only the three and the folder comes from the
  * chooser, no invalid selection is reachable and nothing here refuses one. The card says in words that a change reaches
- * windows opened afterwards and leaves this window's capture as it is.
+ * windows opened afterwards and leaves this window's capture as it is, and (PD-STARTUP-011) what a run directory's log
+ * holds: this application's log for every open window, folder paths and error messages included, and no conversation, model
+ * output or file contents. Every window has a folder in force — a window with no workspace has the per-user default — so
+ * the folder field always shows one.
  *
  * The About page has no design material (`docs/design/README.md` §3.2); the card is drawn with the page's own vocabulary —
  * its section heading, the value text, the secondary hint, the design system's select, field and secondary button.
@@ -31,6 +34,14 @@ export const DIAGNOSTICS_LEVEL_LABELS: Readonly<Record<DiagnosticsLevel, string>
 /** REQ-SHELL-163: "the card SHALL say so in words". */
 export const DIAGNOSTICS_TAKES_EFFECT = 'A change to either choice applies to windows opened from now on. The capture running in this window, if any, carries on as it started.';
 
+/**
+ * PD-STARTUP-011's three sentences on what a run directory holds, said in words on the card: whose log, what it includes,
+ * and what it never holds (REQ-STARTUP-134).
+ */
+export const DIAGNOSTICS_LOG_SCOPE = "A run directory holds this application's log for every open window, not only this one.";
+export const DIAGNOSTICS_LOG_INCLUDES = 'The log includes folder paths and error messages.';
+export const DIAGNOSTICS_LOG_EXCLUDES = 'It holds no conversation, model output or file contents.';
+
 /** What this window's own capture is doing, in one sentence. */
 export function captureSentence(state: DiagnosticsCardState | null): string {
   if (state === null) return '';
@@ -51,11 +62,12 @@ export function DiagnosticsCard({ state, onLevel, onChooseFolder, onOpenRunDirec
     event.preventDefault();
     void run(onChooseFolder);
   };
-  const folder = state === null ? '' : state.folder ?? 'No folder: choose one, or open a workspace';
+  const folder = state === null ? '' : state.folder;
   return (
     <section aria-labelledby="about-diagnostics-heading" data-testid="diagnostics-card">
       <h2 className="settings__heading" id="about-diagnostics-heading">Diagnostics</h2>
       <p className="text-secondary settings__hint">Diagnostics write this application's log to a run directory on this machine, one per window. Nothing is sent anywhere.</p>
+      <p className="text-secondary settings__hint" data-testid="diagnostics-log-contents">{DIAGNOSTICS_LOG_SCOPE} {DIAGNOSTICS_LOG_INCLUDES} {DIAGNOSTICS_LOG_EXCLUDES}</p>
       <div className="settings__dictation-field">
         <label htmlFor="diagnostics-level">Capture level</label>
         <DesignSelect
@@ -71,7 +83,7 @@ export function DiagnosticsCard({ state, onLevel, onChooseFolder, onOpenRunDirec
         </DesignSelect>
       </div>
       <div className="settings__dictation-field">
-        <label htmlFor="diagnostics-folder">Output folder{state !== null && !state.folderChosen && state.folder !== null ? ' (the default)' : ''}</label>
+        <label htmlFor="diagnostics-folder">Output folder{state !== null && !state.folderChosen ? ' (the default)' : ''}</label>
         {/* Selectable text that opens the chooser when activated: a read-only field, so the path can be selected and copied. */}
         <DesignInput
           id="diagnostics-folder"

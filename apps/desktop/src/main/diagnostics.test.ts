@@ -14,7 +14,9 @@ import {
   SegmentedJsonLines,
   createRunDirectory,
   defaultDiagnosticsBase,
+  diagnosticsBase,
   manifestChecksumHolds,
+  perUserDiagnosticsBase,
   readJsonLines,
   readStream,
   runDirectoryStamp,
@@ -39,6 +41,7 @@ function captures(extra: Partial<DiagnosticsCapturesDeps> & { clock?: { at: Inst
     pid: PID,
     app: () => ({ name: 'Rotaris', version: '0.9.0' }),
     platform: { os: 'win32', arch: 'arm64', runtime: 'electron44.1.1' },
+    perUserData: join(dir, 'per-user-data'),
     warn: (m) => warnings.push(m),
     info: (m) => infos.push(m),
     ...extra,
@@ -122,9 +125,66 @@ describe('REQ-STARTUP-131: each window\'s run directory, created exclusively', (
     registry.record(line(1)); // nothing to write to, and nothing thrown
   });
 
-  it('is inactive, not failing, for a window that holds no workspace when no folder is chosen (OQ-480)', () => {
+});
+
+describe('PD-STARTUP-011: a window with no workspace writes under the per-user data directory', () => {
+  const perUser = () => perUserDiagnosticsBase(join(dir, 'per-user-data'));
+
+  it('resolves the chosen folder first, then the workspace default, then <per-user data directory>/diagnostics/rotaris — never none', () => {
+    const data = join(dir, 'per-user-data');
+    expect(perUserDiagnosticsBase(data)).toBe(join(data, 'diagnostics', 'rotaris'));
+    expect(diagnosticsBase({ outputDir: join(dir, 'chosen'), workspace: null }, data)).toBe(join(dir, 'chosen'));
+    expect(diagnosticsBase({ outputDir: undefined, workspace: join(dir, 'ws') }, data)).toBe(defaultDiagnosticsBase(join(dir, 'ws')));
+    expect(diagnosticsBase({ outputDir: undefined, workspace: null }, data)).toBe(perUserDiagnosticsBase(data));
+  });
+
+  it('captures a window built with no workspace and no chosen folder under the per-user default, its log lines and manifest there', () => {
+    const { registry, warnings } = captures();
+    const state = registry.open(4, { level: 'light', outputDir: undefined, workspace: null });
+    expect(state).toEqual({ state: 'active', level: 'light', runDirectory: join(perUser(), `20261103T101112Z-${PID}`) });
+    registry.record(line(1));
+    registry.close(4);
+    const runDirectory = join(perUser(), `20261103T101112Z-${PID}`);
+    expect(tree(runDirectory)).toEqual([`${APP_LOG_STREAM}-01.jsonl`, MANIFEST_FILE]);
+    expect(readStream(runDirectory, APP_LOG_STREAM).records).toEqual([line(1)]);
+    const manifest = JSON.parse(readFileSync(join(runDirectory, MANIFEST_FILE), 'utf8')) as { configuration: { outputBase: string; outputBaseChosen: boolean } };
+    expect(manifest.configuration).toMatchObject({ outputBase: perUser(), outputBaseChosen: false });
+    expect(warnings).toEqual([]);
+  });
+
+  it('fixes the default when the window is built: a workspace opened in it later moves neither the capture nor the folder in force', () => {
     const { registry } = captures();
-    expect(registry.open(4, { level: 'light', outputDir: undefined, workspace: null }).state).toBe('inactive');
+    const workspace = join(dir, 'ws');
+    const built = registry.open(4, { level: 'light', outputDir: undefined, workspace: null });
+    // The window has since opened a workspace: the card asks with the workspace it holds now.
+    expect(registry.folderFor(4, undefined, workspace)).toBe(perUser());
+    expect(registry.stateOf(4)).toEqual(built);
+    expect(existsSync(defaultDiagnosticsBase(workspace))).toBe(false);
+    // And the other way about: a window built for a workspace keeps that workspace's default, whatever it holds now.
+    registry.open(5, { level: 'off', outputDir: undefined, workspace });
+    expect(registry.folderFor(5, undefined, null)).toBe(defaultDiagnosticsBase(workspace));
+    // A chosen folder is the one in force either way (REQ-SHELL-163).
+    expect(registry.folderFor(4, join(dir, 'chosen'), workspace)).toBe(join(dir, 'chosen'));
+    registry.close(4);
+    registry.close(5);
+  });
+
+  it('is inactive only when that base itself cannot be written, and says which base', () => {
+    const blocked = join(dir, 'per-user-is-a-file');
+    writeFileSync(blocked, 'not a directory');
+    const { registry, warnings } = captures({ perUserData: blocked });
+    const state = registry.open(4, { level: 'light', outputDir: undefined, workspace: null });
+    expect(state.state).toBe('inactive');
+    expect(state.state === 'inactive' && state.reason).toContain(perUserDiagnosticsBase(blocked));
+    expect(state.state === 'inactive' && state.reason).not.toMatch(/nowhere to be written|holds no workspace/);
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('creates nothing under the per-user default at off', () => {
+    const { registry } = captures();
+    expect(registry.open(4, { level: 'off', outputDir: undefined, workspace: null })).toEqual({ state: 'off' });
+    registry.record(line(1));
+    expect(existsSync(perUser())).toBe(false);
   });
 });
 

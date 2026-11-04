@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import { instant } from '@rotaris/kernel';
 import { PreferenceStore } from '@rotaris/platform';
-import { DiagnosticsCaptures, defaultDiagnosticsBase } from '../diagnostics.js';
+import { DiagnosticsCaptures, defaultDiagnosticsBase, perUserDiagnosticsBase } from '../diagnostics.js';
 import { cardState, diagnosticsCommands } from './diagnostics.js';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 
@@ -22,7 +22,7 @@ afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
 function facet(chosen: string | null) {
   const preferences = new PreferenceStore(join(dir, 'preferences'));
-  const diagnostics = new DiagnosticsCaptures({ now: () => instant(Date.UTC(2026, 10, 3)), pid: 1, app: () => ({ name: 'Rotaris', version: '0' }), platform: { os: 'win32', arch: 'arm64', runtime: 'electron' }, warn: () => undefined, info: () => undefined });
+  const diagnostics = new DiagnosticsCaptures({ now: () => instant(Date.UTC(2026, 10, 3)), pid: 1, app: () => ({ name: 'Rotaris', version: '0' }), platform: { os: 'win32', arch: 'arm64', runtime: 'electron' }, perUserData: join(dir, 'data'), warn: () => undefined, info: () => undefined });
   const chooseDirectory = vi.fn((_parent: BrowserWindow, _opts: Electron.OpenDialogOptions) => Promise.resolve(chosen));
   const ctx = { capturing: false, chooseDirectory, clocks: { timers: { after: () => ({ cancel: () => undefined }) } } as unknown as CommandContext['clocks'], diagnostics, log: () => undefined, preferences } as unknown as Parameters<typeof diagnosticsCommands>[0];
   const workspace = join(dir, 'ws');
@@ -68,8 +68,18 @@ describe('REQ-SHELL-163: the diagnostics card', () => {
     f.diagnostics.close(5);
   });
 
-  it('has no folder in force for a window holding no workspace when none is chosen', () => {
+  it('shows the per-user default as the folder in force for a window holding no workspace when none is chosen (PD-STARTUP-011)', () => {
     const f = facet(null);
-    expect(cardState({ wcId: 9, workspace: '(no workspace)' }, 'light', undefined, f.diagnostics)).toEqual({ level: 'light', folder: null, folderChosen: false, capture: { state: 'off' } });
+    expect(cardState({ wcId: 9, workspace: '(no workspace)' }, 'light', undefined, f.diagnostics)).toEqual({ level: 'light', folder: perUserDiagnosticsBase(join(dir, 'data')), folderChosen: false, capture: { state: 'off' } });
+  });
+
+  it('keeps showing the default fixed when the window was built after a workspace is opened in it (PD-STARTUP-011)', async () => {
+    const f = facet(null);
+    f.diagnostics.open(5, { level: 'off', outputDir: undefined, workspace: null });
+    // The window built with no workspace has since opened one: the record's workspace moved, the default did not.
+    expect(await f.handlers['diagnostics.state']({ kind: 'diagnostics.state' }, f.at)).toMatchObject({ ok: true, value: { folder: perUserDiagnosticsBase(join(dir, 'data')), folderChosen: false } });
+    await f.handlers['diagnostics.chooseOutputDir']({ kind: 'diagnostics.chooseOutputDir' }, f.at);
+    expect(f.chooseDirectory.mock.calls[0]?.[1]).toMatchObject({ defaultPath: perUserDiagnosticsBase(join(dir, 'data')) });
+    f.diagnostics.close(5);
   });
 });

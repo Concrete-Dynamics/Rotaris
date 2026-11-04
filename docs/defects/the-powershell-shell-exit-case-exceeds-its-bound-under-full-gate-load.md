@@ -58,3 +58,8 @@ bound under load, the same timing sensitivity the two notes above record.
 from two sibling sessions' gates and proof reruns, one of six reds in the file that run; the file alone two hours later,
 the host still at 100 %: 93 passed, 42 skipped, 427 s. The third reading in three days, each under full load, each green
 alone. Recorded, not investigated.
+
+**Observed again, 2026-11-04 (the consortium branch rebuilt on origin/main `de779d29`, head `c640ffd9`, Windows 11 ARM64,
+Node 26.13.0).** The seventh landing attempt's gate (`pnpm worktree:land --reviewed --keep`, 15m06s) went red on this case alone,
+1 of 7,779, while the hardening orchestration's proof sweep ran on the host. The file alone straight after, CPU 97 % with 14 node
+processes before it (02:00): Tests 93 passed | 42 skipped (135). Recorded, not investigated.

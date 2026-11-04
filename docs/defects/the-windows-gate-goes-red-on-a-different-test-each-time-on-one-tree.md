@@ -199,7 +199,9 @@ case, the soft-paused hand-over of OQ-144, the kill's next command) and `package
 `plan-gate-proof` with their Electron instances, from two of its trees) and a sibling session ran `land.test.ts` of its own: CPU 50 %
 with 7 node processes when the attempt started (01:07), 83 % during the rerun (01:36). The three files rerun together alone under that
 load: 117 passed, 42 skipped, 0 failed, in 4m39s. The attempt before it had been the install red of its own note (a kept landing
-tree not reinstalled when the rebased head adds a dependency). Another attempt follows this note.
+tree not reinstalled when the rebased head adds a dependency). The seventh attempt, on the branch rebuilt over origin/main `de779d29` (head `c640ffd9`, 15m06s): one case, the
+shell-exit case of its own note, 1 of 7,779; `terminal.test.ts` alone straight after at 97 % CPU: Tests 93 passed | 42 skipped (135). Another attempt
+follows this note.
 
 ## Specs
 

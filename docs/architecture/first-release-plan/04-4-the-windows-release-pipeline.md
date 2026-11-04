@@ -86,6 +86,8 @@ writes no manifest and creates no release, and holds a read-only token. Everythi
 `pnpm deps:audit` (`pnpm audit --prod --audit-level=high`, blocking) before `pnpm check`, and the whole tree's audit
 beside it without blocking; `.github/workflows/codeql.yml` analyses the code on push to main, pull requests and weekly.
 Since 2026-11-03 the gate job also runs `pnpm test:coverage` after `pnpm check` (hardening F1's floor) and uploads `coverage/`.
+Since 2026-11-04 it also runs `pnpm deps:audit:runtime` after `pnpm deps:audit`, blocking: the whole tree's report read
+for Electron alone, the shipped runtime `--prod` cannot see (`tools/runtime-audit/`; [the lane](../dependency-alerts/2026-11-04-lane-electron-44-10.md)).
 Neither is this section's workflow nor a release gate (REQ-STARTUP-156 is unchanged).*
 
 **4.2 The tag workflow.** `.github/workflows/release.yml` does not exist yet. It is triggered only by tags

@@ -14,6 +14,11 @@ own worktree, installed after each rebase by hand, had the package throughout. T
 rebased head's lockfile differs from the one the tree was installed from (or always; `--prefer-offline` is cheap when nothing
 moved), and say so in its "setting up the landing tree" line.
 
+*Seen again 2026-11-04, 01:30* (the consortium branch `claude/busy-noyce-b7b850`, R-093): its fourth landing attempt, on a kept
+landing tree installed the evening before, rebased onto a main that had gained `fast-check` (`b31230ef`) and went red at typecheck in
+1m35s with `Cannot find module 'fast-check'` from the two property tests; `pnpm install --prefer-offline` in the tree (4.2 s) and
+the next attempt ran the gate on the head.
+
 ## Specs
 
 None contradicted by the product; `docs/clean-room/agent-workflow.md` ("Rebase onto main, and persevere") says the landing

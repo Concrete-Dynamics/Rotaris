@@ -22,6 +22,10 @@ each proof's exact comparison is to change is left to the Windows session with t
 CPU load 86 to 99 % from other sessions, no other tree's Electron running): `driver-proof` step 8 read `1000×682` once more,
 its other 42 checks passing.
 
+**Sighted again 2026-11-04** (plan hrda, bundle `hrda-accept1-2`, Electron 44.10.0, on its branch over `ad1a6698`; CPU
+load 58 % from other sessions at the launch, no other tree's Electron running): `driver-proof` step 8 read `1000×682`, its
+other 42 checks passing. The bundle moves the Electron pin within the 44 line and changes no window code.
+
 ## Specs
 
 None named here: REQ-SHELL-022 states the 1000×680 minimum, and whether a 1000×682 reading at 150 % meets it is the proofs'

@@ -26,6 +26,18 @@ different cases on `focus` alone — first `rotaris-dim` at 1.75 and 2, `nocturn
 `nocturne` at 1.25 and nothing else (13 Electron processes of other trees open, CPU 32 % at its start). The cases that fail move
 from run to run, as this note describes; nothing was established about why.
 
+*Seen again 2026-11-04, 03:00 to 03:17* (the consortium branch `claude/busy-noyce-b7b850` at `825eb54e`, a docs-only diff,
+built in `C:devRotaris-wt-claude-busy-noyce-b7b850-land`; Windows 11 ARM64, Node 26.13.0; CPU 28 to 55 %, with the Electron
+windows of two other trees on the same desktop — another session's landing tree `Rotaris-wt-claude-elastic-montalcini-d696e2-land`
+running its six proof suites, and the hardening orchestration's `Rotaris-wt-hrd1-rendererfail`). Inside `pnpm worktree:land`, after a
+green gate (12m25s), a green `directive-proof` and a green `layout-proof`: `theme-proof` read `FAIL focus` on eight of fifteen
+cases (`rotaris-dim` @ 1, 1.5, 1.75; `nocturne` @ 1, 1.5, 2; `high-contrast` @ 1.75, 2) and `PASS` on the other seven. Rerun alone
+on the same build straight after (10m18s): a different eleven failed and four passed (`rotaris-dim` @ 1, `nocturne` @ 1.5 and 1.75,
+`high-contrast` @ 1.5), with 16 stale captures at `rotaris-dim` @ 1.5, 21 at `high-contrast` @ 1 and 1 at `nocturne` @ 1, and
+every measured ratio at or above 3 where a capture was not stale: the verdict turned on stale captures and on cases that
+passed in the other run, never twice on the same case. The branch touches no style, no focus handling and no theme token.
+The landing was parked on this reading rather than retried; a desktop with no other tree's window is the condition it waits for.
+
 ## Specs
 
 None contradicted by the code as far as shown. REQ-SHELL-145/160 (the focus ring's contrast) are what the section

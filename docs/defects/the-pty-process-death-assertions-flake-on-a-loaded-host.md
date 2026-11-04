@@ -114,3 +114,9 @@ against 5 s, one read at 19,961 ms against 10 s, and four at their 30 s and 60 s
 soft-paused command's own exit status, the PowerShell typeahead case, the kill-and-restore case). The file alone, with the
 host still at 100 %: 93 passed, 42 skipped, 427 s. Recorded, not investigated; the umbrella note
 `the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md` holds the whole gate's reading.
+
+**Observed again, 2026-11-04 (a landing's gate on the Overview audit's execution branch, Windows 11 ARM64, Node 26.13.0, the
+host at 73 to 100 % CPU with nineteen Electron processes of two sibling sessions' proof runs).** Two cases of
+`packages/agent-tools/src/terminal/terminal.test.ts` red in a 21 m 53 s `pnpm check`: the soft-paused kill's next command at
+11,050 ms against 10 s, and the keystrokes-without-Enter case at its 30 s bound. The file alone, the host still at 100 %: 93
+passed, 42 skipped, 261 s. Recorded, not investigated; the umbrella note holds the gate's reading.

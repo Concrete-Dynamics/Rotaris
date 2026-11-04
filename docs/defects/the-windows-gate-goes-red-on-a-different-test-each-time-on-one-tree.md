@@ -225,3 +225,13 @@ another, 23:08 to 23:19 with the host still at 100 %: all green — the landing 
 records, on a developer's tree rather than the hosted runner: a red that names no defect of the code, only the bound a
 case gives a child process under load. Recorded, not investigated; the commit went on the green reruns, as the rule in
 `.claude/rules/tests-and-proofs.md` says.
+
+**Observed again, 2026-11-04, in a landing's own gate (`pnpm worktree:land` on the Overview audit's execution branch over
+`4930c49a`, Windows 11 ARM64, Node 26.13.0).** The gate on the rebased head ran 21 m 53 s (the tests' own clock 2,405 s) from
+01:13 local with the host at 73 to 100 % CPU — nineteen Electron and seven Node processes of two sibling sessions' proof runs
+beside it — and went red on 3 cases in 2 files: `tools/worktree/land.test.ts` (the development-time store case, a real landing
+in a scratch repository, timed out at 30 s) and `packages/agent-tools/src/terminal/terminal.test.ts` (the soft-paused kill's
+next command at 11,050 ms against its 10 s bound; the keystrokes-without-Enter case timed out at 30 s). Both files alone, one
+after another, 01:36 to 01:42 with the host still at 100 %: 21 of 21 in 104 s, and 93 passed with 42 skipped in 261 s. The
+landing was run again on the reruns' green: the tool runs the whole gate on each attempt and retries no red, so a loaded
+host costs a landing attempt per red, not a file. Recorded, not investigated.

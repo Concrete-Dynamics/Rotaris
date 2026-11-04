@@ -214,13 +214,14 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       }
       return { kind: 'workspace.restored', report };
     }
-    // OQ-281 (ruled 2026-10-14 under R-072): the deliberate new store, in two phases like the restore (`store-establish.ts`).
+    // OQ-281 (ruled 2026-10-14 under R-072): the deliberate new store, in two phases like the restore (`store-establish.ts`);
+    // OQ-477 (ruled 2026-11-04): `held: 'corrupt'` sets a damaged store aside the same way.
     case 'workspace.store.establish.assess':
-      return assessEstablish({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, readId: readWorkspaceId, restoreInFlight: restoreInFlight.active, stamp: fileStamp(clocks.wall.instant()) });
+      return assessEstablish({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, readId: readWorkspaceId, restoreInFlight: restoreInFlight.active, stamp: fileStamp(clocks.wall.instant()), held: req.held });
     case 'workspace.store.establish.perform': {
       closeOwn();
-      const r = performEstablish({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, readId: readWorkspaceId, restoreInFlight: restoreInFlight.active, stamp: req.stamp });
-      log(r.kind === 'workspace.store.established' ? `new session store for ${req.workspaceRoot}: what was in ${r.place} is kept at ${r.kept} (OQ-281)` : `new session store for ${req.workspaceRoot} refused: ${r.kind === 'refused' ? `${r.headline} — ${r.detail ?? ''}` : r.kind}`, r.kind === 'workspace.store.established' ? 'info' : 'warn');
+      const r = performEstablish({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, readId: readWorkspaceId, restoreInFlight: restoreInFlight.active, stamp: req.stamp, held: req.held });
+      log(r.kind === 'workspace.store.established' ? `new session store for ${req.workspaceRoot}: what was in ${r.place} is kept at ${r.kept} (${req.held === 'corrupt' ? 'OQ-477, the damaged store set aside' : 'OQ-281'})` : `new session store for ${req.workspaceRoot} refused: ${r.kind === 'refused' ? `${r.headline} — ${r.detail ?? ''}` : r.kind}`, r.kind === 'workspace.store.established' ? 'info' : 'warn');
       return r;
     }
     case 'config.read':

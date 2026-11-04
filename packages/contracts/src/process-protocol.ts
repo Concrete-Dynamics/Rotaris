@@ -323,10 +323,22 @@ export const RestoreAssessmentSchema = z.object({
   /**
    * `placeEmpty` (OQ-281, ruled 2026-10-14 under R-072): the place for the target store exists and the store is not in it
    * (REQ-SESSION-202) — the restore moves what is in that place aside, keeps it, and puts the backup's sessions there.
+   *
+   * `unreadable` (OQ-477, ruled 2026-11-04 under R-072): the target is this workspace's store, main holds it as
+   * `workspace.store-corrupt`, and it still fails C1's integrity check — present, failed, its contents not read: `report` is
+   * SQLite's own, and `sessions`, `foreignLocks` and `liveLocks` are not counts but unknown (0 and empty), because a number
+   * read from damaged pages is not evidence (REQ-SESSION-089). Nothing opened the target to say so.
    */
-  target: z.object({ exists: z.boolean(), placeEmpty: z.boolean(), sessions: z.number().int(), foreignLocks: z.array(z.string()), liveLocks: z.array(z.string()) }),
-  /** A refusal decided before any confirmation is asked (ADR-0058 gates 1 and 2, REQ-SESSION-197; `path-too-long`: consequence 18's D11, a store the restore would create at a path the engine cannot open). */
-  refusal: z.object({ why: z.enum(['unreadable-artifact', 'corrupt', 'newer-schema', 'unreadable-identifier', 'path-too-long']), detail: z.string() }).nullable(),
+  target: z.object({
+    exists: z.boolean(), placeEmpty: z.boolean(), sessions: z.number().int(), foreignLocks: z.array(z.string()), liveLocks: z.array(z.string()),
+    unreadable: z.object({ report: z.array(z.string()) }).optional(),
+  }),
+  /**
+   * A refusal decided before any confirmation is asked (ADR-0058 gates 1 and 2, REQ-SESSION-197; `path-too-long`: consequence
+   * 18's D11, a store the restore would create at a path the engine cannot open; `store-sound`: OQ-477, a store held as
+   * corrupt that now passes its check — open the workspace again, never set it aside on a stale refusal).
+   */
+  refusal: z.object({ why: z.enum(['unreadable-artifact', 'corrupt', 'newer-schema', 'unreadable-identifier', 'path-too-long', 'store-sound']), detail: z.string() }).nullable(),
 });
 export type RestoreAssessment = z.infer<typeof RestoreAssessmentSchema>;
 
@@ -335,6 +347,11 @@ export const RestoreDecisionsSchema = z.object({
   /** `workspace`: into this workspace's store (case same); `artifact-store`: into the artifact's own store, identifier untouched; `establish`: ESC-26 — write the artifact's identifier over this workspace's, on confirmation, or by exclusive create where none exists. */
   identifier: z.enum(['workspace', 'artifact-store', 'establish']),
   proceedWithForeignLocks: z.boolean(),
+  /**
+   * OQ-477: the user was told the target failed its integrity check and could not be read, and confirmed. The perform re-checks
+   * it (refusing `store-sound` where it now passes) and opens nothing of it: the directory is moved aside whole and kept.
+   */
+  targetUnreadable: z.boolean().optional(),
 });
 export type RestoreDecisions = z.infer<typeof RestoreDecisionsSchema>;
 
@@ -379,16 +396,21 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   /** REQ-SESSION-201: the whole-store backup, taken here (ADR-0002); main supplied the destination through the save dialog and nothing else. */
   z.object({ kind: z.literal('workspace.backup'), workspaceRoot: z.string(), destination: z.string() }),
   /** Two phases, so every confirmation is asked before any mutation (REQ-SESSION-201 "before anything is changed"). */
-  z.object({ kind: z.literal('workspace.restore.assess'), workspaceRoot: z.string(), artifact: z.string() }),
+  /** `heldCorrupt` (OQ-477): main holds this workspace's store as `workspace.store-corrupt`; the target is checked, never opened. */
+  z.object({ kind: z.literal('workspace.restore.assess'), workspaceRoot: z.string(), artifact: z.string(), heldCorrupt: z.boolean().optional() }),
   z.object({ kind: z.literal('workspace.restore.perform'), workspaceRoot: z.string(), artifact: z.string(), decisions: RestoreDecisionsSchema }),
   /**
    * OQ-281 (ruled 2026-10-14 under R-072), REQ-SESSION-202: the deliberate "Start a new session store" — in two phases like the
    * restore, so the user is told what was found and where it will be kept before anything moves. `assess` re-reads the
    * condition and names the place and the kept path for `stamp`; `perform` re-checks it, moves the place aside under that
    * stamp (a counter where the name is taken) and creates the store as an absent place's open does.
+   *
+   * OQ-477 (ruled 2026-11-04 under R-072): `held: 'corrupt'` resolves a held `workspace.store-corrupt` the same way — "Set the
+   * damaged store aside and start a new one…": both phases re-check that the store is in its place and still fails C1's
+   * check (asked of a copy), the assessment answers SQLite's report, and the perform moves the directory aside whole.
    */
-  z.object({ kind: z.literal('workspace.store.establish.assess'), workspaceRoot: z.string() }),
-  z.object({ kind: z.literal('workspace.store.establish.perform'), workspaceRoot: z.string(), stamp: z.string().min(1) }),
+  z.object({ kind: z.literal('workspace.store.establish.assess'), workspaceRoot: z.string(), held: z.enum(['missing', 'corrupt']).optional() }),
+  z.object({ kind: z.literal('workspace.store.establish.perform'), workspaceRoot: z.string(), stamp: z.string().min(1), held: z.enum(['missing', 'corrupt']).optional() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
   /** ADR-0037 Tier A: the configuration read, the desktop save, the scoped per-field write — each followed by the load again. */
   z.object({ kind: z.literal('config.read'), workspaceRoot: z.string() }),
@@ -538,7 +560,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.restore.assessment'), assessment: RestoreAssessmentSchema }),
   z.object({ kind: z.literal('workspace.restored'), report: RestoreReportSchema }),
   /** OQ-281: what a deliberate new store would do — the place found empty, and where what is in it would be kept. */
-  z.object({ kind: z.literal('workspace.store.establishable'), place: z.string(), kept: z.string(), stamp: z.string() }),
+  z.object({ kind: z.literal('workspace.store.establishable'), place: z.string(), kept: z.string(), stamp: z.string(), report: z.array(z.string()).optional() }),
   /** OQ-281: the new store is in place; what was in the place is kept at `kept`. */
   z.object({ kind: z.literal('workspace.store.established'), place: z.string(), kept: z.string() }),
   z.object({ kind: z.literal('repository.state'), state: RepositoryStateSchema }),

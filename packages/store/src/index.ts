@@ -10,4 +10,5 @@ export * from './recover.js';
 export * from './delivery/index.js'; // Part AK
 export * from './improvements/index.js';
 export * from './establish.js';
+export * from './integrity.js';
 export * from './wal-checkpoint.js';

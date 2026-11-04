@@ -40,7 +40,7 @@ as a rebase and a fast-forward push, never a merge commit (`references/repositor
    all as one dynamic workflow. Each ruling goes into its entry ("Ruled <date> under the owner's delegation (R-072)",
    naming both recommendations) and becomes a directive where it departs from a requirement, on a docs-only branch
    landed before the plan that builds it. An escalation, or reversing a clause the owner ruled personally, stays the
-   owner's; the consortium's own recommendation goes with it.
+   owner's; the consortium's own recommendation goes with it. `pnpm archive:migrate` runs in the same commit as a ruling, so the entry moves and the lint stays green.
 3. Ask the owner, in ONE message, everything that would stop the run later: may live runs happen, against which
    endpoint, and may you add the permission rules for agents (`references/live-runs.md`); may you remove this
    orchestration's own landed worktrees and scratch without asking each time; model and effort (default: Opus,

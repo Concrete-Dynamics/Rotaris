@@ -32,6 +32,10 @@ after `quit: requested` — the setup's cancelled create step terminated in 3978
 workspace service exited 0 — so the seconds past the bound fall after the exit was logged, the shape above. Every other
 check of the launch passed (49 of 50, 5 skipped).
 
+Seen again 2026-11-03 in `secure-windows-and-fuses`' review (the hardening orchestration, on the Windows host): `pnpm
+driver-proof`'s exit-trace launches, both the orderly quit and the crash quit, found the application still running past
+the bound after it had logged its exit, the shape above.
+
 ## Specs
 
 PD-ORCH-005 clause 9 and REQ-SHELL-121 (the application's quit ends the process), if the lingering process is the

@@ -134,3 +134,7 @@ window's kill of a soft-paused command twice, the two A10 typeahead cases), thre
 soft-paused hand-over of OQ-144, the kill's next command). The file alone on the same tree, between the attempts, with the
 neighbours still running: 93 passed, 42 skipped; and once more alone with four other red files, 130 passed across the five, 0
 failed. A third landing attempt went red on seven cases of this file (the three above, the hard-timeout kill, the PD-TOOLS-001 reset, the A10 typeahead case and the throwing single-line command). Once more on 2026-11-04 after midnight, on the branch rebuilt over origin/main (head `89d0f14a`): the same three cases red in the landing's gate (the shell-ending case, the soft-paused hand-over, the kill's next command) with the hardening orchestration's proof sweep on the host at 50–83 % CPU; the file rerun alone beside two others, 117 passed, 0 failed. Recorded, not investigated; the landing waits for a quiet host.
+
+**Observed again, 2026-11-03 (the hardening orchestration's landing gates, on the Windows host).** A process-death
+assertion read 5995.78 ms against its 5,000 ms bound in `thin-packages`' landing gate, and 5259 ms in
+`secure-windows-and-fuses`' gate; the file was green alone both times.

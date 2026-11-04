@@ -3,6 +3,17 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-11-04 — a ruling and its `pnpm archive:migrate` run land in one commit
+
+**Prompted by** the hardening orchestration's consortium run of 2026-11-04 (R-091, R-092), which ruled OQ-477, OQ-480,
+OQ-485, OQ-487, OQ-490 and OQ-491 under R-072, and its scribe's commit on the docs-only branch `hrd-rulings`: a ruled
+entry left live in `docs/architecture/open-questions/` is something `node tools/archive/migrate.mjs --check`, in
+`pnpm lint`, refuses ("nothing that qualifies is live"), so a ruling written without the migration turns the next gate
+red. The 2026-11-03 rulings of OQ-493 to OQ-540 (`68f75bbe`) ran it in the same commit already; §1.2 did not say so.
+**Changed:** §1.2's consortium item says that `pnpm archive:migrate` runs in the same commit as a ruling, so the entry
+moves and the lint stays green. **Verified** by that run: the six entries moved to the archive's parts 69 and 71, every
+link to them repointed, and `pnpm lint` green on the commit, `archive --check` included.
+
 ## 2026-11-02 — a note moved into the archive is registered by `pnpm archive:migrate`
 
 **Prompted by** bundle I3 of plan hrd2 (R-092; `docs/architecture/hardening.md` §6): `tools/archive/migrate.mjs --check`,

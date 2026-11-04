@@ -21,9 +21,10 @@ holds its entries in the order the single file had them. The counts and their hi
 are parts 01 and 02.
 
 **A link that still reaches the index.** One document outside this change's reach cites a question as
-`open-questions.md#oq-<n>`, the form before the split, so its anchor is kept here and points on to the part:
+`open-questions.md#oq-<n>`, the form before the split, so its anchor is kept here and points on to the archive file the
+ruled entry moved to:
 <a id="oq-400"></a>[OQ-400](../archive/architecture/open-questions/64-spikes-and-later-questions-31.md#oq-400), from
-`implementation-conditions.md`. When that link is repointed to the part, this paragraph goes.
+`implementation-conditions.md`. When that link is repointed to the archive file, this paragraph goes.
 
 **The archive.** Since 2026-11-01 ([R-092](../product/requests.md#r-092)) a ruled, closed, resolved or withdrawn
 question is not kept here: its entry is in [`docs/archive/architecture/open-questions/`](../archive/architecture/open-questions/),

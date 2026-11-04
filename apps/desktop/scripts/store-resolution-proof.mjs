@@ -27,6 +27,16 @@
  *                 from the backup was applied, and where the prepared copy is kept; the journal is gone. Then the same cut
  *                 again with the prepared copy deleted by hand: the notice names no kept copy.
  *
+ *   E. corrupt store — OQ-477 (ruled 2026-11-04 under R-072): the proof damages the store in its place (the header of each
+ *                 b-tree page past the schema's, so SQLite's `quick_check` fails and the file still opens) and launches.
+ *                 The open is refused as `workspace.store-corrupt`, its error notice carries "Open Project settings", and
+ *                 Settings › Project offers "Set the damaged store aside and start a new one…" beside the restore. E1 restores
+ *                 under it: the first question says the store failed its check and that its sessions and lock records could
+ *                 not be read, the backup's session is listed, and the damaged store is kept beside its place byte for byte.
+ *                 E2 damages that store again and sets it aside: Cancel (the default) moves nothing; confirmed, the question
+ *                 is the ruling's third wording, the new store lists empty, and the damaged store is kept byte for byte where
+ *                 the question said. Neither flow opens the damaged store: what is kept is the file as the proof left it.
+ *
  * Every launch's first store is made beside its place and renamed in (OQ-281): no dot-prefixed sibling is left behind.
  *
  * Message boxes are answered by `ROTARIS_CAPTURE_ANSWERS` in order, which logs each box's title, message, detail, buttons
@@ -209,6 +219,91 @@ for (const [name, withCopy] of [['cut-restore', true], ['cut-restore-no-copy', f
   results[name] = { notice, sessions: listed.value.sessions.length };
   await stop(launched, name);
   rmSync(staging, { recursive: true, force: true });
+}
+// ── E. a store that fails its integrity check, resolved by the restore (E1) and by setting it aside (E2) (OQ-477) ──
+const CORRUPT_TITLE = 'The session store for this workspace failed its integrity check';
+/**
+ * The store in its place, damaged so that `quick_check` fails while the file still opens: the header of every b-tree page
+ * after the first (the schema's, which the open reads) overwritten. The app quit cleanly, so no log holds those pages.
+ */
+const damageTheStore = () => {
+  const dbs = findDatabases(local).filter((f) => !f.includes('.displaced-'));
+  if (dbs.length !== 1) fail(`expected one live store below ${local}; found ${JSON.stringify(dbs)}`);
+  const file = dbs[0];
+  if (existsSync(`${file}-wal`) && readFileSync(`${file}-wal`).length > 0) fail(`a clean quit left a non-empty log beside ${file}`);
+  const bytes = readFileSync(file);
+  const raw = bytes.readUInt16BE(16);
+  const pageSize = raw === 1 ? 65536 : raw;
+  const pages = bytes.readUInt32BE(28);
+  for (let n = 2; n <= pages; n++) bytes.fill(0xa5, (n - 1) * pageSize, (n - 1) * pageSize + 8);
+  writeFileSync(file, bytes);
+  const place = dirname(file);
+  return { file, place, bytes: readFileSync(file), left: readdirSync(place).sort() };
+};
+const followCorruptNotice = async (d, label) => {
+  const n = await until(() => noticeNow(d), (v) => v?.title === CORRUPT_TITLE, { timeoutMs: 30_000, what: `the store-corrupt notice (${label})` });
+  await d.click('.notice__action', { text: 'Open Project settings' });
+  await d.waitFor('.app-shell[data-view="settings"]', { timeoutMs: 10_000 });
+  const selected = await until(() => d.eval(`document.querySelector('.nav-list__item.is-selected')?.textContent ?? null`), (v) => v === 'Project', { timeoutMs: 10_000, what: 'Settings at Project' });
+  const offered = await until(() => setAsideShown(d), (v) => v === true, { timeoutMs: 10_000, what: '"Set the damaged store aside and start a new one…" offered' });
+  return { notice: n, selected, offered };
+};
+const setAsideShown = (d) => d.eval(`[...document.querySelectorAll('.settings__action button')].some((b) => b.textContent.trim() === 'Set the damaged store aside and start a new one…')`);
+const keptBeside = (place, before) => readdirSync(dirname(place)).filter((n) => n.includes('.displaced-') && !before.includes(n));
+{
+  const damaged = damageTheStore();
+  results.firstDamage = { file: damaged.file, left: damaged.left };
+  const asideBefore = readdirSync(dirname(damaged.place)).filter((n) => n.includes('.displaced-'));
+  const before = boxLines().length;
+  const launched = await launch('corrupt-restore', { ROTARIS_CAPTURE_RESTORE_FROM: backup, ROTARIS_CAPTURE_ANSWERS: '1' });
+  const d = launched.driver;
+  await d.waitFor('.app-shell', { timeoutMs: 60_000 });
+  const followed = await followCorruptNotice(d, 'restore');
+  check('E1: the corrupt store is refused and raised as an error notice whose action opens Settings › Project', followed.notice.action === 'Open Project settings' && followed.selected === 'Project', `${JSON.stringify(followed.notice)}; selected ${followed.selected}`);
+  check('E1: the notice names the two remedies and the route by hand', /Restore a backup, or set the damaged store aside and start a new one, from Settings › Project/.test(followed.notice.detail ?? '') && /fails SQLite's integrity check: /.test(followed.notice.detail ?? ''), JSON.stringify(followed.notice.detail));
+  const refusedList = await listing(d);
+  check('E1: the listing answers the condition (REQ-SESSION-043)', refusedList.ok === false && refusedList.code === 'workspace.store-corrupt', JSON.stringify(refusedList));
+  check('E1: "Set the damaged store aside and start a new one…" is offered beside the restore while it is held', followed.offered === true, 'offered');
+  await d.screenshot(join(output, 'corrupt-restore.settings-project.png'));
+  await d.click('.settings__action button', { text: 'Restore session store…' });
+  const restored = await until(() => listing(d), (r) => r?.ok === true && r.value.sessions.length === 1, { timeoutMs: 60_000, what: 'the backup\'s session listed over the damaged store' });
+  check('E1: the restore is admitted under the refusal and the backup\'s session is listed', restored.ok && restored.value.sessions.length === 1, `${restored.value.sessions.length} session(s)`);
+  const boxes = boxLines().slice(before);
+  check('E1: the first question is the unreadable target\'s, with Cancel the default', boxes.length === 1 && boxes[0].includes('"Restore the session store"') && boxes[0].includes('The session store this backup restores into failed its integrity check: ') && boxes[0].includes('How many sessions it holds cannot be read, and neither can any lock records in it.') && boxes[0].includes('a run there may be writing to it now, and the restore replaces what it writes') && boxes[0].includes('default 0'), boxes.join(' || '));
+  const kept = keptBeside(damaged.place, asideBefore);
+  check('E1: the damaged store is kept beside its place, byte for byte, never opened', kept.length === 1 && readdirSync(join(dirname(damaged.place), kept[0])).sort().join(',') === damaged.left.join(',') && readFileSync(join(dirname(damaged.place), kept[0], 'workspace.db')).equals(damaged.bytes), `${JSON.stringify(kept)} holding ${kept.length ? JSON.stringify(readdirSync(join(dirname(damaged.place), kept[0])).sort()) : '-'}`);
+  const after = await until(() => noticeNow(d), (n) => n?.title !== CORRUPT_TITLE, { timeoutMs: 15_000, what: 'the corrupt notice withdrawn' });
+  check('E1: the refusal\'s notice is withdrawn; the restore\'s names the damaged store kept', after === null || /The damaged store was kept, unchanged, at /.test(after.title ?? ''), JSON.stringify(after));
+  const withdrawn = await until(() => setAsideShown(d), (v) => v === false, { timeoutMs: 10_000, what: 'the set-aside action withdrawn' });
+  check('E1: the set-aside action is withdrawn once a store opens', withdrawn === false, 'withdrawn');
+  results.corruptRestore = { notice: followed.notice, boxes, after, kept };
+  await stop(launched, 'corrupt-restore');
+}
+{
+  const damaged = damageTheStore();
+  results.secondDamage = { file: damaged.file, left: damaged.left };
+  const workspacesRoot = dirname(damaged.place);
+  const asideBefore = readdirSync(workspacesRoot).filter((n) => n.includes('.displaced-'));
+  const before = boxLines().length;
+  const launched = await launch('corrupt-set-aside', { ROTARIS_CAPTURE_ANSWERS: '0,1' });
+  const d = launched.driver;
+  await d.waitFor('.app-shell', { timeoutMs: 60_000 });
+  await followCorruptNotice(d, 'set-aside');
+  const cancelled = await d.command({ kind: 'workspace.establishStore' });
+  const asideAfterCancel = readdirSync(workspacesRoot).filter((n) => n.includes('.displaced-'));
+  check('E2: Cancel, the default, moves nothing and leaves the damaged store as it was', cancelled.ok && cancelled.value.cancelled === true && JSON.stringify(asideAfterCancel.sort()) === JSON.stringify(asideBefore.sort()) && readFileSync(damaged.file).equals(damaged.bytes), `${JSON.stringify(cancelled)}`);
+  await d.click('.settings__action button', { text: 'Set the damaged store aside and start a new one…' });
+  const empty = await until(() => listing(d), (r) => r?.ok === true, { timeoutMs: 30_000, what: 'the new store listed' });
+  check('E2: the new store opens and lists empty', empty.ok && empty.value.sessions.length === 0, `${empty.value.sessions.length} session(s)`);
+  const boxes = boxLines().slice(before);
+  const box = (i) => boxes[i] ?? '';
+  check('E2: both questions are the ruling\'s third wording, with Cancel the default', boxes.length === 2 && boxes.every((b) => b.includes('"Set the damaged store aside and start a new one"') && b.includes(`The session store for this workspace (${damaged.place}) failed its integrity check: `) && b.includes('Starting a new store recovers nothing: every session in the damaged store will no longer be listed, and this machine holds no other copy of them.') && b.includes('restoring it instead returns the sessions it holds') && b.includes('buttons ["Cancel","Set aside and start a new store"] default 0')) && box(0).includes('→ answered 0') && box(1).includes('→ answered 1'), boxes.join(' || '));
+  const keptNow = keptBeside(damaged.place, asideBefore);
+  check('E2: the damaged store is kept, whole and byte for byte, at the path the question named', keptNow.length === 1 && box(1).includes(`moved aside to ${join(workspacesRoot, keptNow[0])}, unchanged, and kept`) && readdirSync(join(workspacesRoot, keptNow[0])).sort().join(',') === damaged.left.join(',') && readFileSync(join(workspacesRoot, keptNow[0], 'workspace.db')).equals(damaged.bytes), JSON.stringify(keptNow));
+  const notice = await until(() => noticeNow(d), (n) => n?.title === 'A new session store was started', { timeoutMs: 15_000, what: 'the new-store notice' });
+  check('E2: an info notice names the damaged store kept', (notice.detail ?? '').startsWith(`The damaged store was moved aside, unchanged, and kept at ${join(workspacesRoot, keptNow[0])}.`), JSON.stringify(notice));
+  results.corruptSetAside = { cancelled, boxes, kept: keptNow, notice };
+  await stop(launched, 'corrupt-set-aside');
 }
 {
   const workspacesRoot = dirname(secondEmptying.place);

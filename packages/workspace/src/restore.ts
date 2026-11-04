@@ -4,7 +4,7 @@ import { parseWorkspaceId, type MachineId, type Millis, type Timers, type WallCl
 import { exclusiveCreate, isLockForeign, isLockLive, probePid, replaceDocument, type Liveness } from '@rotaris/platform';
 import type { RestoreAssessment, RestoreDecisions, RestoreReportPayload } from '@rotaris/contracts';
 import {
-  CONTAINER_MANIFEST, CONTAINER_STORE_FILE, CURRENT_SCHEMA_VERSION, expandArtifact, FILE_STAMP_LENGTH, forgetSpelling, openStore, openStoreForInspection, pathTooLongDetail,
+  checkStoreIntegrity, CONTAINER_MANIFEST, CONTAINER_STORE_FILE, CURRENT_SCHEMA_VERSION, expandArtifact, FILE_STAMP_LENGTH, forgetSpelling, openStore, openStoreForInspection, pathTooLongDetail,
   readWorkspaceId, restorePathTooLong, restoreStore, StoreDal, storeDir, storeFile, storePathLimit, WORKSPACE_ID_HEADER, workspaceIdFile, type BackupManifest,
   type RunHostControl,
 } from '@rotaris/store';
@@ -26,6 +26,18 @@ import {
  * nothing), or by replacement where the user confirmed ESC-26's exception
  * (case (c) outcome 3). The store under the replaced identifier is never
  * touched: writing the old value back is a complete undo.
+ *
+ * OQ-477 (ruled 2026-11-04 by the consortium under R-072, no directive): while
+ * main holds this workspace's store as `workspace.store-corrupt`, the restore
+ * is admitted and NOTHING opens the damaged target. With `heldCorrupt` and the
+ * target this workspace's own store, the assessment asks C1's check of a copy
+ * (`checkStoreIntegrity`) and, where it still fails, reports the target as
+ * present, failed and unreadable — `target.unreadable { report }`, no session
+ * count and no lock rows, each unknown, because a number read from damaged
+ * pages is not evidence (REQ-SESSION-089) — or refuses `store-sound` where it
+ * now passes. The perform, told `targetUnreadable`, re-assesses the same way
+ * and hands `restoreStore` its `targetUnreadable`, under which no service
+ * handle is opened and step 8 displaces the directory whole.
  */
 export interface AssessDeps {
   readonly workspacesRoot: string;
@@ -35,6 +47,10 @@ export interface AssessDeps {
   readonly probe?: (pid: number) => Liveness;
   /** D11: the engine's database-path limit the restore is held to; `null` for none. Defaults to this platform's (`storePathLimit`). */
   readonly storePathLimit?: number | null;
+  /** OQ-477: main holds this workspace's store as `workspace.store-corrupt`; the target is checked (of a copy), never opened. */
+  readonly heldCorrupt?: boolean;
+  /** Whether the target is looked at at all; `false` reads the artifact and the identifier only (the perform's lease needs no more). */
+  readonly inspectTarget?: boolean;
 }
 
 function readManifest(dir: string): BackupManifest | null {
@@ -116,6 +132,14 @@ export function assessRestore(d: AssessDeps): RestoreAssessment {
   // OQ-281 (ruled 2026-10-14 under R-072): a place that exists and holds no store (REQ-SESSION-202) is said as what was found;
   // the restore moves it aside and keeps it (step 8 displaces whatever is at the target name), and nothing in it is a store.
   let target: RestoreAssessment['target'] = existsSync(storeDir(d.workspacesRoot, targetId)) && !existsSync(targetFile) ? { ...noTarget, placeEmpty: true } : noTarget;
+  if (d.inspectTarget === false) return { artifact, identifier, target: noTarget, refusal: null };
+  if (existsSync(targetFile) && d.heldCorrupt === true && identifier.case === 'same') {
+    // OQ-477: the damaged target is never opened. C1's check is asked of a copy; a store that now passes is not set aside on a
+    // stale refusal, and one whose check cannot even run stays what main holds it as — a store that could not be read.
+    const checked = checkStoreIntegrity(d.workspacesRoot, targetId);
+    if (checked.ok) return refuse('store-sound', `The session store in its place now passes its integrity check (${targetFile}); open the workspace again.`, artifact);
+    return { artifact, identifier, target: { ...noTarget, exists: true, unreadable: { report: checked.why === 'corrupt' ? [...checked.report] : [checked.detail] } }, refusal: null };
+  }
   if (existsSync(targetFile)) {
     // D8 (ADR-0058 consequence 18): an inspection that leaves the target's directory holding the files it found —
     // the read-only open this replaced left `-wal` and `-shm` in a target that had been closed cleanly.
@@ -154,16 +178,21 @@ export function decisionAllowed(c: RestoreAssessment['identifier']['case'], d: R
 }
 
 export async function performRestore(d: PerformDeps): Promise<RestoreReportPayload> {
-  const a = assessRestore(d);
+  // OQ-477: a confirmation given for a target that failed its check re-runs that check now, never an inspection that opens it.
+  const unreadableConfirmed = d.decisions.targetUnreadable === true;
+  const a = assessRestore({ ...d, heldCorrupt: unreadableConfirmed });
   const fail = (error: string): RestoreReportPayload => ({ ok: false, abandoned: true, error, leftovers: [], steps: ['assess-refused'], restoredInto: a.artifact.workspaceId, identifierEstablished: false });
   if (a.refusal) return fail(a.refusal.detail);
   if (!decisionAllowed(a.identifier.case, d.decisions.identifier)) return fail(`the decision "${d.decisions.identifier}" is not one the identifier case "${a.identifier.case}" admits`);
+  // What the user was told is no longer what is there: the damaged store left its place, or the identifier case moved the target.
+  if (unreadableConfirmed && a.target.unreadable === undefined) return fail('the damaged store is no longer the store in this restore\'s place; nothing was changed. Open the workspace again.');
 
   const targetId = a.artifact.workspaceId as WorkspaceId;
   const r = await restoreStore(
     { workspacesRoot: d.workspacesRoot, id: targetId, artifact: d.artifact, thisMachine: d.thisMachine, originLabel: d.workspaceRoot, runHost: d.runHost, timers: d.timers, wall: d.wall },
     {
       proceedWithForeignLocks: d.decisions.proceedWithForeignLocks, ...(d.ackBoundMs === undefined ? {} : { ackBoundMs: d.ackBoundMs }),
+      ...(a.target.unreadable === undefined ? {} : { targetUnreadable: true }),
       ...(d.storePathLimit === undefined ? {} : { storePathLimit: d.storePathLimit }),
     },
   );

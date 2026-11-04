@@ -141,7 +141,7 @@ export const PROOFS = [
   {
     id: 'store-resolution-proof',
     area: 'The run',
-    summary: 'a store\'s place holding no store resolved in Settings › Project — the refusal, the restore, the new store (OQ-281)',
+    summary: 'a store\'s place holding no store, and a store that fails its integrity check, resolved in Settings › Project — the refusal, the restore, the new store, the set-aside (OQ-281, OQ-477)',
     neighbours: ['sessions-proof', 'restore-kill-proof', 'workspace-proof'],
     requires: [],
     platforms: ALL_HOSTS,

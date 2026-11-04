@@ -65,5 +65,8 @@ wording (the check failed, SQLite's report, no session count and no lock records
 the damaged store no longer listed); and **"Set the damaged store aside and start a new one…"** (`setAsideBox`), whose
 `workspace.store.establish.assess/perform` carry `held: 'corrupt'`: the service re-checks that the store is in its place and
 still fails C1's check (`checkDamagedStore`, asked of a copy by `checkStoreIntegrity`, never of the store in place), refuses
-`store-sound` where it now passes, and moves the directory aside whole under the `displaced` stamp. Salvage (ADR-0058 part 11,
+`store-sound` where it now passes, and moves the directory aside whole under the `displaced` stamp. The restore's assessment does
+the same for this workspace's own store under `heldCorrupt` (`target.unreadable { report }`, no count, no lock rows), its perform
+re-assesses under `targetUnreadable`, and `restoreStore`'s `targetUnreadable` opens no service handle on the target: the gates
+judge no rows and step 8 displaces the directory whole. The perform's lease reads the artifact only (`inspectTarget: false`). Salvage (ADR-0058 part 11,
 steps 2 and 3) is not built; the kept directory is its input.

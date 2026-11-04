@@ -117,6 +117,14 @@ export interface RestoreOptions {
   readonly removeStaging?: typeof rmSync;
   /** D11: the engine's database-path limit to hold the restore to; `null` for none (D11 as it was). Defaults to this platform's. */
   readonly storePathLimit?: number | null;
+  /**
+   * OQ-477 (ruled 2026-11-04 under R-072): the target failed C1's integrity check and the user confirmed having been told its
+   * contents could not be read. No service handle is opened on it — an open of a store holding a `-wal` and no `-shm` is a
+   * read-write one whose close checkpoints the log into the damaged file and deletes it — so steps 2 and 4 judge no rows
+   * (no store was handed to the run host while main held the refusal), and step 8 displaces the directory whole, its
+   * database, log and index byte for byte, and keeps it.
+   */
+  readonly targetUnreadable?: boolean;
 }
 
 /** D11 — the restore's database paths measured against the engine's limit, as the engine will be handed them (canonical). */
@@ -226,7 +234,9 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
 
   // The target may not exist yet: a restore into an artifact's own store on a machine that never held it
   // (ADR-0058 case (c) outcome 2, case (b)). Then there are no locks to judge and nothing to displace.
-  let svc: StoreHandle | null = existsSync(dbFile) ? openStore(dbFile, { mustExist: true }) : null;
+  // OQ-477: a target that failed its integrity check is never opened; it has no rows this restore may read.
+  let svc: StoreHandle | null = existsSync(dbFile) && !opts.targetUnreadable ? openStore(dbFile, { mustExist: true }) : null;
+  if (opts.targetUnreadable) steps.push('0-target-unreadable(not-opened)');
   let dal: StoreDal | null = svc ? new StoreDal(svc) : null;
 
   const abandon = async (refusal: Refusal): Promise<RestoreReport> => {

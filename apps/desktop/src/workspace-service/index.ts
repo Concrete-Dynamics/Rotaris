@@ -190,12 +190,14 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       return { kind: 'workspace.backedUp', destination: r.value.destination, bytes: r.value.bytes, sessions: r.value.sessions, takenAtUtc };
     }
     case 'workspace.restore.assess':
-      return { kind: 'workspace.restore.assessment', assessment: assessRestore({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, artifact: req.artifact, thisMachine }) };
+      // OQ-477: under a held `workspace.store-corrupt` the target is checked of a copy, never opened (`heldCorrupt`).
+      return { kind: 'workspace.restore.assessment', assessment: assessRestore({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, artifact: req.artifact, thisMachine, heldCorrupt: req.heldCorrupt === true }) };
     case 'workspace.restore.perform': {
       // The service's own connection would hold the target directory open (step 7's lesson); close it first.
       closeOwn();
       // 3b: the lease is renewed while the restore is genuinely still running; a dead service renews nothing.
-      const targetId = assessRestore({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, artifact: req.artifact, thisMachine }).artifact.workspaceId as WorkspaceId;
+      // The lease needs only the artifact's identifier: the target is not looked at here (OQ-477: a damaged one is never opened).
+      const targetId = assessRestore({ workspacesRoot: layout.workspaces, workspaceRoot: req.workspaceRoot, artifact: req.artifact, thisMachine, inspectTarget: false }).artifact.workspaceId as WorkspaceId;
       const renew = clocks.timers.every(millis(10_000), () => { void ask({ kind: 'runHost.renewLease', workspaceId: targetId, leaseMs: REFUSAL_LEASE_MS }, millis(5_000)).catch(() => undefined); });
       let report;
       try {

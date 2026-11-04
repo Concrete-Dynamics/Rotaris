@@ -105,6 +105,21 @@ rebuilds"). So the two actions ask the check of a **copy** of the store's databa
 removed whatever happens (`packages/store/src/integrity.ts`, `checkStoreIntegrity`): the same check over the same bytes, the
 answer the same report (pinned), and the store in its place is never opened by either flow.
 
+*The restore over a damaged target, the same day (hrda, OQ-477's second half; REQ-SESSION-201).* Two opens the ruling named are
+gone from this path: the assessment's `openStoreForInspection`, which opens a target holding a `-wal` and no `-shm` read-write,
+and `restoreStore`'s own gate, `openStore(dbFile, { mustExist: true })`, which always does; either close checkpoints the log into
+the damaged file and deletes it (both pinned as counterfactuals in `packages/workspace/src/workspace.test.ts`, where the
+directory kept is not the one found). With `heldCorrupt` and the target this workspace's own store, `assessRestore` asks C1's
+check of a copy and reports `target.unreadable { report }` — present, failed, no session count and no lock rows, each unknown —
+or refuses `store-sound`; the perform, told `targetUnreadable`, re-assesses the same way and refuses where the store now passes or
+has left its place; `restoreStore`'s `targetUnreadable` opens no service handle, so steps 2 and 4 judge no rows (no store was
+handed to the run host under the refusal), and step 8 displaces the directory whole: `workspace.db` and its `-wal` byte for
+byte, no `-shm` made. On the built app `pnpm store-resolution-proof`'s launch E keeps the damaged store byte for byte under the
+restore (E1) and under the set-aside (E2). **One reading did not survive building**: the foreign-lock clause's "stating how many
+there are" binds "where the target store holds such records", and a damaged store can hold them (the unit fixture does, on pages
+the restore never reads), so the first question states that they could not be read instead; the ruling kept that as a reading,
+and it is raised as [OQ-542](../../open-questions/71-spikes-and-later-questions-38.md#oq-542), built as ruled.
+
 **Recovery, in order, and it never destroys anything.** On a store that will not open or fails
 `quick_check`:
 

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { forgetSpelling, openStore, openWorkspaceStore, readWorkspaceId, SIDECAR_PATTERN, StoreDal, storeFile, takeBackup, type RunHostControl } from '@rotaris/store';
+import { forgetSpelling, openStore, openWorkspaceStore, readWorkspaceId, restoreStore, SIDECAR_PATTERN, StoreDal, storeFile, takeBackup, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, decisionAllowed, performRestore } from './index.js';
 
 const M = mintMachineId('0000000000000000000000000000000a');
@@ -289,5 +289,133 @@ describe('workspace — D11: a restore whose kept store the engine could not ope
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * OQ-477 (ruled 2026-11-04 by the consortium under R-072, no directive): the restore while main holds this workspace's store
+ * as `workspace.store-corrupt`. The fixture is the disk a killed process leaves: the store's file with the `sessions` table's
+ * root page header overwritten, and a live write-ahead log holding a committed transaction, with no `-shm` — the case in
+ * which the assessment's `openStoreForInspection` opens the target read-write and `restoreStore`'s own gate always does, and
+ * either close checkpoints the log into the damaged file and deletes it. It also holds a lock row naming another machine,
+ * which the restore must not read.
+ */
+describe('workspace — OQ-477: a restore over a store that failed its integrity check never opens it (REQ-SESSION-201, ADR-0058 part 11)', () => {
+  const listing = (id: WorkspaceId): string[] => readdirSync(join(root, id)).sort();
+  function corruptInPlace(id: WorkspaceId): { readonly db: Buffer; readonly wal: Buffer } {
+    const built = mkdtempSync(join(tmpdir(), 'rotaris-corrupt-built-'));
+    try {
+      const r = openWorkspaceStore(built, id, ws);
+      const dal = new StoreDal(r.db);
+      for (let n = 0; n < 400; n++) dal.upsertSession({ session_id: `S-old-${n}`, execution_status: 'completed', workspace_root: ws, created_at: 't', updated_at: 't' });
+      dal.claimLock(asSessionId('S-old-0'), 1, OTHER, 't');
+      r.db.pragma('wal_checkpoint(TRUNCATE)');
+      r.db.pragma('wal_autocheckpoint = 0');
+      r.db.prepare('INSERT INTO prompt_history(text, at) VALUES (?, ?)').run('logged after the checkpoint', 't');
+      const rootPage = (r.db.prepare("SELECT rootpage FROM sqlite_master WHERE name = 'sessions'").get() as { rootpage: number }).rootpage;
+      const pageSize = r.db.pragma('page_size', { simple: true }) as number;
+      mkdirSync(join(root, id), { recursive: true });
+      // Copied while the connection is open, so no close has checkpointed the log away.
+      copyFileSync(r.file, storeFile(root, id));
+      copyFileSync(`${r.file}-wal`, `${storeFile(root, id)}-wal`);
+      r.db.close();
+      forgetSpelling(r.dir);
+      const fd = openSync(storeFile(root, id), 'r+');
+      try { writeSync(fd, Buffer.alloc(12, 0xa5), 0, 12, (rootPage - 1) * pageSize); } finally { closeSync(fd); }
+      return { db: readFileSync(storeFile(root, id)), wal: readFileSync(`${storeFile(root, id)}-wal`) };
+    } finally {
+      rmSync(built, { recursive: true, force: true });
+    }
+  }
+  const held = (artifact: string) => ({ ...deps(artifact), heldCorrupt: true });
+
+  it('the assessment reports the target present, failed and unreadable — no count, no lock rows — and leaves it byte for byte, no -shm made', () => {
+    writeId(A);
+    const art = artifactOf(A, ['S-new']);
+    const found = corruptInPlace(A);
+    const a = assessRestore(held(art));
+    expect(a.refusal).toBeNull();
+    expect(a.identifier).toEqual({ case: 'same', current: A });
+    expect(a.target).toMatchObject({ exists: true, placeEmpty: false, sessions: 0, foreignLocks: [], liveLocks: [] });
+    expect(a.target.unreadable?.report.length).toBeGreaterThan(0);
+    expect(listing(A)).toEqual(['workspace.db', 'workspace.db-wal']);
+    expect(readFileSync(storeFile(root, A)).equals(found.db)).toBe(true);
+    expect(readFileSync(`${storeFile(root, A)}-wal`).equals(found.wal)).toBe(true);
+  });
+
+  it('(counterfactual) the assessment as it was — no `heldCorrupt` — opens the target, and its close takes the log', () => {
+    writeId(A);
+    const art = artifactOf(A, ['S-new']);
+    const found = corruptInPlace(A);
+    try { assessRestore(deps(art)); } catch { /* the damaged page may be met while counting */ }
+    forgetSpelling(join(root, A));
+    const walKept = existsSync(`${storeFile(root, A)}-wal`) && readFileSync(`${storeFile(root, A)}-wal`).equals(found.wal);
+    expect(walKept && readFileSync(storeFile(root, A)).equals(found.db) && !existsSync(`${storeFile(root, A)}-shm`)).toBe(false);
+  });
+
+  it('the restore told the target is unreadable displaces the directory whole, byte for byte, never opened, and the backup\'s sessions take its place', async () => {
+    writeId(A);
+    const art = artifactOf(A, ['S-new']);
+    const found = corruptInPlace(A);
+    const rh = runHost();
+    const r = await performRestore({ ...held(art), decisions: { identifier: 'workspace', proceedWithForeignLocks: false, targetUnreadable: true }, runHost: rh, timers: clocks.timers, wall: clocks.wall });
+    expect(r.ok).toBe(true);
+    expect(r.refusal).toBeUndefined(); // the foreign lock row on the damaged pages is never read
+    expect(r.steps).toContain('0-target-unreadable(not-opened)');
+    expect(rh.log).toEqual(['refuse', 'close', 'reopen']);
+    expect(r.displaced).toBeDefined();
+    expect(readdirSync(r.displaced!).sort()).toEqual(['workspace.db', 'workspace.db-wal']);
+    expect(readFileSync(join(r.displaced!, 'workspace.db')).equals(found.db)).toBe(true);
+    expect(readFileSync(join(r.displaced!, 'workspace.db-wal')).equals(found.wal)).toBe(true);
+    expect(sids(A)).toEqual(['S-new']);
+  });
+
+  it('(counterfactual) the mechanism as it was — no `targetUnreadable` — opens the target and the directory it keeps is not the one found', async () => {
+    writeId(A);
+    const art = artifactOf(A, ['S-new']);
+    const found = corruptInPlace(A);
+    const r = await restoreStore(
+      { workspacesRoot: root, id: A, artifact: art, thisMachine: M, originLabel: ws, runHost: runHost(), timers: clocks.timers, wall: clocks.wall },
+      { proceedWithForeignLocks: true },
+    ).catch(() => null);
+    forgetSpelling(join(root, A));
+    const kept = r?.displaced ?? join(root, A);
+    const walKept = existsSync(join(kept, 'workspace.db-wal')) && readFileSync(join(kept, 'workspace.db-wal')).equals(found.wal);
+    expect(walKept && readFileSync(join(kept, 'workspace.db')).equals(found.db)).toBe(false);
+  });
+
+  it('the perform re-checks: a store repaired by hand since the question is refused as sound, and nothing changes', async () => {
+    writeId(A);
+    const art = artifactOf(A, ['S-new']);
+    corruptInPlace(A);
+    expect(assessRestore(held(art)).target.unreadable).toBeDefined();
+    rmSync(join(root, A), { recursive: true, force: true });
+    seed(root, A, ['S-repaired']);
+    const before = listing(A);
+    const r = await performRestore({ ...held(art), decisions: { identifier: 'workspace', proceedWithForeignLocks: false, targetUnreadable: true }, runHost: runHost(), timers: clocks.timers, wall: clocks.wall });
+    expect(r).toMatchObject({ ok: false, abandoned: true, steps: ['assess-refused'] });
+    expect(r.error).toContain('now passes its integrity check');
+    expect(listing(A)).toEqual(before);
+    expect(sids(A)).toEqual(['S-repaired']);
+    expect(readdirSync(root).filter((n) => n.includes('.displaced-'))).toEqual([]);
+  });
+
+  it('a damaged store taken out of its place by hand since the question is refused, and nothing is restored', async () => {
+    writeId(A);
+    const art = artifactOf(A, ['S-new']);
+    corruptInPlace(A);
+    rmSync(join(root, A), { recursive: true, force: true });
+    const r = await performRestore({ ...held(art), decisions: { identifier: 'workspace', proceedWithForeignLocks: false, targetUnreadable: true }, runHost: runHost(), timers: clocks.timers, wall: clocks.wall });
+    expect(r).toMatchObject({ ok: false, steps: ['assess-refused'] });
+    expect(existsSync(join(root, A))).toBe(false);
+  });
+
+  it('only this workspace\'s own store is checked: a backup of another identifier assesses its own target as before', () => {
+    writeId(B);
+    corruptInPlace(B);
+    const a = assessRestore(held(artifactOf(A, ['S-new'])));
+    expect(a.identifier).toEqual({ case: 'different', current: B });
+    expect(a.target.unreadable).toBeUndefined();
+    expect(listing(B)).toEqual(['workspace.db', 'workspace.db-wal']);
   });
 });

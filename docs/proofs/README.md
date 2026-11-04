@@ -63,7 +63,7 @@ their own zygotes and a Git view's `git diff`
 | [`checkpoint-proof`](checkpoint-proof.md) | the capture at iteration close through to the desktop restore (ADR-0039) | — | `--skip-build` | all hosts — its `hook-capture` launch reads a hook-written file on POSIX hosts (REQ-HOOKS-082) | `sessions-proof`, `restore-kill-proof`, `git-proof` |
 | [`sessions-proof`](sessions-proof.md) | the session browser's actions: repair, delete with ref cleanup, the exports | — | `--skip-build` | all hosts | `checkpoint-proof`, `store-resolution-proof` |
 | [`restore-kill-proof`](restore-kill-proof.md) | ADR-0058's restore killed between its two renames, and the next open putting the displaced store back (OQ-266) | — | `--trials=<n>` | all hosts | `checkpoint-proof`, `store-resolution-proof`, `workspace-proof` |
-| [`store-resolution-proof`](store-resolution-proof.md) | a store's place holding no store resolved in Settings › Project — the refusal, the restore, the new store (OQ-281) | — | `--skip-build` | all hosts | `sessions-proof`, `restore-kill-proof`, `workspace-proof` |
+| [`store-resolution-proof`](store-resolution-proof.md) | a store's place holding no store, and a store that fails its integrity check, resolved in Settings › Project — the refusal, the restore, the new store, the set-aside (OQ-281, OQ-477) | — | `--skip-build` | all hosts | `sessions-proof`, `restore-kill-proof`, `workspace-proof` |
 
 ## Tools
 

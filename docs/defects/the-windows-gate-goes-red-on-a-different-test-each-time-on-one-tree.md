@@ -191,6 +191,16 @@ full `pnpm check` (798 s) had gone red on 11 cases in four files (`terminal.test
 `executor.test.ts`, `land.test.ts`), those four alone green but for one different PTY case, and `terminal.test.ts` alone
 after that 93 passed, 42 skipped. The third attempt, 25 minutes after the second (23m35s, the host still at 100 %): 8 cases in two files — `terminal.test.ts` (seven) and `executor.test.ts` (one). Recorded, not investigated; the landing waits for a quiet host, and nothing was pushed or landed by hand (the starting session's ruling, the owner asked).
 
+*Seen again 2026-11-04, after midnight* (the same host; the consortium branch rebuilt on origin/main `4930c49a`, head `89d0f14a`,
+docs-only): `pnpm worktree:land --reviewed --keep`'s gate red after 21m16s on 6 cases in three files — `tools/worktree/land.test.ts`
+(two: the re-rebase case and the explicit-review stop), `packages/agent-tools/src/terminal/terminal.test.ts` (three: the shell-ending
+case, the soft-paused hand-over of OQ-144, the kill's next command) and `packages/workspace/src/improvements/executor.test.ts` (its
+30 s case) — while the hardening orchestration's proof sweep ran on the host (`questions-proof`, `exit-trace-proof` and
+`plan-gate-proof` with their Electron instances, from two of its trees) and a sibling session ran `land.test.ts` of its own: CPU 50 %
+with 7 node processes when the attempt started (01:07), 83 % during the rerun (01:36). The three files rerun together alone under that
+load: 117 passed, 42 skipped, 0 failed, in 4m39s. The attempt before it had been the install red of its own note (a kept landing
+tree not reinstalled when the rebased head adds a dependency). Another attempt follows this note.
+
 ## Specs
 
 None contradicted on this evidence. The failures are the harness's readings and its bounds: `REQ-MCP-066`/`REQ-MCP-067`

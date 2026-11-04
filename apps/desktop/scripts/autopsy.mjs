@@ -17,7 +17,9 @@
  * REQ-SESSION-134/135's timeline and issue shapes. Locators are carried,
  * never resolved (REQ-EVENTS-056). The snapshot writes nothing to the
  * session's own record: every read is a SELECT, and the only wall-clock read
- * is the ring headers' `taken_at`.
+ * is the ring headers' `taken_at`. Nor beside it: a store no connection holds
+ * open is read from a temporary copy, so a live-run pack keeps verifying
+ * (`lib/autopsy-store.mjs`).
  *
  * Usage:
  *   node apps/desktop/scripts/autopsy.mjs [workspace.db] [session-id]
@@ -35,6 +37,7 @@ import { workspacesRootFor } from './lib/harness.mjs';
 import { nullSummaryLine, zeroCostLine } from './lib/autopsy-coherence.mjs';
 import { childKeyAt, childModelKeys, entryKeyLabel, entryModelKeys } from './lib/autopsy-entry-model.mjs';
 import { retriedCommands } from './lib/autopsy-retries.mjs';
+import { openStoreForReading } from './lib/autopsy-store.mjs';
 
 const require = createRequire(join(process.cwd(), 'apps', 'desktop', 'package.json'));
 const Database = require('better-sqlite3');
@@ -94,26 +97,33 @@ function failureDetail(tool, entry) {
 }
 
 const dbPath = process.argv[2] ?? newestDatabase();
-const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+// Read where the store stands without adding a file beside it: a pack's `-shm`/`-wal` failed `pnpm evidence verify`
+// (`lib/autopsy-store.mjs`; AF-23 of plan hrda, 2026-11-04).
+const store = openStoreForReading(dbPath, Database);
+const db = store.db;
+let sessions, sid, row, toolCalls, timeline, launchAudit, issues, events, children, checkpoints;
+try {
 
-const sessions = db.prepare('SELECT * FROM sessions ORDER BY updated_at DESC').all();
-let sid = process.argv[3] ?? null;
-if (!sid) {
-  const started = sessions.filter((s) => s.run_started_at !== null);
-  if (started.length === 0) throw new Error(`no started session in ${dbPath}`);
-  sid = started[0].session_id;
+  sessions = db.prepare('SELECT * FROM sessions ORDER BY updated_at DESC').all();
+  sid = process.argv[3] ?? null;
+  if (!sid) {
+    const started = sessions.filter((s) => s.run_started_at !== null);
+    if (started.length === 0) throw new Error(`no started session in ${dbPath}`);
+    sid = started[0].session_id;
+  }
+  row = db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sid);
+  if (!row) throw new Error(`no session ${sid} in ${dbPath}`);
+
+  toolCalls = db.prepare('SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(sid);
+  timeline = db.prepare('SELECT ordinal, at, name, actor, message, metadata, severity FROM timeline WHERE session_id = ? ORDER BY ordinal').all(sid);
+  launchAudit = db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sid);
+  issues = db.prepare('SELECT ordinal, id, kind, severity, actor, message FROM issues WHERE session_id = ? ORDER BY ordinal').all(sid);
+  events = db.prepare('SELECT ordinal, kind, at, payload FROM events WHERE session_id = ? ORDER BY ordinal').all(sid);
+  children = db.prepare('SELECT given_name, canonical_name, persona, state, tool_calls, model_key, spawned_at, completed_at FROM children WHERE session_id = ? ORDER BY spawned_at').all(sid);
+  checkpoints = db.prepare('SELECT sequence FROM checkpoints WHERE session_id = ? ORDER BY sequence').all(sid);
+} finally {
+  store.close();
 }
-const row = db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sid);
-if (!row) throw new Error(`no session ${sid} in ${dbPath}`);
-
-const toolCalls = db.prepare('SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(sid);
-const timeline = db.prepare('SELECT ordinal, at, name, actor, message, metadata, severity FROM timeline WHERE session_id = ? ORDER BY ordinal').all(sid);
-const launchAudit = db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sid);
-const issues = db.prepare('SELECT ordinal, id, kind, severity, actor, message FROM issues WHERE session_id = ? ORDER BY ordinal').all(sid);
-const events = db.prepare('SELECT ordinal, kind, at, payload FROM events WHERE session_id = ? ORDER BY ordinal').all(sid);
-const children = db.prepare('SELECT given_name, canonical_name, persona, state, tool_calls, model_key, spawned_at, completed_at FROM children WHERE session_id = ? ORDER BY spawned_at').all(sid);
-const checkpoints = db.prepare('SELECT sequence FROM checkpoints WHERE session_id = ? ORDER BY sequence').all(sid);
-db.close();
 
 // Per-tool totals with elapsed sums; failed vs blocked partitioned by status.
 const byTool = new Map();

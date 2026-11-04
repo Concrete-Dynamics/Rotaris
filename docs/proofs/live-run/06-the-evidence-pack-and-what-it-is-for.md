@@ -31,7 +31,10 @@ directory). Then one directory per scenario:
 **That shape is the run-autopsy skill's input.** `.agents/skills/run-autopsy/SKILL.md` asks for a launch log, the
 session store and a session id; the live run produced all three and used to delete two of them with the sandbox,
 which is why every defect that skill has found came from a session somebody drove by hand. Read a pack with
-`pnpm autopsy .live-run/runs/<stamp>/workspace.db <session-id>`, or point the skill at the pack directory.
+`pnpm autopsy .live-run/runs/<stamp>/workspace.db <session-id>`, or point the skill at the pack directory. The reader
+leaves the pack as the manifest recorded it: a store no connection holds open is read from a temporary copy, since
+opening the WAL-mode store in place left `workspace.db-shm` and `-wal` beside it and `pnpm evidence verify` then failed the
+pack (AF-23 of plan hrda, 2026-11-04; `apps/desktop/scripts/lib/autopsy-store.mjs`).
 The pack stays out of the repository; an autopsy the record cites is kept in
 [`docs/architecture/live-runs/`](../../architecture/live-runs/README.md) (since 2026-10-13), with no host, URL, key or token in it.
 

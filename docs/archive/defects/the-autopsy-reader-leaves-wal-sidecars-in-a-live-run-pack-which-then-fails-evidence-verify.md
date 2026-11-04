@@ -24,3 +24,20 @@ None contradicted. The reader's own header promises a read-only pass that "write
 - `apps/desktop/scripts/autopsy.mjs` — the read-only open (line 97 at `9c0e8cc4`).
 - `apps/desktop/scripts/lib/evidence-manifest.mjs` — `verifyEvidenceManifest`, which fails a file the manifest does not name.
 - `.agents/skills/run-autopsy/SKILL.md` — Step 1 runs the reader on the pack.
+
+## Outcome — repaired 2026-11-04 (plan hrda, bundle `hrda-accept1-5`)
+
+The reader opens its store through `openStoreForReading` (`apps/desktop/scripts/lib/autopsy-store.mjs`). Every
+connection to a WAL database holds its `-shm` open while it lives, so where no `-shm` stands beside the store nothing has
+it open: the reader copies the store (and a `-wal` a crash left, whose committed frames are part of it) into a temporary
+directory, reads the copy and removes the directory, also when the read throws. Where a `-shm` stands a connection may be
+live, the running application's, and copying the store and its log one after the other could tear a write, so the store
+is opened in place read-only as before; its sidecars were already there.
+
+Pinned by `apps/desktop/scripts/lib/autopsy-store.test.ts`: a pack read by the reader still lists only its own files and
+verifies against its manifest; a plain read-only open, the old one, leaves both sidecars and fails it; a store a writer
+holds open is read in place, rows still in its log included; a crash's log is carried into the copy. With the copy
+forced off (in-place open always), the first and the fourth fail. Shown on the pack the finding named: a copy of
+`.live-run/runs/2026-11-04T18-23-14-351Z` without the sidecars verified (8 files), the reader ran over it, and it verified
+again with no file added; and on a store with a started session (`C:/dev/Rotaris/.live-run/runs/2026-10-31T21-12-56-701Z`'s
+`workspace.db` with a manifest written for it), the reader printed its autopsy and the directory verified after it.

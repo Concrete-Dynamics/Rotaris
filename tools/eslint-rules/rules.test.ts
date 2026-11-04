@@ -287,7 +287,7 @@ describe('lint — import hygiene and the zero-warning gate (R-091, hardening.md
     const severities = (result?.messages ?? []).filter((m) => m.ruleId === 'react-hooks/exhaustive-deps').map((m) => m.severity);
     expect(severities).toEqual([1]);
     const scripts = (JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts;
-    expect(scripts['lint']).toMatch(/&& eslint \. --max-warnings 0"?$/);
+    expect(scripts['lint']).toMatch(/&& node --max-old-space-size=\d+ node_modules\/eslint\/bin\/eslint\.js \. --max-warnings 0"?$/);
   });
   it('a disable directive that suppresses nothing is reported as an error', async () => {
     const [result] = await eslint.lintText('// eslint-disable-next-line no-debugger\nexport const a = 1;\n', { filePath: join(repo, 'packages/engine/src/fine.ts') });

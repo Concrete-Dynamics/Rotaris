@@ -1,5 +1,21 @@
 ## The CI gate's lint runs out of JavaScript heap at Node's default heap limit
 
+**Outcome (repaired 2026-11-04, acceptance hrda, AF-02).** `pnpm lint` runs its last stage as
+`node --max-old-space-size=8192 node_modules/eslint/bin/eslint.js . --max-warnings 0` in place of `eslint . --max-warnings 0`:
+the bound is set on the eslint process itself, so the local gate and CI's `pnpm check` carry the same one, twice the
+default the lint ran out at and within the runner's 16 GB. Nothing in what the lint checks changed. `tools/lint-heap.test.ts`
+pins it: the last stage runs eslint under `node` with `--max-old-space-size` of at least 8192 MB, no stage runs a bare
+`eslint`, and the file it runs is eslint's own `bin` entry (two of its three cases red on the script as it stood);
+`tools/eslint-rules/rules.test.ts`'s zero-warning case reads the new stage. The mode was reproduced on this host by
+lowering the bound below the lint's need: `node --max-old-space-size=3584 node_modules/eslint/bin/eslint.js .
+--max-warnings 0` died after 177 s with the runner's `FATAL ERROR: Ineffective mark-compacts near heap limit` and exit
+134 (host CPU 83 %, another tree's proof windows open). With the bound, `pnpm lint` passed in 179 s, and the bounded eslint
+under `--trace-gc` peaked at 3,942 MB after a mark-compact against a limit of 8,288 MB, 48 % (host CPU 68 %, two other
+trees' proof windows open). Not measured here: a CI run on GitHub with the bound, which the
+landing's push to `main` is the first of; this note's table is what that run is read against. The heap the lint needs is
+not reduced: it grows with the projects and the module graph, and a future red of this shape reads the peak again
+(`node --trace-gc`, as below) before the bound is raised.
+
 Seen 2026-11-04 by acceptance round 1 of plan hrda (finding AF-02), reading `gh run list --workflow CI` and each failed
 run's `gh run view <id> --log-failed`. The `CI` workflow's gate job (`.github/workflows/ci.yml`, R-079; `pnpm check` on
 `windows-latest`, Node 24.22.2 from `.node-version`) dies inside `pnpm lint`'s last stage, `eslint . --max-warnings 0`,

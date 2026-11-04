@@ -51,7 +51,11 @@ Part 2 of 22 of [the codebase record](../codebase.md), which indexes every part.
   and `forceConsistentCasingInFileNames`, and leaves `noPropertyAccessFromIndexSignature` out, saying why.
 - **A warning fails the gate, and so does a disable that disables nothing** (since 2026-11-01, R-091) — `eslint .
   --max-warnings 0` in `pnpm lint`, and `linterOptions.reportUnusedDisableDirectives: 'error'`. A disable says why on its
-  own line (`-- <reason>`).
+  own line (`-- <reason>`). The eslint process runs with a heap bound of its own, `node --max-old-space-size=8192` (since
+  2026-11-04): one type-aware `eslint .` holds every project's program and `no-cycle`'s module graph at once, measured
+  at 3.9 GB of Node's default 4.1 GB, and CI's runner ran out at that default before its tests
+  ([the note](../../archive/defects/the-ci-gates-lint-runs-out-of-javascript-heap-at-nodes-default-heap-limit.md);
+  `tools/lint-heap.test.ts`).
 - **The import graph has no cycle, and a package imports only what its manifest declares** (since 2026-11-01, R-091) —
   `eslint-plugin-import-x` over the TypeScript resolver, beside the boundaries plugin: `import-x/no-cycle` at
   `maxDepth: Infinity` (third-party modules aside; the workspace's `@rotaris/*` packages are internal by

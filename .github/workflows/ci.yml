@@ -113,6 +113,9 @@ jobs:
       - name: Electron runtime
         run: node node_modules/electron/install.js
 
+      # `pnpm lint`'s eslint carries its own heap bound (`--max-old-space-size`, package.json): one type-aware `eslint .`
+      # needs about 3.9 GB, and at Node's default limit on this runner it died before the tests ran
+      # (docs/archive/defects/the-ci-gates-lint-runs-out-of-javascript-heap-at-nodes-default-heap-limit.md).
       - name: pnpm check
         run: pnpm check
 

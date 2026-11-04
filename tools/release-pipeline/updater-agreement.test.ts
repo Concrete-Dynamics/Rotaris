@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { parseChecksumManifest } from '@rotaris/release-naming';
+import { selectOffer, type FeedAsset } from '../../apps/desktop/src/main/updater/feed.js';
 import { runInstall, type InstallContext, type NetworkResponse, type StagingArea } from '../../apps/desktop/src/main/updater/install.js';
 import type { StrategyFiles } from '../../apps/desktop/src/main/updater/strategies.js';
 import { runPipelineCommand } from './cli.mjs';
@@ -13,6 +15,9 @@ import { keyFingerprint } from './signing.mjs';
  * installs, and one it signs with a key the build does not carry is one the updater refuses. The release directory is
  * produced by the pipeline's own commands, as the tag workflow runs them; the updater's `runInstall` reads it through a
  * network fake that serves those exact bytes by name (first-release-plan.md §4.6, §4.7; ADR-0054 "The updater").
+ *
+ * Since PD-STARTUP-012 the directory also holds the release's SBOM, listed in the manifest the pipeline signs: the update
+ * path selects its artifact, the manifest and the signature by exact name and asks for nothing else (REQ-STARTUP-108).
  */
 
 const VERSION = '0.2.0';
@@ -121,5 +126,28 @@ describe('the pipeline\'s release, installed by the updater (REQ-STARTUP-122, RE
     expect(result).toMatchObject({ ok: false, stage: 'signature' });
     expect(requests).toHaveLength(2);
     expect(volume.get(TARGET)).toBe('v0.1.0');
+  });
+
+  it('PD-STARTUP-012, REQ-STARTUP-108: the manifest lists the SBOM, and the update path selects and fetches by exact name, never asking for it', async () => {
+    const key = pair();
+    expect(publish(key, [key.publicPem]).verified).toBe(0);
+    // The signed manifest carries the SBOM's line beside the artifacts', as `sha256sum -c` reads it.
+    const listed = parseChecksumManifest(readFileSync(join(assets, 'SHA256SUMS.txt'), 'utf8')).map((e) => e.name);
+    expect(listed).toEqual([PORTABLE, SBOM, SETUP]);
+    // The feed offers every file the draft attaches, the SBOM among them; the offer is chosen by exact name alone.
+    const feed: FeedAsset[] = readdirSync(assets).map((name) => ({ name, url: `https://example.invalid/${name}`, size: readFileSync(join(assets, name)).byteLength }));
+    expect(feed.map((a) => a.name)).toContain(SBOM);
+    for (const [flavour, name] of [['portable', PORTABLE], ['installer', SETUP]] as const) {
+      const chosen = selectOffer({ version: VERSION, body: '', assets: feed }, '0.1.0', flavour);
+      expect(chosen?.asset.name).toBe(name);
+      expect(chosen?.manifest?.name).toBe('SHA256SUMS.txt');
+      expect(chosen?.signature?.name).toBe('SHA256SUMS.txt.sig');
+    }
+    const selected = selectOffer({ version: VERSION, body: '', assets: feed }, '0.1.0', 'portable')!;
+    const { ctx, requests, volume } = installContext([key.publicPem]);
+    const result = await runInstall(selected, ctx);
+    expect(result.ok).toBe(true);
+    expect(requests.map((u) => u.slice(u.lastIndexOf('/') + 1))).toEqual(['SHA256SUMS.txt', 'SHA256SUMS.txt.sig', PORTABLE]);
+    expect(volume.get(TARGET)).toBe('v0.2.0');
   });
 });

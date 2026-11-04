@@ -12,3 +12,18 @@ For each platform key a release publishes, the release SHALL publish exactly one
 > **Extends:** REQ-STARTUP-031
 
 *Raised as [OQ-487](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-487) by [R-091](../requests.md#r-091)'s hardening, 2026-11-02, and ruled 2026-11-04 by the orchestrator's consortium under the owner's delegation ([R-072](../requests.md#r-072)); minted because the SBOM is a published asset whose filename is not one of REQ-STARTUP-031's artifact shapes, where REQ-STARTUP-152 holds every published filename to that scheme. Numbered PD-STARTUP-011 in its ruling; [`PD-STARTUP-011`](pd-startup-011.md#pd-startup-011), ruled the same day, took that number first, so this took the next free one. REQ-STARTUP-032 and REQ-STARTUP-035 hold as written once the SBOM is an asset, and carry a cross-reference rather than a back-pointer.*
+
+> **First execution, 2026-11-04 (hardening hrda, `sbom-published-asset`):** built as ruled, and executed locally only.
+> `sbomName(version, platform)` stands in `tools/release-naming/src/index.ts` beside `artifactName`, outside
+> `ARTIFACT_KINDS`; `tools/release-pipeline/assets.mjs` admits and requires `expectedSboms` and still refuses every other
+> unnamed file; `pnpm sbom:write <tag> <dir> <platform>` takes its filename from the authority; `release.yml`'s build job
+> writes it into `release-assets/` and keeps no workflow artifact of its own. On Windows 11 ARM64 (Node 26.13.0, pnpm
+> 11.9.0) the writer produced `Rotaris-0.1.0rc1-windows-x64-sbom.cdx.json` (118,037 bytes, 88 components, Electron 44.3.0
+> included); `release:pipeline manifest` over stand-in artifacts refused the directory without it and listed three lines
+> with it, `sha256sum -c --strict` read all three OK, and `body` gave it its row. *Reading carried, not a ruling:* "refused
+> at the manifest step" is built as `writeChecksumManifest` refusing, with nothing written, so no signature is ever made
+> over a manifest that lacks the SBOM; a missing artifact is still refused at `verify`, in the same `sign` job.
+> **Not executed here:** the tag workflow and the release key. The release's first execution is the next tag's draft read
+> back by the owner — the SBOM attached, listed in `SHA256SUMS.txt`, its row in the body, the signature verifying — and the
+> Scorecard's SBOM credit is observed only from the first published release that carries it
+> ([first executions, part 37](../../architecture/first-executions/37-the-register-36.md)).

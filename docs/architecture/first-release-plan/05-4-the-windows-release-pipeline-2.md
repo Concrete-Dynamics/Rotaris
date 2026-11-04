@@ -95,6 +95,13 @@ assets gain no SBOM yet. The `build` job writes `Rotaris-<v>-sbom.cdx.json` afte
 and the draft does not carry it, because REQ-STARTUP-152 holds every published asset to REQ-STARTUP-031's names. Whether it joins the assets, listed and signed with them, is
 [OQ-487](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-487).*
 
+*2026-11-04 ([`PD-STARTUP-012`](../../product/directives/pd-startup-012.md#pd-startup-012), ruled on OQ-487): it joins them. The
+`build` job writes `Rotaris-<v>-<platform>-sbom.cdx.json`, named by `tools/release-naming`'s `sbomName`, straight into
+`release-assets/` (`pnpm sbom:write <tag> release-assets <platform>`), and keeps no workflow artifact of its own; the
+manifest above lists it, so the signature covers it, a release directory without it is refused at the manifest step, the
+body gives it its row and the draft attaches it. The update path still selects its artifact, the manifest and the signature
+by exact name and never asks for it (REQ-STARTUP-108). Not executed here: the next tag's draft read-back is the owner's.*
+
 *Built 2026-10-22 under [R-080](../../product/requests.md#r-080) (§4.2's first-execution note; ADR-0054).*
 `tools/release-pipeline` — `pnpm release:pipeline manifest | sign | verify`:
 

@@ -13,8 +13,9 @@
  *   schedule, a superseded run cancelled;
  * - an audit exception in `pnpm-workspace.yaml` names an advisory a reading in `docs/architecture/dependency-alerts/`
  *   holds;
- * - `release.yml`'s build job writes the CycloneDX SBOM after `pnpm package` and uploads it as a workflow artifact of
- *   its own, outside the release directory, until OQ-487 rules whether a release publishes it.
+ * - `release.yml`'s build job writes the CycloneDX SBOM after `pnpm package` into the release directory, for its matrix's
+ *   platform key, so the `sign` job's manifest lists it, the signature covers it and the draft attaches it
+ *   (PD-STARTUP-012, ruled on OQ-487); no workflow artifact of its own is kept beside it.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -25,7 +26,7 @@ const root = join(import.meta.dirname, '..');
 const workflowsDir = join(root, '.github', 'workflows');
 
 type Permissions = Record<string, string> | 'read-all' | 'write-all' | undefined;
-type Step = { name?: string; uses?: string; run?: string; with?: Record<string, unknown>; 'continue-on-error'?: boolean; if?: string };
+type Step = { name?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, unknown>; 'continue-on-error'?: boolean; if?: string };
 type Job = { permissions?: Permissions; steps?: Step[]; environment?: unknown };
 type Workflow = {
   on: Record<string, unknown>;
@@ -227,33 +228,41 @@ describe('codeql.yml', () => {
   });
 });
 
-describe('release.yml — the SBOM (R-091; OQ-487)', () => {
-  const build = workflow('release.yml').jobs['build']?.steps ?? [];
-  const at = (match: (s: Step) => boolean): number => build.findIndex(match);
-  const writes = (s: Step): boolean => /^pnpm sbom:write "\$env:TAG" apps\/desktop\/release$/.test(s.run?.trim() ?? '');
-  const uploadsSbom = (s: Step): boolean =>
-    s.uses?.startsWith('actions/upload-artifact@') === true && /-sbom\.cdx\.json$/.test(String(s.with?.['path']));
+describe('release.yml — the SBOM, published beside the artifacts (R-091; PD-STARTUP-012, ruled on OQ-487)', () => {
+  const release = workflow('release.yml');
+  const jobSteps = (job: string): Step[] => release.jobs[job]?.steps ?? [];
+  const build = jobSteps('build');
+  const at = (steps: Step[], match: (s: Step) => boolean): number => steps.findIndex(match);
+  const writes = (s: Step): boolean => /^pnpm sbom:write "\$env:TAG" release-assets "\$env:PLATFORM"$/.test(s.run?.trim() ?? '');
+  const uploadsReleaseDirectory = (s: Step): boolean =>
+    s.uses?.startsWith('actions/upload-artifact@') === true && String(s.with?.['path']) === 'release-assets/';
   const said = (s: Step): string => `${s.run ?? ''} ${JSON.stringify(s.with ?? {})}`;
 
-  it('writes the SBOM in the build job, after pnpm package, for the tag', () => {
-    const pkg = at((s) => s.run?.trim() === 'pnpm package');
+  it('writes the SBOM in the build job, after pnpm package, into the release directory for the matrix\'s platform key', () => {
+    const pkg = at(build, (s) => s.run?.trim() === 'pnpm package');
     expect(pkg).toBeGreaterThanOrEqual(0);
-    expect(at(writes)).toBeGreaterThan(pkg);
+    const write = at(build, writes);
+    expect(write).toBeGreaterThan(pkg);
+    expect(build[write]?.env).toEqual({ PLATFORM: '${{ matrix.platform }}' });
+    expect(at(build, uploadsReleaseDirectory)).toBeGreaterThan(write);
   });
 
-  it('uploads it as a workflow artifact of its own, failing when it is missing', () => {
-    const uploads = build.filter(uploadsSbom);
-    expect(uploads).toHaveLength(1);
-    expect(String(uploads[0]?.with?.['name'])).toMatch(/^sbom-/);
-    expect(uploads[0]?.with?.['if-no-files-found']).toBe('error');
-    expect(at(uploadsSbom)).toBeGreaterThan(at(writes));
-  });
-
-  it('keeps it out of the release directory, its manifest and the draft until OQ-487 is ruled', () => {
-    const intoRelease = stepsOf(workflow('release.yml'))
-      .filter(({ step }) => /sbom/i.test(said(step)) && /release-assets/.test(said(step)))
+  it('keeps no workflow artifact of its own beside the published one', () => {
+    const separate = stepsOf(release)
+      .filter(({ step }) => step.uses?.startsWith('actions/upload-artifact@') === true && /sbom/i.test(said(step)))
       .map(({ job, step }) => `${job}: ${step.name ?? step.uses ?? ''}`);
-    expect(intoRelease).toEqual([]);
-    expect(text('release.yml')).toMatch(/OQ-487/);
+    expect(separate).toEqual([]);
+  });
+
+  it('reaches the manifest the sign job writes and signs, and the draft that attaches the verified directory', () => {
+    const sign = jobSteps('sign');
+    const download = at(sign, (s) => s.uses?.startsWith('actions/download-artifact@') === true && s.with?.['pattern'] === 'release-assets-*');
+    const manifest = at(sign, (s) => s.run?.trim() === 'node tools/release-pipeline/cli.mjs manifest release-assets "$TAG"');
+    const signs = at(sign, (s) => s.run?.trim() === 'node tools/release-pipeline/cli.mjs sign release-assets');
+    expect(download).toBeGreaterThanOrEqual(0);
+    expect(manifest).toBeGreaterThan(download);
+    expect(signs).toBeGreaterThan(manifest);
+    expect(jobSteps('draft').some((s) => /gh release create "\$TAG" "\$\{flags\[@\]\}" release-assets\/\*/.test(s.run ?? ''))).toBe(true);
+    expect(text('release.yml')).toMatch(/PD-STARTUP-012/);
   });
 });

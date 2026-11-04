@@ -83,15 +83,19 @@ describe('the stages in the workflow\'s order', () => {
     expect(lines.err).toEqual([]);
   });
 
-  it('body writes the body and the metadata the draft is created from', () => {
+  it('body writes the body and the metadata the draft is created from, the SBOM\'s row among the assets', () => {
     const assets = release();
-    run(['manifest', assets, 'v0.2.0']);
+    expect(run(['manifest', assets, 'v0.2.0'])).toBe(0);
     spawnSync('git', ['init', '-q', dir]);
     expect(run(['body', assets, 'v0.2.0', join(dir, 'out')], { repo: dir })).toBe(0);
     expect(JSON.parse(readFileSync(join(dir, 'out', 'release.json'), 'utf8'))).toEqual({ tag: 'v0.2.0', version: '0.2.0', name: 'Rotaris 0.2.0', prerelease: false });
     const text = readFileSync(join(dir, 'out', 'release-body.md'), 'utf8');
     expect(text.startsWith('## Rotaris 0.2.0\n')).toBe(true);
     expect(text).toContain(`| \`${SETUP}\` |`);
+    // REQ-STARTUP-035 (3) read with PD-STARTUP-012: the SBOM is a published asset, so it has its row, the manifest's digest.
+    const sbomLine = readFileSync(join(assets, 'SHA256SUMS.txt'), 'utf8').split('\n').find((l) => l.endsWith(`  ${SBOM}`));
+    expect(sbomLine).toMatch(/^[0-9a-f]{64} {2}/);
+    expect(text).toContain(`| \`${SBOM}\` | \`${sbomLine!.slice(0, 64)}\` |`);
     expect(text).toContain('First release — no previous tag to compare against.');
   });
 });

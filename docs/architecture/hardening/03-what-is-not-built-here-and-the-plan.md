@@ -39,7 +39,7 @@ on the merged head: the full proof sweep, the live runs against the registered u
 | | **F2** `property-tests`: fast-check over redaction, the fence, `CommandRequestSchema`, `ProcessMessageSchema` | 3.5 row 7 |
 | | **F3** `thin-packages`: `shell` and `kernel` tests; a `driver-proof` scenario for malformed, oversized and throwing commands | 3.5 row 7 |
 | 6 supply chain | **G1** `dependency-policy`: `minimumReleaseAge` explicit, `trustPolicy`, `engineStrict`, a catalog, `.node-version`; Dependabot | 3.5 rows 8, 9 |
-| | **G2** `ci-security`: `pnpm audit`, CodeQL, a CycloneDX SBOM on the release draft (a workflow artifact until OQ-487), `SECURITY.md`, `CODEOWNERS` | 3.5 row 10 |
+| | **G2** `ci-security`: `pnpm audit`, CodeQL, a CycloneDX SBOM on the release draft (a workflow artifact until OQ-487; a signed release asset under PD-STARTUP-012 since 2026-11-04), `SECURITY.md`, `CODEOWNERS` | 3.5 row 10 |
 | 7 the decision archive (R-092) | **I1** `archive-tooling-and-open-questions`: `docs/archive/` and the re-runnable migration (`pnpm archive:migrate`); the gates read live and archived parts alike; every ruled, closed or withdrawn open question moves, an index line stays | §6 rows 1, 2 |
 | | **I2** `archive-decisions-and-notes`: ruled escalations and gate rulings, historical ADR passages, `docs/defects/fixed/` | §6 rows 3 to 5 |
 | | **I3** `archive-superseded-requirements`: a superseded or withdrawn requirement's text moves verbatim; its identifier, anchor, definition line and back-pointer stay in `docs/spec/`; the artifact's counts hold | §6 row 6 |

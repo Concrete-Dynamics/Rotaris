@@ -18,6 +18,16 @@ import type { StoreRefusal } from './store-notice.js';
  *    kept, the dialog saying what was found and that it recovers nothing;
  *  - after either succeeds the window's open is completed (`reopen`), which clears the held refusal and withdraws its notice.
  * A window with no workspace at all is still `workspace.none`; a held `workspace.store-displaced` (OQ-266) stays as it was.
+ *
+ * OQ-477 (ruled 2026-11-04 by the consortium under R-072, no directive): a held `workspace.store-corrupt` — a store that failed
+ * C1's integrity check — is resolved in the same place by the same two actions, each with a wording of its own:
+ *  - the restore (REQ-SESSION-201) is admitted as under `store-missing`, its assessment asked with `heldCorrupt` so the
+ *    target is checked and never opened; its first question says the store failed its check, quotes SQLite's report, says
+ *    its sessions and lock records could not be read, states the foreign-lock clause's risk, and that the store is moved aside
+ *    and kept unchanged while every session in it will no longer be listed;
+ *  - "Set the damaged store aside and start a new one…" (`establishFlow`, ADR-0058 part 11's step 4) says what was found,
+ *    that it recovers nothing and that this machine holds no other copy, and names the restore as the remedy that returns
+ *    history (step 5) without looking for a backup. Cancel is the default and the cancel on both.
  */
 
 export interface FlowWindow {
@@ -57,34 +67,52 @@ function refusal(r: ProcessReply, headline: string): CommandOutcome {
   return { ok: false, code: r.kind === 'refused' ? r.code : 'reply.unexpected', headline, detail };
 }
 
-/** The window's workspace root, and whether its open is held as a place holding no store (OQ-281). */
-function placeOf<W extends FlowWindow>(w: W, deps: StoreFlowDeps<W>): { readonly root: string | null; readonly missing: boolean } {
-  if (w.workspace === '(no workspace)' || w.workspace === '') return { root: null, missing: false };
+/** Which held store refusal Settings › Project resolves: a place holding no store (OQ-281) or a store that failed its check (OQ-477). */
+export type HeldStore = 'missing' | 'corrupt';
+
+/** The window's workspace root, and which refusal its open is held under that these flows resolve, if any (OQ-281, OQ-477). */
+function placeOf<W extends FlowWindow>(w: W, deps: StoreFlowDeps<W>): { readonly root: string | null; readonly held: HeldStore | null } {
+  if (w.workspace === '(no workspace)' || w.workspace === '') return { root: null, held: null };
   const root = deps.canonicalPath(w.workspace);
-  return { root, missing: w.workspaceId === undefined && deps.heldRefusal(root)?.code === 'workspace.store-missing' };
+  if (w.workspaceId !== undefined) return { root, held: null };
+  const code = deps.heldRefusal(root)?.code;
+  return { root, held: code === 'workspace.store-missing' ? 'missing' : code === 'workspace.store-corrupt' ? 'corrupt' : null };
+}
+
+/**
+ * OQ-477: the first question's account of a target that failed its integrity check — the report, what could not be read, the
+ * foreign-lock clause's risk stated without a count it may not read (REQ-SESSION-201), and what becomes of its sessions.
+ */
+export function unreadableTargetText(report: readonly string[], backupSessions: number): string {
+  return `The session store this backup restores into failed its integrity check: ${report.join('; ')}. How many sessions it holds cannot be read, and neither can any lock records in it. `
+    + 'If this store is reachable from another machine, a run there may be writing to it now, and the restore replaces what it writes. '
+    + `Restoring moves the damaged store aside and keeps it unchanged, and the backup's ${countNoun(backupSessions, 'session')} take its place; every session in the damaged store will no longer be listed.`;
 }
 
 export async function restoreFlow<W extends FlowWindow>(w: W, deps: StoreFlowDeps<W>): Promise<CommandOutcome> {
-  const { root, missing } = placeOf(w, deps);
-  if (root === null || (!w.workspaceId && !missing)) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before restoring its session store' };
+  const { root, held } = placeOf(w, deps);
+  if (root === null || (!w.workspaceId && held === null)) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before restoring its session store' };
   const svc = deps.service(root);
   if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
   // REQ-SESSION-201 / REQ-SHELL-021's gate: refused while a run is active; the service's liveness gates hold it for the whole
-  // restore. Under a held `store-missing` no store was handed to the run host, so no run can be recording into one (OQ-281).
-  if (!missing && w.workspaceId) {
+  // restore. Under a held refusal no store was handed to the run host, so no run can be recording into one (OQ-281, OQ-477).
+  if (held === null && w.workspaceId) {
     const active = await deps.runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000));
     if (active.kind === 'runs.count' && active.count > 0) return { ok: false, code: 'run.active', headline: 'Finish the active run before restoring the session store.' };
   }
   const artifact = await deps.chooseArtifact(w);
   if (!artifact) return cancelled();
-  const assessed = await svc.request({ kind: 'workspace.restore.assess', workspaceRoot: root, artifact }, millis(120_000));
+  const assessed = await svc.request({ kind: 'workspace.restore.assess', workspaceRoot: root, artifact, ...(held === 'corrupt' ? { heldCorrupt: true } : {}) }, millis(120_000));
   if (assessed.kind !== 'workspace.restore.assessment') return refusal(assessed, 'The backup could not be assessed');
   const a = assessed.assessment;
   if (a.refusal) { deps.raiseNotice('error', 'The restore was refused', a.refusal.detail); return { ok: false, code: `restore.${a.refusal.why}`, headline: 'The restore was refused', detail: a.refusal.detail }; }
 
   // 1 — which workspace, when, and what it does to the store that is there now. Cancel is the default.
   const from = a.artifact.lastSeenWorkspacePath ?? a.artifact.workspaceId;
-  const nowText = a.target.exists
+  const unreadable = a.target.unreadable;
+  const nowText = unreadable
+    ? unreadableTargetText(unreadable.report, a.artifact.sessions)
+    : a.target.exists
     ? `The store this backup restores into currently holds ${countNoun(a.target.sessions, 'session')}. Restoring replaces it: those sessions are moved aside and kept (never deleted), and the backup's ${countNoun(a.artifact.sessions, 'session')} take their place. A session here and absent from the backup will no longer be listed; one in the backup and absent here will appear.`
     : a.target.placeEmpty
       // OQ-281: REQ-SESSION-202's condition, said as what was found; what is in the place is kept, never deleted.
@@ -124,14 +152,14 @@ export async function restoreFlow<W extends FlowWindow>(w: W, deps: StoreFlowDep
     proceedWithForeignLocks = true;
   }
 
-  const done = await svc.request({ kind: 'workspace.restore.perform', workspaceRoot: root, artifact, decisions: { identifier, proceedWithForeignLocks } }, millis(600_000));
+  const done = await svc.request({ kind: 'workspace.restore.perform', workspaceRoot: root, artifact, decisions: { identifier, proceedWithForeignLocks, ...(unreadable ? { targetUnreadable: true } : {}) } }, millis(600_000));
   if (done.kind !== 'workspace.restored') return refusal(done, 'The restore could not be performed');
   const rep = done.report;
   if (rep.ok) {
     // The workspace now resolves as the restore left it; hand the run host the store again (W-18). Under a held refusal this
     // completes the window's open, which clears the refusal and withdraws its notice (OQ-281).
     await deps.reopen(root, w);
-    const kept = rep.displaced === undefined ? '' : a.target.placeEmpty ? ` What was in the place for this workspace's session store was kept at ${rep.displaced}.` : ` The previous store was kept at ${rep.displaced}.`;
+    const kept = rep.displaced === undefined ? '' : unreadable ? ` The damaged store was kept, unchanged, at ${rep.displaced}.` : a.target.placeEmpty ? ` What was in the place for this workspace's session store was kept at ${rep.displaced}.` : ` The previous store was kept at ${rep.displaced}.`;
     deps.raiseNotice('info', `Restored ${countNoun(a.artifact.sessions, 'session')} from the backup taken on ${a.artifact.takenAtUtc}.${rep.identifierEstablished ? ' This workspace now carries the backup\'s identifier.' : ''}${kept}`);
     return { ok: true, value: { restoredInto: rep.restoredInto, identifierEstablished: rep.identifierEstablished } };
   }
@@ -156,26 +184,47 @@ export function establishBox(place: string, kept: string): BoxOptions {
 }
 
 /**
+ * OQ-477: the confirmation for "Set the damaged store aside and start a new one…", in the ruling's words — what was found, with
+ * SQLite's report; that it recovers nothing and this machine holds no other copy; where it is kept; and the restore named as
+ * the remedy that returns history (ADR-0058 part 11, steps 4 and 5), with no backup looked for.
+ */
+export function setAsideBox(place: string, kept: string, report: readonly string[]): BoxOptions {
+  return {
+    type: 'warning', title: 'Set the damaged store aside and start a new one',
+    message: `The session store for this workspace (${place}) failed its integrity check: ${report.join('; ')}.`,
+    detail: `Starting a new store recovers nothing: every session in the damaged store will no longer be listed, and this machine holds no other copy of them. The damaged store is moved aside to ${kept}, unchanged, and kept. If you hold a backup of this workspace, restoring it instead returns the sessions it holds.`,
+    buttons: ['Cancel', 'Set aside and start a new store'], defaultId: 0, cancelId: 0, noLink: true,
+  };
+}
+
+/**
  * OQ-281 / REQ-SESSION-202: "Start a new session store…". Offered only while the window's open holds `workspace.store-missing`;
  * the user is told what was found and that it recovers nothing, Cancel the default and the cancel; the service re-checks the
- * condition, keeps the found place and creates the store; the window's open is then completed.
+ * condition, keeps the found place and creates the store; the window's open is then completed. OQ-477: the same flow, under a
+ * held `workspace.store-corrupt`, is "Set the damaged store aside and start a new one…" (`setAsideBox`).
  */
 export async function establishFlow<W extends FlowWindow>(w: W, deps: StoreFlowDeps<W>): Promise<CommandOutcome> {
-  const { root, missing } = placeOf(w, deps);
+  const { root, held } = placeOf(w, deps);
   if (root === null) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting its session store' };
-  if (!missing) return { ok: false, code: 'workspace.store-not-missing', headline: 'This workspace\'s session store is not missing from its place', detail: 'A new store is started only where the place for this workspace\'s store exists and the store is not in it.' };
+  if (held === null) return { ok: false, code: 'workspace.store-not-missing', headline: 'This workspace\'s session store is not missing from its place', detail: 'A new store is started only where the place for this workspace\'s store exists and the store is not in it, or where the store in it failed its integrity check.' };
   const svc = deps.service(root);
   if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-  const assessed = await svc.request({ kind: 'workspace.store.establish.assess', workspaceRoot: root }, millis(10_000));
+  const heldField = held === 'corrupt' ? { held } : {};
+  // The damaged store's check is asked of a copy of it, at both phases (`checkStoreIntegrity`): the bound is the restore's.
+  const bound = millis(held === 'corrupt' ? 120_000 : 10_000);
+  const assessed = await svc.request({ kind: 'workspace.store.establish.assess', workspaceRoot: root, ...heldField }, bound);
   if (assessed.kind !== 'workspace.store.establishable') return refusal(assessed, 'A new session store was not started');
-  if (await deps.ask(w, establishBox(assessed.place, assessed.kept)) !== 1) return cancelled();
-  const done = await svc.request({ kind: 'workspace.store.establish.perform', workspaceRoot: root, stamp: assessed.stamp }, millis(30_000));
+  const box = held === 'corrupt' ? setAsideBox(assessed.place, assessed.kept, assessed.report ?? []) : establishBox(assessed.place, assessed.kept);
+  if (await deps.ask(w, box) !== 1) return cancelled();
+  const done = await svc.request({ kind: 'workspace.store.establish.perform', workspaceRoot: root, stamp: assessed.stamp, ...heldField }, millis(held === 'corrupt' ? 120_000 : 30_000));
   if (done.kind !== 'workspace.store.established') {
     const out = refusal(done, 'A new session store was not started');
     deps.raiseNotice('error', 'A new session store was not started', out.ok ? undefined : out.detail);
     return out;
   }
   await deps.reopen(root, w);
-  deps.raiseNotice('info', 'A new session store was started', `What was in the place for this workspace's session store was moved aside and kept at ${done.kept}. The new store holds no sessions.`);
+  deps.raiseNotice('info', 'A new session store was started', held === 'corrupt'
+    ? `The damaged store was moved aside, unchanged, and kept at ${done.kept}. The new store holds no sessions.`
+    : `What was in the place for this workspace's session store was moved aside and kept at ${done.kept}. The new store holds no sessions.`);
   return { ok: true, value: { kept: done.kept } };
 }

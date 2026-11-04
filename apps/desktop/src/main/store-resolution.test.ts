@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessReply, RestoreAssessment, RunHostRequest, WorkspaceServiceRequest } from '@rotaris/contracts';
-import { establishBox, establishFlow, restoreFlow, type BoxOptions, type FlowWindow, type StoreFlowDeps } from './store-resolution.js';
+import { establishBox, establishFlow, restoreFlow, setAsideBox, unreadableTargetText, type BoxOptions, type FlowWindow, type StoreFlowDeps } from './store-resolution.js';
 import type { StoreRefusal } from './store-notice.js';
 
 /**
@@ -11,6 +11,8 @@ import type { StoreRefusal } from './store-notice.js';
 const ROOT = '/work/a';
 const MISSING: StoreRefusal = { code: 'workspace.store-missing', headline: 'The session store for this workspace is not where it is kept', detail: 'The place … exists and the store is not in it.' };
 const DISPLACED: StoreRefusal = { code: 'workspace.store-displaced', headline: 'A restore of this workspace did not finish, and its store could not be put back' };
+const CORRUPT: StoreRefusal = { code: 'workspace.store-corrupt', headline: 'The session store for this workspace failed its integrity check', detail: 'The session store at … fails SQLite\'s integrity check: …' };
+const REPORT = ['*** in database main ***', 'Tree 4 page 4: btreeInitPage() returns error code 11'];
 
 const assessment = (target: Partial<RestoreAssessment['target']> = {}): RestoreAssessment => ({
   artifact: { workspaceId: 'v1-aaaa', takenAtUtc: '2026-10-14T00:00:00.000Z', sessions: 2, rows: 4, locks: 0, storeUserVersion: 35, lastSeenWorkspacePath: ROOT },
@@ -82,6 +84,94 @@ describe('the restore while the open holds a place with no store (OQ-281)', () =
     expect(h.runHostSent).toEqual([{ kind: 'runs.active', workspaceId: 'v1-aaaa' }]);
     expect(h.boxes[0]!.detail).toMatch(/^The store this backup restores into currently holds 1 session\./);
     expect(h.notices[0]!.headline).toContain('The previous store was kept at');
+  });
+});
+
+describe('the restore while the open holds a store that failed its integrity check (OQ-477, REQ-SESSION-201)', () => {
+  const unreadable = assessment({ exists: true, placeEmpty: false, sessions: 0, unreadable: { report: REPORT } });
+  const corruptReplies = { 'workspace.restore.assess': { kind: 'workspace.restore.assessment', assessment: unreadable } } as const;
+
+  it('is admitted with no identifier, skips the active-run gate, and asks the assessment to check the target rather than open it', async () => {
+    const h = harness({ held: CORRUPT, answers: [1], replies: corruptReplies });
+    expect(await restoreFlow(refused, h.deps)).toEqual({ ok: true, value: { restoredInto: 'v1-aaaa', identifierEstablished: false } });
+    expect(h.runHostSent).toEqual([]);
+    expect(h.sent[0]).toEqual({ kind: 'workspace.restore.assess', workspaceRoot: ROOT, artifact: '/backups/a.tar', heldCorrupt: true });
+    expect(h.sent[1]).toEqual({ kind: 'workspace.restore.perform', workspaceRoot: ROOT, artifact: '/backups/a.tar', decisions: { identifier: 'workspace', proceedWithForeignLocks: false, targetUnreadable: true } });
+    expect(h.reopened).toEqual([ROOT]);
+    expect(h.notices).toEqual([{ severity: 'info', headline: 'Restored 2 sessions from the backup taken on 2026-10-14T00:00:00.000Z. The damaged store was kept, unchanged, at /data/workspaces/v1-aaaa.displaced-2026-10-14T06-00-00-000Z.' }]);
+  });
+
+  it('its first question is the third wording: the check failed, the report quoted, nothing counted, the foreign-lock risk stated, Cancel the default', async () => {
+    const h = harness({ held: CORRUPT, answers: [0], replies: corruptReplies });
+    expect(await restoreFlow(refused, h.deps)).toEqual({ ok: true, value: { cancelled: true } });
+    expect(h.sent.map((q) => q.kind)).toEqual(['workspace.restore.assess']);
+    expect(h.boxes).toHaveLength(1);
+    expect(h.boxes[0]).toMatchObject({ title: 'Restore the session store', buttons: ['Cancel', 'Restore'], defaultId: 0, cancelId: 0 });
+    const detail = h.boxes[0]!.detail;
+    expect(detail).toBe(unreadableTargetText(REPORT, 2));
+    expect(detail).toBe('The session store this backup restores into failed its integrity check: *** in database main ***; Tree 4 page 4: btreeInitPage() returns error code 11. '
+      + 'How many sessions it holds cannot be read, and neither can any lock records in it. '
+      + 'If this store is reachable from another machine, a run there may be writing to it now, and the restore replaces what it writes. '
+      + 'Restoring moves the damaged store aside and keeps it unchanged, and the backup\'s 2 sessions take its place; every session in the damaged store will no longer be listed.');
+    expect(detail).not.toMatch(/holds 0 sessions/);
+  });
+
+  it('the assessment\'s refusal when the store now passes its check is said, and nothing is performed', async () => {
+    const sound = { ...assessment(), refusal: { why: 'store-sound' as const, detail: 'The session store in its place now passes its integrity check; open the workspace again.' } };
+    const h = harness({ held: CORRUPT, answers: [1], replies: { 'workspace.restore.assess': { kind: 'workspace.restore.assessment', assessment: sound } } });
+    expect(await restoreFlow(refused, h.deps)).toMatchObject({ ok: false, code: 'restore.store-sound' });
+    expect(h.sent.map((q) => q.kind)).toEqual(['workspace.restore.assess']);
+    expect(h.boxes).toEqual([]);
+  });
+});
+
+describe('"Set the damaged store aside and start a new one" (OQ-477, ADR-0058 part 11 step 4)', () => {
+  const setAside = { 'workspace.store.establish.assess': { kind: 'workspace.store.establishable', place: '/data/workspaces/v1-aaaa', kept: '/data/workspaces/v1-aaaa.displaced-S', stamp: 'S', report: REPORT } } as const;
+
+  it('asks first in the ruling\'s words: what was found, that it recovers nothing and no other copy is here, the restore named; Cancel the default', () => {
+    expect(setAsideBox('/data/workspaces/v1-aaaa', '/data/workspaces/v1-aaaa.displaced-S', REPORT)).toEqual({
+      type: 'warning', title: 'Set the damaged store aside and start a new one',
+      message: 'The session store for this workspace (/data/workspaces/v1-aaaa) failed its integrity check: *** in database main ***; Tree 4 page 4: btreeInitPage() returns error code 11.',
+      detail: 'Starting a new store recovers nothing: every session in the damaged store will no longer be listed, and this machine holds no other copy of them. The damaged store is moved aside to /data/workspaces/v1-aaaa.displaced-S, unchanged, and kept. If you hold a backup of this workspace, restoring it instead returns the sessions it holds.',
+      buttons: ['Cancel', 'Set aside and start a new store'], defaultId: 0, cancelId: 0, noLink: true,
+    });
+  });
+
+  it('a dismissed or cancelled question changes nothing: the perform is never sent', async () => {
+    for (const answers of [[], [0]]) {
+      const h = harness({ held: CORRUPT, answers, replies: setAside });
+      expect(await establishFlow(refused, h.deps)).toEqual({ ok: true, value: { cancelled: true } });
+      expect(h.sent).toEqual([{ kind: 'workspace.store.establish.assess', workspaceRoot: ROOT, held: 'corrupt' }]);
+      expect(h.boxes[0]!.title).toBe('Set the damaged store aside and start a new one');
+      expect(h.reopened).toEqual([]);
+    }
+  });
+
+  it('confirmed: performed under the assessed stamp for the held condition, the open completed, the kept place named', async () => {
+    const h = harness({ held: CORRUPT, answers: [1], replies: setAside });
+    expect(await establishFlow(refused, h.deps)).toEqual({ ok: true, value: { kept: '/data/workspaces/v1-aaaa.displaced-S' } });
+    expect(h.sent).toEqual([
+      { kind: 'workspace.store.establish.assess', workspaceRoot: ROOT, held: 'corrupt' },
+      { kind: 'workspace.store.establish.perform', workspaceRoot: ROOT, stamp: 'S', held: 'corrupt' },
+    ]);
+    expect(h.reopened).toEqual([ROOT]);
+    expect(h.notices).toEqual([{ severity: 'info', headline: 'A new session store was started', detail: 'The damaged store was moved aside, unchanged, and kept at /data/workspaces/v1-aaaa.displaced-S. The new store holds no sessions.' }]);
+  });
+
+  it('the service\'s re-check finding the store sound again is said, and nothing is set aside or reopened', async () => {
+    const h = harness({ held: CORRUPT, answers: [1], replies: { ...setAside, 'workspace.store.establish.perform': { kind: 'refused', code: 'workspace.store-store-sound', headline: 'A new session store was not started', detail: 'The session store in its place now passes its integrity check' } } });
+    expect(await establishFlow(refused, h.deps)).toMatchObject({ ok: false, code: 'workspace.store-store-sound' });
+    expect(h.reopened).toEqual([]);
+    expect(h.notices[0]).toMatchObject({ severity: 'error', headline: 'A new session store was not started' });
+  });
+
+  it('is reachable only while the refusal is held: an open workspace holding it is refused without a question', async () => {
+    const h = harness({ held: CORRUPT, answers: [1] });
+    expect(await establishFlow(open, h.deps)).toMatchObject({ ok: false, code: 'workspace.store-not-missing' });
+    expect(await restoreFlow(open, h.deps)).toMatchObject({ ok: true });
+    // The open window's restore is the ordinary one: the active-run gate, no `heldCorrupt`.
+    expect(h.runHostSent).toEqual([{ kind: 'runs.active', workspaceId: 'v1-aaaa' }]);
+    expect(h.sent.filter((q) => q.kind === 'workspace.restore.assess')).toEqual([{ kind: 'workspace.restore.assess', workspaceRoot: ROOT, artifact: '/backups/a.tar' }]);
   });
 });
 

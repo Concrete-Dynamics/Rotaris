@@ -96,7 +96,9 @@ describe('the workspace service\'s open of a store (OQ-266, REQ-SESSION-202)', (
     if (r.ok) return;
     expect(r.refusal).toMatchObject({ kind: 'refused', code: 'workspace.store-corrupt', headline: 'The session store for this workspace failed its integrity check' });
     expect(r.refusal.detail).toContain(`The session store at ${seeded.file} fails SQLite's integrity check: `);
-    expect(r.refusal.detail).toMatch(/It was left exactly as it was found, its write-ahead log included: nothing was migrated or written, and no session in this workspace can start until it is resolved\.$/);
+    expect(r.refusal.detail).toContain('It was left exactly as it was found, its write-ahead log included: nothing was migrated or written, and no session in this workspace can start until it is resolved.');
+    // OQ-477: the two remedies Settings › Project offers while it is held, each keeping the store, and the route by hand.
+    expect(r.refusal.detail).toMatch(/ Restore a backup, or set the damaged store aside and start a new one, from Settings › Project: either keeps the damaged store, unchanged, beside its place\. Or move it out of its place by hand \(a copy may be repaired outside Rotaris\) and open the workspace again\.$/);
     // Nothing was created over it, and the same open refuses again.
     expect(readdirSync(storeDir(root, id)).filter((n) => n === 'workspace.db')).toEqual(['workspace.db']);
     expect(openStoreAtOpen(root, id, '/work/a', false).ok).toBe(false);

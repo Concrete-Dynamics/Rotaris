@@ -37,13 +37,14 @@ export function openStoreAtOpen(workspacesRoot: string, id: WorkspaceId, workspa
 /**
  * Hardening C1, REQ-SESSION-089: which store could not be opened and the reason the store itself gave — SQLite's own report,
  * unaltered (ADR-0058's recovery ladder, step 1) — that it was left as it was found, and that no session starts. Main holds
- * it and raises it like the other store refusals (`STORE_REFUSALS`, `main/store-notice.ts`). The notice names no way on yet:
- * how the restore, or the ladder's salvage and move-aside, reach a store refused this way is OQ-477's.
+ * it and raises it like the other store refusals (`STORE_REFUSALS`, `main/store-notice.ts`). OQ-477 (ruled 2026-11-04 under
+ * R-072): the detail ends with the two remedies Settings › Project offers while it is held — a restore, or setting the damaged
+ * store aside and starting a new one, each keeping it unchanged (ADR-0058 part 11's steps 4 and 5) — and the route by hand.
  */
 export function corruptRefusal(e: StoreCorruptError): Refusal {
   return {
     kind: 'refused', code: 'workspace.store-corrupt', headline: 'The session store for this workspace failed its integrity check',
-    detail: `The session store at ${e.file} fails SQLite's integrity check: ${e.report.join('; ')}. It was left exactly as it was found, its write-ahead log included: nothing was migrated or written, and no session in this workspace can start until it is resolved.`,
+    detail: `The session store at ${e.file} fails SQLite's integrity check: ${e.report.join('; ')}. It was left exactly as it was found, its write-ahead log included: nothing was migrated or written, and no session in this workspace can start until it is resolved. Restore a backup, or set the damaged store aside and start a new one, from Settings › Project: either keeps the damaged store, unchanged, beside its place. Or move it out of its place by hand (a copy may be repaired outside Rotaris) and open the workspace again.`,
   };
 }
 

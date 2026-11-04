@@ -143,7 +143,10 @@ held refusal rather than `workspace.none` (or the checkpoints' `checkpoint.no-wo
 `workspace.store.establishable {place, kept, stamp}` and `workspace.store.establish.perform {workspaceRoot, stamp}` →
 `workspace.store.established {place, kept}` (OQ-281: Settings › Project's deliberate new store, asked by main first with Cancel
 the default; the service re-checks the condition, moves the found place aside as `<identifier>.displaced-<stamp>` and keeps it,
-then opens as an absent place opens; `workspace-service/store-establish.ts`),
+then opens as an absent place opens; `workspace-service/store-establish.ts`; since 2026-11-04, OQ-477, both establish requests carry
+an optional `held: 'missing' | 'corrupt'` and `establishable` the damaged store's `report`, the `store-corrupt` notice carries
+the same action, and `workspace.restore.assess` is admitted under it with `heldCorrupt`, its perform's decisions with
+`targetUnreadable`, and `RestoreAssessment.target.unreadable {report}` and the refusal `store-sound` saying what was found),
 `config.read/save/setField/bootstrap`, `repository.read`, `git.view`, `worktree.*`, `checkpoint.capture/refs/preview/
 restore/prune` (Part P), `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002 c.7) —
 `runHost.refuseRuns/renewLease/closeStore/release/reopen` — are forwarded by main to the run host; the two children never

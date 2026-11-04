@@ -60,11 +60,13 @@ export interface SettingsViewProps {
   readonly onBackup: () => Promise<{ ok: true } | { ok: false; reason: string }>;
   readonly onRestore: () => Promise<{ ok: true } | { ok: false; reason: string }>;
   /**
-   * OQ-281 (ruled 2026-10-14 under R-072), REQ-SESSION-202: this window's open holds `workspace.store-missing` — the place for
-   * the store exists and the store is not in it. The restore stays offered (and is admitted by main), and the deliberate
-   * "Start a new session store…" appears beside it, only now.
+   * The store refusal this window's open holds, which Settings › Project › Session store resolves; `null` when none.
+   * OQ-281 (ruled 2026-10-14 under R-072), REQ-SESSION-202: `missing` — the place for the store exists and the store is not in
+   * it; the restore stays offered (and is admitted by main), and the deliberate "Start a new session store…" appears beside it.
+   * OQ-477 (ruled 2026-11-04 under R-072): `corrupt` — the store failed its integrity check; the restore stays offered, and
+   * "Set the damaged store aside and start a new one…" (ADR-0058 part 11's step 4) appears beside it. Each only while held.
    */
-  readonly storeMissing?: boolean | undefined;
+  readonly storeHeld?: 'missing' | 'corrupt' | null | undefined;
   readonly onEstablishStore?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** ADR-0015: the Hooks category's data and actions, owned by the renderer root. */
   readonly hooks?: HooksSettingsProps | undefined;
@@ -97,7 +99,7 @@ export interface SettingsViewProps {
   readonly projectInit?: ProjectInitSettingsProps | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, storeMissing = false, onEstablishStore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */, skills /* ADR-0063 */, instructions /* PD-WORKSPACE-002 */, projectInit /* Part AS */ }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, storeHeld = null, onEstablishStore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */, skills /* ADR-0063 */, instructions /* PD-WORKSPACE-002 */, projectInit /* Part AS */ }: SettingsViewProps) {
   const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
@@ -206,19 +208,30 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeMis
                   {busyAction === 'restore' ? 'Restoring…' : 'Restore session store…'}
                 </DesignButton>
                 <span className="text-secondary settings__hint">
-                  {storeMissing
+                  {storeHeld === 'missing'
                     ? 'The store is not in its place. Restoring moves what is in that place aside, keeps it, and puts the backup\'s sessions there.'
-                    : 'Replaces this workspace\'s store with a backup; the previous store is kept. Refused while a run is live.'}
+                    : storeHeld === 'corrupt'
+                      ? 'The store failed its integrity check. Restoring moves the damaged store aside unchanged, keeps it, and puts the backup\'s sessions in its place.'
+                      : 'Replaces this workspace\'s store with a backup; the previous store is kept. Refused while a run is live.'}
                   {disabledReason ? ` ${disabledReason}` : ''}
                 </span>
               </div>
               {/* OQ-281: offered only while the open holds a place with no store; main asks first, Cancel the default. */}
-              {storeMissing && onEstablishStore ? (
+              {storeHeld === 'missing' && onEstablishStore ? (
                 <div className="settings__action" data-ui="settings-establish-store">
                   <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null} onClick={() => { void act('establish'); }}>
                     {busyAction === 'establish' ? 'Starting…' : 'Start a new session store…'}
                   </DesignButton>
                   <span className="text-secondary settings__hint">Starts an empty store in that place and recovers nothing that may have been there; what is in the place now is moved aside and kept.</span>
+                </div>
+              ) : null}
+              {/* OQ-477: offered only while the open holds a store that failed its integrity check; main asks first, Cancel the default. */}
+              {storeHeld === 'corrupt' && onEstablishStore ? (
+                <div className="settings__action" data-ui="settings-set-aside-store">
+                  <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null} onClick={() => { void act('establish'); }}>
+                    {busyAction === 'establish' ? 'Setting aside…' : 'Set the damaged store aside and start a new one…'}
+                  </DesignButton>
+                  <span className="text-secondary settings__hint">Moves the damaged store aside unchanged and keeps it, then starts an empty store. It recovers nothing: the sessions in it will no longer be listed.</span>
                 </div>
               ) : null}
             </div>

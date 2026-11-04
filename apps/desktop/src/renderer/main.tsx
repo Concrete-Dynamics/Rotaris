@@ -845,20 +845,21 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
    */
   const [about, setAbout] = useState<AboutInfo | null>(null);
   /**
-   * OQ-281 (ruled 2026-10-14 under R-072): whether this window's open holds `workspace.store-missing`, learnt from the
-   * listing's own refusal (REQ-SESSION-043: the condition, not an empty list) — read when Settings mounts and again after
-   * the restore or the new store, either of which resolves it. It decides whether "Start a new session store…" is offered.
+   * OQ-281 (ruled 2026-10-14 under R-072), OQ-477 (ruled 2026-11-04): which store refusal this window's open holds —
+   * `workspace.store-missing` or `workspace.store-corrupt` — learnt from the listing's own refusal (REQ-SESSION-043: the
+   * condition, not an empty list), read when Settings mounts and again after the restore or the new store, either of which
+   * resolves it. It decides whether "Start a new session store…" or "Set the damaged store aside and start a new one…" is offered.
    */
-  const [storeMissing, setStoreMissing] = useState(false);
-  const readStoreMissing = useCallback(() => {
-    void bridge.command({ kind: 'session.list' }).then((r) => setStoreMissing(!r.ok && r.code === 'workspace.store-missing'));
+  const [storeHeld, setStoreHeld] = useState<'missing' | 'corrupt' | null>(null);
+  const readStoreHeld = useCallback(() => {
+    void bridge.command({ kind: 'session.list' }).then((r) => setStoreHeld(r.ok ? null : r.code === 'workspace.store-missing' ? 'missing' : r.code === 'workspace.store-corrupt' ? 'corrupt' : null));
   }, []);
-  useEffect(() => { queueMicrotask(readStoreMissing); }, [readStoreMissing]);
+  useEffect(() => { queueMicrotask(readStoreHeld); }, [readStoreHeld]);
   const storeAction = useCallback(async (kind: 'workspace.restore' | 'workspace.establishStore') => {
     const r = await workspaceAction(kind);
-    readStoreMissing();
+    readStoreHeld();
     return r;
-  }, [readStoreMissing]);
+  }, [readStoreHeld]);
   useEffect(() => {
     queueMicrotask(() => {
       void bridge.command({ kind: 'shell.hello' }).then((r) => {
@@ -1020,7 +1021,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       workspace={workspace}
       onBackup={() => workspaceAction('workspace.backup')}
       onRestore={() => storeAction('workspace.restore')}
-      storeMissing={storeMissing}
+      storeHeld={storeHeld}
       onEstablishStore={() => storeAction('workspace.establishStore')}
       hooks={hooks}
       playbooks={playbooks}

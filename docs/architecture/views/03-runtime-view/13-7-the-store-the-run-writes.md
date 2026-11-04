@@ -25,7 +25,7 @@ opened (or refused) as found, a failed create removes it, and a stray one is rem
 That open, every time, asks SQLite whether the file is sound before anything writes or migrates (`checkIntegrity`, `PRAGMA quick_check(5)`
 after the journal mode is read back; hardening C1): a store that fails is refused as `workspace.store-corrupt`, naming the store and
 SQLite's report (REQ-SESSION-089), and closed beside a read-only holder so that its write-ahead log is left as found; main holds it
-like the other store refusals, its notice with no action (OQ-477). An open that migrated runs `foreign_key_check` and logs
+like the other store refusals, its notice opening Settings › Project, where it is resolved (OQ-477, below). An open that migrated runs `foreign_key_check` and logs
 what it finds. The run host's open asks nothing. Every writable open, the run host's included, sets and reads back
 `journal_mode = WAL`, `wal_autocheckpoint = 1000` (`WAL_AUTOCHECKPOINT_PAGES`) and `foreign_keys = ON`, and sets `synchronous = NORMAL`
 and `busy_timeout = 5000`; `durableTransaction` raises `synchronous` to FULL around a terminal save and an explicit flush only
@@ -57,3 +57,13 @@ is held, which asks with Cancel the default (`establishBox`), and on confirmatio
 present, no `workspace.db`, no restore journal), move the place aside under the assessed stamp and create the store as an absent
 place's open does (`establishInEmptyPlace`, `packages/store/src/establish.ts`). Either is followed by the window's open
 (`MainWindows.open`), which hands the run host the store, clears the held refusal and withdraws its notice.
+
+**Resolving a store that failed its check (OQ-477, ruled 2026-11-04 under R-072).** The same place and the same two flows, while
+`workspace.store-corrupt` is held and only then (`placeOf` answers which refusal is held, `missing` or `corrupt`): the
+**restore**, its assessment asked with `heldCorrupt` and its perform with `targetUnreadable` once the user has read the third
+wording (the check failed, SQLite's report, no session count and no lock records readable, the foreign-lock risk, every session in
+the damaged store no longer listed); and **"Set the damaged store aside and start a new one…"** (`setAsideBox`), whose
+`workspace.store.establish.assess/perform` carry `held: 'corrupt'`: the service re-checks that the store is in its place and
+still fails C1's check (`checkDamagedStore`, asked of a copy by `checkStoreIntegrity`, never of the store in place), refuses
+`store-sound` where it now passes, and moves the directory aside whole under the `displaced` stamp. Salvage (ADR-0058 part 11,
+steps 2 and 3) is not built; the kept directory is its input.

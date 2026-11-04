@@ -79,6 +79,32 @@ host's open asks nothing. Three things differ from the paragraph, each kept besi
   `PRAGMA foreign_key_check`, which `quick_check` does not cover, runs after an open that migrated, and what it finds is
   logged, not refused.
 
+*First execution of the resolution, 2026-11-04 (hrda, [OQ-477](../../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-4.md#oq-477), ruled 2026-11-04 under R-072, no directive;
+REQ-SESSION-089, REQ-SESSION-201, REQ-SESSION-202).* The bullet above that reads "Steps 2 to 5 of the ladder below are not built,
+and the restore is not admitted" is kept as what was true on 2026-11-01, and is no longer: **steps 4 and 5 are built, and the
+restore is admitted**, while the refusal is held and only then. Settings › Project › Session store is where it is resolved (OQ-281's
+place); the error notice carries OQ-281's `open-settings`/`project` action (`main/store-notice.ts`,
+`RESOLVED_IN_PROJECT_SETTINGS`) and is withdrawn when an open succeeds, and `corruptRefusal`'s detail names the two remedies and
+the route by hand. **Step 4** is "Set the damaged store aside and start a new one…" (`main/store-resolution.ts` `establishFlow`
+and `setAsideBox`; `packages/store/src/establish.ts` `establishInEmptyPlace(…, 'corrupt')`): Cancel the default, the question
+quoting SQLite's report and saying that it recovers nothing, that every session in the damaged store will no longer be listed and
+that this machine holds no other copy; the store's directory is moved aside whole under the restore's own `displaced` stamp
+(`claimAsideName`), so the database, its log and its index are kept byte for byte, and the kept place is named on success. **Step
+5** is the same question's last sentence and Settings' restore beside the action: the restore is named as the remedy that returns
+history, and nothing looks for or offers a backup. Neither action deletes or repairs anything in place. Both re-ask C1's check at
+their assessment and again at their perform, and refuse where the store now passes (`store-sound`, "open the workspace again"),
+so a store repaired by hand meanwhile is never set aside on a stale refusal. **Steps 2 and 3 — salvage first, and the exports of
+what it recovered — are not built, and the ordering "salvage first" is kept here, not repaired**: its reason stands (salvage is
+the one step that can return this store's history), the ruling defers it because the directory each action sets aside is kept
+unchanged as salvage's input, so deferring loses nothing, and what salvage needs of the engine is raised as its own question
+when it is taken up. **What building found:** C1's checked open, the one open the ruling admits on the damaged target, was
+read as leaving it as found, and it does not quite: on a store holding a `-wal` and no `-shm` (the disk a killed process
+leaves) the checked open creates the `-shm` and C1's close leaves it (measured on this day's Windows 11 ARM64 host, Node 26,
+`integrity.test.ts`'s counterfactual) — the paragraph above says as much ("the `-shm` index beside it, which the next open
+rebuilds"). So the two actions ask the check of a **copy** of the store's database and log in a scratch directory beside it,
+removed whatever happens (`packages/store/src/integrity.ts`, `checkStoreIntegrity`): the same check over the same bytes, the
+answer the same report (pinned), and the store in its place is never opened by either flow.
+
 **Recovery, in order, and it never destroys anything.** On a store that will not open or fails
 `quick_check`:
 

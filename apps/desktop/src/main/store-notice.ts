@@ -20,9 +20,14 @@ export interface StoreNotice {
  * OQ-281 (ruled 2026-10-14 under R-072): a place holding no store is resolved in Settings › Project — the restore, or the
  * deliberate "Start a new session store…" beside it — so its notice opens Settings at that category (REQ-NOTIFY-044,
  * REQ-SHELL-023's Project). A cut restore whose store could not be put back (OQ-266) carries none: its detail names the
- * rename that resolves it, and neither action there is for it.
+ * rename that resolves it, and neither action there is for it. OQ-477 (ruled 2026-11-04 under R-072): a store that failed its
+ * integrity check is resolved in the same place — the restore, or "Set the damaged store aside and start a new one…" — so its
+ * notice carries the same action, withdrawn with the notice once an open succeeds.
  */
 export const OPEN_PROJECT_SETTINGS = { label: 'Open Project settings', action: { kind: 'open-settings', category: 'project' } } as const;
+
+/** The held refusals Settings › Project resolves, whose notices open it there (OQ-281, OQ-477). */
+export const RESOLVED_IN_PROJECT_SETTINGS: ReadonlySet<string> = new Set(['workspace.store-missing', 'workspace.store-corrupt']);
 
 /** The condition `session.list` answers with while the open refuses the store (REQ-SESSION-202, REQ-SESSION-043). */
 export interface StoreRefusal {
@@ -37,7 +42,7 @@ type Opened = Extract<ProcessReply, { kind: 'workspace.opened' }>;
  * The refusals that are a lasting condition of the store's place, as against a restore merely under way
  * (`workspace.restore-in-flight`, which the restore's own end resolves): a place holding no store (REQ-SESSION-202, W-31) and
  * a cut restore whose store could not be put back (OQ-266); and, since hardening C1, a store that fails SQLite's `quick_check`
- * (`workspace.store-corrupt`, REQ-SESSION-089), whose notice carries no action until OQ-477 says how it is resolved.
+ * (`workspace.store-corrupt`, REQ-SESSION-089), whose notice opens Settings › Project, where it is resolved (OQ-477).
  */
 export const STORE_REFUSALS: ReadonlySet<string> = new Set(['workspace.store-missing', 'workspace.store-displaced', 'workspace.store-corrupt']);
 
@@ -67,12 +72,13 @@ export function workspaceRefusalOf(reply: ProcessReply): StoreRefusal | undefine
 
 /**
  * REQ-SESSION-202, REQ-SESSION-197: the error notice a held refusal is raised as — what was found, and no reason invented for it
- * (W-31 (2)). Only the place holding no store carries an action (OQ-281); the others are resolved by hand, as their detail says.
+ * (W-31 (2)). The place holding no store (OQ-281) and the store that failed its check (OQ-477) carry Settings › Project's
+ * action, where both are resolved; the others are resolved by hand, as their detail says.
  */
 export function storeRefusalNotice(held: StoreRefusal): StoreNotice {
   return {
     severity: 'error', headline: held.headline, ...(held.detail === undefined ? {} : { detail: held.detail }),
-    ...(held.code === 'workspace.store-missing' ? { action: OPEN_PROJECT_SETTINGS } : {}),
+    ...(RESOLVED_IN_PROJECT_SETTINGS.has(held.code) ? { action: OPEN_PROJECT_SETTINGS } : {}),
   };
 }
 

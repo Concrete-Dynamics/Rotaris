@@ -289,7 +289,10 @@ expect(popup.first === 'stop' && popup.active === 0, `the first row should be /s
 // mirrors carry `action`. This launch discovers no skill and has no prompt file, so the set is exactly those two, and the
 // `skill` badge sits on exactly those two rows. Until 2026-09-28 the assertion read every row as `action`, which
 // `/skill` stopped matching on 2026-09-15 (`docs/archive/defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
-// "Discovers no skill" rests on the launch's isolation: on a POSIX host a skill under the machine-wide
+// "Discovers no skill" rests on the launch's isolation. The home's three skill roots are the scratch profile's on every
+// platform since 2026-11-04 (`proofIsolationEnv` names the home seams; until then a Windows launch read the operator's own
+// `~/.agents/skills` and counted its `caveman` here,
+// `docs/archive/defects/slash-proof-counts-a-skill-from-the-real-home-as-a-fixed-skill-command.md`). On a POSIX host a skill under the machine-wide
 // `/etc/codex/skills`, which this proof does not redirect (`ROTARIS_CAPTURE_SKILLS_MACHINE` exists since 2026-09-28
 // and is not set here), would add its own `skill` row and fail the exact set below
 // (`docs/archive/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).

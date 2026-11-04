@@ -83,7 +83,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
-import { cleanEnvironment, configDirFor, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, homeSeams, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { ABOUT_ASSETS } from './lib/about-assets.mjs';
 import { produce, put, restore, stage } from './lib/staged-resources.mjs';
@@ -141,7 +141,7 @@ async function launch(name, workspace, local, preferences, extra, timeoutMs = 12
       // home-relative bases without reading the operator's own files (the skills proof's seam pattern), and the
       // scratch machine-wide directory for the same reason: an `/etc/codex/AGENTS.md` on the host would otherwise be
       // a third row in the exact Instructions inventory below, and an `/etc/codex/skills` entry would reach the run.
-      ROTARIS_CAPTURE_INSTRUCTIONS_HOME: home,
+      ...homeSeams(home),
       ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: machine,
       ...extra,
     },

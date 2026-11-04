@@ -1060,6 +1060,7 @@
     "defects/single-retry-stream-stall-aborted-a-76-minute-run.md": "0d5d23ec3d7525a1061cce1bdcf54c2e8a72fb7db238ee457eb4d7c90ae6c8b7",
     "defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md": "42b79b08fa35aa66a1e43b49f530385fcc5deb7aee7b323178d32af37bbad6d1",
     "defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md": "d018bff8aeba67d9cca57024b0cdb9f7ce6f3c54cb753439c85c7f35414a5e34",
+    "defects/slash-proof-counts-a-skill-from-the-real-home-as-a-fixed-skill-command.md": "8cf06013e92f7d50be0ecd0f261990ef7756c6460bcaf3a5aff8b03677430b58",
     "defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md": "6e9857619b4659cca6485007292a7dedd6aef5a49e2b50c548a05b6962a1850e",
     "defects/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md": "ec7ca3c3e9aee32f63c7b04d62b14d5eb13c3d7af6fdc24da6ab9edb6f463cec",
     "defects/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md": "ab8eb47005e16db98d24094b927047fe03b146c7dfc7db958f707f38f1b29bf3",

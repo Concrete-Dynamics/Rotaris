@@ -39,7 +39,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { app, buildDesktop, configDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
+import { app, buildDesktop, configDirFor, electron, evidenceDirectory, homeSeams, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const output = evidenceDirectory('skills-proof');
@@ -84,9 +84,11 @@ async function launch(name, workspace, extra, timeoutMs = 120_000) {
        * It is a capture seam rather than an override of `HOME`/`USERPROFILE`: **overriding those kills the
        * Electron process before it paints** on Windows. Measured on this proof's first run — the launch exited
        * 0x80000003 two log lines in, and a control run with the same environment minus those two variables
-       * exited 0. The seam is read only by the run host's skill host and only when it is set.
+       * exited 0. The run host reads the skills seam, and the workspace service's instruction inventory the instructions
+       * seam, so both are named at the one home (`homeSeams`); every launch names them since 2026-11-04, at the profile's
+       * own scratch home when its caller names none (`proofIsolationEnv`).
        */
-      ROTARIS_CAPTURE_SKILLS_HOME: scratch.home,
+      ...homeSeams(scratch.home),
       /*
        * The scratch machine-wide directory: the fourth user-scope skill root is its `skills` child, and PD-WORKSPACE-002's
        * machine-wide instruction base is the directory itself, so the run host reads neither from the machine's own

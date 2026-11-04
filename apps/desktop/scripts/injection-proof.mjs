@@ -69,7 +69,7 @@ import { createHash } from 'node:crypto';
 import { cpus, platform as hostPlatform, release } from 'node:os';
 import { dirname, join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { app, buildDesktop, configDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
+import { app, buildDesktop, configDirFor, electron, evidenceDirectory, homeSeams, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { bindingVerdict } from './lib/code-intelligence-binding.mjs';
 
@@ -110,7 +110,7 @@ async function launch(name, profile, workspace, extra, timeoutMs = 120_000) {
     cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...launchOptions({ local: profile.local, preferences: profile.preferences, ...(scratchHome ? { home: profile.home } : {}) }),
-      ROTARIS_CAPTURE_INSTRUCTIONS_HOME: profile.home,
+      ...homeSeams(profile.home),
       ...(hasMachineBase ? { ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: profile.machine } : {}),
       ROTARIS_CAPTURE_MODEL_REQUESTS: calls,
       ROTARIS_CAPTURE_PNG: png,

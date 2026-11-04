@@ -317,6 +317,19 @@ export function launchOptions({ local, preferences, home, extra = {} }) {
  * (`docs/archive/defects/a-deep-data-directory-leaves-the-launch-windowless.md`), so this variable is no longer what
  * makes a deep profile launchable; it still keeps each profile's socket in a directory of that profile's own, and
  * `workspace-proof`'s scenario 13b takes it away to drive the fallback.
+ *
+ * The two home seams (`homeSeams`) are the home's half on Windows, where `HOME` cannot be moved. REQ-WORKSPACE-051 makes
+ * the home a skill root (`~/.agents/skills`, `~/.config/opencode/skills`, `~/.openhands/skills/installed`) and
+ * PD-WORKSPACE-002 an instruction base (`~/.agents/AGENTS.md`), and a Windows launch reads both from `homedir()`, which is
+ * `USERPROFILE`, the operator's. Until 2026-11-04 every launch there discovered the operator's own skills: `slash-proof`
+ * counted `caveman` beside `/skill` and `/skills`, and the live run logged the operator's `diagnose` skill as skipped
+ * (`docs/archive/defects/slash-proof-counts-a-skill-from-the-real-home-as-a-fixed-skill-command.md`). Every launch now
+ * names both seams, on every platform, at the home `HOME` takes on POSIX (the caller's `home`, or the scratch home beside
+ * `local`, spelled for the platform), so no discovery a launch makes reads the operator's home. A caller with a home of its
+ * own passes it here or spreads `homeSeams(home)` over this object; never one seam alone, because the run host prefers the
+ * skills seam over the instructions seam and the workspace service reads only the instructions seam, so naming one would
+ * split the launch's home between its two processes (`proof-isolation.test.ts` scans every script for that). The seams are
+ * compiled out of a packaged build (`__ROTARIS_SEAMS__`), so a packaged launch still reads the operator's home on Windows.
  */
 /**
  * @param {{ profileRoot?: string | undefined, local: string, preferences?: string | undefined, home?: string | undefined, platform?: NodeJS.Platform }} options
@@ -355,8 +368,20 @@ export function proofIsolationEnv({ profileRoot, local, preferences, home, platf
   // which opens a preference store). Naming the key with no value would put the string "undefined" in the
   // child's environment on Windows, which is a path.
   if (preferences !== undefined) env.ROTARIS_PREFERENCES_ROOT = preferences;
-  if (platform !== 'win32') env.HOME = home ?? scratchHomeFor(local);
+  const launchHome = home ?? (platform === 'win32' ? win32.join(local, '..', 'home') : scratchHomeFor(local));
+  Object.assign(env, homeSeams(launchHome));
+  if (platform !== 'win32') env.HOME = launchHome;
   return env;
+}
+
+/**
+ * The verification seams that move user-scope discovery's home without moving `HOME`/`USERPROFILE`: the skill roots and
+ * the home-relative instruction bases (REQ-WORKSPACE-051, PD-WORKSPACE-002; `src/run-host/host.ts`,
+ * `src/workspace-service/index.ts`). Always named together, at one directory, as `proofIsolationEnv` says why.
+ */
+/** @param {string} home @returns {{ ROTARIS_CAPTURE_SKILLS_HOME: string, ROTARIS_CAPTURE_INSTRUCTIONS_HOME: string }} */
+export function homeSeams(home) {
+  return { ROTARIS_CAPTURE_SKILLS_HOME: home, ROTARIS_CAPTURE_INSTRUCTIONS_HOME: home };
 }
 
 /** The `capture: probe <selector> → <json>` lines a launch logged, by selector. The shape twenty scripts parse. */

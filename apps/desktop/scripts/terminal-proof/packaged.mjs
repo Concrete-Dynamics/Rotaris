@@ -85,7 +85,11 @@ export function launchEnvironment({ base = process.env, scratch, localAppData, p
   const env = { ...base };
   for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
   // Both variable pairs, so the launch's store is the launch's own on every platform and not the operator's.
-  Object.assign(env, proofIsolationEnv({ profileRoot: scratch, local: localAppData, preferences }));
+  // Less the isolation's home seams (`homeSeams`, since 2026-11-04): a packaged build compiles them out, so a packaged launch is
+  // handed none, as it is handed no other seam.
+  const isolation = proofIsolationEnv({ profileRoot: scratch, local: localAppData, preferences });
+  for (const key of Object.keys(isolation)) if (key.startsWith('ROTARIS_CAPTURE_')) delete isolation[key];
+  Object.assign(env, isolation);
   const probe = { ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROMPT: 'show me the tree', ROTARIS_CAPTURE_AFTER_MS: String(afterMs) };
   for (const key of Object.keys(probe)) if (!KEPT.includes(key)) throw new Error(`${key} is not one of the packaged probe's variables (${KEPT.join(', ')})`);
   return Object.assign(env, probe);

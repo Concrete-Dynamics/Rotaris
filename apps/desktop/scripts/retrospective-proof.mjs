@@ -77,7 +77,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { buildDesktop, cleanEnvironment, evidenceDirectory, findDatabases, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
+import { buildDesktop, cleanEnvironment, evidenceDirectory, findDatabases, homeSeams, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { fieldSaveReading, runtimeFieldSteps } from './lib/settings-runtime-field.mjs';
@@ -372,7 +372,7 @@ mkdirSync(join(beyondRoot, 'home', '.agents'), { recursive: true });
 mkdirSync(join(beyondRoot, 'machine'), { recursive: true });
 writeFileSync(join(beyondRoot, 'home', '.agents', 'AGENTS.md'), '# A user-global rule the retrospective must not read\n');
 writeFileSync(join(beyondRoot, 'machine', 'AGENTS.md'), '# A machine-wide rule the retrospective must not read\n');
-const beyondTheRoot = { ROTARIS_CAPTURE_INSTRUCTIONS_HOME: join(beyondRoot, 'home'), ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: join(beyondRoot, 'machine') };
+const beyondTheRoot = { ...homeSeams(join(beyondRoot, 'home')), ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: join(beyondRoot, 'machine') };
 
 // ── 2. The pass itself, held open for fourteen seconds so the indicators can be READ — and measured at two window
 //    sizes (L10, below) — while it runs. Six seconds held the reads alone; two resizes and two shots are added, and

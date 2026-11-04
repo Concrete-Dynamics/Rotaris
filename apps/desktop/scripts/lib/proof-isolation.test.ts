@@ -15,9 +15,11 @@
  * not this product's, and it is the only step between this test and the claim the note makes.
  */
 import { describe, expect, it } from 'vitest';
-import { posix, win32 } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, posix, win32 } from 'node:path';
 import { resolveUserDirs, dataLayout } from '@rotaris/platform';
-import { configDirFor, dataDirFor, machineIdFileFor, proofIsolationEnv, scratchHomeFor, tokensDirFor, workspacesRootFor } from './harness.mjs';
+import { skillRoots } from '@rotaris/config';
+import { configDirFor, dataDirFor, homeSeams, machineIdFileFor, proofIsolationEnv, scratchHomeFor, tokensDirFor, workspacesRootFor } from './harness.mjs';
 
 /**
  * The scratch profile as the host that plans each launch spells it. A launch runs on the host that plans it, so a Windows
@@ -49,7 +51,8 @@ describe('proof isolation lands inside the scratch profile on every platform', (
 
   it('names both variable pairs, and spells the POSIX pair the way a POSIX machine reads it', () => {
     expect(Object.keys(env).sort()).toEqual([
-      'APPDATA', 'HOME', 'LOCALAPPDATA', 'ROTARIS_PREFERENCES_ROOT', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_RUNTIME_DIR',
+      'APPDATA', 'HOME', 'LOCALAPPDATA', 'ROTARIS_CAPTURE_INSTRUCTIONS_HOME', 'ROTARIS_CAPTURE_SKILLS_HOME', 'ROTARIS_PREFERENCES_ROOT',
+      'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_RUNTIME_DIR',
     ]);
     expect(Object.keys(windowsEnv).sort()).toEqual(Object.keys(env).filter((key) => key !== 'HOME').sort());
     // A Windows-spelled `XDG_DATA_HOME` is a path no POSIX machine resolves, so even the Windows launch's inert pair is
@@ -202,5 +205,73 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     expect(dirs.data.length).toBeGreaterThan(40);
     // The reason `XDG_RUNTIME_DIR` exists in the pair at all: the data root alone overflows the 108-byte cap.
     expect(env['XDG_RUNTIME_DIR']!.length).toBeLessThan(80);
+  });
+});
+
+/**
+ * REQ-WORKSPACE-051 names the home as a skill root (`~/.agents/skills` and two more), and PD-WORKSPACE-002 the home as an
+ * instruction base (`~/.agents/AGENTS.md`). A Windows launch keeps the operator's real home (moving `USERPROFILE` kills
+ * Electron before it paints), so until 2026-11-04 every proof and live-run launch there discovered the operator's own
+ * skills: `slash-proof` counted `caveman` beside `/skill` and `/skills`, and the live run's sign-in launch logged
+ * "skills: skipped …\.agents\skills\diagnose\SKILL.md — missing frontmatter"
+ * (`docs/archive/defects/slash-proof-counts-a-skill-from-the-real-home-as-a-fixed-skill-command.md`). The product's
+ * verification seams move both discoveries' home without touching `USERPROFILE`, and the harness now names them on
+ * every launch. They are modelled here as the two processes read them: the run host (the skill catalog and the
+ * injection) takes `ROTARIS_CAPTURE_SKILLS_HOME ?? ROTARIS_CAPTURE_INSTRUCTIONS_HOME` (`src/run-host/host.ts`), the
+ * workspace service's inventory `ROTARIS_CAPTURE_INSTRUCTIONS_HOME` alone (`src/workspace-service/index.ts`).
+ */
+describe('a launch discovers nothing from the operator’s own home (REQ-WORKSPACE-051, PD-WORKSPACE-002)', () => {
+  const runHostHome = (e: Readonly<Record<string, string | undefined>>): string | undefined => e['ROTARIS_CAPTURE_SKILLS_HOME'] ?? e['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'];
+  const serviceHome = (e: Readonly<Record<string, string | undefined>>): string | undefined => e['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'];
+  const slashes = (p: string): string => p.replaceAll(win32.sep, posix.sep);
+  const inside = (path: string, root: string): boolean => slashes(path).startsWith(`${slashes(root)}/`);
+
+  it('names one scratch home for both processes on every platform, inside the profile and never the operator’s', () => {
+    for (const platform of ['win32', 'linux', 'darwin'] as const) {
+      const launched = proofIsolationEnv({ profileRoot: profileFor(platform), local: localFor(platform), preferences: preferencesFor(platform), platform });
+      const home = runHostHome(launched);
+      // The defect: on Windows neither seam was named, so both processes fell back to `homedir()`, the operator's.
+      expect(home, platform).toBeDefined();
+      expect(serviceHome(launched), platform).toBe(home);
+      expect(inside(home!, profileFor(platform)), `${platform}: ${home}`).toBe(true);
+      expect(slashes(home!)).not.toContain(slashes(OPERATOR.win32Home));
+      expect(home!).not.toContain(OPERATOR.home);
+      // Spelled for the platform that reads it, as the profile is.
+      expect(home!.includes(win32.sep), platform).toBe(platform === 'win32');
+      // On POSIX it is the HOME the launch already runs with, so the seams change nothing there but say it twice.
+      if (platform !== 'win32') expect(home).toBe(launched['HOME']);
+    }
+  });
+
+  it('every user-scope skill root the run host searches from that home lies inside the scratch profile', () => {
+    for (const platform of ['win32', 'linux', 'darwin'] as const) {
+      const launched = proofIsolationEnv({ profileRoot: profileFor(platform), local: localFor(platform), preferences: preferencesFor(platform), platform });
+      const roots = skillRoots({ workspaceRoot: join(profileFor(platform), 'workspace'), home: runHostHome(launched)!, platform, exists: () => false })
+        .filter((root) => root.scope === 'user' && !slashes(root.dir).startsWith('/etc/'));
+      // `~/.agents/skills`, `~/.config/opencode/skills`, `~/.openhands/skills/installed` — the machine-wide root is another seam's.
+      expect(roots.length, platform).toBe(3);
+      for (const root of roots) expect(inside(root.dir, profileFor(platform)), `${platform}: ${root.dir}`).toBe(true);
+    }
+  });
+
+  it('a caller’s own home moves both seams together, and on Windows still never HOME', () => {
+    const windows = proofIsolationEnv({ local: WINDOWS_LOCAL, home: win32.join(WINDOWS_PROFILE, 'own-home'), platform: 'win32' });
+    expect(runHostHome(windows)).toBe(win32.join(WINDOWS_PROFILE, 'own-home'));
+    expect(serviceHome(windows)).toBe(win32.join(WINDOWS_PROFILE, 'own-home'));
+    expect('HOME' in windows).toBe(false);
+    const linux = proofIsolationEnv({ local: LOCAL, home: '/scratch/own-home', platform: 'linux' });
+    expect([runHostHome(linux), serviceHome(linux), linux['HOME']]).toEqual(['/scratch/own-home', '/scratch/own-home', '/scratch/own-home']);
+    expect(homeSeams('/x')).toEqual({ ROTARIS_CAPTURE_SKILLS_HOME: '/x', ROTARIS_CAPTURE_INSTRUCTIONS_HOME: '/x' });
+  });
+
+  it('no script names one home seam on its own: a launch never splits its home between the two processes', () => {
+    // The run host prefers the skills seam, so a script that named only the instructions seam over the harness's default
+    // would inject from one home and list from another; one that named only the skills seam would list the default's
+    // instruction files. Every script moves both, through `homeSeams`.
+    const scripts = join(import.meta.dirname, '..');
+    const files = [...readdirSync(scripts).map((name) => join(scripts, name)), ...readdirSync(import.meta.dirname).map((name) => join(import.meta.dirname, name))]
+      .filter((file) => file.endsWith('.mjs') && file !== join(import.meta.dirname, 'harness.mjs'));
+    const offenders = files.filter((file) => /ROTARIS_CAPTURE_(SKILLS|INSTRUCTIONS)_HOME['"]?\s*:/.test(readFileSync(file, 'utf8')));
+    expect(offenders).toEqual([]);
   });
 });

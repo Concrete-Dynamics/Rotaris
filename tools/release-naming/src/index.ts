@@ -56,6 +56,23 @@ export function releaseArtifacts(version: string): readonly { platform: Platform
   return PLATFORM_KEYS.flatMap((platform) => KINDS_BY_PLATFORM[platform].map((kind) => ({ platform, kind, name: artifactName(version, kind) })));
 }
 
+/**
+ * PD-STARTUP-012 (extends REQ-STARTUP-031, narrows REQ-STARTUP-152) — the name of a release's Software Bill of
+ * Materials for one platform key: `Rotaris-{v}-{platform}-sbom.cdx.json`.
+ *
+ * A function of its own and never an artifact kind: `ARTIFACT_KINDS`, `KINDS_BY_PLATFORM`, `artifactName` and its
+ * unknown-kind error are untouched by it, `releaseArtifacts` never lists it, and the updater, which selects its artifact
+ * through `artifactName` alone (REQ-STARTUP-108), has no way to ask for it. The release pipeline (`tools/release-pipeline`)
+ * admits and requires exactly these names beside the artifacts, and the SBOM writer (`tools/sbom`) names its file here.
+ * The platform is part of the name so that two published platform keys cannot collide in one release directory.
+ */
+export function sbomName(version: string, platform: string): string {
+  if (!(PLATFORM_KEYS as readonly string[]).includes(platform)) {
+    throw new Error(`"${platform}" is not a platform key of REQ-STARTUP-030. Known platform keys: ${PLATFORM_KEYS.join(', ')}.`);
+  }
+  return `Rotaris-${version}-${platform}-sbom.cdx.json`;
+}
+
 export const CHECKSUM_MANIFEST_NAME = 'SHA256SUMS.txt' as const;
 export const CHECKSUM_SIGNATURE_NAME = 'SHA256SUMS.txt.sig' as const;
 

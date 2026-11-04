@@ -1,5 +1,6 @@
 // The types for `assets.mjs`. That module is plain JavaScript on purpose — the signing job runs the release pipeline's
-// tool without `pnpm install` — so its contract is declared here for the tests beside it (REQ-STARTUP-031/032/152).
+// tool without `pnpm install` — so its contract is declared here for the tests beside it (REQ-STARTUP-031/032/152;
+// PD-STARTUP-012 for the SBOM).
 import type { ArtifactKind, ChecksumEntry, PlatformKey } from '@rotaris/release-naming';
 
 export interface ReleaseAsset {
@@ -8,10 +9,21 @@ export interface ReleaseAsset {
   readonly name: string;
 }
 
+/** PD-STARTUP-012: a published platform key's SBOM — a published asset, never an artifact kind. */
+export interface ReleaseSbom {
+  readonly platform: PlatformKey;
+  readonly name: string;
+}
+
 /** `PD-STARTUP-001`: `windows-x64` alone until the directive is withdrawn. */
 export declare const PUBLISHED_PLATFORMS: readonly PlatformKey[];
 export declare function expectedAssets(version: string, platforms?: readonly string[]): ReleaseAsset[];
+export declare function expectedSboms(version: string, platforms?: readonly string[]): ReleaseSbom[];
 export declare function sha256File(path: string): string;
-export declare function readReleaseDirectory(dir: string, version: string, platforms?: readonly string[]): { assets: ReleaseAsset[]; missing: ReleaseAsset[]; foreign: string[] };
+export declare function readReleaseDirectory(
+  dir: string,
+  version: string,
+  platforms?: readonly string[],
+): { assets: ReleaseAsset[]; missing: ReleaseAsset[]; sboms: ReleaseSbom[]; missingSboms: ReleaseSbom[]; foreign: string[] };
 export declare function writeChecksumManifest(dir: string, version: string, platforms?: readonly string[]): { ok: true; entries: ChecksumEntry[]; text: string } | { ok: false; problems: string[] };
 export declare function verifyReleaseDirectory(dir: string, version: string, platforms?: readonly string[]): string[];

@@ -16,18 +16,16 @@
  *   `docs/architecture/dependency-alerts/2026-11-01-audit-gate.md` §3 records for the production audit. Its version is
  *   the installed one, the one `pnpm package` puts in the installer.
  *
- * Whether this file is published beside the release's artifacts is OQ-487: REQ-STARTUP-152 holds every filename a
- * release publishes as an asset to REQ-STARTUP-031's naming scheme, and this file is not one of its names. Until that is ruled the release
- * workflow keeps it as a workflow artifact of the build job, outside the release directory and its `SHA256SUMS.txt`.
+ * The file is published beside the release's artifacts (PD-STARTUP-012, ruled on OQ-487): one per published platform
+ * key, named `Rotaris-{v}-{platform}-sbom.cdx.json` by the release naming authority's `sbomName` — re-exported here, so
+ * this module composes no name of its own — written into the release directory, listed in `SHA256SUMS.txt` and covered
+ * by its signature. A wrong or incomplete SBOM is published under the publisher's signature, so its correctness is a
+ * release concern this file's tests hold.
  */
+import { tryParseReleaseVersion } from '../release-naming/src/index.ts';
 
-/** The SBOM's file name for a release of `version`: `Rotaris-<version>-sbom.cdx.json`. */
-export function sbomName(version) {
-  if (typeof version !== 'string' || version.length === 0 || /[\\/\s]/.test(version)) {
-    throw new Error(`"${String(version)}" is not a version an SBOM can be named for`);
-  }
-  return `Rotaris-${version}-sbom.cdx.json`;
-}
+/** PD-STARTUP-012: the naming authority's `sbomName(version, platform)`, the one place the SBOM's filename is rendered. */
+export { sbomName } from '../release-naming/src/index.ts';
 
 /** The product's reference inside the document. */
 export function productRef(version) {
@@ -51,7 +49,9 @@ export function composeReleaseSbom(bom, release) {
   if (!/^\d+\.\d+\.\d+/.test(release.electronVersion ?? '')) {
     throw new Error(`"${String(release.electronVersion)}" is not an Electron version`);
   }
-  sbomName(release.version);
+  if (typeof release.version !== 'string' || tryParseReleaseVersion(release.version) === null) {
+    throw new Error(`"${String(release.version)}" is not a release version an SBOM can be made for (REQ-STARTUP-027)`);
+  }
 
   const root = productRef(release.version);
   const electronRef = `pkg:npm/electron@${release.electronVersion}`;

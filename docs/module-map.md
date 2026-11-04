@@ -57,17 +57,17 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 `rotaris/requirement-citations-resolve`
 and their siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`, and `ensure.mjs`, the
 plugin `electron.vite.config.ts` carries so a build writes the symbols when they are absent), `tools/release-naming/` (the
-artifact names and the release-tag grammar), `tools/release-guard/` (`pnpm release:guard <tag>`, the pre-build version
+artifact names, the SBOM's name `sbomName` — never an artifact kind, PD-STARTUP-012 — and the release-tag grammar), `tools/release-guard/` (`pnpm release:guard <tag>`, the pre-build version
 and package-pin guard; `cli.mjs` boots `src/guard.ts` through Vite's module runner because it reads `@rotaris/config`'s
 source), `tools/release-pipeline/` (since 2026-10-22 `pnpm release:pipeline` — the tag workflow's stages after the
-guard: the checksum manifest, its signature, the key record `key-record.json` and the release body; open `cli.mjs`; its
+guard: the checksum manifest over the artifacts and the SBOM (`assets.mjs`, PD-STARTUP-012), its signature, the key record `key-record.json` and the release body; open `cli.mjs`; its
 `verify` reads the updater's own `apps/desktop/src/main/updater/keys.ts`; tests in `*.test.ts` beside it), `tools/notices/` (the generator behind
 `pnpm notices` — `THIRD-PARTY-LICENSES.txt` and its validation, open
 `notices.mjs`; the three tables beside it are the reviewed exceptions, the release inputs and the bundled fonts;
 tests in `notices.test.ts`), `tools/build-id/` (the writer behind `pnpm build-id` — `build-id.txt`, REQ-SHELL-140's
 build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), `tools/sbom/` (since 2026-11-02 the writer behind
-`pnpm sbom:write <tag> <dir>` — the release's CycloneDX SBOM from pnpm's own `sbom` command, Electron added; open
-`sbom.mjs`, tests in `sbom.test.ts`; R-091, OQ-487), `tools/requirement-coverage/` (the report behind
+`pnpm sbom:write <tag> <dir> <platform>` — the release's CycloneDX SBOM from pnpm's own `sbom` command, Electron added,
+named by `tools/release-naming`'s `sbomName`; open `sbom.mjs`, tests in `sbom.test.ts`; R-091, PD-STARTUP-012), `tools/requirement-coverage/` (the report behind
 `pnpm req-coverage` — every live shipping requirement's implementation, test and proof citations; `--check` in `pnpm lint` holds `baseline.json`, the uncited per domain, which only shrinks; `--since`
 the identifiers a branch adds and drops, `--drift` the requirements changed after their code; open
 `coverage.mjs`, tests in `coverage.test.ts`), `tools/test-support-naming/` (since 2026-10-15 the one guard that a module

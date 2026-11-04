@@ -15,6 +15,8 @@ import { keyFingerprint, keyRecordRow } from './signing.mjs';
 
 const SETUP = 'Rotaris-0.2.0-windows-x64-setup.exe';
 const PORTABLE = 'Rotaris-0.2.0-windows-x64-portable.exe';
+/** PD-STARTUP-012: the windows-x64 SBOM, which a release directory holds beside the artifacts. */
+const SBOM = 'Rotaris-0.2.0-windows-x64-sbom.cdx.json';
 
 let dir: string;
 let lines: { out: string[]; err: string[] };
@@ -44,6 +46,7 @@ function release() {
   mkdirSync(assets);
   writeFileSync(join(assets, SETUP), 'setup');
   writeFileSync(join(assets, PORTABLE), 'portable');
+  writeFileSync(join(assets, SBOM), '{"bomFormat":"CycloneDX"}');
   return assets;
 }
 
@@ -100,6 +103,7 @@ describe('the draft\'s channel flag (REQ-STARTUP-029, REQ-STARTUP-034)', () => {
     mkdirSync(assets);
     writeFileSync(join(assets, `Rotaris-${version}-windows-x64-setup.exe`), 'setup');
     writeFileSync(join(assets, `Rotaris-${version}-windows-x64-portable.exe`), 'portable');
+    writeFileSync(join(assets, `Rotaris-${version}-windows-x64-sbom.cdx.json`), '{}');
     run(['manifest', assets, tag]);
     spawnSync('git', ['init', '-q', dir]);
     const out = join(dir, 'out');
@@ -176,6 +180,14 @@ describe('each stage refuses on its own', () => {
     expect(run(['portable', assets, 'v0.2.0'], { portableDir: renamed })).toBe(1);
     expect(lines.err[1]).toMatch(/carries 0\.1\.9-[0-9a-f]{16} with entry point Rotaris\.exe; the release of 0\.2\.0 needs/);
     expect(existsSync(join(assets, PORTABLE))).toBe(false);
+  });
+
+  it('manifest refuses a release directory that lacks the SBOM, writing nothing (PD-STARTUP-012)', () => {
+    const assets = release();
+    rmSync(join(assets, SBOM));
+    expect(run(['manifest', assets, 'v0.2.0'])).toBe(1);
+    expect(lines.err).toEqual([`error: PD-STARTUP-012: ${SBOM} is missing; windows-x64 publishes its SBOM beside its artifacts, listed in SHA256SUMS.txt`]);
+    expect(existsSync(join(assets, 'SHA256SUMS.txt'))).toBe(false);
   });
 
   it('sign refuses without the secret, naming O-2, and writes nothing', () => {

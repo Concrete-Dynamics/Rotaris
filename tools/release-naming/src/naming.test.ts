@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { artifactName, parseReleaseTag, releaseArtifacts, UnknownArtifactKindError } from './index.js';
+import { ARTIFACT_KINDS, artifactName, KINDS_BY_PLATFORM, parseReleaseTag, PLATFORM_KEYS, releaseArtifacts, sbomName, UnknownArtifactKindError } from './index.js';
 
 const APP = resolve(import.meta.dirname, '..', '..', '..', 'apps', 'desktop');
 
@@ -24,6 +24,25 @@ describe('release naming — REQ-STARTUP-031', () => {
       'Rotaris-0.1.0-macos-arm64.dmg',
       'Rotaris-0.1.0-linux-x86_64.AppImage',
     ]);
+  });
+});
+
+describe('the SBOM\'s name — PD-STARTUP-012 (extends REQ-STARTUP-031)', () => {
+  it('renders Rotaris-{v}-{platform}-sbom.cdx.json for every platform key, the version as written', () => {
+    expect(sbomName('1.2.3', 'windows-x64')).toBe('Rotaris-1.2.3-windows-x64-sbom.cdx.json');
+    expect(sbomName('1.2.3', 'macos-arm64')).toBe('Rotaris-1.2.3-macos-arm64-sbom.cdx.json');
+    expect(sbomName('1.2.3', 'linux-x86_64')).toBe('Rotaris-1.2.3-linux-x86_64-sbom.cdx.json');
+    expect(sbomName(parseReleaseTag('v0.1.0rc1').version, 'windows-x64')).toBe('Rotaris-0.1.0rc1-windows-x64-sbom.cdx.json');
+  });
+  it('refuses a key REQ-STARTUP-030 does not have, naming the known keys', () => {
+    expect(() => sbomName('1.2.3', 'windows-arm64')).toThrow(/"windows-arm64" is not a platform key of REQ-STARTUP-030.*windows-x64, macos-arm64, linux-x86_64/);
+  });
+  it('is never an artifact kind: the four shapes, the per-platform kinds and the unknown-kind error are unchanged', () => {
+    expect(ARTIFACT_KINDS).toEqual(['setup', 'portable', 'dmg', 'appimage']);
+    expect(KINDS_BY_PLATFORM).toEqual({ 'windows-x64': ['setup', 'portable'], 'macos-arm64': ['dmg'], 'linux-x86_64': ['appimage'] });
+    for (const kind of ['sbom', 'sbom.cdx.json', 'cdx']) expect(() => artifactName('1.2.3', kind)).toThrow(UnknownArtifactKindError);
+    const artifacts = releaseArtifacts('1.2.3').map((a) => a.name);
+    for (const platform of PLATFORM_KEYS) expect(artifacts).not.toContain(sbomName('1.2.3', platform));
   });
 });
 

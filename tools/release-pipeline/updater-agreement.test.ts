@@ -18,6 +18,8 @@ import { keyFingerprint } from './signing.mjs';
 const VERSION = '0.2.0';
 const PORTABLE = `Rotaris-${VERSION}-windows-x64-portable.exe`;
 const SETUP = `Rotaris-${VERSION}-windows-x64-setup.exe`;
+/** PD-STARTUP-012: the SBOM a release directory holds beside its artifacts, listed in the manifest the pipeline signs. */
+const SBOM = `Rotaris-${VERSION}-windows-x64-sbom.cdx.json`;
 const TARGET = 'E:\\Rotaris-0.1.0-windows-x64-portable.exe';
 
 let dir: string;
@@ -28,6 +30,7 @@ beforeEach(() => {
   mkdirSync(assets);
   writeFileSync(join(assets, PORTABLE), Buffer.alloc(2_500_000, 3));
   writeFileSync(join(assets, SETUP), Buffer.alloc(1_000, 4));
+  writeFileSync(join(assets, SBOM), '{"bomFormat":"CycloneDX","specVersion":"1.6"}\n');
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 

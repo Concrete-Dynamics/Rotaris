@@ -18,6 +18,8 @@ Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fenceha
 None named here: the proof sizes the window at its minimum and measures it, and whether 1000x682 meets that is the
 proof's reading, left to the Windows session.
 
+Seen again on 2026-11-04 at the landing of R-091 bundle D3 (fence-hardening), rebased head `aacd3806`, Windows 11 ARM64, Node 26.13.0, the desktop free of other trees: the window read 1000x682 again, alone at 14 % CPU. Recorded, not repaired.
+
 ## Relevant files
 
 - `apps/desktop/scripts/plan-gate-proof.mjs` — the 1000x680 measurement (about line 340).

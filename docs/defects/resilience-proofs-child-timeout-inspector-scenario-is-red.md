@@ -9,6 +9,8 @@ Measured 2026-10-30; the cause was not established.
 
 None established. The scenario reads the inspector's context limit for a child after its fallback.
 
+Seen again on 2026-11-04 at the landing of R-091 bundle D3 (fence-hardening), rebased head `aacd3806`, Windows 11 ARM64, Node 26.13.0, the desktop free of other trees: red again, in the sweep and alone at 16 % CPU (the same sighting is in `windows-proof-reruns-leave-persona-and-recovery-readings-red.md`). Recorded, not repaired.
+
 ## Relevant files
 
 - `apps/desktop/scripts/resilience-proof.mjs`: `child-timeout-inspector`

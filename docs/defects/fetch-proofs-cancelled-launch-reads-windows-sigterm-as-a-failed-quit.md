@@ -28,6 +28,8 @@ Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fenceha
 None contradicted by the product. The proof's quit instrument assumes a POSIX signal; PD-TOOLS-013 revision 2's reading is not
 reached on win32.
 
+Seen again on 2026-11-04 at the landing of R-091 bundle D3 (fence-hardening), rebased head `aacd3806`, Windows 11 ARM64, Node 26.13.0, the desktop free of other trees: `pnpm worktree:land` stopped on scenario 9 with the same line, and the proof alone, at 16 % CPU with no other Electron process, read the same. The bundle changes only the fence (`packages/agent-tools`). Recorded, not repaired.
+
 ## Relevant files
 
 - `apps/desktop/scripts/fetch-proof.mjs` — scenario 9 (`cancelled`): `process.kill(app.pid, 'SIGTERM')` and the exit-0 check.

@@ -36,6 +36,8 @@ Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fenceha
 
 These proofs verify REQ-MONITOR-086/281 (run-wide compression display), REQ-MONITOR-052/066 (the active model and input ceiling), and REQ-NOTIFY-072 (the recovery dialog).
 
+Seen again on 2026-11-04 at the landing of R-091 bundle D3 (fence-hardening), rebased head `aacd3806`, Windows 11 ARM64, Node 26.13.0, the desktop free of other trees: `resilience-proof` read `child-timeout-inspector` (alpha measured against null), `fatal` (546 px) and `auth-fallback` (no 1000x680 reading) red in the sweep with 71 % CPU before its launch, and again alone at 16 % CPU with no other Electron process; the other 20 scenarios were green both times. Recorded, not repaired.
+
 ## Relevant files
 
 - `apps/desktop/scripts/compression-proof.mjs` — run-wide count launch and persona probes.

@@ -28,6 +28,8 @@ Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fenceha
 None contradicted by the product, as far as the reading goes; whether an injected instruction file's CRLF endings should be
 normalized is not stated (REQ-WORKSPACE-050 names the execution root's files).
 
+Seen again on 2026-11-04 at the landing of R-091 bundle D3 (fence-hardening), rebased head `aacd3806`, Windows 11 ARM64, Node 26.13.0, the desktop free of other trees: the `isolated` launch read PRESENCE, the workspace `AGENTS.md` block "was not received whole", alone at 15 % CPU. The bundle changes only the fence. Recorded, not repaired.
+
 ## Relevant files
 
 - `apps/desktop/scripts/injection-proof.mjs` — `assertReceived` (`blockOf`) and the `isolated` launch's `isoText` (the committed text).

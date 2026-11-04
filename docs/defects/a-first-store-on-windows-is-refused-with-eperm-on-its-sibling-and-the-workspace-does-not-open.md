@@ -39,6 +39,8 @@ sibling and renamed into place, retrying a refusal the platform makes transientl
 leaves a workspace that does not open, on a fresh profile, four times in five here. REQ-SESSION-202's empty place did not
 occur; the place stayed absent, as OQ-281 intends.
 
+Seen again on 2026-11-04 at the landing of R-091 bundle D3 (fence-hardening), rebased head `aacd3806`, Windows 11 ARM64, Node 26.13.0, the desktop free of other trees: `pnpm part-j-proof` stopped at the `pause` launch with "expected one workspace database … found 0", alone at 14 % CPU, on a head whose changes touch only the fence (`packages/agent-tools`), so the holder is not in this bundle either. Recorded, not repaired.
+
 ## Relevant files
 
 - `packages/store/src/resolve.ts` — `installFirstStore`: the three removals, the rename's five tries, the removal after them

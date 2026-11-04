@@ -3,6 +3,22 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-11-04 — the review the archive bundles' skill changes owed
+
+**Prompted by** the independent review (`references/skill-review.md`, Opus `high`, read-only, run by the hardening
+orchestration on 2026-11-04 over the four skill commits of bundles I1 and I2: `41c4c97e`, `80132a88`, `e5c2db8d`,
+`b0901fb3`), which the bundles' reviewers had named as owed. Verdict PASS, no blocking finding; `node
+scripts/orchestration.mjs self-test` green and `pnpm check` green apart from one recorded Windows EBUSY red
+(`packages/mcp/src/mcp.test.ts`, green alone), which the 2026-11-02 entry below had not stated. Three scratch reverts
+each turned the `repairedDefectsDir` assertions red, as that entry claims. **Changed** on its optional findings, in
+`references/repository.md`: the forward repair of another writer's red also runs `pnpm archive:migrate`; a settled
+question is "ruled, closed, resolved or withdrawn" and a deferred one stays live, as `docs/README.md` says; an ADR
+correction or strike, a ruling the specification carries and a withdrawn or superseded requirement run the migration
+in their commit; a repaired note's own links are rebased one level. SKILL.md §1.2's new sentence folded to the file's
+wrap. The README overstatement it found (`docs/defects/README.md` says the script repoints every pointer; it repoints
+only paths into the retired `fixed/`) is recorded as a defect note, not repaired. **Verified** by `pnpm lint` and
+`pnpm vitest run tools/orchestrated-build-skill.test.ts tools/agent-config.test.ts` on the branch.
+
 ## 2026-11-04 — a ruling and its `pnpm archive:migrate` run land in one commit
 
 **Prompted by** the hardening orchestration's consortium run of 2026-11-04 (R-091, R-092), which ruled OQ-477, OQ-480,

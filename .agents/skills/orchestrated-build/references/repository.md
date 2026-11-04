@@ -54,8 +54,8 @@ prompts rendered from the older copy (SKILL.md §4 refreshes it between runs onl
 intermediate merge of theirs (`a46180d`, before they merged this session's work, read like a lost row). A red base is
 reported to the owner and recorded as a defect note (`docs/defects/README.md`). When a docs-only change repairs it (a
 count line, a link a moved note left behind), the orchestrator repairs it forward on its own branch in its own
-worktree from origin/main, the note moved to `docs/archive/defects/` in the same commit, landed with the gate green before the next
-bundle's merge gate meets it; a red that needs code goes to the owner or into a plan. Their commit is never reverted
+worktree from origin/main, the note moved to `docs/archive/defects/` and registered by `pnpm archive:migrate` (Records) in
+the same commit, landed with the gate green before the next bundle's merge gate meets it; a red that needs code goes to the owner or into a plan. Their commit is never reverted
 (`AGENTS.md`, "The agent workflow": surface a collision with the owner's commit, never reset it).
 
 ## Worktrees and branches — `AGENTS.md`, "The agent workflow"
@@ -100,15 +100,17 @@ The same commits as the code carry:
   `docs/architecture/views/README.md`, when a view's content changed, with the change's entry at the top of
   `docs/architecture/views/reconciliation-log.md` (never in the README, since 2026-10-13);
 - a mechanism's first execution reported in place into the record that decided it, plus one row in
-  `docs/architecture/first-executions.md`; a falsified claim corrected in place with the old reason kept beside it;
+  `docs/architecture/first-executions.md`; a falsified claim corrected in place with the old reason kept beside it, and
+  the same commit runs `pnpm archive:migrate` for an ADR correction or strike, a ruling the specification now carries,
+  or a requirement withdrawn or superseded (`docs/README.md`, "The archive");
 - a repaired defect note: its outcome written on it (what changed, which test or proof pins it), `git mv` to
   `docs/archive/defects/` (`docs/defects/fixed/` is retired since 2026-11-01; `pnpm archive:migrate` moves a note left
-  there), every link to its old path repointed (`pnpm lint` runs `tools/check-record-links.mjs`), then
+  there), its own relative links rebased one level deeper, every link to its old path repointed (`pnpm lint` runs `tools/check-record-links.mjs`), then
   `pnpm archive:migrate` run so that `docs/archive/manifest.json` registers it (since 2026-11-02 `--check` fails an
   archived file or passage the script has not hashed; a rebase that conflicts on the manifest re-runs the script);
 - a defect noticed along the way recorded in `docs/defects/` (schema in `docs/defects/README.md`), fixed or not;
 - a question the specification leaves open appended to the last part of `docs/architecture/open-questions.md` (its
-  index names the part) as the next free number, and once it is ruled, closed or withdrawn moved to `docs/archive/` by
+  index names the part) as the next free number, and once it is ruled, closed, resolved or withdrawn (a deferred one stays live) moved to `docs/archive/` by
   `pnpm archive:migrate` in the same commit, which a rebase re-runs rather than merging moved entries by hand
   (`docs/README.md`, "The archive"; `pnpm lint` fails while a settled entry is live);
 - `docs/architecture/codebase.md`, `AGENTS.md` and `docs/architecture/first-release-plan.md` updated where they name

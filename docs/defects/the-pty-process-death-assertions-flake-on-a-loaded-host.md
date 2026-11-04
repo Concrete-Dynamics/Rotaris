@@ -121,12 +121,6 @@ soft-paused command's own exit status, the PowerShell typeahead case, the kill-a
 host still at 100 %: 93 passed, 42 skipped, 427 s. Recorded, not investigated; the umbrella note
 `the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md` holds the whole gate's reading.
 
-**Observed again, 2026-11-04 (a landing's gate on the Overview audit's execution branch, Windows 11 ARM64, Node 26.13.0, the
-host at 73 to 100 % CPU with nineteen Electron processes of two sibling sessions' proof runs).** Two cases of
-`packages/agent-tools/src/terminal/terminal.test.ts` red in a 21 m 53 s `pnpm check`: the soft-paused kill's next command at
-11,050 ms against 10 s, and the keystrokes-without-Enter case at its 30 s bound. The file alone, the host still at 100 %: 93
-passed, 42 skipped, 261 s. Recorded, not investigated; the umbrella note holds the gate's reading.
-
 **Observed again, 2026-11-03, late evening (the consortium branch `claude/busy-noyce-b7b850` at `45665fa9`, Windows 11 ARM64,
 Node 26.13.0, the host at 91–100 % CPU under the sibling sessions and the hardening orchestration).** `pnpm worktree:land`'s
 gate went red twice on this file among others: five cases the first time (the shell-ending command of line 1031 again, the
@@ -138,3 +132,9 @@ failed. A third landing attempt went red on seven cases of this file (the three 
 **Observed again, 2026-11-03 (the hardening orchestration's landing gates, on the Windows host).** A process-death
 assertion read 5995.78 ms against its 5,000 ms bound in `thin-packages`' landing gate, and 5259 ms in
 `secure-windows-and-fuses`' gate; the file was green alone both times.
+
+**Observed again, 2026-11-04 (a landing's gate on the Overview audit's execution branch, Windows 11 ARM64, Node 26.13.0, the
+host at 73 to 100 % CPU with nineteen Electron processes of two sibling sessions' proof runs).** Two cases of
+`packages/agent-tools/src/terminal/terminal.test.ts` red in a 21 m 53 s `pnpm check`: the soft-paused kill's next command at
+11,050 ms against 10 s, and the keystrokes-without-Enter case at its 30 s bound. The file alone, the host still at 100 %: 93
+passed, 42 skipped, 261 s. Recorded, not investigated; the umbrella note holds the gate's reading.

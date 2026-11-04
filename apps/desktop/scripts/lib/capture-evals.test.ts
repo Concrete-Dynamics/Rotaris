@@ -4,7 +4,9 @@
  * probe can only ever read its own answer, and a schedule that still cannot tell two apart fails instead of choosing.
  */
 import { describe, expect, it } from 'vitest';
+import { redact } from '@rotaris/kernel';
 import { parseEvals, readEval } from './capture-evals.mjs';
+import { cellPaintProbe } from './cell-paint.mjs';
 
 const readNotice = `(() => { const n = document.querySelector('[data-testid="notice"]'); return n ? { title: n.textContent } : null; })()`;
 const openChip = `(() => { const t = document.querySelector('[data-testid="chip-model"]'); if (!t) return 'no chip'; t.click(); return 'opened'; })()`;
@@ -57,5 +59,37 @@ describe('the answer is the seam\'s JSON, read as the old reader read it', () =>
     const evals = parseEvals(line(9, readNotice, null));
     expect(readEval(evals, 9, readNotice)).toBeNull();
     expect(readEval(evals, 10, readNotice)).toBeUndefined();
+  });
+});
+
+describe('an expression the application log echoes masked is still read as its own (REQ-TOOLS-171, REQ-TOOLS-172)', () => {
+  // The application log runs every line through the one redaction pass, so the value after a name holding a
+  // secret-looking segment (`key`) is masked in the echo: git-proof's cell probe, `key: tr.parentElement.tagName …`, is
+  // logged as `key: *** === 'THEAD' …`. Pinned against the product's own pass, not a copy of it
+  // (docs/archive/defects/rows-and-git-proofs-read-probe-and-eval-text-the-application-logs-redaction-pass-masks.md).
+  const cells = cellPaintProbe('[data-testid="git-worktrees"] table.git__worktree-table');
+  const logged = (at: number, expression: string, value: unknown) => redact(line(at, expression, value));
+
+  it('the product masks the cell probe in its echo, so the cases below are not vacuous', () => {
+    expect(logged(170000, cells, null)).toContain('key: *** ===');
+    expect(logged(170000, cells, null)).not.toContain(cells);
+  });
+
+  it('git-proof\'s cell probe reads its answer from the masked echo', () => {
+    const rows = { viewport: [1440, 900], rows: [{ key: 'header', cells: [] }] };
+    expect(readEval(parseEvals(logged(170000, cells, rows)), 170000, cells)).toEqual(rows);
+  });
+
+  it('a masked echo is read only for the expression it masks, at its own offset', () => {
+    const evals = parseEvals([logged(5, '({ key: a.b })', 1), logged(5, '({ other: a.b })', 2)].join('\n'));
+    expect(readEval(evals, 5, '({ key: a.b })')).toBe(1);
+    expect(readEval(evals, 5, '({ other: a.b })')).toBe(2);
+    expect(readEval(evals, 5, '({ key: a.b, more: 1 })')).toBeUndefined();
+    expect(readEval(evals, 6, '({ key: a.b })')).toBeUndefined();
+  });
+
+  it('two expressions that mask to one echo at one offset are ambiguous and throw rather than choose', () => {
+    const evals = parseEvals([logged(5, '({ key: a.b })', 1), logged(5, '({ key: c.d })', 2)].join('\n'));
+    expect(() => readEval(evals, 5, '({ key: a.b })')).toThrow(/2 evals of one expression logged at 5 ms/);
   });
 });

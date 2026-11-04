@@ -33,6 +33,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { readEndProbes, readTimedStep } from './lib/logged-text.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -96,35 +97,33 @@ const PROBES = [
 
 async function launch(name, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
+  const env = {
+    ...cleanEnvironment(), ...proofIsolationEnv({ profileRoot: root, local, preferences }),
+    ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES,
+    ROTARIS_ROWS_PROOF: '1', ROTARIS_CAPTURE_NET: '1', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+    ...extra,
+  };
   const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, timeoutMs, windowsHide: true,
-    env: {
-      ...cleanEnvironment(), ...proofIsolationEnv({ profileRoot: root, local, preferences }),
-      ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES,
-      ROTARIS_ROWS_PROOF: '1', ROTARIS_CAPTURE_NET: '1', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
-      ...extra,
-    },
+    cwd: app, timeoutMs, windowsHide: true, env,
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
   if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}\n${log.slice(-3000)}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
-  const probes = {};
-  for (const line of log.split('\n')) {
-    const m = /capture: probe (.+?) → (\[.*\])\s*$/.exec(line);
-    if (m) { try { probes[m[1]] = JSON.parse(m[2]); } catch { probes[m[1]] = []; } }
-  }
+  // Keyed by the selector given, not by its echo: the application log masks the value after a secret-looking name
+  // (REQ-TOOLS-171, REQ-TOOLS-172), so `[data-call-key="call-ok"]` is logged as `[data-call-key="***"]` and the three
+  // outcome probes echo alike; the seam's order tells them apart
+  // (docs/archive/defects/rows-and-git-proofs-read-probe-and-eval-text-the-application-logs-redaction-pass-masks.md).
+  const probes = readEndProbes(log, String(env.ROTARIS_CAPTURE_PROBE ?? '').split(';;'));
   return { png, log, probes };
 }
 const text = (probes, selector) => (probes[selector] ?? []).map((p) => p.text);
-const inspect = (log, at, selector) => {
-  const m = new RegExp(`capture: inspect-at ${at} ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\{.*\\})\\s*$`, 'm').exec(log);
-  return m ? JSON.parse(m[1]) : null;
-};
+/** One timed reading, found by its offset and its selector's echo, masked or not (`lib/logged-text.mjs`). */
+const inspect = (log, at, selector) => readTimedStep(log, 'inspect-at', at, selector);
 const probesAt = (log, at, selector) => {
-  const m = new RegExp(`capture: probe-at ${at} ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])\\s*$`, 'm').exec(log);
-  return m ? JSON.parse(m[1]).map((x) => x.text) : null;
+  const found = readTimedStep(log, 'probe-at', at, selector);
+  return Array.isArray(found) ? found.map((x) => x.text) : null;
 };
 const dragged = (log, at) => {
   const m = new RegExp(`capture: drag-at ${at} .* → ("(?:[^"\\\\]|\\\\.)*")\\s*$`, 'm').exec(log);

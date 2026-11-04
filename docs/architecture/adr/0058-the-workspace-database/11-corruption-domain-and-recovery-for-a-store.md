@@ -118,7 +118,7 @@ byte, no `-shm` made. On the built app `pnpm store-resolution-proof`'s launch E 
 restore (E1) and under the set-aside (E2). **One reading did not survive building**: the foreign-lock clause's "stating how many
 there are" binds "where the target store holds such records", and a damaged store can hold them (the unit fixture does, on pages
 the restore never reads), so the first question states that they could not be read instead; the ruling kept that as a reading,
-and it is raised as [OQ-542](../../open-questions/71-spikes-and-later-questions-38.md#oq-542), built as ruled.
+and it is raised as [OQ-542](../../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-542), built as ruled.
 
 **Recovery, in order, and it never destroys anything.** On a store that will not open or fails
 `quick_check`:

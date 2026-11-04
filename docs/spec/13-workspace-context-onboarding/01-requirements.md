@@ -88,6 +88,12 @@ Part 1 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
   > circuit-breaker explanations are REQ-SHELL-041's sentences word for word, not bounded by "exactly the following and
   > no more". The five flags, their conditions and the file-access pair are unchanged.
 
+  > **Narrowed by [`PD-WORKSPACE-009`](../../product/directives/pd-workspace-009.md#pd-workspace-009), 2026-11-04.** The `workspace-scoped`
+  > explanation is "File access: Rotaris's file tools read and write inside this workspace folder only; terminal commands and
+  > MCP tools reach what OS confinement allows, or everything this account can where none is active.", one fixed string that
+  > does not vary with confinement. The `outside-workspace!` explanation, the five flags, their conditions and the short
+  > forms are unchanged.
+
 ### Workspace and Branch Label Rendering
 
 - **REQ-WORKSPACE-023** — *Withdrawn.* There is no terminal status bar; REQ-WORKSPACE-149 carries the home-directory collapsing and literal rendering of the workspace path and branch name in the desktop window chrome.

@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and eighteen.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and twenty.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -145,6 +145,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-SESSION-002](directives/pd-session-002.md) | summary.md's mostly-elided artifacts are the attached artifacts a delegated agent was not given |
 | [PD-SESSION-003](directives/pd-session-003.md) | an error-path tool record's arguments keep their shape, and what is never cut stays whole past 2,000 characters |
 | [PD-SESSION-004](directives/pd-session-004.md) | the session log holds at most 32 MiB as one file, its oldest lines dropped |
+| [PD-SESSION-005](directives/pd-session-005.md) | an unreadable restore target's lock records are reported as unreadable, not counted |
 
 ### SHELL
 
@@ -179,7 +180,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-STARTUP-008](directives/pd-startup-008.md) | an update downloads by itself and takes effect at the next start or by `Restart now` |
 | [PD-STARTUP-009](directives/pd-startup-009.md) | each hand-over has its own interval, and a holder that is live and never answers is reclaimed |
 | [PD-STARTUP-010](directives/pd-startup-010.md) | the preparation warning outlasts the no-provider notice |
-| [PD-STARTUP-011](directives/pd-startup-011.md) | a run directory carries the application log, and a window with no workspace writes under the per-user data directory |
+| [PD-STARTUP-011](directives/pd-startup-011.md) | a run directory carries the application log, and a window whose default base cannot be created writes under the per-user data directory |
 | [PD-STARTUP-012](directives/pd-startup-012.md) | a release publishes its SBOM beside its artifacts, signed with them |
 
 ### TOOLS
@@ -226,6 +227,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-WORKSPACE-006](directives/pd-workspace-006.md) | a code-intelligence setup's failure reads in these words where REQ-WORKSPACE-092 and REQ-WORKSPACE-093 give none |
 | [PD-WORKSPACE-007](directives/pd-workspace-007.md) | the status strip's path link and flag explanations follow the shell domain |
 | [PD-WORKSPACE-008](directives/pd-workspace-008.md) | the strip's branch item names the states in which there is no branch to show |
+| [PD-WORKSPACE-009](directives/pd-workspace-009.md) | the file-access flag and the autonomous prompt state the workspace boundary per tool |
 
 ---
 <!--

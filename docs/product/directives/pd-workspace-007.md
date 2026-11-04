@@ -17,7 +17,7 @@ the shell domain's statement SHALL govern:
   REQ-WORKSPACE-022's "exactly the following and no more" does not bound them.
 
 Everything else in REQ-WORKSPACE-019 and REQ-WORKSPACE-022 still governs: the link's name and tooltip, the five flags and
-their conditions, the mode flag's value vocabulary, the file-access pair's fixed sentences, and each flag's explanation as
+their conditions, the mode flag's value vocabulary, the file-access pair's fixed sentences *(2026-11-04: the `workspace-scoped` sentence is narrowed by [PD-WORKSPACE-009](pd-workspace-009.md#pd-workspace-009), OQ-468; this directive ruled nothing on the pair.)*, and each flag's explanation as
 both its tooltip and its accessible description.
 
 **As built.** `workspace.openFolder` (`apps/desktop/src/main/commands/workspace.ts`, `apps/desktop/src/main/open-folder.ts`),

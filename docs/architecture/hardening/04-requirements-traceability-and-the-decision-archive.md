@@ -61,6 +61,6 @@ Open questions this plan raised and rules before building: [OQ-462 to OQ-467](..
 and [OQ-459](../../archive/architecture/open-questions/68-spikes-and-later-questions-35.md#oq-459), all ruled 2026-11-01 by the orchestrator's
 consortium under R-072; two rulings minted directives, [`PD-SESSION-004`](../../product/directives/pd-session-004.md#pd-session-004)
 (the session log's bound, from OQ-465) and [`PD-CHAT-011`](../../product/directives/pd-chat-011.md#pd-chat-011) (a refused
-draft or image, from OQ-467), and OQ-464's ruling raised [OQ-468](../open-questions/69-spikes-and-later-questions-36.md#oq-468),
+draft or image, from OQ-467), and OQ-464's ruling raised [OQ-468](../../archive/architecture/open-questions/69-spikes-and-later-questions-36-continued-5.md#oq-468),
 left open. Numbers reserved for the plans: OQ-469 to OQ-492. The first executions owed: the fuses on the packaged artifact, `quick_check` on open, the guards' first
 refusal, and type-aware lint's cost to the gate, each a row in `first-executions.md`.

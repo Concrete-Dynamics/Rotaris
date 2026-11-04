@@ -60,7 +60,7 @@ was refused `runHost.gone` in 1 ms; a submit was refused with the draft kept. Th
 `silent`) painted its window with "The run host did not start", refused a run-host command in 0 ms and quit 0, with no
 unhandled rejection; `not-ready-workspace-service` refused its open with the transient "The project could not be opened"
 and no notice. Unplanned, the proof's `orderly` launch of one run missed the bound on load alone and still painted its
-window — the miss [OQ-473](../../open-questions/71-spikes-and-later-questions-38.md#oq-473) asks about.
+window — the miss [OQ-473](../../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-4.md#oq-473) asks about.
 
 Two findings the build made and repaired in the same change: a refused `hooks.summary` at an open was read as a summary,
 so a run host already gone raised "No model provider is authenticated yet" over the loss notice in the one slot (now a

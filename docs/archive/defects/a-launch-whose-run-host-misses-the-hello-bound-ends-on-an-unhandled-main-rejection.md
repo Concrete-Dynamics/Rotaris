@@ -41,4 +41,4 @@ load (its window then loaded 2.4 s later, no unhandled rejection), and its `not-
 run host through the seam `ROTARIS_CAPTURE_CHILD_FAULT=run-host:silent`, painted its window with the notice, answered a
 run-host command in 0 ms with the refusal and quit 0. Pinned by `child-supervision.test.ts` and that launch. Whether 5 s is
 the right bound on a loaded host — the miss is now a run host gone for the session rather than a launch gone — is
-[OQ-473](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-473).
+[OQ-473](../architecture/open-questions/71-spikes-and-later-questions-38-continued-4.md#oq-473).

@@ -87,7 +87,7 @@ the immediate exit, or the orderly shutdown begun) raises ONE error notice — "
 service for <workspace> stopped" — with a dismiss, no action, no session, and the exit status and pid in its detail; the
 run host's link refuses every request at once from then on (`runHost.gone`), so a submit is refused with the draft kept.
 The run host is never forked again; a service is forked again at the next open. Whether 5 s is the right bound on a loaded
-host is [OQ-473](../../open-questions/71-spikes-and-later-questions-38.md#oq-473).
+host is [OQ-473](../../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-4.md#oq-473).
 
 **The window paints before the workspace opens.** A view's start-time read — the Overview's session list, the
 repository card — therefore arrives while no workspace exists yet. Those reads **wait, bounded**

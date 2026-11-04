@@ -55,12 +55,17 @@ tree, read the same evening after §2's move: 12 advisories, **4 high**, 6 moder
 
 | Package | Resolved | High | Reach | Lead |
 | --- | --- | --- | --- | --- |
-| `electron` | 44.3.0 | GHSA-jr5w-w6x2-84p9 (`<44.9.1`); also one moderate, two low | **shipped**: the runtime itself | Dependabot's `electron` group, pull request #49 (opened 2026-11-01, 44.3.0 → 45.0.0); [the note](../../defects/the-shipped-electron-runtime-sits-inside-a-high-advisory-the-production-audit-cannot-see.md) |
+| `electron` | 44.3.0 | GHSA-jr5w-w6x2-84p9 (`<44.9.1`); also one moderate, two low | **shipped**: the runtime itself | Dependabot's `electron` group, pull request #49 (opened 2026-11-01, 44.3.0 → 45.0.0); [the note](../../archive/defects/the-shipped-electron-runtime-sits-inside-a-high-advisory-the-production-audit-cannot-see.md) |
 | `undici` | 6.28.1 | GHSA-xjj6-f33q-929c, GHSA-2m5v-pch6-74hx, GHSA-qrxm-fqhp-jwvm | build only: `node-gyp` 12.4.0 (`^6.25.0`) under `@electron/rebuild`, which fetches Node headers when the native bindings are rebuilt | 6.29.1 exists; not shipped |
 
 The moderates are `@vitest/mocker` 4.1.11 (test only) and `minimatch` (eslint and electron-builder, build only).
 `ci.yml` therefore runs `pnpm audit --audit-level=high` over the whole tree as well, in a step that reports and does
 not block, so the shipped runtime's advisories are in every run's log; blocking on them is not this reading's to decide.
+
+*2026-11-04:* Electron moved to 44.10.0, out of all four of its advisories, and the shipped runtime's audit now blocks:
+`pnpm deps:audit:runtime` reads the whole tree's report for Electron alone, the build tools' advisories staying report-only
+([the lane's reading](2026-11-04-lane-electron-44-10.md)). The `undici` 6.28.1 row above stands, and is
+[a note](../../defects/the-build-tools-undici-6-copy-sits-inside-three-high-advisories-and-keeps-the-vulnerabilities-check-open.md).
 
 ## 4. How an exception is written
 

@@ -1,6 +1,6 @@
 # ADR-0056 — The build toolchain — Fourth execution — 2026-09-11, the seams stop shipping, and the build is made to say so
 
-Part 9 of 10 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
+Part 9 of 11 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
 
 ## Fourth execution — 2026-09-11, the seams stop shipping, and the build is made to say so
 

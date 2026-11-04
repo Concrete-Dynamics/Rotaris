@@ -81,5 +81,8 @@ Not a finding: the bundled SQLite is 3.53.4, past the WAL-reset fix of 3.51.3; C
 Scorecard checks met today: Binary-Artifacts, CI-Tests, Dangerous-Workflow, License, Maintained, Pinned-Dependencies
 (actions by SHA, a lockfile), Token-Permissions. Configured, and counted once Scorecard reads them on main: Dependency-Update-Tool
 (G1), SAST and Security-Policy (G2). Open and closable here: Fuzzing (property tests count), SBOM (built under PD-STARTUP-012, closed on the first signed release that publishes it),
-Vulnerabilities (the production tree audits clean, the whole tree does not: Electron 44.3.0, the audit reading's §3).
+Vulnerabilities (the production tree audits clean, the whole tree does not: ~~Electron 44.3.0, the audit reading's §3~~
+moved to 44.10.0 on 2026-11-04 by plan hrda, and the shipped runtime's audit made blocking, `pnpm deps:audit:runtime`
+([the lane](../dependency-alerts/2026-11-04-lane-electron-44-10.md); `tools/runtime-audit/runtime-audit.test.ts`); open
+on the build tools' `undici` 6.28.1, three highs, not shipped ([the note](../../defects/the-build-tools-undici-6-copy-sits-inside-three-high-advisories-and-keeps-the-vulnerabilities-check-open.md))).
 The owner's: Branch-Protection, Code-Review (`CODEOWNERS` only requests the review), Signed-Releases (signing, R-071).

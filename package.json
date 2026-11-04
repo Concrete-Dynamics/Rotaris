@@ -93,6 +93,7 @@
     "build-id": "node tools/build-id/write.mjs",
     "req-coverage": "node tools/requirement-coverage/coverage.mjs",
     "deps:audit": "pnpm audit --prod --audit-level=high",
+    "deps:audit:runtime": "pnpm audit --json | node tools/runtime-audit/cli.mjs",
     "sbom:write": "node tools/sbom/write.mjs",
     "verify:plan": "node tools/verify-plan/plan.mjs",
     "local-model:apply": "node tools/local-model/apply.mjs",

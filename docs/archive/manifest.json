@@ -1325,6 +1325,7 @@
     "defects/the-shared-quota-cap-is-a-list-of-provider-names-not-a-catalogue-property.md": "b9037923fa9dbdd42210a3d0249fda510556ef170b110dd9c20023a1e093f215",
     "defects/the-shell-state-snapshot-is-corrupted-on-a-screen-narrower-than-its-rows.md": "7066d4d9f54585cf9e356ef74468f354a52d7802ffb2e581e627b6e6efbd5444",
     "defects/the-shell-switchview-command-is-declared-and-answered-by-nobody.md": "e531f58ad89ef726e734e95879b0ed1b3b0e055ddaa025a335df1c0fbae9db28",
+    "defects/the-shipped-electron-runtime-sits-inside-a-high-advisory-the-production-audit-cannot-see.md": "c97840cbdc5428064873b77d33ba1e802b701cd4f14ec28bea16adc52969e747",
     "defects/the-sigint-background-session-test-fails-under-full-suite-load.md": "490a35ce7034ebf59dc281114e24390abddc689bd1535ec20fe8e38e55b6b865",
     "defects/the-signal-test-gives-a-dead-proofs-launch-two-and-a-half-seconds-to-be-gone.md": "3d66a1426af0e273700530f4be0b091a9a76ebb0795a982c877a28751a325c5d",
     "defects/the-skills-instructions-and-queue-readers-fall-back-to-defaults-on-a-fatal-load.md": "cea6c7fdc7c4e94c65297ed9ba12364c2a6bd373d90ac4c05a970221f6d6bcb6",

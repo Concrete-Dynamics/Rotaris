@@ -1,6 +1,6 @@
 # ADR-0056 — The build toolchain — First execution — 2026-09-03, the walking skeleton
 
-Part 6 of 10 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
+Part 6 of 11 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
 
 ## First execution — 2026-09-03, the walking skeleton
 

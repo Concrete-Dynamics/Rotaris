@@ -67,7 +67,9 @@ guard: the checksum manifest over the artifacts and the SBOM (`assets.mjs`, PD-S
 tests in `notices.test.ts`), `tools/build-id/` (the writer behind `pnpm build-id` — `build-id.txt`, REQ-SHELL-140's
 build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), `tools/sbom/` (since 2026-11-02 the writer behind
 `pnpm sbom:write <tag> <dir> <platform>` — the release's CycloneDX SBOM from pnpm's own `sbom` command, Electron added,
-named by `tools/release-naming`'s `sbomName`; open `sbom.mjs`, tests in `sbom.test.ts`; R-091, PD-STARTUP-012), `tools/requirement-coverage/` (the report behind
+named by `tools/release-naming`'s `sbomName`; open `sbom.mjs`, tests in `sbom.test.ts`; R-091, PD-STARTUP-012), `tools/runtime-audit/` (since
+2026-11-04 the blocking audit of the shipped runtime behind `pnpm deps:audit:runtime` — Electron's advisories read out of the whole tree's
+`pnpm audit --json`, which `--prod` cannot see; open `runtime-audit.mjs`, tests in `runtime-audit.test.ts`; R-091), `tools/requirement-coverage/` (the report behind
 `pnpm req-coverage` — every live shipping requirement's implementation, test and proof citations; `--check` in `pnpm lint` holds `baseline.json`, the uncited per domain, which only shrinks; `--since`
 the identifiers a branch adds and drops, `--drift` the requirements changed after their code; open
 `coverage.mjs`, tests in `coverage.test.ts`), `tools/test-support-naming/` (since 2026-10-15 the one guard that a module

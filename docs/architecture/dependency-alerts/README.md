@@ -50,3 +50,4 @@ only with the pull request.
 | --- | --- | --- | --- |
 | [`2026-10-22-dependabot-triage.md`](2026-10-22-dependabot-triage.md) | `b0d1b3ff` | 51 open | the first pass (R-081): each alert's resolved copy, path and reach; two pull requests (patches; Electron); two residuals |
 | [`2026-11-01-audit-gate.md`](2026-11-01-audit-gate.md) | `9b0b5858` | `pnpm audit`, not the alerts | CI's blocking production audit's first run (R-091): 5 high in `zod`, `undici`, `fast-uri`, patched; what `--prod` does not see (the shipped Electron); how an exception is written |
+| [`2026-11-04-lane-electron-44-10.md`](2026-11-04-lane-electron-44-10.md) | `ad1a6698` | `pnpm audit`, not the alerts | Electron 44.3.0 → 44.10.0 (R-091, acceptance finding AF-05 of plan `hrda`): GHSA-jr5w-w6x2-84p9 and three more, patched; the shipped runtime's audit made blocking |

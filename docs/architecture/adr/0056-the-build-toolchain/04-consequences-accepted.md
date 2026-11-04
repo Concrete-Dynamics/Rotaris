@@ -1,6 +1,6 @@
 # ADR-0056 — The build toolchain — Consequences accepted
 
-Part 4 of 10 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
+Part 4 of 11 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
 
 ## Consequences accepted
 

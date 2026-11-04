@@ -1,6 +1,6 @@
 # ADR-0056 — The build toolchain — Decision
 
-Part 3 of 10 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
+Part 3 of 11 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
 
 ## Decision
 

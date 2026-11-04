@@ -1,6 +1,6 @@
 # ADR-0056 — The build toolchain — Second execution — 2026-09-04, the first packaging, and IC-6
 
-Part 7 of 10 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
+Part 7 of 11 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
 
 ## Second execution — 2026-09-04, the first packaging, and IC-6
 

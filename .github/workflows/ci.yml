@@ -3,7 +3,8 @@
 # Every push to a branch and every pull request runs two jobs on a Windows x64 runner:
 #
 #   gate     `pnpm deps:audit` — `pnpm audit --prod --audit-level=high` over the production tree, blocking (R-091,
-#            docs/architecture/hardening.md §3.5); then `pnpm check` — symbols, typecheck, lint, tests: the commit gate
+#            docs/architecture/hardening.md §3.5); `pnpm deps:audit:runtime` — the shipped Electron's advisories at high and
+#            above, blocking; then `pnpm check` — symbols, typecheck, lint, tests: the commit gate
 #            of AGENTS.md; then `pnpm req-coverage`'s summary on the run's page (R-092); then `pnpm test:coverage`, failing
 #            below vitest.config.ts's floor, its summary on the run's page and coverage/ uploaded (R-091)
 #   package  `pnpm package` — the code-intelligence runtime for win32-x64 (ADR-0035), the native bindings rebuilt and
@@ -35,7 +36,9 @@
 # reading in docs/architecture/dependency-alerts/ — never `--ignore` on this command line, never a silent ignore.
 # `--prod` reads `dependencies` alone, and Electron, the runtime the product ships, is a devDependency of
 # apps/desktop (electron-builder's convention), as are the build tools; the whole tree is therefore audited too, in a
-# step that reports and does not block (docs/architecture/dependency-alerts/2026-11-01-audit-gate.md).
+# step that reports and does not block (docs/architecture/dependency-alerts/2026-11-01-audit-gate.md), and the same
+# report is read for Electron alone in a step that blocks (`pnpm deps:audit:runtime`, 2026-11-04; the reading
+# docs/architecture/dependency-alerts/2026-11-04-lane-electron-44-10.md).
 name: CI
 
 on:
@@ -97,6 +100,12 @@ jobs:
       # `pnpm audit --prod --audit-level=high` (root package.json); exceptions as the header says.
       - name: Dependency audit (production, high and above)
         run: pnpm deps:audit
+
+      # The shipped runtime the production audit cannot see: Electron is a devDependency (electron-builder's
+      # convention), so `--prod` skips it. The whole tree's report, read for the runtime alone
+      # (tools/runtime-audit/runtime-audit.mjs); a report it cannot read fails too. Exceptions as the header says.
+      - name: Dependency audit (shipped runtime, high and above)
+        run: pnpm deps:audit:runtime
 
       # The whole tree, Electron and the build tools included, for the log and the run's summary only: the report is
       # written to $GITHUB_STEP_SUMMARY, and a red here marks the step and never fails the job.

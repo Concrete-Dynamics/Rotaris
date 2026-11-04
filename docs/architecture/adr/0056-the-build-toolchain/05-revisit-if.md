@@ -1,6 +1,6 @@
 # ADR-0056 — The build toolchain — Revisit if
 
-Part 5 of 10 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
+Part 5 of 11 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
 
 ## Revisit if
 

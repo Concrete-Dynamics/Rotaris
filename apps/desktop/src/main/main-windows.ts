@@ -38,6 +38,18 @@ export interface MainWindowAdapter<TWindow, TPersonaWindows, TTerminalWindows> {
    * one — after which nothing its renderer registered is listening until the new document registers again.
    */
   readonly onNavigated: (win: TWindow, listener: () => void) => void;
+  /**
+   * R-091 (hardening §3.2 row 5): fires each time the window's renderer process is gone (`render-process-gone`), with
+   * Electron's reason and exit code. The adapter has already shed the dead sink from the relay when it fires.
+   */
+  readonly onRendererGone: (win: TWindow, listener: (loss: RendererLoss) => void) => void;
+  /**
+   * R-091 (hardening §3.2 row 5): Chromium's `unresponsive` and `responsive` for the window's renderer, OUTSIDE a close-guard
+   * question — while one is out, the guard's own liveness probe hears `unresponsive` and says so itself (PD-SHELL-010).
+   */
+  readonly onResponsiveness: (win: TWindow, listener: (state: 'unresponsive' | 'responsive') => void) => void;
+  /** Loads the window's page again in a new renderer, the window's relay sink attached first; rejects when the load fails. */
+  readonly reload: (win: TWindow) => Promise<void>;
   readonly ownsAuxiliary: (personaWindows: TPersonaWindows, terminalWindows: TTerminalWindows, senderId: number) => boolean;
   readonly disposeResources: (win: TWindow, wcId: number, personaWindows: TPersonaWindows, terminalWindows: TTerminalWindows) => void;
 }
@@ -64,6 +76,25 @@ export type WindowRequest =
 type WindowRequestKind = WindowRequest['kind'];
 /** What became of a window request: sent to a listening renderer, held for one still loading, or no such window. */
 export type WindowRequestOutcome = 'sent' | 'held' | 'gone';
+
+/** R-091 (hardening §3.2 row 5): Electron's reason and exit code for a renderer process gone (`render-process-gone`). */
+export interface RendererLoss {
+  readonly reason: string;
+  readonly exitCode: number;
+}
+/**
+ * What main did about a lost renderer: loaded the window again (`reloaded`), left it as it is because its renderer was lost
+ * again within `RENDERER_RELOAD_BOUND_MS` of the last reload (`left`), or tried and failed (`reload-failed`).
+ */
+export type RendererLossOutcome = 'reloaded' | 'left' | 'reload-failed';
+/**
+ * R-091 (hardening §3.2 row 5; REQ-STARTUP-161, REQ-SHELL-020, ADR-0055): how long after main reloads a window whose renderer was
+ * lost a second loss leaves the window as it is. One reload per bound, so a renderer that dies as it loads is not reloaded in a
+ * loop. Counted on the main-window timers port (`rotaris/no-bare-timers`).
+ */
+export const RENDERER_RELOAD_BOUND_MS = 60_000;
+/** Electron's reasons that are no loss to recover from: an orderly end, and a renderer something ended on purpose. */
+export const RENDERER_ENDS_NOT_RELOADED: ReadonlySet<string> = new Set(['clean-exit', 'killed']);
 
 type WorkspaceGate =
   | { readonly ok: true }
@@ -100,7 +131,12 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
     action?: AcknowledgementAction,
   ) => void;
   readonly reportFailure: (windowId: number, title: string, audience: 'window' | 'application') => void;
-  readonly log: (message: string) => void;
+  readonly log: (message: string, level?: 'info' | 'warn' | 'error') => void;
+  /**
+   * R-091 (hardening §3.2 row 5; REQ-NOTIFY-023): a main window's renderer was lost, and what main did about it. Main raises the
+   * persistent notice here (`rendererLossNotice`, `renderer-loss-notice.ts`); `error` is the reload's failure, when it failed.
+   */
+  readonly rendererLost?: (window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>, loss: RendererLoss, outcome: RendererLossOutcome, error?: string) => void;
   /**
    * REQ-TOOLS-063/064: the requests still queued for a window's dialog when the window closes. Each was acknowledged as
    * queued (`approval.queued`), so the run host no longer bounds its wait: main must say it was never shown, or it hangs.
@@ -155,6 +191,10 @@ interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TD
   readonly listening: Set<WindowRequestKind>;
   /** At most one request of each kind held for a renderer not yet listening; the later of two replaces the earlier. */
   readonly pending: Map<WindowRequestKind, WindowRequest>;
+  /** R-091: running from a reload after a lost renderer until `RENDERER_RELOAD_BOUND_MS` has passed; a loss meanwhile is not reloaded. */
+  reloadBound: MainWindowTimer | null;
+  /** R-091: whether main has written that the renderer is unresponsive and not yet that it answers again. */
+  unresponsive: boolean;
 }
 
 export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval = never, TDialog = never> {
@@ -185,6 +225,8 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
       deferredOffer: null,
       listening: new Set(),
       pending: new Map(),
+      reloadBound: null,
+      unresponsive: false,
     };
     this.#records.set(record.wcId, record);
     this.#rememberFocus(record.wcId);
@@ -196,6 +238,19 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     this.dependencies.adapter.onNavigated(record.win, () => {
       if (record.listening.size > 0) this.dependencies.log(`window ${record.wcId} started a new document; its window requests are held until it listens again`);
       record.listening.clear();
+    });
+    // R-091 (hardening §3.2 row 5): a renderer lost is reloaded once within a bound, and the person is told; a renderer that
+    // stops answering, or answers again, outside a close guard's question is written to the log.
+    this.dependencies.adapter.onRendererGone(record.win, (loss) => { this.#rendererGone(record, loss); });
+    this.dependencies.adapter.onResponsiveness(record.win, (state) => {
+      if (state === 'unresponsive') {
+        if (record.unresponsive) return;
+        record.unresponsive = true;
+        this.dependencies.log(`main window ${record.wcId}: its renderer is unresponsive (Chromium); the window is left to recover on its own`, 'warn');
+      } else if (record.unresponsive) {
+        record.unresponsive = false;
+        this.dependencies.log(`main window ${record.wcId}: its renderer is responsive again`);
+      }
     });
     // REQ-STARTUP-043: the update check is initiated from the post-show activation and never during construction —
     // registered here, fired by the adapter when the window is shown, once for this window.
@@ -642,8 +697,23 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return this.#ready(wcId, 'project-init') !== undefined;
   }
 
+  /**
+   * R-091 (hardening §3.2 rows 4 and 5): loads the main window `wcId`'s page again in a new renderer — the render-failure
+   * boundary's "Reload this window" (`window.reload`) for a main window — and hands the reloaded renderer the session the
+   * window followed, which is main's state (REQ-SHELL-020), as a held session focus (channel 16). False when no such window.
+   */
+  reload(wcId: number, why: string): boolean {
+    const record = this.#liveRecord(wcId);
+    if (!record) return false;
+    void this.#reload(record, why).catch((error: unknown) => {
+      this.dependencies.log(`main window ${wcId}: the reload failed (${error instanceof Error ? error.message : String(error)})`, 'error');
+    });
+    return true;
+  }
+
   dispose(): void {
     for (const record of [...this.#records.values()]) {
+      record.reloadBound?.cancel();
       record.deferredOffer?.cancel();
       if (!this.dependencies.adapter.isDestroyed(record.win)) this.dependencies.adapter.destroy(record.win);
       else this.#forget(record.wcId);
@@ -752,6 +822,49 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return { ok: true };
   }
 
+  /**
+   * R-091 (hardening §3.2 row 5; REQ-STARTUP-161, REQ-SHELL-020, ADR-0055): the window's renderer is gone. An orderly end or a
+   * renderer ended on purpose (`RENDERER_ENDS_NOT_RELOADED`) is left as it is. Any other loss is reloaded ONCE: a second loss
+   * within `RENDERER_RELOAD_BOUND_MS` of the reload leaves the window as it is, so a renderer that dies as it loads is not
+   * reloaded in a loop. Either way the person is told by a persistent error notice naming the reason and the exit code. The
+   * window, its workspace, the session it follows and its presenter registration are main's and outlive the renderer; nothing
+   * here touches the run host — a renderer's loss is not a run's.
+   */
+  #rendererGone(record: WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog>, loss: RendererLoss): void {
+    if (this.dependencies.adapter.isDestroyed(record.win)) return;
+    const label = `main window ${record.wcId}`;
+    const what = `${loss.reason}, exit ${loss.exitCode}`;
+    // The dead document listened for nothing any more; a reloaded one registers again (`sessionFocusReady`).
+    record.listening.clear();
+    record.unresponsive = false;
+    if (RENDERER_ENDS_NOT_RELOADED.has(loss.reason)) {
+      this.dependencies.log(`${label}: its renderer ended (${what}); an end that is no crash is not reloaded`);
+      return;
+    }
+    if (record.reloadBound !== null) {
+      this.dependencies.log(`${label}: its renderer is gone again (${what}) within ${RENDERER_RELOAD_BOUND_MS} ms of its reload; the window is left as it is, not reloaded again`, 'warn');
+      this.dependencies.rendererLost?.(this.#view(record), loss, 'left');
+      return;
+    }
+    record.reloadBound = this.dependencies.timers.after(RENDERER_RELOAD_BOUND_MS, () => { record.reloadBound = null; });
+    this.dependencies.log(`${label}: its renderer is gone (${what}); reloading the window once (R-091)`);
+    this.dependencies.rendererLost?.(this.#view(record), loss, 'reloaded');
+    void this.#reload(record, `its renderer was lost (${what})`).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      this.dependencies.log(`${label}: the reload after its renderer was lost failed (${message}); the window is left as it is`, 'error');
+      this.dependencies.rendererLost?.(this.#view(record), loss, 'reload-failed', message);
+    });
+  }
+
+  async #reload(record: WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog>, why: string): Promise<void> {
+    record.listening.clear();
+    await this.dependencies.adapter.reload(record.win);
+    if (this.dependencies.adapter.isDestroyed(record.win)) return;
+    const followed = record.followedSessionId;
+    this.dependencies.log(`main window ${record.wcId} reloaded: ${why}${followed === null ? '' : `; it is handed back session ${followed}, which it followed`}`);
+    if (followed !== null) this.#request(record.wcId, { kind: 'session-focus', sessionId: followed });
+  }
+
   #request(wcId: number, request: WindowRequest): WindowRequestOutcome {
     const record = this.#liveRecord(wcId);
     if (!record) return 'gone';
@@ -827,6 +940,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     const record = this.#records.get(id);
     if (!record) return;
     record.deferredOffer?.cancel();
+    record.reloadBound?.cancel();
     record.settleReady();
     this.#records.delete(id);
     const index = this.#focusOrder.indexOf(id);
@@ -1075,9 +1189,11 @@ export function askRendererGuard(contents: GuardedContents, dependencies: Render
   return new Promise<unknown>((resolve, reject) => {
     let settled = false;
     let bound: MainWindowTimer | null = null;
+    questionsOut.set(contents, (questionsOut.get(contents) ?? 0) + 1);
     const finish = (settle: () => void): void => {
       if (settled) return;
       settled = true;
+      questionsOut.set(contents, Math.max(0, (questionsOut.get(contents) ?? 1) - 1));
       bound?.cancel();
       bound = null;
       contents.removeListener('render-process-gone', gone);
@@ -1108,6 +1224,30 @@ export function askRendererGuard(contents: GuardedContents, dependencies: Render
     asked.then((answer) => finish(() => resolve(answer)), (error: unknown) => finish(() => reject(error)));
     probe();
   });
+}
+
+/** How many close-guard questions are out to each renderer (`askRendererGuard`), so its own `unresponsive` is not said twice. */
+const questionsOut = new WeakMap<object, number>();
+
+/** Whether a close-guard question is out to this renderer now: its liveness probe hears `unresponsive` and says so itself. */
+export function rendererQuestionOut(contents: object): boolean {
+  return (questionsOut.get(contents) ?? 0) > 0;
+}
+
+/** The part of a main window's `webContents` its lifecycle watch needs (R-091, hardening §3.2 row 5). */
+export interface WatchedContents {
+  on(event: 'render-process-gone', listener: (event: unknown, details: { readonly reason: string; readonly exitCode: number }) => void): unknown;
+  on(event: 'unresponsive' | 'responsive', listener: () => void): unknown;
+}
+
+/**
+ * R-091 (hardening §3.2 row 5): Chromium's `unresponsive` and `responsive` for a renderer, as `MainWindowAdapter.onResponsiveness`
+ * hands them on — `unresponsive` only while no close-guard question is out, since the guard's own probe hears it then and writes
+ * PD-SHELL-010's line itself (`askRendererGuard`). Until 2026-11-04 `unresponsive` was heard only inside that question.
+ */
+export function watchResponsiveness(contents: WatchedContents, listener: (state: 'unresponsive' | 'responsive') => void): void {
+  contents.on('unresponsive', () => { if (!rendererQuestionOut(contents)) listener('unresponsive'); });
+  contents.on('responsive', () => { listener('responsive'); });
 }
 
 /** Electron's concrete half of the lifecycle seam. Tests use an in-memory adapter with the same ordering. */
@@ -1250,6 +1390,16 @@ export function createElectronMainWindowAdapter(
     // The window's own `show` event: fired by the `ready-to-show` show above and by `#replace`'s explicit show alike, once.
     onShown: (win, listener) => { win.once('show', listener); },
     onNavigated: (win, listener) => { win.webContents.on('did-start-navigation', (details) => { if (details.isMainFrame && !details.isSameDocument) listener(); }); },
+    // R-091 (hardening §3.2 row 5): registered after `create`'s own handler, which has shed the dead sink by the time this fires.
+    onRendererGone: (win, listener) => { win.webContents.on('render-process-gone', (_event, details) => { listener({ reason: details.reason, exitCode: details.exitCode }); }); },
+    onResponsiveness: (win, listener) => { watchResponsiveness(win.webContents, listener); },
+    // The sink is attached again before the page loads, so the new document misses no publication made while it loads; a
+    // sink still attached (a reload asked by a live renderer) is replaced by the same one.
+    reload: async (win) => {
+      if (win.isDestroyed()) return;
+      dependencies.relayAttach(win);
+      await dependencies.loadMainWindow(win);
+    },
     ownsAuxiliary: (personaWindows, terminalWindows, senderId) => Boolean(
       personaWindows.bySender(senderId) ?? terminalWindows.bySender(senderId),
     ),

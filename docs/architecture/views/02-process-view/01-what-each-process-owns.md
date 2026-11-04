@@ -50,3 +50,16 @@ in later kills Chromium often ended them first (exit 0), and in 2 of 4 `exit-tra
 10 s after the kill, during its code-intelligence setup step — why is open on
 [the orphaned run host note](../../../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md). A verification seam, `ROTARIS_CAPTURE_CHILD_FAULT` (`injectChildFault`, compiled out of a
 packaged build), raises a throw or a rejection in either child for `exit-trace-proof`'s `last-resort` launches.
+
+**How a main window's renderer is lost, and comes back** (since 2026-11-04, R-091, hardening §3.2 row 5; REQ-STARTUP-161,
+REQ-SHELL-020, ADR-0055). On `render-process-gone` the Electron adapter sheds the window's relay sink and forgets its terminal
+frames, as before, and `MainWindows` (`#rendererGone`) decides the rest: `clean-exit` and `killed` are left as they are
+(`RENDERER_ENDS_NOT_RELOADED`, OQ-476); any other reason reloads the window ONCE — the adapter's `reload` attaches the sink
+again and loads the page — and the reloaded renderer is handed the session the window followed as a held session focus
+(channel 16), since the window's workspace and follow are main's and outlive its renderer; a second loss within
+`RENDERER_RELOAD_BOUND_MS` (60 s, on the main-window timers port) leaves the window as it is. Each reload and each window left
+raises ONE persistent `error` notice naming the reason and the exit code (`main/renderer-loss-notice.ts`). The presenter
+registration, the window's personas and the run host are not touched: a renderer's loss is not a run's. Chromium's
+`unresponsive` outside a close-guard question is one `warning` line and `responsive` after it one `info` line
+(`watchResponsiveness`; inside a question the guard's probe says it, PD-SHELL-010). The GPU process lost is one `error` line
+naming it (`ChildrenEndedByMain.gone`). `window.reload` from a main window takes the same reload path.

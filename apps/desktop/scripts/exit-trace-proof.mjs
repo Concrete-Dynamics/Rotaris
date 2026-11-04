@@ -18,7 +18,9 @@
  *                `info`). Main still answers, and (OQ-462, ruled 2026-11-01) the person is told: ONE error notice "The run
  *                host stopped" with a dismiss and no action, and a submit after it is refused at once with the draft kept.
  *                Then the main window's renderer is crashed with SIGSEGV: main writes
- *                `RENDERER GONE (<reason>, exit <n>) for <its URL>` at `error`. The application's quit (`app.quit()`,
+ *                `RENDERER GONE (<reason>, exit <n>) for <its URL>` at `error`. On Windows (R-091, hardening §3.2 row 5)
+ *                main then reloads the window once and raises "This window stopped and was reloaded"; a second crash
+ *                within the 60 s bound is left as it is, the notice saying so, and no reload loop follows. The application's quit (`app.quit()`,
  *                a quit from outside any window) is then asked, and ends the process: since OQ-298's ruling it asks no
  *                close guard at all (`quitGuardsOutsideAnyWindow`, `exit.ts`), the window closes, and the orderly shutdown
  *                runs to `quit: exiting with status 0` and `main process exiting with status 0`, exit 0. Until 2026-10-14
@@ -148,6 +150,27 @@ function renderersOf(mainPid) {
   }
   return all.filter((p) => ours.has(p.pid) && p.pid !== mainPid && /--type=renderer\b/.test(p.command));
 }
+/**
+ * Crashes the given renderers from outside: SIGSEGV on POSIX; on Windows `TerminateProcess` with `STATUS_ACCESS_VIOLATION`
+ * (0xC0000005) as the exit status, which Chromium reports as `crashed` — what a renderer that faulted reports. Node's
+ * `process.kill` on Windows terminates with exit 1, which Chromium reports as `killed`.
+ */
+function crashRenderers(renderers) {
+  if (!WINDOWS) {
+    for (const r of renderers) { try { process.kill(r.pid, 'SIGSEGV'); } catch { /* gone already */ } }
+    return;
+  }
+  if (renderers.length === 0) return;
+  const script = [
+    "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class T {",
+    '[DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint a, bool i, int p);',
+    '[DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);',
+    "[DllImport(\"kernel32.dll\")] public static extern bool TerminateProcess(IntPtr h, uint c); }'",
+    // 0x0001 is PROCESS_TERMINATE; 3221225477 is 0xC0000005, STATUS_ACCESS_VIOLATION.
+    `foreach ($p in @(${renderers.map((r) => r.pid).join(',')})) { $h = [T]::OpenProcess(0x0001, $false, $p); if ($h -ne [IntPtr]::Zero) { [void][T]::TerminateProcess($h, [uint32]3221225477); [void][T]::CloseHandle($h) } }`,
+  ].join('\n');
+  try { execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: 'ignore', timeout: 30_000 }); } catch { /* gone, or not ours */ }
+}
 const logOf = (started) => readFileSync(started.logFile, 'utf8');
 /** Main's own lines, as `<level> <message>`: the forwarded children's lines carry their own prefix. */
 const mainLines = (log) => log.split('\n').flatMap((line) => { const m = /^\[main [^\]]+\] (\w+)\s+(.*)$/.exec(line); return m ? [{ level: m[1], message: m[2] }] : []; });
@@ -210,11 +233,39 @@ const results = {};
   const renderers = renderersOf(started.child.pid);
   check('the launch has a renderer to crash', renderers.length >= 1, renderers.map((r) => r.pid).join(', ') || 'none');
   const before = goneAtError(logOf(started)).length;
-  // SIGSEGV on POSIX; on Windows, which cannot send it, `TerminateProcess` — a renderer lost from outside either way.
-  for (const r of renderers) { try { process.kill(r.pid, WINDOWS ? undefined : 'SIGSEGV'); } catch { /* gone already */ } }
+  // SIGSEGV on POSIX; on Windows, which cannot send it, `TerminateProcess` with an access violation's status, which Chromium
+  // reads as `crashed` (a plain `process.kill` there is exit 1, `killed`, which main deliberately does not reload) — a
+  // renderer lost from outside either way.
+  crashRenderers(renderers);
   const rendererLine = await until(() => mainLines(logOf(started)).find((l) => /^RENDERER GONE \(/.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 20_000, what: 'main\'s RENDERER GONE line' }).catch(() => null);
   check('the renderer crashed: main writes render-process-gone with its reason, exit code and URL at error', rendererLine?.level === 'error' && /^RENDERER GONE \((crashed|killed|abnormal-exit), exit -?\d+\) for (file|app|http):/.test(rendererLine.message), rendererLine ? `${rendererLine.level} ${rendererLine.message}` : 'no line');
   check('one more GONE line at error than before the renderer crashed', goneAtError(logOf(started)).length > before);
+
+  /*
+   * R-091 (hardening §3.2 row 5; REQ-STARTUP-161, REQ-SHELL-020, ADR-0055): until 2026-11-04 the window of a lost renderer
+   * stayed open and blank. Main now reloads it ONCE within `RENDERER_RELOAD_BOUND_MS` (60 s) and raises a persistent error
+   * notice naming the reason and the exit code; a second loss inside the bound leaves the window as it is, and the notice
+   * says so. Read on Windows, where the crash above is `crashed`; on a Linux host the renderer's loss is not produced at all
+   * (docs/defects/exit-trace-proofs-renderer-crash-writes-no-renderer-gone-line-on-a-linux-host.md), and macOS is not run.
+   */
+  if (WINDOWS) {
+    const reloadLines = () => mainLines(logOf(started)).filter((l) => /^main window \d+ reloaded: its renderer was lost \(crashed, exit -?\d+\)/.test(l.message));
+    const reloadLine = await until(() => reloadLines()[0] ?? null, (l) => l !== null, { timeoutMs: 30_000, what: 'the reload after the lost renderer' }).catch(() => null);
+    const shellBack = await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 }).then(() => true, () => false);
+    check('R-091: the crashed renderer is reloaded once — main writes the reload, and the shell is drawn again', reloadLine !== null && shellBack, reloadLine ? `${reloadLine.level} ${reloadLine.message}` : 'no reload line');
+    const lossNotice = await until(() => started.driver.eval(READ_NOTICE).catch(() => null), (n) => n?.title === 'This window stopped and was reloaded', { timeoutMs: 15_000, what: 'the lost renderer\'s notice' }).catch(() => null);
+    check('R-091: the reloaded window shows the persistent error notice, no action, the reason and the exit code in its detail (REQ-NOTIFY-023)', lossNotice?.severity === 'error' && lossNotice.action === false && /The renderer process was gone: crashed, exit code -?\d+\./.test(lossNotice.detail ?? ''), JSON.stringify(lossNotice));
+    const reloaded = renderersOf(started.child.pid);
+    crashRenderers(reloaded);
+    const left = await until(() => mainLines(logOf(started)).find((l) => /^main window \d+: its renderer is gone again \(crashed, exit -?\d+\) within 60000 ms of its reload; the window is left as it is, not reloaded again$/.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 30_000, what: 'the second loss within the bound' }).catch(() => null);
+    check('R-091: a second loss within the bound leaves the window as it is — main says so at warning', left?.level === 'warning', left ? `${left.level} ${left.message}` : `no line (renderers ${reloaded.map((r) => r.pid).join(', ') || 'none'})`);
+    const leftNotice = await until(() => mainLines(logOf(started)).find((l) => /^diagnostics: notice #\d+ error "This window stopped again and was not reloaded"/.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 15_000, what: 'the second loss\'s notice' }).catch(() => null);
+    check('R-091: …and the notice says the window was not reloaded (published and recorded; the window it would draw in is gone)', leftNotice !== null, leftNotice?.message.split('\n')[0] ?? 'no notice');
+    // Nothing reloads in a loop: one reload line, after two losses, until the quit.
+    await new Promise((r) => setTimeout(r, 3_000));
+    check('R-091: one reload for two losses — no reload loop', reloadLines().length === 1, `${reloadLines().length} reload line(s)`);
+    results.rendererReload = { reload: reloadLine?.message ?? null, notice: lossNotice, left: left?.message ?? null, leftNotice: leftNotice?.message.split('\n')[0] ?? null };
+  }
 
   /*
    * The application's quit after the crash. Measured 2026-10-13 (fin42): it was HELD — the renderer's close guard was asked
@@ -504,8 +555,9 @@ for (const [name, spec, missLine, noticeTitle] of [
   check('render-fault: main writes ONE error line for the fault, carrying the error and the component stack', errorLines.length - before === 1 && stackLines.some((l) => l.includes(FAULT)) && stackLines.some((l) => /Component stack:/.test(l)), errorLines.map((l) => l.message).join(' | ') || 'no line');
   await started.driver.click('[data-ui="render-failure-reload"]').catch(() => null);
   const reloaded = await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 }).then(() => true, () => false);
-  const reloadLine = mainLines(logOf(started)).find((l) => /^window \d+ reloaded at its renderer's request/.test(l.message));
-  check('render-fault: "Reload this window" asks main, which reloads the window, and the shell is drawn again', reloaded && reloadLine !== undefined, reloadLine ? `${reloadLine.level} ${reloadLine.message}` : 'no reload line');
+  // A main window reloads through `MainWindows`, which hands back the session it followed (R-091, hardening §3.2 row 5).
+  const reloadLine = await until(() => mainLines(logOf(started)).find((l) => /^main window \d+ reloaded: its renderer asked \("Reload this window", R-091\)/.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 15_000, what: 'the reload line' }).catch(() => undefined);
+  check('render-fault: "Reload this window" asks main, which reloads the window, and the shell is drawn again', reloaded && reloadLine !== undefined && reloadLine !== null, reloadLine ? `${reloadLine.level} ${reloadLine.message}` : 'no reload line');
   const notice = await until(() => started.driver.eval(READ_NOTICE).catch(() => null), (n) => n?.title === 'This window stopped drawing', { timeoutMs: 15_000, what: 'the notice for the fault' }).catch(() => null);
   check('render-fault: the reloaded window shows the persistent error notice, the error and the component stack in its detail (REQ-NOTIFY-005, REQ-NOTIFY-023)', notice?.severity === 'error' && notice.dismiss === true && (notice.detail ?? '').includes(FAULT) && /Component stack:/.test(notice.detail ?? ''), JSON.stringify(notice)?.slice(0, 400));
   check('render-fault: still one error line for the one fault after the reload', rendererErrors(logOf(started)).length - before === 1);

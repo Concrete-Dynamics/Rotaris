@@ -56,6 +56,7 @@ import { sessionCommands } from './commands/session.js';
 import { dictationCommands } from './commands/dictation.js';
 import { installPermissionHandlers, type ApplicationPages, type PermissionSession } from './permissions.js';
 import { installWebContentsGuard } from './web-contents-guard.js'; // R-091, OQ-466
+import { rendererLossNotice } from './renderer-loss-notice.js'; // R-091, hardening §3.2 row 5
 import { secureWebPreferences } from './secure-web-preferences.js'; // R-091: one set of web preferences for every window
 import { dispatchCommand } from './command-dispatch.js'; // R-091: nothing throws out of runCommand (ADR-0019)
 import { refuseCommandSender } from './command-sender.js'; // R-091: who may send a command (checklist 17)
@@ -1671,6 +1672,11 @@ async function main(): Promise<void> {
       else raiseNotice('error', title);
     },
     log,
+    // R-091 (hardening §3.2 row 5): a main window's renderer lost — reloaded once, or left after a second loss within the bound,
+    // or a reload that failed — is told by ONE persistent error notice per loss, its words in `renderer-loss-notice.ts`.
+    rendererLost: (window, loss, outcome, error) => {
+      void notices.report(rendererLossNotice(loss, outcome, window, error));
+    },
     // REQ-TOOLS-063/064: a request queued behind a closing window's dialog is never shown there, and the run host no
     // longer bounds its wait, so main says so — REQ-TOOLS-058's presenter-error denial — rather than leave it to hang.
     // PD-ORCH-005 clause 9: a quit's closing windows answer nothing; the run host's shutdown withdraws the request.
@@ -1938,6 +1944,8 @@ async function main(): Promise<void> {
     storeRefusal: (workspace) => storeRefusals.get(canonicalPath(workspace))?.held,
     // R-091 (hardening §3.2 row 4): `window.reload`, the render-failure boundary's one action — the sender's own page, loaded again.
     reloadWindow: (senderId) => {
+      // A main window reloads through `MainWindows`, which hands the reloaded renderer the session it followed (REQ-SHELL-020).
+      if (mainWindows.forSender(senderId) !== undefined) return mainWindows.reload(senderId, 'its renderer asked ("Reload this window", R-091)');
       const target = BrowserWindow.getAllWindows().find((b) => !b.isDestroyed() && b.webContents.id === senderId);
       if (target === undefined || target.webContents.isDestroyed()) return false;
       log(`window ${senderId} reloaded at its renderer's request ("Reload this window", R-091)`);

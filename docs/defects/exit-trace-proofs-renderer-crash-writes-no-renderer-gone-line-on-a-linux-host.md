@@ -19,6 +19,12 @@ fired. Why was not established. One possibility is that Chromium's own crash-sig
 user-sent `SIGSEGV` (`si_code` `SI_USER`) differently from a fault. Another is that the pid chosen was not the main window's
 renderer. Whether the proof passed on Linux before is not recorded in this note.
 
+*Read again 2026-11-04 by R-091's hardening bundle B2, which reloads a lost main window's renderer once and tells the person
+(hardening §3.2 row 5).* The bundle does not close this note and does not change what it measures on Linux: the proof's POSIX
+crash is still `SIGSEGV` from outside, and the reload and its notice are read on Windows alone, where the crash is now
+`TerminateProcess` with `STATUS_ACCESS_VIOLATION` and Chromium reports it `crashed`. Should the Linux crash be produced, main
+would reload that window once; the Linux branch reads nothing about it yet.
+
 ## Specs
 
 None is shown contradicted by the product. The renderer half of the exit trace (PD-MONITOR-002, `render-process-gone` at

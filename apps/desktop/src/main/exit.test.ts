@@ -621,3 +621,12 @@ describe("what a utility process's exit status says (R-091, PD-MONITOR-002)", ()
     for (const code of [1, 3, 6, 9, 11, 15, 69]) expect(childExitReading(code)).toEqual({ level: 'error', reading: 'lost to a signal or a crash' });
   });
 });
+
+/** R-091 (hardening §3.2 row 5): the GPU process's loss is ONE error line that names what was lost and what follows. */
+describe('the GPU process lost is one error line naming it (R-091)', () => {
+  it('names the GPU process, the reason, and that Chromium starts a new one; a clean exit stays info', () => {
+    const ended = new ChildrenEndedByMain();
+    expect(ended.gone({ type: 'GPU', reason: 'crashed', exitCode: -1073741819 })).toEqual({ level: 'error', message: 'CHILD PROCESS GONE (GPU: crashed, exit -1073741819): the GPU process was lost (crashed); Chromium starts a new one by itself, and the windows may redraw or draw more slowly meanwhile' });
+    expect(ended.gone({ type: 'GPU', reason: 'clean-exit', exitCode: 0 })).toEqual({ level: 'info', message: 'CHILD PROCESS GONE (GPU: clean-exit, exit 0)' });
+  });
+});

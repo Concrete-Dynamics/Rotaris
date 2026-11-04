@@ -76,7 +76,9 @@ Invariants:
 - **A dead sink is shed, never thrown on.** A `send` that throws (a disposed render frame) detaches the sink
   from the relay and delivery continues to the survivors (`relaySequenced`, `broadcast`, and the channel-3
   limiter's `send` all isolate per sink). `render-process-gone` detaches the window's sink at once, so the
-  crash-without-close path never waits for the next publication. A vanished view leaves the run untouched
+  crash-without-close path never waits for the next publication; since 2026-11-04 (R-091) the reload `MainWindows` makes
+  of a lost renderer attaches the sink again before the page loads (the process view, "How a main window's renderer is
+  lost"). A vanished view leaves the run untouched
   (`REQ-MONITOR-226`'s intent on the delivery path).
 
 Update the process view's **main → renderer** paragraph and the channel list in its diagram.

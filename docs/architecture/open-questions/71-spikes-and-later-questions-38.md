@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-523 – OQ-540, OQ-485, OQ-473 and OQ-475.
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475 and OQ-476.
 
 <a id="oq-523"></a>
 
@@ -213,3 +213,13 @@ The renderer's boundary is the same shape. `dispatchCommand` (`apps/desktop/src/
 **What the build proceeds under.** A persistent notice at `warning`, titled "This window recovered from a drawing error", its detail the error and both stacks, and so ONE `warning` line in main's log (`RENDER_RECOVERED_TITLE`, `renderFailureReport`); the two failures at `error`, as the hardening plan asks.
 
 **What decides it.** A ruling on whether a recovered error is shown to the person at all — the notice at `warning`, at `info`, or none — and, if none, whether the renderer gains a log-only path to main (a command that writes one line and raises nothing), which would be a new member of the command union.
+
+<a id="oq-476"></a>
+
+**OQ-476 — Is a main window whose renderer was `killed` owed a reload or a notice, now that every other loss is reloaded and told?** *(REQ-STARTUP-161, REQ-SHELL-020, REQ-NOTIFY-001, REQ-NOTIFY-003, ADR-0055, PD-MONITOR-002. Raised 2026-11-04 by [R-091](../../product/requests.md#r-091)'s hardening bundle B2, building [hardening §3.2 row 5](../hardening/02-the-findings.md#32-failure-handling-outside-main); numbered from the bundle's range OQ-475 – OQ-476.)*
+
+**What is open.** `MainWindows` reloads a main window once within 60 s when its renderer is lost and raises a persistent error notice, for every reason Electron gives but `clean-exit` and `killed`, as the hardening plan asks (`RENDERER_ENDS_NOT_RELOADED`, `apps/desktop/src/main/main-windows.ts`). `killed` is what Chromium reports for a renderer ended from outside with an ordinary exit status: on Windows Node's `process.kill` and Task Manager's End task, both `TerminateProcess` with status 1 (measured on Windows on 2026-10-20 and again 2026-11-04 by `exit-trace-proof`), and, by Chromium's reading of a termination status and not measured here, a `SIGKILL` on Linux, the out-of-memory killer's among them. Such a window is left as it was before this bundle: open and blank, with main's `RENDERER GONE (killed, exit 1)` line at `error` and nothing said to the person. Whether a person ending the renderer means the window to stay blank, and whether the out-of-memory killer's end is a loss to recover from, the specification does not say.
+
+**What the build proceeds under.** `killed` and `clean-exit` are neither reloaded nor told; every other reason is (`crashed`, `oom`, `abnormal-exit`, `launch-failed`, `integrity-failure`, `memory-eviction`).
+
+**What decides it.** A ruling on `killed`: left as it is, told by a notice without a reload, or reloaded within the same bound as a crash.

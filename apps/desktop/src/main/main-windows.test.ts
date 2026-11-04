@@ -10,7 +10,11 @@ import {
   RENDERER_LIVENESS_BOUND_MS,
   RENDERER_LIVENESS_PROBE,
   RENDERER_UNSAVED_PROBE_SCRIPT,
+  RENDERER_RELOAD_BOUND_MS,
+  watchResponsiveness,
   type GuardedContents,
+  type RendererLoss,
+  type WatchedContents,
   type GuardedWindow,
   type MainWindowAdapter,
   type MainWindowsDependencies,
@@ -30,6 +34,8 @@ interface MemoryWindow {
   readonly closedListeners: (() => void)[];
   readonly shownListeners: (() => void)[];
   readonly navigatedListeners: (() => void)[];
+  readonly goneListeners: ((loss: RendererLoss) => void)[];
+  readonly responsivenessListeners: ((state: 'unresponsive' | 'responsive') => void)[];
 }
 
 interface PendingTimer {
@@ -52,12 +58,18 @@ function harness(options: {
   readonly integrating?: (workspaceId?: string) => boolean;
   /** The unsaved-settings guard's answer (REQ-SHELL-021 gate 1); true when absent. */
   readonly unsavedAllows?: () => boolean;
+  /** R-091: windows whose reload after a lost renderer rejects. */
+  readonly failReloads?: ReadonlySet<number>;
 } = {}) {
   const actions: string[] = [];
   /** The workspace-open gates asked, in order (REQ-SHELL-021). */
   const gates: string[] = [];
   const workspacesOpened: string[] = [];
   const delivered: string[] = [];
+  /** Main's log lines with their level, `<level> <message>` (R-091). */
+  const levels: string[] = [];
+  /** R-091: each lost renderer `rendererLost` was told of, `<wcId>:<reason>:<exit>:<outcome>[:<error>]`. */
+  const losses: string[] = [];
   const notices: { windowId: number; title: string; action?: string }[] = [];
   const folders: (string | null)[] = [];
   const timers: PendingTimer[] = [];
@@ -73,7 +85,7 @@ function harness(options: {
     create: async ({ workspace, origin }) => {
       const win: MemoryWindow = {
         id: nextId++, workspace, destroyed: false, visible: false, minimized: false, closeAllowed: true,
-        focusListeners: [], closedListeners: [], shownListeners: [], navigatedListeners: [],
+        focusListeners: [], closedListeners: [], shownListeners: [], navigatedListeners: [], goneListeners: [], responsivenessListeners: [],
       };
       windows.set(win.id, win);
       actions.push(`build:${workspace}:${origin}`);
@@ -111,6 +123,13 @@ function harness(options: {
     onClosed: (win, listener) => { win.closedListeners.push(listener); },
     onShown: (win, listener) => { win.shownListeners.push(listener); },
     onNavigated: (win, listener) => { win.navigatedListeners.push(listener); },
+    onRendererGone: (win, listener) => { win.goneListeners.push(listener); },
+    onResponsiveness: (win, listener) => { win.responsivenessListeners.push(listener); },
+    reload: async (win) => {
+      actions.push(`reload:${win.id}`);
+      for (const listener of win.navigatedListeners) listener();
+      if (options.failReloads?.has(win.id)) throw new Error(`reload-failed:${win.id}`);
+    },
     ownsAuxiliary: (personaWindows, terminalWindows, senderId) => terminalWindows === `terminal:${senderId - 100}` || personaWindows === `personas:${senderId - 200}`,
     disposeResources: (_win, _wcId, personaWindows, terminalWindows) => actions.push(`dispose:${personaWindows}:${terminalWindows}`),
   };
@@ -145,7 +164,8 @@ function harness(options: {
       notices.push({ windowId, title, ...(action === undefined ? {} : { action: action.label }) });
     },
     reportFailure: (windowId, title) => notices.push({ windowId, title }),
-    log: (message) => actions.push(`log:${message}`),
+    log: (message, level) => { actions.push(`log:${message}`); levels.push(`${level ?? 'info'} ${message}`); },
+    rendererLost: (window, loss, outcome, error) => { losses.push(`${window.wcId}:${loss.reason}:${loss.exitCode}:${outcome}${error === undefined ? '' : `:${error}`}`); },
     unshownApprovals: (approvals) => { actions.push(`unshown:${approvals.join(',')}`); },
     workspaceClosed: (workspace) => { actions.push(`workspace-closed:${workspace}`); },
     workspaceOpened: (window) => { workspacesOpened.push(`${window.workspace}:${window.workspaceId ?? 'none'}:after-${actions.length}`); },
@@ -155,7 +175,7 @@ function harness(options: {
 
   const mainWindows = new MainWindows<MemoryWindow, string, string, string, string>(dependencies);
   return {
-    mainWindows, actions, gates, workspacesOpened, delivered, notices, folders, windows, openFailures, openRejections,
+    mainWindows, actions, gates, workspacesOpened, delivered, notices, folders, windows, openFailures, openRejections, levels, losses,
     deferOpens: () => { deferOpens = true; },
     resolveOpen: (workspace: string, opened = true) => openResolvers.get(workspace)?.(opened ? { workspaceId: `id:${workspace}`, storeFile: `${workspace}/store.db` } : undefined),
     advanceTimers: () => { for (const timer of timers.splice(0)) if (!timer.cancelled) timer.callback(); },
@@ -1558,5 +1578,136 @@ describe('askUnsavedInTurn — every main window\'s unsaved-settings guard, one 
 
   it('the probe asks whether the renderer installed its guard, which it does only while its Settings form is dirty', () => {
     expect(RENDERER_UNSAVED_PROBE_SCRIPT).toBe('typeof window.__rotarisCloseGuard === "function"');
+  });
+});
+
+/**
+ * R-091 (hardening §3.2 row 5; REQ-STARTUP-161, REQ-SHELL-020, ADR-0055): until 2026-11-04 a main window whose renderer was lost
+ * was detached from the relay, logged, and left open and blank — no reload, nothing said. `MainWindows` now reloads it once
+ * within `RENDERER_RELOAD_BOUND_MS`, tells the person each time, and leaves the window as it is after a second loss inside
+ * the bound. The fake window emits the adapter's events as Electron's `webContents` would.
+ */
+describe('a main window whose renderer is lost is reloaded once within a bound, and the person is told (R-091)', () => {
+  const crash = (win: MemoryWindow, exitCode = -1073741819): void => { for (const listener of win.goneListeners) listener({ reason: 'crashed', exitCode }); };
+  const settle = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+
+  it('a crash reloads the window once and raises the notice; a second crash within the bound leaves it as it is, with the notice saying so', async () => {
+    const h = harness();
+    const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const win = h.windows.get(view.wcId)!;
+    crash(win);
+    await settle();
+    expect(h.actions.filter((a) => a.startsWith('reload:'))).toEqual([`reload:${view.wcId}`]);
+    expect(h.losses).toEqual([`${view.wcId}:crashed:-1073741819:reloaded`]);
+    expect(h.pendingDelays()).toContain(RENDERER_RELOAD_BOUND_MS);
+    crash(win, 1);
+    await settle();
+    expect(h.actions.filter((a) => a.startsWith('reload:'))).toHaveLength(1);
+    expect(h.losses).toEqual([`${view.wcId}:crashed:-1073741819:reloaded`, `${view.wcId}:crashed:1:left`]);
+    expect(h.levels).toContain(`warn main window ${view.wcId}: its renderer is gone again (crashed, exit 1) within ${RENDERER_RELOAD_BOUND_MS} ms of its reload; the window is left as it is, not reloaded again`);
+  });
+
+  it('once the bound has passed a later loss is reloaded again — the bound stops a loop, not every recovery', async () => {
+    const h = harness();
+    const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const win = h.windows.get(view.wcId)!;
+    crash(win);
+    await settle();
+    h.advanceTimers();
+    crash(win);
+    await settle();
+    expect(h.actions.filter((a) => a.startsWith('reload:'))).toHaveLength(2);
+    expect(h.losses.map((l) => l.split(':').pop())).toEqual(['reloaded', 'reloaded']);
+  });
+
+  it('an orderly end and a renderer killed on purpose are neither reloaded nor told', async () => {
+    const h = harness();
+    const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const win = h.windows.get(view.wcId)!;
+    for (const reason of ['clean-exit', 'killed']) for (const listener of win.goneListeners) listener({ reason, exitCode: reason === 'killed' ? 1 : 0 });
+    await settle();
+    expect(h.actions.filter((a) => a.startsWith('reload:'))).toEqual([]);
+    expect(h.losses).toEqual([]);
+  });
+
+  it('the reloaded renderer is handed back the session the window followed, held until it listens (REQ-SHELL-020)', async () => {
+    const h = harness();
+    const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    h.mainWindows.setFollowedSession(view.wcId, 'session-7');
+    expect(h.mainWindows.sessionFocusReady(view.wcId)).toBeNull();
+    crash(h.windows.get(view.wcId)!);
+    await settle();
+    // The dead document's listening was cleared: the request is held, not sent to a renderer that is not there.
+    expect(h.delivered).toEqual([]);
+    expect(h.mainWindows.sessionFocusReady(view.wcId)).toBe('session-7');
+    expect(h.mainWindows.forSender(view.wcId)?.workspace).toBe('C:/a');
+  });
+
+  it('a reload that fails is told as such, and the window is left as it is', async () => {
+    const h = harness({ failReloads: new Set([1]) });
+    const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    crash(h.windows.get(view.wcId)!);
+    await settle();
+    expect(h.losses).toEqual([`${view.wcId}:crashed:-1073741819:reloaded`, `${view.wcId}:crashed:-1073741819:reload-failed:reload-failed:${view.wcId}`]);
+    expect(h.levels.some((l) => l.startsWith(`error main window ${view.wcId}: the reload after its renderer was lost failed`))).toBe(true);
+  });
+
+  it('the boundary\'s "Reload this window" reloads a main window through the same path, handing back its followed session', async () => {
+    const h = harness();
+    const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    h.mainWindows.setFollowedSession(view.wcId, 'session-9');
+    expect(h.mainWindows.reload(view.wcId, 'asked')).toBe(true);
+    await settle();
+    expect(h.actions.filter((a) => a.startsWith('reload:'))).toEqual([`reload:${view.wcId}`]);
+    expect(h.mainWindows.sessionFocusReady(view.wcId)).toBe('session-9');
+    expect(h.losses).toEqual([]);
+    expect(h.mainWindows.reload(404, 'asked')).toBe(false);
+  });
+
+  it('an unresponsive renderer is one warning line until it answers again, which is one info line', async () => {
+    const h = harness();
+    const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const win = h.windows.get(view.wcId)!;
+    const emit = (state: 'unresponsive' | 'responsive') => { for (const listener of win.responsivenessListeners) listener(state); };
+    emit('unresponsive');
+    emit('unresponsive');
+    emit('responsive');
+    emit('responsive');
+    expect(h.levels.filter((l) => / its renderer is (un)?responsive/.test(l))).toEqual([
+      `warn main window ${view.wcId}: its renderer is unresponsive (Chromium); the window is left to recover on its own`,
+      `info main window ${view.wcId}: its renderer is responsive again`,
+    ]);
+  });
+});
+
+describe('watchResponsiveness — Chromium\'s unresponsive outside a close-guard question (R-091, PD-SHELL-010)', () => {
+  class FakeContents implements WatchedContents, GuardedContents {
+    readonly #listeners = new Map<string, ((...args: unknown[]) => void)[]>();
+    on(event: string, listener: (...args: never[]) => void): this { this.#listeners.set(event, [...(this.#listeners.get(event) ?? []), listener as (...args: unknown[]) => void]); return this; }
+    once(event: string, listener: () => void): this { return this.on(event, listener); }
+    removeListener(event: string, listener: () => void): this { this.#listeners.set(event, (this.#listeners.get(event) ?? []).filter((l) => l !== listener)); return this; }
+    emit(event: string): void { for (const listener of [...(this.#listeners.get(event) ?? [])]) listener(); }
+    executeJavaScript(): Promise<unknown> { return new Promise(() => undefined); }
+    isCrashed(): boolean { return false; }
+    isDestroyed(): boolean { return false; }
+  }
+
+  it('hands unresponsive and responsive on while no question is out, and holds unresponsive back while the guard asks', async () => {
+    const contents = new FakeContents();
+    const heard: string[] = [];
+    watchResponsiveness(contents, (state) => heard.push(state));
+    contents.emit('unresponsive');
+    contents.emit('responsive');
+    expect(heard).toEqual(['unresponsive', 'responsive']);
+    const warned: string[] = [];
+    const asking = askRendererGuard(contents, { timers: { after: () => ({ cancel: () => undefined }) }, warn: (m) => warned.push(m) }).catch(() => 'cannot answer');
+    contents.emit('unresponsive');
+    expect(await asking).toBe('cannot answer');
+    // The guard's own line said it; the watch said nothing more.
+    expect(heard).toEqual(['unresponsive', 'responsive']);
+    expect(warned).toHaveLength(1);
+    // The question has settled: the next one is the watch's again.
+    contents.emit('unresponsive');
+    expect(heard).toEqual(['unresponsive', 'responsive', 'unresponsive']);
   });
 });

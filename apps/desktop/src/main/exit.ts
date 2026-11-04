@@ -452,6 +452,10 @@ export class ChildrenEndedByMain {
     const message = `CHILD PROCESS GONE (${details.type}${details.name === undefined ? '' : ` ${details.name}`}: ${details.reason}, exit ${details.exitCode})`;
     if (details.reason === 'clean-exit') return { level: 'info', message };
     if (details.reason === 'killed' && details.name !== undefined && this.#ended.has(details.name)) return { level: 'info', message: `${message}; main ended it at its exit` };
+    // R-091 (hardening §3.2 row 5): the GPU process is no child of main's own, and Chromium starts a new one by itself (after
+    // repeated losses it draws in software); the one line says what was lost and what follows, so a reader of the log does
+    // not take it for a renderer or a run lost.
+    if (details.type === 'GPU') return { level: 'error', message: `${message}: the GPU process was lost (${details.reason}); Chromium starts a new one by itself, and the windows may redraw or draw more slowly meanwhile` };
     return { level: 'error', message };
   }
 }

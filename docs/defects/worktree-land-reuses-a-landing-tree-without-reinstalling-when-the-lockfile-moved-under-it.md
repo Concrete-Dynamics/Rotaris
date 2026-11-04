@@ -29,3 +29,10 @@ tree is "installed on first use", which is what it does, and what is not enough 
 - `tools/worktree/land.mjs` — the landing-tree step and its "no dependencies yet" condition.
 - `tools/worktree/land.test.ts` — the landing's cases, none of which moves the lockfile between two attempts.
 - `docs/clean-room/agent-workflow.md` — the wrappers' surface, "installed on first use".
+
+**Seen again, 2026-11-04 (the harness-repairs branch `claude/serene-saha-86e3d2`, its eighth landing at `bc6a0ba7`, Windows 11
+ARM64, Node 26.13.0, pnpm 11.9.0).** The tree kept from a landing of 2026-11-03 was moved to a head carrying `fast-check`
+4.10.2 (the root `package.json`, since `b31230ef`) and not re-installed; the gate's typecheck failed in 75 s on every
+`*.property.test.ts` and `schema-arbitrary.test-support.ts` with `TS2307: Cannot find module 'fast-check'`, while the
+branch's own tree held the package. Worked around by removing the landing worktree, so the next run recreated and
+installed it. A note of the same defect written on that branch before this one was known was dropped in favour of this one.

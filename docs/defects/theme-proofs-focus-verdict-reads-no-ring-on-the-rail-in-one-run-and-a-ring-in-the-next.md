@@ -31,3 +31,16 @@ measures; whether the product meets them on a desktop it does not own alone is n
 - `apps/desktop/scripts/pixels.cjs` — `focusContrast`.
 - `C:/dev/Rotaris-wt-integ-hrd2-hrd2-typeawarelin/.proof/theme-proof/results.json` — the second run's figures (scratch
   evidence, removed with the landing worktree).
+
+**Observed again, 2026-11-04 (a landing's proof run on the Overview audit's execution branch, head `c6cc5792` over `2c3a9bc9`,
+Windows 11 ARM64, Node 26.13.0, the host at 73 to 100 % CPU with twelve to nineteen Electron processes of two sibling sessions'
+proof runs open on the same desktop).** `pnpm worktree:land`'s `theme-proof` (02:34 to 03:07 local): every `rotaris-dim` case
+passed (minimum ratios 3.20 to 4.43 over 34 to 35 stops); `nocturne` failed at every scale and `high-contrast` at 1 to 1.5. The
+failing readings are the shape above, not a weaker ring: a ratio of exactly 1.00 — no ring painted — on the rail's seven view
+buttons, the twelve Settings category rows, Sessions and "Dismiss this error", and 1.37 on the three window controls
+(`nocturne @ 1.25`, `@ 1.75`, `@ 2`; `high-contrast @ 1.25` on the seven rail buttons); and three runs with no failing stop at all
+but stale captures (`nocturne @ 1` 30 of 36 tested, `@ 1.5` 16 of 36 with a minimum of 11.19, `high-contrast @ 1.5` 21 of 36 with
+3.13). The branch's diff touches no theme token and no focus handling; the controls it draws (the Overview's secondary
+"Open Workspace", the StatusDot, the empty state's action slot) are in no failing list. The landing stopped with nothing
+pushed, the five suites before it green on the same head (directive 12, layout 28, mission, overview, retrospective 84). Recorded,
+not investigated; the suite was rerun alone on the same head and tree for the classification.

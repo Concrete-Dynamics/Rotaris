@@ -208,9 +208,10 @@ export function shellCommands(
     'notice.report': async (req) => {
       const message = req.message === undefined ? undefined : redact(req.message);
       const detail = req.detail === undefined ? undefined : redact(req.detail);
-      const r = await notices.report({ severity: req.severity, title: redact(req.title), ...(message === undefined ? {} : { message }), ...(detail === undefined ? {} : { detail }), persistent: req.persistent, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) });
+      const title = redact(req.title);
+      const r = await notices.report({ severity: req.severity, title, ...(message === undefined ? {} : { message }), ...(detail === undefined ? {} : { detail }), persistent: req.persistent, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) });
       const level = req.severity === 'error' ? 'error' : req.severity === 'warning' ? 'warn' : 'info';
-      log(`notice from the renderer: ${req.severity} "${req.title}" → #${r.id}${level !== 'info' && detail !== undefined && detail !== '' ? `
+      log(`notice from the renderer: ${req.severity} "${title}" → #${r.id}${level !== 'info' && detail !== undefined && detail !== '' ? `
 ${detail}` : ''}`, level);
       return { ok: true, value: { id: r.id } };
     },

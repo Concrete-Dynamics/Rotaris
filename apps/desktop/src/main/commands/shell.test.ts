@@ -269,4 +269,16 @@ describe('notice.report: a renderer\'s error is one error line in main\'s log an
     await f['notice.report']({ kind: 'notice.report', severity: 'error', title: 'This window stopped drawing', message: 'api_key=sk-live-123', detail: 'Authorization: Bearer abc.def', persistent: true }, at);
     expect(reported).toEqual([{ severity: 'error', title: 'This window stopped drawing', message: 'api_key=***', detail: 'Authorization: Bearer ***', persistent: true }]);
   });
+
+  /*
+   * Review of R-091 bundle B2 (2026-11-04): the handler stored the redacted title but wrote the line with the title as the
+   * renderer sent it, so a credential in a title reached main's log file unmasked.
+   */
+  it('the line main writes carries the redacted title too, never the text the renderer sent (REQ-TOOLS-171)', async () => {
+    const { f, lines } = reportFacet();
+    await f['notice.report']({ kind: 'notice.report', severity: 'error', title: 'token=sk-live-title', detail: 'Authorization: Bearer abc.def', persistent: true }, at);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.message).not.toContain('sk-live-title');
+    expect(lines[0]!.message).toBe('notice from the renderer: error "token=***" → #7\nAuthorization: Bearer ***');
+  });
 });

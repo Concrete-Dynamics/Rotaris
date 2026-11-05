@@ -1063,7 +1063,7 @@
     "defects/single-retry-stream-stall-aborted-a-76-minute-run.md": "0d5d23ec3d7525a1061cce1bdcf54c2e8a72fb7db238ee457eb4d7c90ae6c8b7",
     "defects/six-back-pointers-name-a-directive-whose-disposition-does-not-name-their-requirement.md": "42b79b08fa35aa66a1e43b49f530385fcc5deb7aee7b323178d32af37bbad6d1",
     "defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md": "d018bff8aeba67d9cca57024b0cdb9f7ce6f3c54cb753439c85c7f35414a5e34",
-    "defects/slash-proof-counts-a-skill-from-the-real-home-as-a-fixed-skill-command.md": "09ce5e47f804b65b81908b0ff158ec4a22c0ef5e6dc025e3f2186b2a73655dad",
+    "defects/slash-proof-counts-a-skill-from-the-real-home-as-a-fixed-skill-command.md": "4c0f6e1598eb17b8fed7dfadb7b4ce440a578201f6ab0eeb47031a8554540e3f",
     "defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md": "6e9857619b4659cca6485007292a7dedd6aef5a49e2b50c548a05b6962a1850e",
     "defects/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md": "ec7ca3c3e9aee32f63c7b04d62b14d5eb13c3d7af6fdc24da6ab9edb6f463cec",
     "defects/slash-proofs-wired-launch-cannot-read-its-key-saving-eval-because-the-log-masks-the-key.md": "689479cee6954e2300a1e9d5283999f80b46a3ea67a3b583093a014c727148bc",

@@ -33,7 +33,7 @@ after it stopped earlier on another reading this repair let the proof reach
 `retrospective-proof` (84 passed) passed with the shared seams. `injection-proof` passed its first three launches (all-on,
 switch, switched), which inject the scratch home's `~/.agents` files through the shared seam, and stopped at its fourth,
 `isolated`, on its known Windows reading
-(`docs/defects/injection-proofs-isolated-launch-compares-a-crlf-checkout-with-the-committed-lf-text.md`). `settings-proof`
+(`docs/archive/defects/injection-proofs-isolated-launch-compares-a-crlf-checkout-with-the-committed-lf-text.md`). `settings-proof`
 stopped at its known window reading, 1000×682 for 1000×680
 (`docs/defects/plan-gate-proofs-window-reads-1000x682-where-1000x680-is-asked-on-windows.md`), before its Instructions
 inventory launches, so the workspace service's half of the shared seam was not measured in the built app on this host. The live run's throwaway sign-in launch

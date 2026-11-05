@@ -18,6 +18,15 @@ proof stopped at "expected every command listed (≥ 27 rows: 15 built-ins + the
 inspect disagreeing). It depends on the git view landing between the two reads, so a run where it lands earlier passes that
 check; this one is the first reading of it. Not caused by that branch's change, which moves only the proof's home.
 
+Seen twice more on 2026-11-05 on the same host, by the bundle's review on `hrda-accept1-4` rebased onto `70436c90`
+(`pnpm slash-proof --skip-build`, CPU load 62 % and 77 %, no other Electron running): both runs stopped at line 300, "the
+built-ins and mirrors carry the action badge and the two fixed skill commands the skill badge — no other kind: action". In
+both, the second git view arrived about 270 to 300 ms before the eval at 2400 ms, and the eval and the inspect at 2500 ms
+agreed on 35 rows with no `/skill` or `/skills`. So a rebuild while the popup is open loses the two from both reads, not only
+from the second, and on this host it now stops every run of the catalogue launch. A Linux launch has always run with no skill
+discovered, as every launch here does since AF-16's repair, so the reading is not that repair's; it was hidden on Windows by
+the operator's own skill (perhaps because its registration re-rendered the popup; not traced).
+
 ## Specs
 
 REQ-CHAT-024 ("a bare `/` lists everything") and REQ-CHAT-162 (the two fixed skill commands, members of the catalogue

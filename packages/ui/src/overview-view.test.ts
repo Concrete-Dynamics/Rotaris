@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, type AgentRecord, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
-import { clampRight, costLabelParts, OVERVIEW_DIVIDER_WIDTH, OVERVIEW_LOADING_LABEL, OVERVIEW_NO_SESSION_CAPTION, OVERVIEW_PROPOSALS_HINT, OVERVIEW_SESSIONS_FAILED, OverviewView, type OverviewProps } from './OverviewView.js';
+import { clampRight, costLabelParts, OVERVIEW_DIVIDER_WIDTH, OVERVIEW_EMPTY_HINT, OVERVIEW_LOADING_LABEL, OVERVIEW_NO_PROVIDER_HINT, OVERVIEW_NO_TOKEN_HISTORY, OVERVIEW_OPEN_SETTINGS, OVERVIEW_NO_SESSION_CAPTION, OVERVIEW_PROPOSALS_HINT, OVERVIEW_SESSIONS_FAILED, OverviewView, type OverviewProps } from './OverviewView.js';
 
 /**
  * The Overview audit of 2026-11-02 (`docs/design/briefs/overview.md`), executed 2026-11-03: each case pins one item's or one
@@ -26,7 +26,7 @@ const repository: RepositoryState = { gitAvailable: true, isRepository: true, br
 const ok = async () => ({ ok: true as const });
 const render = (over: Partial<OverviewProps> = {}) => renderToStaticMarkup(createElement(OverviewView, {
   session: null, sessions: [], sessionsState: 'idle', sessionsError: null, repository, caps: { depth: 3, fanOut: 4 }, layout: undefined, onLayout: () => undefined, nowIso: '2026-11-03T10:01:00.000Z',
-  onListSessions: () => undefined, onNewSession: ok, onRefresh: () => undefined, onOpenSession: () => undefined, onContinueSession: () => undefined, onGoTo: () => undefined,
+  onListSessions: () => undefined, onNewSession: ok, onRefresh: () => undefined, onOpenSession: () => undefined, onContinueSession: () => undefined, onGoTo: () => undefined, providerAuthenticated: true, onOpenSettings: () => undefined,
   improvements: [], onOpenProposal: () => undefined, onReviewProposal: ok, reducedMotion: false,
   ...over,
 }));
@@ -98,7 +98,7 @@ describe('the three session-scoped cards with sessions listed and none focused (
 describe('the populated cards (REQ-MONITOR-166..169; audit items 4, 5, 6, 13, 16)', () => {
   const html = render({ session: session({ agents: [agent()] }), sessions: [row()] });
   it('sets every figure a caption carries in the mono face, the prose in the body face, each figure one unit with its word — item 5, UIR-201', () => {
-    expect(html).toContain('<div class="card-meta"><span data-testid="overview-cost" data-qualifier="configured"><span class="mono">0.0028</span> at configured rates</span></div>');
+    expect(html).toContain('<div class="card-meta"><span data-testid="overview-cost" data-qualifier="configured"><span class="ov-caption__unit"><span class="mono">0.0028</span> at configured rates</span></span></div>');
     expect(html).toContain('<div class="card-meta" data-testid="overview-tool-agents"><span>across <span class="mono">1</span> agent</span></div>');
     expect(html).toContain('<div class="card-meta" data-testid="overview-repo-touched"><span><span class="ov-caption__unit"><span class="mono">1</span> file touched</span> · <span class="ov-caption__unit"><span class="mono">0</span> uncommitted</span></span></div>');
     expect(html).toContain('<span class="card-meta"><span><span class="mono">1</span> listed</span></span>');
@@ -147,6 +147,71 @@ describe('the seam between the columns (REQ-MONITOR-165; audit item 9)', () => {
     expect(rule('.overview__body')).toContain('var(--rt-space-4) 340px');
     expect(OVERVIEW_DIVIDER_WIDTH).toBe(16);
     expect(clampRight(560, 880)).toBe(880 - 320 - OVERVIEW_DIVIDER_WIDTH);
+  });
+});
+
+describe('the onboarding empty state under the provider precondition (OQ-537; audit item 2)', () => {
+  it('with no provider authenticated keeps the title, states REQ-WORKSPACE-152 (3)\'s two facts and offers Open Settings at models', () => {
+    let opened: string | null = null;
+    const html = render({ providerAuthenticated: false, onOpenSettings: (category) => { opened = category; } });
+    expect(html).toContain('data-precondition="provider"');
+    expect(html).toContain('class="empty-state-title">Nothing to show yet<');
+    expect(html).toContain(OVERVIEW_NO_PROVIDER_HINT);
+    expect(html).not.toContain(OVERVIEW_EMPTY_HINT);
+    // Controls leading to a step REQ-WORKSPACE-137 refuses: 1 → 0. The one control is secondary, so "New session" stays the one filled.
+    expect(html).not.toContain('>Open Workspace<');
+    expect(html).toMatch(new RegExp(`<div class="empty-state-action"><button type="button" class="btn btn-secondary"[^>]*data-testid="overview-open-settings"[^>]*>${OVERVIEW_OPEN_SETTINGS}</button></div>`));
+    expect(count(html, 'btn btn-primary')).toBe(1);
+    expect(opened).toBeNull();
+  });
+  it('keeps today\'s first-use copy and Open Workspace once a provider is authenticated', () => {
+    const html = render({ providerAuthenticated: true });
+    expect(html).toContain(OVERVIEW_EMPTY_HINT);
+    expect(html).toContain('>Open Workspace<');
+    expect(html).not.toContain('data-precondition');
+    expect(html).not.toContain(OVERVIEW_OPEN_SETTINGS);
+  });
+  it('waits on the provider read as on the list, so the empty state is never drawn in one copy and then the other', () => {
+    const html = render({ providerAuthenticated: null });
+    expect(html).toContain('data-testid="overview-loading"');
+    expect(html).not.toContain('data-testid="overview-empty"');
+    // With sessions listed the precondition decides nothing: the grid draws.
+    expect(render({ providerAuthenticated: null, sessions: [row()] })).toContain('data-testid="overview-tokens"');
+  });
+});
+
+describe('the metric cards composed from the inventory (OQ-539, OQ-540; audit item 11)', () => {
+  const populated = render({ session: session(), sessions: [row()] });
+  it('draws the three session-scoped metric cards as the design KpiCard, unaccented, and every card through the design Card', () => {
+    expect(count(populated, 'data-ui-component="KpiCard"')).toBe(3);
+    expect(populated).not.toContain('card-accented');
+    expect(populated).not.toContain('<section');
+    // Local copies 3 → 0: no card without a component name, no `.ov-kpi` row, no hand-drawn sparkline path.
+    expect(count(populated, 'class="card ')).toBe(count(populated, 'data-ui-component="Card"') + count(populated, 'data-ui-component="KpiCard"'));
+    expect(populated).not.toContain('ov-kpi"');
+    expect(populated).not.toContain('class="ov-kpi ');
+    expect(populated).not.toMatch(/<path d="M0\.0/);
+    expect(css).not.toMatch(/^\.ov-kpi \{/m);
+    expect(css).not.toMatch(/^\.ov-spark/m);
+  });
+  it('draws the trend with the design Sparkline, stroked by the component in --rt-viz-1, the proof\'s probes kept', () => {
+    expect(count(populated, 'data-ui-component="Sparkline"')).toBe(1);
+    expect(populated).toMatch(/<svg class="sparkline ov-spark" viewBox="0 0 160 22" preserveAspectRatio="none" role="img" data-ui-component="Sparkline" aria-label="token history, 2 samples" data-samples="2"><polyline class="sparkline__series" points="[^"]+"><\/polyline><\/svg>/);
+    expect(populated).not.toContain('stroke=');
+    expect(rule('.sparkline__series')).toContain('stroke: var(--rt-viz-1)');
+    expect(rule('.sparkline__series')).toContain('fill: none');
+  });
+  it('draws the explicit empty form below two samples, in the same box, and says so in the caption', () => {
+    const one = render({ session: session({ usageHistory: [['2026-11-03T10:00:07.000Z', 100]] }), sessions: [row()] });
+    expect(one).toContain(`<svg class="sparkline sparkline--empty ov-spark" viewBox="0 0 160 22" preserveAspectRatio="none" role="img" data-ui-component="Sparkline" aria-label="${OVERVIEW_NO_TOKEN_HISTORY}" data-empty="true" data-samples="1">`);
+    expect(one).not.toContain('sparkline__series');
+    // The caption is the cost label alone in both forms, so the card keeps its height when the second sample arrives.
+    expect(one).toContain('<span data-testid="overview-cost" data-qualifier="configured"><span class="ov-caption__unit"><span class="mono">0.0028</span> at configured rates</span></span>');
+    expect(one).not.toContain('no history yet');
+    const none = render({ sessions: [row()] });
+    expect(none).toContain('data-samples="0"');
+    expect(none).toContain(`aria-label="${OVERVIEW_NO_TOKEN_HISTORY}"`);
+    expect(rule('.sparkline__axes')).toContain('stroke: var(--rt-viz-grid)');
   });
 });
 

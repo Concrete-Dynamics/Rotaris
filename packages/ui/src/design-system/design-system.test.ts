@@ -281,6 +281,32 @@ describe('production design-system layer', () => {
       expect(render(design.Sparkline, { values: [1, 4, 2], label: 'Tokens per turn' })).toContain('aria-label="Tokens per turn"');
     });
 
+    // OQ-540 (the §4.1 amendment of 2026-11-03): below two values the box is drawn, the name stated, and no series drawn.
+    it.each([[[]], [[7]]])('draws the explicit empty sparkline at %j — box, name, no series', (values) => {
+      const markup = render(design.Sparkline, { values, label: 'Tokens per turn', emptyLabel: 'No token history yet' });
+      expect(markup).toContain('viewBox="0 0 160 22"');
+      expect(markup).toContain('role="img"');
+      expect(markup).toContain('aria-label="No token history yet"');
+      expect(markup).toContain('data-empty="true"');
+      expect(markup).toContain('class="sparkline__axes"');
+      expect(markup).not.toContain('polyline');
+      expect(markup).not.toContain('Tokens per turn');
+    });
+
+    // OQ-539: one series, stroked by the component's own class and never by an attribute a caller could pass.
+    it('draws two or more values as one series inside the specimen box, with no stroke attribute', () => {
+      const markup = render(design.Sparkline, { values: [0, 10], label: 'Tokens' });
+      expect(markup).toContain('<polyline class="sparkline__series" points="0,21 160,1">');
+      expect(markup).not.toContain('stroke');
+      expect(markup).not.toContain('data-empty');
+    });
+
+    it('draws KpiCard as its specimen: the baseline row, the trend slot, further lines, and an honoured accented flag', () => {
+      const markup = render(design.KpiCard, { title: 'Tokens', value: '336', unit: 'tok', sparkline: 'TREND', footer: 'FOOT' }, 'LINE');
+      expect(markup).toBe('<div class="card card-accented" data-ui-component="KpiCard"><div class="card-kicker">Tokens</div><div class="kpi-row"><span class="kpi-value">336</span><span class="kpi-unit">tok</span></div>TRENDLINE<div class="card-meta">FOOT</div></div>');
+      expect(render(design.KpiCard, { title: 'Tokens', value: 1, accented: false })).not.toContain('card-accented');
+    });
+
     it('clamps a meter rather than drawing outside itself', () => {
       expect(render(design.MeterBar, { value: 400, max: 100, label: 'Context' })).toContain('width:100%');
       expect(render(design.MeterBar, { value: -4, max: 100, label: 'Context' })).toContain('width:0%');

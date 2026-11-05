@@ -5,8 +5,11 @@
  * three launches against one scratch profile:
  *
  *   1. empty     — a fresh workspace that is a Git repository with one commit and one untracked file: Overview is
- *                  the first view painted; the onboarding empty state; then, with PATH emptied of git, the repository
- *                  card's "not available" state and no dialog (REQ-GIT-102/103).
+ *                  the first view painted; the onboarding empty state, keyed to the provider precondition since no
+ *                  provider is authenticated (OQ-537: REQ-WORKSPACE-152 (3)'s two facts, REQ-WORKSPACE-137's "Open
+ *                  Settings"); then, with PATH emptied of git, the repository card's "not available" state and no dialog
+ *                  (REQ-GIT-102/103); then, with a stored credential for one provider, today's first-use
+ *                  copy and "Open Workspace" (OQ-537), the credential removed again before the run.
  *   2. run       — a scripted run whose one model call waits 21 s (three token-sample periods), one delegate step
  *                  and two tool calls; driven from the Workspace view, the Overview read afterwards: the header, the
  *                  tokens card with ≥ 2 samples, the tool-call chips matching the store, the agents caption, the
@@ -21,7 +24,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
@@ -43,7 +46,7 @@ if (!process.argv.includes('--skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
-const PROBES = ['[data-testid="overview-session"]', '[data-testid="overview-empty"]', '[data-testid="overview-tokens"]', '.ov-spark', '[data-testid="overview-cost"]', '[data-testid="overview-tool-calls"]', '[data-testid="overview-tool-chips"] .tag', '[data-testid="overview-repo-state"]', '[data-testid="overview-repo-branch"]', '[data-testid="overview-repo-counts"]', '[data-testid="overview-agent-count"]', '[data-testid="overview-agent-caps"]', '[data-testid="overview-agent-states"]', '[data-testid="overview-sessions"] .ov-session', '[data-testid="overview-sessions-empty"]', '[data-testid="overview-divider"]', '.app-shell'];
+const PROBES = ['[data-testid="overview-session"]', '[data-testid="overview-empty"]', '[data-testid="overview-empty"] .empty-state-hint', '[data-testid="overview-empty"] .empty-state-action button', '[data-testid="overview-open-settings"]', '[data-testid="overview-tokens"]', '.ov-spark', '[data-testid="overview-cost"]', '[data-testid="overview-tool-calls"]', '[data-testid="overview-tool-chips"] .tag', '[data-testid="overview-repo-state"]', '[data-testid="overview-repo-branch"]', '[data-testid="overview-repo-counts"]', '[data-testid="overview-agent-count"]', '[data-testid="overview-agent-caps"]', '[data-testid="overview-agent-states"]', '[data-testid="overview-sessions"] .ov-session', '[data-testid="overview-sessions-empty"]', '[data-testid="overview-divider"]', '.app-shell'];
 
 async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
@@ -110,13 +113,41 @@ if (emptyView !== 'overview') throw new Error(`the first view painted was ${empt
 if (text(empty.probes, '[data-testid="overview-empty"]').length !== 1) throw new Error('the onboarding empty state was not on screen with no session and no stored run');
 if (!/repository .*: git=true repo=true branch=main base=- \+0\/-0 touched=1 uncommitted=0/.test(empty.log)) throw new Error(`the repository was not read as expected:\n${empty.log.split('\n').filter((l) => /repository/.test(l)).join('\n')}`);
 const readMs = Number(/repository .* in (\d+) ms/.exec(empty.log)?.[1] ?? -1);
-results.empty = { view: emptyView, emptyState: true, repositoryReadMs: readMs };
+// OQ-537 (the Overview audit's item 2): with no provider authenticated the empty state keeps its title, states REQ-WORKSPACE-152 (3)'s
+// two facts and offers REQ-WORKSPACE-137's "Open Settings" — never "Open Workspace", which led to the step REQ-WORKSPACE-137 refuses.
+const NO_PROVIDER_HINT = 'No model provider is authenticated yet. Runs cannot start until one is.';
+const FIRST_USE_HINT = 'Start a run from the Workspace view. Finished and suspended runs, their tokens, tool calls and agents will be summarised here.';
+if (!/providers: 0 authenticated/.test(empty.log)) throw new Error('the empty launch did not start with no provider authenticated');
+const emptyBox = first(empty.probes, '[data-testid="overview-empty"]');
+const emptyHint = text(empty.probes, '[data-testid="overview-empty"] .empty-state-hint')[0] ?? '';
+const emptyControls = text(empty.probes, '[data-testid="overview-empty"] .empty-state-action button');
+if (emptyBox?.data?.['data-precondition'] !== 'provider' || emptyHint !== NO_PROVIDER_HINT) throw new Error(`with no provider authenticated the empty state did not name the precondition: "${emptyHint}"`);
+if (JSON.stringify(emptyControls) !== JSON.stringify(['Open Settings'])) throw new Error(`with no provider authenticated the empty state offered ${JSON.stringify(emptyControls)}, not Open Settings alone`);
+results.empty = { view: emptyView, emptyState: true, precondition: 'provider', hint: emptyHint, controls: emptyControls, repositoryReadMs: readMs };
 
 // 1b. PATH emptied of git: the reads end in a state — no dialog, no throw (REQ-GIT-102/103).
 const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_AFTER_MS: '3500', PATH: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent', Path: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent' });
 if (!/repository .*: git=false repo=false/.test(noGit.log)) throw new Error(`with no git on the path the repository read did not end in the empty state:\n${noGit.log.split('\n').filter((l) => /repository/.test(l)).join('\n')}`);
 if (/Error box|dialog/i.test(noGit.log.split('\n').filter((l) => /repository/.test(l)).join('\n'))) throw new Error('a dialog was raised for a missing git');
 results.noGit = { repositoryState: 'git=false', dialog: false };
+
+// 1c. One authenticated provider: the first-use copy and "Open Workspace" return unchanged (OQ-537). A provider is authenticated by
+//     its stored credential and the clock alone (REQ-PROVIDER-010/059, `credentialStatus`), so the proof seats one in the scratch
+//     profile's credential store (REQ-PROVIDER-014, where `tokensDirFor` says the product keeps it): a user-defined OpenAI-compatible
+//     instance whose base URL is an unreachable loopback port and whose key is no key, so nothing leaves the machine. It is removed
+//     before the run, so the run below meets the configuration it always met.
+const credentialFile = join(tokensDirFor(local), 'openai-compatible--overview-proof.json');
+mkdirSync(tokensDirFor(local), { recursive: true });
+writeFileSync(credentialFile, JSON.stringify({ access_token: 'overview-proof-not-a-key', refresh_token: '', expires_at: 0, account_id: null, extra: { provider_family: 'openai-compatible', api_base: 'http://127.0.0.1:9/v1' } }));
+const withProvider = await launch('empty-provider', workspace, local, preferences, { ROTARIS_CAPTURE_AFTER_MS: '3500' });
+rmSync(credentialFile, { force: true });
+if (!/providers: [1-9]\d* authenticated/.test(withProvider.log)) throw new Error(`the snapshot's provider was not read as authenticated:\n${withProvider.log.split('\n').filter((l) => /providers:/.test(l)).join('\n')}`);
+const providerBox = first(withProvider.probes, '[data-testid="overview-empty"]');
+const providerHint = text(withProvider.probes, '[data-testid="overview-empty"] .empty-state-hint')[0] ?? '';
+const providerControls = text(withProvider.probes, '[data-testid="overview-empty"] .empty-state-action button');
+if (providerBox === null || providerBox.data?.['data-precondition'] !== undefined || providerHint !== FIRST_USE_HINT) throw new Error(`with a provider authenticated the empty state did not keep its first-use copy: "${providerHint}"`);
+if (JSON.stringify(providerControls) !== JSON.stringify(['Open Workspace'])) throw new Error(`with a provider authenticated the empty state offered ${JSON.stringify(providerControls)}`);
+results.emptyWithProvider = { hint: providerHint, controls: providerControls };
 
 // 2. A scripted run driven from the Workspace view, the Overview read afterwards. The orchestrator's first call waits
 //    21 s (three sample periods), then delegates one child, then reads a file, then answers.

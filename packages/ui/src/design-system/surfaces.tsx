@@ -16,9 +16,17 @@ export interface KpiCardProps extends Omit<CardProps, 'title'> {
   readonly title: ReactNode;
   readonly value: ReactNode;
   readonly unit?: ReactNode;
+  /** The specimen's trend slot (`docs/design/system/components/surfaces/KpiCard.jsx`), drawn under the figure: a `Sparkline`. */
+  readonly sparkline?: ReactNode;
 }
-export function KpiCard({ title, value, unit, footer, className, ...rest }: KpiCardProps) {
-  return <Card title={title} accented className={classes('card', 'card-accented', className)} footer={footer} data-ui-component="KpiCard" {...rest}><div><span className="kpi-value">{value}</span>{unit === undefined ? null : <span className="kpi-unit">{unit}</span>}</div></Card>;
+/**
+ * The specimen's KPI card: the kicker, the figure and its unit on one baseline row (`.kpi-row`), the trend, then the caller's
+ * further lines (`children`) and the footer. Until 2026-11-05 the built component dropped the specimen's trend slot and its
+ * baseline row, discarded `children` and forced the accented kicker whatever `accented` said, so the Overview drew its metric
+ * cards as local copies instead (the Overview audit of 2026-11-02, item 11). `accented` keeps the specimen's default.
+ */
+export function KpiCard({ title, value, unit, sparkline, footer, accented = true, className, children, ...rest }: KpiCardProps) {
+  return <Card title={title} accented={accented} className={classes('card', accented && 'card-accented', className)} footer={footer} data-ui-component="KpiCard" {...rest}><div className="kpi-row"><span className="kpi-value">{value}</span>{unit === undefined ? null : <span className="kpi-unit">{unit}</span>}</div>{sparkline ?? null}{children}</Card>;
 }
 
 export interface SectionLabelProps extends HTMLAttributes<HTMLDivElement> { readonly children?: ReactNode }

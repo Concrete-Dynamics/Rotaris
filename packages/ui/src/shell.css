@@ -1311,6 +1311,9 @@
 /* UIR-007: sized to its message. `flex: 1` made the panel take the view's whole remaining height —
    634.75 px of dashed frame and dot grid around three lines of copy. */
 .overview__empty { flex: 0 0 auto; margin-block: auto; }
+/* OQ-537's two-sentence hint left its last word alone on a second line in the 388 px box (iteration 3, 2026-11-05); the hint
+   wraps so no line ends with one word, in either copy. */
+.overview__empty .empty-state-hint { text-wrap: pretty; }
 /* The adopted EmptyState's `action` slot stands `--rt-space-2` above its control (`EmptyState.jsx`'s `marginTop: 8`), so the control
    sits further from the hint than the hint from the title (audit item 12). Product-wide: every EmptyState with an `action`. */
 .empty-state-action { margin-top: var(--rt-space-2); }
@@ -1333,8 +1336,6 @@
 .ov-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2, 8px); }
 .ov-card__head > .card-kicker { flex: 0 0 auto; white-space: nowrap; }
 .ov-card__head > .card-meta { min-width: 0; text-align: end; }
-.ov-card__title { margin: 0; }
-.ov-kpi { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
 /* Audit item 6: REQ-MONITOR-168's directional markers, Phosphor regular at the rail's size in the passive-metadata ink (§1.9). A
    marker sits flush to its numeral (the glyph's own side bearings space it, as the typed glyph's did) and the word follows at the
    figure gap; the three are one unit, so a count wraps whole in the narrow four-column card. */
@@ -1343,7 +1344,6 @@
 .ov-caption__unit { white-space: nowrap; }
 .ov-kpi__count > .kpi-unit { margin-inline-start: var(--rt-space-2); }
 .ov-kpi__marker { font-size: var(--rt-icon-size); color: var(--rt-text-tertiary); align-self: center; }
-.ov-spark { color: var(--rt-accent-300); max-width: 100%; }
 .ov-chips { display: flex; flex-wrap: wrap; gap: var(--rt-space-1, 4px); }
 .ov-sessions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .ov-session { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; grid-auto-flow: dense; align-items: center; column-gap: var(--rt-space-2, 8px); row-gap: 2px; padding: var(--rt-space-2, 8px) 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
@@ -1716,6 +1716,16 @@
 .ctx-ring--fail .ctx-ring__fill { stroke: var(--rt-danger-300); }
 .ctx-ring__tick { stroke: var(--rt-text-secondary); stroke-width: 2; }
 .ctx-ring__value { position: relative; font-size: var(--rt-text-2xs, 10px); color: var(--rt-text); }
+/* The design KpiCard's figure row, the specimen's own (`system/components/surfaces/KpiCard.jsx`: the figure and its unit on one
+   baseline). The Overview's metric cards drew it as a local `.ov-kpi` until 2026-11-05 (the Overview audit of 2026-11-02, item 11). */
+.kpi-row { display: flex; align-items: baseline; gap: var(--rt-space-2); flex-wrap: wrap; }
+/* The design Sparkline (`design-system/data.tsx`). OQ-539: a single series strokes `--rt-viz-1`, declared here once and passed by no
+   call site, with no fill; the specimen's `--rt-accent-500` and the mockup's `--rt-viz-2` are illustrative (§1.3's reading note).
+   OQ-540: below two values the empty form keeps the box and draws only an empty pair of axes in `--rt-viz-grid`, never a series.
+   The box stretches to its container at the specimen's height band; the stroke keeps its width however the box is stretched. */
+.sparkline { display: block; width: 100%; height: var(--rt-space-6); overflow: visible; }
+.sparkline__series { fill: none; stroke: var(--rt-viz-1); stroke-width: calc(1.5 * var(--rt-hairline-width)); stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.sparkline__axes { fill: none; stroke: var(--rt-viz-grid); stroke-width: var(--rt-hairline-width); vector-effect: non-scaling-stroke; }
 .workspace--narrow { grid-template-columns: 1fr; grid-template-areas: 'bar' 'runhead' 'reauth' 'plangate' 'transcript' 'queue' 'divider' 'composer'; grid-template-rows: auto auto minmax(0, auto) auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); position: relative; }
 .workspace--narrow > .workspace__drawer-bar { grid-area: bar; display: flex; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); border-bottom: 1px solid var(--rt-border); background: var(--rt-chrome); }
 .workspace--narrow > .transcript { grid-area: transcript; }

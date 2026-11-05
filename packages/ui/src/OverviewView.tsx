@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type Pointe
 import { PROPOSAL_STATUSES, isBusy, presentationChildState, presentationStatus, STATUS_LABELS, type AgentRecord, type ImprovementArtifactRecord, type ImprovementProposal, type PaneLayout, type ProposalStatus, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
 import { AgentTree } from './AgentTree.js';
 import { categoryLabel, ProposalDecisionDialog, RetrospectiveGesture, statusLabel } from './library/ProposalsTab.js';
-import { Button as DesignButton, EmptyState as DesignEmptyState, layoutContractAttributes, PageHeader as DesignPageHeader, Spinner as DesignSpinner, Tag as DesignTag, type UiLayoutContract } from './design-system/index.js';
+import { Button as DesignButton, Card as DesignCard, EmptyState as DesignEmptyState, KpiCard as DesignKpiCard, layoutContractAttributes, PageHeader as DesignPageHeader, Sparkline as DesignSparkline, Spinner as DesignSpinner, Tag as DesignTag, type UiLayoutContract } from './design-system/index.js';
 
 /**
  * REQ-SHELL-026's startup view. Structure from the specification — REQ-MONITOR-164 (the header), 165 (the two
@@ -40,6 +40,17 @@ const columnUi = (id: string): UiLayoutContract => ({ id, relations: [{ kind: 's
  * ways a proposal is produced.
  */
 export const OVERVIEW_PROPOSALS_HINT = "Run improvement analysis, or a retrospective over this workspace's history, to produce reviewable suggestions.";
+/**
+ * OQ-537 (ruled 2026-11-03, a reading of REQ-NOTIFY-006 and REQ-NOTIFY-010, no directive): while the provider rows list no
+ * authenticated provider, the onboarding empty state keeps its title, its hint conveys REQ-WORKSPACE-152 (3)'s two facts in that
+ * requirement's terms, and its one control is REQ-WORKSPACE-137's "Open Settings" at the `models` category (REQ-CONFIG-269) —
+ * never the guided setup itself, whose places REQ-WORKSPACE-152 names exhaustively. Once any provider is authenticated the
+ * first-use copy and "Open Workspace" return unchanged.
+ */
+export const OVERVIEW_EMPTY_TITLE = 'Nothing to show yet';
+export const OVERVIEW_EMPTY_HINT = 'Start a run from the Workspace view. Finished and suspended runs, their tokens, tool calls and agents will be summarised here.';
+export const OVERVIEW_NO_PROVIDER_HINT = 'No model provider is authenticated yet. Runs cannot start until one is.';
+export const OVERVIEW_OPEN_SETTINGS = 'Open Settings';
 
 export interface OverviewProps {
   readonly session: SessionRecord | null;
@@ -62,6 +73,14 @@ export interface OverviewProps {
   readonly onOpenSession: (sessionId: string) => void;
   readonly onContinueSession: (sessionId: string) => void;
   readonly onGoTo: (view: 'workspace' | 'mission' | 'library') => void;
+  /**
+   * OQ-537: whether the provider rows list an authenticated provider — main's own predicate for REQ-WORKSPACE-152 (3)'s notice
+   * (`providers.list().some((row) => row.authenticated)`), so the hint and the notice cannot disagree. `null` until read; the
+   * body waits on it as it waits on the session list, so the empty state never draws one copy and then the other.
+   */
+  readonly providerAuthenticated: boolean | null;
+  /** OQ-537: REQ-WORKSPACE-137's "Open Settings", which navigates to the Settings primary view at `models` (REQ-CONFIG-269). */
+  readonly onOpenSettings: (category: 'models') => void;
   readonly improvements: readonly ImprovementArtifactRecord[];
   readonly onOpenProposal: (proposalId?: string) => void;
   readonly onReviewProposal: (artifactId: string, proposalId: string, status: ProposalStatus, expectedVersionsDue: number) => Promise<{ ok: true } | { ok: false; reason: string }>;
@@ -84,15 +103,12 @@ export function runElapsedLabel(startedAt: string | null, nowIso: string): strin
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** REQ-MONITOR-166: the sparkline's path over the samples; fewer than two is EMPTY, never a flat line. */
-export function sparklinePath(samples: readonly (readonly [string, number])[], width: number, height: number): string | null {
-  if (samples.length < 2) return null;
-  const values = samples.map((s) => s[1]);
-  const min = Math.min(...values), max = Math.max(...values);
-  const span = max - min || 1;
-  const step = width / (samples.length - 1);
-  return values.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${(height - ((v - min) / span) * (height - 2) - 1).toFixed(1)}`).join(' ');
-}
+/**
+ * REQ-MONITOR-166's sparkline is the design `Sparkline` since 2026-11-05 (the Overview audit of 2026-11-02, item 11): its stroke
+ * is the component's own `--rt-viz-1` (OQ-539) and fewer than two samples draw its explicit empty form (OQ-540), so the local
+ * `sparklinePath` and the hand-drawn `svg.ov-spark` it fed are gone. The accessible name of that empty form:
+ */
+export const OVERVIEW_NO_TOKEN_HISTORY = 'No token history yet';
 
 /**
  * REQ-MONITOR-169: waiting = waiting + queued; failed = failed + cancelled (+ blocked, which presents as failed).
@@ -145,21 +161,25 @@ export function clampRight(right: number, containerWidth: number, dividerWidth =
   return Math.round(Math.max(OVERVIEW_RIGHT_MIN, Math.min(OVERVIEW_RIGHT_MAX, right, Math.max(OVERVIEW_RIGHT_MIN, maxByLeft))));
 }
 
-function Card({ kicker, title, children, className = '', actions, kickerUi }: { kicker: string; title?: string | undefined; children: React.ReactNode; className?: string; actions?: React.ReactNode; kickerUi?: UiLayoutContract | undefined }) {
+/**
+ * The Overview's card with a head band: the design `Card` (so every card carries `data-ui-component`, the Overview audit's item 11
+ * counted the local `section.card` that did not), a named region, and the kicker beside the card's own controls. The four metric
+ * cards are the design `KpiCard` instead; the three lists move to `TableCard` under item 7.
+ */
+function Card({ kicker, children, className = '', actions, kickerUi }: { kicker: string; children: React.ReactNode; className?: string; actions?: React.ReactNode; kickerUi?: UiLayoutContract | undefined }) {
   return (
-    <section className={`card ov-card ${className}`} aria-label={kicker}>
+    <DesignCard className={`card ov-card ${className}`} role="region" aria-label={kicker}>
       <div className="ov-card__head">
         <span className="card-kicker" {...layoutContractAttributes(kickerUi)}>{kicker}</span>
         {actions}
       </div>
-      {title && <h2 className="card-title ov-card__title">{title}</h2>}
       {children}
-    </section>
+    </DesignCard>
   );
 }
 
 export function OverviewView(props: OverviewProps) {
-  const { session, sessions, sessionsState, sessionsError = null, repository, caps, layout, onLayout, nowIso = null, reducedMotion = false } = props;
+  const { session, sessions, sessionsState, sessionsError = null, repository, caps, layout, onLayout, nowIso = null, reducedMotion = false, providerAuthenticated } = props;
   const now = nowIso ?? new Date().toISOString();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [right, setRight] = useState<number>(() => layout?.sizes[1] ?? OVERVIEW_RIGHT_DEFAULT);
@@ -207,11 +227,12 @@ export function OverviewView(props: OverviewProps) {
   // read is pending, the onboarding empty state once a read settled on zero sessions, and otherwise the grid — a refused read
   // included, which until 2026-11-03 drew as an empty store because only `loading` was excluded here.
   const nothingListed = session === null && sessions.length === 0;
-  const loading = nothingListed && sessionsState === 'loading';
-  const empty = nothingListed && sessionsState === 'idle';
+  // The provider rows are read beside the list (OQ-537), so the empty state is drawn once, in the copy it keeps.
+  const loading = nothingListed && (sessionsState === 'loading' || (sessionsState === 'idle' && providerAuthenticated === null));
+  const empty = nothingListed && sessionsState === 'idle' && providerAuthenticated !== null;
   const counts = useMemo(() => agentCounts(session?.agents ?? []), [session]);
   const total = session ? tokenTotal(session) : 0;
-  const path = useMemo(() => (session ? sparklinePath(session.usageHistory, 160, 36) : null), [session]);
+  const samples = useMemo(() => (session?.usageHistory ?? []).map((sample) => sample[1]), [session]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [newSessionError, setNewSessionError] = useState<string | null>(null);
   const [proposalDecision, setProposalDecision] = useState<{ artifactId: string; versionsDue: number; proposal: ImprovementProposal; status: ProposalStatus } | null>(null);
@@ -241,8 +262,12 @@ export function OverviewView(props: OverviewProps) {
       ) : empty ? (
         /* REQ-MONITOR-165's onboarding empty state through the adopted shorthand: its one control is the secondary variant, so
            "New session" is the view's one filled control in every state (§1.7; audit item 3), and it stands in the `action` slot,
-           `--rt-space-2` below the hint (audit item 12). */
-        <DesignEmptyState className="empty-state overview__empty" data-testid="overview-empty" title="Nothing to show yet" hint="Start a run from the Workspace view. Finished and suspended runs, their tokens, tool calls and agents will be summarised here." action={<DesignButton type="button" className="btn btn-secondary" onClick={() => props.onGoTo('workspace')}>Open Workspace</DesignButton>} />
+           `--rt-space-2` below the hint (audit item 12). OQ-537 (audit item 2): while no provider is authenticated the hint states
+           REQ-WORKSPACE-152 (3)'s two facts and the control is REQ-WORKSPACE-137's "Open Settings" at `models`, since "Open
+           Workspace" led to the step REQ-WORKSPACE-137 refuses; the title stays. */
+        providerAuthenticated === false
+          ? <DesignEmptyState className="empty-state overview__empty" data-testid="overview-empty" data-precondition="provider" title={OVERVIEW_EMPTY_TITLE} hint={OVERVIEW_NO_PROVIDER_HINT} action={<DesignButton type="button" className="btn btn-secondary" data-testid="overview-open-settings" onClick={() => props.onOpenSettings('models')}>{OVERVIEW_OPEN_SETTINGS}</DesignButton>} />
+          : <DesignEmptyState className="empty-state overview__empty" data-testid="overview-empty" title={OVERVIEW_EMPTY_TITLE} hint={OVERVIEW_EMPTY_HINT} action={<DesignButton type="button" className="btn btn-secondary" onClick={() => props.onGoTo('workspace')}>Open Workspace</DesignButton>} />
       ) : (
         <div className="overview__body" ref={bodyRef} style={{ gridTemplateColumns: `minmax(${OVERVIEW_LEFT_MIN}px, 1fr) var(--rt-space-4) ${right}px` }}>
           <div className="overview__left" {...layoutContractAttributes(columnUi('overview-left'))}>
@@ -253,21 +278,26 @@ export function OverviewView(props: OverviewProps) {
                   carries is set in `--rt-font-mono` — a span per figure, the prose in the body face, as HOME sets "14/18" beside
                   "Billing core" — not the whole line: set whole in mono, "1 file touched · 0 uncommitted" and the cost label outgrew
                   the four-column card's 171 px at 1400 and broke "uncommitted" and "rates" from their figures (iteration 2's UIR-201).
-                  The adopted `.card-meta` is a flex row, so each caption's content is one child span and wraps as inline text. */}
-              <Card kicker="Tokens" className="ov-card--tokens">
-                <div className="ov-kpi"><span className="kpi-value" data-testid="overview-tokens">{session ? total.toLocaleString('en-US') : '—'}</span><span className="kpi-unit">tok</span></div>
-                <svg className="ov-spark" viewBox="0 0 160 36" width="160" height="36" role="img" aria-label={path ? `token history, ${session?.usageHistory.length ?? 0} samples` : 'no token history yet'} data-samples={session?.usageHistory.length ?? 0}>
-                  {path ? <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" /> : <line x1="0" y1="35" x2="160" y2="35" stroke="currentColor" strokeDasharray="2 3" opacity="0.5" />}
-                </svg>
-                <div className="card-meta"><span data-testid="overview-cost" data-qualifier={session?.costLabel.qualifier ?? 'unknown'}>{session ? <>{path ? null : 'no history yet · '}{costLabelParts(session.costLabel.text).figure !== '' && <span className="mono">{costLabelParts(session.costLabel.text).figure}</span>}{costLabelParts(session.costLabel.text).rest}</> : OVERVIEW_NO_SESSION_CAPTION}</span></div>
-              </Card>
-              <Card kicker="Tool calls">
-                <div className="ov-kpi"><span className="kpi-value" data-testid="overview-tool-calls">{session ? session.toolCalls.total : '—'}</span></div>
+                  The adopted `.card-meta` is a flex row, so each caption's content is one child span and wraps as inline text.
+                  Audit item 11 (after OQ-539 and OQ-540, 2026-11-05): the three session-scoped metric cards are the design `KpiCard`
+                  — unaccented, as the expanded overview strip draws its figure cards — and the trend is the design `Sparkline`, so the
+                  local `section.card`, `.ov-kpi` row and hand-drawn `svg.ov-spark` are gone; the caller passes no colour, and below
+                  two samples the component draws its explicit empty form. `ov-spark` and `data-samples` stay on the svg for
+                  `pnpm overview-proof`'s probes. The caption no longer prefixes "no history yet · " below two samples: the empty form
+                  states it, and the clause leaving at the second sample shrank the card by 17.81 px at 1000 wide, against OQ-540's "a
+                  card does not reflow when the second sample arrives" (drive, 2026-11-05). */}
+              <DesignKpiCard accented={false} className="ov-card ov-card--tokens" role="region" aria-label="Tokens" title="Tokens"
+                value={<span data-testid="overview-tokens">{session ? total.toLocaleString('en-US') : '—'}</span>} unit="tok"
+                sparkline={<DesignSparkline className="ov-spark" values={samples} label={`token history, ${samples.length} samples`} emptyLabel={OVERVIEW_NO_TOKEN_HISTORY} data-samples={samples.length} />}>
+                <div className="card-meta"><span data-testid="overview-cost" data-qualifier={session?.costLabel.qualifier ?? 'unknown'}>{session ? <><span className="ov-caption__unit">{costLabelParts(session.costLabel.text).figure !== '' && <span className="mono">{costLabelParts(session.costLabel.text).figure}</span>}{costLabelParts(session.costLabel.text).rest}</span></> : OVERVIEW_NO_SESSION_CAPTION}</span></div>
+              </DesignKpiCard>
+              <DesignKpiCard accented={false} className="ov-card" role="region" aria-label="Tool calls" title="Tool calls"
+                value={<span data-testid="overview-tool-calls">{session ? session.toolCalls.total : '—'}</span>}>
                 <div className="card-meta" data-testid="overview-tool-agents"><span>{session ? <>across <span className="mono">{session.toolCalls.agents}</span> agent{session.toolCalls.agents === 1 ? '' : 's'}</> : OVERVIEW_NO_SESSION_CAPTION}</span></div>
                 <div className="ov-chips" data-testid="overview-tool-chips">
                   {(session?.toolCalls.byTool ?? []).slice(0, 5).map((t) => <DesignTag key={t.tool} kind="neutral" className="mono">{t.tool} {t.count}</DesignTag>)}
                 </div>
-              </Card>
+              </DesignKpiCard>
               <Card kicker="Repository">
                 {repository === null ? <div className="card-body">Reading the repository…</div>
                   : !repository.gitAvailable ? <div className="card-body" data-testid="overview-repo-state">Git is not available on this machine.</div>
@@ -278,17 +308,17 @@ export function OverviewView(props: OverviewProps) {
                             unicode glyphs typed into the figure spans, about 20 px tall at the numeral's size, until 2026-11-03). Each
                             marker, numeral and word is one unit, so where the four-column card is too narrow for both (171 px of content
                             at 1400 px) a count wraps whole and its word never leaves its figure. */}
-                        <div className="ov-kpi mono" data-testid="overview-repo-counts"><span className="ov-kpi__count"><i className="ph ph-arrow-up ov-kpi__marker" aria-hidden="true" /><span className="kpi-value">{repository.ahead}</span><span className="kpi-unit">ahead</span></span><span className="ov-kpi__count"><i className="ph ph-arrow-down ov-kpi__marker" aria-hidden="true" /><span className="kpi-value">{repository.behind}</span><span className="kpi-unit">behind</span></span></div>
+                        <div className="kpi-row mono" data-testid="overview-repo-counts"><span className="ov-kpi__count"><i className="ph ph-arrow-up ov-kpi__marker" aria-hidden="true" /><span className="kpi-value">{repository.ahead}</span><span className="kpi-unit">ahead</span></span><span className="ov-kpi__count"><i className="ph ph-arrow-down ov-kpi__marker" aria-hidden="true" /><span className="kpi-value">{repository.behind}</span><span className="kpi-unit">behind</span></span></div>
                         <div className="card-meta mono" data-testid="overview-repo-branch">{repository.base ?? 'no base'} → {repository.branch ?? '—'}</div>
                         <div className="card-meta" data-testid="overview-repo-touched"><span><span className="ov-caption__unit"><span className="mono">{repository.touched}</span> file{repository.touched === 1 ? '' : 's'} touched</span> · <span className="ov-caption__unit"><span className="mono">{repository.uncommitted}</span> uncommitted</span>{repository.failed.length > 0 ? ` · not read: ${repository.failed.join(', ')}` : ''}</span></div>
                       </>)}
               </Card>
-              <Card kicker="Agents">
-                <div className="ov-kpi"><span className="kpi-value" data-testid="overview-agent-count">{session ? session.agents.length : '—'}</span></div>
+              <DesignKpiCard accented={false} className="ov-card" role="region" aria-label="Agents" title="Agents"
+                value={<span data-testid="overview-agent-count">{session ? session.agents.length : '—'}</span>}>
                 {/* REQ-MONITOR-169's caption form, its two clauses each one unit so a wrap falls at the " · " and never orphans a limit (UIR-202). */}
                 <div className="card-meta mono" data-testid="overview-agent-caps"><span><span className="ov-caption__unit">depth {session ? counts.depth : '—'} / {caps?.depth ?? '—'}</span> · <span className="ov-caption__unit">fan-out {session ? counts.running : '—'} / {caps?.fanOut ?? '—'}</span></span></div>
                 <div className={`card-meta${session ? ' mono' : ''}`} data-testid="overview-agent-states">{session ? agentStatesLine(counts) : OVERVIEW_NO_SESSION_CAPTION}</div>
-              </Card>
+              </DesignKpiCard>
             </div>
             <Card kicker="Sessions" className="ov-card--sessions" actions={<span className="card-meta"><span><span className="mono">{sessions.length}</span> listed</span></span>}>
               {sessionsState === 'loading' && sessions.length === 0 ? <div className="card-body">Loading sessions…</div>
@@ -328,7 +358,7 @@ export function OverviewView(props: OverviewProps) {
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onKeyDown={onDividerKey} data-testid="overview-divider" />
           <aside className="overview__right" style={{ width: right }} {...layoutContractAttributes(columnUi('overview-right'))}>
             <Card kicker="Cloud credit" className="ov-card--credit">
-              <div className="ov-kpi"><span className="kpi-value">—</span><span className="kpi-unit">credit</span></div>
+              <div className="kpi-row"><span className="kpi-value">—</span><span className="kpi-unit">credit</span></div>
               <div className="card-meta">No hosted account is connected in this build; a balance appears here once one is.</div>
             </Card>
             <Card kicker="Subscription limits">

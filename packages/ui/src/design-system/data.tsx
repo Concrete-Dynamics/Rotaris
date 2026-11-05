@@ -4,17 +4,35 @@ import { classes, componentClass } from './shared.js';
 
 export interface SparklineProps extends Omit<SVGAttributes<SVGSVGElement>, 'values'> {
   readonly values: readonly number[];
+  /** The accessible name of the drawn trend. */
   readonly label: string;
+  /** The accessible name of the empty form below two values (OQ-540); it states that there is no history yet. */
+  readonly emptyLabel?: string;
 }
-export function Sparkline({ values, label, className, ...rest }: SparklineProps) {
-  if (values.length === 0) return null;
-  const width = 96;
-  const height = 28;
+/** The specimen's box (`docs/design/system/components/data/Sparkline.jsx`): 160 by 22, stretched to its container. */
+export const SPARKLINE_VIEW = { width: 160, height: 22 } as const;
+/**
+ * A single-series trend. The stroke is the component's own, `--rt-viz-1` on `.sparkline__series` in `shell.css`, and no call site
+ * passes a colour (OQ-539: §1.3's ramp is "used in order", so one series takes its first stop).
+ *
+ * Below two values it renders its EMPTY form (OQ-540, the §4.1 amendment of 2026-11-03; REQ-MONITOR-166's "explicit empty
+ * sparkline rather than a flat line"): the same box, so a card does not reflow when the second sample arrives; `role="img"` under
+ * `emptyLabel`; no series. Its one mark is an empty pair of axes in `--rt-viz-grid` (§1.3's token for chart rules), told from a
+ * series by shape and by name, never by colour alone (REQ-SHELL-149). Until 2026-11-05 it returned null at zero values and drew a
+ * one-point polyline at one.
+ */
+export function Sparkline({ values, label, emptyLabel = 'No history yet', className, ...rest }: SparklineProps) {
+  const { width, height } = SPARKLINE_VIEW;
+  const box = { viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: 'none', role: 'img', 'data-ui-component': 'Sparkline' } as const;
+  if (values.length < 2) {
+    return <svg className={classes('sparkline', 'sparkline--empty', className)} {...box} aria-label={emptyLabel} data-empty="true" {...rest}><path className="sparkline__axes" d={`M0.5,0 V${height - 0.5} H${width}`} /></svg>;
+  }
   const low = Math.min(...values);
   const high = Math.max(...values);
   const span = Math.max(1, high - low);
-  const points = values.map((value, index) => `${(index / Math.max(1, values.length - 1)) * width},${height - ((value - low) / span) * height}`).join(' ');
-  return <svg className={classes('sparkline', className)} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label} data-ui-component="Sparkline" {...rest}><polyline points={points} /></svg>;
+  // The specimen's one-unit inset top and bottom, so the stroke is never cut at the box's edge.
+  const points = values.map((value, index) => `${(index / (values.length - 1)) * width},${height - 1 - ((value - low) / span) * (height - 2)}`).join(' ');
+  return <svg className={classes('sparkline', className)} {...box} aria-label={label} {...rest}><polyline className="sparkline__series" points={points} /></svg>;
 }
 
 export interface MeterBarProps extends HTMLAttributes<HTMLDivElement> {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CheckpointListPayload, SessionListItemPayload, GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, OVERVIEW_DIVIDER_WIDTH, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, branchFitKey, stateFitKey, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, keepWaitingAction, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, OVERVIEW_DIVIDER_WIDTH, formatTokens, sessionDot, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, branchFitKey, stateFitKey, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, keepWaitingAction, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import { resolveTheme, isBusy, presentationStatus, EXECUTION_STATUSES, PRESENTATION_STATUSES } from '@rotaris/contracts';
 
 describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
@@ -115,14 +115,7 @@ describe('ui — session browser (REQ-SHELL-126)', () => {
 
 describe('ui — the Overview view (REQ-MONITOR-165..171)', () => {
   const row = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, unreadable: null, ...over });
-  it('REQ-MONITOR-166: fewer than two samples is an empty sparkline, never a flat line; the path spans the samples', () => {
-    expect(sparklinePath([], 160, 36)).toBeNull();
-    expect(sparklinePath([['t', 5]], 160, 36)).toBeNull();
-    const path = sparklinePath([['a', 0], ['b', 50], ['c', 100]], 160, 36)!;
-    expect(path.startsWith('M0.0,35.0')).toBe(true);
-    expect(path).toContain('L160.0,1.0');
-    expect(sparklinePath([['a', 7], ['b', 7]], 160, 36)).toContain('L160.0,35.0');
-  });
+  // REQ-MONITOR-166's empty sparkline is the design Sparkline's empty form since 2026-11-05 (OQ-540): `design-system.test.ts` pins it.
   it('REQ-MONITOR-170: the aggregate total when a sample carries it, else input + output; thousands separated with tok', () => {
     expect(tokenTotal({ tokenUsage: { input: 1200, output: 34 }, usageHistory: [] })).toBe(1234);
     expect(tokenTotal({ tokenUsage: { input: 10, output: 5 }, usageHistory: [['t', 5911]] })).toBe(5911);

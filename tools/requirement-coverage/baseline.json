@@ -474,13 +474,12 @@
       ]
     },
     "NOTIFY": {
-      "uncited": 164,
+      "uncited": 163,
       "requirements": [
         "REQ-NOTIFY-002",
         "REQ-NOTIFY-004",
         "REQ-NOTIFY-007",
         "REQ-NOTIFY-009",
-        "REQ-NOTIFY-010",
         "REQ-NOTIFY-034",
         "REQ-NOTIFY-039",
         "REQ-NOTIFY-041",

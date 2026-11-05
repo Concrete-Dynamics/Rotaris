@@ -431,6 +431,17 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
   const [caps, setCaps] = useState<{ depth: number; fanOut: number } | null>(null);
   const [improvements, setImprovements] = useState<readonly ImprovementArtifactRecord[]>([]);
   const [nowIso, setNowIso] = useState(() => new Date().toISOString());
+  // OQ-537: the onboarding empty state keys its hint and control to the provider precondition by main's own predicate for
+  // REQ-WORKSPACE-152 (3)'s notice (any provider row authenticated), read on mount and again whenever a configuration snapshot is
+  // announced, which main does after every provider change (`afterProviderChange`). A refused read keeps the first-use copy: the
+  // view states no fact it could not read, and REQ-WORKSPACE-137's refusal still stands at the run.
+  const [providerAuthenticated, setProviderAuthenticated] = useState<boolean | null>(null);
+  const readProviders = useCallback(async () => {
+    const r = await bridge.command({ kind: 'providers.list' });
+    setProviderAuthenticated(r.ok ? (r.value as readonly ProviderRow[]).some((row) => row.authenticated) : true);
+  }, []);
+  useEffect(() => { queueMicrotask(() => { void readProviders(); }); }, [readProviders]);
+  useEffect(() => bridge.onConfigChanged(() => { void readProviders(); }), [readProviders]);
   const hasWorkspace = workspace !== '(no workspace)';
   const status = session?.executionStatus ?? null;
   // Changes when a session is followed, and when the followed run stops being busy — the refresh triggers of REQ-MONITOR-174.
@@ -470,6 +481,7 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
     onListSessions={onListSessions} onNewSession={onNewSession} onRefresh={() => { void refresh(); }}
     onOpenSession={(id) => { void onOpenSession(id); }} onContinueSession={(id) => { void onOpenSession(id); }}
     onGoTo={(view) => useShellState.getState().switchView(view)}
+    providerAuthenticated={providerAuthenticated} onOpenSettings={(category) => useShellState.getState().openSettings(category)}
     improvements={improvements}
     onOpenProposal={(proposalId) => useShellState.getState().openLibrary('proposals', proposalId)}
     onReviewProposal={async (artifactId, proposalId, proposalStatus, expectedVersionsDue) => {

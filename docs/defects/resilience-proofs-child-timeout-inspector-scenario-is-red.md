@@ -15,6 +15,8 @@ Seen again on 2026-11-04 at the landing of R-091 bundle D3 (fence-hardening), re
 
 Seen again on 2026-11-04 (hrda), Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits; one proof at a time after `pnpm build`, no other tree's Electron running, host CPU about 54 % at launch: red, "the inspector measured the child on alpha against null, not alpha's 100,000" (the sighting is also in `windows-proof-reruns-leave-persona-and-recovery-readings-red.md`). Recorded, not repaired.
 
+Seen again on 2026-11-05 (hrdb, bundle `hrdb-child-ready-and-killed-renderer`), Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrdb-childreadyan` on `origin/main` `6328bb8b` plus the bundle's two commits (OQ-473, OQ-476), after `pnpm build`, one proof at a time, host CPU about 82 % at launch with another session's tree (`C:/dev/Rotaris-wt-hrdb-diagnosticsf`) running Electron earlier in the hour: red, "the inspector measured the child on alpha against null, not alpha's 100,000" (also in `windows-proof-reruns-leave-persona-and-recovery-readings-red.md`). Recorded, not repaired.
+
 ## Relevant files
 
 - `apps/desktop/scripts/resilience-proof.mjs`: `child-timeout-inspector`

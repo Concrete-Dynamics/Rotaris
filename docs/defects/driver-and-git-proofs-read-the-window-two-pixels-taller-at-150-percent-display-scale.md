@@ -26,6 +26,8 @@ its other 42 checks passing.
 load 58 % from other sessions at the launch, no other tree's Electron running): `driver-proof` step 8 read `1000×682`, its
 other 42 checks passing. The bundle moves the Electron pin within the 44 line and changes no window code.
 
+**Sighted again 2026-11-05** (plan hrdb, bundle `hrdb-child-ready-and-killed-renderer`, Electron 44.10.0, on its branch over `6328bb8b`; CPU load 56 % at the launch, run alone after `resilience-proof`): `driver-proof` step 8 read `1000×682`, its other 42 checks passing. The bundle moves the run host's `hello` off the paint path (OQ-473) and changes no window-size code.
+
 ## Specs
 
 None named here: REQ-SHELL-022 states the 1000×680 minimum, and whether a 1000×682 reading at 150 % meets it is the proofs'

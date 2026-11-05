@@ -1,5 +1,6 @@
 import { relayTerminalCommand } from '../terminal.js';
 import { type CommandOutcome, type CommandRequest } from '@rotaris/contracts';
+import { redact } from '@rotaris/kernel';
 import { type CommandAt, type CommandContext, type CommandHandlers } from './context.js';
 
 /**
@@ -60,10 +61,13 @@ export function windowsCommands(
   };
 }
 
-/** PD-SHELL-003 — commands from the product-drawn main-window frame; and R-091's `window.reload`, from any window. */
+/**
+ * PD-SHELL-003 — commands from the product-drawn main-window frame; R-091's `window.reload` and OQ-475's `window.recovered`,
+ * from any window.
+ */
 export function windowCommands(
-  ctx: Pick<CommandContext, 'windowFor' | 'reloadWindow'>,
-): Pick<CommandHandlers, 'window.state' | 'window.minimize' | 'window.toggleMaximize' | 'window.close' | 'window.reload'> {
+  ctx: Pick<CommandContext, 'log' | 'windowFor' | 'reloadWindow'>,
+): Pick<CommandHandlers, 'window.state' | 'window.minimize' | 'window.toggleMaximize' | 'window.close' | 'window.reload' | 'window.recovered'> {
   const forMain = (senderId: number, act: () => CommandOutcome): CommandOutcome => (
     ctx.windowFor(senderId) === undefined
       ? { ok: false, code: 'window.notMain', headline: 'Only a main window controls its frame' }
@@ -84,5 +88,17 @@ export function windowCommands(
     'window.reload': (_req, { senderId }) => (ctx.reloadWindow(senderId)
       ? { ok: true as const }
       : { ok: false, code: 'window.gone', headline: 'This window can no longer be reloaded' }),
+    /*
+     * OQ-475 (ruled 2026-11-04; REQ-NOTIFY-003, PD-MONITOR-002): an error React recovered from by drawing the tree again — the
+     * window looks as it did and nothing was lost — is ONE `warning` line in main's log and nothing else: no notice (it would
+     * take the one slot, REQ-NOTIFY-024), no record in a run's timeline (REQ-NOTIFY-268), so this facet is not even handed
+     * the notice store. `warning` is PD-MONITOR-002's level for a degraded, uninterrupted condition, at the default threshold.
+     * The text crossed from a renderer, so it passes the one redaction pass (REQ-TOOLS-171) here again; the pass is idempotent.
+     */
+    'window.recovered': (req, { senderId }) => {
+      const detail = redact(req.detail);
+      ctx.log(`window ${senderId} recovered from a drawing error; React drew it again and nothing is shown (OQ-475): ${redact(req.error)}${detail === '' ? '' : `\n${detail}`}`, 'warn');
+      return { ok: true as const };
+    },
   };
 }

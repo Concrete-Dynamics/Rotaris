@@ -124,3 +124,25 @@ describe('OQ-485: a malformed request leaves one warning line, never a value, bu
     expect(none.lines).toEqual([]);
   });
 });
+
+/**
+ * OQ-475 (ruled 2026-11-04; PD-MONITOR-002): `window.recovered` reaches its handler by the one channel every kind shares, and
+ * the dispatcher adds nothing to the one `warning` line it writes. A severity the renderer adds is stripped by the schema,
+ * never obeyed — the level is the ruling's — and a detail past its bound is refused before the handler.
+ */
+describe('window.recovered through the dispatcher (OQ-475)', () => {
+  it('a recovered error is one warning line and an ok answer; a severity sent with it changes nothing', async () => {
+    const { windowCommands } = await import('./commands/windows.js');
+    const lines: { message: string; level: AppLogLevel }[] = [];
+    const handlers = windowCommands({ log: (message, level = 'info') => { lines.push({ message, level }); }, windowFor: () => undefined, reloadWindow: () => true });
+    const { d } = deps({ 'window.recovered': handlers['window.recovered'] as never });
+    await expect(dispatchCommand({ kind: 'window.recovered', error: 'TypeError: drawn again', detail: 'Window: main', severity: 'error' }, 7, d)).resolves.toEqual({ ok: true });
+    expect(lines).toEqual([{ level: 'warn', message: 'window 7 recovered from a drawing error; React drew it again and nothing is shown (OQ-475): TypeError: drawn again\nWindow: main' }]);
+  });
+
+  it('a detail past FREE_TEXT_MAX, or no error at all, is command.malformed before the handler', async () => {
+    const { d } = deps({ 'window.recovered': () => { throw new Error('reached the handler'); } });
+    await expect(dispatchCommand({ kind: 'window.recovered', error: 'x', detail: 'y'.repeat(FREE_TEXT_MAX + 1) }, 7, d)).resolves.toMatchObject({ ok: false, code: 'command.malformed' });
+    await expect(dispatchCommand({ kind: 'window.recovered', error: '', detail: '' }, 7, d)).resolves.toMatchObject({ ok: false, code: 'command.malformed' });
+  });
+});

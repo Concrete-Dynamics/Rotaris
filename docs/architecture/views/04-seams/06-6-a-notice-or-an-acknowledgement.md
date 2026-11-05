@@ -60,12 +60,18 @@ Invariants:
 - **A window's own failure to draw is a renderer's notice too** (since 2026-11-04, R-091, hardening §3.2 row 4). Every root is
   made by `createReportingRoot` (`apps/desktop/src/renderer/render-failure.tsx`): wrapped in `RenderFailureBoundary`
   (`packages/ui/src/design-system/patterns.tsx`), whose fallback is the language's empty state with one action, "Reload this
-  window" (`window.reload`, §1), and created with React's `onCaughtError`, `onUncaughtError` and `onRecoverableError`, each
-  sending ONE `notice.report` (`renderFailureReport`: the failure's plain headline; the error, the window, the component stack
+  window" (`window.reload`, §1), and created with React's `onCaughtError` and `onUncaughtError`, each sending ONE
+  `notice.report` at `error` (`renderFailureReport`: the failure's plain headline; the error, the window, the component stack
   and the script stack in `detail`, redacted and bounded; at most five per document). The boundary reports nothing itself —
   React calls the root's option for every error a boundary catches — so an error is reported once. Main writes the line at
   the notice's own level (`notice from the renderer: …`, `commands/shell.ts`). A new root is made the same way; a bare
   `createRoot` in the renderer is a window that goes blank on a throw.
+- **An error React recovered from is no notice** (OQ-475, ruled 2026-11-04). `onRecoverableError` — React drew the tree again
+  and nothing was lost — sends `window.recovered` (§1), never `notice.report`: it is none of REQ-NOTIFY-003's three, a notice
+  would replace whatever stood in the one slot (REQ-NOTIFY-024) and write a redraw into a run's timeline (REQ-NOTIFY-268).
+  Main writes ONE `warning` line (`commands/windows.ts`) and nothing else. Its dedupe set and its cap of five per document
+  (`RENDER_RECOVERED_LINES_MAX`) are its own, so a fault React keeps recovering from never spends the failures' budget. A
+  renderer asks main for a log line by that sibling path; it still raises a persistent notice only by asking main.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.
 - **An action is dispatched in one place**, `dispatchNoticeAction` in `apps/desktop/src/renderer/main.tsx`; a member
   whose target is not built is logged there and nothing else. `retry-run` has its target since 2026-10-02 (REQ-NOTIFY-045,

@@ -301,3 +301,8 @@ The read asserts what it means now — an executed command raises no REFUSAL (`t
 composer draws no banner of its own — and records the standing notice's title in `results.json` rather than demanding
 its absence.
 
+**Note, 2026-11-05 — a sibling path that raises nothing ([OQ-475](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-4.md#oq-475)).**
+Decision B is unchanged: a renderer still raises a persistent notice only by asking main (`notice.report`). An error React
+recovered from on its own is no notice at all, so a renderer asks main for a log line by a sibling command,
+`window.recovered`, which main writes as ONE `warning` line and which reaches neither this store nor the record of
+REQ-NOTIFY-268 (`main/commands/windows.ts`).

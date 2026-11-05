@@ -395,6 +395,16 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    */
   z.object({ kind: z.literal('window.reload') }),
   /**
+   * OQ-475 (ruled 2026-11-04; REQ-NOTIFY-001, REQ-NOTIFY-003, PD-MONITOR-002): an error React recovered from on its own, by
+   * drawing the window's tree again. It is shown to no one — none of REQ-NOTIFY-003's three, and a notice would take the one
+   * slot (REQ-NOTIFY-024) and a run's timeline (REQ-NOTIFY-268) — so this is a renderer's LOG-ONLY path to main, the sibling
+   * of `notice.report` that raises nothing: main writes ONE `warning` line and touches neither the notice store nor any
+   * record. It carries the two parts `renderFailureReport` builds — the error's headline and the detail block (the window,
+   * the component stack, the script stack), both redacted before they leave the renderer — and no severity: the level is
+   * the ruling's, not the sender's. Not `diagnostics.`, which REQ-SHELL-163's capture owns.
+   */
+  z.object({ kind: z.literal('window.recovered'), error: z.string().max(FREE_TEXT_MAX).min(1), detail: z.string().max(FREE_TEXT_MAX) }),
+  /**
    * ADR-0048's application modality, second execution (Part W; REQ-SHELL-051/054): a main window's application-modal
    * surface (the command palette, the keyboard help) registers itself open or closed, and main's registry disables
    * input in every other window of that main window's family for the duration. From a main window only; a persona

@@ -76,6 +76,10 @@ close calls `BrowserWindow.close()` so the existing guarded close event remains 
 **`window.reload`** (R-091, hardening §3.2 row 4, 2026-11-04: the render-failure boundary's "Reload this window" — from ANY
 window, since every window's root is wrapped in `RenderFailureBoundary`; main reloads the sender's own `webContents`
 (`reloadWindow`, `index.ts`) and answers `window.gone` for a sender with no live window),
+**`window.recovered {error, detail}`** (OQ-475, ruled 2026-11-04: a renderer's LOG-ONLY path to main, the sibling of
+`notice.report` that raises nothing — a root's `onRecoverableError` sends it for an error React recovered from by drawing the
+tree again; main writes ONE `warning` line naming the sender, the error and the redacted detail, and touches neither the notice
+store nor the record of REQ-NOTIFY-268; no severity on the wire; at most five per document, on their own count),
 `window.modality {active}` (Part W: the main window's application-modal surface — the command
 palette, the keyboard help — registering itself open or closed; main's registry disables input in every persona window
 of that family for the duration, ADR-0048; a persona window sending it is refused `window.notMain`),

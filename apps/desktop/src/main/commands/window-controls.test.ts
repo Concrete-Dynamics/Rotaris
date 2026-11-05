@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createNoticeStore, type NoticeRecord } from '../notices.js';
 import { windowCommands } from './windows.js';
 
 function harness(maximized = false, mainSender = true) {
@@ -14,7 +15,7 @@ function harness(maximized = false, mainSender = true) {
     unmaximize,
     close,
   };
-  const handlers = windowCommands({ windowFor: () => mainSender ? ({ win } as never) : undefined, reloadWindow: () => true });
+  const handlers = windowCommands({ log: () => undefined, windowFor: () => mainSender ? ({ win } as never) : undefined, reloadWindow: () => true });
   const at = { w: { win }, senderId: 7, awaitWorkspace: async () => undefined } as never;
   return { handlers, at, minimize, maximize, unmaximize, close };
 }
@@ -65,10 +66,43 @@ describe('PD-SHELL-003 main window commands', () => {
 describe('window.reload', () => {
   it('reloads the window that sent it, a dialog as well as a main window, and refuses a sender with no live window', () => {
     const reloaded: number[] = [];
-    const handlers = windowCommands({ windowFor: () => undefined, reloadWindow: (senderId) => { reloaded.push(senderId); return senderId !== 404; } });
+    const handlers = windowCommands({ log: () => undefined, windowFor: () => undefined, reloadWindow: (senderId) => { reloaded.push(senderId); return senderId !== 404; } });
     const from = (senderId: number) => ({ w: {}, senderId, awaitWorkspace: async () => undefined }) as never;
     expect(handlers['window.reload']({ kind: 'window.reload' }, from(12))).toEqual({ ok: true });
     expect(handlers['window.reload']({ kind: 'window.reload' }, from(404))).toEqual({ ok: false, code: 'window.gone', headline: 'This window can no longer be reloaded' });
     expect(reloaded).toEqual([12, 404]);
+  });
+});
+
+/**
+ * OQ-475 (ruled 2026-11-04; REQ-NOTIFY-003, REQ-NOTIFY-024, REQ-NOTIFY-268, PD-MONITOR-002): an error React recovered from is
+ * ONE `warning` line in main's log and nothing else. Until the ruling it arrived as a persistent `warning` notice, which took
+ * the one slot from whatever stood there and wrote a redraw nobody saw into the focused run's timeline. The store here is the
+ * real one, holding a refusal and following a run, so a handler that touched it would show.
+ */
+describe('window.recovered', () => {
+  it('writes exactly one warning line naming the window, the error and the detail, and leaves the notice and the record untouched', async () => {
+    const recorded: NoticeRecord[] = [];
+    const notices = createNoticeStore({ broadcast: () => undefined, pushAcknowledgement: () => undefined, record: async (entry) => { recorded.push(entry); return true; }, log: () => undefined, focusedSession: () => 's-focused' });
+    await notices.report({ severity: 'error', title: 'The run was refused', sessionId: 's-focused' });
+    const before = notices.current();
+    recorded.length = 0;
+    const lines: { message: string; level: string | undefined }[] = [];
+    const handlers = windowCommands({ log: (message, level) => { lines.push({ message, level }); }, windowFor: () => undefined, reloadWindow: () => true });
+    const at = { w: {}, senderId: 12, awaitWorkspace: async () => undefined } as never;
+    const detail = 'Window: main\n\nHow it was reported: recovered by React, which drew the tree again\n\nComponent stack:\n    at Rows';
+    expect(await handlers['window.recovered']({ kind: 'window.recovered', error: 'TypeError: drawn again', detail }, at)).toEqual({ ok: true });
+    expect(lines).toEqual([{ level: 'warn', message: `window 12 recovered from a drawing error; React drew it again and nothing is shown (OQ-475): TypeError: drawn again\n${detail}` }]);
+    await notices.settled();
+    expect(notices.current()).toEqual(before);
+    expect(recorded).toEqual([]);
+  });
+
+  it('masks a credential the renderer sent before the line is written (REQ-TOOLS-171), and writes no empty detail', async () => {
+    const lines: string[] = [];
+    const handlers = windowCommands({ log: (message) => { lines.push(message); }, windowFor: () => undefined, reloadWindow: () => true });
+    const at = { w: {}, senderId: 3, awaitWorkspace: async () => undefined } as never;
+    await handlers['window.recovered']({ kind: 'window.recovered', error: 'Error: api_key=sk-live-recovered', detail: '' }, at);
+    expect(lines).toEqual(['window 3 recovered from a drawing error; React drew it again and nothing is shown (OQ-475): Error: api_key=***']);
   });
 });

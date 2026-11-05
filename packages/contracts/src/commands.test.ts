@@ -55,3 +55,19 @@ describe('commands.ts names no retired pane-layout key as current (REQ-SHELL-069
     expect(prose).toMatch(/Part AB adds `panels\/workspace\/state`/);
   });
 });
+
+/**
+ * OQ-475 (ruled 2026-11-04): an error React recovered from reaches main by `window.recovered`, a log-only member of the
+ * union that carries the error's headline and the detail block, bounded by `limits.ts`, and no severity — main writes it at
+ * `warning`, whatever the sender would say.
+ */
+describe('window.recovered — the renderer\'s log-only command (OQ-475)', () => {
+  it('parses the two parts, strips a severity, and refuses an empty error or a detail past FREE_TEXT_MAX', async () => {
+    const { CommandRequestSchema } = await import('./commands.js');
+    const { FREE_TEXT_MAX } = await import('./limits.js');
+    expect(CommandRequestSchema.parse({ kind: 'window.recovered', error: 'TypeError: x', detail: 'Window: main', severity: 'error', title: 'shown' })).toEqual({ kind: 'window.recovered', error: 'TypeError: x', detail: 'Window: main' });
+    expect(CommandRequestSchema.safeParse({ kind: 'window.recovered', error: '', detail: '' }).success).toBe(false);
+    expect(CommandRequestSchema.safeParse({ kind: 'window.recovered', error: 'x', detail: 'y'.repeat(FREE_TEXT_MAX + 1) }).success).toBe(false);
+    expect(CommandRequestSchema.safeParse({ kind: 'window.recovered', error: 'x'.repeat(FREE_TEXT_MAX + 1), detail: '' }).success).toBe(false);
+  });
+});

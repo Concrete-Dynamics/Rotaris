@@ -61,11 +61,17 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
   private readonly eventListeners = new Set<(e: ProcessEvent) => void>();
   private askHandler: ((ask: ServiceAsk) => Promise<ProcessReply>) | null = null;
   private ended: Extract<ProcessReply, { kind: 'refused' }> | null = null;
+  /** OQ-473 (3): settles with the refusal `end` is called with, so a request held then is refused at once. */
+  private readonly endedSignal: Promise<Extract<ProcessReply, { kind: 'refused' }>>;
+  private signalEnded: (refusal: Extract<ProcessReply, { kind: 'refused' }>) => void = () => undefined;
+  /** OQ-473 (3): while set, every request waits on it before it is posted (`holdUntil`). */
+  private held: Promise<void> | null = null;
   private readonly stop: () => void;
   private readonly refusals: RefusalFold;
 
   constructor(private readonly port: MessagePortLike, private readonly timers: Timers, private readonly log: ProcessLinkLog) {
     this.refusals = new RefusalFold(timers, log.warn);
+    this.endedSignal = new Promise((resolve) => { this.signalEnded = resolve; });
     this.stop = port.onMessage((raw) => {
       const parsed = ProcessMessageSchema.safeParse(raw);
       if (!parsed.success) { this.refuse(raw); return; }
@@ -133,6 +139,7 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
   end(refusal: Extract<ProcessReply, { kind: 'refused' }>): void {
     if (this.ended !== null) return;
     this.ended = refusal;
+    this.signalEnded(refusal);
     for (const p of this.pending.values()) { p.cancel(); p.resolve(refusal); }
     this.pending.clear();
     // OQ-485: the link's end closes every refusal window, each with its count line.
@@ -144,8 +151,29 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
     return this.ended;
   }
 
+  /**
+   * OQ-473 (3), ruled 2026-11-04 under the owner's delegation (R-072): a child's first answer is asked at its fork and no
+   * longer awaited before the first window, so a request made before that answer is HELD — not posted, its own bound not
+   * yet running — until `ready` settles, then posted in the order it was made, its bound counted from there. A request is
+   * so held at most to the ready bound (`boundedReady`, `apps/desktop/src/main/child-supervision.ts`). One held when `end`
+   * is called (the missed `hello`, or the child's exit) is answered that refusal at once, and every one after it is too,
+   * as before. A request posted before the hold was set — the `hello` itself — is not held.
+   */
+  holdUntil(ready: Promise<unknown>): void {
+    const gate = ready.then(() => undefined, () => undefined);
+    this.held = gate;
+    // Registered before any held request's own continuation, so the gate is lifted before the first of them is posted.
+    void gate.then(() => { if (this.held === gate) this.held = null; });
+  }
+
+  /** Whether a request made now would be held (`holdUntil`): the ready it waits on has not settled and the link has not ended. */
+  get holding(): boolean {
+    return this.held !== null && this.ended === null;
+  }
+
   request(request: Req, boundMs: Millis): Promise<ProcessReply> {
     if (this.ended !== null) return Promise.resolve(this.ended);
+    if (this.held !== null) return Promise.race([this.held.then(() => this.request(request, boundMs)), this.endedSignal]);
     const id = this.nextId++;
     const env: ProcessRequestEnvelope = { v: CONTRACT_SCHEMA_VERSION, id, request };
     return new Promise<ProcessReply>((resolve, reject) => {

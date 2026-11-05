@@ -259,3 +259,71 @@ describe('ProcessLink — close', () => {
     expect(events).toEqual([]);
   });
 });
+
+describe('ProcessLink — a request held on the child\'s ready (OQ-473 (3))', () => {
+  const hello: ProcessReply = { kind: 'hello', process: 'run-host', pid: 7 };
+  const gone = { kind: 'refused', code: 'runHost.notStarted', headline: 'The run host did not start' } as const;
+
+  it('a request made before the ready settles is not posted, and its bound is not running, until it does', async () => {
+    const clock = new FakeClock();
+    const { port, posted, deliver } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    const ready = link.request({ kind: 'hello' }, millis(20_000));
+    link.holdUntil(ready);
+    expect(link.holding).toBe(true);
+    const first = link.request({ kind: 'ping' }, millis(1_000));
+    const second = link.request({ kind: 'session.list', workspaceId: 'w' }, millis(1_000));
+    // Only the hello went out; the held requests carry no deadline yet, so passing their bound refuses nothing.
+    expect(posted).toEqual([{ v: CONTRACT_SCHEMA_VERSION, id: 1, request: { kind: 'hello' } }]);
+    clock.advance(6_000);
+    expect(await settled(first)).toBe(false);
+    deliver(reply(1, hello));
+    await expect(ready).resolves.toEqual(hello);
+    await Promise.resolve();
+    await Promise.resolve();
+    // Released in the order they were made, each with its own bound from here.
+    expect(posted.slice(1)).toEqual([
+      { v: CONTRACT_SCHEMA_VERSION, id: 2, request: { kind: 'ping' } },
+      { v: CONTRACT_SCHEMA_VERSION, id: 3, request: { kind: 'session.list', workspaceId: 'w' } },
+    ]);
+    expect(link.holding).toBe(false);
+    deliver(reply(2, pong));
+    await expect(first).resolves.toEqual(pong);
+    clock.advance(1_000);
+    await expect(second).rejects.toBeInstanceOf(NoReplyWithinBound);
+    link.close();
+  });
+
+  it('a request held when the link ends is answered the refusal at once, and never posted', async () => {
+    const clock = new FakeClock();
+    const { port, posted } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    let release: () => void = () => undefined;
+    link.holdUntil(new Promise<void>((resolve) => { release = resolve; }));
+    const held = link.request({ kind: 'ping' }, millis(1_000));
+    link.end(gone);
+    await expect(held).resolves.toEqual(gone);
+    release();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(posted).toEqual([]);
+    expect(link.holding).toBe(false);
+    await expect(link.request({ kind: 'ping' }, millis(1_000))).resolves.toEqual(gone);
+    expect(clock.pendingCount()).toBe(0);
+  });
+
+  it('a ready that rejects lifts the hold as one that resolves does', async () => {
+    const clock = new FakeClock();
+    const { port, posted } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    link.holdUntil(Promise.reject(new Error('no reply to hello within 20000 ms')));
+    const asked = link.request({ kind: 'ping' }, millis(1_000));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(posted).toEqual([{ v: CONTRACT_SCHEMA_VERSION, id: 1, request: { kind: 'ping' } }]);
+    clock.advance(1_000);
+    await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    link.close();
+  });
+});

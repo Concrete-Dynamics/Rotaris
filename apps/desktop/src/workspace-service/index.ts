@@ -1,6 +1,6 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnvelopeSchema, WorkspaceServiceRequestSchema, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { countNoun, fileStamp, millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
-import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, injectChildFault, superviseUtilityProcess } from '@rotaris/platform';
+import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, holdMessagesFor, injectChildFault, superviseUtilityProcess } from '@rotaris/platform';
 import { walCheckpointBeforeClose, walCheckpoint, establishWorkspaceId, forgetSpelling, IDLE_WAL_CHECKPOINT_MS, IdleWalCheckpoint, readWorkspaceId, REFUSAL_LEASE_MS, workspaceIdFile, type WalCheckpointResult, type ResolvedStore, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
@@ -50,8 +50,8 @@ superviseUtilityProcess({
   timers: clocks.timers,
 });
 // Verification only, compiled out of a packaged build: a fault the last-resort handler is proved against (`exit-trace-proof`),
-// or silence, which misses main's ready bound (OQ-462 (2)).
-const fault = __ROTARIS_SEAMS__ ? injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'workspace-service', clocks.timers) : { silent: false };
+// silence, which misses main's ready bound (OQ-462 (2)), or a slow start, which meets it late (OQ-473).
+const fault = __ROTARIS_SEAMS__ ? injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'workspace-service', clocks.timers) : { silent: false, slowMs: 0 };
 const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(layout.workspaces, { recursive: true });
@@ -370,7 +370,7 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
   }
 }
 
-if (!fault.silent) port.on('message', (e: { data: unknown }) => {
+if (!fault.silent) port.on('message', holdMessagesFor((e: { data: unknown }) => {
   const answer = ServiceAnswerEnvelopeSchema.safeParse(e.data);
   if (answer.success) {
     const p = pendingAsks.get(answer.data.ask);
@@ -388,6 +388,6 @@ if (!fault.silent) port.on('message', (e: { data: unknown }) => {
     // Hardening C1: every settled request re-arms the idle WAL checkpoint while a store is open.
     if (open) idleWalCheckpoint.touch();
   });
-});
+}, fault.slowMs, clocks.timers));
 
 send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'ready', process: 'workspace-service', pid: process.pid } });

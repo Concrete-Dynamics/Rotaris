@@ -106,18 +106,33 @@ export function watchParent(deps: {
  * `workspace-service` and `<fault>` one of
  * - `uncaught`: a throw from a timer `afterMs` after the start (default 3,000), which no request path catches;
  * - `rejection`: a rejected promise nothing awaits, as late;
- * - `silent`: the process starts and never answers a request, so main's ready bound is missed (OQ-462 (2)).
- * `exit-trace-proof` drives all three: the first two through the last-resort handler (its `last-resort` launches), the
- * third as a missed ready bound (its `not-ready` launches); a spec naming
- * another process, or none, is no fault. Answers whether this process stays silent.
+ * - `silent`: the process starts and never answers a request, so main's ready bound is missed (OQ-462 (2));
+ * - `slow`: the process answers nothing for its first `afterMs`, then everything it was asked meanwhile, in order — a
+ *   child slow to start that still makes its ready bound (OQ-473: `hello` late, the window painted, nothing lost).
+ * `exit-trace-proof` drives all four: the first two through the last-resort handler (its `last-resort` launches), the
+ * third as a missed ready bound (its `not-ready` launches), the fourth as a late one met (its `slow-ready` launch); a spec
+ * naming another process, or none, is no fault. Answers whether this process stays silent, and for how long it holds its
+ * first messages (`slowMs`, 0 for none; the entry applies it with `holdMessagesFor`).
  */
-export function injectChildFault(spec: string | undefined, self: 'run-host' | 'workspace-service', timers: Timers): { readonly silent: boolean } {
+export function injectChildFault(spec: string | undefined, self: 'run-host' | 'workspace-service', timers: Timers): { readonly silent: boolean; readonly slowMs: number } {
   const [target, fault, after] = (spec ?? '').split(':');
-  if (target !== self) return { silent: false };
+  if (target !== self) return { silent: false, slowMs: 0 };
   const afterMs = millis(after === undefined || after === '' || !Number.isFinite(Number(after)) ? 3_000 : Number(after));
   if (fault === 'uncaught') timers.after(afterMs, () => { throw new Error(`child fault: an uncaught throw in the ${self}, by the verification seam`); });
   if (fault === 'rejection') timers.after(afterMs, () => { void Promise.reject(new Error(`child fault: an unhandled rejection in the ${self}, by the verification seam`)); });
-  return { silent: fault === 'silent' };
+  return { silent: fault === 'silent', slowMs: fault === 'slow' ? afterMs : 0 };
+}
+
+/**
+ * Verification only, for `injectChildFault`'s `slow`: a message handler that holds every message it is given for the first
+ * `ms` from now, then handles the held ones in the order they came and every later one at once. `ms` 0 is the handler
+ * itself.
+ */
+export function holdMessagesFor<E>(handle: (message: E) => void, ms: number, timers: Timers): (message: E) => void {
+  if (ms <= 0) return handle;
+  let held: E[] | null = [];
+  timers.after(millis(ms), () => { const due = held ?? []; held = null; for (const m of due) handle(m); });
+  return (message) => { if (held === null) handle(message); else held.push(message); };
 }
 
 /** The part of Node's `process` a utility process's supervision reads. */

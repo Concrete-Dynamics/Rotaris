@@ -1,5 +1,5 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, ServiceAnswerEnvelopeSchema } from '@rotaris/contracts';
-import { injectChildFault, nodeClocks, superviseUtilityProcess } from '@rotaris/platform';
+import { holdMessagesFor, injectChildFault, nodeClocks, superviseUtilityProcess } from '@rotaris/platform';
 import { createRunHost } from './host.js';
 import { dispatch } from './dispatch.js';
 
@@ -40,14 +40,14 @@ superviseUtilityProcess({
   timers: nodeClocks().timers,
 });
 // Verification only, compiled out of a packaged build: a fault the last-resort handler is proved against (`exit-trace-proof`),
-// or silence, which misses main's ready bound (OQ-462 (2)).
-const fault = __ROTARIS_SEAMS__ ? injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'run-host', nodeClocks().timers) : { silent: false };
+// silence, which misses main's ready bound (OQ-462 (2)), or a slow start, which meets it late (OQ-473).
+const fault = __ROTARIS_SEAMS__ ? injectChildFault(process.env['ROTARIS_CAPTURE_CHILD_FAULT'], 'run-host', nodeClocks().timers) : { silent: false, slowMs: 0 };
 
 // Everything this process holds, built now rather than at import (`host.ts`), and the one request path over it.
 const h = createRunHost();
 const { port, send, reply, pendingAsks } = h;
 
-if (!fault.silent) port.on('message', (e: { data: unknown }) => {
+if (!fault.silent) port.on('message', holdMessagesFor((e: { data: unknown }) => {
   const answer = ServiceAnswerEnvelopeSchema.safeParse(e.data);
   if (answer.success) {
     const p = pendingAsks.get(answer.data.ask);
@@ -62,7 +62,7 @@ if (!fault.silent) port.on('message', (e: { data: unknown }) => {
     (r) => reply(env.data.id, r),
     (err) => reply(env.data.id, { kind: 'refused', code: 'request.failed', headline: String(err) }),
   );
-});
+}, fault.slowMs, nodeClocks().timers));
 
 send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'ready', process: 'run-host', pid: process.pid } });
 

@@ -18,14 +18,26 @@ import type { ReportInput } from './notices.js';
  * (3) After the run host's exit every request main would send it is refused at once (`ProcessLink.end`).
  * (4) The run host is never forked again; a workspace service is forked again at the next open.
  *
- * Every notice raised before the notice store exists (a run host that misses its `hello`, which main awaits before it
- * builds the store) is held and published once the store is attached.
+ * OQ-473, ruled 2026-11-04 under the owner's delegation (R-072), revises (2)'s figure and takes the run host's `hello` off
+ * the first-paint path (REQ-STARTUP-155, ADR-0002 consequence 1): both bounds are 20 s; each `hello` is asked immediately
+ * after its `utilityProcess.fork`, so the request's own `ProcessLink` deadline is the bound counted from the child's start
+ * and no second timestamp is kept (`readyAtFork`); main builds the notice store and the first main window while the run
+ * host is still starting, and every run-host request made before its `hello` settles is held on it
+ * (`ProcessLink.holdUntil`) — answered once it is ready, refused `runHost.notStarted` once it missed. (4) stands.
+ *
+ * Every notice raised before the notice store exists is held and published once the store is attached. Until OQ-473 that
+ * was a run host that missed its `hello`, which main awaited before it built the store; now it is a child lost before the
+ * store's construction, which no longer waits on the `hello`.
  */
 
-/** OQ-462 (2): the bound on the run host's first answer, its `hello` — the 5 s main has always given it. */
-export const RUN_HOST_READY_BOUND_MS: Millis = millis(5_000);
-/** OQ-462 (2): the same bound on a workspace service's first answer, its `hello`, asked before the open. */
-export const WORKSPACE_SERVICE_READY_BOUND_MS: Millis = millis(5_000);
+/**
+ * OQ-473 (1): the bound on the run host's first answer, its `hello`, counted from its fork. Was 5 s under OQ-462 (2) —
+ * "the 5 s main has always given it", a figure with no measured basis — until three misses by a healthy run host on a
+ * loaded host (about 5.8 s at 100 % CPU, 2026-11-03; ADR-0002 part 12) showed a false miss costs every run of the session.
+ */
+export const RUN_HOST_READY_BOUND_MS: Millis = millis(20_000);
+/** OQ-473 (1): the same bound on a workspace service's first answer, its `hello`, asked at its fork before the open (was 5 s, OQ-462 (2)). */
+export const WORKSPACE_SERVICE_READY_BOUND_MS: Millis = millis(20_000);
 
 /** Which child, as the notice and the refusal name it. */
 export type SupervisedChild =
@@ -151,4 +163,23 @@ export async function boundedReady(hello: () => Promise<ProcessReply>, missed: (
   }
   await missed(cause);
   return null;
+}
+
+/** The part of a `ProcessLink` a child's first answer is asked and held through (`readyAtFork`). */
+export interface ReadyLink<Req> {
+  request(request: Req, boundMs: Millis): Promise<ProcessReply>;
+  holdUntil(ready: Promise<unknown>): void;
+}
+
+/**
+ * OQ-473 (2) and (3): the child's `hello`, asked at once — called immediately after `utilityProcess.fork`, before main
+ * awaits anything else, so the request's own deadline is the bound counted from the child's start — and the link held on
+ * the answer: every other request made through it before the `hello` settles waits for it, then is posted, or is refused
+ * with the link's end once `missed` has ended the link. Answers what `boundedReady` answers, and never rejects. The `hello`
+ * is posted before this returns (`boundedReady` asks synchronously), so it is never held behind itself.
+ */
+export function readyAtFork<Req>(link: ReadyLink<Req>, hello: Req, boundMs: Millis, missed: (cause: string) => Promise<void>): Promise<Extract<ProcessReply, { kind: 'hello' }> | null> {
+  const ready = boundedReady(() => link.request(hello, boundMs), missed);
+  link.holdUntil(ready);
+  return ready;
 }

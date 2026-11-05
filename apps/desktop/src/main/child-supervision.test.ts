@@ -3,23 +3,38 @@ import { describe, expect, it } from 'vitest';
 import { CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
 import { FakeClock, millis } from '@rotaris/kernel';
 import { ProcessLink, type MessagePortLike } from '@rotaris/shell';
-import { boundedReady, ChildLossReporter, childLossNotice, RUN_HOST_READY_BOUND_MS, runHostGoneRefusal, WORKSPACE_SERVICE_READY_BOUND_MS, workspaceServiceGoneRefusal } from './child-supervision.js';
+import { boundedReady, ChildLossReporter, childLossNotice, readyAtFork, RUN_HOST_READY_BOUND_MS, runHostGoneRefusal, WORKSPACE_SERVICE_READY_BOUND_MS, workspaceServiceGoneRefusal } from './child-supervision.js';
 import { ChildrenEndedByMain, endBeforeMain, QuitState, RUN_HOST_END_BOUND_MS, watchChildExit } from './exit.js';
 import type { ReportInput } from './notices.js';
 
 /**
- * A fake `utilityProcess`: its port answers `hello` (or stays silent), `kill()` ends it with Electron's 0 for main's kill,
- * and `crash(code)` ends it on its own with any status — 0, 70 (the last-resort handler), a signal's number.
+ * A fake `utilityProcess`: its port answers `hello` (or stays silent) — at once, or `helloAfterMs` after it was asked, on
+ * the fake clock: a child still starting, which answers nothing before its first answer and everything asked meanwhile
+ * after it, in order — and answers `ping` with `pong`; `kill()` ends it with Electron's 0 for main's kill, and
+ * `crash(code)` ends it on its own with any status — 0, 70 (the last-resort handler), a signal's number. `asked` lists the
+ * kinds it received, in order.
  */
-function fakeChild(opts: { answers: boolean; pid?: number }) {
+function fakeChild(opts: { answers: boolean; pid?: number; helloAfterMs?: number; clock?: FakeClock }) {
   const events = new EventEmitter();
   const toChild = new Set<(m: unknown) => void>();
   const toMain = new Set<(m: unknown) => void>();
+  const asked: string[] = [];
   let alive = true;
+  let started = opts.helloAfterMs === undefined;
+  const backlog: { id: number; request: { kind: string } }[] = [];
   const end = (code: number): void => { if (!alive) return; alive = false; events.emit('exit', code); };
+  const answer = (e: { id: number; request: { kind: string } }): void => {
+    if (!alive) return;
+    const reply = e.request.kind === 'hello' ? { kind: 'hello', process: 'run-host', pid: opts.pid ?? 4242 } : e.request.kind === 'ping' ? { kind: 'pong' } : null;
+    if (reply !== null) for (const f of toMain) f({ v: CONTRACT_SCHEMA_VERSION, id: e.id, reply });
+  };
+  if (opts.helloAfterMs !== undefined) opts.clock?.after(millis(opts.helloAfterMs), () => { started = true; for (const e of backlog.splice(0)) answer(e); });
   toChild.add((m) => {
     const e = m as { id: number; request: { kind: string } };
-    if (opts.answers && e.request.kind === 'hello') for (const f of toMain) f({ v: CONTRACT_SCHEMA_VERSION, id: e.id, reply: { kind: 'hello', process: 'run-host', pid: opts.pid ?? 4242 } });
+    asked.push(e.request.kind);
+    if (!opts.answers) return;
+    if (started) answer(e);
+    else backlog.push(e);
   });
   const port: MessagePortLike = {
     postMessage: (m) => { if (alive) for (const f of toChild) f(m); },
@@ -32,18 +47,21 @@ function fakeChild(opts: { answers: boolean; pid?: number }) {
     kill: () => { end(0); return true; },
     crash: (code: number) => { end(code); },
   };
-  return { child, port };
+  return { child, port, asked };
 }
 
-/** Main's wiring of one child, as `index.ts` writes it: the link, the exit watch, the reporter and the link's end on exit. */
-function supervised(kind: 'run-host' | 'workspace-service', opts: { answers: boolean }) {
+/**
+ * Main's wiring of one child, as `index.ts` writes it: the link, the exit watch, the reporter, the link's end on exit, and
+ * the `hello` asked at the fork with the link held on it (OQ-473). `ready()` is the fork: call it once.
+ */
+function supervised(kind: 'run-host' | 'workspace-service', opts: { answers: boolean; helloAfterMs?: number }) {
   const clock = new FakeClock();
   const quit = new QuitState();
   const endedByMain = new ChildrenEndedByMain();
   const lines: [string, string | undefined][] = [];
   const notices: ReportInput[] = [];
   const reporter = new ChildLossReporter({ endedByMain: (n) => endedByMain.ended(n), quitting: () => quit.ending(), log: (m, level) => lines.push([m, level]) });
-  const { child, port } = fakeChild(opts);
+  const { child, port, asked } = fakeChild({ ...opts, clock });
   const name = kind === 'run-host' ? 'rotaris-run-host' : 'rotaris-workspace:C:\\work\\alpha';
   const who = kind === 'run-host' ? { process: 'run-host' as const } : { process: 'workspace-service' as const, workspace: 'C:\\work\\alpha' };
   const link = new ProcessLink(port, clock, { boundary: 'run host', warn: () => {} });
@@ -54,17 +72,23 @@ function supervised(kind: 'run-host' | 'workspace-service', opts: { answers: boo
     link.end(kind === 'run-host' ? runHostGoneRefusal(how ?? 'stopped') : workspaceServiceGoneRefusal('C:\\work\\alpha'));
   });
   const bound = kind === 'run-host' ? RUN_HOST_READY_BOUND_MS : WORKSPACE_SERVICE_READY_BOUND_MS;
-  const ready = () => boundedReady(() => link.request({ kind: 'hello' }, bound), async () => {
+  const ready = () => readyAtFork(link, { kind: 'hello' }, bound, async () => {
     reporter.missedReady(name, bound);
+    link.end(kind === 'run-host' ? runHostGoneRefusal('did-not-start') : workspaceServiceGoneRefusal('C:\\work\\alpha'));
     await endBeforeMain(child, exit, clock, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, () => lines.push(['still running', 'error']));
   });
-  return { clock, quit, reporter, notices, lines, child, link, endable, ready, attach: () => reporter.attach((n) => notices.push(n)) };
+  return { clock, quit, reporter, notices, lines, child, link, asked, endable, ready, attach: () => reporter.attach((n) => notices.push(n)) };
 }
 
-describe('OQ-462 (2): a bounded ready', () => {
-  it('both children are bounded at 5 s, the run host\'s hello bound', () => {
-    expect(RUN_HOST_READY_BOUND_MS).toBe(5_000);
-    expect(WORKSPACE_SERVICE_READY_BOUND_MS).toBe(5_000);
+/** Lets the microtasks a settled reply or a lifted hold queues run. */
+async function drain(): Promise<void> {
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+}
+
+describe('OQ-462 (2), as OQ-473 revises it: a bounded ready', () => {
+  it('both children are bounded at 20 s (OQ-473 (1); 5 s under OQ-462 (2))', () => {
+    expect(RUN_HOST_READY_BOUND_MS).toBe(20_000);
+    expect(WORKSPACE_SERVICE_READY_BOUND_MS).toBe(20_000);
   });
 
   it('a child that answers its hello is ready, and nothing is raised', async () => {
@@ -72,6 +96,71 @@ describe('OQ-462 (2): a bounded ready', () => {
     s.attach();
     await expect(s.ready()).resolves.toEqual({ kind: 'hello', process: 'run-host', pid: 4242 });
     expect(s.notices).toEqual([]);
+  });
+
+  it.each([6_000, 19_000])('OQ-473 (1): a run host that answers its hello %i ms after its fork is ready: no miss, no notice, nothing ended', async (afterMs) => {
+    const s = supervised('run-host', { answers: true, helloAfterMs: afterMs });
+    s.attach();
+    const ready = s.ready();
+    // The hello is posted at the fork, before anything else is awaited (OQ-473 (2)).
+    expect(s.asked).toEqual(['hello']);
+    s.clock.advance(afterMs - 1);
+    await drain();
+    expect(s.link.holding).toBe(true);
+    s.clock.advance(1);
+    await expect(ready).resolves.toEqual({ kind: 'hello', process: 'run-host', pid: 4242 });
+    expect(s.notices).toEqual([]);
+    expect(s.reporter.didNotStart('rotaris-run-host')).toBe(false);
+    expect(s.lines).toEqual([]);
+    expect(s.link.endedWith).toBeNull();
+    // Nothing is left to fire: the hello's deadline was cancelled with its answer.
+    expect(s.clock.pendingCount()).toBe(0);
+  });
+
+  it('OQ-473 (1): a run host that would answer 21 s after its fork has missed the bound at 20 s: ended, with the "did not start" notice', async () => {
+    const s = supervised('run-host', { answers: true, helloAfterMs: 21_000 });
+    s.attach();
+    const ready = s.ready();
+    s.clock.advance(19_999);
+    await drain();
+    expect(s.link.holding).toBe(true);
+    s.clock.advance(1);
+    await expect(ready).resolves.toBeNull();
+    expect(s.notices).toEqual([expect.objectContaining({ severity: 'error', persistent: true, title: 'The run host did not start', detail: expect.stringMatching(/no answer to its hello within 20000 ms, so main ended it \(pid 4242, exit status 0\)/) })]);
+    // Ended: its late answer never comes, and every request is refused at once.
+    s.clock.advance(1_000);
+    await expect(s.link.request({ kind: 'ping' }, millis(30_000))).resolves.toEqual(runHostGoneRefusal('did-not-start'));
+  });
+
+  it('OQ-473 (3): a request made before the hello is held, not posted, and answered once the run host is ready', async () => {
+    const s = supervised('run-host', { answers: true, helloAfterMs: 8_000 });
+    s.attach();
+    const ready = s.ready();
+    // A request with a 5 s bound, made at once: what `session.list` or `presenter.register` is during the first paint.
+    const held = s.link.request({ kind: 'ping' }, millis(5_000));
+    s.clock.advance(7_999);
+    await drain();
+    // Held: never posted, so the child has seen only the hello, and its 5 s bound has not run out at 8 s.
+    expect(s.asked).toEqual(['hello']);
+    s.clock.advance(1);
+    await expect(ready).resolves.not.toBeNull();
+    await drain();
+    expect(s.asked).toEqual(['hello', 'ping']);
+    await expect(held).resolves.toEqual({ kind: 'pong' });
+    expect(s.notices).toEqual([]);
+  });
+
+  it('OQ-473 (3): a request made before the hello is held, then refused `runHost.notStarted` at the miss, not after its own bound', async () => {
+    const s = supervised('run-host', { answers: false });
+    s.attach();
+    const ready = s.ready();
+    const held = s.link.request({ kind: 'ping' }, millis(30_000));
+    s.clock.advance(RUN_HOST_READY_BOUND_MS);
+    await expect(held).resolves.toEqual(runHostGoneRefusal('did-not-start'));
+    await expect(ready).resolves.toBeNull();
+    // Never posted: the silent child saw the hello alone.
+    expect(s.asked).toEqual(['hello']);
+    expect(s.notices.map((n) => n.title)).toEqual(['The run host did not start']);
   });
 
   it('a run host that misses the bound is ended, never rejects out of the launch, and the notice is held until the store exists', async () => {
@@ -83,7 +172,7 @@ describe('OQ-462 (2): a bounded ready', () => {
     // endable, so the miss is still a loss (it is the missed bound, not main's quit).
     expect(s.notices).toEqual([]);
     s.attach();
-    expect(s.notices).toEqual([expect.objectContaining({ severity: 'error', persistent: true, title: 'The run host did not start', detail: expect.stringMatching(/no answer to its hello within 5000 ms, so main ended it \(pid 4242, exit status 0\)/) })]);
+    expect(s.notices).toEqual([expect.objectContaining({ severity: 'error', persistent: true, title: 'The run host did not start', detail: expect.stringMatching(/no answer to its hello within 20000 ms, so main ended it \(pid 4242, exit status 0\)/) })]);
     expect(s.notices[0]!.action).toBeUndefined();
     expect(s.notices[0]!.sessionId).toBeUndefined();
     // (3): every request after it is refused at once, without the link's bound.

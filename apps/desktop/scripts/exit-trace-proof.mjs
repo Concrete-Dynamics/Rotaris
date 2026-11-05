@@ -7,7 +7,7 @@
  * `render-process-gone` for a renderer lost, `child-process-gone` for a utility child lost, and `process.on('exit')` last
  * (`docs/archive/defects/process-exit-left-no-diagnosable-trace.md`). The orderly half was measured when it landed; the crash
  * handlers were "argued, not measured", and no proof or live launch killed a process until this one
- * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Twelve driven launches:
+ * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Thirteen driven launches:
  *
  *   1. orderly — launched and quit through the driver: the log carries `quit: exiting with status 0` and
  *                `main process exiting with status 0`, and NO `error` line for a renderer or a child gone. The control for
@@ -50,9 +50,14 @@
  *   7. main-killed — main killed from outside: the run host and the workspace service, which probe main's pid every 250 ms,
  *                are gone within 2,000 ms (`RUN_HOST_END_BOUND_MS`), since Electron's parent port emits no `close`.
  *   8. not-ready — OQ-462 (2): a run host, then a workspace service, that never answers its `hello` (the seam's `silent`): the
- *                window still paints, main ends the child at the 5 s bound with no unhandled rejection, the run host's miss
- *                raises "The run host did not start" and refuses every later request at once, the service's refuses its
- *                open with the transient "The project could not be opened" and no notice, and the application quits 0.
+ *                window still paints, main ends the child at the bound (20 s since OQ-473; 5 s until 2026-11-05) with no
+ *                unhandled rejection, the run host's miss raises "The run host did not start" and refuses every later
+ *                request at once, the service's refuses its open with the transient "The project could not be opened" and
+ *                no notice, and the application quits 0.
+ *      slow-ready — OQ-473 (3): a run host that answers its `hello` about 8 s after its fork (the seam's `slow:8000`): the
+ *                window is shown within 5 s of the fork, before the `hello`, with no loss notice; a request made before the
+ *                `hello` is held and answered, not refused; a run then completes; main logs the `hello`'s latency from the
+ *                fork, which the proof records.
  *   9. render-fault — R-091 (hardening §3.2 row 4): a component in the main window throws while it is drawn (the renderer
  *                seam `window.__rotarisRenderFault`, compiled out of a packaged build): the window draws the error boundary's
  *                fallback with "Reload this window" instead of going blank, main writes ONE `error` line carrying the error and
@@ -194,7 +199,11 @@ const results = {};
   check('an orderly quit exits 0', stopped.exit?.code === 0, JSON.stringify(stopped.exit));
   check('an orderly quit writes its status and the main process\'s last line', lines.some((l) => l.message === 'quit: exiting with status 0') && lines.some((l) => l.message === 'main process exiting with status 0'), lines.slice(-3).map((l) => l.message).join(' | '));
   check('an orderly quit writes no renderer or child GONE line at error', goneAtError(log).length === 0, goneAtError(log).map((l) => l.message).join(' | ') || 'none');
-  results.orderly = { exit: stopped.exit, last: lines.slice(-3).map((l) => `${l.level} ${l.message}`) };
+  // OQ-473: main logs the run host's hello latency from its fork; recorded for every launch that reads it, the question returning
+  // if any is above half the 20 s bound.
+  const orderlyHello = /run host hello: \{.*\} \((\d+) ms after the fork, bound (\d+) ms; OQ-473\)/.exec(log);
+  check('OQ-473: main logs the run host\'s hello with its latency from the fork, within the 20 s bound',orderlyHello !== null && Number(orderlyHello[1]) < Number(orderlyHello[2]) && Number(orderlyHello[2]) === 20_000, orderlyHello?.[0] ?? 'no hello line');
+  results.orderly = { exit: stopped.exit, helloLatencyMs: orderlyHello ? Number(orderlyHello[1]) : null, last: lines.slice(-3).map((l) => `${l.level} ${l.message}`) };
 }
 
 // ── 2. crash: the run host killed, then the renderer crashed ────────────────────────────────────────────
@@ -488,34 +497,43 @@ for (const [name, spec, source, event, exitPattern] of [
   results['main-killed'] = { mainPid, children: readings, survivors };
 }
 
-// ── 8. not-ready: a run host, then a workspace service, that never answers its hello (OQ-462 (2)) ─────────────────────────
+// ── 8. not-ready: a run host, then a workspace service, that never answers its hello (OQ-462 (2), OQ-473) ──────────────────
 /*
- * OQ-462 (2), ruled 2026-11-01: each child's first answer is bounded at 5 s; one that misses it is ended. The run host's
- * miss was an unhandled rejection in main that ended the launch with no window
+ * OQ-462 (2), ruled 2026-11-01: each child's first answer is bounded; one that misses it is ended. The run host's miss was
+ * an unhandled rejection in main that ended the launch with no window
  * (docs/archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md): now the window
  * paints with the "did not start" notice, every request to the run host is refused at once, and the application quits 0.
  * A service's miss refuses its open on the open's own surface (REQ-SHELL-112's transient) and raises no notice. The silence
- * is the seam `ROTARIS_CAPTURE_CHILD_FAULT=<process>:silent`: the child starts and answers nothing.
+ * is the seam `ROTARIS_CAPTURE_CHILD_FAULT=<process>:silent`: the child starts and answers nothing. OQ-473 (ruled
+ * 2026-11-04) moved the bound from 5 s to 20 s, counted from each child's fork, and took the run host's `hello` off the
+ * paint path: the window is shown while the `hello` is still awaited (main's `shown … its hello still awaited` line).
  */
+const READY_BOUND_MS = 20_000;
+/** Main's line for the first window's show (OQ-473): its time from the run host's fork, and where the `hello` stood. */
+const shownLine = (started) => mainLines(logOf(started)).map((l) => /^main window \d+ shown (\d+) ms after the run host's fork; its hello (still awaited|answered|missed or lost) \(OQ-473\)$/.exec(l.message)).find((m) => m !== null) ?? null;
+/** Main's hello line (OQ-473): the latency from the fork. */
+const helloLatency = (started) => { const m = /run host hello: \{.*\} \((\d+) ms after the fork, bound (\d+) ms; OQ-473\)/.exec(logOf(started)); return m ? { ms: Number(m[1]), boundMs: Number(m[2]) } : null; };
 for (const [name, spec, missLine, noticeTitle] of [
-  ['not-ready-run-host', 'run-host:silent', /^run host did not answer its hello within 5000 ms \(no reply to hello within 5000 ms\); main ends it/, 'The run host did not start'],
-  ['not-ready-workspace-service', 'workspace-service:silent', /^workspace service for .* did not answer its hello within 5000 ms \(no reply to hello within 5000 ms\); main ends it and refuses the open/, null],
+  ['not-ready-run-host', 'run-host:silent', new RegExp(`^run host did not answer its hello within ${READY_BOUND_MS} ms \\(no reply to hello within ${READY_BOUND_MS} ms\\); main ends it`), 'The run host did not start'],
+  ['not-ready-workspace-service', 'workspace-service:silent', new RegExp(`^workspace service for .* did not answer its hello within ${READY_BOUND_MS} ms \\(no reply to hello within ${READY_BOUND_MS} ms\\); main ends it and refuses the open`), null],
 ]) {
   const started = await startApp({ root: join(output, name), workspace, extra: { ROTARIS_CAPTURE_CHILD_FAULT: spec }, timeoutMs: 90_000 });
   const painted = await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 }).then(() => true, () => false);
   check(`${name}: the window paints although the child never answered`, painted);
-  const missed = await until(() => mainLines(logOf(started)).find((l) => missLine.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 30_000, what: 'main\'s missed-hello line' }).catch(() => null);
-  check(`${name}: main writes the missed bound at error and ends the child`, missed?.level === 'error', missed ? `${missed.level} ${missed.message}` : 'no line');
+  const shown = await until(() => shownLine(started), (m) => m !== null, { timeoutMs: 15_000, what: 'main\'s shown line' }).catch(() => null);
+  if (noticeTitle !== null) check(`${name}: OQ-473 (3): the window is shown while the run host's hello is still awaited, not after the bound`, shown?.[2] === 'still awaited' && Number(shown[1]) < READY_BOUND_MS, shown?.[0] ?? 'no line');
+  const missed = await until(() => mainLines(logOf(started)).find((l) => missLine.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: READY_BOUND_MS + 40_000, what: 'main\'s missed-hello line' }).catch(() => null);
+  check(`${name}: main writes the missed bound (${READY_BOUND_MS} ms, OQ-473) at error and ends the child`, missed?.level === 'error', missed ? `${missed.level} ${missed.message}` : 'no line');
   const unhandled = mainLines(logOf(started)).filter((l) => /^UNHANDLED rejection in main|^UNCAUGHT in main/.test(l.message));
   check(`${name}: no unhandled rejection or uncaught exception in main`, unhandled.length === 0, unhandled.map((l) => l.message).join(' | ') || 'none');
   if (noticeTitle !== null) {
     const notice = await until(() => started.driver.eval(READ_NOTICE).catch(() => null), (n) => n?.title === noticeTitle, { timeoutMs: 20_000, what: 'the did-not-start notice' }).catch(() => null);
-    check(`${name}: one error notice "${noticeTitle}", no action, saying no run can start until a restart`, notice?.severity === 'error' && notice.action === false && /No run can start until the application is restarted/.test(notice.message ?? '') && /no answer to its hello within 5000 ms/.test(notice.detail ?? ''), JSON.stringify(notice));
+    check(`${name}: one error notice "${noticeTitle}", no action, saying no run can start until a restart`, notice?.severity === 'error' && notice.action === false && /No run can start until the application is restarted/.test(notice.message ?? '') && new RegExp(`no answer to its hello within ${READY_BOUND_MS} ms`).test(notice.detail ?? ''), JSON.stringify(notice));
     const askedAt = Date.now();
     const answer = await started.driver.command({ kind: 'session.list' }).catch((e) => ({ error: String(e) }));
     check(`${name}: a request that reaches the run host is answered at once, not after a bound`, Date.now() - askedAt < 3_000, `${Date.now() - askedAt} ms: ${JSON.stringify(answer).slice(0, 200)}`);
   } else {
-    const acks = await until(() => started.driver.eval(READ_ACKS).catch(() => []), (a) => Array.isArray(a) && a.includes('The project could not be opened'), { timeoutMs: 20_000, what: 'the refusal of the open' }).catch(() => started.driver.eval(READ_ACKS).catch(() => []));
+    const acks = await until(() => started.driver.eval(READ_ACKS).catch(() => []), (a) => Array.isArray(a) && a.includes('The project could not be opened'), { timeoutMs: READY_BOUND_MS + 40_000, what: 'the refusal of the open' }).catch(() => started.driver.eval(READ_ACKS).catch(() => []));
     check(`${name}: the open's refusal is the transient "The project could not be opened"`, Array.isArray(acks) && acks.includes('The project could not be opened'), JSON.stringify(acks));
     // The service's exit follows main's kill within the end bound; any notice it would raise has been raised by then.
     await new Promise((r) => setTimeout(r, 3_000));
@@ -525,7 +543,58 @@ for (const [name, spec, missLine, noticeTitle] of [
   const stopped = await stopApp(started);
   if (stopped.overran) throw new Error(stopOverrunMessage(name, stopped, logOf(started)));
   check(`${name}: the application then quits, exit 0`, stopped.exit?.code === 0, JSON.stringify(stopped.exit));
-  results[name] = { spec, missed: missed ? `${missed.level} ${missed.message}` : null, exit: stopped.exit };
+  results[name] = { spec, shown: shown?.[0] ?? null, missed: missed ? `${missed.level} ${missed.message}` : null, exit: stopped.exit };
+}
+
+// ── 8b. slow-ready: a run host that answers its hello late, within the bound (OQ-473) ──────────────────────────────────────
+/*
+ * OQ-473, ruled 2026-11-04 under the owner's delegation (R-072): a run host slow to start on a loaded host (about 5.8 s at
+ * 100 % CPU, 2026-11-03) missed OQ-462's 5 s and was gone for the session. Now the bound is 20 s from the fork and the window
+ * does not wait for the `hello`: shown within 5 s of the fork (REQ-STARTUP-155's budget, which no child's answer may spend),
+ * no loss notice, a request made before the `hello` held and then answered, and a run that completes. The seam's
+ * `run-host:slow:8000` holds every message the run host receives for its first 8 s. The latency main logs is recorded; the
+ * ruling's question returns if a first execution observes any `hello` above half the bound (10 s) without the seam.
+ */
+{
+  const SLOW_MS = 8_000;
+  const started = await startApp({ root: join(output, 'slow-ready'), workspace, extra: { ROTARIS_CAPTURE_CHILD_FAULT: `run-host:slow:${SLOW_MS}` }, timeoutMs: 90_000 });
+  const painted = await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 }).then(() => true, () => false);
+  const shown = await until(() => shownLine(started), (m) => m !== null, { timeoutMs: 15_000, what: 'main\'s shown line' }).catch(() => null);
+  check('slow-ready: OQ-473 (3): the window is shown within 5 s of the run host\'s fork, while its hello is still awaited', painted && shown?.[2] === 'still awaited' && Number(shown[1]) <= 5_000, shown?.[0] ?? 'no line');
+  const latency = await until(() => helloLatency(started), (h) => h !== null, { timeoutMs: READY_BOUND_MS + 20_000, what: 'main\'s hello line' }).catch(() => null);
+  /*
+   * A request made before the hello, held and then answered (OQ-473 (3)). The driver's endpoint opens only once the launch's
+   * open has settled, which waits on the run host, so the driver cannot ask before the hello (measured on the first run,
+   * 2026-11-05: its `session.list` came 90 ms after the hello line). The launch's own open asks first: the workspace service
+   * opens the store before the hello, and main hands the opened workspace to the run host with a 5 s bound
+   * (`workspace.opened`, `handOffOpenedWorkspace`). Posted at once, that bound would expire before an 8 s hello and the line
+   * would read `run host: no reply`; held, it is posted at the hello and acknowledged.
+   */
+  const stamp = (l) => Date.parse(/^\[main ([^\]]+)\]/.exec(l)?.[1] ?? '');
+  const raw = logOf(started).split('\n');
+  const helloAt = stamp(raw.find((l) => /\] info\s+run host hello: /.test(l)) ?? '');
+  const serviceOpenedAt = stamp(raw.find((l) => /workspace service: configuration bootstrap at the open of /.test(l)) ?? '');
+  const handOffLine = raw.find((l) => /\] info\s+workspace .* → \S+ \(schema v\d+\); run host: /.test(l)) ?? '';
+  check('slow-ready: OQ-473 (3): the open\'s hand-off, asked before the hello with a 5 s bound, is held and then acknowledged, not missed', serviceOpenedAt < helloAt && helloAt - serviceOpenedAt > 5_000 && /run host: workspace\.ack$/.test(handOffLine) && stamp(handOffLine) >= helloAt, `service open ${helloAt - serviceOpenedAt} ms before the hello; ${handOffLine.replace(/^\[main [^\]]+\]\s+\w+\s+/, '') || 'no hand-off line'}`);
+  const askedAt = Date.now();
+  const listed = await started.driver.command({ kind: 'session.list' }).catch((e) => ({ error: String(e) }));
+  const listedMs = Date.now() - askedAt;
+  check('slow-ready: a run-host request after the hello is answered', listed?.ok === true, `${listedMs} ms: ${JSON.stringify(listed).slice(0, 200)}`);
+  check(`slow-ready: OQ-473 (1): the hello is accepted late, at or after the seam's ${SLOW_MS} ms and within the ${READY_BOUND_MS} ms bound, and main logs its latency from the fork`, latency !== null && latency.ms >= SLOW_MS - 500 && latency.ms < READY_BOUND_MS && latency.boundMs === READY_BOUND_MS, JSON.stringify(latency));
+  const lossLines = mainLines(logOf(started)).filter((l) => /did not answer its hello|^notice: The run host /.test(l.message));
+  const notice = await started.driver.eval(READ_NOTICE).catch(() => null);
+  check('slow-ready: no missed bound and no loss notice', lossLines.length === 0 && !/run host/i.test(notice?.title ?? ''), `${lossLines.map((l) => l.message).join(' | ') || 'no line'}; notice ${JSON.stringify(notice)}`);
+  // A run completes on the scripted dialect's default answer.
+  await started.driver.click('.nav-item', { text: 'Workspace' });
+  await started.driver.click('textarea.composer__input');
+  await started.driver.type('complete one run after a slow start', { enter: true });
+  const completed = await started.driver.waitFor('[data-testid="run-header"][data-state="completed"]', { timeoutMs: 60_000 }).then(() => true, () => false);
+  const runState = await started.driver.eval('document.querySelector(\'[data-testid="run-header"]\')?.getAttribute(\'data-state\') ?? null').catch(() => null);
+  check('slow-ready: a run then completes', completed, `run header ${runState}`);
+  const stopped = await stopApp(started);
+  if (stopped.overran) throw new Error(stopOverrunMessage('slow-ready', stopped, logOf(started)));
+  check('slow-ready: the application then quits, exit 0', stopped.exit?.code === 0, JSON.stringify(stopped.exit));
+  results['slow-ready'] = { shown: shown?.[0] ?? null, helloLatencyMs: latency?.ms ?? null, sessionListMs: listedMs, handOff: handOffLine.replace(/^\[main [^\]]+\]\s+\w+\s+/, ''), serviceOpenBeforeHelloMs: helloAt - serviceOpenedAt, runState, exit: stopped.exit };
 }
 
 // ── 9. render-fault: a component throws while the main window is drawn (R-091, hardening §3.2 row 4) ─────────────────────

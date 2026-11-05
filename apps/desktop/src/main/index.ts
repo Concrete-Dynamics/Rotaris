@@ -70,7 +70,7 @@ import { emptyArtifactNotice, passFailureDetail, passFailureTitle } from './impr
 import { answerUnderHeldRefusal, cutRestoreNotice, holdOpenRefusal, type HeldOpenRefusal } from './store-notice.js'; // REQ-SESSION-202, REQ-SESSION-197, OQ-266, OQ-281
 import { handOffOpenedWorkspace } from './workspace-handoff.js'; // W-18, ADR-0002 consequence 11, OQ-386
 import { establishFlow as establishStoreFlow, restoreFlow as restoreStoreFlow, type StoreFlowDeps } from './store-resolution.js'; // OQ-281
-import { boundedReady, ChildLossReporter, runHostGoneRefusal, RUN_HOST_READY_BOUND_MS, workspaceServiceGoneRefusal, WORKSPACE_SERVICE_READY_BOUND_MS } from './child-supervision.js'; // OQ-462
+import { boundedReady, ChildLossReporter, readyAtFork, runHostGoneRefusal, RUN_HOST_READY_BOUND_MS, workspaceServiceGoneRefusal, WORKSPACE_SERVICE_READY_BOUND_MS } from './child-supervision.js'; // OQ-462, OQ-473
 import { childExitReading, ChildrenEndedByMain, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitOutsideAnyWindow, QuitState, RUN_HOST_END_BOUND_MS, SessionEndShutdown, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
@@ -366,6 +366,7 @@ async function main(): Promise<void> {
   // sandbox switch THIS process was started with (`--no-sandbox`, as root on Linux). A utility process's argv is what it
   // is forked with, not the parent's, so the switch is handed over here; the run host reads it back from its own argv.
   const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [...inheritedChromiumSwitches(process.argv)], { serviceName: RUN_HOST_SERVICE_NAME });
+  const runHostForkedAt = clocks.monotonic.now();
   // PD-MONITOR-002 (live-run finding L13): main's own end of the run host is recorded, so Electron's `killed` is not a loss.
   const runHostEndable = endedByMain.endable(RUN_HOST_SERVICE_NAME, runHostChild);
   // Watched from the fork so the quit can race its `shutdown` against it and never miss the event (`exit.ts`).
@@ -414,6 +415,36 @@ async function main(): Promise<void> {
   // its answered `shutdown` needs (a 0 ms timer) before ending it. Either way the next launch finds its pid dead.
   const runHostStillRunning = (): void => { log(`quit: the run host (pid ${runHostChild.pid ?? '?'}) was still running ${RUN_HOST_END_BOUND_MS} ms after it was ended; a session it held is refused to the next launch until it exits`, 'error'); };
   endRunHost = () => endBeforeMain(runHostEndable, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
+  /*
+   * PD-PROVIDER-001: the handshake hands the run host the shared-quota caps the provider catalogue declares.
+   * OQ-473 (ruled 2026-11-04, R-072; revising OQ-462 (2)'s 5 s): the `hello` is asked HERE, at the fork, before main awaits
+   * anything else, so its request deadline — RUN_HOST_READY_BOUND_MS, 20 s — is the bound counted from the run host's start;
+   * and it is NOT awaited before the first main window (REQ-STARTUP-155: the paint budget is not spent on a child's answer).
+   * The notice store and `MainWindows` are built while the run host starts, and every run-host request made before the
+   * `hello` settles — `session.list`, `presenter.register`, `hooks.summary`, a submit — is held on it
+   * (`ProcessLink.holdUntil`). A run host that misses it is ended through `endBeforeMain` and its link ended, so each held
+   * request and every later one is refused `runHost.notStarted` at once, and its exit raises "The run host did not start"
+   * (OQ-462 (1)). It is never forked again (ADR-0002 consequence 1, OQ-462 (4)). Until 2026-11-03 the miss rejected out of
+   * `main()` (`docs/archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md`);
+   * until OQ-473 main awaited the `hello` here before it built anything, so a slow run host delayed the first paint.
+   */
+  const runHostReady = readyAtFork(runHost, { kind: 'hello', sharedQuotaCaps: sharedQuotaCaps() }, RUN_HOST_READY_BOUND_MS, async (cause) => {
+    childLoss.missedReady(RUN_HOST_SERVICE_NAME, RUN_HOST_READY_BOUND_MS);
+    log(`run host did not answer its hello within ${RUN_HOST_READY_BOUND_MS} ms (${cause}); main ends it, and no run can start until the application is restarted (OQ-462, OQ-473)`, 'error');
+    runHost.end(runHostGoneRefusal('did-not-start'));
+    await endBeforeMain(runHostChild, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
+  });
+  // Main's own line about the handshake: named `run host hello:` so it cannot be read as a line the run host forwarded,
+  // which the log writes as `run host: …` (PD-MONITOR-002's source column). OQ-473: it carries the latency from the fork,
+  // which the proofs read — a reading for the log only; the bound is the request's own deadline.
+  /** OQ-473: whether the run host's `hello` has settled, read by the first window's show line below. */
+  let runHostReadySettled = false;
+  void runHostReady.then((hello) => {
+    runHostReadySettled = true;
+    if (hello !== null) log(`run host hello: ${JSON.stringify(hello)} (${Math.round(clocks.monotonic.now() - runHostForkedAt)} ms after the fork, bound ${RUN_HOST_READY_BOUND_MS} ms; OQ-473)`);
+  });
+  /** OQ-473 (3): the first main window's show is said once, with its time from the run host's fork — the paint the `hello` no longer delays. */
+  let firstShowSaid = false;
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest>; exit: ChildExit }>();
   /**
@@ -521,7 +552,8 @@ async function main(): Promise<void> {
           default: return Promise.resolve({ kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from a workspace service` } as ProcessReply);
         }
       });
-      // OQ-462 (2): the service's first answer is bounded as the run host's is; one that misses it is ended through
+      // OQ-462 (2): the service's first answer is bounded as the run host's is (20 s since OQ-473, asked here at its fork with
+      // nothing awaited between); one that misses it is ended through
       // `endBeforeMain`, and this open is refused on its own surface (REQ-SHELL-112's transient), with no notice besides.
       const ready = await boundedReady(() => own.link.request({ kind: 'hello' }, WORKSPACE_SERVICE_READY_BOUND_MS), async (cause) => {
         childLoss.missedReady(serviceName, WORKSPACE_SERVICE_READY_BOUND_MS);
@@ -612,21 +644,8 @@ async function main(): Promise<void> {
     return { workspaceId: opened.workspaceId, storeFile: opened.storeFile };
   };
 
-  // PD-PROVIDER-001: the handshake hands the run host the shared-quota caps the provider catalogue declares.
-  // OQ-462 (2): bounded by RUN_HOST_READY_BOUND_MS. A run host that misses it is ended through `endBeforeMain`, every request
-  // to it is refused at once from here on, and the launch goes on to its window, where the "did not start" notice stands
-  // (raised on its exit, held until the notice store below exists). Until 2026-11-03 the miss rejected out of `main()`
-  // and ended the launch with no window
-  // (`docs/archive/defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md`).
-  const rhHello = await boundedReady(() => runHost.request({ kind: 'hello', sharedQuotaCaps: sharedQuotaCaps() }, RUN_HOST_READY_BOUND_MS), async (cause) => {
-    childLoss.missedReady(RUN_HOST_SERVICE_NAME, RUN_HOST_READY_BOUND_MS);
-    log(`run host did not answer its hello within ${RUN_HOST_READY_BOUND_MS} ms (${cause}); main ends it, and no run can start until the application is restarted (OQ-462)`, 'error');
-    runHost.end(runHostGoneRefusal('did-not-start'));
-    await endBeforeMain(runHostChild, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
-  });
-  // Main's own line about the handshake: named `run host hello:` so it cannot be read as a line the run host forwarded,
-  // which the log writes as `run host: …` (PD-MONITOR-002's source column).
-  if (rhHello !== null) log(`run host hello: ${JSON.stringify(rhHello)}`);
+  // OQ-473: the run host's `hello` was awaited here, before the notice store and the first window; it is asked at the fork
+  // (`runHostReady`, above) and no longer awaited by the launch.
 
   const relay = new UpdateRelay();
   // Verification only: the capture may wait for the first terminal result (ROTARIS_CAPTURE_WAIT=result).
@@ -657,7 +676,8 @@ async function main(): Promise<void> {
     log,
     focusedSession: () => activeWindow()?.followedSessionId ?? null,
   });
-  // OQ-462 (1): a child's loss is told through this store; one raised before it existed (a run host that missed its hello) now.
+  // OQ-462 (1): a child's loss is told through this store; one raised before it existed is published now. Since OQ-473 the
+  // store no longer waits on the run host's `hello`, so a miss at its 20 s bound normally finds it attached.
   childLoss.attach((notice) => { void notices.report(notice); });
   /**
    * THE UPDATER (first-release-plan.md §4.6, ADR-0054; ruled into the first release by O-10) — `main/updater/`.
@@ -1725,6 +1745,11 @@ async function main(): Promise<void> {
     // REQ-STARTUP-165 (c): the finding held from the pre-window phase is raised here, after the window is painted, on the
     // update offer's surface at warning severity — once per run, which its key holds however many windows are shown.
     postShowActivation: (window) => {
+      if (!firstShowSaid) {
+        firstShowSaid = true;
+        const helloState = !runHostReadySettled ? 'still awaited' : runHost.endedWith === null ? 'answered' : 'missed or lost';
+        log(`main window ${window.wcId} shown ${Math.round(clocks.monotonic.now() - runHostForkedAt)} ms after the run host's fork; its hello ${helloState} (OQ-473)`);
+      }
       if (preparationFinding !== undefined) {
         void notices.report(preparationNotice(preparationFinding)).then((r) => { if (r.shown) log(`launch preparation: warning notice #${r.id} raised after the show (REQ-STARTUP-165 (c))`); });
       }

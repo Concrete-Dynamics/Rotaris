@@ -49,7 +49,9 @@ exit 69 within 0.4 s of the kill in two launches and within 2.5 s in two more, a
 in later kills Chromium often ended them first (exit 0), and in 2 of 4 `exit-trace-proof` runs the run host was still running
 10 s after the kill, during its code-intelligence setup step — why is open on
 [the orphaned run host note](../../../defects/the-run-host-outlives-a-killed-main-on-windows-and-keeps-calling-the-model.md). A verification seam, `ROTARIS_CAPTURE_CHILD_FAULT` (`injectChildFault`, compiled out of a
-packaged build), raises a throw or a rejection in either child for `exit-trace-proof`'s `last-resort` launches.
+packaged build), raises a throw or a rejection in either child for `exit-trace-proof`'s `last-resort` launches, silence for
+its `not-ready` launches, and a start that answers nothing for its first seconds for its `slow-ready` launch (`slow`,
+`holdMessagesFor`; OQ-473).
 
 **How a main window's renderer is lost, and comes back** (since 2026-11-04, R-091, hardening §3.2 row 5; REQ-STARTUP-161,
 REQ-SHELL-020, ADR-0055). On `render-process-gone` the Electron adapter sheds the window's relay sink and forgets its terminal

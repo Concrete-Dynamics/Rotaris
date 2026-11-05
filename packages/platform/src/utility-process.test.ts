@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { Liveness } from './liveness.js';
-import { describeThrown, injectChildFault, installLastResort, LAST_RESORT_EXIT_STATUS, PARENT_GONE_EXIT_STATUS, PARENT_WATCH_PERIOD_MS, superviseUtilityProcess, watchParent } from './utility-process.js';
+import { describeThrown, holdMessagesFor, injectChildFault, installLastResort, LAST_RESORT_EXIT_STATUS, PARENT_GONE_EXIT_STATUS, PARENT_WATCH_PERIOD_MS, superviseUtilityProcess, watchParent } from './utility-process.js';
 
 /** A fake `process`: the two events by hand, and the exits it was asked for. */
 function fakeProcess(ppid = 4242) {
@@ -72,9 +72,9 @@ describe('the last-resort handler of a utility process (R-091, ADR-0002, PD-MONI
 describe('the child fault seam (verification only)', () => {
   it('a throw from a timer after the given delay, for the named process alone', () => {
     const clock = new FakeClock();
-    expect(injectChildFault('workspace-service:uncaught:100', 'run-host', clock)).toEqual({ silent: false });
+    expect(injectChildFault('workspace-service:uncaught:100', 'run-host', clock)).toEqual({ silent: false, slowMs: 0 });
     expect(clock.pendingCount()).toBe(0);
-    expect(injectChildFault('run-host:uncaught:100', 'run-host', clock)).toEqual({ silent: false });
+    expect(injectChildFault('run-host:uncaught:100', 'run-host', clock)).toEqual({ silent: false, slowMs: 0 });
     expect(() => clock.advance(100)).toThrow(/an uncaught throw in the run-host/);
   });
 
@@ -94,8 +94,28 @@ describe('the child fault seam (verification only)', () => {
     } finally {
       process.off('unhandledRejection', onRejection);
     }
-    expect(injectChildFault('run-host:silent', 'run-host', clock)).toEqual({ silent: true });
-    expect(injectChildFault(undefined, 'run-host', clock)).toEqual({ silent: false });
+    expect(injectChildFault('run-host:silent', 'run-host', clock)).toEqual({ silent: true, slowMs: 0 });
+    expect(injectChildFault(undefined, 'run-host', clock)).toEqual({ silent: false, slowMs: 0 });
+  });
+
+  it('OQ-473: `slow` holds every message for its first afterMs, then handles them in order, and later ones at once', () => {
+    const clock = new FakeClock();
+    expect(injectChildFault('run-host:slow:8000', 'workspace-service', clock)).toEqual({ silent: false, slowMs: 0 });
+    const fault = injectChildFault('run-host:slow:8000', 'run-host', clock);
+    expect(fault).toEqual({ silent: false, slowMs: 8_000 });
+    expect(clock.pendingCount()).toBe(0);
+    const handled: string[] = [];
+    const handle = holdMessagesFor((m: string) => { handled.push(m); }, fault.slowMs, clock);
+    handle('hello');
+    handle('session.list');
+    clock.advance(7_999);
+    expect(handled).toEqual([]);
+    clock.advance(1);
+    expect(handled).toEqual(['hello', 'session.list']);
+    handle('ping');
+    expect(handled).toEqual(['hello', 'session.list', 'ping']);
+    const direct = (m: string): void => { handled.push(m); };
+    expect(holdMessagesFor(direct, 0, clock)).toBe(direct);
   });
 });
 

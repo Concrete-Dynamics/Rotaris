@@ -66,3 +66,27 @@ Two findings the build made and repaired in the same change: a refused `hooks.su
 so a run host already gone raised "No model provider is authenticated yet" over the loss notice in the one slot (now a
 refusal raises nothing there); and a loss notice for a run host whose kill landed only during the quit was raised as the
 application ended (now nothing is raised once it is ending).
+
+## First execution — 2026-11-05, the first answer bounded at 20 s from the fork, off the paint path (OQ-473)
+
+[OQ-473](../../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-4.md#oq-473)'s ruling of
+2026-11-04 is built as written (hrdb, `hrdb-child-ready-and-killed-renderer`): `RUN_HOST_READY_BOUND_MS` and
+`WORKSPACE_SERVICE_READY_BOUND_MS` are 20 s; each `hello` is asked immediately after its `utilityProcess.fork`
+(`readyAtFork`, `main/child-supervision.ts`), so the request's own `ProcessLink` deadline is the bound from the child's start;
+main no longer awaits the run host's `hello` before the notice store and `MainWindows`, and every run-host request made before
+it settles is held on it (`ProcessLink.holdUntil`, `packages/shell`), then posted in order with its own bound, or refused
+`runHost.notStarted` at once on a miss. Consequence 1 and OQ-462 (1), (3) and (4) are unchanged. Main now logs the `hello`'s
+latency from the fork and the first window's show with where the `hello` stood; a seam fault `slow` (`holdMessagesFor`,
+compiled out of a packaged build) makes a child answer nothing for its first seconds.
+
+Measured on Windows 11 ARM64, Node 26.13.0, by `exit-trace-proof` in three runs: the first at 37 % CPU with no other
+Electron tree, the second and third at 62 to 63 % with another session's tree (`Rotaris-wt-hrdb-diagnosticsf`, six Electron
+processes) running proofs. The third read 93 checks of 93. The `hello` latency from the fork in the twelve launches of the
+third run that did not delay it was **297 to 412 ms** (the first run's `orderly` launch 569 ms, the second's 521 ms) — far
+under half the bound, so the ruling's question does not return. `not-ready-run-host` showed its window 218 to 222 ms after the
+fork with the `hello` still awaited, missed at 20,000 ms with "The run host did not start" and a request refused in 0 ms;
+`not-ready-workspace-service` refused its open at 20,000 ms. `slow-ready` (`run-host:slow:8000`) showed the window 207 to 243
+ms after the fork, accepted the `hello` at 8,317 to 8,432 ms with no loss notice, held the open's `workspace.opened` hand-off
+(a 5 s bound, asked about 7.9 s before the `hello`) until the `hello` and had it acknowledged, and a run completed. The first
+run's check for a driver request before the `hello` could not be made as written: the driver's endpoint opens only after the
+launch's open has settled, which waits on the run host, so the hand-off is the request the proof reads.

@@ -30,12 +30,17 @@ sequenceDiagram
     M->>M: preferences, theme, provider catalogue
     M->>M: await app.whenReady()
     M->>RH: utilityProcess.fork(run-host.js) — one for the application's lifetime
-    M->>RH: hello, bounded RUN_HOST_READY_BOUND_MS (5 s; OQ-462 (2))
-    alt answered
-      RH-->>M: hello (its pid)
-    else no answer within 5 s
-      M->>RH: endBeforeMain — ended; every later request refused at once (OQ-462 (3)); never forked again
-      Note over M: on its exit, the error notice "The run host did not start",<br/>held until the notice store exists, then in the slot (OQ-462 (1))
+    M->>RH: hello at the fork, bounded RUN_HOST_READY_BOUND_MS (20 s; OQ-473) — NOT awaited: the launch goes on
+    Note over M: until it settles every run-host request is held on it (ProcessLink.holdUntil)
+    par the run host starts
+      alt answered within 20 s of the fork
+        RH-->>M: hello (its pid); "run host hello: … (N ms after the fork …)"; held requests posted in order
+      else no answer within 20 s
+        M->>RH: endBeforeMain — ended; held and later requests refused runHost.notStarted at once (OQ-462 (3)); never forked again
+        Note over M: on its exit, the error notice "The run host did not start" (OQ-462 (1))
+      end
+    and the first window paints
+    M->>M: notice store, MainWindows (no await on the run host)
     end
     M->>MW: launch(argvWorkspace)
     MW->>MW: resolveStartup: explicit folder → remembered (if still a directory) → cwd + prompt
@@ -55,7 +60,7 @@ sequenceDiagram
     end
     MW->>WS: open(root) — fork one service per workspace
     opt a service forked by this open
-      MW->>WS: hello, bounded WORKSPACE_SERVICE_READY_BOUND_MS (5 s; OQ-462 (2))
+      MW->>WS: hello at its fork, bounded WORKSPACE_SERVICE_READY_BOUND_MS (20 s; OQ-473), awaited before the open
       Note over MW: no answer: main ends it (endBeforeMain) and refuses this open with the transient<br/>"The project could not be opened" (REQ-SHELL-112); no notice; the next open forks a new one
     end
     WS->>WS: identify workspace, open, check (quick_check) and migrate the store
@@ -75,19 +80,22 @@ sequenceDiagram
   end
 ```
 
-**A child that does not start, or stops (OQ-462, ruled 2026-11-01; hardening §3.2 rows 2 and 3; 2026-11-04).** Main bounds
-each child's first answer, its `hello`, at 5 s (`RUN_HOST_READY_BOUND_MS`, `WORKSPACE_SERVICE_READY_BOUND_MS`,
-`main/child-supervision.ts`); `boundedReady` never rejects, so a missed `hello` no longer ends the launch on an unhandled
-rejection with no window. A run host that misses it is ended through `endBeforeMain`, its link is ended
-(`ProcessLink.end`: every request then and later answered `runHost.notStarted` at once), and the launch goes on to paint;
-its exit raises "The run host did not start", held by `ChildLossReporter` until the notice store exists. A service that
+**A child that does not start, or stops (OQ-462, ruled 2026-11-01; hardening §3.2 rows 2 and 3; 2026-11-04; OQ-473,
+2026-11-05).** Main bounds each child's first answer, its `hello`, at 20 s (`RUN_HOST_READY_BOUND_MS`,
+`WORKSPACE_SERVICE_READY_BOUND_MS`, `main/child-supervision.ts`; 5 s until OQ-473), asked at the child's fork
+(`readyAtFork`), so the request's own deadline counts from the child's start; `boundedReady` never rejects. The run host's
+`hello` is not awaited by the launch: the notice store and the first window are built while it starts, and every run-host
+request made before it settles is held on it (`ProcessLink.holdUntil`), then posted in order — main logs the `hello`'s
+latency from the fork and the first window's show with where the `hello` stood. A run host that misses it is ended through
+`endBeforeMain` and its link ended (`ProcessLink.end`: every held, waiting and later request answered `runHost.notStarted`
+at once); its exit raises "The run host did not start" (`ChildLossReporter` holds a notice raised before the store). A service that
 misses it is ended the same way and its open refused on the open's surface; it raises no notice. After the ready, a child
 that ends when main did not end it (`ChildrenEndedByMain.ended`) and the application is not ending (`QuitState.ending`:
 the immediate exit, or the orderly shutdown begun) raises ONE error notice — "The run host stopped", or "The workspace
 service for <workspace> stopped" — with a dismiss, no action, no session, and the exit status and pid in its detail; the
 run host's link refuses every request at once from then on (`runHost.gone`), so a submit is refused with the draft kept.
-The run host is never forked again; a service is forked again at the next open. Whether 5 s is the right bound on a loaded
-host is [OQ-473](../../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-4.md#oq-473).
+The run host is never forked again; a service is forked again at the next open. The bound and the paint path are
+[OQ-473](../../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-4.md#oq-473)'s ruling.
 
 **The window paints before the workspace opens.** A view's start-time read — the Overview's session list, the
 repository card — therefore arrives while no workspace exists yet. Those reads **wait, bounded**

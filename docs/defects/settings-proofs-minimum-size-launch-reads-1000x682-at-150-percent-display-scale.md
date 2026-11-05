@@ -27,6 +27,8 @@ Electron running): "the window was not shrunk to REQ-SHELL-022's 1000×680 (capt
 
 **Sighting, 2026-11-04 (hrda, bundle hrda-corrupt-store-resolution).** The same red on the same host (Windows 11 ARM64, 150 %), `pnpm settings-proof --skip-build` on that branch's build, run after `store-resolution-proof` with no other tree's Electron alive and the host CPU at about 77 %: `capture: resize at 400 → content 1000×682`, the same first failure; nothing after it reached.
 
+**Sighting, 2026-11-05 (hardening plan hrdb, bundle `hrdb-diagnostics-fallback-and-unreadable-locks`).** The same red, the same first failure, in the configuration-and-startup suite `pnpm verify:plan` named for the diagnostics base's change, on that branch's build over `6328bb8b` (Windows 11 ARM64, 150 %, CPU about 52 %, another tree's Electron — `C:/dev/Rotaris-wt-hrdb-childreadyan` — running proofs beside it): `capture: resize at 400 → content 1000×682`.
+
 ## Specs
 
 `REQ-SHELL-022` (the minimum content size) may be contradicted on a 150 % display, or only the seam's read-back may be:

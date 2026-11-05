@@ -48,6 +48,8 @@ configuration-and-startup suite (CPU load 42 % from other sessions, no other tre
 
 **Sighting, 2026-11-04 (hrda).** Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits; one proof at a time after `pnpm build`, no other tree's Electron running, host CPU 100 % at launch: the same one check of the stage red, "and it still carries the launch's other variables … ROTARIS_APP_LOG_LEVEL ABSENT, ROTARIS_INTENT_SCRIPT ABSENT"; every other check green. Recorded, not repaired.
 
+**Sighting, 2026-11-05 (hardening plan hrdb, bundle `hrdb-diagnostics-fallback-and-unreadable-locks`).** Windows 11 ARM64, Node 26.13.0, Electron 44.10.0, that branch over `6328bb8b`, in the configuration-and-startup suite `pnpm verify:plan` named for the diagnostics base's change: the same one check of 15, "ROTARIS_APP_LOG_LEVEL ABSENT, ROTARIS_INTENT_SCRIPT ABSENT", the other 14 passing — at CPU about 52 %, and again on a re-run at CPU about 85 %, each with six Electron processes of `C:/dev/Rotaris-wt-hrdb-childreadyan` alive, so neither run was alone.
+
 ## Specs
 
 None is contradicted: REQ-STARTUP-106 and REQ-STARTUP-147 are what the stage measures, and it reads nothing because the

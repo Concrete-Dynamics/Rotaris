@@ -22,6 +22,8 @@ The same tree with no bundle (13:58 UTC, CPU 100 % beside another tree's six Ele
 setup's duration on this host is the emulated x64 interpreter's (OQ-401's reading); a Linux acceptance tree has passed with
 the bundle built.
 
+**Sighting, 2026-11-05 (hardening plan hrdb, bundle `hrdb-diagnostics-fallback-and-unreadable-locks`).** Windows 11 ARM64, Node 26.13.0, Electron 44.10.0, that branch over `6328bb8b` with PD-SESSION-005's wording built, in the record and run suites `pnpm verify:plan` named for it: red once, "loop supervisor stop reason was absent", at CPU about 62 % with no other Electron running when it started, in a tree without the code-intelligence bundle; re-run at CPU about 53 % it passed.
+
 ## Specs
 
 None of the product's: the proof's capture windows meet a setup the product runs as specified. `REQ-ORCH-099..107` and

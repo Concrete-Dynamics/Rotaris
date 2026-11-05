@@ -21,6 +21,8 @@ The fourth red (sessions-proof run 2) was the machine entering Modern Standby du
 proof. Every product reading the reds left unread was read on the other runs: the restore, the refusal and the delete
 report all appeared on the runs that waited long enough.
 
+**Sighting, 2026-11-05 (hardening plan hrdb, bundle `hrdb-diagnostics-fallback-and-unreadable-locks`).** Windows 11 ARM64, Node 26.13.0, Electron 44.10.0, that branch over `6328bb8b` with PD-SESSION-005's wording built, in the record and run suites `pnpm verify:plan` named for it: `checkpoint-proof` red once, "the second holder was planted 15305 ms into the launch, after the restore's first click was due", at CPU about 91 % with six Electron processes of `C:/dev/Rotaris-wt-hrdb-childreadyan` alive; re-run at CPU about 23 % (that tree's Electron still alive) it passed. `sessions-proof` passed in the same suite.
+
 ## Specs
 
 None: the product did what its requirements ask, later than the proofs' schedules. The proofs' failures are false reds on

@@ -15,6 +15,8 @@ Seen again by R-091's bundle D3 (2026-11-04), in `C:/dev/Rotaris-wt-hrd1-fenceha
 
 **Sighting, 2026-11-04 (hrda).** Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits; one proof at a time after `pnpm build`, no other tree's Electron running, host CPU about 24 % at launch: the same red, "the window was not measured at 1000x680: 1000x682". The bundle changes no window or capture seam. Recorded, not repaired.
 
+**Sighting, 2026-11-05 (hardening plan hrdb, bundle `hrdb-diagnostics-fallback-and-unreadable-locks`).** Windows 11 ARM64, Node 26.13.0, Electron 44.10.0, that branch over `6328bb8b` with PD-SESSION-005's wording built, in the record and run suites `pnpm verify:plan` named for it: "the window was not measured at 1000x680: 1000x682", at CPU about 19 % with no other Electron running when the proof started.
+
 ## Specs
 
 None named here: the proof sizes the window at its minimum and measures it, and whether 1000x682 meets that is the

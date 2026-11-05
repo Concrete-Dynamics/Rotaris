@@ -5,6 +5,8 @@ measured the child on alpha against null, not alpha's 100,000" twice on `3ed01f9
 One whole-suite run on `3ed01f9f` failed the scenario earlier, "the child did not succeed on the fallback under its configured key".
 Measured 2026-10-30; the cause was not established.
 
+**Sighting, 2026-11-05 (hardening plan hrdb, bundle `hrdb-diagnostics-fallback-and-unreadable-locks`).** Windows 11 ARM64, Node 26.13.0, Electron 44.10.0, that branch over `6328bb8b` with PD-SESSION-005's wording built, in the record and run suites `pnpm verify:plan` named for it: `child-timeout-inspector` red again, "the inspector measured the child on alpha against null, not alpha's 100,000", at CPU about 10 % with no other Electron running when the proof started; of its other 22 scenarios, 20 green and `fatal` and `auth-fallback` red (sighted on `windows-proof-reruns-leave-persona-and-recovery-readings-red.md`).
+
 ## Specs
 
 None established. The scenario reads the inspector's context limit for a child after its fallback.

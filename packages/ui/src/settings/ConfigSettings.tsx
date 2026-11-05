@@ -258,6 +258,27 @@ function ClampedNumberField(props: { readonly id: string; readonly range: Number
 }
 
 /**
+ * REQ-CONFIG-327's two confirmations, each Yes and Cancel with Cancel the default. Access beyond the workspace keeps the
+ * requirement's words. The `autonomous` one says the three things PD-WORKSPACE-009 (OQ-468, ruled 2026-11-04) fixes in
+ * place of REQ-CONFIG-327's residual guard, which the runtime never kept: REQ-TOOLS-044 has a file tool's outside path
+ * refused by the fence and never asked about, and the terminal and MCP are not judged by path at all. Until 2026-11-05 the
+ * body said the first of the three alone, an unrecorded departure from REQ-CONFIG-327
+ * (`docs/archive/defects/the-autonomous-confirmation-dropped-the-residual-guard-clause-with-no-directive.md`).
+ */
+export const RUNTIME_CONFIRMATIONS = {
+  outside: {
+    title: 'Allow access beyond the workspace?',
+    body: 'Agents will then be able to read and change files outside the chosen workspace. This belongs on only where a task genuinely needs it.',
+  },
+  autonomous: {
+    title: 'Start runs in autonomous mode?',
+    body: 'Mutating tools inside the workspace will be invoked without asking, except for the destructive commands the starter rules always deny. '
+      + 'A file tool reaching a path outside the workspace is refused by the path fence and never asked about, unless access beyond the workspace is on. '
+      + 'Terminal commands and MCP tools are not judged by the paths they reach; they are bounded only by OS confinement where it is active.',
+  },
+} as const;
+
+/**
  * REQ-CONFIG-320..328 and 471, in the order the requirement fixes, and the Security policy card (`SecurityPolicy.tsx`,
  * ADR-0022/0023, Part AR; REQ-SANDBOX-113). (Until 2026-10-13 this said the card was not built for want of a confinement
  * backend; both have existed since Part AR.)
@@ -360,8 +381,8 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
         <Toggle id="diagnostics" label="Memory diagnostics" hint="Written to the selected scope's file immediately and reloaded; outside Save and Discard — Discard does not undo it." on={snapshot.runtime.memory_diagnostics_enabled} disabled={!props.serviceAvailable} onChange={(v) => { void writeDiagnostics(v); }} />
         {advancedMessage && <div className="text-secondary settings__hint" role="status">{advancedMessage}</div>}
       </DesignCard>
-      {confirm === 'outside' && <Confirm title="Allow access beyond the workspace?" body="Agents will then be able to read and change files outside the chosen workspace. This belongs on only where a task genuinely needs it." onCancel={() => setConfirm(null)} onYes={() => { setConfirm(null); onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: true }); }} />}
-      {confirm === 'autonomous' && <Confirm title="Start runs in autonomous mode?" body="Mutating tools inside the workspace will be invoked without asking, except for the destructive commands the starter rules always deny." onCancel={() => setConfirm(null)} onYes={() => { setConfirm(null); onChange({ kind: 'runtime', key: 'permission_mode', value: 'autonomous' }); }} />}
+      {confirm === 'outside' && <Confirm title={RUNTIME_CONFIRMATIONS.outside.title} body={RUNTIME_CONFIRMATIONS.outside.body} onCancel={() => setConfirm(null)} onYes={() => { setConfirm(null); onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: true }); }} />}
+      {confirm === 'autonomous' && <Confirm title={RUNTIME_CONFIRMATIONS.autonomous.title} body={RUNTIME_CONFIRMATIONS.autonomous.body} onCancel={() => setConfirm(null)} onYes={() => { setConfirm(null); onChange({ kind: 'runtime', key: 'permission_mode', value: 'autonomous' }); }} />}
     </div>
   );
 }

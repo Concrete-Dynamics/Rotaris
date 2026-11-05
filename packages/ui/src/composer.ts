@@ -148,7 +148,7 @@ export const STRIP_NAMES = {
  * decides which); and `mode: {mode}`. Each carries one explanation, and its tooltip and accessible description are the
  * one joined string `{short form} — {explanation}`. The file-access explanations are REQ-WORKSPACE-022's fixed pair,
  * "the pair a reader compares", in the words of REQ-WORKSPACE-148's Settings control ("read and write outside this
- * workspace folder"). The unsaved-settings sentence is REQ-SHELL-041's two facts; REQ-WORKSPACE-022 states another second
+ * workspace folder"); the `workspace-scoped` one is PD-WORKSPACE-009's, which states the boundary per tool. The unsaved-settings sentence is REQ-SHELL-041's two facts; REQ-WORKSPACE-022 states another second
  * fact (OQ-191). Until 2026-10-02 the file-access flag was the literal `workspace-scoped` whatever the opt-out said, so
  * with it on the strip still told the user agents were confined.
  */
@@ -174,7 +174,14 @@ export const CIRCUIT_BREAKER_EXPLANATION = 'Circuit breaker: Rotaris stops a run
 export const REDACTION_EXPLANATION = 'Secret redaction: anything that looks like a credential is masked before it reaches a model or the transcript.';
 export const UNSAVED_SETTINGS_EXPLANATION = 'The Settings view is holding edits that have not been saved; runs keep using the last saved values until they are saved.';
 export const OUTSIDE_WORKSPACE_EXPLANATION = 'File access: agents may read and write outside this workspace folder.';
-export const WORKSPACE_SCOPED_EXPLANATION = 'File access: agents may read and write inside this workspace folder only.';
+/**
+ * PD-WORKSPACE-009 (OQ-468, ruled 2026-11-04): the boundary per tool, as OQ-464 ruled it — the fence binds the file tools,
+ * and the terminal and MCP are bounded by OS confinement where it is active and by nothing where it is not (IC-8). One
+ * fixed string that does not vary with the focused session's confinement result: that fact is REQ-SANDBOX-121's item right
+ * after this flag. Until 2026-11-05 it read "File access: agents may read and write inside this workspace folder only.",
+ * true of the file tools and false of a shell command.
+ */
+export const WORKSPACE_SCOPED_EXPLANATION = 'File access: Rotaris\'s file tools read and write inside this workspace folder only; terminal commands and MCP tools reach what OS confinement allows, or everything this account can where none is active.';
 export function modeExplanation(mode: string): string {
   return `Permission mode ${mode}: how much agents may do without asking. Change it under the composer or in Settings → Runtime.`;
 }

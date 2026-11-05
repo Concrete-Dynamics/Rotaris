@@ -220,7 +220,8 @@ describe('REQ-SHELL-038/047: the status strip, item by item', () => {
     const confined = named(stripItems(1400, facts({ safety: { circuitBreakerArmed: false, unsavedSettings: false, outsideWorkspace: false, mode: 'mode: ask' } })), STRIP_NAMES.safety).map((f) => f.text);
     expect(confined).toEqual(['redaction: always on', 'workspace-scoped', 'mode: ask']);
     const scoped = named(stripItems(1400, facts()), STRIP_NAMES.safety).find((f) => f.text === 'workspace-scoped');
-    expect(scoped?.title).toBe('workspace-scoped — File access: agents may read and write inside this workspace folder only.');
+    // PD-WORKSPACE-009 (OQ-468): the boundary per tool, one fixed string whatever the confinement result.
+    expect(scoped?.title).toBe('workspace-scoped — File access: Rotaris\'s file tools read and write inside this workspace folder only; terminal commands and MCP tools reach what OS confinement allows, or everything this account can where none is active.');
   });
 
   it('REQ-SHELL-043/044/045: the model at full strength, the tokens grouped, the cost by the money rule and absent until there is one', () => {

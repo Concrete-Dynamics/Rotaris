@@ -38,6 +38,11 @@ import {
  * now passes. The perform, told `targetUnreadable`, re-assesses the same way
  * and hands `restoreStore` its `targetUnreadable`, under which no service
  * handle is opened and step 8 displaces the directory whole.
+ *
+ * PD-SESSION-005 (ruled on OQ-542) governs REQ-SESSION-201's foreign-lock
+ * clause for such a target: no lock record is read or counted, and
+ * `targetUnreadable` is the decision recording the one confirmation main's
+ * first question carries; no second decision is asked for the same condition.
  */
 export interface AssessDeps {
   readonly workspacesRoot: string;
@@ -178,7 +183,8 @@ export function decisionAllowed(c: RestoreAssessment['identifier']['case'], d: R
 }
 
 export async function performRestore(d: PerformDeps): Promise<RestoreReportPayload> {
-  // OQ-477: a confirmation given for a target that failed its check re-runs that check now, never an inspection that opens it.
+  // OQ-477, PD-SESSION-005: a confirmation given for a target that failed its check re-runs that check now, never an inspection
+  // that opens it; it is the only decision that displaces such a target, and it stands in for `proceedWithForeignLocks`.
   const unreadableConfirmed = d.decisions.targetUnreadable === true;
   const a = assessRestore({ ...d, heldCorrupt: unreadableConfirmed });
   const fail = (error: string): RestoreReportPayload => ({ ok: false, abandoned: true, error, leftovers: [], steps: ['assess-refused'], restoredInto: a.artifact.workspaceId, identifierEstablished: false });

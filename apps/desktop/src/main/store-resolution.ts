@@ -22,9 +22,11 @@ import type { StoreRefusal } from './store-notice.js';
  * OQ-477 (ruled 2026-11-04 by the consortium under R-072, no directive): a held `workspace.store-corrupt` — a store that failed
  * C1's integrity check — is resolved in the same place by the same two actions, each with a wording of its own:
  *  - the restore (REQ-SESSION-201) is admitted as under `store-missing`, its assessment asked with `heldCorrupt` so the
- *    target is checked and never opened; its first question says the store failed its check, quotes SQLite's report, says
- *    its sessions and lock records could not be read, states the foreign-lock clause's risk, and that the store is moved aside
- *    and kept unchanged while every session in it will no longer be listed;
+ *    target is checked and never opened; its first question, under PD-SESSION-005 (ruled on OQ-542) in place of the
+ *    foreign-lock clause's count, says the store failed its check, quotes SQLite's report, says its sessions could not be
+ *    counted and that whether it holds lock records naming another machine, and how many, cannot be read, what such records
+ *    would mean, the clause's risk, and that the store is moved aside and kept unchanged while every session in it will no
+ *    longer be listed;
  *  - "Set the damaged store aside and start a new one…" (`establishFlow`, ADR-0058 part 11's step 4) says what was found,
  *    that it recovers nothing and that this machine holds no other copy, and names the restore as the remedy that returns
  *    history (step 5) without looking for a backup. Cancel is the default and the cancel on both.
@@ -80,11 +82,16 @@ function placeOf<W extends FlowWindow>(w: W, deps: StoreFlowDeps<W>): { readonly
 }
 
 /**
- * OQ-477: the first question's account of a target that failed its integrity check — the report, what could not be read, the
- * foreign-lock clause's risk stated without a count it may not read (REQ-SESSION-201), and what becomes of its sessions.
+ * PD-SESSION-005 (ruled on OQ-542; OQ-477): the first question's account of a target that failed its integrity check, in place
+ * of the count REQ-SESSION-201's foreign-lock clause asks for — the report quoted; that how many sessions it holds cannot be
+ * read, nor whether it holds lock records naming another machine, or how many; what such records would mean, that nothing on
+ * this machine writes under them because no store was handed to the run host under the held refusal; the clause's risk
+ * unchanged; and what becomes of its sessions. It is the one confirmation of that condition: Cancel the default, and no
+ * second question asked for it.
  */
 export function unreadableTargetText(report: readonly string[], backupSessions: number): string {
-  return `The session store this backup restores into failed its integrity check: ${report.join('; ')}. How many sessions it holds cannot be read, and neither can any lock records in it. `
+  return `The session store this backup restores into failed its integrity check: ${report.join('; ')}. How many sessions it holds cannot be read, and neither can whether it holds lock records naming another machine, or how many. `
+    + 'Such a record would mean a run on another machine had claimed a session in it; nothing on this machine writes under one, because this store was not handed to any run here. '
     + 'If this store is reachable from another machine, a run there may be writing to it now, and the restore replaces what it writes. '
     + `Restoring moves the damaged store aside and keeps it unchanged, and the backup's ${countNoun(backupSessions, 'session')} take its place; every session in the damaged store will no longer be listed.`;
 }
@@ -152,6 +159,8 @@ export async function restoreFlow<W extends FlowWindow>(w: W, deps: StoreFlowDep
     proceedWithForeignLocks = true;
   }
 
+  // PD-SESSION-005: `targetUnreadable` records the first question's confirmation over an unreadable target, sent only after it
+  // was answered Restore; no second confirmation is asked for the same condition.
   const done = await svc.request({ kind: 'workspace.restore.perform', workspaceRoot: root, artifact, decisions: { identifier, proceedWithForeignLocks, ...(unreadable ? { targetUnreadable: true } : {}) } }, millis(600_000));
   if (done.kind !== 'workspace.restored') return refusal(done, 'The restore could not be performed');
   const rep = done.report;

@@ -120,6 +120,24 @@ there are" binds "where the target store holds such records", and a damaged stor
 the restore never reads), so the first question states that they could not be read instead; the ruling kept that as a reading,
 and it is raised as [OQ-542](../../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-542), built as ruled.
 
+*OQ-542 ruled, and built, 2026-11-05 (R-091's hardening plan `hrdb`; [PD-SESSION-005](../../../product/directives/pd-session-005.md#pd-session-005)
+over REQ-SESSION-201 for an unreadable target).* The reading above is departed from in words and kept in behaviour: nothing
+counts the damaged target's lock records, and the first question says so in place of the count. `unreadableTargetText`
+(`apps/desktop/src/main/store-resolution.ts`) now states that whether the store holds lock records naming another machine, and
+how many, cannot be read, and what such a record would mean — a run on another machine had claimed a session in it, and nothing
+on this machine writes under one, because the store was not handed to any run here — beside the risk, unchanged; Cancel stays the
+default and no second question is asked (`store-resolution.test.ts` pins the wording, `defaultId: 0`, and that the "Lock records
+name another machine" question never follows). The perform's `targetUnreadable` stays the one decision recording that
+confirmation; the system advocate's second flag was not ruled and is not built. `packages/workspace/src/workspace.test.ts` gains
+the case OQ-542 described: on the corrupt fixture the assessment counts no lock row, the perform proceeds under the confirmed
+decision with `proceedWithForeignLocks` false and nothing refusing it, the target is never opened (`0-target-unreadable(not-opened)`)
+and the directory kept is the one found, byte for byte — and a scratch copy of that kept directory, opened afterwards, names
+`S-old-0` locked by another machine, so the store did hold such a record and no count was stated. Building it found one gap
+outside the ruling, recorded and not repaired: a perform sent **without** `targetUnreadable` over the same store is assessed as
+a readable one, opens it and checkpoints its log, refused `foreign-locks` with the damaged store altered; main never sends that
+request, so the invariant is main's to hold, not the service's
+([the note](../../../defects/a-restore-perform-sent-without-target-unreadable-over-a-store-that-failed-its-check-opens-it-and-checkpoints-its-log.md)).
+
 **Recovery, in order, and it never destroys anything.** On a store that will not open or fails
 `quick_check`:
 

@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-05**
 
+**An unreadable restore target's lock records are said to be unreadable, not counted (R-091 hardening plan `hrdb`; PD-SESSION-005, ruling OQ-542; REQ-SESSION-201; 2026-11-05).** `03-runtime-view/13-7-the-store-the-run-writes.md`'s "Resolving a store that failed its check" names PD-SESSION-005 as what governs the restore's first question over a damaged target in place of the foreign-lock clause's count — whether it holds lock records naming another machine, and how many, unreadable, and what such a record would mean — and `targetUnreadable` as the one decision recording that confirmation.
+
 **A window whose workspace default cannot be created writes under the per-user data directory (R-091 hardening plan `hrdb`; PD-STARTUP-011 revision 2, ruling OQ-541; REQ-STARTUP-131, REQ-SHELL-163; 2026-11-05).** `02-process-view/08-files-and-directories-on-disk.md`'s run-directory row says how `<base>` is decided now: the chosen folder, never redirected; the workspace default only for an existing directory where the run directory can be created; otherwise the per-user base, fixed when the window is built, the fallback named in the capture's first line and on the card. The row's "no launch reaches it" is gone with the gap it described. The oldest dated block of this log, 2026-11-01, moved verbatim to part 20.
 
 Last reconciled with the code: **2026-11-04**

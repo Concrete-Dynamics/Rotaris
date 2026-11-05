@@ -31,8 +31,10 @@
  *                 b-tree page past the schema's, so SQLite's `quick_check` fails and the file still opens) and launches.
  *                 The open is refused as `workspace.store-corrupt`, its error notice carries "Open Project settings", and
  *                 Settings › Project offers "Set the damaged store aside and start a new one…" beside the restore. E1 restores
- *                 under it: the first question says the store failed its check and that its sessions and lock records could
- *                 not be read, the backup's session is listed, and the damaged store is kept beside its place byte for byte.
+ *                 under it: the first question says the store failed its check, that its sessions could not be counted and,
+ *                 under PD-SESSION-005 (OQ-542) in place of a count, that whether it holds lock records naming another machine
+ *                 cannot be read and what such a record would mean; the backup's session is listed, and the damaged store is
+ *                 kept beside its place byte for byte.
  *                 E2 damages that store again and sets it aside: Cancel (the default) moves nothing; confirmed, the question
  *                 is the ruling's third wording, the new store lists empty, and the damaged store is kept byte for byte where
  *                 the question said. Neither flow opens the damaged store: what is kept is the file as the proof left it.
@@ -269,7 +271,9 @@ const keptBeside = (place, before) => readdirSync(dirname(place)).filter((n) => 
   const restored = await until(() => listing(d), (r) => r?.ok === true && r.value.sessions.length === 1, { timeoutMs: 60_000, what: 'the backup\'s session listed over the damaged store' });
   check('E1: the restore is admitted under the refusal and the backup\'s session is listed', restored.ok && restored.value.sessions.length === 1, `${restored.value.sessions.length} session(s)`);
   const boxes = boxLines().slice(before);
-  check('E1: the first question is the unreadable target\'s, with Cancel the default', boxes.length === 1 && boxes[0].includes('"Restore the session store"') && boxes[0].includes('The session store this backup restores into failed its integrity check: ') && boxes[0].includes('How many sessions it holds cannot be read, and neither can any lock records in it.') && boxes[0].includes('a run there may be writing to it now, and the restore replaces what it writes') && boxes[0].includes('default 0'), boxes.join(' || '));
+  // PD-SESSION-005 (ruled on OQ-542): in place of the foreign-lock clause's count, the one question says the lock records
+  // cannot be read, what such a record would mean, and the risk.
+  check('E1: the first question is the unreadable target\'s, with Cancel the default (PD-SESSION-005)', boxes.length === 1 && boxes[0].includes('"Restore the session store"') && boxes[0].includes('The session store this backup restores into failed its integrity check: ') && boxes[0].includes('How many sessions it holds cannot be read, and neither can whether it holds lock records naming another machine, or how many.') && boxes[0].includes('nothing on this machine writes under one, because this store was not handed to any run here') && boxes[0].includes('a run there may be writing to it now, and the restore replaces what it writes') && boxes[0].includes('default 0'), boxes.join(' || '));
   const kept = keptBeside(damaged.place, asideBefore);
   check('E1: the damaged store is kept beside its place, byte for byte, never opened', kept.length === 1 && readdirSync(join(dirname(damaged.place), kept[0])).sort().join(',') === damaged.left.join(',') && readFileSync(join(dirname(damaged.place), kept[0], 'workspace.db')).equals(damaged.bytes), `${JSON.stringify(kept)} holding ${kept.length ? JSON.stringify(readdirSync(join(dirname(damaged.place), kept[0])).sort()) : '-'}`);
   const after = await until(() => noticeNow(d), (n) => n?.title !== CORRUPT_TITLE, { timeoutMs: 15_000, what: 'the corrupt notice withdrawn' });

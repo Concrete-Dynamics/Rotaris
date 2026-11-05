@@ -87,7 +87,7 @@ describe('the restore while the open holds a place with no store (OQ-281)', () =
   });
 });
 
-describe('the restore while the open holds a store that failed its integrity check (OQ-477, REQ-SESSION-201)', () => {
+describe('the restore while the open holds a store that failed its integrity check (OQ-477, PD-SESSION-005)', () => {
   const unreadable = assessment({ exists: true, placeEmpty: false, sessions: 0, unreadable: { report: REPORT } });
   const corruptReplies = { 'workspace.restore.assess': { kind: 'workspace.restore.assessment', assessment: unreadable } } as const;
 
@@ -101,7 +101,7 @@ describe('the restore while the open holds a store that failed its integrity che
     expect(h.notices).toEqual([{ severity: 'info', headline: 'Restored 2 sessions from the backup taken on 2026-10-14T00:00:00.000Z. The damaged store was kept, unchanged, at /data/workspaces/v1-aaaa.displaced-2026-10-14T06-00-00-000Z.' }]);
   });
 
-  it('its first question is the third wording: the check failed, the report quoted, nothing counted, the foreign-lock risk stated, Cancel the default', async () => {
+  it('its first question is PD-SESSION-005\'s wording: the check failed, the report quoted, no count, the lock records unreadable, what they would mean, the risk, Cancel the default', async () => {
     const h = harness({ held: CORRUPT, answers: [0], replies: corruptReplies });
     expect(await restoreFlow(refused, h.deps)).toEqual({ ok: true, value: { cancelled: true } });
     expect(h.sent.map((q) => q.kind)).toEqual(['workspace.restore.assess']);
@@ -110,10 +110,14 @@ describe('the restore while the open holds a store that failed its integrity che
     const detail = h.boxes[0]!.detail;
     expect(detail).toBe(unreadableTargetText(REPORT, 2));
     expect(detail).toBe('The session store this backup restores into failed its integrity check: *** in database main ***; Tree 4 page 4: btreeInitPage() returns error code 11. '
-      + 'How many sessions it holds cannot be read, and neither can any lock records in it. '
+      + 'How many sessions it holds cannot be read, and neither can whether it holds lock records naming another machine, or how many. '
+      + 'Such a record would mean a run on another machine had claimed a session in it; nothing on this machine writes under one, because this store was not handed to any run here. '
       + 'If this store is reachable from another machine, a run there may be writing to it now, and the restore replaces what it writes. '
       + 'Restoring moves the damaged store aside and keeps it unchanged, and the backup\'s 2 sessions take its place; every session in the damaged store will no longer be listed.');
     expect(detail).not.toMatch(/holds 0 sessions/);
+    // PD-SESSION-005: no count of lock records, in words or in figures, and the one question is the only confirmation.
+    expect(detail).not.toMatch(/\b\d+ (lock records?|sessions?) (in the store )?(carr|nam)/);
+    expect(h.boxes.some((b) => b.title === 'Lock records name another machine')).toBe(false);
   });
 
   it('the assessment\'s refusal when the store now passes its check is said, and nothing is performed', async () => {

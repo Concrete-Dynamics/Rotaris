@@ -300,7 +300,7 @@ describe('workspace — D11: a restore whose kept store the engine could not ope
  * either close checkpoints the log into the damaged file and deletes it. It also holds a lock row naming another machine,
  * which the restore must not read.
  */
-describe('workspace — OQ-477: a restore over a store that failed its integrity check never opens it (REQ-SESSION-201, ADR-0058 part 11)', () => {
+describe('workspace — OQ-477: a restore over a store that failed its integrity check never opens it (PD-SESSION-005, REQ-SESSION-201, ADR-0058 part 11)', () => {
   const listing = (id: WorkspaceId): string[] => readdirSync(join(root, id)).sort();
   function corruptInPlace(id: WorkspaceId): { readonly db: Buffer; readonly wal: Buffer } {
     const built = mkdtempSync(join(tmpdir(), 'rotaris-corrupt-built-'));
@@ -368,6 +368,45 @@ describe('workspace — OQ-477: a restore over a store that failed its integrity
     expect(readFileSync(join(r.displaced!, 'workspace.db')).equals(found.db)).toBe(true);
     expect(readFileSync(join(r.displaced!, 'workspace.db-wal')).equals(found.wal)).toBe(true);
     expect(sids(A)).toEqual(['S-new']);
+  });
+
+  it('PD-SESSION-005: a foreign lock row on pages the restore never reads — no count stated, the restore proceeding only under the confirmed decision, the target never opened, kept byte for byte', async () => {
+    writeId(A);
+    const art = artifactOf(A, ['S-new']);
+    const found = corruptInPlace(A);
+    // The question's ground: the assessment counts nothing, so a "0 lock records" read off damaged pages is never stated.
+    const a = assessRestore(held(art));
+    expect(a.target.unreadable).toBeDefined();
+    expect(a.target.foreignLocks).toEqual([]);
+    expect(listing(A)).toEqual(['workspace.db', 'workspace.db-wal']);
+    // The perform proceeds on the decision that records the first question's confirmation (`targetUnreadable`), which
+    // `restoreFlow` sends only after that question was answered Restore (`store-resolution.test.ts`), and on no second one:
+    // `proceedWithForeignLocks` stays false and nothing refuses it, because no lock row is read.
+    const rh = runHost();
+    const r = await performRestore({ ...held(art), decisions: { identifier: 'workspace', proceedWithForeignLocks: false, targetUnreadable: true }, runHost: rh, timers: clocks.timers, wall: clocks.wall });
+    expect(r.ok).toBe(true);
+    expect(r.refusal).toBeUndefined();
+    expect(r.steps).toContain('0-target-unreadable(not-opened)');
+    expect(rh.log).toEqual(['refuse', 'close', 'reopen']);
+    expect(readFileSync(join(r.displaced!, 'workspace.db')).equals(found.db)).toBe(true);
+    expect(readFileSync(join(r.displaced!, 'workspace.db-wal')).equals(found.wal)).toBe(true);
+    expect(sids(A)).toEqual(['S-new']);
+    // And the store did hold such a record: a scratch copy of what was kept, opened, names another machine. The directive's
+    // case is real, not a reading — "where the target store holds such records" was true, and no count was stated.
+    const scratch = mkdtempSync(join(tmpdir(), 'rotaris-kept-copy-'));
+    try {
+      copyFileSync(join(r.displaced!, 'workspace.db'), join(scratch, 'workspace.db'));
+      copyFileSync(join(r.displaced!, 'workspace.db-wal'), join(scratch, 'workspace.db-wal'));
+      const db = openStore(join(scratch, 'workspace.db'), { mustExist: true });
+      try {
+        expect(new StoreDal(db).listLocks().filter((l) => l.host === OTHER).map((l) => l.session_id)).toEqual(['S-old-0']);
+      } finally {
+        db.close();
+        forgetSpelling(scratch);
+      }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it('(counterfactual) the mechanism as it was — no `targetUnreadable` — opens the target and the directory it keeps is not the one found', async () => {

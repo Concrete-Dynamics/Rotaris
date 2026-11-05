@@ -118,8 +118,8 @@ export interface RestoreOptions {
   /** D11: the engine's database-path limit to hold the restore to; `null` for none (D11 as it was). Defaults to this platform's. */
   readonly storePathLimit?: number | null;
   /**
-   * OQ-477 (ruled 2026-11-04 under R-072): the target failed C1's integrity check and the user confirmed having been told its
-   * contents could not be read. No service handle is opened on it — an open of a store holding a `-wal` and no `-shm` is a
+   * OQ-477 (ruled 2026-11-04 under R-072), PD-SESSION-005 (ruled on OQ-542): the target failed C1's integrity check and the
+   * user confirmed having been told its contents — its lock records among them, uncounted — could not be read. No service handle is opened on it — an open of a store holding a `-wal` and no `-shm` is a
    * read-write one whose close checkpoints the log into the damaged file and deletes it — so steps 2 and 4 judge no rows
    * (no store was handed to the run host while main held the refusal), and step 8 displaces the directory whole, its
    * database, log and index byte for byte, and keeps it.
@@ -234,7 +234,8 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
 
   // The target may not exist yet: a restore into an artifact's own store on a machine that never held it
   // (ADR-0058 case (c) outcome 2, case (b)). Then there are no locks to judge and nothing to displace.
-  // OQ-477: a target that failed its integrity check is never opened; it has no rows this restore may read.
+  // OQ-477, PD-SESSION-005: a target that failed its integrity check is never opened; it has no rows this restore may read,
+  // so steps 2 and 4 count no lock records naming another machine and refuse on none.
   let svc: StoreHandle | null = existsSync(dbFile) && !opts.targetUnreadable ? openStore(dbFile, { mustExist: true }) : null;
   if (opts.targetUnreadable) steps.push('0-target-unreadable(not-opened)');
   let dal: StoreDal | null = svc ? new StoreDal(svc) : null;

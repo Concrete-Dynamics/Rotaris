@@ -61,8 +61,10 @@ place's open does (`establishInEmptyPlace`, `packages/store/src/establish.ts`). 
 **Resolving a store that failed its check (OQ-477, ruled 2026-11-04 under R-072).** The same place and the same two flows, while
 `workspace.store-corrupt` is held and only then (`placeOf` answers which refusal is held, `missing` or `corrupt`): the
 **restore**, its assessment asked with `heldCorrupt` and its perform with `targetUnreadable` once the user has read the third
-wording (the check failed, SQLite's report, no session count and no lock records readable, the foreign-lock risk, every session in
-the damaged store no longer listed); and **"Set the damaged store aside and start a new one…"** (`setAsideBox`), whose
+wording (the check failed, SQLite's report, no session count, and — [`PD-SESSION-005`](../../../product/directives/pd-session-005.md#pd-session-005)
+in place of the foreign-lock clause's count, 2026-11-05 — whether it holds lock records naming another machine, and how many,
+unreadable, what such records would mean, the foreign-lock risk, every session in the damaged store no longer listed;
+`unreadableTargetText`), `targetUnreadable` the one decision recording that confirmation, with no second question; and **"Set the damaged store aside and start a new one…"** (`setAsideBox`), whose
 `workspace.store.establish.assess/perform` carry `held: 'corrupt'`: the service re-checks that the store is in its place and
 still fails C1's check (`checkDamagedStore`, asked of a copy by `checkStoreIntegrity`, never of the store in place), refuses
 `store-sound` where it now passes, and moves the directory aside whole under the `displaced` stamp. The restore's assessment does

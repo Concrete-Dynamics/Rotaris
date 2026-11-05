@@ -27,6 +27,8 @@ from the second, and on this host it now stops every run of the catalogue launch
 discovered, as every launch here does since AF-16's repair, so the reading is not that repair's; it was hidden on Windows by
 the operator's own skill (perhaps because its registration re-rendered the popup; not traced).
 
+**Not seen, 2026-11-05** (plan hrdb, bundle `hrdb-recovered-error-line-and-scope-strings`, Windows 11 ARM64, Node 26.13.0, Electron 44.10.0, on that branch over `f71f4073`, no other tree's Electron running; CPU 15 %): `pnpm slash-proof` in the composer suite passed whole, line 300 included, on one run. One green is no repair: the reading depends on a git view arriving while the popup is open, which this run may not have met.
+
 ## Specs
 
 REQ-CHAT-024 ("a bare `/` lists everything") and REQ-CHAT-162 (the two fixed skill commands, members of the catalogue

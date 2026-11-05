@@ -50,6 +50,8 @@ configuration-and-startup suite (CPU load 42 % from other sessions, no other tre
 
 **Sighting, 2026-11-05 (hardening plan hrdb, bundle `hrdb-diagnostics-fallback-and-unreadable-locks`).** Windows 11 ARM64, Node 26.13.0, Electron 44.10.0, that branch over `6328bb8b`, in the configuration-and-startup suite `pnpm verify:plan` named for the diagnostics base's change: the same one check of 15, "ROTARIS_APP_LOG_LEVEL ABSENT, ROTARIS_INTENT_SCRIPT ABSENT", the other 14 passing — at CPU about 52 %, and again on a re-run at CPU about 85 %, each with six Electron processes of `C:/dev/Rotaris-wt-hrdb-childreadyan` alive, so neither run was alone.
 
+**Sighting, 2026-11-05 (plan hrdb, bundle `hrdb-recovered-error-line-and-scope-strings`, Windows 11 ARM64, Node 26.13.0, Electron 44.10.0, on that branch over `f71f4073`, no other tree's Electron running).** In the configuration-and-startup suite, twice alone (CPU 20 %, then 16 %): check 15, "ROTARIS_APP_LOG_LEVEL ABSENT, ROTARIS_INTENT_SCRIPT ABSENT", the other 14 passing both times.
+
 ## Specs
 
 None is contradicted: REQ-STARTUP-106 and REQ-STARTUP-147 are what the stage measures, and it reads nothing because the

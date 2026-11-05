@@ -28,6 +28,8 @@ other 42 checks passing. The bundle moves the Electron pin within the 44 line an
 
 **Sighted again 2026-11-05** (plan hrdb, bundle `hrdb-child-ready-and-killed-renderer`, Electron 44.10.0, on its branch over `6328bb8b`; CPU load 56 % at the launch, run alone after `resilience-proof`): `driver-proof` step 8 read `1000×682`, its other 42 checks passing. The bundle moves the run host's `hello` off the paint path (OQ-473) and changes no window-size code.
 
+**Sighted again 2026-11-05** (plan hrdb, bundle `hrdb-recovered-error-line-and-scope-strings`, Windows 11 ARM64, Node 26.13.0, Electron 44.10.0, on that branch over `f71f4073`, no other tree's Electron running; CPU load 20 % at the launch, then 15 % on a second run alone): `driver-proof` step 8 read `1000×682` both times, its other 42 checks passing. The bundle adds the log-only command `window.recovered` (OQ-475) and changes the strip's and a confirmation's words (PD-WORKSPACE-009); no window-size code.
+
 ## Specs
 
 None named here: REQ-SHELL-022 states the 1000×680 minimum, and whether a 1000×682 reading at 150 % meets it is the proofs'

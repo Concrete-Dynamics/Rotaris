@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-473, OQ-475, OQ-476, OQ-541, OQ-542; OQ-523 – OQ-540, OQ-485, OQ-480 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-473, OQ-475, OQ-476, OQ-541, OQ-542, OQ-543; OQ-523 – OQ-540, OQ-485, OQ-480 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
 
 - OQ-523 — Is a `--rt-viz-2` persona label one stop from `--rt-run` a “state colour” under PD-CHAT-005?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-523)
 - OQ-524 — Is Workspace compact mode measured by the view's own width or by the viewport, when REQ-SHELL-059 and REQ-MONITOR-051 name different ones?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-524)
@@ -73,3 +73,13 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** OQ-477 as ruled, nothing minted: the first question states that the store failed its check with SQLite's report, that how many sessions it holds cannot be read and neither can any lock records in it, the risk the clause requires, and that every session in it will no longer be listed; Cancel is the default. The restore's own gates read no rows of such a target (`restoreStore`'s `targetUnreadable`).
 
 **What decides it.** A ruling that the reading stands (the clause binds only where the records can be read, and is met), or that the words are departed from for a target that failed its integrity check — a directive narrowing REQ-SESSION-201's foreign-lock clause for that case, with what the confirmation states in place of the count.
+
+<a id="oq-543"></a>
+
+**OQ-543 — Does REQ-MONITOR-166's "explicit empty sparkline" ask for a mark a sighted operator can read, when OQ-540's empty form draws its axes in `--rt-viz-grid` at about 1.3:1?** *(REQ-MONITOR-166, REQ-SHELL-144, REQ-SHELL-149, §1.3, [OQ-540](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-3.md#oq-540). Raised 2026-11-05 by the fresh-context `review-ui` critique of the Overview's iteration-3 pack, executing the Overview audit's item 11 ([the brief](../../design/briefs/overview.md)); numbered after OQ-542.)*
+
+**What is open.** OQ-540 ruled that below two samples the design `Sparkline` keeps its box, carries an accessible name stating that there is no token history yet, draws no series, and strokes any placeholder mark in `--rt-viz-grid`, "§1.3's token for chart rules". Built that way on 2026-11-05, the empty form's one mark, an empty pair of axes, measures 1.32:1 on the card ground at 1400×900 and 1.28:1 at 1000×680 on `rotaris-dim` (pixels sampled from the drive captures), against 6.18:1 for the drawn series. The same execution removed the cost caption's "no history yet · " clause, because the clause leaving at the second sample shrank the Tokens card by 17.81 px at 1000 wide, against OQ-540's "a card does not reflow when the second sample arrives". So the accessible name states the absence, while a sighted operator has only a faint mark. REQ-SHELL-144's 3:1 non-text floor names borders, focus rings and icons, not chart rules, so the critique filed no finding against the build.
+
+**What the build proceeds under.** OQ-540 as ruled and built: the axes in `--rt-viz-grid`, the name "No token history yet", the caption the cost label alone.
+
+**What decides it.** One ruling: the empty form stands (explicit by its name and its shape, and a chart rule needs no contrast floor), or REQ-MONITOR-166's "explicit" is read to need a visible statement — a mark at the 3:1 floor in a token §1.3 already names, or a visible word inside the sparkline's box so the card still does not reflow.

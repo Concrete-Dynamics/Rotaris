@@ -21,6 +21,23 @@ its live file has under `docs/`.
 An entry moves whole and verbatim, under its own anchor; only a relative path in it is rewritten to reach the same file
 from here. A file that would pass the document budget continues in `<part>-continued-<k>.md`.
 
+**The folders this page indexes**, and their size on 2026-11-05 — a reader arriving at `docs/archive/` sees three
+folders and should not have to open them to learn which kind of entry is where. This page is the archive's index; the
+folders under it carry none of their own, since **nothing in `docs/archive/` is written by hand** except this page and
+the manifest (a `README.md` added inside a subfolder here would be an unregistered entry and fails `--check`):
+
+| Folder | Holds | Files 2026-11-05 |
+|---|---|---|
+| [`architecture/adr/`](architecture/adr/) | the ADR history, one `<nnnn>-history.md` per record that has any | 31 |
+| [`architecture/open-questions/`](architecture/open-questions/) | the settled open-question entries, one archive file per live part | 75 |
+| [`architecture/owner-decisions/`](architecture/owner-decisions/) | the ruled ESC, SR and GD entries the specification carries | 9 |
+| [`defects/`](defects/) | the repaired defect notes, one flat folder named for the defect | 857 |
+| `spec/` | the text of a withdrawn or superseded requirement, beyond its definition (held by `tools/archive/spec.mjs`; empty on 2026-11-05 — the first run moved nothing, OQ-490) | — |
+
+**A note a reader should not have to derive:** `defects/` and `open-questions/` are searched, not read through — 857
+and 75 files do not fit a list, and neither folder's page pretends to carry one. Reach an entry from its live file's
+index line ([below](#reading-an-archived-entry)) or by searching the folder for the defect's or question's own name.
+
 ## Reading an archived entry
 
 Start from the live file. Where an entry stood, its live file keeps one line that names it and links here:

@@ -27,7 +27,7 @@ discovered … 1 skipped` and `context units for <session>: catalog caveman`, so
 agent context too. After it, every launch logged `run host: skills: 0 discovered` and no skipped file; the third run (load
 83 %, the acceptance tree's Electron beside it) passed the whole catalogue launch, the skill-badge check included, and the
 palettes and theme-restart launches, and stopped in the `wired` launch on a reading of its own
-(`docs/defects/slash-proofs-wired-launch-cannot-read-its-key-saving-eval-because-the-log-masks-the-key.md`). The first run
+(`docs/archive/defects/slash-proofs-wired-launch-cannot-read-its-key-saving-eval-because-the-log-masks-the-key.md`, since repaired by `main`'s own `readEval` change). The first run
 after it stopped earlier on another reading this repair let the proof reach
 (`docs/defects/an-open-slash-popup-loses-skill-and-skills-when-the-catalogue-is-rebuilt.md`). `skills-proof` and
 `retrospective-proof` (84 passed) passed with the shared seams. `injection-proof` passed its first three launches (all-on,

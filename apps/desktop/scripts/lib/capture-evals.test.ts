@@ -93,3 +93,20 @@ describe('an expression the application log echoes masked is still read as its o
     expect(() => readEval(evals, 5, '({ key: a.b })')).toThrow(/2 evals of one expression logged at 5 ms/);
   });
 });
+
+describe('slash-proof\'s wired launch reads its key-saving eval through the masked echo (REQ-CHAT-159)', () => {
+  // The expression carries the made-up key as a literal (`saveProviderKeyAndList` in `slash-proof.mjs`, in this shape), and
+  // the application log masks it (`apiKey: '***'`), so the verbatim reader found nothing and the proof stopped at "the
+  // credential store should have taken the key: undefined"
+  // (docs/archive/defects/slash-proofs-wired-launch-cannot-read-its-key-saving-eval-because-the-log-masks-the-key.md).
+  const saveKey = `(async () => { const s = await window.rotaris.command({ kind: 'providers.save', id: 'deepseek', apiKey: 'sk-proof-not-a-real-key', baseUrl: null, validate: false }); const l = await window.rotaris.command({ kind: 'providers.list' }); return { saved: s.ok ? s.value : { error: s.headline }, rows: l.ok ? l.value.map((row) => ({ id: row.id, authenticated: row.authenticated })) : null }; })()`;
+  const answer = { saved: { ok: true, message: 'Saved. Saved the key for DeepSeek.' }, rows: [{ id: 'deepseek', authenticated: true }] };
+
+  it('the product masks the key in the echo, so the read below is not vacuous', () => {
+    expect(redact(line(31000, saveKey, answer))).not.toContain('sk-proof-not-a-real-key');
+  });
+
+  it('reads the answer from the masked echo at its offset', () => {
+    expect(readEval(parseEvals(redact(line(31000, saveKey, answer))), 31000, saveKey)).toEqual(answer);
+  });
+});

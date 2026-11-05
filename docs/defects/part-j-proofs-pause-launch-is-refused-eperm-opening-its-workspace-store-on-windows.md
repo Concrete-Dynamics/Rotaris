@@ -23,6 +23,12 @@ or removal meets while another handle (an indexer, a scanner, a process of the l
 Electron running beside it: `pause.log` read `workspace.open refused: … EPERM, Permission denied: '…\pause\local\rotaris\data\workspaces\.d0bad552124955cb7eb6a61d8fbde837'`
 and the proof stopped at "found 0". Recorded, not repaired.
 
+**Sightings, 2026-11-05 (hrda, bundle `hrda-accept1-6`, resumed).** The same tree rebased onto `origin/main` `70436c90` (the
+commit above became `0ab16753`), after `pnpm build`; no other tree's Electron running, CPU 71 % and 53 % at the two launches
+(12:13 and 12:15 UTC): both runs met `queue`, `steer` and `steer-early` and stopped at `pause` on the same EPERM
+(`workspace.open refused: … EPERM, Permission denied: '…\pause\local\rotaris\data\workspaces\.b95be63e…'`) and "found 0".
+Recorded, not repaired.
+
 ## Specs
 
 None named here: a workspace opens with its store, and whether a transient Windows file lock refusing that open is the

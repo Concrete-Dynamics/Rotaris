@@ -46,11 +46,14 @@ export const DIAGNOSTICS_LOG_EXCLUDES = 'It holds no conversation, model output 
 
 /**
  * PD-STARTUP-011 revision 2: where this window took the per-user folder in place of its workspace's own, the sentence saying
- * so in words with the cause; empty otherwise.
+ * so in words with the cause; empty otherwise. Where the per-user folder could not be created either, the capture is
+ * inactive and nothing goes there, so the sentence says the per-user folder was tried, and the capture's sentence carries
+ * that base's own cause.
  */
 export function fallbackSentence(state: DiagnosticsCardState | null): string {
   if (state?.fallback === undefined) return '';
-  return `This workspace's own folder could not be written (${state.fallback.cause}), so this window's diagnostics go to the per-user folder instead of ${state.fallback.from}.`;
+  const where = state.capture.state === 'active' ? "this window's diagnostics go to the per-user folder" : 'this window tried the per-user folder';
+  return `This workspace's own folder could not be written (${state.fallback.cause}), so ${where} instead of ${state.fallback.from}.`;
 }
 
 /** What this window's own capture is doing, in one sentence. */

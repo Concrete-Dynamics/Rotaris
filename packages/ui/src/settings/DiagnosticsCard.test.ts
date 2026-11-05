@@ -85,6 +85,22 @@ describe('REQ-SHELL-163: the diagnostics card', () => {
     expect(/<input[^>]*aria-label="Diagnostics output folder"[^>]*>/.exec(html)?.[0]).toContain(`value="${perUser}"`);
   });
 
+  it('never says the diagnostics go to the per-user folder where that folder could not be created either and the capture is inactive (PD-STARTUP-011 revision 2)', () => {
+    const perUser = 'C:\\blocked\\diagnostics\\rotaris';
+    const fallback = { from: 'C:\\notes.txt\\.rotaris\\diagnostics\\rotaris', cause: 'C:\\notes.txt is not an existing folder' };
+    const reason = `Diagnostics could not create a run directory in ${perUser}: ENOTDIR, after the workspace's own folder ${fallback.from} could not be written (${fallback.cause}). This window opened without them.`;
+    const state: DiagnosticsCardState = { ...OFF, level: 'light', folder: perUser, fallback, capture: { state: 'inactive', level: 'light', reason } };
+    const sentence = fallbackSentence(state);
+    expect(sentence).toMatch(/workspace's own folder could not be written/);
+    expect(sentence).toContain(fallback.cause);
+    expect(sentence).toContain('tried the per-user folder');
+    expect(sentence).not.toMatch(/diagnostics go to/);
+    const html = decoded(draw(state));
+    expect(html).toContain(`data-testid="diagnostics-fallback">${sentence}</p>`);
+    expect(html).toContain(`data-testid="diagnostics-capture">${captureSentence(state)}</p>`);
+    expect(captureSentence(state)).toContain(perUser);
+  });
+
   it('says nothing of a fallback where the window took its workspace\'s own folder', () => {
     expect(fallbackSentence(OFF)).toBe('');
     expect(fallbackSentence(null)).toBe('');

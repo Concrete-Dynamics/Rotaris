@@ -22,20 +22,25 @@ import { INDEXED_FOLDERS, MIN_ENTRIES, MIN_FOLDERS, isPartsFolder, missingIndexe
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
-/** A scratch tree for one case, removed when the case ends. */
-const scratch = () => {
+const created: string[] = [];
+
+/**
+ * A scratch tree for one case, removed when the case ends.
+ */
+const scratch = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'folder-indexes-'));
   created.push(dir);
   return dir;
 };
-/** @type {string[]} */
-const created = [];
+
 afterEach(() => {
   for (const dir of created.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-/** `n` Markdown files named to sort, in `dir`. */
-const fill = (dir, n) => {
+/**
+ * `n` Markdown files named to sort, in `dir`.
+ */
+const fill = (dir: string, n: number): void => {
   mkdirSync(dir, { recursive: true });
   for (let i = 0; i < n; i += 1) writeFileSync(join(dir, `${String(i).padStart(2, '0')}-part.md`), '# part\n');
 };
@@ -74,8 +79,10 @@ describe('every ADR is reachable from an index', () => {
 });
 
 describe('the rule itself', () => {
-  /** A scratch repository: `<dir>/docs/`, with its own index so `docs/` is never the answer being tested. */
-  const docsOf = (dir) => {
+  /**
+   * A scratch repository: `<dir>/docs/`, with its own index so `docs/` is never the answer being tested.
+   */
+  const docsOf = (dir: string): string => {
     const docs = join(dir, 'docs');
     mkdirSync(docs, { recursive: true });
     writeFileSync(join(docs, 'README.md'), '# The record\n');

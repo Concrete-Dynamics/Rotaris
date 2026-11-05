@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { toIsoUtc, type Instant } from '@rotaris/kernel';
 import type { DiagnosticsCapture, DiagnosticsLevel } from '@rotaris/contracts';
@@ -19,10 +19,13 @@ import type { AppLogRecord } from './app-log.js';
  *   registry and the registry, holding no capture, returns at once.
  * - **The run directory** (REQ-STARTUP-131): `<base>/<yyyymmddTHHMMSSZ>-<pid>/`, created exclusively, the first free `-2`,
  *   `-3`, … taken when the name is held; a base that cannot be written leaves the window open with the capture inactive,
- *   and the card says why. The base is the chosen folder, else the window's workspace's default, else — a window built
- *   with no workspace — `<per-user data directory>/diagnostics/rotaris` (PD-STARTUP-011, REQ-STARTUP-145), fixed when the
- *   window is built and unmoved by a workspace opened later; so every window has a base, and the one inactive case is
- *   that base being unwritable.
+ *   and the card says why. The base is the chosen folder; else the window's workspace's default, but only when that folder
+ *   is an existing directory when the window is built and the run directory can be created there; else — a window built
+ *   with no workspace, or for a path that is a file, missing, unreachable or unwritable —
+ *   `<per-user data directory>/diagnostics/rotaris` (PD-STARTUP-011 revision 2, ruling OQ-541; REQ-STARTUP-145). The
+ *   base is decided inside the window's build, fixed then, and moved neither by what the window's open then does nor by
+ *   a workspace opened later; nothing is created under a path that is not an existing directory. The inactive cases are
+ *   the per-user base itself unwritable, and a chosen folder unwritable, which is never redirected.
  * - **The manifest** (REQ-STARTUP-132, REQ-STARTUP-157): schema 3, the app's identity, the creation time, the platform
  *   triple, the full effective configuration with every bound and cadence of REQ-STARTUP-133, and a self-checksum.
  * - **The bound** (REQ-STARTUP-133): the stream is at most four segment files of at most 8 MiB, the oldest replaced.
@@ -68,8 +71,9 @@ export function defaultDiagnosticsBase(workspace: string): string {
 }
 
 /**
- * PD-STARTUP-011's default base for a window built with no workspace: `<per-user data directory>/diagnostics/rotaris`, the
- * per-user data directory being REQ-STARTUP-145's, whose machine-local clause it inherits.
+ * PD-STARTUP-011's per-user base, for a window built with no workspace or whose workspace default cannot be created
+ * (revision 2): `<per-user data directory>/diagnostics/rotaris`, the per-user data directory being REQ-STARTUP-145's,
+ * whose machine-local clause it inherits.
  */
 export function perUserDiagnosticsBase(perUserData: string): string {
   return join(perUserData, 'diagnostics', 'rotaris');
@@ -268,12 +272,30 @@ export interface DiagnosticsChoice {
 }
 
 /**
- * The folder a window built now would write under: the chosen one, else its workspace's default (REQ-STARTUP-131), else —
- * a window that holds no workspace — the per-user default under `perUserData` (PD-STARTUP-011). Never none.
+ * The folder a window would write under before anything on disk is checked: the chosen one, else its workspace's default
+ * (REQ-STARTUP-131), else — a window that holds no workspace — the per-user default under `perUserData` (PD-STARTUP-011).
+ * Never none. It is the card's folder at `off`, where nothing is checked (REQ-STARTUP-130); a window built at `light` or
+ * `deep` may take the per-user base in place of its workspace's default (`DiagnosticsCaptures.open`).
  */
 export function diagnosticsBase(choice: Pick<DiagnosticsChoice, 'outputDir' | 'workspace'>, perUserData: string): string {
   if (choice.outputDir !== undefined) return choice.outputDir;
   return choice.workspace === null ? perUserDiagnosticsBase(perUserData) : defaultDiagnosticsBase(choice.workspace);
+}
+
+/** Whether `path` is an existing directory now: a file, a missing or an unreachable path is not (REQ-SHELL-010 (b)'s check). */
+export function isExistingDirectory(path: string): boolean {
+  try { return statSync(path).isDirectory(); } catch { return false; }
+}
+
+/**
+ * PD-STARTUP-011 revision 2's fallback: the workspace default a window could not take, and why, in the words the card and
+ * the capture's first line both use.
+ */
+export interface DiagnosticsFallback {
+  /** The workspace default, `<workspace>/.rotaris/diagnostics/rotaris`, that the window did not write under. */
+  readonly from: string;
+  /** Why: the workspace path is not an existing folder, or the errno the run directory's creation there met. */
+  readonly cause: string;
 }
 
 export interface DiagnosticsCapturesDeps {
@@ -287,6 +309,11 @@ export interface DiagnosticsCapturesDeps {
    * (PD-STARTUP-011). Main passes the one it resolved at start (`resolveUserDirs().data`).
    */
   readonly perUserData: string;
+  /**
+   * Whether a path is an existing directory (PD-STARTUP-011 revision 2): the workspace default is tried only under one, so
+   * nothing is created under a path that is a file, missing or unreachable. Main passes `isExistingDirectory`.
+   */
+  readonly isDirectory: (path: string) => boolean;
   /** A line for the application log, at `warning`: a capture that could not start or stopped. */
   readonly warn: (message: string) => void;
   /** A line for the application log, at `info`: a capture that started, naming its directory. */
@@ -305,30 +332,78 @@ export class DiagnosticsCaptures {
   readonly #running = new Map<number, Running>();
   readonly #inactive = new Map<number, { readonly level: Exclude<DiagnosticsLevel, 'off'>; readonly reason: string }>();
   /**
-   * The workspace each window was built for (null: none), kept whatever its level, so the default folder the card shows
-   * stays the one fixed when the window was built and is not moved by a workspace opened later (PD-STARTUP-011). A map
-   * entry, nothing on disk and no timer, so `off` stays zero work in REQ-STARTUP-130's sense.
+   * The default base each window was built with, kept whatever its level, so the card's folder in force stays the one fixed
+   * when the window was built and is moved neither by its open nor by a workspace opened later (PD-STARTUP-011): at `off`
+   * its workspace's default unchecked (REQ-STARTUP-130), otherwise the base the capture took — the workspace default or, in
+   * its place, the per-user base — with the fallback where one was taken. A map entry, nothing on disk and no timer, so
+   * `off` stays zero work in REQ-STARTUP-130's sense.
    */
-  readonly #builtFor = new Map<number, string | null>();
+  readonly #builtWith = new Map<number, { readonly base: string; readonly fallback: DiagnosticsFallback | undefined }>();
 
   constructor(private readonly deps: DiagnosticsCapturesDeps) {}
 
-  /** REQ-STARTUP-129 to REQ-STARTUP-132: start `windowId`'s capture as `choice` stands now, or nothing at `off`. */
+  /**
+   * REQ-STARTUP-129 to REQ-STARTUP-132: start `windowId`'s capture as `choice` stands now, or nothing at `off`. Called when
+   * the window is built, before its workspace is opened, so the base decided here depends on nothing the open does
+   * (PD-STARTUP-011 revision 2, OQ-541).
+   */
   open(windowId: number, choice: DiagnosticsChoice): DiagnosticsCapture {
     this.close(windowId);
-    this.#builtFor.set(windowId, choice.workspace);
-    if (choice.level === 'off') return { state: 'off' };
-    const level = choice.level;
-    const base = diagnosticsBase(choice, this.deps.perUserData);
-    const started = this.deps.now();
-    let runDirectory: string;
-    try {
-      runDirectory = createRunDirectory(base, runDirectoryStamp(started), this.deps.pid);
-      const manifest = diagnosticsManifest({ app: this.deps.app(), createdAt: started, platform: this.deps.platform, pid: this.deps.pid, level, outputBase: base, outputBaseChosen: choice.outputDir !== undefined, runDirectory });
-      writeFileSync(join(runDirectory, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' });
-    } catch (cause) {
-      return this.#inactivate(windowId, level, `Diagnostics could not create a run directory in ${base}: ${(cause as NodeJS.ErrnoException).code ?? String(cause)}. This window opened without them.`);
+    const unchecked = diagnosticsBase({ outputDir: undefined, workspace: choice.workspace }, this.deps.perUserData);
+    if (choice.level === 'off') {
+      this.#builtWith.set(windowId, { base: unchecked, fallback: undefined });
+      return { state: 'off' };
     }
+    const level = choice.level;
+    const started = this.deps.now();
+    // A chosen folder is the person's choice (REQ-STARTUP-129): never checked first and never redirected.
+    if (choice.outputDir !== undefined) {
+      this.#builtWith.set(windowId, { base: unchecked, fallback: undefined });
+      const made = this.#create(choice.outputDir, true, level, started);
+      if (!made.ok) return this.#inactivate(windowId, level, `Diagnostics could not create a run directory in ${choice.outputDir}: ${made.cause}. This window opened without them.`);
+      return this.#start(windowId, level, made.runDirectory, undefined);
+    }
+    const perUser = perUserDiagnosticsBase(this.deps.perUserData);
+    let fallback: DiagnosticsFallback | undefined;
+    if (choice.workspace !== null) {
+      const workspaceBase = defaultDiagnosticsBase(choice.workspace);
+      if (this.deps.isDirectory(choice.workspace)) {
+        const made = this.#create(workspaceBase, false, level, started);
+        if (made.ok) {
+          this.#builtWith.set(windowId, { base: workspaceBase, fallback: undefined });
+          return this.#start(windowId, level, made.runDirectory, undefined);
+        }
+        fallback = { from: workspaceBase, cause: made.cause };
+      } else {
+        fallback = { from: workspaceBase, cause: `${choice.workspace} is not an existing folder` };
+      }
+    }
+    this.#builtWith.set(windowId, { base: perUser, fallback });
+    const made = this.#create(perUser, false, level, started);
+    if (!made.ok) {
+      const before = fallback === undefined ? '' : `, after the workspace's own folder ${fallback.from} could not be written (${fallback.cause})`;
+      return this.#inactivate(windowId, level, `Diagnostics could not create a run directory in ${perUser}: ${made.cause}${before}. This window opened without them.`);
+    }
+    return this.#start(windowId, level, made.runDirectory, fallback);
+  }
+
+  /** The window's run directory under `base` with its manifest, or the errno (else the message) that stopped it. */
+  #create(base: string, chosen: boolean, level: Exclude<DiagnosticsLevel, 'off'>, started: Instant): { readonly ok: true; readonly runDirectory: string } | { readonly ok: false; readonly cause: string } {
+    try {
+      const runDirectory = createRunDirectory(base, runDirectoryStamp(started), this.deps.pid);
+      const manifest = diagnosticsManifest({ app: this.deps.app(), createdAt: started, platform: this.deps.platform, pid: this.deps.pid, level, outputBase: base, outputBaseChosen: chosen, runDirectory });
+      writeFileSync(join(runDirectory, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`, { flag: 'wx' });
+      return { ok: true, runDirectory };
+    } catch (cause) {
+      return { ok: false, cause: (cause as NodeJS.ErrnoException).code ?? String(cause) };
+    }
+  }
+
+  /**
+   * The capture runs: its stream opened and its first line written. Where the per-user base was taken in place of the
+   * workspace default, that first line names the base and the cause (PD-STARTUP-011 revision 2).
+   */
+  #start(windowId: number, level: Exclude<DiagnosticsLevel, 'off'>, runDirectory: string, fallback: DiagnosticsFallback | undefined): DiagnosticsCapture {
     const stream = new SegmentedJsonLines(runDirectory, APP_LOG_STREAM, this.deps.bounds ?? { segmentBytes: DIAGNOSTICS_BOUNDS.streamSegmentBytes, segments: DIAGNOSTICS_BOUNDS.streamSegments }, (cause) => {
       // Removed before the warning is written, so the warning does not come back to the stream that failed.
       this.#running.delete(windowId);
@@ -336,7 +411,8 @@ export class DiagnosticsCaptures {
       this.deps.warn(`diagnostics: window ${windowId}'s capture stopped writing to ${runDirectory}: ${String(cause)}`);
     });
     this.#running.set(windowId, { level, runDirectory, stream });
-    this.deps.info(`diagnostics: window ${windowId} captures at ${level} in ${runDirectory}`);
+    const instead = fallback === undefined ? '' : `, the per-user folder, because the workspace's own folder ${fallback.from} could not be written (${fallback.cause})`;
+    this.deps.info(`diagnostics: window ${windowId} captures at ${level} in ${runDirectory}${instead}`);
     return { state: 'active', level, runDirectory };
   }
 
@@ -345,17 +421,23 @@ export class DiagnosticsCaptures {
     this.#running.get(windowId)?.stream.close();
     this.#running.delete(windowId);
     this.#inactive.delete(windowId);
-    this.#builtFor.delete(windowId);
+    this.#builtWith.delete(windowId);
   }
 
   /**
-   * REQ-SHELL-163's "folder currently in force" for `windowId`: `outputDir` when one is chosen, else the default fixed when
-   * the window was built (PD-STARTUP-011) — its workspace's, or the per-user one for a window built with none. A window this
-   * registry was never told of (none in the product; every main window is opened here when built) reads `workspaceNow`.
+   * REQ-SHELL-163's "folder currently in force" for `windowId`: `outputDir` when one is chosen, else the base recorded when
+   * the window was built (PD-STARTUP-011 revision 2) — the one its capture writes under, its workspace's default or the
+   * per-user one in its place, and at `off` its workspace's default unchecked. A window this registry was never told of
+   * (none in the product; every main window is opened here when built) reads `workspaceNow`.
    */
   folderFor(windowId: number, outputDir: string | undefined, workspaceNow: string | null): string {
-    const built = this.#builtFor.get(windowId);
-    return diagnosticsBase({ outputDir, workspace: built === undefined ? workspaceNow : built }, this.deps.perUserData);
+    if (outputDir !== undefined) return outputDir;
+    return this.#builtWith.get(windowId)?.base ?? diagnosticsBase({ outputDir, workspace: workspaceNow }, this.deps.perUserData);
+  }
+
+  /** The workspace default `windowId` could not take when it was built, and why, or undefined (PD-STARTUP-011 revision 2). */
+  fallbackOf(windowId: number): DiagnosticsFallback | undefined {
+    return this.#builtWith.get(windowId)?.fallback;
   }
 
   /** One recorded line of the application log, to every running capture. */

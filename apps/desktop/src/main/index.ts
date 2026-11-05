@@ -32,7 +32,7 @@ import { createSuccessorWait } from './updater/successor.js';
 import { classifyThisInstallation, createUpdaterPorts, successorArguments, successorEndpointFromArgv } from './updater/electron.js';
 import { updateCommands } from './commands/update.js';
 import { diagnosticsCommands } from './commands/diagnostics.js'; // REQ-SHELL-163, REQ-STARTUP-129
-import { DiagnosticsCaptures } from './diagnostics.js'; // REQ-STARTUP-129..133, hardening D2
+import { DiagnosticsCaptures, isExistingDirectory } from './diagnostics.js'; // REQ-STARTUP-129..133, hardening D2, PD-STARTUP-011
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
@@ -165,8 +165,10 @@ const diagnostics = new DiagnosticsCaptures({
   pid: process.pid,
   app: () => ({ name: 'Rotaris', version: productVersion() }),
   platform: { os: process.platform, arch: process.arch, runtime: `electron${process.versions.electron ?? ''}` },
-  // PD-STARTUP-011: a window built with no workspace and no chosen folder writes under the per-user data directory.
+  // PD-STARTUP-011 revision 2 (OQ-541): a window built with no workspace, or whose workspace default is not an existing
+  // directory or cannot be created when it is built, and with no chosen folder, writes under the per-user data directory.
   perUserData: dirs.data,
+  isDirectory: isExistingDirectory,
   warn: (m) => { log(m, 'warn'); },
   info: (m) => { log(m); },
 });

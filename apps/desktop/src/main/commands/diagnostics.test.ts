@@ -1,11 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import { instant } from '@rotaris/kernel';
 import { PreferenceStore } from '@rotaris/platform';
-import { DiagnosticsCaptures, defaultDiagnosticsBase, perUserDiagnosticsBase } from '../diagnostics.js';
+import { DiagnosticsCaptures, defaultDiagnosticsBase, isExistingDirectory, perUserDiagnosticsBase } from '../diagnostics.js';
 import { cardState, diagnosticsCommands } from './diagnostics.js';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 
@@ -22,7 +22,7 @@ afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
 function facet(chosen: string | null) {
   const preferences = new PreferenceStore(join(dir, 'preferences'));
-  const diagnostics = new DiagnosticsCaptures({ now: () => instant(Date.UTC(2026, 10, 3)), pid: 1, app: () => ({ name: 'Rotaris', version: '0' }), platform: { os: 'win32', arch: 'arm64', runtime: 'electron' }, perUserData: join(dir, 'data'), warn: () => undefined, info: () => undefined });
+  const diagnostics = new DiagnosticsCaptures({ now: () => instant(Date.UTC(2026, 10, 3)), pid: 1, app: () => ({ name: 'Rotaris', version: '0' }), platform: { os: 'win32', arch: 'arm64', runtime: 'electron' }, perUserData: join(dir, 'data'), isDirectory: isExistingDirectory, warn: () => undefined, info: () => undefined });
   const chooseDirectory = vi.fn((_parent: BrowserWindow, _opts: Electron.OpenDialogOptions) => Promise.resolve(chosen));
   const ctx = { capturing: false, chooseDirectory, clocks: { timers: { after: () => ({ cancel: () => undefined }) } } as unknown as CommandContext['clocks'], diagnostics, log: () => undefined, preferences } as unknown as Parameters<typeof diagnosticsCommands>[0];
   const workspace = join(dir, 'ws');
@@ -80,6 +80,25 @@ describe('REQ-SHELL-163: the diagnostics card', () => {
     expect(await f.handlers['diagnostics.state']({ kind: 'diagnostics.state' }, f.at)).toMatchObject({ ok: true, value: { folder: perUserDiagnosticsBase(join(dir, 'data')), folderChosen: false } });
     await f.handlers['diagnostics.chooseOutputDir']({ kind: 'diagnostics.chooseOutputDir' }, f.at);
     expect(f.chooseDirectory.mock.calls[0]?.[1]).toMatchObject({ defaultPath: perUserDiagnosticsBase(join(dir, 'data')) });
+    f.diagnostics.close(5);
+  });
+
+  it('shows the per-user base in force and the workspace default it replaced, with the cause, for a window built for a file (PD-STARTUP-011 revision 2)', async () => {
+    const f = facet(null);
+    writeFileSync(f.workspace, 'a file, not a folder');
+    const capture = f.diagnostics.open(5, { level: 'light', outputDir: undefined, workspace: f.workspace });
+    const perUser = perUserDiagnosticsBase(join(dir, 'data'));
+    expect(await f.handlers['diagnostics.state']({ kind: 'diagnostics.state' }, f.at)).toEqual({
+      ok: true,
+      value: { level: 'off', folder: perUser, folderChosen: false, fallback: { from: defaultDiagnosticsBase(f.workspace), cause: `${f.workspace} is not an existing folder` }, capture },
+    });
+    f.diagnostics.close(5);
+  });
+
+  it('carries no fallback where the window took its workspace\'s own folder (PD-STARTUP-011 revision 2)', () => {
+    const f = facet(null);
+    f.diagnostics.open(5, { level: 'off', outputDir: undefined, workspace: f.workspace });
+    expect(cardState({ wcId: 5, workspace: f.workspace }, 'off', undefined, f.diagnostics)).not.toHaveProperty('fallback');
     f.diagnostics.close(5);
   });
 });

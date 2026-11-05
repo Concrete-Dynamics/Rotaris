@@ -7,9 +7,9 @@ import type { CommandContext, CommandHandlers, MainWindowState } from './context
 /**
  * DIAGNOSTICS — Settings › About's diagnostics card (REQ-SHELL-163) over the one source REQ-STARTUP-129 names, the
  * preference store. Every answer is for the window that asked: its own capture, fixed when it was built, and the folder in
- * force for it — the chosen one, else the default fixed when it was built, the per-user one for a window built with no
- * workspace (PD-STARTUP-011). A level or a folder chosen here is stored and reaches the windows built afterwards; the asking window's
- * capture is not touched (`diagnostics.ts`).
+ * force for it — the chosen one, else the base fixed when it was built, the per-user one for a window built with no
+ * workspace or whose workspace default could not be created then (PD-STARTUP-011 revision 2). A level or a folder chosen
+ * here is stored and reaches the windows built afterwards; the asking window's capture is not touched (`diagnostics.ts`).
  */
 export function diagnosticsCommands(
   ctx: Pick<CommandContext, 'capturing' | 'chooseDirectory' | 'clocks' | 'diagnostics' | 'log' | 'preferences'>,
@@ -54,7 +54,11 @@ export function workspaceOf(w: Pick<MainWindowState, 'workspace'>): string | nul
   return w.workspace === '(no workspace)' || w.workspace === '' ? null : w.workspace;
 }
 
-/** REQ-SHELL-163's card for one window: the stored choices, the folder in force for it (PD-STARTUP-011), and its own capture. */
-export function cardState(w: Pick<MainWindowState, 'wcId' | 'workspace'>, level: DiagnosticsCardState['level'], outputDir: string | undefined, diagnostics: Pick<DiagnosticsCaptures, 'stateOf' | 'folderFor'>): DiagnosticsCardState {
-  return { level, folder: diagnostics.folderFor(w.wcId, outputDir, workspaceOf(w)), folderChosen: outputDir !== undefined, capture: diagnostics.stateOf(w.wcId) };
+/**
+ * REQ-SHELL-163's card for one window: the stored choices, the folder in force for it, the workspace default it could not
+ * take where it took the per-user base instead (PD-STARTUP-011 revision 2), and its own capture.
+ */
+export function cardState(w: Pick<MainWindowState, 'wcId' | 'workspace'>, level: DiagnosticsCardState['level'], outputDir: string | undefined, diagnostics: Pick<DiagnosticsCaptures, 'stateOf' | 'folderFor' | 'fallbackOf'>): DiagnosticsCardState {
+  const fallback = diagnostics.fallbackOf(w.wcId);
+  return { level, folder: diagnostics.folderFor(w.wcId, outputDir, workspaceOf(w)), folderChosen: outputDir !== undefined, ...(fallback ? { fallback } : {}), capture: diagnostics.stateOf(w.wcId) };
 }

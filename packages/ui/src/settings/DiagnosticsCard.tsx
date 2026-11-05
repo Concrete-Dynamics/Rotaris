@@ -11,8 +11,10 @@ import { Button as DesignButton, Input as DesignInput, Select as DesignSelect } 
  * chooser, no invalid selection is reachable and nothing here refuses one. The card says in words that a change reaches
  * windows opened afterwards and leaves this window's capture as it is, and (PD-STARTUP-011) what a run directory's log
  * holds: this application's log for every open window, folder paths and error messages included, and no conversation, model
- * output or file contents. Every window has a folder in force — a window with no workspace has the per-user default — so
- * the folder field always shows one.
+ * output or file contents. Every window has a folder in force — a window with no workspace, or whose workspace's own folder
+ * could not be written when it was built, has the per-user default — so the folder field always shows one, and where the
+ * per-user folder was taken in place of the workspace's own the card says so and names the cause (PD-STARTUP-011
+ * revision 2).
  *
  * The About page has no design material (`docs/design/README.md` §3.2); the card is drawn with the page's own vocabulary —
  * its section heading, the value text, the secondary hint, the design system's select, field and secondary button.
@@ -41,6 +43,15 @@ export const DIAGNOSTICS_TAKES_EFFECT = 'A change to either choice applies to wi
 export const DIAGNOSTICS_LOG_SCOPE = "A run directory holds this application's log for every open window, not only this one.";
 export const DIAGNOSTICS_LOG_INCLUDES = 'The log includes folder paths and error messages.';
 export const DIAGNOSTICS_LOG_EXCLUDES = 'It holds no conversation, model output or file contents.';
+
+/**
+ * PD-STARTUP-011 revision 2: where this window took the per-user folder in place of its workspace's own, the sentence saying
+ * so in words with the cause; empty otherwise.
+ */
+export function fallbackSentence(state: DiagnosticsCardState | null): string {
+  if (state?.fallback === undefined) return '';
+  return `This workspace's own folder could not be written (${state.fallback.cause}), so this window's diagnostics go to the per-user folder instead of ${state.fallback.from}.`;
+}
 
 /** What this window's own capture is doing, in one sentence. */
 export function captureSentence(state: DiagnosticsCardState | null): string {
@@ -98,6 +109,7 @@ export function DiagnosticsCard({ state, onLevel, onChooseFolder, onOpenRunDirec
           onKeyDown={activateFolder}
         />
       </div>
+      {state?.fallback !== undefined && <p className="text-secondary settings__hint" data-testid="diagnostics-fallback">{fallbackSentence(state)}</p>}
       <p className="text-secondary settings__hint" data-testid="diagnostics-takes-effect">{DIAGNOSTICS_TAKES_EFFECT}</p>
       <p className="about__value" data-testid="diagnostics-capture">{captureSentence(state)}</p>
       <DesignButton

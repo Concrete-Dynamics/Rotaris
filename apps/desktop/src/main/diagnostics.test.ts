@@ -15,6 +15,7 @@ import {
   createRunDirectory,
   defaultDiagnosticsBase,
   diagnosticsBase,
+  isExistingDirectory,
   manifestChecksumHolds,
   perUserDiagnosticsBase,
   readJsonLines,
@@ -42,6 +43,7 @@ function captures(extra: Partial<DiagnosticsCapturesDeps> & { clock?: { at: Inst
     app: () => ({ name: 'Rotaris', version: '0.9.0' }),
     platform: { os: 'win32', arch: 'arm64', runtime: 'electron44.1.1' },
     perUserData: join(dir, 'per-user-data'),
+    isDirectory: isExistingDirectory,
     warn: (m) => warnings.push(m),
     info: (m) => infos.push(m),
     ...extra,
@@ -95,6 +97,7 @@ describe('REQ-STARTUP-131: each window\'s run directory, created exclusively', (
   it('defaults to <workspace>/.rotaris/diagnostics/rotaris when no folder is chosen', () => {
     const { registry } = captures();
     const workspace = join(dir, 'ws');
+    mkdirSync(workspace);
     const state = registry.open(1, { level: 'light', outputDir: undefined, workspace });
     expect(defaultDiagnosticsBase(workspace)).toBe(join(workspace, '.rotaris', 'diagnostics', 'rotaris'));
     expect(state.state === 'active' && state.runDirectory).toBe(join(defaultDiagnosticsBase(workspace), `20261103T101112Z-${PID}`));
@@ -185,6 +188,152 @@ describe('PD-STARTUP-011: a window with no workspace writes under the per-user d
     expect(registry.open(4, { level: 'off', outputDir: undefined, workspace: null })).toEqual({ state: 'off' });
     registry.record(line(1));
     expect(existsSync(perUser())).toBe(false);
+  });
+});
+
+describe('PD-STARTUP-011 revision 2 (OQ-541): a window whose workspace default cannot be created takes the per-user base, decided at build', () => {
+  const perUser = () => perUserDiagnosticsBase(join(dir, 'per-user-data'));
+  const runIn = (base: string) => join(base, `20261103T101112Z-${PID}`);
+  /** The registry with its `info` and `warn` lines fed back as the application log feeds them, so a stream's first line can be read. */
+  function logged(extra: Partial<DiagnosticsCapturesDeps> = {}) {
+    const infos: string[] = [];
+    const warnings: string[] = [];
+    const holder: { registry?: DiagnosticsCaptures } = {};
+    const feed = (level: 'info' | 'warning', message: string) => holder.registry?.record({ at: '2026-11-03T10:11:12.345Z', level, source: 'main', message });
+    const registry = new DiagnosticsCaptures({
+      now: () => START,
+      pid: PID,
+      app: () => ({ name: 'Rotaris', version: '0.9.0' }),
+      platform: { os: 'win32', arch: 'arm64', runtime: 'electron44.1.1' },
+      perUserData: join(dir, 'per-user-data'),
+      isDirectory: isExistingDirectory,
+      info: (m) => { infos.push(m); feed('info', m); },
+      warn: (m) => { warnings.push(m); feed('warning', m); },
+      ...extra,
+    });
+    holder.registry = registry;
+    return { registry, infos, warnings };
+  }
+  const configurationOf = (runDirectory: string) => (JSON.parse(readFileSync(join(runDirectory, MANIFEST_FILE), 'utf8')) as { configuration: { outputBase: string; outputBaseChosen: boolean } }).configuration;
+  const firstLine = (runDirectory: string) => (readStream(runDirectory, APP_LOG_STREAM).records[0] as AppLogRecord | undefined)?.message ?? '';
+
+  it('a workspace path that is a regular file: the per-user base, nothing created under the file, the cause in the first line, the manifest and the folder in force', () => {
+    const file = join(dir, 'a-file.txt');
+    writeFileSync(file, 'not a folder');
+    const { registry, warnings } = logged();
+    const state = registry.open(1, { level: 'light', outputDir: undefined, workspace: file });
+    expect(state).toEqual({ state: 'active', level: 'light', runDirectory: runIn(perUser()) });
+    expect(tree(dir).filter((p) => !p.startsWith('per-user-data'))).toEqual(['a-file.txt']);
+    expect(readFileSync(file, 'utf8')).toBe('not a folder');
+    expect(configurationOf(runIn(perUser()))).toMatchObject({ outputBase: perUser(), outputBaseChosen: false });
+    const first = firstLine(runIn(perUser()));
+    expect(first).toContain(runIn(perUser()));
+    expect(first).toContain('per-user folder');
+    expect(first).toContain(defaultDiagnosticsBase(file));
+    expect(first).toContain(`${file} is not an existing folder`);
+    expect(registry.folderFor(1, undefined, file)).toBe(perUser());
+    expect(registry.fallbackOf(1)).toEqual({ from: defaultDiagnosticsBase(file), cause: `${file} is not an existing folder` });
+    expect(warnings).toEqual([]);
+  });
+
+  it('a missing workspace path: the per-user base, and neither the path nor <path>/.rotaris is created', () => {
+    const missing = join(dir, 'gone');
+    const { registry } = logged();
+    const state = registry.open(2, { level: 'deep', outputDir: undefined, workspace: missing });
+    expect(state).toEqual({ state: 'active', level: 'deep', runDirectory: runIn(perUser()) });
+    expect(existsSync(missing)).toBe(false);
+    expect(existsSync(join(missing, '.rotaris'))).toBe(false);
+    expect(registry.fallbackOf(2)?.from).toBe(defaultDiagnosticsBase(missing));
+  });
+
+  it('an existing folder where the run directory cannot be created: one retry under the per-user base, the errno named', () => {
+    const workspace = join(dir, 'ws');
+    mkdirSync(workspace);
+    writeFileSync(join(workspace, '.rotaris'), 'in the way'); // `<ws>/.rotaris/diagnostics/rotaris` cannot be made
+    const { registry, warnings } = logged();
+    const state = registry.open(3, { level: 'light', outputDir: undefined, workspace });
+    expect(state).toEqual({ state: 'active', level: 'light', runDirectory: runIn(perUser()) });
+    const fallback = registry.fallbackOf(3);
+    expect(fallback?.from).toBe(defaultDiagnosticsBase(workspace));
+    expect(fallback?.cause).toMatch(/^E[A-Z]+$/);
+    expect(firstLine(runIn(perUser()))).toContain(`(${fallback?.cause ?? 'none'})`);
+    expect(readFileSync(join(workspace, '.rotaris'), 'utf8')).toBe('in the way');
+    expect(registry.folderFor(3, undefined, workspace)).toBe(perUser());
+    expect(warnings).toEqual([]);
+  });
+
+  it('an existing, writable folder keeps its own default: no fallback, nothing under the per-user folder', () => {
+    const workspace = join(dir, 'ws');
+    mkdirSync(workspace);
+    const { registry } = logged();
+    expect(registry.open(4, { level: 'light', outputDir: undefined, workspace })).toEqual({ state: 'active', level: 'light', runDirectory: runIn(defaultDiagnosticsBase(workspace)) });
+    expect(registry.fallbackOf(4)).toBeUndefined();
+    expect(registry.folderFor(4, undefined, workspace)).toBe(defaultDiagnosticsBase(workspace));
+    expect(firstLine(runIn(defaultDiagnosticsBase(workspace)))).not.toMatch(/per-user/);
+    expect(existsSync(perUser())).toBe(false);
+  });
+
+  it('a chosen folder that cannot be written stays inactive and is never redirected to the per-user base', () => {
+    const chosen = join(dir, 'chosen-is-a-file');
+    writeFileSync(chosen, 'not a directory');
+    const workspace = join(dir, 'ws');
+    mkdirSync(workspace);
+    const { registry, warnings } = logged();
+    const state = registry.open(5, { level: 'light', outputDir: chosen, workspace });
+    expect(state.state).toBe('inactive');
+    expect(state.state === 'inactive' && state.reason).toContain(chosen);
+    expect(existsSync(perUser())).toBe(false);
+    expect(existsSync(defaultDiagnosticsBase(workspace))).toBe(false);
+    expect(registry.fallbackOf(5)).toBeUndefined();
+    expect(registry.folderFor(5, chosen, workspace)).toBe(chosen);
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('inactive where the per-user base itself cannot be created, naming that base, its cause and the workspace default that failed before it', () => {
+    const blocked = join(dir, 'per-user-is-a-file');
+    writeFileSync(blocked, 'not a directory');
+    const file = join(dir, 'a-file.txt');
+    writeFileSync(file, 'not a folder');
+    const { registry, warnings } = logged({ perUserData: blocked });
+    const state = registry.open(6, { level: 'light', outputDir: undefined, workspace: file });
+    expect(state.state).toBe('inactive');
+    const reason = state.state === 'inactive' ? state.reason : '';
+    expect(reason).toContain(perUserDiagnosticsBase(blocked));
+    expect(reason).toMatch(/: E[A-Z]+/);
+    expect(reason).toContain(defaultDiagnosticsBase(file));
+    expect(reason).toContain('is not an existing folder');
+    expect(registry.folderFor(6, undefined, file)).toBe(perUserDiagnosticsBase(blocked));
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('checks nothing and creates nothing at off, and the folder in force is the workspace default unchecked', () => {
+    const missing = join(dir, 'gone');
+    let asked = 0;
+    const { registry } = logged({ isDirectory: () => { asked += 1; return false; } });
+    expect(registry.open(7, { level: 'off', outputDir: undefined, workspace: missing })).toEqual({ state: 'off' });
+    expect(asked).toBe(0);
+    expect(registry.folderFor(7, undefined, missing)).toBe(defaultDiagnosticsBase(missing));
+    expect(registry.fallbackOf(7)).toBeUndefined();
+    expect(tree(dir)).toEqual([]);
+  });
+
+  it('fixes the base at build: the per-user base taken stays the folder in force after the folder appears', () => {
+    const missing = join(dir, 'later');
+    const { registry } = logged();
+    registry.open(8, { level: 'light', outputDir: undefined, workspace: missing });
+    mkdirSync(missing);
+    expect(registry.folderFor(8, undefined, missing)).toBe(perUser());
+    expect(registry.stateOf(8)).toEqual({ state: 'active', level: 'light', runDirectory: runIn(perUser()) });
+    expect(existsSync(join(missing, '.rotaris'))).toBe(false);
+  });
+
+  it('reads a folder as a directory, and a file, a missing path and a path under a file as not', () => {
+    const file = join(dir, 'f');
+    writeFileSync(file, '');
+    expect(isExistingDirectory(dir)).toBe(true);
+    expect(isExistingDirectory(file)).toBe(false);
+    expect(isExistingDirectory(join(dir, 'missing'))).toBe(false);
+    expect(isExistingDirectory(join(file, 'under-a-file'))).toBe(false);
   });
 });
 

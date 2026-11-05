@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { DiagnosticsCardState } from '@rotaris/contracts';
 import { AboutSettings } from './About.js';
-import { DIAGNOSTICS_LOG_EXCLUDES, DIAGNOSTICS_LOG_INCLUDES, DIAGNOSTICS_LOG_SCOPE, DIAGNOSTICS_TAKES_EFFECT, DiagnosticsCard, captureSentence } from './DiagnosticsCard.js';
+import { DIAGNOSTICS_LOG_EXCLUDES, DIAGNOSTICS_LOG_INCLUDES, DIAGNOSTICS_LOG_SCOPE, DIAGNOSTICS_TAKES_EFFECT, DiagnosticsCard, captureSentence, fallbackSentence } from './DiagnosticsCard.js';
 
 /**
  * REQ-SHELL-163: the About tab's diagnostics card — three named, keyboard-reachable controls; the level offers exactly the
@@ -70,6 +70,25 @@ describe('REQ-SHELL-163: the diagnostics card', () => {
     expect(/<input[^>]*aria-label="Diagnostics output folder"[^>]*>/.exec(html)?.[0]).toContain(`value="${perUser}"`);
     expect(html).toMatch(/Output folder \(the default\)/);
     expect(html).not.toMatch(/No folder/);
+  });
+
+  it('says in words that the workspace\'s own folder could not be written, and names the cause, where the per-user folder was taken (PD-STARTUP-011 revision 2)', () => {
+    const perUser = 'C:\\Users\\u\\AppData\\Roaming\\Rotaris\\diagnostics\\rotaris';
+    const fallback = { from: 'C:\\notes.txt\\.rotaris\\diagnostics\\rotaris', cause: 'C:\\notes.txt is not an existing folder' };
+    const state: DiagnosticsCardState = { ...OFF, level: 'light', folder: perUser, fallback, capture: { state: 'active', level: 'light', runDirectory: `${perUser}\\20261104T101112Z-42` } };
+    const sentence = fallbackSentence(state);
+    expect(sentence).toMatch(/workspace's own folder could not be written/);
+    expect(sentence).toContain(fallback.cause);
+    expect(sentence).toContain('per-user folder');
+    const html = decoded(draw(state));
+    expect(html).toContain(`data-testid="diagnostics-fallback">${sentence}</p>`);
+    expect(/<input[^>]*aria-label="Diagnostics output folder"[^>]*>/.exec(html)?.[0]).toContain(`value="${perUser}"`);
+  });
+
+  it('says nothing of a fallback where the window took its workspace\'s own folder', () => {
+    expect(fallbackSentence(OFF)).toBe('');
+    expect(fallbackSentence(null)).toBe('');
+    expect(draw(OFF)).not.toContain('data-testid="diagnostics-fallback"');
   });
 
   it('is drawn on the About page when the root offers it, and not otherwise', () => {

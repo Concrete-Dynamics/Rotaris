@@ -22,13 +22,19 @@ export interface DiagnosticsCardState {
   /** The stored level: what windows built from now on capture at (REQ-STARTUP-129). */
   readonly level: DiagnosticsLevel;
   /**
-   * The folder in force: the chosen one, else this window's default location fixed when it was built — its workspace's
+   * The folder in force: the chosen one, else the base this window's capture took when it was built — its workspace's
    * `<workspace>/.rotaris/diagnostics/rotaris` (REQ-STARTUP-131), or `<per-user data directory>/diagnostics/rotaris` for a
-   * window built with no workspace (PD-STARTUP-011). Every window has one.
+   * window built with no workspace or whose workspace default could not be created then (PD-STARTUP-011 revision 2); at
+   * `off`, where nothing is checked, its workspace's default. Every window has one.
    */
   readonly folder: string;
   /** Whether `folder` is the person's choice (`diagnostics/outputDir`) rather than the default. */
   readonly folderChosen: boolean;
+  /**
+   * PD-STARTUP-011 revision 2: present where this window took the per-user base in place of its workspace's default — that
+   * default (`from`) and why it could not be written (`cause`), which the card says in words.
+   */
+  readonly fallback?: { readonly from: string; readonly cause: string };
   /** This window's own capture, fixed when the window was built: a later choice never alters it (REQ-SHELL-163). */
   readonly capture: DiagnosticsCapture;
 }

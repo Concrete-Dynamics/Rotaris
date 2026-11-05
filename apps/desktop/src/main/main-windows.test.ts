@@ -10,6 +10,7 @@ import {
   RENDERER_LIVENESS_BOUND_MS,
   RENDERER_LIVENESS_PROBE,
   RENDERER_UNSAVED_PROBE_SCRIPT,
+  RENDERER_ENDS_NOT_RELOADED,
   RENDERER_RELOAD_BOUND_MS,
   watchResponsiveness,
   type GuardedContents,
@@ -60,6 +61,8 @@ function harness(options: {
   readonly unsavedAllows?: () => boolean;
   /** R-091: windows whose reload after a lost renderer rejects. */
   readonly failReloads?: ReadonlySet<number>;
+  /** OQ-476: whether the application's quit has begun; absent, never. */
+  readonly quitting?: () => boolean;
 } = {}) {
   const actions: string[] = [];
   /** The workspace-open gates asked, in order (REQ-SHELL-021). */
@@ -171,6 +174,7 @@ function harness(options: {
     workspaceOpened: (window) => { workspacesOpened.push(`${window.workspace}:${window.workspaceId ?? 'none'}:after-${actions.length}`); },
     deliver: (window, request) => { delivered.push(`${window.wcId}:${request.kind}${request.kind === 'session-focus' ? `:${request.sessionId}` : ''}`); },
     ...(options.postShowActivation === undefined ? {} : { postShowActivation: (window) => { actions.push(`activate:${window.workspace}`); options.postShowActivation!(window.wcId); } }),
+    ...(options.quitting === undefined ? {} : { quitting: options.quitting }),
   };
 
   const mainWindows = new MainWindows<MemoryWindow, string, string, string, string>(dependencies);
@@ -1620,14 +1624,45 @@ describe('a main window whose renderer is lost is reloaded once within a bound, 
     expect(h.losses.map((l) => l.split(':').pop())).toEqual(['reloaded', 'reloaded']);
   });
 
-  it('an orderly end and a renderer killed on purpose are neither reloaded nor told', async () => {
+  it('an orderly end (`clean-exit`) is neither reloaded nor told', async () => {
     const h = harness();
     const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
     const win = h.windows.get(view.wcId)!;
-    for (const reason of ['clean-exit', 'killed']) for (const listener of win.goneListeners) listener({ reason, exitCode: reason === 'killed' ? 1 : 0 });
+    for (const listener of win.goneListeners) listener({ reason: 'clean-exit', exitCode: 0 });
     await settle();
     expect(h.actions.filter((a) => a.startsWith('reload:'))).toEqual([]);
     expect(h.losses).toEqual([]);
+    expect(RENDERER_ENDS_NOT_RELOADED).toEqual(new Set(['clean-exit']));
+  });
+
+  it('OQ-476: a renderer `killed` (TerminateProcess, exit 1, on Windows) is reloaded once and told like a crash; a second kill within the bound leaves the window, told', async () => {
+    const h = harness();
+    const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const win = h.windows.get(view.wcId)!;
+    const kill = (): void => { for (const listener of win.goneListeners) listener({ reason: 'killed', exitCode: 1 }); };
+    kill();
+    await settle();
+    expect(h.actions.filter((a) => a.startsWith('reload:'))).toEqual([`reload:${view.wcId}`]);
+    expect(h.losses).toEqual([`${view.wcId}:killed:1:reloaded`]);
+    expect(h.pendingDelays()).toContain(RENDERER_RELOAD_BOUND_MS);
+    kill();
+    await settle();
+    expect(h.actions.filter((a) => a.startsWith('reload:'))).toHaveLength(1);
+    expect(h.losses).toEqual([`${view.wcId}:killed:1:reloaded`, `${view.wcId}:killed:1:left`]);
+    expect(h.levels).toContain(`warn main window ${view.wcId}: its renderer is gone again (killed, exit 1) within ${RENDERER_RELOAD_BOUND_MS} ms of its reload; the window is left as it is, not reloaded again`);
+  });
+
+  it('OQ-476: a renderer lost once the application\'s quit has begun is left to the quit, neither reloaded nor told', async () => {
+    let quitting = false;
+    const h = harness({ quitting: () => quitting });
+    const view = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const win = h.windows.get(view.wcId)!;
+    quitting = true;
+    for (const reason of ['killed', 'crashed']) for (const listener of win.goneListeners) listener({ reason, exitCode: 1 });
+    await settle();
+    expect(h.actions.filter((a) => a.startsWith('reload:'))).toEqual([]);
+    expect(h.losses).toEqual([]);
+    expect(h.levels).toContain(`info main window ${view.wcId}: its renderer is gone (killed, exit 1) while the application quits; left to the quit, not reloaded (OQ-476)`);
   });
 
   it('the reloaded renderer is handed back the session the window followed, held until it listens (REQ-SHELL-020)', async () => {

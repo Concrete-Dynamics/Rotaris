@@ -7,7 +7,7 @@
  * `render-process-gone` for a renderer lost, `child-process-gone` for a utility child lost, and `process.on('exit')` last
  * (`docs/archive/defects/process-exit-left-no-diagnosable-trace.md`). The orderly half was measured when it landed; the crash
  * handlers were "argued, not measured", and no proof or live launch killed a process until this one
- * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Thirteen driven launches:
+ * (`docs/archive/defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md`). Fourteen driven launches (thirteen off Windows):
  *
  *   1. orderly — launched and quit through the driver: the log carries `quit: exiting with status 0` and
  *                `main process exiting with status 0`, and NO `error` line for a renderer or a child gone. The control for
@@ -28,6 +28,10 @@
  *                (`docs/archive/defects/a-main-window-whose-renderer-crashed-holds-the-applications-quit-forever.md`); from
  *                then until OQ-298 a guard that could not answer allowed. Should the quit be held again the check fails,
  *                and the immediate exit ends the launch for its trace.
+ *      kill    — OQ-476 (Windows only): the main window's renderer ended with `process.kill` (`TerminateProcess`, exit 1),
+ *                which Chromium reports `killed`: main writes `RENDERER GONE (killed, exit 1)`, reloads the window once
+ *                with "This window stopped and was reloaded" naming `killed` and exit code 1, leaves it after a second kill
+ *                within the 60 s bound with the notice saying so, reloads nothing more, and the quit then exits 0.
  *
  *   3. hang    — the main window's renderer stopped with SIGSTOP (alive, answering nothing), then the driver's quit. Since
  *                OQ-298 (2026-10-14, R-072) the quit asks no close guard, so it waits for no renderer: main writes the
@@ -243,8 +247,8 @@ const results = {};
   check('the launch has a renderer to crash', renderers.length >= 1, renderers.map((r) => r.pid).join(', ') || 'none');
   const before = goneAtError(logOf(started)).length;
   // SIGSEGV on POSIX; on Windows, which cannot send it, `TerminateProcess` with an access violation's status, which Chromium
-  // reads as `crashed` (a plain `process.kill` there is exit 1, `killed`, which main deliberately does not reload) — a
-  // renderer lost from outside either way.
+  // reads as `crashed` (a plain `process.kill` there is exit 1, `killed`, which until OQ-476 main did not reload; the `kill`
+  // launch reads it now) — a renderer lost from outside either way.
   crashRenderers(renderers);
   const rendererLine = await until(() => mainLines(logOf(started)).find((l) => /^RENDERER GONE \(/.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 20_000, what: 'main\'s RENDERER GONE line' }).catch(() => null);
   check('the renderer crashed: main writes render-process-gone with its reason, exit code and URL at error', rendererLine?.level === 'error' && /^RENDERER GONE \((crashed|killed|abnormal-exit), exit -?\d+\) for (file|app|http):/.test(rendererLine.message), rendererLine ? `${rendererLine.level} ${rendererLine.message}` : 'no line');
@@ -302,6 +306,65 @@ const results = {};
   const lastOwn = lines.findLastIndex((l) => l.message === 'main process exiting with status 0');
   check('the log ends where the process did: main\'s exit line comes after the losses, and nothing of main\'s own work after it', lastOwn > lines.findIndex((l) => /^RENDERER GONE \(/.test(l.message)) && lines.slice(lastOwn + 1).every((l) => /^quit: exiting with status \d+$|^workspace service for .* exited \(\d+\)(, an orderly end)?$/.test(l.message)), lines.slice(-3).map((l) => l.message).join(' | '));
   results.crash = { runHostPid, runHost: runHostLines.map((l) => `${l.level} ${l.message}`), renderers: renderers.map((r) => r.pid), renderer: rendererLine ? `${rendererLine.level} ${rendererLine.message}` : null, guardedQuit: guardedExit === null ? { held: true } : { held: false, exit: guardedExit }, exit: ended, last: lines.slice(-3).map((l) => `${l.level} ${l.message}`) };
+}
+
+// ── 2b. kill: the main window's renderer ended by `process.kill`, Chromium's `killed` (OQ-476, Windows) ─────────────────────
+/*
+ * OQ-476, ruled 2026-11-04 under the owner's delegation (R-072; REQ-NOTIFY-001, REQ-NOTIFY-003, REQ-STARTUP-161, ADR-0055):
+ * until 2026-11-05 a renderer Chromium reported `killed` was neither reloaded nor told (`RENDERER_ENDS_NOT_RELOADED` held it
+ * beside `clean-exit`), so a renderer ended by `TerminateProcess` with an ordinary status — Task Manager's End task, Node's
+ * `process.kill`, exit 1 on Windows — left the window open and blank with nothing said. Now `killed` takes the crash's path:
+ * ONE reload within `RENDERER_RELOAD_BOUND_MS` (60 s) with the persistent error notice naming the reason and the exit code,
+ * and a second kill inside the bound leaves the window as it is, the notice saying so. Read on Windows, where the reason was
+ * measured; Linux's `SIGKILL` reading is not measured anywhere yet, and macOS is not run.
+ */
+if (WINDOWS) {
+  const started = await startApp({ root: join(output, 'kill'), workspace, timeoutMs: 90_000 });
+  await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 });
+  /*
+   * The open's slot first (REQ-WORKSPACE-141: 800 ms after the open, its notices — no provider, the initialization's banner)
+   * and then a quiet log: one notice slot is drawn (REQ-NOTIFY-024), so a notice the slot raises after the kill would stand
+   * in place of the loss notice this launch reads. The first run (2026-11-05) killed inside the slot, and its loss notice
+   * was published (`diagnostics: notice #1`) and then replaced on screen by "Project setup did not finish" 450 ms later.
+   */
+  await until(() => mainLines(logOf(started)).some((l) => /^providers: \d+ authenticated/.test(l.message)), (v) => v, { timeoutMs: 30_000, what: 'the open\'s slot' }).catch(() => false);
+  const noticeCount = () => mainLines(logOf(started)).filter((l) => /^diagnostics: notice #\d+ /.test(l.message)).length;
+  for (let seen = noticeCount(), quietSince = Date.now(), until20 = Date.now() + 20_000; Date.now() - quietSince < 2_000 && Date.now() < until20;) {
+    await new Promise((r) => setTimeout(r, 250));
+    const now = noticeCount();
+    if (now !== seen) { seen = now; quietSince = Date.now(); }
+  }
+  const killRenderers = (renderers) => { for (const r of renderers) { try { process.kill(r.pid); } catch { /* gone already */ } } };
+  const reloadLines = () => mainLines(logOf(started)).filter((l) => /^main window \d+ reloaded: its renderer was lost \(killed, exit 1\)/.test(l.message));
+  const renderers = renderersOf(started.child.pid);
+  check('kill: the launch has a renderer to end', renderers.length >= 1, renderers.map((r) => r.pid).join(', ') || 'none');
+  killRenderers(renderers);
+  const goneLine = await until(() => mainLines(logOf(started)).find((l) => /^RENDERER GONE \(/.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 20_000, what: 'main\'s RENDERER GONE line' }).catch(() => null);
+  check('kill: `process.kill` on Windows is Chromium\'s `killed`, exit 1, written at error', goneLine?.level === 'error' && /^RENDERER GONE \(killed, exit 1\) for (file|app|http):/.test(goneLine.message), goneLine ? `${goneLine.level} ${goneLine.message}` : 'no line');
+  const reloadLine = await until(() => reloadLines()[0] ?? null, (l) => l !== null, { timeoutMs: 30_000, what: 'the reload after the killed renderer' }).catch(() => null);
+  const shellBack = await started.driver.waitFor('.app-shell', { timeoutMs: 60_000 }).then(() => true, () => false);
+  check('OQ-476: the killed renderer is reloaded once — main writes the reload, and the shell is drawn again', reloadLine !== null && shellBack, reloadLine ? `${reloadLine.level} ${reloadLine.message}` : 'no reload line');
+  const lossNotice = await until(() => started.driver.eval(READ_NOTICE).catch(() => null), (n) => n?.title === 'This window stopped and was reloaded', { timeoutMs: 15_000, what: 'the killed renderer\'s notice' }).catch(() => null);
+  check('OQ-476: the reloaded window shows the persistent error notice, no action, `killed` and exit code 1 in its detail (REQ-NOTIFY-003, REQ-NOTIFY-023)', lossNotice?.severity === 'error' && lossNotice.action === false && /The renderer process was gone: killed, exit code 1\./.test(lossNotice.detail ?? ''), JSON.stringify(lossNotice));
+  const reloaded = renderersOf(started.child.pid);
+  killRenderers(reloaded);
+  const left = await until(() => mainLines(logOf(started)).find((l) => /^main window \d+: its renderer is gone again \(killed, exit 1\) within 60000 ms of its reload; the window is left as it is, not reloaded again$/.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 30_000, what: 'the second kill within the bound' }).catch(() => null);
+  check('OQ-476: a second kill within the bound leaves the window as it is — main says so at warning', left?.level === 'warning', left ? `${left.level} ${left.message}` : `no line (renderers ${reloaded.map((r) => r.pid).join(', ') || 'none'})`);
+  const leftNotice = await until(() => mainLines(logOf(started)).find((l) => /^diagnostics: notice #\d+ error "This window stopped again and was not reloaded"/.test(l.message)) ?? null, (l) => l !== null, { timeoutMs: 15_000, what: 'the second kill\'s notice' }).catch(() => null);
+  check('OQ-476: …and the notice says the window was not reloaded (published and recorded; the window it would draw in is gone)', leftNotice !== null, leftNotice?.message.split('\n')[0] ?? 'no notice');
+  await new Promise((r) => setTimeout(r, 3_000));
+  check('OQ-476: one reload for two kills — no reload loop', reloadLines().length === 1, `${reloadLines().length} reload line(s)`);
+  const asked = await within(started.driver.quit(), 10_000);
+  let ended = await exitWithin(started.child, 30_000);
+  check('kill: the application\'s quit after the kills ends the process, exit 0', ended?.code === 0, ended === null ? `held (${asked === null ? 'unanswered' : 'answered'}, no exit in 30 s)` : JSON.stringify(ended));
+  if (ended === null) {
+    await within(started.driver.quit({ immediate: true }), 10_000);
+    ended = await exitWithin(started.child, 15_000);
+  }
+  started.driver.close();
+  if (ended === null) { await endLaunch(started.child); throw new Error(`kill: the launch did not exit on the immediate exit either:\n${logTail(logOf(started))}`); }
+  await drainGroup(started.child);
+  results.kill = { renderers: renderers.map((r) => r.pid), gone: goneLine?.message ?? null, reload: reloadLine?.message ?? null, notice: lossNotice, left: left?.message ?? null, leftNotice: leftNotice?.message.split('\n')[0] ?? null, exit: ended };
 }
 
 // ── 3 and 4. hang: the main window's renderer stopped (SIGSTOP), then the application's quit, or a person's close ──────

@@ -1734,6 +1734,9 @@ async function main(): Promise<void> {
     rendererLost: (window, loss, outcome, error) => {
       void notices.report(rendererLossNotice(loss, outcome, window, error));
     },
+    // OQ-476 (ruled 2026-11-04): `killed` is reloaded and told like a crash now, so a renderer lost once the quit has begun
+    // is left to the quit, as OQ-462 rules for a child (`QuitState.ending`).
+    quitting: () => quit.ending(),
     // REQ-TOOLS-063/064: a request queued behind a closing window's dialog is never shown there, and the run host no
     // longer bounds its wait, so main says so — REQ-TOOLS-058's presenter-error denial — rather than leave it to hang.
     // PD-ORCH-005 clause 9: a quit's closing windows answer nothing; the run host's shutdown withdraws the request.

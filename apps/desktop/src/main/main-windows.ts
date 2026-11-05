@@ -93,8 +93,19 @@ export type RendererLossOutcome = 'reloaded' | 'left' | 'reload-failed';
  * loop. Counted on the main-window timers port (`rotaris/no-bare-timers`).
  */
 export const RENDERER_RELOAD_BOUND_MS = 60_000;
-/** Electron's reasons that are no loss to recover from: an orderly end, and a renderer something ended on purpose. */
-export const RENDERER_ENDS_NOT_RELOADED: ReadonlySet<string> = new Set(['clean-exit', 'killed']);
+/**
+ * Electron's reasons that are no loss to recover from: an orderly end alone (OQ-476, ruled 2026-11-04 under the owner's
+ * delegation, R-072; REQ-NOTIFY-001, REQ-NOTIFY-003, REQ-STARTUP-161, ADR-0055). Every other reason, `killed` among them, is
+ * reloaded once within `RENDERER_RELOAD_BOUND_MS` and told.
+ *
+ * Falsified reason, kept beside its replacement (the standing rule on first executions): until 2026-11-05 this set was
+ * `['clean-exit', 'killed']`, read as "an orderly end, and a renderer something ended on purpose". The code cannot know a
+ * purpose: `killed` is Chromium's reading of `TerminateProcess` with an ordinary status on Windows — Task Manager's End task
+ * and Node's `process.kill` alike, exit 1, measured by `exit-trace-proof` on 2026-10-20 and 2026-11-04 — and of a `SIGKILL`
+ * on Linux, the out-of-memory killer's among them (not measured here); main never ends its own renderers. Such a window was
+ * left open and blank with nothing said.
+ */
+export const RENDERER_ENDS_NOT_RELOADED: ReadonlySet<string> = new Set(['clean-exit']);
 
 type WorkspaceGate =
   | { readonly ok: true }
@@ -137,6 +148,11 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
    * persistent notice here (`rendererLossNotice`, `renderer-loss-notice.ts`); `error` is the reload's failure, when it failed.
    */
   readonly rendererLost?: (window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>, loss: RendererLoss, outcome: RendererLossOutcome, error?: string) => void;
+  /**
+   * OQ-476: whether the application's quit has begun (`QuitState.ending`: the immediate exit, or the orderly shutdown). A
+   * renderer lost then is left to the quit — neither reloaded nor told — as OQ-462 rules for a child. Absent: never quitting.
+   */
+  readonly quitting?: () => boolean;
   /**
    * REQ-TOOLS-063/064: the requests still queued for a window's dialog when the window closes. Each was acknowledged as
    * queued (`approval.queued`), so the run host no longer bounds its wait: main must say it was never shown, or it hangs.
@@ -823,8 +839,9 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
   }
 
   /**
-   * R-091 (hardening §3.2 row 5; REQ-STARTUP-161, REQ-SHELL-020, ADR-0055): the window's renderer is gone. An orderly end or a
-   * renderer ended on purpose (`RENDERER_ENDS_NOT_RELOADED`) is left as it is. Any other loss is reloaded ONCE: a second loss
+   * R-091 (hardening §3.2 row 5; REQ-STARTUP-161, REQ-SHELL-020, ADR-0055): the window's renderer is gone. An orderly end
+   * (`RENDERER_ENDS_NOT_RELOADED`, `clean-exit` alone since OQ-476) is left as it is, and so is a loss once the application's
+   * quit has begun (`quitting`), which is the quit's. Any other loss, `killed` included, is reloaded ONCE: a second loss
    * within `RENDERER_RELOAD_BOUND_MS` of the reload leaves the window as it is, so a renderer that dies as it loads is not
    * reloaded in a loop. Either way the person is told by a persistent error notice naming the reason and the exit code. The
    * window, its workspace, the session it follows and its presenter registration are main's and outlive the renderer; nothing
@@ -838,7 +855,11 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     record.listening.clear();
     record.unresponsive = false;
     if (RENDERER_ENDS_NOT_RELOADED.has(loss.reason)) {
-      this.dependencies.log(`${label}: its renderer ended (${what}); an end that is no crash is not reloaded`);
+      this.dependencies.log(`${label}: its renderer ended (${what}); an orderly end is not reloaded`);
+      return;
+    }
+    if (this.dependencies.quitting?.() === true) {
+      this.dependencies.log(`${label}: its renderer is gone (${what}) while the application quits; left to the quit, not reloaded (OQ-476)`);
       return;
     }
     if (record.reloadBound !== null) {

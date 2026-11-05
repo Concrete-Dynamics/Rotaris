@@ -21,4 +21,13 @@ describe('rendererLossNotice', () => {
     expect(failed).toMatchObject({ severity: 'error', title: 'This window stopped and could not be reloaded' });
     expect(failed.detail).toContain('The reload failed: ERR_FAILED (-2) loading index.html.');
   });
+
+  it('OQ-476: a renderer `killed` (TerminateProcess, exit 1) is told as a crash is, the reason and the exit code in the detail', () => {
+    const killed = { reason: 'killed', exitCode: 1 };
+    const notice = rendererLossNotice(killed, 'reloaded', window);
+    expect(notice).toMatchObject({ severity: 'error', title: 'This window stopped and was reloaded', persistent: true });
+    expect(notice).not.toHaveProperty('action');
+    expect(notice.detail).toBe('The renderer process was gone: killed, exit code 1.\nWindow: main window 1, C:/work/p.\nThe window was reloaded once; a second loss within 60 s leaves it as it is.');
+    expect(rendererLossNotice(killed, 'left', window)).toMatchObject({ severity: 'error', title: 'This window stopped again and was not reloaded', persistent: true });
+  });
 });

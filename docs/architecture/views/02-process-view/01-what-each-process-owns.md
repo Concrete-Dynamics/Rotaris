@@ -55,8 +55,10 @@ its `not-ready` launches, and a start that answers nothing for its first seconds
 
 **How a main window's renderer is lost, and comes back** (since 2026-11-04, R-091, hardening §3.2 row 5; REQ-STARTUP-161,
 REQ-SHELL-020, ADR-0055). On `render-process-gone` the Electron adapter sheds the window's relay sink and forgets its terminal
-frames, as before, and `MainWindows` (`#rendererGone`) decides the rest: `clean-exit` and `killed` are left as they are
-(`RENDERER_ENDS_NOT_RELOADED`, OQ-476); any other reason reloads the window ONCE — the adapter's `reload` attaches the sink
+frames, as before, and `MainWindows` (`#rendererGone`) decides the rest: `clean-exit` alone is left as it is
+(`RENDERER_ENDS_NOT_RELOADED`; `killed` was too until OQ-476's ruling, built 2026-11-05, which reads it as `TerminateProcess`
+from outside, not a purpose), and so is a loss once the application's quit has begun (`quitting`, `QuitState.ending`);
+any other reason, `killed` included, reloads the window ONCE — the adapter's `reload` attaches the sink
 again and loads the page — and the reloaded renderer is handed the session the window followed as a held session focus
 (channel 16), since the window's workspace and follow are main's and outlive its renderer; a second loss within
 `RENDERER_RELOAD_BOUND_MS` (60 s, on the main-window timers port) leaves the window as it is. Each reload and each window left

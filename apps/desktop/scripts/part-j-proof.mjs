@@ -10,6 +10,7 @@ import { unpressedClicks } from './lib/capture-clicks.mjs';
 import { STEER_CLICKS, STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, STEER_TYPE, STEER_WHATS, steerPendingAtPause } from './lib/steer-rest.mjs';
 import { STEER_EARLY_CLICKS, STEER_EARLY_TYPE, SUBSCRIBE_HOLD_MS, steerEarlyReading } from './lib/steer-early.mjs';
 import { startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
+import { workspaceSuffix } from './lib/window-suffix.mjs';
 
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
@@ -421,7 +422,7 @@ const pairB = scenario('pair-b', []);
     // B, the idle window, on the other project; then B's own close, one of two windows: nothing is asked.
     await d.command({ kind: 'workspace.choose', newWindow: true });
     await until(windowsOf, (w) => w.length === 2, { timeoutMs: 30_000, what: 'two main windows' });
-    await d.useWindow('pair-b/workspace');
+    await d.useWindow(workspaceSuffix(['pair-b', 'workspace']));
     await d.command({ kind: 'window.close' });
     await d.useWindow();
     await until(windowsOf, (w) => w.length === 1, { timeoutMs: 15_000, what: "the idle window closed by its own close" });
@@ -434,7 +435,7 @@ const pairB = scenario('pair-b', []);
     // PD-GIT-001 (OQ-224): B's launch dialog, while A's project runs, is main's answer for B's own workspace — isolation
     // unchecked and enabled — and B's launch left unchecked runs on B's base tree. Before, main forced it into a worktree for
     // A's run (and B, no Git repository, could not start at all), while the dialog showed it unchecked.
-    await d.useWindow('pair-b/workspace');
+    await d.useWindow(workspaceSuffix(['pair-b', 'workspace']));
     await d.click('button', { text: 'New session' });
     await d.waitFor('[data-testid="start-session-dialog"]', { timeoutMs: 10_000 });
     reading.idleDialog = await d.eval("(() => { const box = document.querySelector('input[data-testid=\"start-session-isolation\"]'); const hint = document.querySelector('[data-testid=\"start-session-hint\"]'); return { checked: box?.checked ?? null, disabled: box?.disabled ?? null, hint: hint?.textContent ?? null }; })()");
@@ -449,7 +450,7 @@ const pairB = scenario('pair-b', []);
     // load, the row was caught there between its creation and its run's first status, and the launch was failed as unended.
     reading.idleLaunch = await until(pairSessionB, (row) => row !== undefined && !['idle', 'starting', 'running', 'waiting', 'background'].includes(row.execution_status), { timeoutMs: 60_000, what: "B's run ending" });
     if (reading.idleLaunch.worktree !== null && reading.idleLaunch.worktree !== '' || reading.idleLaunch.execution_status !== 'completed') throw new Error(`B's unchecked launch did not run on B's base tree to its end (PD-GIT-001): ${JSON.stringify(reading.idleLaunch)}`);
-    await d.useWindow('pair-a/workspace');
+    await d.useWindow(workspaceSuffix(['pair-a', 'workspace']));
     await d.command({ kind: 'window.close' });
     await d.useWindow();
     await until(windowsOf, (w) => w.length === 1 && String(w[0]?.workspace ?? '').includes('pair-b'), { timeoutMs: 30_000, what: "the running window closed after its confirmation, the idle one staying" });

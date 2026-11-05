@@ -63,3 +63,12 @@ but stale captures (`nocturne @ 1` 30 of 36 tested, `@ 1.5` 16 of 36 with a mini
 "Open Workspace", the StatusDot, the empty state's action slot) are in no failing list. The landing stopped with nothing
 pushed, the five suites before it green on the same head (directive 12, layout 28, mission, overview, retrospective 84). Recorded,
 not investigated; the suite was rerun alone on the same head and tree for the classification.
+
+**Observed again, 2026-11-05 (a landing's proof run on branch `claude/nice-leakey-2f1678`, head `346778d5` over `a10ad853`, the
+Overview audit's items 2 and 11; Windows 11 ARM64, Node 26.13.0, Electron 44.10.0; no other tree's Electron process on the desktop
+before the landing started).** The same suite ran green at every theme and scale on this branch's tree about an hour earlier.
+In `pnpm worktree:land`'s run, 14 of 15 cases passed; `high-contrast @ 1.25` failed its focus verdict with six of 37 tested stops at a
+ratio of exactly 1.00 — the Settings category rows Models, Personas, Runtime, Interface, Display and Skills — and no stale capture.
+The diff draws nothing in Settings and touches no focus handling or theme token. The landing stopped with nothing pushed, the gate
+(7,896 tests), `overview-proof` and `layout-proof` green on the same head. Recorded, not investigated; the suite was rerun alone on
+the same head and tree for the classification: 15 of 15 green, `high-contrast @ 1.25` among them.

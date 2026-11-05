@@ -21,7 +21,7 @@ reading and stopped at the worktree-ahead launch's `1440x902`, the known reading
 Of the other `readEval` suites, `artifacts-proof` was green; `plan-gate-proof` read its eval and stopped at the known
 `1000x682` (`docs/defects/plan-gate-proofs-window-reads-1000x682-where-1000x680-is-asked-on-windows.md`); `slash-proof`
 read its popup eval and stopped after it on a skill from the real home
-(`docs/defects/slash-proof-counts-a-skill-from-the-real-home-as-a-fixed-skill-command.md`). Not repaired here, and
+(`docs/archive/defects/slash-proof-counts-a-skill-from-the-real-home-as-a-fixed-skill-command.md`). Not repaired here, and
 exposed the same way should a step ever carry a secret-looking name: `lib/capture-clicks.mjs`'s `unpressedClicks`
 reads the click seam's echo verbatim, and other proofs carry their own copies of the probe parser; none of their steps
 carries such a name today, and none of the three suites' logs from this run holds a masked echo.

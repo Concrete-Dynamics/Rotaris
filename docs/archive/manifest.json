@@ -1049,7 +1049,7 @@
     "defects/retrospective-proofs-instruction-file-check-requires-a-machine-wide-base-windows-never-reads.md": "5f3971142e2f6a5693985146b2748ec282292649b13761b5cdf6443b54840014",
     "defects/role-gutter-truncation-rule-is-inert.md": "9e02cf6526c2e8f402b7c4be3ba95235d5d5281278795e4c13817c3861ee0f23",
     "defects/role-model-save-writes-null-and-breaks-the-load.md": "043556350c66ece71033f47528b44b36bf1d9103c53a5c385950c9750d3ddbf0",
-    "defects/rows-and-git-proofs-read-probe-and-eval-text-the-application-logs-redaction-pass-masks.md": "cffcc43cb42e96a890fc5c8781e7a9424671923ffcda756ff219576a99f369ef",
+    "defects/rows-and-git-proofs-read-probe-and-eval-text-the-application-logs-redaction-pass-masks.md": "d7044538bb54b5aa6505ea41ec0f55dafbdac9f7c27343cdf352d4e227c0ca5b",
     "defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md": "731d19f706437ca6eae38fa87a4e7829fe2f9d5889ae4135dd6e82a1efde8d23",
     "defects/search-transcript-and-the-reasoning-toggle-are-withheld-for-reasons-no-longer-true.md": "c90810c33e63775ec5638a5456edd01cd122421fd66f185d49a820e4aa13ef84",
     "defects/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md": "85683717b59d8c03d7c0435664c704a2462dada652b31bc3903c13acae4c97b1",

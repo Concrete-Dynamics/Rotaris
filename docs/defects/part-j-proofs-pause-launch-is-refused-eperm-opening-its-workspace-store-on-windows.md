@@ -18,6 +18,11 @@ or removal meets while another handle (an indexer, a scanner, a process of the l
 
 **Sighting, 2026-11-04 (hrda).** Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-corruptstore` (bundle hrda-corrupt-store-resolution, OQ-477) on `origin/main` `3bf27f00` plus its commits; one proof at a time after `pnpm build`, no other tree's Electron running, host CPU about 37 % at launch: the same red, "expected one workspace database below …\part-j-proof\pause\local; found 0". Recorded, not repaired.
 
+**Sighting, 2026-11-04 (hrda, bundle `hrda-accept1-6`).** Windows 11 ARM64, Node 26.13.0, `C:/dev/Rotaris-wt-hrda-a1-6` at
+`9da7ca9f` (`origin/main` `a10ad853` plus the bundle's first commit), after `pnpm build`; CPU 100 % at launch, `C:/dev/Rotaris-wt-accept`'s
+Electron running beside it: `pause.log` read `workspace.open refused: … EPERM, Permission denied: '…\pause\local\rotaris\data\workspaces\.d0bad552124955cb7eb6a61d8fbde837'`
+and the proof stopped at "found 0". Recorded, not repaired.
+
 ## Specs
 
 None named here: a workspace opens with its store, and whether a transient Windows file lock refusing that open is the

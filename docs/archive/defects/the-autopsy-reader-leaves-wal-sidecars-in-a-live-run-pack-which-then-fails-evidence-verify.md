@@ -41,3 +41,16 @@ forced off (in-place open always), the first and the fourth fail. Shown on the p
 `.live-run/runs/2026-11-04T18-23-14-351Z` without the sidecars verified (8 files), the reader ran over it, and it verified
 again with no file added; and on a store with a started session (`C:/dev/Rotaris/.live-run/runs/2026-10-31T21-12-56-701Z`'s
 `workspace.db` with a manifest written for it), the reader printed its autopsy and the directory verified after it.
+
+**Corrected at review, 2026-11-05.** The repair above rested on the reason "A live-run pack holds a checkpointed
+`workspace.db` with no sidecars", which is false: `live-run.mjs`'s `preserveStore` copies the store with whichever `-wal`
+and `-shm` stand beside the live store, and the manifest records them. On a copy of
+`C:/dev/Rotaris-wt-accept/.live-run/runs/2026-11-04T20-32-59-545Z` (121 files, its manifest naming `workspace.db-wal` at
+2,241,312 B and `workspace.db-shm`) `pnpm evidence verify` passed, the reader at the repair above found the `-shm` and
+opened the store in place, and verify then failed on "changed: workspace.db-shm": the open rebuilt the wal-index the pack
+recorded. The reader now reads a copy also where an evidence manifest (`evidence-manifest.json`) stands beside the store,
+since a finished run wrote the pack and nothing holds it open; the copy carries the `-wal`, whose committed frames are part
+of the store, and rebuilds the index itself. On the same pack the reader then printed the completed session the log holds
+and verify passed again. Pinned by a fifth case in `apps/desktop/scripts/lib/autopsy-store.test.ts` (a pack whose manifest
+records the `-wal` and `-shm`, copied from a store a writer holds open, still verifies after a read and its log's row is
+read), which fails at the repair above with that same "changed: workspace.db-shm".

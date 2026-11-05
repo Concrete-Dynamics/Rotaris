@@ -1,8 +1,9 @@
 /**
  * The autopsy reader opens the store it reads without leaving a file beside it (`autopsy-store.mjs`): a live-run pack
  * read by it still verifies against its evidence manifest (acceptance finding AF-23 of plan hrda, 2026-11-04,
- * `docs/archive/defects/the-autopsy-reader-leaves-wal-sidecars-in-a-live-run-pack-which-then-fails-evidence-verify.md`), and a
- * store a connection holds open is still read in place, its log's rows included.
+ * `docs/archive/defects/the-autopsy-reader-leaves-wal-sidecars-in-a-live-run-pack-which-then-fails-evidence-verify.md`), with or
+ * without the `-wal` and `-shm` the pack recorded, and a store a connection holds open is still read in place, its log's
+ * rows included.
  */
 import { copyFileSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -52,6 +53,36 @@ describe('the autopsy reader\'s store open (R-043, AF-23)', () => {
       expect.stringMatching(/^not in the manifest: workspace\.db-shm /),
       expect.stringMatching(/^not in the manifest: workspace\.db-wal /),
     ]);
+  });
+
+  it('a pack whose manifest records the store\'s -wal and -shm, as live-run copies a live store, still verifies after a read, its log\'s rows read', () => {
+    const live = mkdtempSync(join(tmpdir(), 'rotaris-autopsy-source-'));
+    dirs.push(live);
+    const source = join(live, 'workspace.db');
+    const writer = new Database(source);
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-autopsy-walpack-'));
+    dirs.push(dir);
+    const db = join(dir, 'workspace.db');
+    try {
+      writer.pragma('journal_mode = WAL');
+      writer.pragma('wal_autocheckpoint = 0');
+      writer.exec("CREATE TABLE sessions (session_id TEXT); INSERT INTO sessions VALUES ('in-log')");
+      // `live-run.mjs`'s `preserveStore`: the store and whichever sidecars stand, copied while the application holds them.
+      for (const suffix of ['', '-wal', '-shm']) copyFileSync(`${source}${suffix}`, `${db}${suffix}`);
+    } finally {
+      writer.close();
+    }
+    writeFileSync(join(dir, 'results.json'), '{}\n');
+    writeEvidenceManifest(dir, { kind: 'pack', label: 'af-23-wal', environment: {}, now: () => '2026-11-05T00:00:00.000Z' });
+    const files = ['evidence-manifest.json', 'results.json', 'workspace.db', 'workspace.db-shm', 'workspace.db-wal'];
+    expect(readdirSync(dir).sort()).toEqual(files);
+    expect(verifyEvidenceManifest(dir).problems).toEqual([]);
+    const store = openStoreForReading(db, Database);
+    expect(store.snapshot).toBe(true);
+    expect(store.db.prepare('SELECT session_id FROM sessions').all()).toEqual([{ session_id: 'in-log' }]);
+    store.close();
+    expect(readdirSync(dir).sort()).toEqual(files);
+    expect(verifyEvidenceManifest(dir)).toMatchObject({ ok: true, problems: [] });
   });
 
   it('a store a connection holds open is read in place, rows still in its log included, and keeps its sidecars', () => {

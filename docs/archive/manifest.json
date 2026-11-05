@@ -1109,7 +1109,7 @@
     "defects/the-autopsy-reader-counts-different-commands-as-one-retried-command.md": "3826e716b2c1da4da4b078402cf21c8488724e8a6187b28a5e48e7eb0649e99d",
     "defects/the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md": "61db1940553b232bed8b67cdf046239e1bd07533f0f19ed109e2caf70bab990b",
     "defects/the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md": "e649d82f825abcb914e45daa04c420ff69cea13ccabd1745ff94858b894c79b3",
-    "defects/the-autopsy-reader-leaves-wal-sidecars-in-a-live-run-pack-which-then-fails-evidence-verify.md": "315ee7d0a10a6b4e2424e2243aaf723b88ff85be38b57d397a9ea8ad82761064",
+    "defects/the-autopsy-reader-leaves-wal-sidecars-in-a-live-run-pack-which-then-fails-evidence-verify.md": "fda7da1c7c4b8201725ce0e14bd505fbd8aa96a3ff44a40bcd5971bd31e7d124",
     "defects/the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md": "a96ee3edcb6bb1d60f01174fae09098b789476085409955c6251f91e932520f6",
     "defects/the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md": "00b5320bc3034af46e73d6369ac050b6431e221bb930c590036116cb4368e90f",
     "defects/the-autopsy-reader-reads-two-agents-each-running-a-command-once-as-one-command-retried.md": "31f77f4a008df9e38dfe6c62ec0de8cbf44c4f4e71afe926aec7676603afc15e",

@@ -134,12 +134,15 @@ timing flake the repo's own note names (`docs/defects/the-ci-gate-on-githubs-win
 | `8c395725` | `42304821177` job `128191442588` / `42304829557` job `128191474072` | **pass** / **pass** | **refused** / **refused** |
 | `d3120f7b` | `42307333061` job `128199877177` / `42307343562` job `128199911518` | fail (`tools/worktree/land.test.ts`, the CI-runner flake) / **pass** | **refused** / **refused** |
 | `96820fc8` | `42309179792` job `128206091528` / `42309187548` job `128206116986` | fail (the terminal flake) / fail (the terminal flake) | **refused** / **refused** |
+| `1973d0ce` (head) | `42310411783` job `128210141058` / `42310420595` job `128210169322` | **pass** (18m33s) / fail (`apps/desktop/scripts/lib/settle-launch.test.ts`, a timing-bound flake) | **refused** / **refused** |
 
 The heads after `59241faf` carry **doc-only** commits — the dependency diff is frozen at `59241faf` and identical on
 every head below it, so the reading transfers across them; each is named with the run it was read from. **The `package`
-job refused on four independent runs, on both events, at the same step, with the same end state.** The two `gate`
-flakes seen on these heads everywhere are the two the repo already documents: `packages/agent-tools/src/terminal/terminal.test.ts`
-(host-dependent) and `tools/worktree/land.test.ts` (GitHub-runner timing); neither file is touched by this branch.
+job refused on six independent runs, on both events, at the same step, with the same end state.** The `gate` reds seen
+on these heads are timing-bound cases in files this branch does not touch — `packages/agent-tools/src/terminal/terminal.test.ts`
+(the host-dependent flake the repo documents) and `tools/worktree/land.test.ts`, `apps/desktop/scripts/lib/settle-launch.test.ts`
+(the Windows-runner timing flake the repo also documents, whose red test differs run to run). At least one `gate` job
+was **green** on each of `8c395725`, `d3120f7b` and `1973d0ce`, so the `package` refusal never rests on a red commit gate.
 
 The refusal itself, each time:
 

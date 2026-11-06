@@ -1,6 +1,6 @@
 # ADR-0056 — The build toolchain — The Electron pin moves to 44.3.0 — 2026-10-22 (R-081)
 
-Part 10 of 11 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
+Part 10 of 12 of [ADR-0056](../0056-the-build-toolchain.md), which indexes every part.
 
 ## The Electron pin moves to 44.3.0 — 2026-10-22 (R-081)
 

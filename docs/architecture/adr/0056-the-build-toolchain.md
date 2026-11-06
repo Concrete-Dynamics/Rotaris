@@ -29,3 +29,4 @@ one now names its part.
 | [09](0056-the-build-toolchain/09-fourth-execution-2026-09-11-the-seams-stop.md) | Fourth execution — 2026-09-11, the seams stop shipping, and the build is made to say so |
 | [10](0056-the-build-toolchain/10-the-electron-pin-moves-to-4430-2026-10-22-r-081.md) | The Electron pin moves to 44.3.0 — 2026-10-22 (R-081) |
 | [11](0056-the-build-toolchain/11-the-electron-pin-moves-to-44100-2026-11-04-r-091.md) | The Electron pin moves to 44.10.0 — 2026-11-04 (R-091) |
+| [12](0056-the-build-toolchain/12-the-electron-pin-moves-to-4510-2026-11-06-r-091.md) | The Electron pin moves to 45.1.0 — 2026-11-06 (R-091) |

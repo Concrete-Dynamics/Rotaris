@@ -39,16 +39,19 @@ updates:
       # as the `dispatcher` (packages/agent-tools/src/tools/direct-fetch.ts,
       # OQ-37). Under 8.12.3 the gate measured the real refusal
       # `InvalidArgumentError: invalid onRequestStart method`
-      # (undici/lib/core/util.js:597) plus five `fetch.test.ts` cases reading
-      # `network_error` where `http_error`/`egress_redirect_denied` is expected
-      # (job 126841519958, head 24ad497a, 2026-11-04). The `Dispatcher`
+      # (undici/lib/core/util.js:597), and five `fetch.test.ts` cases went red
+      # where the product's own words are expected — three reading
+      # `network_error` for `http_error`/`egress_redirect_denied`, two for a
+      # moved body or a `seen` list (job 126841519958, head 24ad497a,
+      # 2026-11-04). The `Dispatcher`
       # contract this code is written against is 7's, not 8's, so the bump is
       # incompatible with the product as built rather than unverified — the
       # reason #54 is closed and this entry stops the weekly re-proposal.
       # Re-evaluate when the dispatcher use is rewritten for 8's contract, in a
       # branch of its own, with direct-fetch and fetch suites green under 8:
-      # then delete this entry. See
-      # docs/architecture/dependency-alerts/2026-11-06-lane-electron-45-1.md §5.
+      # then delete this entry. The refused bump is read in full in that pull
+      # request's close comment (#54) and in
+      # docs/architecture/dependency-alerts/2026-11-06-lane-undici-ignore.md.
       - dependency-name: 'undici'
         update-types: ['version-update:semver-major']
     # A dependency joins the first group whose pattern matches it, so the

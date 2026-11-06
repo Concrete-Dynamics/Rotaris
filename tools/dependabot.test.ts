@@ -12,7 +12,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parse } from 'yaml';
+import { parse, isMap, parseDocument, type YAMLMap, type YAMLSeq } from 'yaml';
 
 const root = join(import.meta.dirname, '..');
 
@@ -71,16 +71,20 @@ describe('.github/dependabot.yml', () => {
    */
   it('ignores undici majors and nothing else, and records why in the file', () => {
     const npm = ecosystem('npm');
-    expect(npm.ignore?.map((entry) => entry['dependency-name'])).toEqual(['undici']);
-    for (const entry of npm.ignore ?? []) {
-      expect(entry['update-types'], entry['dependency-name']).toEqual(['version-update:semver-major']);
-    }
+    // The WHOLE entry, not a projection of it: a projection passes a second key (`versions`, say) that holds
+    // patches and minors too, which is the opposite of what the entry is for.
+    expect(npm.ignore).toEqual([{ 'dependency-name': 'undici', 'update-types': ['version-update:semver-major'] }]);
     expect(ecosystem('github-actions').ignore ?? []).toEqual([]);
     // The entry is in the file with its evidence and the condition that lifts it: the reason lives beside the
     // dependency it names, not in a pull request's description, which the next reader of the file does not open.
-    const text = readFileSync(join(root, '.github', 'dependabot.yml'), 'utf8');
-    const entry = text.slice(text.indexOf('ignore:'), text.indexOf('groups:') > text.indexOf('ignore:') ? text.indexOf('groups:') : undefined);
-    for (const cited of ['direct-fetch.ts', 'OQ-37', 'onRequestStart', 'Re-evaluate when']) expect(entry).toContain(cited);
+    // Sliced from the comment attached to the parsed `ignore` node itself, so a decoy comment elsewhere in the
+    // file — or a second `ignore:` in another ecosystem — cannot satisfy the check.
+    const doc = parseDocument(readFileSync(join(root, '.github', 'dependabot.yml'), 'utf8'));
+    const updates = doc.get('updates', true) as YAMLSeq;
+    const npmEntry = updates.items.find((u) => isMap(u) && u.get('package-ecosystem') === 'npm') as YAMLMap;
+    const ignore = npmEntry.get('ignore', true) as { commentBefore?: string | null } | undefined;
+    const reason = ignore?.commentBefore ?? '';
+    for (const cited of ['direct-fetch.ts', 'OQ-37', 'onRequestStart', 'Re-evaluate when']) expect(reason).toContain(cited);
   });
 
   it('moves every @vitest/ package the root manifest names in the same group as vitest, whose exact version it peers on', () => {

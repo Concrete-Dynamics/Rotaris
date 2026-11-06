@@ -132,7 +132,14 @@ timing flake the repo's own note names (`docs/defects/the-ci-gate-on-githubs-win
 | --- | --- | --- | --- |
 | `59241faf` | `42301968967` job `128181729710` / `42301980575` job `128181769344` | fail (the terminal flake) / fail | **refused** / **refused** |
 | `8c395725` | `42304821177` job `128191442588` / `42304829557` job `128191474072` | **pass** / **pass** | **refused** / **refused** |
-| `d3120f7b` (handover) | `42307333061` job `128199877177` / `42307343562` job `128199911518` | fail (`tools/worktree/land.test.ts`, the CI-runner flake) / **pass** | **refused** / **refused** |
+| `d3120f7b` | `42307333061` job `128199877177` / `42307343562` job `128199911518` | fail (`tools/worktree/land.test.ts`, the CI-runner flake) / **pass** | **refused** / **refused** |
+| `96820fc8` | `42309179792` job `128206091528` / `42309187548` job `128206116986` | fail (the terminal flake) / fail (the terminal flake) | **refused** / **refused** |
+
+The heads after `59241faf` carry **doc-only** commits — the dependency diff is frozen at `59241faf` and identical on
+every head below it, so the reading transfers across them; each is named with the run it was read from. **The `package`
+job refused on four independent runs, on both events, at the same step, with the same end state.** The two `gate`
+flakes seen on these heads everywhere are the two the repo already documents: `packages/agent-tools/src/terminal/terminal.test.ts`
+(host-dependent) and `tools/worktree/land.test.ts` (GitHub-runner timing); neither file is touched by this branch.
 
 The refusal itself, each time:
 

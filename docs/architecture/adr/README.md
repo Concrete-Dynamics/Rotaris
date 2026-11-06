@@ -3,7 +3,7 @@
 The decisions this system is built from: **one record per decision**, numbered `0001` upward. That folder is the
 record of *why* — what the system must do is `docs/spec/`, what the owner decided instead is `docs/product/`.
 
-**66 records on 2026-11-05**, no gap in the numbering. **The list of the decisions is not in this file** — it is §7
+**67 records on 2026-11-06**, no gap in the numbering. **The list of the decisions is not in this file** — it is §7
 "Index of decisions" of [the architecture README](../README/13-7-index-of-decisions.md), one row per record with the
 measurement each rests on beside it, and that is the page to cite a decision from. This page answers the two
 questions a reader has *after* they have the number: what a record's file looks like, and where the rest of it went.
@@ -29,7 +29,8 @@ questions a reader has *after* they have the number: what a record's file looks 
 ## The records §7's table does not carry
 
 §7's table stops at **ADR-0058**, and [`../README.md`](../README.md)'s "Decisions" bullet still counts "58 records",
-while this folder holds **66**; the eight below are accepted and are cited from ADRs, requirements and requests.
+while this folder holds **67**; the nine below are cited from ADRs, requirements and requests — the eight before
+ADR-0067 are accepted, and ADR-0067 is a `proposed` draft.
 They are listed here so nothing in the folder is reachable only by listing it — and they belong in §7's table, which
 is where a reader looks first ([the note](../../defects/the-architecture-readmes-decision-index-and-record-count-lag-the-adr-folder.md)).
 
@@ -43,6 +44,7 @@ is where a reader looks first ([the note](../../defects/the-architecture-readmes
 | [0064](0064-the-project-initialization-registry.md) | Project initialization: a task registry in `config`, one marker writer in main, the work delegated | accepted, first execution recorded | 6 |
 | [0065](0065-the-retrospective-pass.md) | The retrospective: a second analysis pass, user-started, workspace-wide | accepted, awaiting its first execution | 13 |
 | [0066](0066-the-linux-artifact-is-built-on-a-developer-host.md) | The Linux artifact is built on a developer host, and accepted against stated criteria | accepted (the owner, 2026-10-26), awaiting its first execution | — |
+| [0067](0067-the-loopback-mcp-server-for-external-agents.md) | The product opens one loopback MCP surface, off by default, that starts and watches runs and nothing else | proposed | — |
 
 **Five things the numbering itself carries**, each stated in §7 as well: the records are numbered in dependency
 order, not in the order they were written; **two break that rule deliberately** (ADR-0057, found missing after the

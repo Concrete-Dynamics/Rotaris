@@ -271,7 +271,9 @@ describe('the real tree', () => {
     const script = readFileSync(join(APP, 'scripts', 'package.mjs'), 'utf8');
     const noticesStep = script.indexOf("exitOf('tools/notices/generate.mjs')");
     const idStep = script.indexOf("exitOf('tools/build-id/write.mjs')");
-    const builderStep = script.indexOf('step(`${STEPS.builder} --win');
+    // The flag is the platform module's now (ADR-0066): the step is entered through `host.builderFlag`, which is
+    // `--win` on a Windows host and `--linux` on a Linux one. Pin the step's own name prefix and the placeholder.
+    const builderStep = script.indexOf('step(`${STEPS.builder} ${host.builderFlag}');
     expect(noticesStep).toBeGreaterThan(0);
     expect(idStep).toBeGreaterThan(noticesStep);
     expect(builderStep).toBeGreaterThan(idStep);

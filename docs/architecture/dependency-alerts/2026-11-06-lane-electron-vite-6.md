@@ -121,34 +121,18 @@ Commands run on this tree (Linux x86_64, Node 26.12.1, pnpm 11.9.0), at write ti
 
 ## 5. CI — the `package` job, and the prediction discharged
 
-Read on three heads: the first head `59241faf`, the head `8c395725` (two doc-only commits later; the dependency diff
-identical), and the handover head `d3120f7b`. The `package` job **refused on every one, on both events, at the same
-step**. `8c395725` is the cleanest reading, because its **`gate` jobs pass on both events** (14m49s and 18m8s) — the
-refusal stands alone, against a green commit gate. On the handover head the pull_request `gate` also passed (13m43s);
-the push `gate` went red on `tools/worktree/land.test.ts` — a test this branch does not touch, and the GitHub-runner
-timing flake the repo's own note names (`docs/defects/the-ci-gate-on-githubs-windows-latest-runner-goes-red-on-a-different-timing-bound-test-at-most-pushes-to-main.md`).
+**The dependency diff is frozen at `59241faf` and identical on every head below it** (the commits after it touch only
+this record and the alerts README). The `package` job (windows-x64, development) has been read on six runs — push and
+pull_request, across the heads `59241faf`, `8c395725`, `d3120f7b`, `96820fc8`, `1973d0ce` — and **refused on every one,
+at the same step, with the same end state.** One reading stands for all of them:
 
-| Head | Runs (push / pull_request) | `gate` | `package` |
-| --- | --- | --- | --- |
-| `59241faf` | `42301968967` job `128181729710` / `42301980575` job `128181769344` | fail (the terminal flake) / fail | **refused** / **refused** |
-| `8c395725` | `42304821177` job `128191442588` / `42304829557` job `128191474072` | **pass** / **pass** | **refused** / **refused** |
-| `d3120f7b` | `42307333061` job `128199877177` / `42307343562` job `128199911518` | fail (`tools/worktree/land.test.ts`, the CI-runner flake) / **pass** | **refused** / **refused** |
-| `96820fc8` | `42309179792` job `128206091528` / `42309187548` job `128206116986` | fail (the terminal flake) / fail (the terminal flake) | **refused** / **refused** |
-| `1973d0ce` (head) | `42310411783` job `128210141058` / `42310420595` job `128210169322` | **pass** (18m33s) / fail (`apps/desktop/scripts/lib/settle-launch.test.ts`, a timing-bound flake) | **refused** / **refused** |
-
-The heads after `59241faf` carry **doc-only** commits — the dependency diff is frozen at `59241faf` and identical on
-every head below it, so the reading transfers across them; each is named with the run it was read from. **The `package`
-job refused on six independent runs, on both events, at the same step, with the same end state.** The `gate` reds seen
-on these heads are timing-bound cases in files this branch does not touch — `packages/agent-tools/src/terminal/terminal.test.ts`
-(the host-dependent flake the repo documents) and `tools/worktree/land.test.ts`, `apps/desktop/scripts/lib/settle-launch.test.ts`
-(the Windows-runner timing flake the repo also documents, whose red test differs run to run). At least one `gate` job
-was **green** on each of `8c395725`, `d3120f7b` and `1973d0ce`, so the `package` refusal never rests on a red commit gate.
-
-The refusal itself, each time:
+**run `42301980575` (pull_request), job `128181769344`, started `2026-11-06T22:05:37Z`, completed
+`2026-11-06T22:12:05Z`** — the first head `59241faf`. Its own artifact, `windows-x64-package-evidence`, re-read here
+rather than taken from the log:
 
 | Reading | Value |
 | --- | --- |
-| refusal | `error: pnpm package refused: expected one session, found 0` / `[package] REFUSED — expected one session, found 0 (286890 ms)` (artifact of run `42301980575`; the reading is identical on `42304829557`) |
+| refusal | `error: pnpm package refused: expected one session, found 0` / `[package] REFUSED — expected one session, found 0 (286890 ms)` |
 | the failing step | `the packaged app opens a store and runs a terminal call` → `expected one session, found 0` |
 | every step before it | **ok** — code-intelligence bundle, manifest, notices, build id, `electron-vite build (seams compiled out)`, the seam check, the artifact names, `electron-builder --win`, the fuses, the portable, the icon |
 | host-side setup in `load-proof.app.log` | complete: `run host hello` received (550 ms), workspace opened (`0 sessions, 0 rows`), `workspace.ack`, MCP setup `completed` |
@@ -156,9 +140,16 @@ The refusal itself, each time:
 | `POST …/chat/completions` (model requests) | **0** |
 | `load-proof.png` | **1024×720, exactly one colour** `(18,18,18)` — whole-image `R=G=B=18`, the pure-black signature |
 
-The app opens its store, settles every host-side step, **paints nothing, starts no run, and exits 0**: #58's signature,
-reproduced on a branch where `electron` never moved. **`electron-vite` 6 is therefore *sufficient on its own* to refuse
-ADR-0056's rule 4, at Electron 44.10.0** — the failure is not the pin's, and the pin was never its mover.
+The other five runs reproduce the refusal and those readings; two are worth naming for what they add. On
+`8c395725` (runs `42304821177` / `42304829557`, jobs `128191442588` / `128191474072`, `2026-11-06T22:27Z`) **both `gate`
+jobs passed** (14m49s, 18m8s), so the refusal stands with the commit gate green on both events. The other `gate` reds seen
+on these heads are timing-bound cases in files this branch does not touch — `packages/agent-tools/src/terminal/terminal.test.ts`
+(the host-dependent flake the repo documents) and `tools/worktree/land.test.ts`, `apps/desktop/scripts/lib/settle-launch.test.ts`
+(the Windows-runner timing flake it also documents, whose red test differs run to run).
+
+**The prediction of §3 held in the shape it was stated.** The packaged app opens its store, settles every host-side
+step, paints nothing, starts no run, exits 0 — #58's signature, on a branch where `electron` never moved. **The rule-4
+failure is `electron-vite` 6's, not the Electron pin's.**
 
 **What the CI artifact does not itself capture:** the run records the end state (no session row, no model request, a
 black PNG) and not the intermediate throw. The chain the end state comes from — the v6 preload's `require("zod")`, the

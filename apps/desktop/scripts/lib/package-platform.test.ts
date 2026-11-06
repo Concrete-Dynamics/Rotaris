@@ -41,8 +41,8 @@ describe('ADR-0066; REQ-STARTUP-024/025 host selection and configuration', () =>
     }
   });
   it.each([['darwin', 'arm64', /IC-3 binds the macOS artifact/], ['linux', 'arm64', /only win32\/x64 and linux\/x64/], ['win32', 'arm64', /only win32\/x64 and linux\/x64/]])('refuses %s/%s before any pipeline step', (platform, arch, reason) => {
-    expect(() => packagePlatform(platform as string, arch as string)).toThrow(reason as RegExp);
-    expect(() => packagePlatform(platform as string, arch as string)).toThrow(`${platform}/${arch}`);
+    expect(() => packagePlatform(platform, arch)).toThrow(reason);
+    expect(() => packagePlatform(platform, arch)).toThrow(`${platform}/${arch}`);
     const source = readFileSync(join(APP, 'scripts', 'package.mjs'), 'utf8');
     const selection = source.indexOf('host = packagePlatform(process.platform, process.arch)');
     expect(selection).toBeGreaterThan(0);

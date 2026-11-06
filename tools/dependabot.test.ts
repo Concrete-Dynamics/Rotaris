@@ -24,6 +24,7 @@ type Update = {
   'open-pull-requests-limit'?: number;
   labels?: string[];
   groups?: Record<string, { patterns: string[] }>;
+  ignore?: { 'dependency-name': string; 'update-types'?: string[] }[];
 };
 const config = parse(readFileSync(join(root, '.github', 'dependabot.yml'), 'utf8')) as { version: number; updates: Update[] };
 const ecosystem = (name: string): Update => {
@@ -56,6 +57,30 @@ describe('.github/dependabot.yml', () => {
     expect(groups['electron']?.patterns).toEqual(['electron', 'electron-builder', 'electron-vite']);
     expect(groups['dev-tooling']?.patterns).toEqual(['eslint*', 'typescript*', 'vitest*', '@vitest/*', '@types/*']);
     expect(groups['production']?.patterns).toEqual(['*']);
+  });
+
+  /*
+   * One entry, and one that says why. Dependabot re-proposes a version it still sees as behind on every weekly
+   * run, so closing #54 (`undici` 7.30.1 → 8.12.3) does not by itself stop 8 coming back as a fresh pull request
+   * — this list does. It is deliberately narrow: `undici` was measured incompatible with the product as built
+   * (the `Dispatcher` given to `fetch` in `packages/agent-tools/src/tools/direct-fetch.ts` is 7's contract, and
+   * 8.12.3 refuses it with `InvalidArgumentError: invalid onRequestStart method`), so only that one dependency
+   * is named, and only its majors are held: 7's patches and minors are not in question. The list is derived
+   * from the file rather than written out here, so an entry added without its reason is caught by the comment
+   * check below at the same time it is added.
+   */
+  it('ignores undici majors and nothing else, and records why in the file', () => {
+    const npm = ecosystem('npm');
+    expect(npm.ignore?.map((entry) => entry['dependency-name'])).toEqual(['undici']);
+    for (const entry of npm.ignore ?? []) {
+      expect(entry['update-types'], entry['dependency-name']).toEqual(['version-update:semver-major']);
+    }
+    expect(ecosystem('github-actions').ignore ?? []).toEqual([]);
+    // The entry is in the file with its evidence and the condition that lifts it: the reason lives beside the
+    // dependency it names, not in a pull request's description, which the next reader of the file does not open.
+    const text = readFileSync(join(root, '.github', 'dependabot.yml'), 'utf8');
+    const entry = text.slice(text.indexOf('ignore:'), text.indexOf('groups:') > text.indexOf('ignore:') ? text.indexOf('groups:') : undefined);
+    for (const cited of ['direct-fetch.ts', 'OQ-37', 'onRequestStart', 'Re-evaluate when']) expect(entry).toContain(cited);
   });
 
   it('moves every @vitest/ package the root manifest names in the same group as vitest, whose exact version it peers on', () => {

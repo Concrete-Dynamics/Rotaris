@@ -1,13 +1,8 @@
 /**
- * The macOS and Linux packaging configuration, PREPARED AND NOT WIRED (R-080, 2026-10-22; ADR-0054, "Linux and macOS
- * configuration prepared").
- *
- * IC-3 binds every Linux and macOS release artifact, and `PD-STARTUP-001` keeps both platform keys out of a release, so
- * nothing builds from this module: `pnpm package` runs `electron-builder --win` with `electron-builder.yml` alone and
- * never imports this file, and `scripts/build-hooks.cjs` refuses every platform but `win32` in `beforeBuild` and
- * `afterPack` ("IC-3: no <platform> artifact may be produced until the build hosts exist"). What this module holds is
- * what a build host would run with, read against the requirements here rather than invented on the day a host exists,
- * and held by `platform-targets.test.ts`:
+ * Linux packaging is wired through package-platform.mjs (ADR-0066, 2026-11-06); macOS stays prepared only.
+ * IC-3 binds macOS alone. PD-STARTUP-001 still excludes both keys from publication.
+ * The original R-080 preparation is now used by pnpm package on linux/x64; the Windows path is unchanged.
+ * These configurations are held against their requirements by platform-targets.test.ts:
  *
  *   macos-arm64   REQ-STARTUP-014 (identifier `ai.rotaris.app`), REQ-STARTUP-022 (a compressed disk image, native ARM64
  *                 only, its volume `Rotaris <version>`, an /Applications link), REQ-STARTUP-023 (no code signature, no
@@ -19,9 +14,9 @@
  * electron-builder's `${version}` is the version normalised (`0.1.0rc1` → `0.1.0-rc1`); so is the disk image's volume
  * name, which REQ-STARTUP-022 makes carry the version.
  *
- * WHAT IS NOT DECIDED HERE (the host's, IC-3): whether the static runtime launches on a host that never had
+ * WHAT IS NOT DECIDED HERE (Linux: ADR-0066 AC-1..AC-4; macOS: IC-3): whether the static runtime launches on a host that never had
  * `libfuse.so.2` (spike 12); the two artifacts' first paint (spike 17); ADR-0056's load proof on a macOS and a Linux
- * runner, which `build-hooks.cjs` builds for win32 alone; the instance claim on both. OQ-450 asks what REQ-STARTUP-014's
+ * runner, whose Linux wiring still awaits execution; the instance claim on both. OQ-450 asks what REQ-STARTUP-014's
  * lower-case bundle name and REQ-STARTUP-023's "no code signature" mean for an ARM64 bundle. The icon is O-4's.
  *
  * Plain ESM, like `artifact-names.mjs`, importing the naming authority by path.
@@ -70,7 +65,7 @@ export const PREPARED_TARGETS = Object.freeze({
       // runtime that needs no `libfuse.so.2`. Its default, "0.0.0", is the legacy FUSE 2 runtime, and with it the tool
       // writes `--no-sandbox` into the desktop entry's Exec line unconditionally (`AppImageTarget.js`); with "1.0.3" it
       // writes none, and the image's AppRun adds the switch only where `unshare -Ur true` fails — the behaviour ESC-11
-      // chose. 26.x labels "1.0.3" a beta; spike 12 measures it on a host that never had the legacy library (IC-3).
+      // chose. 26.x labels "1.0.3" a beta; spike 12 measures it on a host that never had the legacy library (ADR-0066 AC-1).
       toolsets: { appimage: '1.0.3' },
       linux: {
         target: [{ target: 'AppImage', arch: ['x64'] }],

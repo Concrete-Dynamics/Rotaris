@@ -1,9 +1,7 @@
-# ADR-0054 / ADR-0056 — packaging. Windows only until IC-3 is discharged:
-# the macOS and Linux targets are DELIBERATELY absent, not defaulted, because
-# an artifact for a platform nobody has measured is shipping on an untested
-# platform (implementation-conditions.md, IC-3).
-# The two configurations a macOS and a Linux host would merge over this file are PREPARED, not wired, in
-# scripts/lib/platform-targets.mjs (R-080, ADR-0054 "Linux and macOS configuration prepared"); nothing here reads them.
+# ADR-0054 / ADR-0056 / ADR-0066 — Windows base configuration.
+# pnpm package merges scripts/lib/platform-targets.mjs for linux/x64 at build time;
+# no Linux section is duplicated here. macOS stays prepared only and refused under IC-3.
+# Linux acceptance (AC-1..AC-4) and publication remain owed; wiring is not acceptance.
 #
 # Artifact names come from tools/release-naming (REQ-STARTUP-031) and are
 # composed nowhere else — and NOT from electron-builder's `${version}` macro, which
@@ -12,7 +10,8 @@
 # file carries no `artifactName`: `pnpm package` (scripts/package.mjs) renders the
 # name from the DECLARED version and writes this file with `win.artifactName` and
 # `nsis.artifactName` set to it as release/electron-builder.package.yml, which is
-# what electron-builder runs with; afterPack refuses a configuration without them
+# what electron-builder runs with on Windows. Linux writes linux/appImage names to
+# release/electron-builder.package.linux.yml through preparedConfiguration; afterPack refuses a configuration without them
 # or with any other name, and artifactBuildCompleted refuses a produced file by any
 # other name (scripts/build-hooks.cjs, `checkNaming`; scripts/lib/artifact-names.mjs).
 # The installer's OWN version metadata (VERSION define → DisplayVersion,

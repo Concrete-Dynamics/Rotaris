@@ -9,7 +9,7 @@ import { dmgVolumeName, PREPARED_TARGETS, preparedConfiguration } from './platfo
 
 /**
  * The prepared macOS and Linux configuration (R-080; ADR-0054, "Linux and macOS configuration prepared"), read against
- * the requirements it answers — and held inert: nothing that builds reads it, and the hooks refuse both platforms (IC-3).
+ * the requirements it answers; Linux is wired by ADR-0066, macOS remains refused under IC-3.
  */
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -20,16 +20,19 @@ const yaml = builderRequire('js-yaml') as { load: (text: string) => Record<strin
 const base = yaml.load(readFileSync(join(APP, 'electron-builder.yml'), 'utf8'));
 type Section = Record<string, unknown>;
 
-describe('inert under IC-3 and PD-STARTUP-001', () => {
+describe('Linux build wiring; macOS IC-3 and publication PD-STARTUP-001 unchanged', () => {
   it('prepares exactly the two platform keys the directive leaves out, and not windows-x64', () => {
     expect(Object.keys(PREPARED_TARGETS).sort()).toEqual(PLATFORM_KEYS.filter((k) => k !== 'windows-x64').sort());
     expect(() => preparedConfiguration(base, 'windows-x64', '0.1.0')).toThrow(/has no prepared configuration/);
   });
 
-  it('nothing that builds imports it: `pnpm package` builds --win from electron-builder.yml alone', () => {
+  it('package reaches the platform module; Linux configuration is merged at build time', () => {
     const pkg = readFileSync(join(APP, 'scripts', 'package.mjs'), 'utf8');
-    expect(pkg).not.toMatch(/platform-targets/);
-    expect(pkg).toMatch(/'electron-builder', '--win'/);
+    expect(pkg).toMatch(/from '.\/lib\/package-platform.mjs'/);
+    const platform = readFileSync(join(APP, 'scripts', 'lib', 'package-platform.mjs'), 'utf8');
+    expect(platform).toMatch(/import \{ preparedConfiguration \} from '.\/platform-targets.mjs'/);
+    expect(platform).toContain("builderFlag: '--win'");
+    expect(pkg).toContain("'electron-builder', host.builderFlag");
     expect(base['mac']).toBeUndefined();
     expect(base['linux']).toBeUndefined();
   });
@@ -42,11 +45,11 @@ describe('inert under IC-3 and PD-STARTUP-001', () => {
     expect(PUBLISHED_PLATFORMS).toEqual(['windows-x64']);
   });
 
-  it('the hooks a prepared build would still run refuse both platforms before anything is rebuilt or packed', async () => {
+  it('the hooks keep the exact macOS refusal before anything is rebuilt or packed', async () => {
     const hooks = require(join(APP, 'scripts', 'build-hooks.cjs')) as Record<'beforeBuild' | 'afterPack', (ctx: unknown) => Promise<unknown>>;
-    for (const name of ['darwin', 'linux']) {
-      await expect(hooks.beforeBuild({ electronPlatformName: name, arch: 'x64', appDir: APP, electronVersion: '44.1.1' })).rejects.toThrow(`IC-3: no ${name} artifact may be produced`);
-      await expect(hooks.afterPack({ electronPlatformName: name, arch: 'x64', appOutDir: join(APP, 'release', 'never') })).rejects.toThrow(`IC-3: no ${name} artifact may be produced`);
+    for (const name of ['darwin']) {
+      await expect(hooks.beforeBuild({ electronPlatformName: name, arch: 'x64', appDir: APP, electronVersion: '44.1.1' })).rejects.toThrow(`IC-3: no ${name} artifact may be produced until the build hosts exist (implementation-conditions.md)`);
+      await expect(hooks.afterPack({ electronPlatformName: name, arch: 'x64', appOutDir: join(APP, 'release', 'never') })).rejects.toThrow(`IC-3: no ${name} artifact may be produced until the build hosts exist (implementation-conditions.md)`);
     }
     for (const platform of Object.keys(PREPARED_TARGETS)) {
       const config = preparedConfiguration(base, platform, '0.1.0');

@@ -107,9 +107,9 @@ interpreter, the distribution and `uv` (by version and sha256; never shipped), a
 (`pnpm code-intel:lock` writes them; the marker's hash covers them); `bundle.mjs` builds the tree
 (`pnpm code-intel:bundle`, idempotent on the marker; the build fetches, the product never does) for one target
 architecture — since OQ-400 (2026-10-15) `--target=<platform>-<arch>`, the host by default (since 2026-10-16, OQ-401's
-reading, `win32-x64` on a Windows ARM64 host, `defaultTargetKey`) and `win32-x64` from `package.mjs`, the interpreter installed by its full uv key and the target's architecture in the marker and its hash
+reading, `win32-x64` on a Windows ARM64 host, `defaultTargetKey`) and `win32-x64` on Windows x64 or `linux-x64` on Linux x64 from `package.mjs` (ADR-0066), the interpreter installed by its full uv key and the target's architecture in the marker and its hash
 (`target.mjs`), a Windows ARM64 host using the pinned `win32-x64` uv; `build-hooks.cjs`'s `afterPack` refuses a packaged
-interpreter whose PE machine field is not the artifact's (`peArchOf`, `checkRuntime`); `manifest.mjs`
+interpreter whose PE (Windows) or ELF (Linux) machine field is not the artifact's (`peArchOf`, `elfArchOf`, `checkRuntime`); `manifest.mjs`
 starts the bundled runtime, reads `tools/list` and its version and the extensions it indexes, and **generates**
 `packages/config/src/mcp/code-intelligence-manifest.generated.ts` — REQ-MCP-116's binding manifest, committed so
 `pnpm check` needs no Python, regenerated and diffed by `pnpm package` (`--check`). Since `PD-MCP-001` (2026-10-06) the
@@ -135,7 +135,7 @@ is the typed reader every consumer goes through (a test greps the tree for a run
 contains-code walk (an edge it already had). Main gains its first module, `main/sentinel.ts` (the pre-bootstrap
 branch: `platform` for the per-user directory, nothing else), imported before anything that touches `electron`.
 `electron-builder.yml` carries the tree as `extraResources` outside the asar (a Python tree cannot run from an
-archive); `build-hooks.cjs`'s `afterPack` asserts the interpreter answers from inside `win-unpacked`.
+archive); `build-hooks.cjs`'s `afterPack` asserts the interpreter answers from inside `win-unpacked` or `linux-unpacked`.
 
 ### The notices generator (2026-09-27; `first-release-plan.md` §4.3, ADR-0054)
 

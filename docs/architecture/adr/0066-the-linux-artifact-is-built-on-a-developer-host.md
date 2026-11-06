@@ -1,6 +1,7 @@
 # ADR-0066 — The Linux artifact is built on a developer host, and accepted against stated criteria
 
 - **Status:** accepted (the owner, 2026-10-26); awaiting its first execution
+- **Wiring note (2026-11-06):** implemented in source; no artifact built, still awaiting its first execution.
 - **Date:** 2026-10-26
 - **Origin:** [R-087](../../product/requests.md#r-087), the owner's ruling that no implementation condition may prevent a
   Linux build: "das IC, also Implementation Conditions sollten keine Linux-Builds verhindern, weil du, Philipp, willst
@@ -91,6 +92,13 @@ switch rendering the configuration through `preparedConfiguration`, and the hook
 binaries and a Linux launch — written on the Linux host that can run them, which is AC-3. The third change, the
 release matrix and `PUBLISHED_PLATFORMS`, is publication and waits on point 4.
 
+*2026-11-06 — point 5 above is kept as written. The Linux wiring is now implemented: host selection and
+`preparedConfiguration`, hooks' Linux rules 1a and 4, AppImage naming, ELF runtime validation and Linux fuse
+readback. Windows-only steps are explicitly not applicable in the report and terminal; no Linux first-paint or
+packaged-session claim is made. Scoped unit tests are wiring evidence only. AC-3's execution on the owner's Linux
+host, including both D10 counterfactuals, remains owed, as do AC-1, AC-2 and AC-4. Nothing was built or accepted;
+the status remains awaiting its first execution. Publication and macOS remain unchanged.*
+
 ## Consequences
 
 1. `CLAUDE.md`'s bound, `docs/architecture/README.md`'s status line and every current-word statement that "no Linux
@@ -106,6 +114,9 @@ release matrix and `PUBLISHED_PLATFORMS`, is publication and waits on point 4.
    still meets them.
 
 ## Revisit if
+
+*2026-11-06: wiring is implemented; the next evidence owed is AC-3 on the owner's Linux host and AC-1, AC-2, AC-4.
+The triggers below remain unchanged.*
 
 - AC-1 fails: ESC-11's option 1 (the pre-release line) is taken and the configuration changes before anything is
   published.

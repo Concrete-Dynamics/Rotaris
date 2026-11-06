@@ -46,3 +46,9 @@ key it no longer holds. The owner narrowed IC-3 to macOS, and
 first change above, plus the hooks' rules 1a and 4 written for Linux, is that build's wiring (ADR-0066 point 5, AC-3).
 The second and third are publication and still wait on a directive revising `PD-STARTUP-001`. IC-3 items 1 to 4 above
 are, for Linux, ADR-0066's AC-1 to AC-4.*
+
+*Note 2026-11-06, keeping both earlier notes: the Linux build wiring is now implemented under ADR-0066 —
+`package.mjs` reaches `preparedConfiguration`, rules 1a and 4 have Linux forms, naming reads AppImage keys and
+the runtime rule reads ELF. Windows-only steps are recorded not applicable. No artifact was built; AC-3's real
+build and D10 counterfactuals on the owner's Linux host remain owed alongside AC-1, AC-2 and AC-4. macOS remains
+IC-3's; the release matrix and `PUBLISHED_PLATFORMS` still publish Windows alone.*

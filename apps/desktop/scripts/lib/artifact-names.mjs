@@ -23,6 +23,7 @@
  * Plain ESM, loaded by `package.mjs` (import), by `build-hooks.cjs` (dynamic import) and by the tests. The naming module
  * is imported by path, as the hook imports it: one file of erasable syntax that plain Node loads without a bundler.
  */
+import { artifactPlatform } from './artifact-platform.cjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { artifactName, parseReleaseVersion } from '../../../../tools/release-naming/src/index.ts';
@@ -43,9 +44,10 @@ export function declaredProductVersion(appDir) {
   return parseReleaseVersion(value).version;
 }
 
-/** The Windows artifact electron-builder produces on this configuration, named by the authority (REQ-STARTUP-031). */
-export function packagingArtifactNames(version) {
-  return { setup: artifactName(parseReleaseVersion(version).version, 'setup') };
+/** The platform artifact electron-builder produces on this configuration, named by the authority (REQ-STARTUP-031). */
+export function packagingArtifactNames(version, platform = 'win32') {
+  const { kind } = artifactPlatform(platform);
+  return { [kind]: artifactName(parseReleaseVersion(version).version, kind) };
 }
 
 /**
@@ -93,6 +95,7 @@ export function namedConfigurationText(ymlText, names, yaml) {
  * than the authority (REQ-STARTUP-031, REQ-STARTUP-152). Returns the problem, or null.
  */
 export function producedNameProblem(fileBasename, names) {
-  if (fileBasename === names.setup || fileBasename === `${names.setup}.blockmap`) return null;
-  return `REQ-STARTUP-031: electron-builder produced "${fileBasename}"; the declared version renders "${names.setup}" (a prerelease's suffix carries no hyphen)`;
+  const expected = names.appimage ?? names.setup;
+  if (fileBasename === expected || (names.setup && fileBasename === `${names.setup}.blockmap`)) return null;
+  return `REQ-STARTUP-031: electron-builder produced "${fileBasename}"; the declared version renders "${expected}" (a prerelease's suffix carries no hyphen)`;
 }

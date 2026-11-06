@@ -121,14 +121,18 @@ Commands run on this tree (Linux x86_64, Node 26.12.1, pnpm 11.9.0), at write ti
 
 ## 5. CI — the `package` job, and the prediction discharged
 
-Read on two heads: the first head `59241faf`, and the final head `8c395725` (two doc-only commits later; the dependency
-diff is identical). Both refused, on both events, at the same step. The final head is the cleaner reading, because its
-**`gate` jobs pass on both events** (14m49s and 18m8s) — so the refusal stands alone, against a green commit gate.
+Read on three heads: the first head `59241faf`, the head `8c395725` (two doc-only commits later; the dependency diff
+identical), and the handover head `d3120f7b`. The `package` job **refused on every one, on both events, at the same
+step**. `8c395725` is the cleanest reading, because its **`gate` jobs pass on both events** (14m49s and 18m8s) — the
+refusal stands alone, against a green commit gate. On the handover head the pull_request `gate` also passed (13m43s);
+the push `gate` went red on `tools/worktree/land.test.ts` — a test this branch does not touch, and the GitHub-runner
+timing flake the repo's own note names (`docs/defects/the-ci-gate-on-githubs-windows-latest-runner-goes-red-on-a-different-timing-bound-test-at-most-pushes-to-main.md`).
 
 | Head | Runs (push / pull_request) | `gate` | `package` |
 | --- | --- | --- | --- |
 | `59241faf` | `42301968967` job `128181729710` / `42301980575` job `128181769344` | fail (the terminal flake) / fail | **refused** / **refused** |
 | `8c395725` | `42304821177` job `128191442588` / `42304829557` job `128191474072` | **pass** / **pass** | **refused** / **refused** |
+| `d3120f7b` (handover) | `42307333061` job `128199877177` / `42307343562` job `128199911518` | fail (`tools/worktree/land.test.ts`, the CI-runner flake) / **pass** | **refused** / **refused** |
 
 The refusal itself, each time:
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // `pnpm worktree:new <branch>` — a fresh worktree beside the primary checkout, on a new branch cut from
 // origin/main, its dependencies and electron's dist/ installed, and `pnpm preflight` run. It wraps the block
-// `AGENTS.md` ("The agent workflow") spells by hand; the rules that section states still bind.
+// `docs/clean-room/agent-workflow.md` ("Work on a temporary branch in a temporary worktree") spells by hand;
+// the rules that section states still bind.
 import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { isMainModule, oneLine, seconds } from './exec.mjs';
@@ -11,7 +12,7 @@ import { defaultDeps, measured } from './steps.mjs';
 export const USAGE = `pnpm worktree:new <branch> [--dir=<path>]
 
 A fresh worktree beside the primary checkout, on a new branch cut from origin/main, and the setup
-AGENTS.md ("The agent workflow") spells by hand:
+docs/clean-room/agent-workflow.md ("Work on a temporary branch in a temporary worktree") spells by hand:
 
   git fetch origin main
   git worktree add -b <branch> <dir> origin/main

@@ -33,7 +33,8 @@ afterEach(() => {
 });
 
 /**
- * The handoff `AGENTS.md` ("The handoff") fixes: one heading, then exactly the four labelled lines, in
+ * The handoff `docs/clean-room/agent-workflow.md` ("The handoff") fixes: one heading, then exactly the four
+ * labelled lines, in
  * order — and the block closes the run, so nothing follows it. Reads a recorded run's log.
  */
 function expectHandoff(log: string[]): void {

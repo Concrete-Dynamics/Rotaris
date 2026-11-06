@@ -91,34 +91,68 @@ ran here. `pnpm build` and the package path also need a display. Rule 4's run fo
 against 45.1.0 and load-proved under the packaged binary, plus the packaged launch — is **CI's `package` job on the
 landed head**, reported with the pull request, not here. The pull request's ACKNOWLEDGES this in its own text.
 
-**A red on this pull request that is not this change.** The pull request's earlier CI carried the disable error at
-§1 (the gate) **and** a `package` job refusal ("the packaged app opens a store and runs a terminal call" →
-`expected one session, found 0`), which was read in the artifact. That refusal is **not** Electron-45-specific:
-Dependabot's `production` pull request #54 — which keeps `electron` at **44.10.0** — refused the _same_ step on one run
-(41905781129) and passed the same step on the other (41905796288), **on the same head `f1442691`**, with no code
-between them. So the packaged-launch refusal is the flaky step, and
-[the note written from the pull request on 2026-11-04](../../defects/the-packaged-app-under-electron-45-opens-no-session-in-the-package-jobs-launch.md)
-was written from two refusals and could not know that; the note now carries this observation, dated (§4).
+**`package` (rule 4) refused on this branch too, both runs — and it is not a flake.** The `package` job refused on
+both of this branch's runs (42271282568, 42271350580) at the same step, `the packaged app opens a store and runs a
+terminal call` → `expected one session, found 0`, and so did Dependabot's #49 on both of its runs. **Status: blocked
+on rule 4** — the packaged launch does not run a session under 45.1.0 (see §4 for the measurement and the earlier
+claim this file made and now retracts).
 
-## 4. What the two refusals of 2026-11-04 were
+## 4. The packaged launch under 45.1.0 refuses, and the 2026-11-04 note's "flake" reading does not survive
 
-The pull request's `package` job refused on both of its runs (41905629985, 41905640745), and the note above was
-written from those two. Read now against the passing `package` job of #54 on the same Electron line, the refusal is
-**the flaky probe, not the major**:
+**This file earlier read the refusal as the step's flake rather than the major. That reading is retracted: it rested on
+a misattribution, and the corrected tally points the other way.**
 
-| Pull request | Electron | Run | The packaged-launch step |
-| --- | --- | --- | --- |
-| #49 head `eacc569d` | 45.1.0 | 41905629985 | refused — `expected one session, found 0` |
-| #49 head `eacc569d` | 45.1.0 | 41905640745 | refused — `expected one session, found 0` |
-| #54 head `f1442691` | **44.10.0** | 41905781129 | **refused — same message** |
-| #54 head `f1442691` | **44.10.0** | 41905796288 | **passed** |
+What was measured, head by head (every `package` job I read; `expected one session, found 0` is the refusal):
 
-The same step on the same commit of a pull request that never moves Electron went red once and green once. In both
-refusals the app log ends `run host exited (0), an orderly end` and `main process exiting with status 0` with `0
-sessions` written, while the passing runs list the model requests and `run … ended completed (tasks_complete)` — so the
-step is a race the probe reads differently on two runs, and the fix belongs to the probe/harness, not to 45.1.0. It is
-recorded here so that a later reader does not re-derive "45 is refused" from the 2026-11-04 pair, and appended to the
-note as its dated observation rather than rewriting what it said.
+| Head | Electron | Run | Event | `package` |
+| --- | --- | --- | --- | --- |
+| #49 `eacc569d` | **45.1.0** | 41905629985 | push | refused |
+| #49 `eacc569d` | **45.1.0** | 41905640745 | pull_request | refused |
+| **#58 `d24c2fa9`** | **45.1.0** | 42271282568 | push | **refused** |
+| **#58 `d24c2fa9`** | **45.1.0** | 42271350580 | pull_request | **refused** |
+| #52 `f1442691` | 44.10.0 | 41905781129 | push | refused |
+| #52 `f1442691` | 44.10.0 | 41905796288 | pull_request | **passed** |
+| #54 `24ad497a` | 44.10.0 | 41906236287 | push | **passed** |
+| #54 `24ad497a` | 44.10.0 | 41906246618 | pull_request | **passed** |
+| main `b6501e8e` | 44.10.0 | 42252399585 | push | **passed** (2026-11-06, this day) |
+
+**Electron 45.1.0: 4 refusals of 4. Electron 44.10.0: 1 refusal of 5.** The single 44.10.0 refusal is the same-head
+red/green pair this file leaned on — but the head is **#52's** (`f1442691`, the `typescript` pull request), **not
+#54's** as an earlier version of this section said, and #52 never moves Electron either. So the step is not perfectly
+deterministic (one 44.10.0 run refused where four passed), but **every 45.1.0 run refused, on two independent
+branches, while main under 44.10.0 passed the same day** — the correlation is with the Electron line, and the used
+evidence does not support calling it a flake.
+
+**The failure signature, from the evidence artifact** (`windows-x64-package-evidence`, runs 42271282568 and
+42271350580, cross-checked against #49's 41905629985/41905640745, which share it):
+
+| | under 44.10.0 (main `b6501e8e`, passing) | under 45.1.0 (#58 `d24c2fa9`, refusing) |
+| --- | --- | --- |
+| `run host hello` | present | present |
+| `run host: session <uuid> started; row 0 recorded` | **present** | **absent** |
+| `run host: model request POST …/chat/completions` | **5** | **0** |
+| `run … ended completed (tasks_complete)` | present | absent |
+| tail | `0 sessions` not written; the run is recorded | `… exited (0), an orderly end` with **0 sessions** written |
+
+So under 45.1.0 **the packaged app never starts the run at all** — the store opens, the MCP setup completes, and then
+the launch ends with no session row, where the same build under 44.10.0 starts a session and issues its model requests
+seconds in. That is the shape ADR-0056's rule 4 exists to catch, and it is a **behavioural difference in the packaged
+app under the new major**, not a read race in the probe.
+
+**What remains unestablished, stated plainly.** *Why* 45.1.0 refuses is **not** diagnosed here: the artifact shows the
+run never starts, not which of the several candidate causes it is (a Chromium 156 rendering change, a scripted-seam
+(`ROTARIS_CAPTURE_PROMPT`) path that no longer fires, a changed Node/Chromium behaviour on the way to the composer, a
+startup refusal the log does not name). This host cannot run the packaged launch to bisect (no display), so the
+diagnosis is owed to a Windows host or to CI with an instrumented probe. What is established is the difference itself
+and its correlation with the major.
+
+**Consequence for the branch.** Rule 4 is **not discharged** for 45.1.0, so `main`'s rule — a green gate on the
+landed head and the proofs the plan names — is not met, and this branch reports **blocked on rule 4** rather than
+ready. The esbuild fix in §1 stands on its own (the gate's lint error is gone, verified locally), but a lint fix does
+not carry a major whose packaged launch does not run. The dated observation appended to
+[the note](../../defects/the-packaged-app-under-electron-45-opens-no-session-in-the-package-jobs-launch.md) was
+written to say the 2026-11-04 refusals were the probe's flake; it has been corrected there too, and the note's original
+reading — that 45's packaged launch opens no session — is **re-instated as the standing one**.
 
 ## 5. The two pull requests beside this one (owner's ruling, 2026-11-06)
 

@@ -35,6 +35,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
+const { artifactPlatform } = require('./lib/artifact-platform.cjs');
+
 const APP_DIR = path.resolve(__dirname, '..');
 const REPO_DIR = path.resolve(APP_DIR, '..', '..');
 const RELEASE_DIR = path.join(APP_DIR, 'release');
@@ -43,15 +45,16 @@ const REPORT = path.join(RELEASE_DIR, 'load-proof.afterpack.json');
 const ARCH_NAMES = { 0: 'ia32', 1: 'x64', 2: 'armv7l', 3: 'arm64', 4: 'universal' };
 
 /** The set rule 1 is written over. A third binding joins here and inherits every rule. */
+// node-pty/binding.gyp: pty on Linux; conpty targets only on Windows, spawn-helper only on macOS.
 const BINDINGS = [
   {
     name: 'better-sqlite3',
-    built: { win32: ['build/Release/better_sqlite3.node'] },
+    built: { win32: ['build/Release/better_sqlite3.node'], linux: ['build/Release/better_sqlite3.node'] },
     prebuilds: (platform, arch) => [`prebuilds/${platform}-${arch}.node`],
   },
   {
     name: 'node-pty',
-    built: { win32: ['build/Release/pty.node', 'build/Release/conpty.node', 'build/Release/conpty_console_list.node'] },
+    built: { win32: ['build/Release/pty.node', 'build/Release/conpty.node', 'build/Release/conpty_console_list.node'], linux: ['build/Release/pty.node'] },
     prebuilds: (platform, arch) => [`prebuilds/${platform}-${arch}`],
   },
 ];
@@ -96,8 +99,8 @@ function bindingCopies(name) {
 }
 
 function platformOf(ctx) {
-  const p = ctx.electronPlatformName ?? (ctx.platform && ctx.platform.nodeName);
-  if (p !== 'win32') throw new Error(`IC-3: no ${p} artifact may be produced until the build hosts exist (implementation-conditions.md)`);
+  const p = ctx.electronPlatformName ?? (ctx.platform && ctx.platform.nodeName) ?? ctx.packager?.platform?.nodeName;
+  if (p !== 'win32' && p !== 'linux') throw new Error(`IC-3: no ${p} artifact may be produced until the build hosts exist (implementation-conditions.md)`);
   return p;
 }
 
@@ -204,7 +207,8 @@ function checkRule4(probe, rule1a, unpackedRoot, marker) {
   if (rep.versions.electron !== marker.electronVersion) throw new Error(`rule 4: the probe ran under Electron ${rep.versions.electron}, the build pins ${marker.electronVersion}`);
   if (!rep.ok) throw new Error(`rule 4: a binding did not load or did not work under the packaged Electron:\n${rep.errors.join('\n')}`);
   // Electron hands dlopen the extended-length spelling of an unpacked path; the comparison ignores the prefix.
-  const norm = (p) => path.resolve(String(p).replace(/^\\\\\?\\/, '')).toLowerCase();
+  const paths = marker.platform === 'linux' ? path.posix : path.win32;
+  const norm = (p) => marker.platform === 'linux' ? paths.resolve(String(p)) : paths.resolve(String(p).replace(/^\\\\\?\\/, '')).toLowerCase();
   const expected = new Map();
   for (const b of rule1a) for (const f of b.files) expected.set(norm(f.packaged), f);
   const opened = rep.dlopen.map((p) => ({ path: p, expected: expected.get(norm(p)) ?? null }));
@@ -217,7 +221,7 @@ function checkRule4(probe, rule1a, unpackedRoot, marker) {
     if (loaded.length === 0) throw new Error(`rule 4 (${b.name}): the probe loaded none of ${needed.join(', ')} — the binding's loader resolved somewhere else or nothing at all`);
     b.loaded = loaded;
   }
-  if (!rep.dlopen.every((p) => norm(p).includes(norm(unpackedRoot)))) throw new Error(`rule 3/4: a binding loaded from outside ${unpackedRoot}: ${rep.dlopen.join(', ')}`);
+  if (!rep.dlopen.every((p) => norm(p).startsWith(`${norm(unpackedRoot)}${paths.sep}`))) throw new Error(`rule 3/4: a binding loaded from outside ${unpackedRoot}: ${rep.dlopen.join(', ')}`);
   return { versions: rep.versions, sqlite: rep.sqlite, journal: rep.journal, pty: rep.pty, dlopen: rep.dlopen };
 }
 
@@ -236,9 +240,9 @@ async function artifactNames() {
  * itself (`configuredArtifactNames`). No configured name at all is refused too: `pnpm package` supplies them, and a bare
  * `electron-builder --win` would fall back to electron-builder's own pattern.
  */
-async function checkNaming(declared, renderedNames) {
+async function checkNaming(declared, renderedNames, platform = 'win32') {
   const { packagingArtifactNames } = await artifactNames();
-  const expected = packagingArtifactNames(declared).setup;
+  const expected = packagingArtifactNames(declared, platform)[artifactPlatform(platform).kind];
   if (renderedNames.length === 0) throw new Error(`REQ-STARTUP-031: no artifactName is configured, so electron-builder would name the installer by its own pattern rather than "${expected}"; pnpm package (scripts/package.mjs) supplies the names from the declared version`);
   for (const rendered of renderedNames) {
     if (rendered !== expected) throw new Error(`REQ-STARTUP-031: electron-builder is configured to produce "${rendered}", the naming module renders "${expected}" from the declared version ${declared}${/-(?:a|b|rc)\d/.test(rendered) ? ' (the version reached electron-builder hyphenated: its \${version} macro is the normalised value, not the declared text)' : ''}`);
@@ -253,8 +257,9 @@ async function checkNaming(declared, renderedNames) {
  */
 function configuredArtifactNames(ctx) {
   const config = ctx.packager.config;
-  const patterns = [config.win && config.win.artifactName, config.nsis && config.nsis.artifactName].filter((p) => typeof p === 'string' && p !== '');
-  return patterns.map((pattern) => ctx.packager.expandMacro(pattern, 'x64', { ext: 'exe' }));
+  const naming = artifactPlatform(ctx.electronPlatformName ?? ctx.packager.platform?.nodeName ?? 'win32');
+  const patterns = naming.keys.map((key) => config[key]?.artifactName).filter((p) => typeof p === 'string' && p !== '');
+  return patterns.map((pattern) => ctx.packager.expandMacro(pattern, 'x64', { ext: naming.ext }));
 }
 
 /**
@@ -264,7 +269,7 @@ function configuredArtifactNames(ctx) {
  */
 async function artifactBuildCompleted(ctx) {
   const { declaredProductVersion, packagingArtifactNames, producedNameProblem } = await artifactNames();
-  const names = packagingArtifactNames(declaredProductVersion(APP_DIR));
+  const names = packagingArtifactNames(declaredProductVersion(APP_DIR), ctx.packager?.platform?.nodeName ?? ctx.electronPlatformName ?? 'win32');
   const problem = producedNameProblem(path.basename(ctx.file), names);
   if (problem !== null) {
     console.error(`[ic6] BUILD REFUSED — ${problem}`);
@@ -292,6 +297,17 @@ function peArchOf(bytes) {
   return { machine, arch: PE_MACHINES[machine] || `machine 0x${machine.toString(16).padStart(4, '0')}` };
 }
 
+/** ADR-0066: validate an ELF header before reading its little-endian machine field. */
+function elfArchOf(bytes) {
+  if (bytes.length < 4 || !bytes.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) throw new Error('not an ELF image (no ELF magic)');
+  if (bytes.length < 20) throw new Error('truncated ELF header before e_machine');
+  if (![1, 2].includes(bytes[4]) || bytes[5] !== 1 || bytes[6] !== 1) throw new Error('malformed ELF identification (class, little-endian encoding or version)');
+  if (bytes.length < (bytes[4] === 2 ? 64 : 52)) throw new Error('truncated ELF header');
+  const machine = bytes.readUInt16LE(18);
+  if ([0x3e, 0xb7].includes(machine) && bytes[4] !== 2) throw new Error('malformed ELF class for a 64-bit machine');
+  return { machine, arch: ({ 0x3e: 'x64', 0xb7: 'arm64' })[machine] || `machine 0x${machine.toString(16).padStart(4, '0')}` };
+}
+
 /**
  * ADR-0035 / ADR-0054 (Part T): the bundled code-intelligence runtime is in the artifact and ANSWERS from inside it — the
  * interpreter under win-unpacked/resources/code-intelligence/runtime reports its version and the distribution's, both equal
@@ -303,19 +319,19 @@ function peArchOf(bytes) {
  * (`docs/archive/defects/the-bundled-interpreter-can-be-built-for-another-architecture-than-the-artifact.md`). `spawn` is
  * `spawnSync` but in the tests.
  */
-function checkRuntime(appOutDir, arch, spawn = spawnSync) {
+function checkRuntime(appOutDir, arch, spawn = spawnSync, platform = 'win32') {
   const pins = JSON.parse(readFileSync(path.join(APP_DIR, 'scripts', 'code-intelligence', 'pins.json'), 'utf8'));
   const root = path.join(appOutDir, 'resources', 'code-intelligence');
-  const python = path.join(root, 'runtime', 'python.exe');
+  const python = path.join(root, 'runtime', ...(platform === 'linux' ? ['bin', 'python3'] : ['python.exe']));
   if (!existsSync(python)) throw new Error(`runtime: no interpreter at ${python} — extraResources did not carry the bundle`);
   let pe;
-  try { pe = peArchOf(readFileSync(python)); } catch (e) { throw new Error(`runtime: ${python} is no interpreter this artifact can run: ${e.message}`); }
+  try { pe = (platform === 'linux' ? elfArchOf : peArchOf)(readFileSync(python)); } catch (e) { throw new Error(`runtime: ${python} is no interpreter this artifact can run: ${e.message}`); }
   if (pe.arch !== arch) throw new Error(`runtime: the packaged interpreter is built for ${pe.arch}, the artifact for ${arch}`);
   const marker = JSON.parse(readFileSync(path.join(root, 'bundle.json'), 'utf8'));
   if (marker.targetArch !== arch) {
     throw new Error(typeof marker.targetArch === 'string'
       ? `runtime: bundle.json says the bundle was built for ${marker.targetArch}, the artifact is ${arch}`
-      : `runtime: bundle.json says the bundle was built for no recorded architecture, the artifact is ${arch} — a bundle from before OQ-400; rebuild it with pnpm code-intel:bundle --target=win32-${arch}`);
+      : `runtime: bundle.json says the bundle was built for no recorded architecture, the artifact is ${arch} — a bundle from before OQ-400; rebuild it with pnpm code-intel:bundle --target=${platform}-${arch}`);
   }
   if (marker.version !== pins.version || marker.python !== pins.python) throw new Error(`runtime: the artifact's bundle.json pins ${marker.distribution} ${marker.version} on Python ${marker.python}; pins.json says ${pins.version} on ${pins.python}`);
   const r = spawn(python, ['-I', '-c', 'import importlib.metadata as m, sys, json; print(json.dumps({"python": sys.version.split()[0], "version": m.version("serena-agent"), "distribution": "serena-agent"}))'], { encoding: 'utf8', windowsHide: true, timeout: 60_000, env: { PYTHONUTF8: '1', SYSTEMROOT: process.env['SYSTEMROOT'] || 'C:\\Windows' } });
@@ -362,7 +378,7 @@ async function afterPack(ctx) {
   const appOutDir = ctx.appOutDir;
   const unpackedRoot = path.join(appOutDir, 'resources', 'app.asar.unpacked', 'node_modules');
   const asarPath = path.join(appOutDir, 'resources', 'app.asar');
-  const exe = path.join(appOutDir, `${ctx.packager.appInfo.productFilename}.exe`);
+  const exe = path.join(appOutDir, platform === 'linux' ? ctx.packager.executableName : `${ctx.packager.appInfo.productFilename}.exe`);
   const report = { at: new Date().toISOString(), appOutDir, marker, counterfactual: marker.counterfactual, rule1a: [], rule4: null, naming: null, failed: null };
   const fail = (e) => {
     report.failed = String(e && e.message ? e.message : e);
@@ -376,10 +392,10 @@ async function afterPack(ctx) {
     for (const b of BINDINGS) report.rule1a.push(checkRule1a(b, platform, arch, marker, unpackedRoot, asarEntries));
     console.log(`[ic6] rule 1a: ${report.rule1a.map((b) => `${b.name} ${b.files.map((f) => `${path.basename(f.rel)} ${f.size} B`).join(', ')}`).join('; ')} — all newer than the marker, byte-identical in the artifact, no prebuild`);
     const { declaredProductVersion } = await artifactNames();
-    report.naming = { normalised: ctx.packager.appInfo.version, ...(await checkNaming(declaredProductVersion(APP_DIR), configuredArtifactNames(ctx))) };
+    report.naming = { normalised: ctx.packager.appInfo.version, ...(await checkNaming(declaredProductVersion(APP_DIR), configuredArtifactNames(ctx), platform)) };
     console.log(`[ic6] naming: declared ${report.naming.declared}, electron-builder's normalised ${report.naming.normalised}; configured to produce ${report.naming.rendered.join(', ')}`);
-    report.runtime = checkRuntime(appOutDir, arch);
-    console.log(`[ic6] runtime: ${report.runtime.python} (PE machine ${report.runtime.machine}, the artifact's) answered Python ${report.runtime.answers.python}, ${report.runtime.answers.distribution} ${report.runtime.answers.version} from inside the artifact (${report.runtime.files} files, ${(report.runtime.bytes / 1048576).toFixed(1)} MiB)`);
+    report.runtime = checkRuntime(appOutDir, arch, spawnSync, platform);
+    console.log(`[ic6] runtime: ${report.runtime.python} (${platform === 'linux' ? 'ELF' : 'PE'} machine ${report.runtime.machine}, the artifact's) answered Python ${report.runtime.answers.python}, ${report.runtime.answers.distribution} ${report.runtime.answers.version} from inside the artifact (${report.runtime.files} files, ${(report.runtime.bytes / 1048576).toFixed(1)} MiB)`);
     report.assets = await checkAssets(appOutDir);
     console.log(`[ic6] assets: build-id.txt ${report.assets.buildId}; THIRD-PARTY-LICENSES.txt ${report.assets.notices}; the tool server's licence text ${report.assets.notices === 'carried' ? 'once, in the notices file' : 'not carried (a development package)'}`);
     const probe = runProbe(exe, appOutDir);
@@ -475,7 +491,9 @@ function unpackedDirFor(arch) {
  * The result joins afterPack's report.
  */
 async function artifactBuildStarted(ctx) {
-  const exe = path.join(path.dirname(ctx.file), unpackedDirFor(ctx.arch), 'Rotaris.exe');
+  // ArtifactBuildStarted has no packager (AppImageTarget emits only target, file and arch).
+  const linux = ctx.targetPresentableName === 'AppImage';
+  const exe = path.join(path.dirname(ctx.file), linux ? 'linux-unpacked' : unpackedDirFor(ctx.arch), linux ? 'rotaris' : 'Rotaris.exe');
   let fuses;
   try {
     fuses = await checkFuses(exe);
@@ -491,4 +509,4 @@ async function artifactBuildStarted(ctx) {
   }
 }
 
-module.exports = { beforeBuild, afterPack, artifactBuildStarted, artifactBuildCompleted, FUSES, fuseConfiguration, fuseProblems, checkFuses, unpackedDirFor, peArchOf, checkRuntime, BINDINGS, checkRule1a, checkRule4, checkNaming, configuredArtifactNames, checkAssets, MARKER, REPORT };
+module.exports = { platformOf, elfArchOf, beforeBuild, afterPack, artifactBuildStarted, artifactBuildCompleted, FUSES, fuseConfiguration, fuseProblems, checkFuses, unpackedDirFor, peArchOf, checkRuntime, BINDINGS, checkRule1a, checkRule4, checkNaming, configuredArtifactNames, checkAssets, MARKER, REPORT };

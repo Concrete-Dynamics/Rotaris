@@ -55,7 +55,9 @@ function probePty() {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('the pseudo-terminal did not exit within 15 s')), 15_000);
     let data = '';
-    const p = pty.spawn(process.env['ComSpec'] || 'cmd.exe', ['/c', 'echo probe-ok'], { cols: 80, rows: 24, cwd: os.tmpdir(), env: process.env });
+    const shell = process.platform === 'linux' ? process.env['SHELL'] || '/bin/sh' : process.env['ComSpec'] || 'cmd.exe';
+    const args = process.platform === 'linux' ? ['-c', 'echo probe-ok'] : ['/c', 'echo probe-ok'];
+    const p = pty.spawn(shell, args, { cols: 80, rows: 24, cwd: os.tmpdir(), env: process.env });
     p.onData((d) => { data += d; });
     p.onExit(({ exitCode }) => { clearTimeout(timer); resolve({ exitCode, sawEcho: /probe-ok/.test(data), pid: p.pid }); });
   });

@@ -14,6 +14,12 @@ meet rules written for another platform. The repair is ADR-0066's "wiring" parag
 Linux host with D10's counterfactual (AC-3). Found while narrowing IC-3, in a documentation change that does not touch
 the build; not repaired there.
 
+**2026-11-06 — wiring implemented; this note stays open.** The Linux refusal is gone; `package.mjs` selects the
+prepared Linux configuration, rules 1a and 4 have their Linux binary and launch forms, naming checks the AppImage,
+and runtime validation reads ELF. Fuse readback now also addresses `linux-unpacked/rotaris` (its Windows-only
+path was another blocker). Scoped tests ran, but no AppImage build or D10 counterfactual ran. AC-3's execution
+on the owner's Linux host is still part of this note's repair; AC-1, AC-2 and AC-4 are also still owed.
+
 ## Specs
 
 None contradicted. REQ-STARTUP-024 and REQ-STARTUP-025 require the Linux artifact; the refusal contradicts the record

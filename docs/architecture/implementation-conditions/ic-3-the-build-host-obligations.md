@@ -52,6 +52,11 @@ none of the four items. Item 1's choice between ESC-11's options now has a confi
 holds — recorded as [a defect note](../../defects/the-build-hooks-refuse-a-linux-artifact-in-the-name-of-ic-3.md), not
 repaired here. Their refusal of `darwin` is this entry's and stands.*
 
+*2026-11-06: the prior note is kept. Linux wiring is now implemented under ADR-0066: the refusal is gone,
+rules 1a and 4 have Linux forms, with AppImage naming and ELF runtime checks. The defect remains open for
+AC-3's actual build and D10 counterfactuals on the owner's Linux host. AC-1, AC-2 and AC-4 remain owed too;
+no artifact was built and no acceptance criterion is claimed. The macOS refusal is unchanged.*
+
 **What deferral is not.** It is not a judgement that these will pass. Every one of them is in the class of
 things this record has never executed, and every mechanism this record has taken from paper to first
 execution has held a defect no reading caught — three for three. **An implementation that reaches a ~~Linux or~~

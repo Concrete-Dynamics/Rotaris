@@ -14,6 +14,14 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-11-06**
+
+**Linux AppImage wiring (ADR-0066; REQ-STARTUP-024/025).** Packaging scripts outside the boundary rule move no
+package, edge, process, message, channel or ownership (R-080's precedent). The component view's bundled-runtime
+paragraph now names the Linux target, ELF validation and unpacked directory alongside Windows. The host switch,
+Linux hook forms and explicit non-applicable Windows steps are wiring only; AC-1..AC-4 remain owed and no first
+execution is recorded.
+
 Last reconciled with the code: **2026-11-05**
 
 **An error React recovered from is one `warning` line and no notice (hrdb, OQ-475 ruled 2026-11-04 under R-072; REQ-NOTIFY-001, REQ-NOTIFY-003, PD-MONITOR-002; 2026-11-05).** `04-seams/06-6-a-notice-or-an-acknowledgement.md` splits the reporting root's invariant: `onCaughtError` and `onUncaughtError` still send ONE `notice.report` at `error`, and `onRecoverableError` now sends **`window.recovered`**, a log-only command main writes as ONE `warning` line, touching neither the notice store nor the record of REQ-NOTIFY-268, under its own dedupe set and cap. `04-seams/01-1-a-renderer-command.md` names the kind under the `windows` facet, and `02-process-view/02-message-families.md`'s renderer → main list gains it.

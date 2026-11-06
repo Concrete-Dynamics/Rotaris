@@ -274,3 +274,102 @@ describe('nothing the application runs needs RunAsNode (R-091, checklist 19)', (
     expect(readers).toEqual(['apps/desktop/src/main/sentinel.ts']);
   });
 });
+
+/** ADR-0066 wiring evidence only: synthetic headers and loader reports, never an AppImage build. */
+describe('Linux hook wiring — REQ-STARTUP-024/025', () => {
+  const linux = appRequire('./scripts/build-hooks.cjs') as {
+    platformOf: (ctx: unknown) => string;
+    afterPack: (ctx: unknown) => Promise<void>;
+    configuredArtifactNames: (ctx: unknown) => string[];
+    checkNaming: (declared: string, names: string[], platform: string) => Promise<unknown>;
+    artifactBuildCompleted: (ctx: unknown) => Promise<void>;
+    artifactBuildStarted: (ctx: unknown) => Promise<void>;
+    elfArchOf: (bytes: Buffer) => { machine: number; arch: string };
+    checkRuntime: (dir: string, arch: string, spawn: (cmd: string, args: string[]) => ReturnType<typeof answering>, platform: string) => { python: string; machine: string };
+    BINDINGS: { name: string; built: Record<string, string[]> }[];
+    checkRule4: (probe: unknown, bindings: unknown[], root: string, marker: unknown) => unknown;
+  };
+  const dirs: string[] = [];
+  afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+  const elf = (machine = 0x3e) => {
+    const bytes = Buffer.alloc(64);
+    bytes.set([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1]);
+    bytes.writeUInt16LE(machine, 18);
+    return bytes;
+  };
+  const runtime = (bytes: Buffer, targetArch = 'x64') => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-linux-hooks-'));
+    dirs.push(dir);
+    const root = join(dir, 'resources', 'code-intelligence');
+    mkdirSync(join(root, 'runtime', 'bin'), { recursive: true });
+    writeFileSync(join(root, 'runtime', 'bin', 'python3'), bytes);
+    writeFileSync(join(root, 'bundle.json'), JSON.stringify({ ...PINS, targetArch }));
+    return dir;
+  };
+  it('accepts linux at the platform guard and afterPack proceeds to artifact checks, while darwin keeps its exact refusal', async () => {
+    expect(linux.platformOf({ electronPlatformName: 'linux' })).toBe('linux');
+    expect(linux.platformOf({ platform: { nodeName: 'linux' } })).toBe('linux');
+    const refusal = 'IC-3: no darwin artifact may be produced until the build hosts exist (implementation-conditions.md)';
+    expect(() => linux.platformOf({ electronPlatformName: 'darwin' })).toThrow(refusal);
+    await expect(linux.afterPack({ electronPlatformName: 'darwin' })).rejects.toThrow(refusal);
+    // No rebuild marker is created by these tests: entering afterPack reaches the marker, not IC-3.
+    await expect(linux.afterPack({ electronPlatformName: 'linux', arch: 'x64' })).rejects.not.toThrow(/IC-3/);
+    expect(linux.BINDINGS.map((binding) => [binding.name, binding.built['linux']])).toEqual([
+      ['better-sqlite3', ['build/Release/better_sqlite3.node']], ['node-pty', ['build/Release/pty.node']],
+    ]);
+  });
+  it('reads Linux naming keys, accepts the AppImage and refuses other names and blockmaps', async () => {
+    const name = artifactName('0.1.0rc1', 'appimage');
+    const ctx = { ...ctxFor({ linux: { artifactName: name }, appImage: { artifactName: name }, win: { artifactName: 'ignored.exe' } }, '0.1.0-rc1'), electronPlatformName: 'linux' };
+    expect(linux.configuredArtifactNames(ctx)).toEqual([name, name]);
+    await expect(linux.checkNaming('0.1.0rc1', [name, name], 'linux')).resolves.toMatchObject({ expected: name });
+    await expect(linux.checkNaming('0.1.0rc1', ['other.AppImage'], 'linux')).rejects.toThrow(/REQ-STARTUP-031/);
+    const declared = (appRequire('./package.json') as { version: string }).version;
+    const produced = artifactName(declared, 'appimage');
+    const context = (file: string) => ({ file, packager: { platform: { nodeName: 'linux' } } });
+    await expect(linux.artifactBuildCompleted(context(produced))).resolves.toBeUndefined();
+    for (const file of ['other.AppImage', produced.toLowerCase(), `${produced}.blockmap`]) {
+      await expect(linux.artifactBuildCompleted(context(file))).rejects.toThrow(/REQ-STARTUP-031/);
+    }
+  });
+  it('reads ELF machines and rejects malformed or truncated headers before reading e_machine', () => {
+    expect(linux.elfArchOf(elf())).toEqual({ machine: 0x3e, arch: 'x64' });
+    expect(linux.elfArchOf(elf(0xb7))).toEqual({ machine: 0xb7, arch: 'arm64' });
+    for (const bytes of [Buffer.from('MZ'), Buffer.alloc(64), elf().subarray(0, 19), elf().subarray(0, 63)]) {
+      expect(() => linux.elfArchOf(bytes)).toThrow(/ELF|truncated/);
+    }
+    const wrongEndian = elf(); wrongEndian[5] = 2;
+    expect(() => linux.elfArchOf(wrongEndian)).toThrow(/malformed/);
+  });
+  it('reads runtime/bin/python3 and checks machine and marker before spawning, preserving isolation and version checks', () => {
+    const dir = runtime(elf());
+    const asked: string[] = [];
+    expect(linux.checkRuntime(dir, 'x64', (cmd, args) => {
+      asked.push(cmd); expect(args[0]).toBe('-I'); return answering();
+    }, 'linux')).toMatchObject({ machine: 'x64', python: join(dir, 'resources', 'code-intelligence', 'runtime', 'bin', 'python3') });
+    expect(asked).toHaveLength(1);
+    const noSpawn = () => { throw new Error('must not spawn'); };
+    expect(() => linux.checkRuntime(runtime(elf(0xb7)), 'x64', noSpawn, 'linux')).toThrow(/built for arm64, the artifact for x64/);
+    expect(() => linux.checkRuntime(runtime(elf(), 'arm64'), 'x64', noSpawn, 'linux')).toThrow(/bundle.json says the bundle was built for arm64/);
+    expect(() => linux.checkRuntime(runtime(Buffer.from('bad')), 'x64', noSpawn, 'linux')).toThrow(/not an ELF image/);
+    expect(() => linux.checkRuntime(dir, 'x64', () => ({ ...answering(), stdout: JSON.stringify({ python: 'wrong', version: PINS.version }) }), 'linux')).toThrow(/pin is/);
+  });
+  it('uses the real artifact-start event shape for Linux fuse readback', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-linux-fuses-')); dirs.push(dir);
+    await expect(linux.artifactBuildStarted({ file: join(dir, 'test.AppImage'), arch: 1, targetPresentableName: 'AppImage' })).rejects.toThrow(`fuses: no packed executable at ${join(dir, 'linux-unpacked', 'rotaris')}`);
+  });
+  it('keeps Linux paths case-sensitive and checks containment at a directory boundary', () => {
+    const root = '/artifact/resources/app.asar.unpacked/node_modules';
+    const file = `${root}/node-pty/build/Release/pty.node`;
+    const probe = (opened: string) => ({ status: 0, report: { ok: true, versions: { electron: '44' }, dlopen: [opened] } });
+    const bindings = (packaged: string) => [{ name: 'node-pty', files: [{ packaged }] }];
+    const marker = { platform: 'linux', electronVersion: '44' };
+    expect(() => linux.checkRule4(probe(file), bindings(file), root, marker)).not.toThrow();
+    expect(() => linux.checkRule4(probe(file.toUpperCase()), bindings(file), root, marker)).toThrow(/not the compiled binary/);
+    const sibling = `${root}-other/pty.node`;
+    expect(() => linux.checkRule4(probe(sibling), bindings(sibling), root, marker)).toThrow(/outside/);
+    const win = 'C:\\artifact\\resources\\app.asar.unpacked\\node_modules';
+    const winFile = `${win}\\node-pty\\build\\Release\\pty.node`;
+    expect(() => linux.checkRule4(probe(`\\\\?\\${winFile.toUpperCase()}`), bindings(winFile), win, { platform: 'win32', electronVersion: '44' })).not.toThrow();
+  });
+});

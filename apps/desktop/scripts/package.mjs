@@ -10,10 +10,10 @@
  *                                           values into release/electron-builder.package.yml, the configuration the next
  *                                           step runs with — never electron-builder's `${version}` macro, which is the
  *                                           version normalised (`0.1.0rc1` → `0.1.0-rc1`)
- *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a, the assets, the naming) → the fuses
+ *   2. electron-builder --win/--linux               rebuild → pack → hooks (rule 1a, rule 4a, the assets, the naming) → the fuses
  *                                           flipped (electron-builder.yml's electronFuses) and read back (artifactBuildStarted)
- *                                           → installer
- *   2‴. the fuses                            read back again from win-unpacked/Rotaris.exe, which every later step packs or
+ *                                           → installer or AppImage
+ *   2‴. the fuses                            read back again from the platform's unpacked executable, which every later step packs or
  *                                           launches (R-091, checklist 19; build-hooks.cjs `checkFuses`), a --dir package too
  *   2′. the portable                         the launcher stub (apps/desktop/launcher) built by Cargo and assembled around
  *                                           win-unpacked into release/portable/Rotaris-{v}-windows-x64-portable.exe
@@ -31,7 +31,7 @@
  *                                           artifact can be renamed aside while the application runs (REQ-STARTUP-125)
  *   4. release/load-proof.json              the merged report; a non-zero exit on any miss
  *
- * ROTARIS_PACKAGE_DIR_ONLY=1   stop at win-unpacked (no installer)
+ * ROTARIS_PACKAGE_DIR_ONLY=1   stop at the unpacked directory (no installer/AppImage)
  * ROTARIS_PACKAGE_SKIP_APP=1   skip steps 3 and 3′
  * ROTARIS_PACKAGE_WITHOUT_NOTICES=1
  *                              go on after the notices step's exit 1: a development package with no notices file (any
@@ -56,8 +56,9 @@ import { closingLines, reached, STEPS } from './lib/package-verdict.mjs';
 import { FORBIDDEN, KEPT, seamCheck } from './lib/seam-check.mjs';
 import { startStubModelEndpoint, STUB_TERMINAL_COMMAND } from './lib/stub-model-endpoint.mjs';
 import { ABOUT_ASSETS, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
-import { declaredProductVersion, namedConfigurationText, packagingArtifactNames, portableArtifactName } from './lib/artifact-names.mjs';
+import { declaredProductVersion, packagingArtifactNames, portableArtifactName } from './lib/artifact-names.mjs';
 import { assemblePortable, buildLauncher, MARKER, readPortable } from './lib/portable.mjs';
+import { packagePlatform, packageConfigurationText, inapplicablePackageSteps } from './lib/package-platform.mjs';
 import { iconCarried } from './lib/pe-icons.mjs';
 
 // A flag value this script does not understand is a usage error (REQ-STARTUP-149's 2), reported before any step runs.
@@ -67,13 +68,20 @@ if (usage !== null) {
   process.exit(2);
 }
 
+// Refuse unsupported hosts before any step, resource write, or report cleanup.
+let host;
+try { host = packagePlatform(process.platform, process.arch); } catch (e) {
+  process.stderr.write(`error: ${e.message}\n`);
+  process.exit(2);
+}
+
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(APP, '..', '..');
 const RELEASE = join(APP, 'release');
 const REPORT = join(RELEASE, 'load-proof.json');
 const require = createRequire(import.meta.url);
 const t0 = Date.now();
-const report = { startedAt: new Date().toISOString(), steps: [], counterfactual: process.env['ROTARIS_IC6_COUNTERFACTUAL'] || null, ok: false };
+const report = { platform: host.key, notApplicable: inapplicablePackageSteps(host), artifactProduction: process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? 'directory only; no artifact produced' : 'requested', startedAt: new Date().toISOString(), steps: [], counterfactual: process.env['ROTARIS_IC6_COUNTERFACTUAL'] || null, ok: false };
 
 function step(name, fn) {
   const at = Date.now();
@@ -133,10 +141,10 @@ try {
   // ADR-0035 (Part T): the bundled code-intelligence runtime is BUILT here (idempotent on its pins' marker), then the
   // committed binding manifest is checked against a fresh generation from that runtime — a diff is a refused build
   // (REQ-MCP-116; the same kind of assertion as REQ-MCP-095's version cross-check). The build fetches; the product never does.
-  // OQ-400 (ruled 2026-10-15 under R-072): built for the artifact's architecture, never by default for the host's — on a
-  // Windows ARM64 host the windows-x64 artifact carries an x86_64 interpreter, and afterPack refuses any other.
+  // OQ-400 (ruled 2026-10-15 under R-072): built for the artifact's architecture, never by default for the host's — on
+  // supported x64 hosts the artifact carries an x86_64 interpreter, and afterPack refuses any other.
   step('code-intelligence bundle', () => {
-    run('node', [join(APP, 'scripts', 'code-intelligence', 'bundle.mjs'), '--target=win32-x64']);
+    run('node', [join(APP, 'scripts', 'code-intelligence', 'bundle.mjs'), host.bundleTarget]);
     const marker = JSON.parse(readFileSync(join(APP, 'resources', 'code-intelligence', 'bundle.json'), 'utf8'));
     return { bundle: { target: marker.target, python: marker.answers.python, distribution: marker.distribution, version: marker.answers.distribution, bytes: marker.size.bytes, files: marker.size.files, builtAt: marker.builtAt, elapsedMs: marker.elapsedMs } };
   });
@@ -214,21 +222,21 @@ try {
   // and not a `-c.` override. The hooks' `./scripts/…` paths resolve against electron-builder's cwd, which is APP.
   const naming = step('the artifact names from the declared version', () => {
     const declared = declaredProductVersion(APP);
-    const names = packagingArtifactNames(declared);
+    const names = packagingArtifactNames(declared, host.platform);
     const yaml = require(require.resolve('js-yaml', { paths: [dirname(require.resolve('app-builder-lib/package.json'))] }));
     mkdirSync(RELEASE, { recursive: true });
-    const named = join('release', 'electron-builder.package.yml');
-    writeFileSync(join(APP, named), namedConfigurationText(readFileSync(join(APP, config), 'utf8'), names, yaml));
-    process.stdout.write(`[package] declared ${declared} → ${names.setup}, written into ${named} (from ${config})\n`);
+    const named = join('release', host.configuration);
+    writeFileSync(join(APP, named), packageConfigurationText(host, readFileSync(join(APP, config), 'utf8'), declared, yaml));
+    process.stdout.write(`[package] declared ${declared} → ${names.setup ?? names.appimage}, written into ${named} (from ${config})\n`);
     return { declared, names, from: config, configuration: named };
   });
-  step(`${STEPS.builder} --win${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', '--win', ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', naming.configuration], { env: builderEnv }));
+  step(`${STEPS.builder} ${host.builderFlag}${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', host.builderFlag, ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', naming.configuration], { env: builderEnv }));
   // R-091 (Electron security checklist 19; ADR-0054): the fuses electron-builder flipped, read back from the packed executable
   // that the portable is assembled around and that steps 3 and 3′ launch — the hooks' own rule, so a `--dir` package, which
   // makes no installer and so meets no artifactBuildStarted, is held to it too. A difference refuses the package.
   report.fuses = await stepAsync('the fuses read back from the packed executable (R-091, checklist 19)', async () => {
     const { checkFuses } = require(join(APP, 'scripts', 'build-hooks.cjs'));
-    const read = await checkFuses(join(RELEASE, 'win-unpacked', 'Rotaris.exe'));
+    const read = await checkFuses(join(RELEASE, host.unpacked, host.executable));
     process.stdout.write(`[package] fuses: ${Object.entries(read.wire).filter(([k]) => k !== 'version').map(([k, v]) => `${k} ${v}`).join(', ')}\n`);
     return read;
   });
@@ -238,6 +246,7 @@ try {
    * with win-unpacked appended. Named by the authority from the declared text, like the installer; written below
    * release/portable/ because release/'s top holds the one installer the CI job counts and uploads.
    */
+  if (host.platform === 'win32') {
   report.portable = await stepAsync('the portable: the launcher stub built and win-unpacked assembled around it (ADR-0054 P4)', async () => {
     const stub = buildLauncher(APP);
     const dir = join(RELEASE, 'portable');
@@ -268,9 +277,12 @@ try {
     if (missing.length) throw new Error(`the icon is not carried — ${missing.join('; ')}`);
     return found;
   });
+  }
 } catch (e) {
   finish(false, String(e.message));
 }
+
+if (host.platform === 'linux') finish(true);
 
 if (process.env['ROTARIS_PACKAGE_SKIP_APP']) finish(true, 'rule 4 (b) skipped by ROTARIS_PACKAGE_SKIP_APP');
 

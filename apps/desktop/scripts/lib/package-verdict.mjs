@@ -28,7 +28,7 @@ export function reached(report, prefix) {
 /**
  * The lines `pnpm package` closes on, for the terminal: stdout's and stderr's, in order.
  * @param {{
- *   report: { ok: boolean, ms: number, steps: { name: string }[], counterfactual: string | null, assets?: { notices?: string, line?: string } },
+ *   report: { ok: boolean, ms: number, steps: { name: string }[], counterfactual: string | null, notApplicable?: { name: string, status: string, reason: string }[], assets?: { notices?: string, line?: string } },
  *   why?: string | undefined,
  *   reportPath: string,
  * }} options
@@ -36,6 +36,9 @@ export function reached(report, prefix) {
  */
 export function closingLines({ report, why, reportPath }) {
   const stdout = [`\n[package] ${report.ok ? 'PASSED' : 'REFUSED'}${why ? ` — ${why}` : ''} (${report.ms} ms) → ${reportPath}`];
+  for (const step of report.notApplicable ?? []) {
+    if (step.status === 'not applicable') stdout.push(`[package] ${step.name}: not applicable — ${step.reason}`);
+  }
   const stderr = report.ok ? [] : [`error: pnpm package refused: ${why || `see ${reportPath}`}`];
   if (report.counterfactual && !reached(report, STEPS.builder)) {
     stdout.push(`[package] COUNTERFACTUAL ${report.counterfactual} NOT EXERCISED — the package ended before electron-builder ran, so no rule it constructs was reached and this run is not its evidence.`);

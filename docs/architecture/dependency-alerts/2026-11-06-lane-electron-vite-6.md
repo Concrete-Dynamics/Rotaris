@@ -79,9 +79,9 @@ false`, spread by every `new BrowserWindow` site in `apps/desktop/src/main/index
 
 **So: if the mechanism is right, this branch's `package` job refuses exactly as #58's did — no session row, 0 model
 requests, a black `load-proof.png`; if it passes, the mechanism is refuted and Electron 45.1.0 becomes the suspect
-again.** This branch cannot itself discharge rule 4 — no display exists on this host, so no packaged launch runs here.
-The CI `package` job (windows-x64, development) on this branch's head is the only thing that can, and its verdict is
-owed to the pull request.
+again.** §5 reads the job: **it refused, in exactly that shape — the prediction held.** This branch cannot itself
+discharge rule 4 (no display exists on this host, so no packaged launch runs here); what §5 produces is the reading
+that the rule-4 failure is `electron-vite` 6's and not the Electron pin's.
 
 ## 4. Verification
 
@@ -107,19 +107,45 @@ Commands run on this tree (Linux x86_64, Node 26.12.1, pnpm 11.9.0), at write ti
   preload is byte-identical (md5 `61c11cdf25375e9c7e06aca6ba5a2aef`, 144,889 bytes) to #58's v6-on-45.1.0 preload,
   and the renderer bundle is byte-identical to `main`'s (`2be796800f898cf5089828484ceaffbe`) — the build difference
   is the preload and nothing the renderer sees.
-- `pnpm check` on this head — **symbols 0, typecheck 0 (no `error TS`), lint 0** (all 15 checks and `eslint .
-  --max-warnings 0`, including the unused-disable rules), **test exit 1: 4 failed | 8052 passed | 57 skipped**, all
-  four in `packages/agent-tools/src/terminal/terminal.test.ts` — the documented host-dependent soft-paused
-  kill-assertion flake (`goneWithin(pids, 5_000)` reading `[true, true]` where `[false, false]` is expected). It is
-  **not this change**: the same file on an untouched `origin/main` (`b6501e8e`) worktree on this same host reads
-  **5 failed | 112 passed**, the identical case shape; the file run alone on this branch reads **4 failed | 113
-  passed** (the same four cases). The red is the host's
+- `pnpm check` on this head — **symbols 0, typecheck 0 (no `error TS`), lint 0** (all 16 stages of `gate:lint` and
+  `eslint . --max-warnings 0`, including the unused-disable rules), **test exit 1: 5 failed | 8052 passed | 57
+  skipped**, every failure in `packages/agent-tools/src/terminal/terminal.test.ts` — the documented host-dependent
+  PTY process-death flake (`goneWithin(pids, 5_000)` reading `[true, true]` where `[false, false]` is expected, plus
+  the neighbouring soft-pause cases). It is **not this change**: the same file on an untouched `origin/main`
+  (`b6501e8e`) worktree on this same host reads **4 failed | 113 passed** (the identical case shape), and the count
+  itself is not stable run to run — an earlier reading of this branch's head in this lane read **4 failed | 8052
+  passed**, `main`'s own CI gate on `6b521dc6` failed the same file with **1 failed | 7980 passed**, and my own
+  reading above (5 failed) is the largest of the three. The red is the host's and CI's
   ([`the-pty-process-death-assertions-flake-on-a-loaded-host.md`](../../defects/the-pty-process-death-assertions-flake-on-a-loaded-host.md));
   the branch touches no code those cases execute.
-- **CI `package` job (windows-x64, development) on this branch's head — the only thing that can discharge ADR-0056
-  rule 4; no display exists on this host, so no packaged launch runs here.** Its verdict is owed to the pull request:
-  a refusal in the #58 shape confirms §3's prediction, a pass refutes it.
 
-## 5. Boundary
+## 5. CI — the `package` job, and the prediction discharged
+
+The `package` job (windows-x64, development) ran on both the push and the pull_request event of the head `59241faf`
+and **refused on both**, at the same step, in the exact shape §3 predicted. Evidence, from the run's own artifact
+`windows-x64-package-evidence` (downloaded and re-read here, not taken from the log alone):
+
+| Reading | Value |
+| --- | --- |
+| the refusal | `error: pnpm package refused: expected one session, found 0` / `[package] REFUSED — expected one session, found 0 (286890 ms)` |
+| the failing step | `the packaged app opens a store and runs a terminal call` → `expected one session, found 0` |
+| every step before it | **ok** — code-intelligence bundle, manifest, notices, build id, `electron-vite build (seams compiled out)`, the seam check, the artifact names, `electron-builder --win`, the fuses, the portable, the icon |
+| host-side setup in `load-proof.app.log` | complete: `run host hello` received (550 ms), workspace opened (`0 sessions, 0 rows`), `workspace.ack`, MCP setup `completed` |
+| `run host: session <uuid> started; row 0 recorded` | **absent** |
+| `POST …/chat/completions` (model requests) | **0** |
+| `load-proof.png` | **1024×720, exactly one colour** `(18,18,18)` — whole-image `R=G=B=18`, the pure-black signature |
+
+The app opens its store, settles every host-side step, **paints nothing, starts no run, and exits 0**: #58's signature,
+reproduced on a branch where `electron` never moved. **The mechanism of §3 is confirmed, and the hypothesis of the
+2026-11-06 diagnosis is now a proof: `electron-vite` 6 is sufficient on its own to refuse ADR-0056's rule 4, at
+Electron 44.10.0.**
+
+**What this does — and does not — say about Electron 45.1.0.** It says the 45.1.0 pin was never the mover: the
+failure follows `electron-vite` 6 onto 44.10.0. It does **not** rate Electron 45.1.0 either way — 45.1.0 was never
+given a preload that loads, so nothing here exercises it. Electron 45.1.0 remains **open and unrated**, and becomes
+answerable only after the preload's externals are fixed (a v6 that bundles `zod` into the preload, or a preload that
+does not import `zod`).
+
+## 6. Boundary
 
 This branch does not touch `.github/workflows`, does not merge, and does not move the `electron` pin.

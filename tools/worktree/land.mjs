@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
-// `pnpm worktree:land` — the landing sequence `AGENTS.md` ("The agent workflow") states, wrapped: fetch
+// `pnpm worktree:land` — the landing sequence `docs/clean-room/agent-workflow.md` ("Rebase onto main, and
+// persevere") states, wrapped: fetch
 // origin/main, rebase onto it (a conflict aborts and hands back — never resolved by the tool), a landing
 // worktree at the rebased head, verify:plan read against origin/main, `pnpm check` on that exact head (a red
 // stops it; it is never retried), the affected proof suites, a fast-forward push of that head, and cleanup.
@@ -14,7 +15,7 @@ import { defaultDeps, measured, needsSetup } from './steps.mjs';
 
 export const USAGE = `pnpm worktree:land [--skip-proofs] [--reviewed] [--keep] [--max-attempts=<n>] [--worktree=<path>]
 
-The landing sequence of AGENTS.md ("The agent workflow"), wrapped:
+The landing sequence of docs/clean-room/agent-workflow.md ("Rebase onto main, and persevere"), wrapped:
 
   git fetch origin main
   git rebase origin/main                 # a conflict aborts the rebase and hands back
@@ -35,7 +36,7 @@ runs from elsewhere (on Windows nothing can remove a tree a shell is sitting in,
 printed as the commands to run once out of it).
 
 A run that lands — or finds the head already on origin/main — closes with the handoff of
-AGENTS.md ("The handoff"): Zustand, Beweise, Offen, Nächster Schritt, one line each.
+docs/clean-room/agent-workflow.md ("The handoff"): Zustand, Beweise, Offen, Nächster Schritt, one line each.
 
 Exit codes: 0 landed, or already on origin/main · 1 stopped, nothing pushed · 2 usage
 `;
@@ -209,7 +210,8 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
     return git.git(['worktree', 'remove', '--force', dir], { cwd: primary }).status === 0;
   }
 
-  /** The closing report `AGENTS.md` ("The handoff") fixes: four labelled lines, never a fifth field. */
+  /** The closing report `docs/clean-room/agent-workflow.md` ("The handoff") fixes: four labelled lines, never a
+   * fifth field. */
   function handoff(state, beweis, open, next) {
     deps.log('worktree:land: handoff');
     deps.log(`  Zustand: ${state}`);
@@ -353,7 +355,7 @@ export function runLand({ argv, cwd = process.cwd(), deps = defaultDeps({ via: '
       git.git(['rebase', '--abort'], { cwd: root });
       if (conflicted.length > 0) {
         deps.error(
-          'worktree:land: the rebase conflicts — aborted, nothing rebased. Resolve by reading both sides (AGENTS.md names the five shapes), then run again:',
+          'worktree:land: the rebase conflicts — aborted, nothing rebased. Resolve by reading both sides (docs/clean-room/agent-workflow.md, "Rebase onto main, and persevere", names the five shapes), then run again:',
         );
         for (const file of conflicted) deps.error(`  ${file}`);
       } else {

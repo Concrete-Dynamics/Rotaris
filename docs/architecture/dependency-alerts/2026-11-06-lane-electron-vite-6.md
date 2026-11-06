@@ -136,16 +136,43 @@ and **refused on both**, at the same step, in the exact shape §3 predicted. Evi
 | `load-proof.png` | **1024×720, exactly one colour** `(18,18,18)` — whole-image `R=G=B=18`, the pure-black signature |
 
 The app opens its store, settles every host-side step, **paints nothing, starts no run, and exits 0**: #58's signature,
-reproduced on a branch where `electron` never moved. **The mechanism of §3 is confirmed, and the hypothesis of the
-2026-11-06 diagnosis is now a proof: `electron-vite` 6 is sufficient on its own to refuse ADR-0056's rule 4, at
-Electron 44.10.0.**
+reproduced on a branch where `electron` never moved. **`electron-vite` 6 is therefore *sufficient on its own* to refuse
+ADR-0056's rule 4, at Electron 44.10.0** — the failure is not the pin's, and the pin was never its mover.
+
+**What the CI artifact does not itself capture:** the run records the end state (no session row, no model request, a
+black PNG) and not the intermediate throw. The chain the end state comes from — the v6 preload's `require("zod")`, the
+sandbox's refusal (`module not found: zod`), the absent bridge — is proven at the preload-loader level **on this Linux
+host** (§4, and the diagnosis report §3), and is here *consistent with* the packaged Windows run rather than read off
+its artifact. Stated as proven: the build output, the loader refusal and the end state. Not asserted: that the throw is
+the only path to that end state in the packaged binary.
 
 **What this does — and does not — say about Electron 45.1.0.** It says the 45.1.0 pin was never the mover: the
 failure follows `electron-vite` 6 onto 44.10.0. It does **not** rate Electron 45.1.0 either way — 45.1.0 was never
-given a preload that loads, so nothing here exercises it. Electron 45.1.0 remains **open and unrated**, and becomes
-answerable only after the preload's externals are fixed (a v6 that bundles `zod` into the preload, or a preload that
+given a preload that loads, so nothing here exercises it. It also does not show that `electron-vite` 6 is the *only*
+blocker: whether a v6 build with the preload's externals fixed, **and** Electron 45.1.0, then passes rule 4 is a
+separate experiment (§7). Electron 45.1.0 remains **open and unrated**, and becomes answerable only after the
+preload's externals are fixed (a v6 that bundles `zod` into the preload, or a preload that
 does not import `zod`).
 
 ## 6. Boundary
 
 This branch does not touch `.github/workflows`, does not merge, and does not move the `electron` pin.
+
+## 7. The next experiment (a proposal — not applied here)
+
+The preload's externals under `electron-vite` 6 are what this branch leaves broken, and they are the prerequisite to
+any further move. Two candidate remedies were tested in a minimal two-file fixture (the same source, the same real
+`zod`, `electron-vite` 6) on this host:
+
+| Preload config under v6 | Built preload | Runtime under `sandbox: true` |
+| --- | --- | --- |
+| `externalizeDepsPlugin()` as today | 0.22 kB, `require("electron")` + `require("zod")` | **fails**, `module not found: zod` |
+| `externalizeDepsPlugin({ exclude: ['zod'] })` | 158,194 B, `require("electron")` only | **passes**, bridge present |
+| `build.externalizeDeps: false` (the plugin's own switch) | 158,194 B, `require("electron")` only | **passes** |
+| `build.rollupOptions.external: ['electron']` | still `require("zod")` | fails |
+| `ssr: { noExternal: true }` (top level or in the section) | still `require("zod")` | fails |
+| the plugin omitted from the `preload` section | still `require("zod")` | fails |
+
+So the shape to build is the first working row on top of this branch — the preload states its externals, `zod` bundles
+back in as v5 did — and only then the Electron pin moves, with its own `package` run. That branch is not this one:
+this one isolates a single variable, and mixing the remedy in would destroy the isolation it exists to provide.

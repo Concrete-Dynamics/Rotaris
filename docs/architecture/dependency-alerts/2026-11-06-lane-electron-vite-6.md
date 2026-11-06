@@ -114,20 +114,27 @@ Commands run on this tree (Linux x86_64, Node 26.12.1, pnpm 11.9.0), at write ti
   the neighbouring soft-pause cases). It is **not this change**: the same file on an untouched `origin/main`
   (`b6501e8e`) worktree on this same host reads **4 failed | 113 passed** (the identical case shape), and the count
   itself is not stable run to run — an earlier reading of this branch's head in this lane read **4 failed | 8052
-  passed**, `main`'s own CI gate on `6b521dc6` failed the same file with **1 failed | 7980 passed**, and my own
-  reading above (5 failed) is the largest of the three. The red is the host's and CI's
+  passed**, and `main`'s own CI gate on `6b521dc6` failed the same file with **1 failed | 7980 passed**. **CI's `gate`
+  on this branch's final head `8c395725` passed on both events** (14m49s, 18m8s). The red is the host's and CI's
   ([`the-pty-process-death-assertions-flake-on-a-loaded-host.md`](../../defects/the-pty-process-death-assertions-flake-on-a-loaded-host.md));
   the branch touches no code those cases execute.
 
 ## 5. CI — the `package` job, and the prediction discharged
 
-The `package` job (windows-x64, development) ran on both the push and the pull_request event of the head `59241faf`
-and **refused on both**, at the same step, in the exact shape §3 predicted. Evidence, from the run's own artifact
-`windows-x64-package-evidence` (downloaded and re-read here, not taken from the log alone):
+Read on two heads: the first head `59241faf`, and the final head `8c395725` (two doc-only commits later; the dependency
+diff is identical). Both refused, on both events, at the same step. The final head is the cleaner reading, because its
+**`gate` jobs pass on both events** (14m49s and 18m8s) — so the refusal stands alone, against a green commit gate.
+
+| Head | Runs (push / pull_request) | `gate` | `package` |
+| --- | --- | --- | --- |
+| `59241faf` | `42301968967` job `128181729710` / `42301980575` job `128181769344` | fail (the terminal flake) / fail | **refused** / **refused** |
+| `8c395725` | `42304821177` job `128191442588` / `42304829557` job `128191474072` | **pass** / **pass** | **refused** / **refused** |
+
+The refusal itself, each time:
 
 | Reading | Value |
 | --- | --- |
-| the refusal | `error: pnpm package refused: expected one session, found 0` / `[package] REFUSED — expected one session, found 0 (286890 ms)` |
+| refusal | `error: pnpm package refused: expected one session, found 0` / `[package] REFUSED — expected one session, found 0 (286890 ms)` (artifact of run `42301980575`; the reading is identical on `42304829557`) |
 | the failing step | `the packaged app opens a store and runs a terminal call` → `expected one session, found 0` |
 | every step before it | **ok** — code-intelligence bundle, manifest, notices, build id, `electron-vite build (seams compiled out)`, the seam check, the artifact names, `electron-builder --win`, the fuses, the portable, the icon |
 | host-side setup in `load-proof.app.log` | complete: `run host hello` received (550 ms), workspace opened (`0 sessions, 0 rows`), `workspace.ack`, MCP setup `completed` |

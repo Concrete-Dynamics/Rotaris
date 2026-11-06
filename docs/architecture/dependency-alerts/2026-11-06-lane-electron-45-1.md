@@ -91,11 +91,11 @@ ran here. `pnpm build` and the package path also need a display. Rule 4's run fo
 against 45.1.0 and load-proved under the packaged binary, plus the packaged launch — is **CI's `package` job on the
 landed head**, reported with the pull request, not here. The pull request's ACKNOWLEDGES this in its own text.
 
-**`package` (rule 4) refused on this branch too, both runs — and it is not a flake.** The `package` job refused on
-both of this branch's runs (42271282568, 42271350580) at the same step, `the packaged app opens a store and runs a
-terminal call` → `expected one session, found 0`, and so did Dependabot's #49 on both of its runs. **Status: blocked
-on rule 4** — the packaged launch does not run a session under 45.1.0 (see §4 for the measurement and the earlier
-claim this file made and now retracts).
+**`package` (rule 4) refused on this branch too, on every run — and it is not a flake.** The `package` job refused
+on both runs of the first head (42271282568, 42271350580) and on the corrected head's run (42273897949) as well, at the
+same step, `the packaged app opens a store and runs a terminal call` → `expected one session, found 0`; and so did
+Dependabot's #49 on both of its runs. **Status: blocked on rule 4** — the packaged launch does not run a session under
+45.1.0 (see §4 for the measurement and the earlier claim this file made and now retracts).
 
 ## 4. The packaged launch under 45.1.0 refuses, and the 2026-11-04 note's "flake" reading does not survive
 
@@ -110,13 +110,14 @@ What was measured, head by head (every `package` job I read; `expected one sessi
 | #49 `eacc569d` | **45.1.0** | 41905640745 | pull_request | refused |
 | **#58 `d24c2fa9`** | **45.1.0** | 42271282568 | push | **refused** |
 | **#58 `d24c2fa9`** | **45.1.0** | 42271350580 | pull_request | **refused** |
+| **#58 `00d7595d`** | **45.1.0** | 42273897949 | push | **refused** (404482 ms, `expected one session, found 0`) |
 | #52 `f1442691` | 44.10.0 | 41905781129 | push | refused |
 | #52 `f1442691` | 44.10.0 | 41905796288 | pull_request | **passed** |
 | #54 `24ad497a` | 44.10.0 | 41906236287 | push | **passed** |
 | #54 `24ad497a` | 44.10.0 | 41906246618 | pull_request | **passed** |
 | main `b6501e8e` | 44.10.0 | 42252399585 | push | **passed** (2026-11-06, this day) |
 
-**Electron 45.1.0: 4 refusals of 4. Electron 44.10.0: 1 refusal of 5.** The single 44.10.0 refusal is the same-head
+**Electron 45.1.0: 5 refusals of 5. Electron 44.10.0: 1 refusal of 5.** The single 44.10.0 refusal is the same-head
 red/green pair this file leaned on — but the head is **#52's** (`f1442691`, the `typescript` pull request), **not
 #54's** as an earlier version of this section said, and #52 never moves Electron either. So the step is not perfectly
 deterministic (one 44.10.0 run refused where four passed), but **every 45.1.0 run refused, on two independent

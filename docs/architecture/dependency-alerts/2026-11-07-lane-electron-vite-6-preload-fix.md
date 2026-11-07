@@ -122,9 +122,13 @@ alone. The dependency diff is frozen at `52d7b547`; the head below adds only thi
 | push, head `90e80d1c` | `128237708649` (run `42318711466`) | **success**, 7m6s |
 | pull_request, head `90e80d1c` | `128237770453` (run `42318716466`) | **failure** — see below |
 | pull_request rerun, head `90e80d1c` | `128241786120` (run `42318716466`) | **success**, 6m44s |
+| push, head `b7f7f9ae` | `128246110261` (run `42321262602`) | **success**, 7m19s |
+| pull_request, head `b7f7f9ae` | `128246150348` (run `42321266385`) | **success**, 6m33s |
 
-**The reading, from the artifact.** The numbers below are the `52d7b547` pull_request run's; the two other green readings
-carry the same fields (session `completed`, `requests` 5, `toolsRequests` 2, `terminalCalls` 1, `painted` true).
+**The reading, from the artifact.** The numbers below are the `52d7b547` pull_request run's; every other green reading
+carries the same fields (session `completed`, `requests` 5, `toolsRequests` 2, `terminalCalls` 1, `painted` true), the last
+of them the final head's (`b7f7f9ae`, pull_request job `128246150348`: session `4ce9dd46-…` `completed`, 5 requests,
+`painted` true, exit 0).
 
 | Item | Before (2026-11-06, six runs) | This head |
 | --- | --- | --- |

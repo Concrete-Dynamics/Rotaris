@@ -124,6 +124,8 @@ alone. The dependency diff is frozen at `52d7b547`; the head below adds only thi
 | pull_request rerun, head `90e80d1c` | `128241786120` (run `42318716466`) | **success**, 6m44s |
 | push, head `b7f7f9ae` | `128246110261` (run `42321262602`) | **success**, 7m19s |
 | pull_request, head `b7f7f9ae` | `128246150348` (run `42321266385`) | **success**, 6m33s |
+| push, head `7c6fc0bf` | `128250243026` (run `42322543368`), started `2026-11-07T01:10:06Z` | **success**, 5m40s |
+| pull_request, head `7c6fc0bf` | `128250329182` (run `42322550347`), started `2026-11-07T01:10:22Z` | **success**, 5m52s |
 
 **The reading, from the artifact.** The numbers below are the `52d7b547` pull_request run's; every other green reading
 carries the same fields (session `completed`, `requests` 5, `toolsRequests` 2, `terminalCalls` 1, `painted` true), the last

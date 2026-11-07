@@ -110,9 +110,50 @@ All of it ran on Linux x86_64, Node 26.12.1, pnpm 11.9.0, Electron 44.10.0 (unch
   Alone on this branch's tree it repeats: 6570 / 6567 / 8059 / 8590 ms. The red is the host's, on both trees, and not a
   difference this branch makes — recorded as a flake, not reformatted into green.
 
-## The `package` job (rule 4)
+## The `package` job (rule 4) — GREEN
 
-Recorded below from CI, with the job id and the UTC timestamp. The `gate` job's own reading is recorded beside it.
+CI on this head, read from each run's own artifact (`windows-x64-package-evidence`), not from the log alone:
+
+| Field | Value |
+| --- | --- |
+| Run (pull_request) | `42317086674`, opened `2026-11-07T00:15:16Z` |
+| Job (pull_request) | **`128232239794`** — `package (windows-x64, development)`, started `2026-11-07T00:15:20Z`, **conclusion success**, 8m3s |
+| Run (push) | `42317066305`, `2026-11-07T00:15:06Z` |
+| Job (push) | **`128232175430`** — same name, **conclusion success**, 5m35s (the run's `load-proof.json` was written `00:16:30.802Z`) |
+| Head | `52d7b5475473074181c1a834be3a0037ffd24e2b` |
+
+**The reading, from the artifact (both runs agree; the numbers below are the pull_request run's).**
+
+| Item | Before (2026-11-06, six runs) | This head |
+| --- | --- | --- |
+| `the packaged app opens a store and runs a terminal call` | **refused** — `expected one session, found 0` | **ok**, 10219 ms |
+| sessions in the store | 0 | **1**, `execution_status` `completed` |
+| terminal call | absent | present, `status` `ok`, `is_error` 0 |
+| stub model requests | **0** | **5** (`toolsRequests` 2, `terminalCalls` 1) |
+| `load-proof.png` | 1024×720, **exactly one colour** `(18,18,18)` | 1024×720, **4659 distinct RGB colours** |
+| app exit | 0, no session started | 0, `run host: session d8ab194b-… started; row 0 recorded` at `00:22:34.247Z`, five `POST …/v1/chat/completions` |
+| store `user_version` | (not reached) | 35, migrated |
+| the new step: `the preload carries no external package` | — | **ok**, 1 file read |
+| every prior step (build, seam check, code-intelligence bundle/manifest, notices, build id, artifact names, `electron-builder --win`, fuses, portable, icon) | ok | ok |
+| portable launched twice (REQ-STARTUP-165) | — | ok, 22082 ms |
+
+**What this settles and what it does not.** Settled: on Electron **44.10.0**, electron-vite 6 with the preload's
+externals answered passes ADR-0056 rule 4 in CI — the packaged application opens its store, starts a run, reaches the
+shipped model client, runs the terminal call and paints a real window. The intermediate link the 2026-11-06 record had to
+mark as "consistent with" is now closed at the packaged level too: the app log carries the session and the model requests
+that the broken preload left at zero. Not settled here: Electron 45.1.0's own fitness (§ above); the `gate` job's own
+reading is the next section.
+
+## The `gate` job (`pnpm check`)
+
+| Event | Job | Conclusion | Reading |
+| --- | --- | --- | --- |
+| push | `128232175088` (run `42317066305`) | **fail** | `Test Files 557 passed \| 5 skipped (563)`, `Tests 7941 passed \| 134 skipped (8121)`, **`Errors 1 error`** — **no failing test**. The one error is `Worker exited unexpectedly` ([`a-vitest-fork-worker-exits-unexpectedly-during-the-gate-and-its-test-file-goes-unreported.md`](../../defects/a-vitest-fork-worker-exits-unexpectedly-during-the-gate-and-its-test-file-goes-unreported.md)): 562 of 563 files reported, one file's worker died and was never reported. The `AttachConsole failed` traces around it are printed by green runs on that host too. This branch's own file reported green in the same run: `✓ apps/desktop/scripts/lib/preload-externals.test.ts (7 tests \| 1 skipped)`. |
+| pull_request | `128232239446` (run `42317086674`) | recorded in the PR | |
+
+This is the repository's documented runner red, not this diff's: no test failed, and the branch touches neither the
+terminal nor the orchestrator nor a worker's own code (`git diff origin/main -- packages/` is empty). A red gate holds
+a merge until it is green, so it is reported here rather than smoothed over.
 
 ## Deviations from the brief, and open risks
 

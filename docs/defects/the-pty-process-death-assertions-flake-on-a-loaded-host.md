@@ -138,3 +138,25 @@ host at 73 to 100 % CPU with nineteen Electron processes of two sibling sessions
 `packages/agent-tools/src/terminal/terminal.test.ts` red in a 21 m 53 s `pnpm check`: the soft-paused kill's next command at
 11,050 ms against 10 s, and the keystrokes-without-Enter case at its 30 s bound. The file alone, the host still at 100 %: 93
 passed, 42 skipped, 261 s. Recorded, not investigated; the umbrella note holds the gate's reading.
+
+**Why sessions on the `kill` reading see a zombie, and why `bounded-launch.test.ts`'s own check does not — measured 2026-11-07
+(this host, Linux x64, 8 cores).** The four `goneWithin` assertions above read a pid with `process.kill(pid, 0)`, which finds
+a process that has exited but is not yet reaped (a zombie) for as long as nothing reaps it. A direct measurement here (a `sh`
+that backgrounds a child and `exec`s into `sleep`, so the child stays a zombie once it exits) shows the two readings on the
+same pid: `/proc/<pid>/stat` reads `Z`, `kill(pid, 0)` answers `true`, and the pid is **still unreaped 20 s on** — this
+container's PID 1 does not reap it. So a case that reads with `kill(pid, 0)` does not merely race a loaded host: on this host
+it reads a killed command's tree as alive indefinitely, which fits the Linux reds above and the `[true, true]`/`[false, true]`
+readings the note records. `apps/desktop/scripts/lib/bounded-launch.test.ts`'s `alive` reads `/proc` (its `Z`/`X` rule,
+line 52) and its `goneWithin` has never flaked here.
+
+**Repaired, first slice, 2026-11-07** (branch `fix/gate-flake-softpaused-death`, base `origin/main` `0b5981f3`;
+`packages/agent-tools/src/terminal/terminal.test.ts` only, no product code). The soft-paused kill suite's `alive` is now the
+same `/proc`-aware reading (a module-level `processAlive`, with `tasklist` kept for Windows and `kill(pid, 0)` as the last
+resort), and `goneWithin` names the survivor and its state when it gives up, so the next red is diagnosable rather than merely
+red. A new case pins the reading itself, `describe.runIf(PROC)('the process-death reading counts an exited-but-unreaped
+process as gone …')`: it builds a real zombie and asserts `process.kill(pid, 0)` does not throw while `processAlive(pid)` is
+false. Verified: the file alone is green (118 passed, 18 skipped, 202.5 s, this host); reverting `alive` to `kill(pid, 0)`
+turns exactly that one case red at its zombie assertion (`expected true to be false`), restored byte-identically
+(sha256 `4425218dd3923b571efca9cd4d3861304c41922cb0d5d2195a149f05118c6926`). This is the first slice; the note's
+other sites stay open: the `EBUSY` rename in `packages/mcp/src/mcp.test.ts` (the stubborn-runner note), the keystrokes-without-Enter
+case, and the shell-exit case that keeps its own note.

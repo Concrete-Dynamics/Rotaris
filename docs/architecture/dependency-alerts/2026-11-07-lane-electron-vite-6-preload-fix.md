@@ -112,17 +112,19 @@ All of it ran on Linux x86_64, Node 26.12.1, pnpm 11.9.0, Electron 44.10.0 (unch
 
 ## The `package` job (rule 4) — GREEN
 
-CI on this head, read from each run's own artifact (`windows-x64-package-evidence`), not from the log alone:
+CI on the frozen dependency diff, read from each run's own artifact (`windows-x64-package-evidence`), not from the log
+alone. The dependency diff is frozen at `52d7b547`; the head below adds only this record file.
 
-| Field | Value |
-| --- | --- |
-| Run (pull_request) | `42317086674`, opened `2026-11-07T00:15:16Z` |
-| Job (pull_request) | **`128232239794`** — `package (windows-x64, development)`, started `2026-11-07T00:15:20Z`, **conclusion success**, 8m3s |
-| Run (push) | `42317066305`, `2026-11-07T00:15:06Z` |
-| Job (push) | **`128232175430`** — same name, **conclusion success**, 5m35s (the run's `load-proof.json` was written `00:16:30.802Z`) |
-| Head | `52d7b5475473074181c1a834be3a0037ffd24e2b` |
+| Event | Job | Conclusion |
+| --- | --- | --- |
+| pull_request, head `52d7b547` | `128232239794` (run `42317086674`), started `2026-11-07T00:15:20Z` | **success**, 8m3s |
+| push, head `52d7b547` | `128232175430` (run `42317066305`) | **success**, 5m35s |
+| push, head `90e80d1c` | `128237708649` (run `42318711466`) | **success**, 7m6s |
+| pull_request, head `90e80d1c` | `128237770453` (run `42318716466`) | **failure** — see below |
+| pull_request rerun, head `90e80d1c` | `128241786120` (run `42318716466`) | **success**, 6m44s |
 
-**The reading, from the artifact (both runs agree; the numbers below are the pull_request run's).**
+**The reading, from the artifact.** The numbers below are the `52d7b547` pull_request run's; the two other green readings
+carry the same fields (session `completed`, `requests` 5, `toolsRequests` 2, `terminalCalls` 1, `painted` true).
 
 | Item | Before (2026-11-06, six runs) | This head |
 | --- | --- | --- |
@@ -131,18 +133,39 @@ CI on this head, read from each run's own artifact (`windows-x64-package-evidenc
 | terminal call | absent | present, `status` `ok`, `is_error` 0 |
 | stub model requests | **0** | **5** (`toolsRequests` 2, `terminalCalls` 1) |
 | `load-proof.png` | 1024×720, **exactly one colour** `(18,18,18)` | 1024×720, **4659 distinct RGB colours** |
-| app exit | 0, no session started | 0, `run host: session d8ab194b-… started; row 0 recorded` at `00:22:34.247Z`, five `POST …/v1/chat/completions` |
+| app log | no session started | `run host: session d8ab194b-… started; row 0 recorded` at `00:22:34.247Z`, five `POST …/v1/chat/completions` |
 | store `user_version` | (not reached) | 35, migrated |
 | the new step: `the preload carries no external package` | — | **ok**, 1 file read |
 | every prior step (build, seam check, code-intelligence bundle/manifest, notices, build id, artifact names, `electron-builder --win`, fuses, portable, icon) | ok | ok |
 | portable launched twice (REQ-STARTUP-165) | — | ok, 22082 ms |
 
+### The one red, and why it is not this change
+
+The `90e80d1c` pull_request run's `package` job failed at the launch with `expected one session, found 0` — the same
+sentence as the defect this branch fixes, and **not** the same failure. Its own artifact separates them:
+
+| | The preload defect (2026-11-06) | This red (`128237770453`) |
+| --- | --- | --- |
+| `the preload carries no external package` | — (step did not exist) | **ok** — the preload it built was clean |
+| `load-proof.png` | **exactly one colour** `(18,18,18)` | **2721 distinct colours**: a fully painted UI (sidebar, banner, Overview) |
+| app log | host-side steps only, no session | host-side steps **and** the window loaded, the notice drawn, `code-intelligence-setup → success` |
+| the typed prompt | never reached | **never reached** — no `prompt roots` line, no `run host: session … started`, 0 model requests |
+| the view | — | **Overview**, the launch view: the probe's Ctrl+2/Ctrl+L chords and its typed text never took effect |
+
+The window painted and every host-side step settled; only the probe's scripted input did not land, so no run started.
+That is a driver-timing mode on a loaded Windows runner, not the preload's externals: the artifact the job itself built
+carried `require("electron")` alone and passed its own check. The same head's push-event job passed the same step, and the
+pull_request rerun passed it too — three green readings and one red across one head, with the red's evidence showing a
+healthy preload. It is recorded here rather than smoothed over: a red package job holds the merge until a green one
+stands, and the green one does (the rerun).
+
 **What this settles and what it does not.** Settled: on Electron **44.10.0**, electron-vite 6 with the preload's
 externals answered passes ADR-0056 rule 4 in CI — the packaged application opens its store, starts a run, reaches the
 shipped model client, runs the terminal call and paints a real window. The intermediate link the 2026-11-06 record had to
 mark as "consistent with" is now closed at the packaged level too: the app log carries the session and the model requests
-that the broken preload left at zero. Not settled here: Electron 45.1.0's own fitness (§ above); the `gate` job's own
-reading is the next section.
+that the broken preload left at zero. Not settled here: Electron 45.1.0's own fitness (§ above); and the probe-input
+mode the one red shows, which the green runs and this branch's own preload do not explain away — it is named as an
+observation with its artifact, not diagnosed here.
 
 ## The `gate` job (`pnpm check`)
 

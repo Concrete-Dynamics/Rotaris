@@ -54,6 +54,7 @@ import { dataDirFor, hostSwitches, proofIsolationEnv, workspacesRootFor } from '
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { closingLines, reached, STEPS } from './lib/package-verdict.mjs';
 import { FORBIDDEN, KEPT, seamCheck } from './lib/seam-check.mjs';
+import { ALLOWED_EXTERNALS, preloadExternals, preloadFiles } from './lib/preload-externals.mjs';
 import { startStubModelEndpoint, STUB_TERMINAL_COMMAND } from './lib/stub-model-endpoint.mjs';
 import { ABOUT_ASSETS, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
 import { declaredProductVersion, packagingArtifactNames, portableArtifactName } from './lib/artifact-names.mjs';
@@ -196,6 +197,20 @@ try {
     if (missing.length) throw new Error(`the packaged bundle lost a seam the probe needs: ${missing.join(', ')}`);
     if (present.length) throw new Error(`the packaged bundle still carries scriptable seams: ${present.join(', ')}`);
     return { kept: KEPT, removed: FORBIDDEN.length, files, bytes };
+  });
+  /**
+   * The PRELOAD EXTERNALS check: a sandboxed preload (ADR-0044) cannot `require` a package out of `node_modules`, so
+   * none may reach the emitted preload. Like the seam check above it reads the ARTIFACT rather than the config: on
+   * 2026-11-07 the build shipped `require("zod")` because electron-vite 6 externalises `dependencies` by default in
+   * every node-side section and writes that list into the options the bundler reads (`build.externalizeDeps`, answered
+   * by `electron.vite.config.ts`), and no source reading showed it — the packaged launch refused rule 4 with a black
+   * capture and no session. `lib/preload-externals.mjs` carries the allowed set and the check that can fail.
+   */
+  step('the preload carries no external package', () => {
+    const files = preloadFiles(join(APP, 'out', 'preload'));
+    const { offenders } = preloadExternals(files, (f) => readFileSync(f, 'utf8'));
+    if (offenders.length) throw new Error(`the preload requires packages a sandboxed preload cannot load: ${offenders.map((o) => `${o.specifier} (${o.file})`).join(', ')}`);
+    return { preloadFiles: files.length, allowed: ALLOWED_EXTERNALS };
   });
   // The keep-prebuild counterfactual packs from the same configuration minus the prebuild exclusions, so the
   // prebuild is in the asar index where the binding's own loader looks first. Rule 4 has to refuse it.

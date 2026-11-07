@@ -12,7 +12,9 @@ import { symbolArtifactPlugin } from '../../tools/symbol-artifact/ensure.mjs';
  *    sharing one externalisation rule; native modules stay external so the
  *    rebuild-and-unpack obligation applies to them.
  *  - preload: ONE self-contained file, no shared chunk (a sandboxed preload
- *    cannot load a chunk at run time — a correctness setting).
+ *    cannot load a chunk at run time — a correctness setting), and nothing
+ *    from this package's `dependencies` external (a sandboxed preload cannot
+ *    `require` one either — the same correctness setting, below).
  *  - renderer: ONE bundle reused by every window, role by route
  *    (REQ-UIBENCH-112 true by construction).
  *  - assets bundled, not fetched; strict CSP; no remote origin.
@@ -88,9 +90,29 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [symbolArtifact, externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES })],
+    /**
+     * electron-vite 6 externalises this package's `dependencies` by DEFAULT in every node-side section
+     * (`build.externalizeDeps ?? true`), and it now writes that list into the options the bundler actually reads
+     * (`rolldownOptions.external`, bridged back to `rollupOptions.external`) — so the `external` list stated
+     * below no longer replaces it. The preload reaches `zod` through `@rotaris/contracts`, and a sandboxed
+     * preload cannot `require` a package from `node_modules`: the loader refuses it, the bridge never lands, and
+     * the packaged launch opens no session (ADR-0056 rule 4 refused; measured on Electron 44.10.0, 2026-11-07).
+     *
+     * `build.externalizeDeps: false` is electron-vite 6's own answer for exactly this — the plugin's own type
+     * carries it as the replacement for the deprecated `externalizeDepsPlugin`, and the preload types say a
+     * sandboxed preload requires third-party dependencies bundled. Only `EXTERNAL` below (electron, the native
+     * modules, the node builtins) stays external.  Without the plugin given here, the option decides; giving the
+     * plugin would override it (`resolveConfigDrivenPlugins` skips the option when the plugin is present).
+     *
+     * The alternative measure — `externalizeDepsPlugin({ exclude: [...WORKSPACE_PACKAGES, 'zod'] })` — was built
+     * and compared on 2026-11-07: byte-identical preload (md5 39d99be2…, 324790 B, the v5 baseline's own file).
+     * This one is taken because it closes the whole class rather than the one package reached today, and because
+     * the exclusion list would have to name every future `dependencies` import the preload grows.
+     */
+    plugins: [symbolArtifact],
     resolve: { alias: workspaceAliases },
     build: {
+      externalizeDeps: false,
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/preload/index.ts') },
         external: EXTERNAL,

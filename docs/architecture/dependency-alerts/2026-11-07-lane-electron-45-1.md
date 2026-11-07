@@ -74,16 +74,46 @@ Linux x86_64, Node 26.12.1, pnpm 11.9.0, each heavy run behind `heavy-nice` + `h
   (`apps/desktop/scripts/lib/package-platform.mjs`: on Linux the launch and capture steps are `not applicable`). Rule 4's
   own reading is therefore CI's, recorded in §5.
 
-## 5. CI — the `package` job (rule 4)
+## 5. CI — the `package` job (rule 4): **GREEN**
 
-Recorded below from CI, with the job id, the UTC timestamps and the artifact's own numbers.
+CI on this head (`56810638`), read from each run's own artifact (`windows-x64-package-evidence`):
 
-## 6. What would separate the two failure classes, if it refuses
+| Event | Run | Job | Conclusion | Start → Ende (UTC) |
+| --- | --- | --- | --- | --- |
+| push | `42328567094` | `128269510949` | **success** | `02:18:24Z` → `02:24:02Z` (5m38s) |
+| pull_request | `42328580836` | `128269555966` | **success** | `02:18:34Z` → `02:24:06Z` (5m32s) |
 
-The base this branch sits on makes the two causes distinguishable, which #58's base could not:
+**The reading, from the push run's artifact.** The pull_request run's artifact carries the same fields (session
+`10b05489-…` `completed`, the same stub counts).
+
+| Item | Value |
+| --- | --- |
+| the artifact's own Electron | `load-proof.afterpack.json` → `electronVersion: "45.1.0"`; the native rebuild ran (`rebuildMs` 83245) |
+| `the preload carries no external package` | **ok**, 5 files read (no external) |
+| `the packaged app opens a store and runs a terminal call` | **ok**, 9764 ms |
+| sessions | **1**, `execution_status` `completed` |
+| terminal call | present, `status` `ok`, `is_error` 0 |
+| stub model requests | **5** (`toolsRequests` 2, `terminalCalls` 1) |
+| `load-proof.png` | 1024×720, **4616 distinct RGB colours** |
+| app log | `run host: session 1999931f-… started; row 0 recorded` at `02:23:20.784Z`, five `POST …/v1/chat/completions` |
+| app exit | 0 |
+| every prior step (build, seam check, code-intelligence bundle/manifest, notices, build id, artifact names, `electron-builder --win`, fuses, portable, icon) | ok |
+
+**Verdict: Electron 45.1.0 passes ADR-0056 rule 4 on the base the preload fix made green — first reading, both
+events.** The packaged application built with Electron 45 opens its store, starts a run, reaches the shipped model client,
+runs the terminal call and paints a real window. **The refusal #49 and #58 read was electron-vite 6's, not the pin's:**
+those two branches carried both changes, and this one moves the pin alone.
+
+**The `gate` job's own reading** is reported in the PR; the repository's documented load-dependent flakes decide it, and no
+file this diff loads is among them.
+
+## 6. What would separate the two failure classes, if it had refused
+
+The base this branch sits on makes the two causes distinguishable, which #58's base could not — and the green reading
+above means neither class occurred here. The table stays as the instrument that would have decided it:
 
 | Reading | Preload-class failure (the electron-vite-6 defect) | Electron-45-specific failure |
 | --- | --- | --- |
 | `the preload carries no external package` | **red** | green — the built preload requires `electron` alone |
 | `load-proof.png` | **exactly one colour** (the black capture) | paints a real window |
-| `the packaged app opens a store and runs a terminal call` | 0 sessions, 0 model requests | recorded below |
+| `the packaged app opens a store and runs a terminal call` | 0 sessions, 0 model requests | run starts, or refuses for another reason the log names |

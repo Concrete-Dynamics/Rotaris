@@ -262,3 +262,22 @@ next command at 11,050 ms against its 10 s bound; the keystrokes-without-Enter c
 after another, 01:36 to 01:42 with the host still at 100 %: 21 of 21 in 104 s, and 93 passed with 42 skipped in 261 s. The
 landing was run again on the reruns' green: the tool runs the whole gate on each attempt and retries no red, so a loaded
 host costs a landing attempt per red, not a file. Recorded, not investigated.
+
+**Seen again 2026-11-07, and the sharpest form of it yet — one head, two events, both verdicts, twice** (the hosted
+Windows runner; recorded from `gh` in Sessionanalyse S-52). Runs `42327641858` (push) and `42327648964`
+(pull_request) are the **same head** `4a5ba0fd` (the electron Dependabot group), seconds apart on the same image: the
+push run's `gate` **and** `package` both failed, the pull_request run had both green. The pair repeats on head
+`067ce107` (production group): run `42328149486` (push) `gate` failure, run `42328154744` (pull_request) `gate` success.
+And `main` itself was red twice on its **unchanged** head `6b521dc6`: job `128151925670` on `AssertionError: expected
+'(no output)' to be 'AAA'` in `packages/agent-tools/src/terminal/terminal.test.ts` (the A10/OQ-168 family), and job
+`128256342101` (a `gh run rerun --failed`) on the `EBUSY` rename in `packages/mcp/src/mcp.test.ts:359` (the
+stubborn-runner case) — a different file each time, neither touched by the head. Two more sites the same night: job
+`128268183066` on head `067ce107` was **wholly green in its tests** (`557 passed`, `7949 passed`) and fell only on
+`Errors 1 error`, `Error: [vitest-pool]: Worker forks emitted error` — [the worker exit](a-vitest-fork-worker-exits-unexpectedly-during-the-gate-and-its-test-file-goes-unreported.md)
+family; and job `128267160826` on head `98c3cfae` was a **typecheck** failure, ~40 `TS2694`/`TS2339` reading
+`node_modules/typescript/lib/version` as if it were the compiler's API (a non-deterministic `tsc` resolution, not the
+diff). The two chronic Windows sites this note holds (the PTY process-death assertions and the stubborn-runner
+`EBUSY` rename) are the two that recurred on `main`. First slice repaired 2026-11-07 (branch
+`fix/gate-flake-softpaused-death`): the PTY suite's death reading is now the `/proc`-aware one
+[the PTY note](the-pty-process-death-assertions-flake-on-a-loaded-host.md) already named, with a case that pins the reading.
+The `EBUSY`, worker-exit and typecheck families stay open.

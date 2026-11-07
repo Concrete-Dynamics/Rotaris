@@ -42,6 +42,25 @@ async function settledCmdline(read: () => string, boundMs: number, pause: () => 
 const shell = findShell();
 
 /**
+ * Whether a pid still runs. `kill(pid, 0)` alone reads a process that has exited but is not yet reaped (a zombie) as
+ * alive for as long as nothing reaps it — and in a container whose PID 1 does not reap, that can outlast a case's own
+ * bound (measured here: 20 s and counting, `docs/archive/defects/the-signal-test-gives-a-dead-proofs-launch-two-and-a-half-seconds-to-be-gone.md`).
+ * So on Linux `/proc/<pid>/stat` decides, where a dead process reads `Z`; Windows keeps `tasklist`; anywhere else
+ * `kill(pid, 0)` is all there is. This is the reading `apps/desktop/scripts/lib/bounded-launch.test.ts` already uses,
+ * and the reason its process-death check has never flaked where these assertions did
+ * (`docs/defects/the-pty-process-death-assertions-flake-on-a-loaded-host.md`).
+ */
+const PROC = process.platform === 'linux' && existsSync('/proc/self/stat');
+const procState = (pid: number): string | null => { try { const s = readFileSync(`/proc/${pid}/stat`, 'utf8'); return s.slice(s.lastIndexOf(')') + 2, s.lastIndexOf(')') + 3); } catch { return null; } };
+const processAlive = (pid: number): boolean => {
+  if (process.platform === 'win32') return execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH'], { encoding: 'utf8', windowsHide: true }).includes(String(pid));
+  if (PROC) { const state = procState(pid); return state !== null && state !== 'Z' && state !== 'X'; }
+  try { process.kill(pid, 0); return true; } catch { return false; }
+};
+/** What each pid read, and how, at the moment a death check gave up: `pid state` pairs, so a red names its survivor. */
+const deathReading = (pids: readonly number[]): string => pids.map((pid) => `${pid} ${procState(pid) ?? (processAlive(pid) ? 'alive' : 'gone')}`).join(', ');
+
+/**
  * REQ-TOOLS-104 sends Windows to PowerShell and every other host to a POSIX shell, so every proof below is
  * spelled in the shell the host actually runs. What is under test is the marker protocol, the capture, the
  * emulated screen and the process tree, and none of those is a property of either language — the two spellings
@@ -1159,14 +1178,17 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // only on a call still `running`, a soft-paused command is not one, and the stream dropped the answer, so the window's kill
   // answered ok while the shell, the command and its grandchild all ran on, and the next call queued behind them to its cap.
   describe('REQ-SHELL-092, REQ-TOOLS-098: the window\'s kill of a soft-paused command', () => {
-    const alive = (pid: number): boolean => {
-      if (process.platform === 'win32') return execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH'], { encoding: 'utf8', windowsHide: true }).includes(String(pid));
-      try { process.kill(pid, 0); return true; } catch { return false; }
-    };
+    // `processAlive` above: the zombie-aware reading. With `kill(pid, 0)` alone the four `goneWithin` assertions below
+    // read a just-killed tree whose members are still unreaped zombies as `[true, true]`/`[false, true]` and go red on an
+    // unladen host — the flake `docs/defects/the-pty-process-death-assertions-flake-on-a-loaded-host.md` records.
+    const alive = processAlive;
     const goneWithin = async (pids: readonly number[], boundMs: number): Promise<boolean[]> => {
       const by = Date.now() + boundMs;
       while (pids.some(alive) && Date.now() < by) await new Promise((res) => setTimeout(res, 200));
-      return pids.map(alive);
+      const reading = pids.map(alive);
+      // A red here used to say only `[false, true]`; the reading names which pid survived and in what state.
+      if (reading.some(Boolean)) expect(reading, `death reading: ${deathReading(pids)}`).toEqual([false, false]);
+      return reading;
     };
     /** A soft-paused command that starts a grandchild and waits, as the note measured it; its two pids once both are up. */
     const pausedWithGrandchild = async (t: Awaited<ReturnType<typeof backendSession>>['t'], tag: string) => {
@@ -3005,4 +3027,29 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     // The executor names the manager's own shell.
     expect(terminalTool(new TerminalManager({ factory: { spawn: () => { throw new Error('unused'); } }, backend: { kind: 'posix', file: '/bin/sh' }, clocks, config: TERMINAL_DEFAULTS, env: {}, warn: () => undefined }), TERMINAL_DEFAULTS).description).toBe(posix);
   });
+});
+
+// docs/defects/the-pty-process-death-assertions-flake-on-a-loaded-host.md: the four `goneWithin` assertions of the
+// soft-paused kill suite used `kill(pid, 0)`, which finds a process that has exited but is not yet reaped (a zombie).
+// Where PID 1 reaps slowly, that reading waits on the host rather than on the tree and the case goes red even unladen.
+// This pins the reading the suite now uses: a zombie is gone, a running process is not.
+describe.runIf(PROC)('the process-death reading counts an exited-but-unreaped process as gone (the check `goneWithin` uses)', () => {
+  it('reads a zombie as gone where `kill(pid, 0)` still finds it, and a running process as alive', async () => {
+    // `sh` starts a child and execs into `sleep`, which never waits for it: once the child exits it stays a zombie until
+    // PID 1 reaps it, which this container's init does not promptly (measured: still a zombie 20 s on). The child blocks
+    // on a pipe from the test (fd 3) so it cannot exit before the exec — a shell that is still a shell would reap it.
+    const holder = spawn('sh', ['-c', '(read _ <&3) & echo $!; exec sleep 30'], { stdio: ['ignore', 'pipe', 'ignore', 'pipe'] });
+    const until = async (done: () => boolean, ms = 10_000): Promise<void> => { for (const deadline = Date.now() + ms; !done() && Date.now() < deadline;) await new Promise((r) => setTimeout(r, 20)); };
+    try {
+      const child = await new Promise<number>((resolve) => holder.stdout!.once('data', (d) => resolve(Number(String(d).trim()))));
+      expect(child).toBeGreaterThan(0);
+      await until(() => procState(holder.pid!) === 'sleep');
+      expect(processAlive(child)).toBe(true); // still blocked on the pipe: running, so not gone
+      (holder.stdio[3] as NodeJS.WritableStream & { destroy(): void }).destroy(); // EOF: the child's `read` returns and it exits
+      await until(() => procState(child) === 'Z');
+      expect(procState(child)).toBe('Z');
+      expect(() => process.kill(child, 0)).not.toThrow(); // what the check used to ask — and why it waited on PID 1
+      expect(processAlive(child)).toBe(false); // the reading that makes the four assertions above host-independent
+    } finally { holder.kill('SIGKILL'); }
+  }, 20_000);
 });

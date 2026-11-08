@@ -19,7 +19,7 @@
  *
  * Evidence under `.proof/persona-chip-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -267,6 +267,39 @@ const bRest = stripAt(b, 7000);
 expect(bRest.runState === 'Ready', `workspace B's chips were not read at rest — the run state is ${JSON.stringify(bRest.runState)}`);
 expect(bRest.persona === 'coding-agent', `workspace B's persona chip at rest does not follow its configured default (REQ-CHAT-006/009): ${JSON.stringify(bRest.persona)} while the file states default_persona: coding-agent — a chip reading ${JSON.stringify(bRest.persona)} has been shown to ignore the configuration`);
 results.workspaceB = { configured: 'coding-agent', atRest: bRest };
+
+
+/*
+ * ── 3. The WRITE limb of the same cause, in workspace A (a third launch) ──
+ *
+ * `entry.persona` is not only drawn: the model and reasoning chips key their CONFIGURATION write by it
+ * (`main.tsx` -> `setNextModel`/`setField`, `config.setField`). On the unrepaired build that key was the literal
+ * `orchestrator` at rest, so a model chosen on an idle composer was written to `personas.orchestrator.*` while the next
+ * run starts as `default_persona` — the user's choice was silently not honoured. The write is measured on the FILE, not
+ * on the chip: choose a model the configured role does not already name, and require the file to have moved that role's
+ * `model`, and no other role's. This launch submits nothing; it ends idle.
+ */
+const before = readFileSync(join(workspaceA, '.rotaris', 'agents.yaml'), 'utf8');
+const w = await launch('write-limb', workspaceA, local, preferences, {
+  ROTARIS_CAPTURE_VIEWS: '2@1500',
+  // The `SearchableSelect` is driven as a person drives it: the trigger is clicked, the wanted option clicked.
+  ROTARIS_CAPTURE_SELECT: `${MODEL}>>scripted@4000~9000`,
+  ROTARIS_CAPTURE_INSPECT_AT: `${RUN_STATE}@3500~7000`,
+  ROTARIS_CAPTURE_AFTER_MS: '13000',
+});
+const after = readFileSync(join(workspaceA, '.rotaris', 'agents.yaml'), 'utf8');
+const config = after.slice(after.indexOf('personas:'));
+/** The `model:` a named role's entry states in the written file, or null where the role is absent. @param {string} role */
+const roleModel = (role) => {
+  const at = config.indexOf(`\n  ${role}:`);
+  if (at === -1) return null;
+  const m = /model:\s*([A-Za-z0-9_.-]+)/.exec(config.slice(at, at + 200));
+  return m?.[1] ?? null;
+};
+expect(w.log.includes('= scripted → chosen'), `the model chip's choice did not land — the select seam reported no choice: ${JSON.stringify(w.log.split('\n').filter((l) => /capture: select/.test(l)))}`);
+expect(roleModel('architect') === 'scripted', `choosing a model at rest did not write it onto the CONFIGURED role (REQ-CHAT-006/009): personas.architect.model is ${JSON.stringify(roleModel('architect'))} in the file the launch wrote, not scripted — on the unrepaired build the write went to the literal fallback's role instead`);
+expect(roleModel('orchestrator') === null, `choosing a model at rest wrote onto a role the workspace does not configure: personas.orchestrator appears in the file (${JSON.stringify(roleModel('orchestrator'))})`);
+results.writeLimb = { configuredRole: 'architect', chosenModel: 'scripted', modelAfter: roleModel('architect'), strayOrchestratorModel: roleModel('orchestrator'), choseLanded: true, beforeHasArchModel: /architect:\s*\{[^}]*arch-model/.test(before) };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

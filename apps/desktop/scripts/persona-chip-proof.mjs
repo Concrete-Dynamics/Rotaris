@@ -1,4 +1,3 @@
-// @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
  * The composer's next-run chips at rest — REQ-CHAT-006/009 with REQ-CONFIG-063, REQ-MONITOR-057/058.
  *
@@ -186,7 +185,9 @@ const AGENTS_YAML = [
   '    code_intelligence: { enabled: false }',
   '',
 ].join('\n');
-for (const [ws, title] of [[workspaceA, 'persona-chip proof workspace A'], [workspaceB, 'persona-chip proof workspace B']]) {
+/** @type {[string, string][]} */
+const workspaces = [[workspaceA, 'persona-chip proof workspace A'], [workspaceB, 'persona-chip proof workspace B']];
+for (const [ws, title] of workspaces) {
   mkdirSync(join(ws, '.rotaris'), { recursive: true });
   writeFileSync(join(ws, 'README.md'), `# ${title}\n`);
   writeFileSync(join(ws, '.rotaris', 'agents.yaml'), ws === workspaceA ? AGENTS_YAML : AGENTS_YAML.replace('default_persona: architect', 'default_persona: coding-agent'));

@@ -926,7 +926,7 @@ describe('REQ-CONFIG-225: the unresolved-placeholder warning names the file the 
     expect(lineFor(r, 'web_search')).toContain('from the built-in defaults');
   });
   it('REQ-CONFIG-371: an entry whose url still holds a placeholder loads unavailable, and one whose key arrives is available', () => {
-    // docs/defects/an-unresolved-remote-url-is-reported-available.md
+    // docs/archive/defects/an-unresolved-remote-url-is-reported-available.md
     const s = scopes(null, 'mcp_servers:\n  remote: { type: http, url: "https://d.example/?k=${NOPE_D}" }\n  satisfied: { type: http, url: "https://d.example/?k=${PRESENT}" }\n');
     const absent = loadConfiguration({ ...s, env: {}, home: tmp() });
     if (!absent.ok) throw new Error(`load failed: ${absent.error.lines.join(' | ')}`);

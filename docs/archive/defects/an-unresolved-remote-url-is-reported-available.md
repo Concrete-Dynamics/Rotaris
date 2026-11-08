@@ -1,5 +1,7 @@
 ## An MCP server whose remote url still holds an unresolved placeholder is reported available, so a probe connects to it and the row shows a network failure where the missing prerequisite belongs
 
+**Outcome: repaired 2026-11-08 (branch `fix/unresolved-remote-url-is-unavailable`, PR [#70](https://github.com/Concrete-Dynamics/Rotaris/pull/70)); the availability rule reads the unresolved list, `resolveMcpConfiguration` passes it, and a remote row draws the host's own detail. Pinned by `packages/config/src/mcp/mcp.test.ts` and `packages/config/src/load.test.ts`.**
+
 `packages/config/src/mcp/commands.ts`'s `availability()` is REQ-MCP-037's one rule for every surface, and its remote
 branch read the transport alone: `if (entry.type !== 'stdio') return { available: true, why: 'remote' };`. It never
 looked at the entry's `url` or at the placeholders left in it, which `resolveMcpConfiguration` had already computed
@@ -44,7 +46,11 @@ decision and is raised in the handoff rather than invented here.
 
 ## Specs
 
-REQ-CONFIG-371, REQ-CONFIG-349, REQ-CONFIG-352, REQ-CONFIG-225, REQ-MCP-037, REQ-MCP-093, REQ-MCP-091, REQ-MCP-092.
+REQ-CONFIG-371, REQ-CONFIG-349, REQ-CONFIG-352, REQ-CONFIG-225, REQ-MCP-037, REQ-MCP-093, REQ-MCP-041, REQ-MCP-091, REQ-MCP-092.
+
+Resolution [`15/03 #49`](../../spec/resolutions/15-settings-configuration/03-dispositions.md) rules the general sentence the
+row's wording follows ("Availability is a statement about the local prerequisite for reaching a thing and nothing else
+… The detail names the missing prerequisite"), and `#1` rules REQ-CONFIG-225's own reading.
 
 ## Relevant files
 
@@ -54,6 +60,5 @@ REQ-CONFIG-371, REQ-CONFIG-349, REQ-CONFIG-352, REQ-CONFIG-225, REQ-MCP-037, REQ
   are computed, now passing the list into the rule.
 - `packages/ui/src/settings/McpSettings.tsx` — the row's enablement hint and the toggle's `title`, which now read
   `row.availabilityDetail` for a remote entry.
-- `apps/desktop/src/run-host/mcp.ts` — `list()` and `probeOne()`, unchanged: both already carry
-  `availabilityDetail` and already short-circuit an unavailable entry, which is why the rule alone decides.
+- `apps/desktop/src/run-host/mcp.ts` — `list()`, `probeOne()` and `carriedAndLaunchable()` all read the fixed verdict and short-circuit an unavailable entry; the REQ-MCP-041 detailed log line is gated to a `stdio` entry (a remote entry made unavailable by its url has no command to name, which the availability fix first made reachable).
 - `packages/config/src/mcp/mcp.test.ts`, `packages/config/src/load.test.ts` — the pins.

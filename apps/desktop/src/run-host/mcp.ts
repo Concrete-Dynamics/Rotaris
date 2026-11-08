@@ -303,11 +303,18 @@ export class McpHost {
       if (d.key === '') said.add(d.message);
       this.deliver(d, ctx);
     }
-    // REQ-MCP-041's detailed line, once per server per process, beside the per-persona warning.
+    // REQ-MCP-041's detailed line, once per server per process, beside the per-persona warning. The requirement is
+    // framed for a stdio entry ("Given an unavailable stdio server carried by a persona … the command was not found on
+    // PATH") and names the raw and resolved command, so it is emitted for a stdio entry alone. A REMOTE entry can be
+    // unavailable too — REQ-CONFIG-225 makes one whose url still holds a placeholder unavailable — and it has no
+    // command to name; the persona's own warning above already carries its prerequisite, which is the url. Until
+    // 2026-11-08 no remote entry could be dropped, so this line never met one; the availability fix made it reachable
+    // and it printed `raw command '' … was not found on PATH` over a remote server.
     for (const dropped of r.value.dropped) {
       if (dropped.reason !== 'unavailable') continue;
       const s = cfg.mcp.servers[dropped.name];
-      if (s) this.deliver({ severity: 'info', scope: 'process', key: `mcp.unavailable-detail.${dropped.name}`, channels: 'log', message: `unavailable — raw command '${s.entry.command ?? ''}', resolved '${s.resolved?.command ?? ''}' [${(s.resolved?.args ?? []).join(' ')}] was not found on PATH (REQ-MCP-041)`, server: dropped.name });
+      if (!s || s.entry.type !== 'stdio') continue;
+      this.deliver({ severity: 'info', scope: 'process', key: `mcp.unavailable-detail.${dropped.name}`, channels: 'log', message: `unavailable — raw command '${s.entry.command ?? ''}', resolved '${s.resolved?.command ?? ''}' [${(s.resolved?.args ?? []).join(' ')}] was not found on PATH (REQ-MCP-041)`, server: dropped.name });
     }
     this.surfaces.set(key, { key, surface: r.value, diagnostics: r.diagnostics });
     const line = `mcp: surface for ${role} — callable ${r.value.active.map((a) => `${a.name}[${a.tools.map((t) => t.callable).join(',')}]`).join(' ') || '(none)'}; dropped ${r.value.dropped.map((d) => `${d.name}:${d.reason}`).join(' ') || '(none)'}; section ${JSON.stringify(renderMcpSection(r.value))}`;

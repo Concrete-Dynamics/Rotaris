@@ -115,9 +115,11 @@ export type Availability = { readonly available: true; readonly why: 'remote' | 
  * missing prerequisite (REQ-CONFIG-371), "Check status" opened a connection to an address the run must never reach,
  * and a persona carried a server whose address was unusable (REQ-MCP-041).
  */
-export function availability(entry: Pick<McpServerEntry, 'type' | 'command'>, resolved: ResolvedCommand | null, onPath: (executable: string) => boolean, unresolved: readonly string[] = []): Availability {
+export function availability(entry: Pick<McpServerEntry, 'type' | 'command'>, resolved: ResolvedCommand | null, onPath: (executable: string) => boolean, unresolved: readonly string[]): Availability {
   if (entry.type !== 'stdio') {
-    if (unresolved.length > 0) return { available: false, why: 'unresolved-url', detail: `its url carries ${unresolved.map((v) => `\${${v}}`).join(', ')}, which no stored secret or environment variable resolved (REQ-CONFIG-225)` };
+    // Distinct variable names, in first-seen order: a url naming one variable twice is one missing prerequisite.
+    const missing = [...new Set(unresolved)];
+    if (missing.length > 0) return { available: false, why: 'unresolved-url', detail: `its url carries ${missing.map((v) => `\${${v}}`).join(', ')}, which no stored secret or environment variable resolved (REQ-CONFIG-225)` };
     return { available: true, why: 'remote' };
   }
   if (entry.command === CODE_INTELLIGENCE_TOKEN || resolved?.builtin) return { available: true, why: 'builtin' };

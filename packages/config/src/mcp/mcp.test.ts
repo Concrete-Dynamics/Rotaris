@@ -195,20 +195,28 @@ describe('REQ-MCP-028..037 — command resolution and the one availability rule'
     expect(resolveCommand({ name: 'ci', command: 'uvx', args: ['x', 'start-mcp-server'], workspaceRoot: 'C:/ws', onPath, binding: null }).value.args).toEqual(['x', 'start-mcp-server']);
   });
   it('availability: remote and the token unconditionally, else PATH after resolution, empty never', () => {
-    expect(availability(entry({ type: 'http', url: 'x' }), null, () => false)).toEqual({ available: true, why: 'remote' });
-    expect(availability(entry({ command: 'builtin:code-intelligence' }), null, () => false)).toEqual({ available: true, why: 'builtin' });
-    expect(availability(entry({ command: 'npm:pkg' }), { command: 'npx', args: [], builtin: false }, onPath)).toEqual({ available: true, why: 'on-path' });
-    expect(availability(entry({ command: 'ghost' }), { command: 'ghost', args: [], builtin: false }, onPath).available).toBe(false);
-    expect(availability(entry({ command: '' }), null, () => true).available).toBe(false);
+    expect(availability(entry({ type: 'http', url: 'x' }), null, () => false, [])).toEqual({ available: true, why: 'remote' });
+    expect(availability(entry({ command: 'builtin:code-intelligence' }), null, () => false, [])).toEqual({ available: true, why: 'builtin' });
+    expect(availability(entry({ command: 'npm:pkg' }), { command: 'npx', args: [], builtin: false }, onPath, [])).toEqual({ available: true, why: 'on-path' });
+    expect(availability(entry({ command: 'ghost' }), { command: 'ghost', args: [], builtin: false }, onPath, []).available).toBe(false);
+    expect(availability(entry({ command: '' }), null, () => true, []).available).toBe(false);
   });
   it('REQ-CONFIG-371 / REQ-CONFIG-225: a remote url still holding an unresolved placeholder is unavailable', () => {
     // A remote entry with no unresolved placeholder is available on the strength of its configuration alone (REQ-MCP-037).
     expect(availability(entry({ type: 'http', url: 'https://x/mcp' }), null, () => false, [])).toEqual({ available: true, why: 'remote' });
+    // `sse` is the same branch as `http`: REQ-CONFIG-371 names both together.
+    expect(availability(entry({ type: 'sse', url: 'https://x/mcp' }), null, () => false, [])).toEqual({ available: true, why: 'remote' });
     const withheld = availability(entry({ type: 'http', url: 'https://x/mcp?key=${NOPE}' }), null, () => false, ['NOPE']);
     expect(withheld.available).toBe(false);
     expect(withheld).toMatchObject({ why: 'unresolved-url' });
     expect(withheld.available === false ? withheld.detail : '').toContain('${NOPE}');
     expect(withheld.available === false ? withheld.detail : '').toMatch(/REQ-CONFIG-225/);
+    expect(availability(entry({ type: 'sse', url: 'https://x/mcp?key=${NOPE}' }), null, () => false, ['NOPE'])).toMatchObject({ available: false, why: 'unresolved-url' });
+    // Two placeholders are both named; one named twice is one missing prerequisite.
+    expect(availability(entry({ type: 'http', url: 'https://x/?a=${A}&b=${B}' }), null, () => false, ['A', 'B', 'A'])).toMatchObject({ why: 'unresolved-url' });
+    const twice = availability(entry({ type: 'http', url: 'https://x/?a=${A}&b=${A}' }), null, () => false, ['A', 'A']);
+    expect(twice.available === false ? twice.detail : '').toContain('${A}');
+    expect((twice.available === false ? twice.detail : '').match(/\$\{A\}/g)).toHaveLength(1);
     // The stdio branch never reads it: a command that is on PATH stays available whatever an unrelated list holds.
     expect(availability(entry({ command: 'node' }), { command: 'node', args: [], builtin: false }, onPath, ['NOPE'])).toEqual({ available: true, why: 'on-path' });
   });

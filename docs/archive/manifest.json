@@ -905,6 +905,7 @@
     "defects/an-orderly-quit-logs-the-run-host-gone-at-error.md": "152babe4101ffac6e81ef4f209fdedb2e693bfc8d7b3348ed0b11736b13e4afd",
     "defects/an-unknown-key-in-a-merged-section-is-reported-without-the-file-that-states-it.md": "3b3c216c5d7ce25e0626aa43dc58fc389ca84c10f2899cb63415ee73fb4475eb",
     "defects/an-unreadable-workspace-identifier-leaves-the-window-unopened-without-a-notice.md": "40ed9686199467820e5e71f7af1bc4eeb8c689920eabfb15e7745784d96ae114",
+    "defects/an-unresolved-remote-url-is-reported-available.md": "3fbded555c0c90b95b5a34651755571068444e6f5b680c642fb54da2ae9f42be",
     "defects/an-update-restart-discards-a-windows-unsaved-settings-unasked.md": "cef90066fac4935b155f43e0eeb4862e7fa9a7dd9f1fd7601d0f20f7f716d804",
     "defects/another-local-user-can-deny-the-instance-sockets-temporary-fallback.md": "798eacb632ef8fa8975ba647201020121e23a0a0c127fd9f0db96ffcaac099d7",
     "defects/another-servers-tool-named-like-a-code-intelligence-edit-tool-is-counted-as-a-file-write.md": "8a09076cd30cc9f8bd4b81f232248094991c1a05b35a1a95561d8259802d7e3d",

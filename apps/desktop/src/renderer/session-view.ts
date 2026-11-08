@@ -49,12 +49,16 @@ export function personasOf(snapshot: ConfigSnapshot | null): PersonaEntry[] {
 /**
  * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): `entryRole` over the snapshot's role view — the
  * persona the latest root runs or ran as (the live run's `entryPersona`, else the transcript's latest root row), its model,
- * its reasoning and its declared tools (`declaredTools`, REQ-MONITOR-060's stand-in). The first root's persona was drawn until 2026-10-01
+ * its reasoning and its declared tools (`declaredTools`, REQ-MONITOR-060's stand-in); with no run and no transcript, the
+ * CONFIGURED default role the next run would start as (`snapshot.defaultPersona`, REQ-CHAT-006/009 with REQ-CONFIG-063).
+ * The first root's persona was drawn until 2026-10-01
  * (docs/archive/defects/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
  */
 export function entryOf(snapshot: ConfigSnapshot | null, rows: readonly TranscriptRow[], session: Pick<SessionRecord, 'agents' | 'entryRoots' | 'entryPersona' | 'modelOverrides'> | null): EntryRole {
   // REQ-CHAT-006 / REQ-SESSION-026: with a session-wide override in force the role names the model it runs on.
-  return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null, session?.modelOverrides ?? []);
+  // REQ-CHAT-006 / REQ-CHAT-009: with no session yet, the configured default role stands in — the role the composer's
+  // persona chip writes and the NEXT run would start as — so the chip does not misdraw `orchestrator` until a run begins.
+  return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null, session?.modelOverrides ?? [], snapshot?.defaultPersona ?? null);
 }
 /** REQ-SHELL-072/073: open or raise the persona window for an agent; the run-level agent's persona is the entry role's. */
 export async function openPersona(agent: AgentRecord, focusSteer: boolean): Promise<void> {

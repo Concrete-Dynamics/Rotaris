@@ -4,7 +4,7 @@ import { applyChange, clampForDisplay, dictationSaveProblem, isDirty, liveStateO
 import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
 
 const snapshot: ConfigSnapshot = {
-  workspaceRoot: 'C:/ws', loadOk: true, fatal: null,
+  workspaceRoot: 'C:/ws', loadOk: true, fatal: null, defaultPersona: 'orchestrator',
   slots: [
     { slot: 'large_model', value: 'gpt-4o', origin: 'default', thinking: null },
     { slot: 'small_model', value: 'gpt-4o-mini', origin: 'workspace', thinking: 'auto' },

@@ -178,6 +178,14 @@ export const ConfigSnapshotSchema = z.object({
   /** False when the files could not be loaded; `fatal` then carries REQ-CONFIG-478's report and every other field is the built-in default. */
   loadOk: z.boolean(),
   fatal: z.string().nullable(),
+  /**
+   * REQ-CONFIG-063 / REQ-CHAT-006 / REQ-CHAT-009: the run's configured default role, as the files resolve it
+   * (`LoadedConfiguration.defaultPersona`, shipped default `orchestrator`). The composer's persona chip chooses the
+   * NEXT run's role, so before any run exists it must name the role that run would start as — which is this value, not
+   * a placeholder. It rides the snapshot because the renderer's `entryOf` has no other configured role to read
+   * (`packages/ui/src/agents.ts`), and the model and reasoning chips read the role it names for their own values.
+   */
+  defaultPersona: z.string(),
   slots: z.array(SlotViewSchema),
   /** Configured model keys, synthetic entries excluded. */
   models: z.array(z.string()),

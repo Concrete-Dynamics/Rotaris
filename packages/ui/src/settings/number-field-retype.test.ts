@@ -26,7 +26,7 @@ const { pendingFrom } = await import('./config-state.js');
 const runtime = (over: Record<string, unknown>) => ({ max_depth: 3, max_active_children: 6, child_timeout: 1200, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [], ...over });
 const draw = (over: Record<string, unknown>): PendingChange[] => {
   const snapshot = {
-    workspaceRoot: '/ws', loadOk: true, fatal: null, slots: [], models: [], imageInputModels: [], modelReasoning: {}, roles: [], runtime: runtime(over),
+    workspaceRoot: '/ws', loadOk: true, fatal: null, defaultPersona: 'orchestrator', slots: [], models: [], imageInputModels: [], modelReasoning: {}, roles: [], runtime: runtime(over),
     rawRuntime: { workspace: null, global: null }, circuitBreakerEnabled: true, compressorThresholdPercentage: 60,
     display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
     skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],

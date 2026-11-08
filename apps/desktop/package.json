@@ -44,8 +44,8 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
-    "electron": "45.1.0",
-    "electron-builder": "^26.15.3",
+    "electron": "45.2.1",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "esbuild": "^0.28.2",
     "vite": "catalog:"

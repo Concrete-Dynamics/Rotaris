@@ -925,4 +925,19 @@ describe('REQ-CONFIG-225: the unresolved-placeholder warning names the file the 
     expect(lineFor(r, 'found')).toContain(`set in ${join(s.workspaceRoot, '.mcp.json')}`);
     expect(lineFor(r, 'web_search')).toContain('from the built-in defaults');
   });
+  it('REQ-CONFIG-371: an entry whose url still holds a placeholder loads unavailable, and one whose key arrives is available', () => {
+    // docs/defects/an-unresolved-remote-url-is-reported-available.md
+    const s = scopes(null, 'mcp_servers:\n  remote: { type: http, url: "https://d.example/?k=${NOPE_D}" }\n  satisfied: { type: http, url: "https://d.example/?k=${PRESENT}" }\n');
+    const absent = loadConfiguration({ ...s, env: {}, home: tmp() });
+    if (!absent.ok) throw new Error(`load failed: ${absent.error.lines.join(' | ')}`);
+    expect(absent.value.mcp.servers['remote']!.availability).toMatchObject({ available: false, why: 'unresolved-url' });
+    expect(absent.value.mcp.servers['satisfied']!.availability).toMatchObject({ available: false, why: 'unresolved-url' });
+    // One conflict-free environment variable turns the second entry available on the strength of its configuration alone.
+    const supplied = loadConfiguration({ ...s, env: { PRESENT: 'v' }, home: tmp() });
+    if (!supplied.ok) throw new Error(`load failed: ${supplied.error.lines.join(' | ')}`);
+    expect(supplied.value.mcp.servers['satisfied']!.availability).toEqual({ available: true, why: 'remote' });
+    expect(supplied.value.mcp.servers['remote']!.availability).toMatchObject({ available: false, why: 'unresolved-url' });
+    // The shipped `web_search` is the case David sees: disabled by default (REQ-CONFIG-181) and its key unset here.
+    expect(absent.value.mcp.servers['web_search']!.availability).toMatchObject({ available: false, why: 'unresolved-url' });
+  });
 });

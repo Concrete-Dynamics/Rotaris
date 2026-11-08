@@ -12,7 +12,7 @@
       ]
     },
     "CONFIG": {
-      "uncited": 173,
+      "uncited": 172,
       "requirements": [
         "REQ-CONFIG-002",
         "REQ-CONFIG-003",
@@ -130,7 +130,6 @@
         "REQ-CONFIG-364",
         "REQ-CONFIG-365",
         "REQ-CONFIG-366",
-        "REQ-CONFIG-371",
         "REQ-CONFIG-373",
         "REQ-CONFIG-374",
         "REQ-CONFIG-375",

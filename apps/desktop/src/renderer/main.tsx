@@ -722,8 +722,13 @@ function useConfiguration(workspace: string | null) {
   }, [workspace, adopt]);
   useEffect(() => { queueMicrotask(() => { void read(); }); }, [read]);
   useEffect(() => bridge.onConfigChanged((p) => { const payload = p as { snapshot: ConfigSnapshot }; adopt(payload.snapshot, true); }), [adopt]);
-  // ADR-0037 Tier B: the screen's current values reach the run host on every change (REQ-CONFIG-262).
+  // ADR-0037 Tier B: the screen's current values reach the run host on every change (REQ-CONFIG-262), and the screen
+  // LETS GO with an EMPTY state when it unmounts, so a form nobody is looking at cannot outrank a durable write made
+  // after it. Which window owns the run host's one live state, and what a window's DOCUMENT going means (a close runs
+  // no React cleanup), are main's to decide — `commands/config.ts` with `live-state.ts`, where every window's write
+  // passes (REQ-SHELL-020).
   useEffect(() => { if (pending) void bridge.command({ kind: 'config.liveState', state: liveStateOf(pending) }); }, [pending]);
+  useEffect(() => () => { void bridge.command({ kind: 'config.liveState', state: {} }); }, []);
   const onChange = useCallback((change: PendingChange) => {
     setForm((current) => { if (!current) return current; const next = applyChange(current.pending, change); return next === current.pending ? current : { saved: current.saved, pending: next }; });
   }, []);

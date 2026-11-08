@@ -25,6 +25,7 @@ import type {
   WorkspaceServiceRequest,
 } from '@rotaris/contracts';
 import type { dataLayout, HandOver, PreferenceKey, PreferenceStore } from '@rotaris/platform';
+import type { LiveStateArbiter } from '../live-state.js';
 import type { ProviderService } from '@rotaris/providers';
 import type { ProcessLink, UpdateRelay } from '@rotaris/shell';
 import type { MainWindows, MainWindowView } from '../main-windows.js';
@@ -111,6 +112,11 @@ export interface CommandContext {
   readonly ownerOfAuxiliary: (senderId: number) => MainWindowState | undefined;
   readonly dialogs: Map<number, ApprovalDialogState>;
   readonly dialogPayloads: Map<number, { payload: ApprovalPayload; othersWaiting: number }>;
+  /**
+   * ADR-0037 Tier B / REQ-CONFIG-262 with REQ-SHELL-020: which main window's Settings screen owns the run host's ONE
+   * live state, and when the run host is told it holds none (`live-state.ts`). Read by `configCommands` alone.
+   */
+  readonly liveState: LiveStateArbiter;
   readonly pauseWindows: Map<string, BrowserWindow>;
   readonly pausePayloads: Map<number, PausePayload>;
   readonly presentPause: (payload: PausePayload) => Promise<void>;

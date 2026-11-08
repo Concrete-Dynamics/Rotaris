@@ -92,7 +92,23 @@ Part 15 of 16 of [the runtime view](../03-runtime-view.md), which indexes every 
   (`child_timeout`, since 2026-10-07, PD-CONFIG-003 — the run's `childTimeoutMs`)**, the iteration cap, the outside-workspace
   switch, the improvement loop, **the improvement analysis timeout (`improvement_collector_timeout`, since 2026-10-07,
   PD-CONFIG-003 revision 2 — the bound the post-run analyst reads from the run's configuration)**, keep-going and the
-  run-start mode.
+  run-start mode. **The live state is TAKEN DOWN when the window that published it lets go, and main decides who owns
+  it** (`apps/desktop/src/main/live-state.ts`, over `commands/config.ts`'s one write path). The run host keeps ONE
+  state for the process, so with two main windows (REQ-SHELL-020) the arbiter keeps each holding window's OWN values in
+  publish order: an empty `config.liveState` is a window LETTING GO, and the run host is then told the **most recent
+  surviving publisher's values**, or **"none" — an empty state, which overlays nothing** — when it was the last holder.
+  Restoring the survivor's values rather than keeping whoever arrived last matters as soon as two windows hold distinct
+  screens. A hold ends at `release` (the Settings screen unmounted, the renderer's ordinary case), at `gone` (the
+  window's DOCUMENT is gone — a close, a lost renderer, or an ordinary RELOAD, reported by `MainWindows` from `#forget`,
+  `#rendererGone` and `onNavigated` alike, because none of the three runs React's cleanup). Until 2026-11-08 nothing ever took the state down, so the run
+  host kept the last state it was handed for the life of the process and the overlay put an abandoned form's permission
+  mode back over the composer's own durable write (REQ-CONFIG-288/REQ-CONFIG-328), which made a run the user armed
+  `autonomous` resolve `ask` and the selector fall back with it (REQ-TOOLS-071, REQ-TOOLS-077;
+  `../../../defects/a-settings-screens-live-state-outlives-the-screen-and-overrides-a-durable-write.md`). The decision
+  lives in main because a renderer cannot see another window's screen and a guard in one sender is one the others
+  bypass; `apps/desktop/src/main/live-state.test.ts` pins the rule. Nothing REQ-CONFIG-262 is about is lost: while the
+  screen is open a run still reads its pending values, and REQ-CONFIG-286's guard settles the form before it can be
+  left.
 - **Tier C** — everything else is read at the next load; nothing watches a file. **The `display:` section** —
   REQ-CHAT-166's four transcript caps, the reader `SECTION_KEYS` declared and nothing stood behind until Part Z —
   is Tier C: it is read by `loadConfiguration`, carried on the configuration snapshot, and reaches every window over

@@ -54,8 +54,10 @@ says.
 > **Extends:** REQ-CONFIG-092, REQ-PROVIDER-072
 
 *Raised by the owner, 2026-11-08, relayed to this lane in a brief; logged as [R-095](../requests.md#r-095). Minted
-by the lane under the brief's instruction to mint where a reading departs from a live requirement, on the owner's
-own tie-break that an unclear route follows the one PR #72 took for its field: the offered set keeps PR #72's
-"the vocabulary read against the model's declared levels" shape, and the vocabulary is what widens. The codex
-subscription catalogue's own reasoning-level capture (REQ-PROVIDER-076) is not displaced by this and stays owed
-as its own build.*
+by the lane under the brief's instruction to mint where a reading departs from a live requirement. **Why a directive
+and not an amendment:** `REQ-CONFIG-069` and `REQ-PROVIDER-088` are faithful statements of the behavioural target —
+the product simply wants something else — so the corpus is not wrong and it is not edited in place; the requirement
+texts keep their words and carry this directive's back-pointer at their own definitions, as `README.md` prescribes.
+The offered-set rule keeps the shape PR #72 built for its field (the vocabulary read against the model's declared
+levels); what widens is the vocabulary, which is the owner's correction. The codex subscription catalogue's own
+reasoning-level capture (`REQ-PROVIDER-076`) is not displaced by this and stays owed as its own build.*

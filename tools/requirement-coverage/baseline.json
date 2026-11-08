@@ -12,7 +12,7 @@
       ]
     },
     "CONFIG": {
-      "uncited": 173,
+      "uncited": 172,
       "requirements": [
         "REQ-CONFIG-002",
         "REQ-CONFIG-003",
@@ -52,7 +52,6 @@
         "REQ-CONFIG-199",
         "REQ-CONFIG-200",
         "REQ-CONFIG-201",
-        "REQ-CONFIG-202",
         "REQ-CONFIG-203",
         "REQ-CONFIG-205",
         "REQ-CONFIG-206",
@@ -679,7 +678,7 @@
       ]
     },
     "PROVIDER": {
-      "uncited": 58,
+      "uncited": 57,
       "requirements": [
         "REQ-PROVIDER-013",
         "REQ-PROVIDER-020",
@@ -717,7 +716,6 @@
         "REQ-PROVIDER-073",
         "REQ-PROVIDER-074",
         "REQ-PROVIDER-075",
-        "REQ-PROVIDER-076",
         "REQ-PROVIDER-090",
         "REQ-PROVIDER-095",
         "REQ-PROVIDER-096",

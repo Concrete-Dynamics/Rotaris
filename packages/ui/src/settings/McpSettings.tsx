@@ -50,8 +50,15 @@ function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: Mc
   const on = row.enabled && !row.overridden && row.available;
   const stateText = health.state === 'healthy' ? `${HEALTH_TEXT.healthy} · ${health.toolCount ?? 0} tool${health.toolCount === 1 ? '' : 's'}` : HEALTH_TEXT[health.state];
   const tooltip = health.state === 'unreachable' ? health.detail ?? '' : undefined;
-  // REQ-MCP-115: which of the two controls is in force, as text.
-  const enablement = !row.enabled ? 'Configured off (enabled: false in the configuration file).' : row.overridden ? 'Overridden for this session — not persistent. To make it durable, set enabled in the configuration file.' : row.available ? 'On.' : 'Off: the command was not found on the executable search path.';
+  // REQ-MCP-115: which of the two controls is in force, as text. REQ-MCP-091/092 fix the tooltip sentence for the case
+  // those requirements were written for — a stdio entry whose command was not found on the executable search path — and
+  // it is kept verbatim for every stdio row. REQ-CONFIG-371 gives the general rule the sentence is an instance of ("the
+  // detail a row shows for an unavailable thing names the missing prerequisite"), and for a REMOTE entry the missing
+  // prerequisite is its url: REQ-CONFIG-225 marks an entry whose url still carries an unresolved placeholder unavailable.
+  // So a remote row reads the host's own detail. Until 2026-11-08 every unavailable row read the PATH sentence, which on
+  // a remote row named a command the entry does not have.
+  const unavailableText = row.type !== 'stdio' && row.availabilityDetail !== '' ? row.availabilityDetail : 'the command was not found on the executable search path';
+  const enablement = !row.enabled ? 'Configured off (enabled: false in the configuration file).' : row.overridden ? 'Overridden for this session — not persistent. To make it durable, set enabled in the configuration file.' : row.available ? 'On.' : `Off: ${unavailableText}`;
   const toggle = async () => {
     if (busy || !row.available) return;
     setBusy(true);
@@ -73,7 +80,7 @@ function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: Mc
       </td>
       <td data-origin>{row.origin}</td>
       <td>
-        <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={`Enable ${row.name} for this session`} aria-description={enablement} disabled={!row.available || busy} title={!row.available ? 'The command was not found on the executable search path.' : undefined} onClick={() => { void toggle(); }} />
+        <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={`Enable ${row.name} for this session`} aria-description={enablement} disabled={!row.available || busy} title={!row.available ? unavailableText : undefined} onClick={() => { void toggle(); }} />
         <div className="text-tertiary settings__hint" data-enablement>{enablement}</div>
         {message ? <div className="composer__error" role="alert">{message}</div> : null}
       </td>

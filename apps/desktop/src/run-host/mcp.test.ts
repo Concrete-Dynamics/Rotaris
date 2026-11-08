@@ -1162,3 +1162,56 @@ describe('PD-MCP-004 revision 2 (OQ-362)', () => {
     }
   });
 });
+
+/**
+ * The availability fix (2026-11-08, `docs/archive/defects/an-unresolved-remote-url-is-reported-available.md`):
+ * an `http`/`sse` entry whose url still holds an unresolved placeholder is now unavailable (REQ-CONFIG-225,
+ * REQ-CONFIG-371), so a persona carrying one drops it — a path a remote entry could not reach before, since the
+ * remote branch of REQ-MCP-037's rule read the transport alone. REQ-MCP-041's detailed line is framed for a stdio
+ * entry ("the command was not found on PATH") and would have printed `raw command ''` over it.
+ */
+describe('a remote entry made unavailable by its url (REQ-CONFIG-225, REQ-MCP-041)', () => {
+  function host() {
+    const lines: { message: string; level: string; channels: string }[] = [];
+    const mcp = new McpHost({ clocks: new FakeClock(), log: (message, level = 'info') => { lines.push({ message, level, channels: 'log' }); }, acknowledge: () => undefined, parentEnv: {}, productVersion: '0.0.0' });
+    const httpEntry = { type: 'http', enabled: true, disabled_tools: [], tool_name_map: {}, command: null, args: [], env: {}, cwd: null, url: 'https://x/mcp?k=${NOPE}', headers: null, request_timeout: 600, tools: [] };
+    const stdioEntry = { type: 'stdio', enabled: true, disabled_tools: [], tool_name_map: {}, command: 'ghost', args: [], env: {}, cwd: null, url: null, headers: null, request_timeout: null, tools: [] };
+    const detail = 'its url carries ${NOPE}, which no stored secret or environment variable resolved (REQ-CONFIG-225)';
+    const cfg = {
+      workspaceRoot: '/ws',
+      personas: { orchestrator: { mcp_servers: ['web_search', 'ghost'] } },
+      mcp: {
+        servers: {
+          web_search: { name: 'web_search', entry: httpEntry, origin: 'default', availability: { available: false, why: 'unresolved-url', detail }, description: { transport: 'http', url: 'https://x/mcp?k=${NOPE}' }, resolved: null, unresolved: ['NOPE'] },
+          ghost: { name: 'ghost', entry: stdioEntry, origin: 'default', availability: { available: false, why: 'not-on-path', detail: "the command 'ghost' was not found on the executable search path" }, description: { transport: 'stdio', command: 'ghost', args: [], env: {}, cwd: '/ws' }, resolved: { command: 'ghost', args: [], builtin: false }, unresolved: [] },
+        },
+        origins: {}, secrets: [], diagnostics: [],
+      },
+    } as unknown as LoadedConfiguration;
+    return { mcp, cfg, lines };
+  }
+
+  it('drops the remote entry with the url as its prerequisite, and writes no PATH line over it', () => {
+    const { mcp, cfg, lines } = host();
+    const surface = mcp.surfaceFor(cfg, '/ws', 'orchestrator', null);
+    expect(surface.dropped.map((d) => `${d.name}:${d.reason}`).sort()).toEqual(['ghost:unavailable', 'web_search:unavailable']);
+    // The persona warning names the prerequisite each entry actually lacks (REQ-MCP-041's per-persona half).
+    expect(lines.some((l) => l.message.includes("'web_search' is unavailable") && l.message.includes('its url carries ${NOPE}'))).toBe(true);
+    // REQ-MCP-041's DETAILED line names a command, so it is a stdio entry's — never a remote entry's.
+    const detailLines = lines.filter((l) => l.message.includes('was not found on PATH (REQ-MCP-041)'));
+    expect(detailLines).toHaveLength(1);
+    expect(detailLines[0]!.message).toContain("raw command 'ghost'");
+    expect(detailLines.some((l) => l.message.includes("raw command ''"))).toBe(false);
+  });
+
+  it('probes it unreachable without connecting, with the url as the detail (REQ-MCP-092, REQ-CONFIG-352)', async () => {
+    const { mcp, cfg } = host();
+    const health = await mcp.probeOne(cfg, 'web_search');
+    expect(health).toMatchObject({ state: 'unreachable', elapsedMs: 0 });
+    expect(health.state === 'unreachable' ? health.detail : '').toContain('${NOPE}');
+    // The row the settings category lists carries the same detail and reads unavailable.
+    const row = mcp.list(cfg).rows.find((r) => r.name === 'web_search')!;
+    expect(row).toMatchObject({ available: false, unresolved: ['NOPE'] });
+    expect(row.availabilityDetail).toContain('${NOPE}');
+  });
+});

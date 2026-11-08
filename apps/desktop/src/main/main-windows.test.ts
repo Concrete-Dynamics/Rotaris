@@ -171,6 +171,7 @@ function harness(options: {
     rendererLost: (window, loss, outcome, error) => { losses.push(`${window.wcId}:${loss.reason}:${loss.exitCode}:${outcome}${error === undefined ? '' : `:${error}`}`); },
     unshownApprovals: (approvals) => { actions.push(`unshown:${approvals.join(',')}`); },
     workspaceClosed: (workspace) => { actions.push(`workspace-closed:${workspace}`); },
+    liveStateLost: (wcId) => { actions.push(`live-state-lost:${wcId}`); },
     workspaceOpened: (window) => { workspacesOpened.push(`${window.workspace}:${window.workspaceId ?? 'none'}:after-${actions.length}`); },
     deliver: (window, request) => { delivered.push(`${window.wcId}:${request.kind}${request.kind === 'session-focus' ? `:${request.sessionId}` : ''}`); },
     ...(options.postShowActivation === undefined ? {} : { postShowActivation: (window) => { actions.push(`activate:${window.workspace}`); options.postShowActivation!(window.wcId); } }),
@@ -189,6 +190,36 @@ function harness(options: {
 }
 
 describe('MainWindows', () => {
+  /**
+   * ADR-0037 Tier B / REQ-CONFIG-262 with REQ-NOTIFY-023: a window's DOCUMENT going is reported, for a close and for a
+   * lost renderer alike. Main's arbiter needs both — a Settings screen's live state belongs to the window that holds
+   * it, and a closed window's form can never be looked at again, yet its values still outrank the file at the next run
+   * start (`live-state.ts`, `commands/config.ts`;
+   * `docs/defects/a-settings-screens-live-state-outlives-the-screen-and-overrides-a-durable-write.md`).
+   */
+  it('reports a window\'s document going on a close and on a lost renderer (ADR-0037 Tier B, REQ-NOTIFY-023)', async () => {
+    const h = harness();
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const second = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    h.windows.get(first.wcId)!.destroyed = true;
+    h.windows.get(first.wcId)!.closedListeners[0]!();
+    expect(h.actions.filter((a) => a.startsWith('live-state-lost:'))).toEqual([`live-state-lost:${first.wcId}`]);
+    // A crash reaches the same report, from the renderer-gone path rather than the close's.
+    for (const listener of h.windows.get(second.wcId)!.goneListeners) listener({ reason: 'crashed', exitCode: -1073741819 });
+    // The crash is reloaded, and the reload navigates, so this window is reported more than once — which is harmless:
+    // the arbiter's `delete` is idempotent, so only the first report of a holder does anything (live-state.ts).
+    expect(new Set(h.actions.filter((a) => a.startsWith('live-state-lost:'))))
+      .toEqual(new Set([`live-state-lost:${first.wcId}`, `live-state-lost:${second.wcId}`]));
+    /*
+     * An ordinary RELOAD replaces the document without closing the window and without losing its renderer process, so
+     * neither path above fires — and the new document boots on the startup view rather than on Settings (REQ-SHELL-026),
+     * so nothing republishes either. It must report the loss for the same reason a close does.
+     */
+    const third = await h.mainWindows.build({ workspace: 'C:/c', origin: 'open-request' });
+    for (const listener of h.windows.get(third.wcId)!.navigatedListeners) listener();
+    expect(h.actions.filter((a) => a.startsWith('live-state-lost:')).at(-1)).toBe(`live-state-lost:${third.wcId}`);
+  });
+
   it('runs the post-show activation once per window, after the window is shown and never during construction (REQ-STARTUP-043, REQ-STARTUP-114, REQ-STARTUP-047)', async () => {
     const activated: number[] = [];
     const h = harness({ postShowActivation: (wcId) => activated.push(wcId) });
@@ -291,7 +322,7 @@ describe('MainWindows', () => {
     replace.folders.push('C:/b');
     await replace.mainWindows.choose(outgoing.wcId, { newWindow: false });
     expect(replace.actions.filter((action) => !action.startsWith('log:') && !action.startsWith('dispose:'))).toEqual([
-      'build:C:/b:open-request', 'load:2', 'open:C:/b', 'show:C:/b', 'close:C:/a', 'workspace-closed:C:/a', 'persist:C:/b', 'focus:C:/b',
+      'build:C:/b:open-request', 'load:2', 'open:C:/b', 'show:C:/b', 'close:C:/a', 'workspace-closed:C:/a', `live-state-lost:${outgoing.wcId}`, 'persist:C:/b', 'focus:C:/b',
     ]);
   });
 

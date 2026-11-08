@@ -170,6 +170,14 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
    */
   readonly workspaceClosed?: (workspace: string) => void;
   /**
+   * ADR-0037 Tier B / REQ-CONFIG-262: a main window's DOCUMENT is gone — it closed, or its renderer was lost — so any
+   * live state its Settings screen published is a snapshot of a form nobody can look at any more and must not outrank
+   * the file at the next run start. Main's arbiter decides whether it was the last holder (`live-state.ts`). Distinct
+   * from the renderer's own cleanup, which a window's close never runs: destroying the window destroys the document
+   * without unmounting React.
+   */
+  readonly liveStateLost?: (wcId: number) => void;
+  /**
    * PD-LIBRARY-002 revision 2, clause (e) (OQ-236): a main window now holds a workspace it opened — a launch's, an added
    * window's, a replacement's, a hand-over's, or a reopen of the same one. Called after the window has loaded (every path
    * builds and loads it first) and its workspace id is set, so main can send it the state it would otherwise learn only at
@@ -254,6 +262,13 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     this.dependencies.adapter.onNavigated(record.win, () => {
       if (record.listening.size > 0) this.dependencies.log(`window ${record.wcId} started a new document; its window requests are held until it listens again`);
       record.listening.clear();
+      /*
+       * ADR-0037 Tier B / REQ-CONFIG-262: the document that published the live state is GONE, replaced by one that
+       * boots on the startup view and mounts no Settings screen (REQ-SHELL-026) — so the form that published can never
+       * be looked at again, and neither React's cleanup nor the close/renderer-gone paths run for an ordinary reload.
+       * Without this the departed form's values keep outranking the file at the next run start.
+       */
+      this.dependencies.liveStateLost?.(record.wcId);
     });
     // R-091 (hardening §3.2 row 5): a renderer lost is reloaded once within a bound, and the person is told; a renderer that
     // stops answering, or answers again, outside a close guard's question is written to the log.
@@ -851,6 +866,13 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     if (this.dependencies.adapter.isDestroyed(record.win)) return;
     const label = `main window ${record.wcId}`;
     const what = `${loss.reason}, exit ${loss.exitCode}`;
+    /*
+     * ADR-0037 Tier B / REQ-CONFIG-262: the document that published the live state is gone. A reloaded renderer starts
+     * on the startup view rather than on Settings (`shell-state.ts`, REQ-SHELL-026), so the form that published is not
+     * coming back and its values must not outrank a durable write at the next run start. Told here, before every early
+     * return below, because every one of them leaves the same document dead.
+     */
+    this.dependencies.liveStateLost?.(record.wcId);
     // The dead document listened for nothing any more; a reloaded one registers again (`sessionFocusReady`).
     record.listening.clear();
     record.unresponsive = false;
@@ -970,6 +992,9 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     const unshown = record.approvals.splice(0);
     if (unshown.length > 0) this.dependencies.unshownApprovals?.(unshown);
     if (record.workspace !== '(no workspace)' && this.#windowHolding(record.workspace) === undefined) this.dependencies.workspaceClosed?.(record.workspace);
+    // The document is gone, so a Settings screen it had open can never be looked at again; its published live state must
+    // not outrank a durable write at the next run start (ADR-0037 Tier B, REQ-CONFIG-262).
+    this.dependencies.liveStateLost?.(id);
   }
 }
 

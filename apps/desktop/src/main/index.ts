@@ -4,6 +4,7 @@ import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
 import { integrationAllowsClose, integrationAllowsUpdate, noWorktreeIntegration } from './integration-guard.js';
 import { askRendererGuard, askUnsavedInTurn, createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, RENDERER_UNSAVED_PROBE_SCRIPT, type CloseGuard, type UnsavedGuardAnswer } from './main-windows.js';
+import { createLiveStateArbiter } from './live-state.js';
 import { createNoticeStore } from './notices.js';
 import { AuthRecovery } from './auth-recovery.js'; // REQ-NOTIFY-072..080 (the 401 note's parts C and D)
 import { createAuthFallback } from './auth-fallback.js'; // REQ-NOTIFY-070/071/078 (the 401 note's parts A and B)
@@ -477,6 +478,15 @@ async function main(): Promise<void> {
    * the moment there are two.
    */
   let mainWindows!: MainWindows<BrowserWindow, PersonaWindows, TerminalWindows, ApprovalPayload, ApprovalDialogState>;
+  /**
+   * ADR-0037 Tier B / REQ-CONFIG-262 with REQ-SHELL-020: which main window's Settings screen owns the run host's ONE
+   * live state, and when the run host must be told it holds none (`live-state.ts` states the whole rule). Declared
+   * here rather than beside the command table because `MainWindows` reports a window's document going into it.
+   */
+  const liveState = createLiveStateArbiter({
+    log: (m, level) => log(m, level),
+    send: (state) => runHost.request({ kind: 'config.liveState', state }, millis(5_000)).then((r) => (r.kind === 'ack' ? { ok: true as const } : refusal(r, 'The live settings could not be handed over')), (cause: unknown) => ({ ok: false as const, code: 'run-host.unreachable', headline: 'The live settings could not be handed over', detail: cause instanceof Error ? cause.message : String(cause) })),
+  });
   /** Each open main window's close guard, by its `webContents` id (`guardClose`, `main-windows.ts`). */
   const closeGuards = new Map<number, CloseGuard>();
   /** PD-ORCH-005 clause 9: whether the application is quitting (`QuitState`), over the main windows as they are now. */
@@ -1760,6 +1770,10 @@ async function main(): Promise<void> {
     },
     // REQ-WORKSPACE-013: a workspace no window holds any more has its initialization run cancelled, and nothing recorded.
     workspaceClosed: (workspace) => { initialization.close(canonicalPath(workspace)); },
+    // ADR-0037 Tier B / REQ-CONFIG-262: the window's DOCUMENT is gone — it closed, or its renderer was lost. A close
+    // runs no React cleanup, so a Settings form the window had open would otherwise keep outranking the file at the
+    // next run start. The arbiter decides whether this was the last holder (`live-state.ts`).
+    liveStateLost: (wcId) => { liveState.gone(wcId); },
     // PD-LIBRARY-002 revision 2 (e): a window that opens a workspace is told the activity as it stands, its own pending
     // retrospective among it, rather than waiting for the next publication.
     workspaceOpened: (window) => { sendImprovementActivity(window.win, window.workspaceId, improvementCoordinator.current()); },
@@ -1993,7 +2007,7 @@ async function main(): Promise<void> {
   const commandContext: CommandContext = {
     log, clocks, capturing, layout, processes,
     runHost, services, relay,
-    mainWindows, windowFor, ownerOfAuxiliary, dialogs, dialogPayloads,
+    mainWindows, windowFor, ownerOfAuxiliary, dialogs, dialogPayloads, liveState,
     pauseWindows, pausePayloads, presentPause, reviewPayloads, authRecovery, authRecoveryPayloads, runFailures,
     measurePersonaPaint, terminalWindowCommand, surface,
     notices, raiseNotice, raiseNoticeKeyed, recoveryFor, configFatal, raiseTransient: (w, kind, title) => raiseTransient(w, kind, title), announceRepairs, updater,

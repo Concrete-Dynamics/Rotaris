@@ -102,7 +102,7 @@ export function resolveMcpConfiguration(input: McpResolveInput): McpConfiguratio
     const env = resolveServerEnvironment(entry, input.env, own);
     servers[name] = {
       name, entry, origin, resolved,
-      availability: availability(entry, resolved, onPath),
+      availability: availability(entry, resolved, onPath, unresolved),
       description: describeForRuntime(entry, resolved, env, url, input.workspaceRoot),
       unresolved,
     };

@@ -3,6 +3,7 @@ import { CHANNEL, CONTRACT_SCHEMA_VERSION, type CommandOutcome, type CommandRequ
 import { canonicalPath, samePath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
 import { announceConfig, configFamily, type ConfigFamilyView } from '../config-broadcast.js';
+import { isEmptyLiveState, type LiveStateArbiter } from '../live-state.js';
 import { refusal, type CommandAt, type CommandContext, type CommandHandlers } from './context.js';
 
 /**
@@ -39,9 +40,9 @@ export function configAnnouncer(
  * never parses YAML of its own.
  */
 export function configCommands(
-  ctx: Pick<CommandContext, 'configFatal' | 'log' | 'mainWindows' | 'raiseNotice' | 'runHost' | 'services'>,
+  ctx: Pick<CommandContext, 'configFatal' | 'log' | 'mainWindows' | 'raiseNotice' | 'services'> & { readonly liveState: LiveStateArbiter },
 ): Pick<CommandHandlers, 'config.read' | 'repository.read' | 'config.save' | 'config.setField' | 'config.liveState'> {
-  const { configFatal, log, mainWindows, raiseNotice, runHost, services } = ctx;
+  const { configFatal, log, liveState, mainWindows, raiseNotice, services } = ctx;
   const announce = configAnnouncer(mainWindows, services, configFatal);
   const onConfigSave = async (req: Extract<CommandRequest, { kind: 'config.save' | 'config.setField' }>, { w }: CommandAt): Promise<CommandOutcome> => {
     // ADR-0037 Tier A: the service writes and loads again; every window repopulates from the reloaded snapshot (decision 4 of the plan for REQ-CONFIG-423)
@@ -95,10 +96,17 @@ export function configCommands(
     },
     'config.save': onConfigSave,
     'config.setField': onConfigSave,
-    'config.liveState': async (req) => {
-      // ADR-0037 Tier B: the settings store's current values reach the run host ahead of the next run start.
-      const r = await runHost.request({ kind: 'config.liveState', state: req.state }, millis(5_000));
-      return r.kind === 'ack' ? { ok: true } : refusal(r, 'The live settings could not be handed over');
+    'config.liveState': async (req, { w }) => {
+      /*
+       * ADR-0037 Tier B: the settings store's current values reach the run host ahead of the next run start, and an
+       * EMPTY state is the Settings screen LETTING GO. Which window owns the run host's one live state is decided in
+       * `live-state.ts`, at this the one place every window's write passes (REQ-SHELL-020: with two main windows a
+       * withdrawal that simply forwarded the empty state would clear a screen still open in the other); a guard on
+       * the renderer side is one the renderer cannot apply, since it cannot see the other windows.
+       */
+      if (isEmptyLiveState(req.state)) { liveState.release(w.wcId); return { ok: true }; }
+      liveState.publish(w.wcId, req.state);
+      return { ok: true };
     },
   };
 }

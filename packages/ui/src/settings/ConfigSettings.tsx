@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, scopeCellOf, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
+import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
+import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, offeredForModel, reasoningChoice, reasoningModelKey, roleReasoningOptions, scopeCellOf, slotModelPick, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { DictationSettings } from './DictationSettings.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
@@ -125,8 +125,21 @@ export function ModelsSettings(props: ConfigSettingsProps) {
             const value = pending.slots[slot] ?? '';
             const thinking = pending.slotThinking[slot];
             const options = snapshot.models.includes(value) || value === '' ? snapshot.models : [value, ...snapshot.models];
-            // REQ-CONFIG-332: the levels the model offers; no catalogue ships, so every configured model offers the five. A stored `auto` is appended under its own label (REQ-CONFIG-254).
-            const levels: string[] = [...REASONING_LEVEL_NAMES.filter((l) => l !== 'auto'), ...(thinking === 'auto' ? ['auto'] : [])];
+            // REQ-CONFIG-332: the levels THIS model offers, from the catalog and nowhere else — the projection the
+            // snapshot carries (`modelReasoning`; `auto` never among them). The model in effect is the pending pick, or
+            // the value the file holds for the leave-as-configured entry. A stored level the model no longer offers is
+            // appended under its own name and shown as the selection (REQ-CONFIG-093/254/332); a model offering none
+            // leaves the unset entry alone, disabled, with the tooltip REQ-CONFIG-332 fixes.
+            const effective = value === '' ? view?.value ?? null : value;
+            const offered = offeredForModel(snapshot, effective);
+            const choice = reasoningChoice(offered, thinking);
+            const cleared = pending.clearedThinking[slot];
+            const clearedNote = cleared === undefined ? null : `The reasoning strength ${LEVEL_LABELS[cleared] ?? cleared} was cleared because the newly chosen model does not offer it.`;
+            const description = [
+              `Sets the reasoning or thinking strength used by ${slot}'s model.`,
+              ...(choice.editable ? [] : [`${slot}'s model exposes no configurable thinking strength.`]),
+              ...(clearedNote === null ? [] : [clearedNote]),
+            ].join(' ');
             return (
               <tr key={slot}>
                 <td className="mono">{slot}<span className="text-tertiary settings__origin"> {view?.origin ?? 'default'}</span></td>
@@ -136,14 +149,20 @@ export function ModelsSettings(props: ConfigSettingsProps) {
                     ariaLabel={`Model for ${slot}`}
                     value={value}
                     options={[{ value: '', label: `Leave as configured${view?.value ? ` (${view.value})` : ''}` }, ...options.map((m) => ({ value: m, label: m }))]}
-                    onChange={(next) => onChange({ kind: 'slot', slot, value: next === '' ? null : next })}
+                    onChange={(next) => {
+                      const picked = next === '' ? null : next;
+                      // REQ-CONFIG-334: the levels the NEWLY chosen model offers decide whether the stored strength is cleared.
+                      const offeredNext = offeredForModel(snapshot, picked ?? view?.value ?? null);
+                      onChange(slotModelPick(slot, picked, view?.value ?? null, pending.slots[slot], offeredNext, thinking));
+                    }}
                   />
                 </td>
                 <td>
-                  <DesignSelect className="input select" aria-label={`Reasoning strength for ${slot}`} aria-description={`Sets the reasoning or thinking strength used by ${slot}'s model.`} value={thinking ?? ''} onChange={(e) => onChange({ kind: 'slotThinking', slot, value: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
+                  <DesignSelect className="input select" aria-label={`Reasoning strength for ${slot}`} aria-description={description} value={choice.selection} disabled={!choice.editable} title={choice.editable ? undefined : 'This model exposes no configurable thinking strength.'} onChange={(e) => onChange({ kind: 'slotThinking', slot, value: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
                     <option value="">Provider default</option>
-                    {levels.map((l) => <option key={l} value={l}>{LEVEL_LABELS[l] ?? l}</option>)}
+                    {choice.levels.map((l) => <option key={l} value={l}>{LEVEL_LABELS[l] ?? l}</option>)}
                   </DesignSelect>
+                  {clearedNote !== null && <span className="text-secondary settings__hint" data-testid={`reasoning-cleared-${slot}`}>{clearedNote}</span>}
                 </td>
               </tr>
             );
@@ -184,7 +203,11 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
             const edit = pending.roles[r.role]?.[scope];
             const model = edit?.unsetModel ? '' : edit?.model !== undefined ? edit.model ?? '' : r.rawModel ?? '';
             const thinking = edit?.unsetThinking ? 'default' : edit?.thinking !== undefined ? edit.thinking ?? 'default' : r.rawThinking ?? 'default';
-            const levels = ROLE_REASONING_NAMES.includes(thinking as 'default') ? ROLE_REASONING_NAMES : [...ROLE_REASONING_NAMES, thinking];
+            // REQ-CONFIG-340: `default`, then `provider_default`, then the RESOLVED model's own levels (through the slot map
+            // first, so a role pointing at a tier gets that tier's model's levels), then the stored value appended when not
+            // already present — an unrecognized stored value is preserved, not dropped.
+            const displayedModel = model === '' ? r.effectiveModel : model;
+            const levels = roleReasoningOptions(offeredForModel(snapshot, reasoningModelKey(snapshot, displayedModel)), thinking);
             const cell = scopeCellOf(r, pending, scope);
             return (
               <tr key={r.role}>

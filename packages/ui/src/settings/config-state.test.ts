@@ -9,7 +9,7 @@ const snapshot: ConfigSnapshot = {
     { slot: 'large_model', value: 'gpt-4o', origin: 'default', thinking: null },
     { slot: 'small_model', value: 'gpt-4o-mini', origin: 'workspace', thinking: 'auto' },
   ],
-  models: ['gpt-4o', 'gpt-4o-mini'], imageInputModels: [],
+  models: ['gpt-4o', 'gpt-4o-mini'], imageInputModels: [], modelReasoning: { 'gpt-4o': ['low', 'medium', 'high', 'max'], 'gpt-4o-mini': ['low', 'medium', 'high', 'max'] },
   roles: [{ role: 'tester', rawModel: null, modelOrigin: 'default', effectiveModel: 'gpt-4o-mini', inherited: true, builtInDefault: 'medium_model', rawThinking: null, thinkingOrigin: 'default', tier: 'medium_model', tools: ['read_file'], declaredTools: ['read_file'] }],
   runtime: { max_depth: 3, max_active_children: 6, child_timeout: 1200, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [] },
   rawRuntime: { workspace: { max_depth: 3 }, global: null },

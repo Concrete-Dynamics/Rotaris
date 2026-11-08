@@ -1,6 +1,97 @@
 import { dictationFieldProblem, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
+ * REQ-CONFIG-332 / REQ-CONFIG-093 / REQ-CONFIG-254: what a reasoning-strength control shows and does, derived from the
+ * levels its model offers (`offered`, already in vocabulary order and free of `auto`) and the stored value.
+ *
+ * - `levels` — the offered levels, with a stored non-null value appended when it is not already among them, under its
+ *   own name and shown as the current selection. `auto` reaches the list only this way (REQ-CONFIG-093/254); a
+ *   repopulation from configuration never discards a level the catalog has stopped offering (REQ-CONFIG-332).
+ * - `selection` — the value the control selects truly: the stored value when it is among `levels`, else the first
+ *   entry (`''`, the unset entry) — REQ-CONFIG-332's "a selection resolving to no known entry falls back to the
+ *   first entry".
+ * - `editable` — REQ-CONFIG-332: the control is disabled exactly when the model offers no levels at all, which is the
+ *   case the requirement's tooltip describes ("the model exposes no configurable thinking strength"); a model
+ *   offering one or more levels keeps the control editable, or the level the endpoint does understand could never be
+ *   selected. The brief for this repair wrote this clause `offered.length > 1`; the requirement's own sentences —
+ *   `entry` names a LIST ITEM throughout ("the list is that entry alone", "a stored `auto` is appended to the control's
+ *   options") and the disabled case is glossed "the unset entry alone and disabled" — and its tooltip coupling both
+ *   read `offered.length > 0`, which is what is implemented here.
+ * - `appended` — the stored value the list appended, or null; the renderer labels it under its own name.
+ */
+export interface ReasoningChoice {
+  readonly levels: readonly string[];
+  readonly selection: string;
+  readonly editable: boolean;
+  readonly appended: string | null;
+}
+
+export function reasoningChoice(offered: readonly string[], stored: string | null): ReasoningChoice {
+  const appended = stored !== null && stored !== '' && !offered.includes(stored) ? stored : null;
+  const levels = appended === null ? [...offered] : [...offered, appended];
+  const selection = stored !== null && stored !== '' && levels.includes(stored) ? stored : '';
+  return { levels, selection, editable: offered.length > 0, appended };
+}
+
+/** REQ-CONFIG-332: the offered levels the snapshot's projection holds for a model key; none for an unconfigured name. */
+export function offeredForModel(snapshot: ConfigSnapshot, key: string | null): readonly string[] {
+  return key === null || key === '' ? [] : (snapshot.modelReasoning[key] ?? []);
+}
+
+/**
+ * REQ-CONFIG-340: the model a role's reasoning options read — the displayed model resolved through the slot map first,
+ * so a role pointing at a tier gets that tier's model's levels. A name that is not a slot is its own key.
+ */
+export function reasoningModelKey(snapshot: ConfigSnapshot, displayed: string | null): string | null {
+  if (displayed === null || displayed === '') return null;
+  const slot = snapshot.slots.find((s) => s.slot === displayed);
+  return slot !== undefined && slot.value !== null ? slot.value : displayed;
+}
+
+/**
+ * REQ-CONFIG-334: the strength a slot's MODEL CHANGE clears, given the levels the newly chosen model offers and the
+ * strength currently stored. Choosing a different model clears the strength to unset whenever the new model does not
+ * offer it; the stored level `auto` is exempt and is never cleared this way, being no model-specific level at all
+ * (REQ-CONFIG-093, REQ-CONFIG-332). Returns the strength that was cleared, or null when nothing was: the order in
+ * which the user touches the two controls is intended to change the stored result, and this is the one place it does.
+ */
+export function modelChangeClearsThinking(offeredNext: readonly string[], stored: string | null): string | null {
+  if (stored === null || stored === '' || stored === 'auto') return null;
+  return offeredNext.includes(stored) ? null : stored;
+}
+
+/**
+ * REQ-CONFIG-334 with REQ-CONFIG-332/335: the change one pick in a slot's model selector produces. The model in effect
+ * is the picked key, or — for the leave-as-configured entry — the value the file holds (`fallback`); a pick that
+ * leaves it unchanged is a plain set that can clear nothing, and one that moves it carries `clears`: the strength the
+ * move cleared (named in the row's disclosure), or null when it cleared nothing.
+ */
+export function slotModelPick(
+  slot: ModelSlotName,
+  picked: string | null,
+  fallback: string | null,
+  currentStored: string | null,
+  offeredNext: readonly string[],
+  storedThinking: string | null,
+): Extract<PendingChange, { kind: 'slot' }> {
+  const currentEffective = currentStored ?? fallback;
+  const nextEffective = picked ?? fallback;
+  if (currentEffective === nextEffective) return { kind: 'slot', slot, value: picked };
+  return { kind: 'slot', slot, value: picked, clears: modelChangeClearsThinking(offeredNext, storedThinking) };
+}
+
+/**
+ * REQ-CONFIG-340: the reasoning options a ROLE row offers, resolved through the slot map first — a role pointing at a
+ * tier shows that tier's model's levels. `default`, then `provider_default`, then the resolved model's own levels, then
+ * the stored value (or `default` when unset) appended when not already present, so an unrecognized stored value is
+ * preserved, not dropped (REQ-CONFIG-340). Selecting an option with no underlying value writes the empty string.
+ */
+export function roleReasoningOptions(levels: readonly string[], stored: string): readonly string[] {
+  const base = ['default', 'provider_default', ...levels];
+  return base.includes(stored) ? base : [...base, stored];
+}
+
+/**
  * The pending settings state (REQ-CONFIG-279..287, 417..426): destination 1's values as the screen holds
  * them, the last-saved snapshot they are compared against, and the dirty flag that governs the FILE and
  * nothing else. Every setter is equality-guarded so a repopulation cannot dirty the form (REQ-CONFIG-335,
@@ -9,6 +100,13 @@ import { dictationFieldProblem, displayCapToFile, EDITABLE_SLOTS, type ConfigSna
 export interface PendingSettings {
   readonly slots: Readonly<Record<ModelSlotName, string | null>>;
   readonly slotThinking: Readonly<Record<ModelSlotName, string | null>>;
+  /**
+   * REQ-CONFIG-334: the strength a MODEL CHANGE cleared, per slot, so the row can disclose it and name it until the
+   * user acts on the reasoning control again, a reload rebuilds the state, or Discard restores the saved values. A
+   * cleared level is a different fact from an unset the file states, and the requirement makes the clearing
+   * "disclosed, never silent".
+   */
+  readonly clearedThinking: Readonly<Partial<Record<ModelSlotName, string>>>;
   readonly runtime: {
     readonly max_depth: number;
     readonly max_active_children: number;
@@ -108,7 +206,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
     thinking[slot] = view?.thinking ?? null;
   }
   return {
-    slots, slotThinking: thinking,
+    slots, slotThinking: thinking, clearedThinking: {},
     runtime: {
       max_depth: snapshot.runtime.max_depth, max_active_children: snapshot.runtime.max_active_children, child_timeout: snapshot.runtime.child_timeout, max_iterations: snapshot.runtime.max_iterations,
       allow_outside_workspace: snapshot.runtime.allow_outside_workspace, permission_mode: snapshot.runtime.permission_mode,
@@ -191,9 +289,16 @@ function sameValue(a: unknown, b: unknown): boolean {
 export function rebasePending(previousSaved: PendingSettings, pending: PendingSettings, fresh: PendingSettings): PendingSettings {
   const slots = {} as Record<ModelSlotName, string | null>;
   const thinking = {} as Record<ModelSlotName, string | null>;
+  const cleared: Record<string, string> = {};
   for (const slot of SLOT_KEYS) {
-    slots[slot] = pending.slots[slot] !== previousSaved.slots[slot] ? pending.slots[slot] : fresh.slots[slot];
-    thinking[slot] = pending.slotThinking[slot] !== previousSaved.slotThinking[slot] ? pending.slotThinking[slot] : fresh.slotThinking[slot];
+    const slotKept = pending.slots[slot] !== previousSaved.slots[slot];
+    const thinkingKept = pending.slotThinking[slot] !== previousSaved.slotThinking[slot];
+    slots[slot] = slotKept ? pending.slots[slot] : fresh.slots[slot];
+    thinking[slot] = thinkingKept ? pending.slotThinking[slot] : fresh.slotThinking[slot];
+    // REQ-CONFIG-334: a disclosure belongs to the model move that made it, so it is kept exactly while that move is
+    // still an edit; a reload that takes the file's values takes the disclosure down with them.
+    const disclosed = pending.clearedThinking[slot];
+    if (disclosed !== undefined && (slotKept || thinkingKept)) cleared[slot] = disclosed;
   }
   const runtime = { ...fresh.runtime };
   // By value, not by reference: a list the user edited and put back is untouched, so it takes the file's new value.
@@ -208,7 +313,7 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
   // state per skill ("the user removed an override"), which nothing produces: the screen only ever sets a
   // mode, and the sparse write below is what turns a baseline choice into a removal.
   return {
-    slots, slotThinking: thinking, runtime, display,
+    slots, slotThinking: thinking, clearedThinking: cleared, runtime, display,
     skills: sameValue(pending.skills, previousSaved.skills) ? fresh.skills : pending.skills,
     // PD-WORKSPACE-002: the instructions block rebases as a whole rather than per key, like the skills
     // block above and for the same reason — the screen only ever sets a state, and the sparse write below
@@ -250,7 +355,7 @@ export function isDirty(saved: PendingSettings, pending: PendingSettings): boole
 }
 
 export type PendingChange =
-  | { readonly kind: 'slot'; readonly slot: ModelSlotName; readonly value: string | null }
+  | { readonly kind: 'slot'; readonly slot: ModelSlotName; readonly value: string | null; readonly clears?: string | null }
   | { readonly kind: 'slotThinking'; readonly slot: ModelSlotName; readonly value: string | null }
   | { readonly kind: 'runtime'; readonly key: keyof PendingSettings['runtime']; readonly value: PendingSettings['runtime'][keyof PendingSettings['runtime']] }
   | { readonly kind: 'circuitBreaker'; readonly value: boolean }
@@ -267,12 +372,30 @@ export type PendingChange =
 /** Apply one change; returns the same object when nothing changed (the equality guard). */
 export function applyChange(pending: PendingSettings, change: PendingChange): PendingSettings {
   switch (change.kind) {
-    case 'slot':
-      if (pending.slots[change.slot] === change.value) return pending;
-      return { ...pending, slots: { ...pending.slots, [change.slot]: change.value } };
-    case 'slotThinking':
+    case 'slot': {
+      // REQ-CONFIG-334: a model change carries `clears` — the strength the move cleared, or null when it cleared
+      // nothing (which drops a previous disclosure so the row never states a clearing it did not cause). A change that
+      // cleared a strength lands the slot's strength unset and records the disclosure for the row to name.
+      if (change.clears === undefined) {
+        if (pending.slots[change.slot] === change.value) return pending;
+        return { ...pending, slots: { ...pending.slots, [change.slot]: change.value } };
+      }
+      const thinking = change.clears === null ? pending.slotThinking[change.slot] : null;
+      if (pending.slots[change.slot] === change.value && pending.slotThinking[change.slot] === thinking && (pending.clearedThinking[change.slot] ?? null) === change.clears) return pending;
+      const clearedThinking = { ...pending.clearedThinking };
+      if (change.clears === null) delete clearedThinking[change.slot];
+      else clearedThinking[change.slot] = change.clears;
+      return { ...pending, slots: { ...pending.slots, [change.slot]: change.value }, slotThinking: { ...pending.slotThinking, [change.slot]: thinking }, clearedThinking };
+    }
+    case 'slotThinking': {
+      // REQ-CONFIG-335/093: a re-selection of the entry already shown changes nothing (the disclosure included).
       if (pending.slotThinking[change.slot] === change.value) return pending;
-      return { ...pending, slotThinking: { ...pending.slotThinking, [change.slot]: change.value } };
+      // REQ-CONFIG-334: an explicit selection supersedes the clearing note — the strength was just chosen by the user,
+      // so the row no longer states a level that a model move cleared.
+      const clearedThinking = { ...pending.clearedThinking };
+      delete clearedThinking[change.slot];
+      return { ...pending, slotThinking: { ...pending.slotThinking, [change.slot]: change.value }, clearedThinking };
+    }
     case 'runtime':
       if (pending.runtime[change.key] === change.value) return pending;
       return { ...pending, runtime: { ...pending.runtime, [change.key]: change.value } };

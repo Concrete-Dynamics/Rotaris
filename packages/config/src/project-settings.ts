@@ -4,6 +4,7 @@ import { exactPrices } from './prices.js';
 import { err, ok, type Result } from '@rotaris/kernel';
 import { MODEL_SLOTS, type ModelSlot } from './keys.js';
 import type { PlainMap } from './merge.js';
+import type { ModelEntry } from './sections/models.js';
 
 /**
  * REQ-PROVIDER-084/085 (the reader) and REQ-CONFIG-034 / REQ-PROVIDER-091 / REQ-CONFIG-204 (the layer):
@@ -192,6 +193,67 @@ export function snapshotLayer(snapshot: ProjectSnapshot): { layer: PlainMap | nu
   const slots: Partial<Record<ModelSlot, string>> = {};
   for (const slot of SNAPSHOT_SLOTS) if (typeof layer[slot] === 'string') slots[slot] = layer[slot];
   return { layer, authenticated: ids, slots };
+}
+
+/**
+ * REQ-CONFIG-332 with REQ-CONFIG-096's candidate ladder: the names a configured `models:` entry is matched under
+ * against a snapshot model keyed by its qualified id. Candidates are tried in the requirement's order, with a repeated
+ * candidate tried once only: the key itself when it holds a `/`; the bare `model_id`; the `model_id` with a leading
+ * provider prefix removed; then each of those re-qualified as `<provider id>/<candidate>`, taking the entry's sign-in
+ * provider id before its dispatch provider id (`codex` and `copilot` both read as `openai`, as REQ-CONFIG-096 fixes).
+ */
+export function snapshotCandidateNames(key: string, entry: Pick<ModelEntry, 'model_id' | 'provider' | 'auth_provider'>): readonly string[] {
+  const forms: string[] = [];
+  if (key.includes('/')) forms.push(key);
+  const modelId = entry.model_id;
+  if (modelId !== '') forms.push(modelId);
+  const slash = modelId.indexOf('/');
+  const stripped = slash >= 0 ? modelId.slice(slash + 1) : null;
+  if (stripped !== null && stripped !== '') forms.push(stripped);
+  const providers: string[] = [];
+  for (const id of [entry.auth_provider, entry.provider]) {
+    const normalised = id === 'codex' || id === 'copilot' ? 'openai' : id;
+    if (normalised !== null && normalised !== '' && !providers.includes(normalised)) providers.push(normalised);
+  }
+  const names = [...forms];
+  // The re-qualified candidates follow, the sign-in provider's before the dispatch provider's; a repeat is tried once only.
+  for (const provider of providers) for (const form of forms) names.push(`${provider}/${form}`);
+  return [...new Set(names)];
+}
+
+/**
+ * REQ-CONFIG-332 / REQ-CONFIG-202: the capability records the discovery snapshot carries, keyed by the snapshot
+ * model's qualified id (`SnapshotModel.id`), for every provider the snapshot holds. The layer's own `authenticated`
+ * filter (REQ-CONFIG-034) governs which models are FOLDED into the configuration; REQ-CONFIG-332 reads the record
+ * the snapshot carries for a model, which is a property of the catalogue rather than of the sign-in state.
+ */
+export function snapshotCapabilityRecords(snapshot: ProjectSnapshot): Readonly<Record<string, Readonly<Record<string, unknown>>>> {
+  const out: Record<string, Readonly<Record<string, unknown>>> = {};
+  for (const id of Object.keys(snapshot.providers).sort()) {
+    const rec = snapshot.providers[id]!;
+    for (const m of rec.models) if (out[m.id] === undefined) out[m.id] = m.capabilities;
+  }
+  return out;
+}
+
+/**
+ * The reasoning levels one capability record declares under the product's own name for REQ-PROVIDER-076's raw
+ * `supported_reasoning_levels` — `capabilities.reasoning_levels`, exactly as `input_modalities` maps to
+ * `accepts_image_input`. Empty when the record declares none, in any other shape, or is absent; the vocabulary
+ * intersection is REQ-CONFIG-332's, so this reader does not filter the declared names.
+ */
+export function capabilityReasoningLevels(capabilities: Readonly<Record<string, unknown>> | undefined): readonly string[] {
+  const declared = capabilities?.['reasoning_levels'];
+  return Array.isArray(declared) ? declared.filter((level): level is string => typeof level === 'string' && level !== '') : [];
+}
+
+/** The capability levels REQ-CONFIG-332 reads for one configured entry: the ladder's first candidate the records hold, or none. */
+export function capabilityLevelsForEntry(key: string, entry: ModelEntry, records: Readonly<Record<string, Readonly<Record<string, unknown>>>>): readonly string[] {
+  for (const name of snapshotCandidateNames(key, entry)) {
+    const record = records[name];
+    if (record !== undefined) return capabilityReasoningLevels(record);
+  }
+  return [];
 }
 
 export { MODEL_SLOTS };

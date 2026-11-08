@@ -27,7 +27,7 @@ import { readCircuitBreakerSection, type CircuitBreakerSection } from './circuit
 import { FieldReader, typeName, vocabularyString, type Problem, type ProblemSink } from './sections/field.js';
 import { resolveSlotsAndReasoning } from './slots.js';
 import { referentialMessages, renderProblems, type FatalLoadReport } from './validate.js';
-import { PROJECT_SETTINGS_FILE, readProjectSnapshot, snapshotLayer } from './project-settings.js';
+import { PROJECT_SETTINGS_FILE, readProjectSnapshot, snapshotCapabilityRecords, snapshotLayer } from './project-settings.js';
 
 /**
  * ADR-0036 alternative B, the whole loader: `loadConfiguration(globalDir, workspaceRoot)` — the entry point
@@ -95,6 +95,12 @@ export interface LoadedConfiguration {
   readonly authenticatedProviders: readonly string[];
   /** REQ-CONFIG-341: the slot values the snapshot layer supplied, so an editor can name `discovered` as an origin. */
   readonly discoveredSlots: Readonly<Partial<Record<ModelSlot, string>>>;
+  /**
+   * REQ-CONFIG-332 / REQ-CONFIG-202: the capability records the discovery snapshot carries, keyed by each snapshot
+   * model's qualified id — the OTHER input of the offered-levels rule (each entry's own `reasoning_effort_map` being
+   * the first). Threaded like `authenticatedProviders` and `discoveredSlots`; empty without a snapshot.
+   */
+  readonly snapshotCapabilities: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   /** REQ-CONFIG-233's warn-and-continue conditions, rendered. */
   readonly warnings: readonly string[];
   /** REQ-CONFIG-229: the referential stage's messages; empty means valid. */
@@ -306,6 +312,7 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
   const snapshotWarnings: string[] = [];
   let authenticatedProviders: readonly string[] = [];
   let discoveredSlots: Readonly<Partial<Record<ModelSlot, string>>> = {};
+  let snapshotCapabilities: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {};
   // Layer 3 (REQ-CONFIG-031): the discovery snapshot; an invalid one is ignored with a warning (REQ-PROVIDER-091).
   const snapshotPath = opts.snapshotPath === undefined ? join(opts.globalDir, PROJECT_SETTINGS_FILE) : opts.snapshotPath;
   if (snapshotPath !== null) {
@@ -315,6 +322,7 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
       const folded = snapshotLayer(snap.value);
       authenticatedProviders = folded.authenticated;
       discoveredSlots = folded.slots;
+      snapshotCapabilities = snapshotCapabilityRecords(snap.value);
       if (folded.layer) layers.push({ source: snapshotPath, value: folded.layer });
     }
   }
@@ -357,7 +365,7 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
   return resolveMerged(merged.value, {
     workspaceRoot: opts.workspaceRoot, hooks, files, raw, problems, delegationStrategy: readDelegationStrategy(workspaceAgents),
     mergeWarnings: [...snapshotWarnings, ...merged.warnings.map((w) => `${w.source}: ${w.message}`)], ...(opts.toolServers ? { toolServers: opts.toolServers } : {}),
-    authenticatedProviders, discoveredSlots,
+    authenticatedProviders, discoveredSlots, snapshotCapabilities,
     loadMs: started === null || !opts.now ? null : opts.now() - started,
     mcp: { discovered: discovered.value, discoveryDiagnostics: discovered.diagnostics, globalDir: opts.globalDir, env, platform, onPath: opts.onPath, readFile: opts.readFile, builtinLaunch: opts.builtinLaunch },
   });
@@ -375,6 +383,8 @@ export interface ResolveContext {
   readonly toolServers?: readonly string[];
   readonly authenticatedProviders?: readonly string[];
   readonly discoveredSlots?: Readonly<Partial<Record<ModelSlot, string>>>;
+  /** REQ-CONFIG-332 / REQ-CONFIG-202: the snapshot's per-model capability records, keyed by qualified id. */
+  readonly snapshotCapabilities?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   readonly loadMs: number | null;
   readonly mcp: McpResolveContext;
 }
@@ -668,6 +678,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     syntheticOrigins: resolution.syntheticOrigins,
     authenticatedProviders: ctx.authenticatedProviders ?? [],
     discoveredSlots: ctx.discoveredSlots ?? {},
+    snapshotCapabilities: ctx.snapshotCapabilities ?? {},
     warnings,
     referential,
     raw: ctx.raw,

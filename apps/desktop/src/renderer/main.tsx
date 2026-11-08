@@ -211,7 +211,11 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
    * configuration — the same scoped per-field write (REQ-CONFIG-441/463) the permission-mode chip already takes, so
    * "the next run starts from it" is the configuration load's own rule rather than a second mechanism beside it.
    * The persona is the run's default role (`default_persona`); the model and the reasoning are that role's own,
-   * which is what `entryOf` reads back, so the chip shows the value it just wrote.
+   * which is what `entryOf` reads back, so the chip shows the value it just wrote. Until 2026-11-08 that reading held
+   * only once a run existed: with no session and no transcript `entryOf` fell back to the literal `orchestrator`, so at
+   * rest the chip named a role no run would start as and appeared to jump to the real one when a run began. The
+   * fallback is now the configured default role (`ConfigSnapshot.defaultPersona`, `entryOf`), which is the value the
+   * write below lands on and the value the next run starts from.
    */
   const setField = useCallback(async (patch: Record<string, unknown>): Promise<{ ok: true } | { ok: false; reason: string }> => {
     const r = await bridge.command({ kind: 'config.setField', patch });

@@ -67,6 +67,9 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
     workspaceRoot: cfg.workspaceRoot,
     loadOk: true,
     fatal: null,
+    // REQ-CONFIG-063 / REQ-CHAT-006 / REQ-CHAT-009: the configured default role, so the composer's chips can name
+    // what the NEXT run starts as (there is no session yet to read it from). Shipped default `orchestrator`.
+    defaultPersona: cfg.defaultPersona,
     slots: slotPreferences(cfg).map((p) => ({ slot: p.slot, value: p.value, origin: p.origin, thinking: p.thinking })),
     models: modelKeys,
     imageInputModels: modelKeys.filter((name) => cfg.models[name]!.accepts_image_input),
@@ -111,7 +114,11 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
 export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: string, env: InstructionSnapshotEnv = {}): ConfigSnapshot {
   const files = scopeFiles(globalDir, workspaceRoot);
   return {
-    workspaceRoot, loadOk: false, fatal: report, slots: [], models: [], imageInputModels: [], modelReasoning: {}, roles: [],
+    workspaceRoot, loadOk: false, fatal: report,
+    // The loader's own shipped default for a file that could not be read (REQ-CONFIG-063), never an empty string:
+    // the chip still names the role a run would start as once the configuration is repaired.
+    defaultPersona: 'orchestrator',
+    slots: [], models: [], imageInputModels: [], modelReasoning: {}, roles: [],
     runtime: {
       max_depth: RUNTIME_DEFAULTS.max_depth, max_active_children: RUNTIME_DEFAULTS.max_active_children, child_timeout: RUNTIME_DEFAULTS.child_timeout, max_iterations: RUNTIME_DEFAULTS.max_iterations,
       allow_outside_workspace: RUNTIME_DEFAULTS.allow_outside_workspace, permission_mode: RUNTIME_DEFAULTS.permission_mode,

@@ -20,7 +20,7 @@ import { applyChange, isDirty, modelChangeClearsThinking, pendingFrom, reasoning
 const runtime = { max_depth: 3, max_active_children: 6, child_timeout: 1200, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto' as const, memory_diagnostics_enabled: false, sandbox_mode: 'off' as const, sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask' as const, network_allowed_hosts: [], network_denied_hosts: [] };
 
 const snapshotWith = (over: Partial<ConfigSnapshot> = {}): ConfigSnapshot => ({
-  workspaceRoot: '/ws', loadOk: true, fatal: null,
+  workspaceRoot: '/ws', loadOk: true, fatal: null, defaultPersona: 'orchestrator',
   slots: [
     { slot: 'large_model', value: 'ds41', origin: 'workspace', thinking: null },
     { slot: 'small_model', value: 'gpt-4o-mini', origin: 'default', thinking: null },

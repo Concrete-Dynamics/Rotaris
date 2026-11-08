@@ -21,7 +21,9 @@ describe('live-run finding K1: the renderer roots wire the declared tools and th
     // drawn as the latest root, the session's roots and the live run's root persona handed in (the repair of
     // after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
     // Since 2026-10-02 the session's overrides in force too, so the role names the model it runs on (REQ-CHAT-006, REQ-SESSION-026).
-    expect(view).toContain('return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null, session?.modelOverrides ?? []);');
+    // Since 2026-11-08 the configured default role is handed in as well, so with no run and no transcript the surface names
+    // the role the NEXT run would start as rather than the literal `orchestrator` (REQ-CHAT-006/009 with REQ-CONFIG-063).
+    expect(view).toContain('return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null, session?.modelOverrides ?? [], snapshot?.defaultPersona ?? null);');
     expect(source('main.tsx').match(/entryOf\(snapshot, rows, session\)/g)).toHaveLength(2);
     expect(source('windows.tsx')).toContain('entryOf(snapshot, state.rows, session)');
     expect(source('windows.tsx')).toContain('?.declaredTools ?? [];');

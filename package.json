@@ -52,6 +52,7 @@
     "transcript-proof": "node apps/desktop/scripts/transcript-proof.mjs",
     "rows-proof": "node apps/desktop/scripts/rows-proof.mjs",
     "composer-proof": "node apps/desktop/scripts/composer-proof.mjs",
+    "mode-reset-proof": "node apps/desktop/scripts/mode-reset-proof.mjs",
     "questions-proof": "node apps/desktop/scripts/questions-proof.mjs",
     "approvals-proof": "node apps/desktop/scripts/approvals-proof.mjs",
     "todo-proof": "node apps/desktop/scripts/todo-proof.mjs",

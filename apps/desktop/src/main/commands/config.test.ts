@@ -1,11 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { RepositoryState, WorkspaceServiceRequest } from '@rotaris/contracts';
+import type { CommandOutcome, RepositoryState, WorkspaceServiceRequest } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
+import { createLiveStateArbiter } from '../live-state.js';
 
 // `config.ts` announces a saved snapshot to the main windows it is handed; no Electron window is reached.
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }));
 const { configCommands } = await import('./config.js');
+
+/**
+ * An arbiter over a stub run host, recording the states handed over. The real one is driven by
+ * `live-state.test.ts`; here it only has to exist, so the facet's other cases are unaffected (REQ-CONFIG-262).
+ */
+const arbiter = (lines: string[] = []) => createLiveStateArbiter({
+  log: (m) => { lines.push(m); },
+  send: (state) => { lines.push(`live-state:${JSON.stringify(state)}`); return Promise.resolve({ ok: true, value: {} } as CommandOutcome); },
+});
 
 /**
  * PD-MONITOR-002, live-run finding a71-9: one fact, one emitter. The workspace service performs the repository read and
@@ -21,9 +31,8 @@ describe('repository.read — the repository card, relayed from the workspace se
     const asked: WorkspaceServiceRequest[] = [];
     const link = { request: async (req: WorkspaceServiceRequest) => { asked.push(req); return { kind: 'repository.state', state }; } };
     const services = new Map([[canonicalPath(ROOT), { link }]]) as unknown as CommandContext['services'];
-    const runHost = { request: async () => ({ kind: 'ack' }) } as unknown as CommandContext['runHost'];
     const mainWindows = { ordered: () => [] } as unknown as CommandContext['mainWindows'];
-    const facet = configCommands({ log: (m) => { lines.push(m); }, mainWindows, raiseNotice: () => undefined, runHost, services });
+    const facet = configCommands({ log: (m) => { lines.push(m); }, liveState: arbiter(lines), mainWindows, raiseNotice: () => undefined, services });
     const at: CommandAt = { w: { workspaceId: 'ws-1', workspace: ROOT, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
     const out = await facet['repository.read']({ kind: 'repository.read' }, at);
     expect(out).toEqual({ ok: true, value: state });
@@ -48,8 +57,7 @@ describe('config.setField — every main window repopulates from its own workspa
     const sent = new Map<string, unknown[]>();
     const win = (workspace: string) => ({ workspace, win: { isDestroyed: () => false, webContents: { send: (_channel: string, payload: { snapshot: unknown }) => { sent.set(workspace, [...(sent.get(workspace) ?? []), payload.snapshot]); } } }, personaWindows: { list: () => [], entry: () => undefined }, terminalWindows: { current: () => null } });
     const mainWindows = { ordered: () => [win(A), win(B)] } as unknown as CommandContext['mainWindows'];
-    const runHost = { request: async () => ({ kind: 'ack' }) } as unknown as CommandContext['runHost'];
-    const facet = configCommands({ log: () => undefined, mainWindows, raiseNotice: () => undefined, runHost, services });
+    const facet = configCommands({ log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services });
     const at: CommandAt = { w: { workspaceId: 'ws-a', workspace: A, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
     const out = await facet['config.setField']({ kind: 'config.setField', patch: { runtime: { allow_outside_workspace: true } } }, at);
     expect(out.ok).toBe(true);
@@ -81,8 +89,7 @@ describe('config.setField — a main window\'s persona and terminal windows repo
       terminalWindows: { current: () => (terminal ? { win: electronWindow(`${name}/terminal`) } : null) },
     });
     const mainWindows = { ordered: () => [family(A, 'A', ['orchestrator', 'reviewer'], true), family(B, 'B', ['orchestrator'], false)] } as unknown as CommandContext['mainWindows'];
-    const runHost = { request: async () => ({ kind: 'ack' }) } as unknown as CommandContext['runHost'];
-    const facet = configCommands({ log: () => undefined, mainWindows, raiseNotice: () => undefined, runHost, services });
+    const facet = configCommands({ log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services });
     const at: CommandAt = { w: { workspaceId: 'ws-a', workspace: A, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
     const out = await facet['config.setField']({ kind: 'config.setField', patch: { runtime: { allow_outside_workspace: true } } }, at);
     expect(out.ok).toBe(true);
@@ -106,13 +113,63 @@ describe('config.setField — each announced load reaches the fatal-load notice 
     const services = new Map([[canonicalPath(A), service(canonicalPath(A), true)], [canonicalPath(B), service(canonicalPath(B), false)]]) as unknown as CommandContext['services'];
     const win = (workspace: string) => ({ workspace, win: { isDestroyed: () => false, webContents: { send: () => undefined } }, personaWindows: { list: () => [], entry: () => undefined }, terminalWindows: { current: () => null } });
     const mainWindows = { ordered: () => [win(A), win(B)] } as unknown as CommandContext['mainWindows'];
-    const runHost = { request: async () => ({ kind: 'ack' }) } as unknown as CommandContext['runHost'];
     const observed: { root: string; loadOk: boolean }[] = [];
     const configFatal = { observe: async (root: string, s: { loadOk: boolean }) => { observed.push({ root, loadOk: s.loadOk }); }, loaded: async () => undefined };
-    const facet = configCommands({ configFatal, log: () => undefined, mainWindows, raiseNotice: () => undefined, runHost, services });
+    const facet = configCommands({ configFatal, log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services });
     const at: CommandAt = { w: { workspaceId: 'ws-a', workspace: A, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
     expect((await facet['config.setField']({ kind: 'config.setField', patch: { runtime: { max_depth: 3 } } }, at)).ok).toBe(true);
     await vi.waitFor(() => { expect(observed).toHaveLength(2); });
     expect(observed).toEqual([{ root: canonicalPath(A), loadOk: true }, { root: canonicalPath(B), loadOk: false }]);
+  });
+});
+
+/**
+ * ADR-0037 Tier B / REQ-CONFIG-262 with REQ-SHELL-020 — the repair of
+ * `docs/defects/a-settings-screens-live-state-outlives-the-screen-and-overrides-a-durable-write.md`, driven through the
+ * facet rather than through the arbiter directly: this is the ONE path every window's write passes, so it is where the
+ * rule has to hold. A window's non-empty state is a publication; an empty one is that window letting go, and the run
+ * host is told "none" only when no window still holds a screen.
+ */
+describe('config.liveState — a window publishes, and letting go is the last holder\'s to do (REQ-CONFIG-262, REQ-SHELL-020)', () => {
+  const states: unknown[] = [];
+  const facetFor = () => configCommands({
+    log: () => undefined, mainWindows: { ordered: () => [] } as unknown as CommandContext['mainWindows'],
+    raiseNotice: () => undefined, services: new Map(),
+    liveState: createLiveStateArbiter({
+      log: () => undefined,
+      send: (state) => { states.push(state); return Promise.resolve({ ok: true, value: {} }); },
+    }),
+  });
+  // `wcId` is the identity the arbiter keys on, so the fake window carries the one the case names (the real
+  // `MainWindowView` does; `commands/config.ts` reads `w.wcId`).
+  const at = (wcId: number): CommandAt => ({ w: { wcId, workspaceId: 'ws-1', workspace: '/work/project', followedSessionId: null } as unknown as MainWindowState, senderId: wcId, awaitWorkspace: async () => undefined });
+
+  it('hands a window\'s values over, and restores a survivor\'s own when another holder lets go', async () => {
+    states.length = 0;
+    const facet = facetFor();
+    const ask = { runtime: { permission_mode: 'ask' } };
+    const autonomous = { runtime: { permission_mode: 'autonomous' } };
+    expect(await facet['config.liveState']({ kind: 'config.liveState', state: ask }, at(1))).toEqual({ ok: true });
+    await vi.waitFor(() => { expect(states).toEqual([ask]); });
+    // A second window publishes; the FIRST lets go. B's values must survive, and they must be B's OWN (REQ-SHELL-020) —
+    // a set of window identities would leave the run host holding B's values only by luck.
+    expect(await facet['config.liveState']({ kind: 'config.liveState', state: autonomous }, at(2))).toEqual({ ok: true });
+    expect(await facet['config.liveState']({ kind: 'config.liveState', state: {} }, at(1))).toEqual({ ok: true });
+    await vi.waitFor(() => { expect(states).toEqual([ask, autonomous]); });
+    // A publishes again, so A owns the state; B letting go now changes nothing (B's values were already displaced).
+    expect(await facet['config.liveState']({ kind: 'config.liveState', state: ask }, at(1))).toEqual({ ok: true });
+    expect(await facet['config.liveState']({ kind: 'config.liveState', state: {} }, at(2))).toEqual({ ok: true });
+    await vi.waitFor(() => { expect(states).toEqual([ask, autonomous, ask]); });
+    // The last holder (A, the owner) lets go, so the run host is told "none".
+    expect(await facet['config.liveState']({ kind: 'config.liveState', state: {} }, at(1))).toEqual({ ok: true });
+    await vi.waitFor(() => { expect(states).toEqual([ask, autonomous, ask, {}]); });
+  });
+
+  it('a letting-go from a window that never published says nothing to the run host', async () => {
+    states.length = 0;
+    const facet = facetFor();
+    expect(await facet['config.liveState']({ kind: 'config.liveState', state: {} }, at(9))).toEqual({ ok: true });
+    await Promise.resolve();
+    expect(states).toEqual([]);
   });
 });

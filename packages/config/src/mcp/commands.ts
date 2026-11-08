@@ -101,11 +101,27 @@ export function findOnPath(command: string, env: Readonly<Record<string, string 
   return findExecutable(command, env, platform);
 }
 
-export type Availability = { readonly available: true; readonly why: 'remote' | 'builtin' | 'on-path' } | { readonly available: false; readonly why: 'empty-command' | 'not-on-path'; readonly detail: string };
+export type Availability = { readonly available: true; readonly why: 'remote' | 'builtin' | 'on-path' } | { readonly available: false; readonly why: 'empty-command' | 'not-on-path' | 'unresolved-url'; readonly detail: string };
 
-/** REQ-MCP-037: the single rule for every surface. Supplying a workspace root never changes the answer. */
-export function availability(entry: Pick<McpServerEntry, 'type' | 'command'>, resolved: ResolvedCommand | null, onPath: (executable: string) => boolean): Availability {
-  if (entry.type !== 'stdio') return { available: true, why: 'remote' };
+/**
+ * REQ-MCP-037: the single rule for every surface. Supplying a workspace root never changes the answer.
+ *
+ * REQ-CONFIG-371 reads the remote half with REQ-CONFIG-225: an `http`/`sse` server is available exactly when it has a
+ * usable url, and a url still carrying an unresolved placeholder is not one — such an entry is "retained in the
+ * configuration and marked unavailable, so no request is ever sent to it" (REQ-CONFIG-225). REQ-MCP-037's
+ * "unconditionally" is about reachability: nothing here contacts a remote server at configuration time, and a
+ * configured address is taken as usable on its own. Until 2026-11-08 the remote branch read only the transport, so an
+ * entry whose url still held `${VAR}` counted as available: the settings row showed a network failure instead of the
+ * missing prerequisite (REQ-CONFIG-371), "Check status" opened a connection to an address the run must never reach,
+ * and a persona carried a server whose address was unusable (REQ-MCP-041).
+ */
+export function availability(entry: Pick<McpServerEntry, 'type' | 'command'>, resolved: ResolvedCommand | null, onPath: (executable: string) => boolean, unresolved: readonly string[]): Availability {
+  if (entry.type !== 'stdio') {
+    // Distinct variable names, in first-seen order: a url naming one variable twice is one missing prerequisite.
+    const missing = [...new Set(unresolved)];
+    if (missing.length > 0) return { available: false, why: 'unresolved-url', detail: `its url carries ${missing.map((v) => `\${${v}}`).join(', ')}, which no stored secret or environment variable resolved (REQ-CONFIG-225)` };
+    return { available: true, why: 'remote' };
+  }
   if (entry.command === CODE_INTELLIGENCE_TOKEN || resolved?.builtin) return { available: true, why: 'builtin' };
   const command = resolved?.command ?? entry.command ?? '';
   if (command.trim() === '') return { available: false, why: 'empty-command', detail: 'the entry has no command' };

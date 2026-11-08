@@ -14,6 +14,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-11-08**
+
+**An MCP server whose remote url still holds an unresolved placeholder is unavailable, as REQ-CONFIG-225 says (REQ-CONFIG-371, REQ-CONFIG-349/352, REQ-CONFIG-225, REQ-MCP-093; `../../archive/defects/an-unresolved-remote-url-is-reported-available.md`).** `packages/config/src/mcp/commands.ts`'s `availability()` gains the `unresolved-url` reason on its remote branch and reads the list `resolveMcpConfiguration` already computes; `McpSettings.tsx`'s row draws the host's `availabilityDetail` for a remote entry. No package, edge, process, message kind, channel, command, store table, run-loop step, control operation or seam edit path changed, and no fact changed owner: every surface already carried `availabilityDetail` and already short-circuited an unavailable entry, so the one rule alone decides the row, the probe and the persona carry.
+
 Last reconciled with the code: **2026-11-06**
 
 **Linux AppImage wiring (ADR-0066; REQ-STARTUP-024/025).** Packaging scripts outside the boundary rule move no

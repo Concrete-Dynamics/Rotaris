@@ -47,7 +47,7 @@ providers:
     models:
       - id: <qualified id>
         display_name: <string, optional>
-        capabilities: { accepts_image_input: <bool, optional; absent means unknown>, image_input_tokens: <int, optional>, image_input_tokens_per_megapixel: <number, optional>, ... }
+        capabilities: { accepts_image_input: <bool, optional; absent means unknown>, reasoning_levels: <list of strings, optional; absent means the provider reports none>, image_input_tokens: <int, optional>, image_input_tokens_per_megapixel: <number, optional>, ... }
         limits: { context_window: <int>, ... }
         pricing: { input_cost_per_token: <decimal string>, output_cost_per_token: <decimal string>, image_cost_per_image: <decimal string, optional> }   # decimal strings: accepted amendment 2026-09-23, OQ-21
         discovered_at: <ISO-8601 with UTC offset>
@@ -71,7 +71,7 @@ Environment: `GITHUB_COPILOT_ACCESS_TOKEN` is defaulted (never overwritten) to t
 
 ### Discovery response (consumed contract)
 
-Generic providers: a JSON object with a `data` list of model objects, each with `id` and optional `display_name`/`name`, capability and limit objects (including `context_length`, and including whatever the provider reports about accepted input modalities, from which the image-input declaration of REQ-PROVIDER-149 and any image token cost of REQ-PROVIDER-150 are taken), and — for the hosted cloud — decimal-string per-token prices (`prompt_usd_per_token`, `completion_usd_per_token`). Codex: a JSON object with a `models` list whose items carry `slug`, `supported_in_api`, `visibility`, `supported_reasoning_levels`, `input_modalities`, `context_window`/`max_context_window`. Hosted-cloud suggestions endpoint (`<base>/model-suggestions`): roles `small`, `medium`, `large`, `fallback` naming discovered model ids.
+Generic providers: a JSON object with a `data` list of model objects, each with `id` and optional `display_name`/`name`, capability and limit objects (including `context_length`, and including whatever the provider reports about accepted input modalities, from which the image-input declaration of REQ-PROVIDER-149 and any image token cost of REQ-PROVIDER-150 are taken, and about the reasoning levels it supports, from which `capabilities.reasoning_levels` is taken — PD-CONFIG-006, 2026-11-08), and — for the hosted cloud — decimal-string per-token prices (`prompt_usd_per_token`, `completion_usd_per_token`). Codex: a JSON object with a `models` list whose items carry `slug`, `supported_in_api`, `visibility`, `supported_reasoning_levels`, `input_modalities`, `context_window`/`max_context_window`. Hosted-cloud suggestions endpoint (`<base>/model-suggestions`): roles `small`, `medium`, `large`, `fallback` naming discovered model ids.
 
 ### Subscription usage payloads (consumed contracts)
 

@@ -25,12 +25,14 @@ levels and its control is the unset entry alone. Each level is displayed under i
 `xhigh` display literally.
 
 How a level reaches a provider, extending REQ-CONFIG-092: `off` SHALL be sent as its `reasoning_effort_map`
-entry where the entry holds one, and otherwise SHALL send **no** reasoning-effort field at all — the treatment
-`auto` already receives — because "switched off" is expressed by the absence of an effort or by the endpoint's
-own word for it, and never by a guessed string. `off` is a known level, so that path raises no warning. `xhigh`
-SHALL reach the provider unchanged, as `low`, `medium` and `high` already do. `max` continues to reach it as
-`xhigh` where no map entry states otherwise, and an explicitly configured `reasoning_effort` still bypasses the
-whole path and is sent verbatim (REQ-CONFIG-089).
+entry where the entry holds one — so an endpoint whose map reads `off: none` is sent `none` — and where the entry
+holds none it SHALL send **no** reasoning-effort field at all, because "switched off" is expressed by the absence
+of an effort or by the endpoint's own word for it and never by a guessed string. `off` is a known level, so that
+path raises no warning. `xhigh` SHALL reach the provider unchanged, as `low`, `medium` and `high` already do.
+`max` continues to reach it as `xhigh` where no map entry states otherwise, and an explicitly configured
+`reasoning_effort` still bypasses the whole path and is sent verbatim (REQ-CONFIG-089). **`auto`'s own handling is
+not changed by this directive**: whether it honours a map entry is left exactly as the build has it, and only the
+offered-level vocabulary and `off`'s route are settled here.
 
 The discovery snapshot's capability record is how a catalogue reaches a control (REQ-CONFIG-332), so a
 provider's catalogue that reports the reasoning levels its models support SHALL have them captured into each

@@ -183,6 +183,16 @@ export const ConfigSnapshotSchema = z.object({
   models: z.array(z.string()),
   /** REQ-CHAT-171/172: model keys whose provider declaration accepts image input. */
   imageInputModels: z.array(z.string()),
+  /**
+   * REQ-CONFIG-332/093/091/202: the reasoning-strength levels each configured `models:` key OFFERS — the slot/model
+   * vocabulary of REQ-CONFIG-069 less `auto`, filtered to a stated `reasoning_effort_map`'s keys where the entry
+   * declares one, else intersected with the reasoning levels the resolved model's discovery-snapshot capability
+   * record declares (`capabilities.reasoning_levels`, REQ-CONFIG-202), in the vocabulary's own order. Keyed by the
+   * SAME keys `models` lists; `auto` is never present (it reaches a control only through REQ-CONFIG-332's appending
+   * rule). This is a projection computed by `@rotaris/config` (`offeredReasoningLevels`): the UI package may not
+   * import that one (eslint-plugin-boundaries), and no control may invent a catalogue of its own.
+   */
+  modelReasoning: z.record(z.string(), z.array(z.string())),
   roles: z.array(RoleViewSchema),
   runtime: RuntimeViewSchema,
   /** REQ-CONFIG-471: each scope's raw `runtime:` mapping as the file states it; null when the file states none. */

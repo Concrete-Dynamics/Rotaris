@@ -16,7 +16,7 @@ const runtime = (improvementTimeout: number): ConfigSnapshot['runtime'] => ({ ma
 const snapshotWith = (improvementTimeout: number): ConfigSnapshot => ({
   workspaceRoot: '/ws', loadOk: true, fatal: null,
   slots: [{ slot: 'large_model', value: 'gpt-4o', origin: 'default', thinking: null }],
-  models: ['gpt-4o'], imageInputModels: [],
+  models: ['gpt-4o'], imageInputModels: [], modelReasoning: { 'gpt-4o': ['low', 'medium', 'high', 'max'] },
   roles: [],
   runtime: runtime(improvementTimeout),
   rawRuntime: { workspace: null, global: null },

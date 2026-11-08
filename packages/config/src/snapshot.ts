@@ -3,6 +3,8 @@ import { declaredToolsOf, DICTATION_CONFIG_DEFAULT, INSTRUCTIONS_CONFIG_DEFAULT,
 import type { Timers } from '@rotaris/kernel';
 import { PERSONA_SYNTHETIC_PREFIX, STARTUP_SLOT_PREFIX } from './keys.js';
 import { isPlainMap, type PlainMap } from './merge.js';
+import { capabilityLevelsForEntry } from './project-settings.js';
+import { offeredReasoningLevels } from './sections/models.js';
 import { loadConfiguration, scopeFiles, type LoadedConfiguration } from './load.js';
 import { rolePreferences, slotPreferences } from './preferences.js';
 import { RUNTIME_DEFAULTS } from './sections/runtime.js';
@@ -57,13 +59,18 @@ export function instructionEnabled(master: boolean, overrides: Readonly<Record<s
 export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv = {}): ConfigSnapshot {
   const rawRuntimeOf = (raw: PlainMap | null): Record<string, unknown> | null => (raw && isPlainMap(raw['runtime']) ? (raw['runtime']) : null);
   const discovered = instructionFiles(cfg.workspaceRoot, { ...env, globalDir: env.globalDir ?? cfg.files.global.dir });
+  // REQ-CONFIG-332: the offered levels of each CONFIGURED model — the same real keys `models` lists (synthetic entries
+  // excluded, and every slot value an editor holds is the unwrapped key), each computed by the one rule the loader and
+  // the catalogue share (`offeredReasoningLevels`), so the screen and the loader can never disagree.
+  const modelKeys = Object.keys(cfg.models).filter((name) => !name.startsWith(STARTUP_SLOT_PREFIX) && !name.startsWith(PERSONA_SYNTHETIC_PREFIX)).sort();
   return {
     workspaceRoot: cfg.workspaceRoot,
     loadOk: true,
     fatal: null,
     slots: slotPreferences(cfg).map((p) => ({ slot: p.slot, value: p.value, origin: p.origin, thinking: p.thinking })),
-    models: Object.keys(cfg.models).filter((name) => !name.startsWith(STARTUP_SLOT_PREFIX) && !name.startsWith(PERSONA_SYNTHETIC_PREFIX)).sort(),
-    imageInputModels: Object.keys(cfg.models).filter((name) => cfg.models[name]!.accepts_image_input && !name.startsWith(STARTUP_SLOT_PREFIX) && !name.startsWith(PERSONA_SYNTHETIC_PREFIX)).sort(),
+    models: modelKeys,
+    imageInputModels: modelKeys.filter((name) => cfg.models[name]!.accepts_image_input),
+    modelReasoning: Object.fromEntries(modelKeys.map((key) => [key, [...offeredReasoningLevels(cfg.models[key]!, capabilityLevelsForEntry(key, cfg.models[key]!, cfg.snapshotCapabilities))]])),
     roles: rolePreferences(cfg).map((r) => ({ role: r.role, rawModel: r.rawModel, modelOrigin: r.modelOrigin, effectiveModel: r.effectiveModel, inherited: r.inherited, builtInDefault: r.builtInDefault, rawThinking: r.rawThinking, thinkingOrigin: r.thinkingOrigin, tier: r.tier, tools: [...r.tools], declaredTools: [...declaredToolsOf(r.role, r.tools)] })),
     runtime: {
       max_depth: cfg.runtime.max_depth, max_active_children: cfg.runtime.max_active_children, child_timeout: cfg.runtime.child_timeout, max_iterations: cfg.runtime.max_iterations,
@@ -104,7 +111,7 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
 export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: string, env: InstructionSnapshotEnv = {}): ConfigSnapshot {
   const files = scopeFiles(globalDir, workspaceRoot);
   return {
-    workspaceRoot, loadOk: false, fatal: report, slots: [], models: [], imageInputModels: [], roles: [],
+    workspaceRoot, loadOk: false, fatal: report, slots: [], models: [], imageInputModels: [], modelReasoning: {}, roles: [],
     runtime: {
       max_depth: RUNTIME_DEFAULTS.max_depth, max_active_children: RUNTIME_DEFAULTS.max_active_children, child_timeout: RUNTIME_DEFAULTS.child_timeout, max_iterations: RUNTIME_DEFAULTS.max_iterations,
       allow_outside_workspace: RUNTIME_DEFAULTS.allow_outside_workspace, permission_mode: RUNTIME_DEFAULTS.permission_mode,

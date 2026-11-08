@@ -16,7 +16,7 @@ const runtime = (childTimeout: number): ConfigSnapshot['runtime'] => ({ max_dept
 const snapshotWith = (childTimeout: number): ConfigSnapshot => ({
   workspaceRoot: '/ws', loadOk: true, fatal: null,
   slots: [{ slot: 'large_model', value: 'gpt-4o', origin: 'default', thinking: null }],
-  models: ['gpt-4o'], imageInputModels: [],
+  models: ['gpt-4o'], imageInputModels: [], modelReasoning: { 'gpt-4o': ['low', 'medium', 'high', 'max'] },
   roles: [],
   runtime: runtime(childTimeout),
   rawRuntime: { workspace: null, global: null },

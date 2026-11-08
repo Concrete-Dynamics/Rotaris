@@ -147,6 +147,24 @@ export function effectivePricing(entry: Pick<ModelEntry, 'input_cost_per_token' 
   return entry.input_cost_per_token !== null && entry.output_cost_per_token !== null ? { input: entry.input_cost_per_token, output: entry.output_cost_per_token } : null;
 }
 
+/**
+ * REQ-CONFIG-332 with REQ-CONFIG-069/091/092/202: the reasoning-strength levels a model entry OFFERS a control. The
+ * closed slot/model vocabulary less `auto`, filtered to the entry's own `reasoning_effort_map` keys where that map
+ * declares any — a map value is a provider-dialect spelling, never a vocabulary level, so a key outside the vocabulary
+ * (REQ-CONFIG-092's `xhigh` among them) can never surface as an offered level and the loader's `thinking` reader,
+ * which rejects a stored level outside the vocabulary, can never be handed a value this rule should not have produced.
+ * Where no map is declared, the levels are the vocabulary intersected with the reasoning levels the resolved model's
+ * catalog entry declares (REQ-CONFIG-202's capability record, `capabilityLevels`); a model with neither offers nothing
+ * and `[]` is the answer. The order is the vocabulary's own, never the map's YAML insertion order.
+ */
+export function offeredReasoningLevels(entry: Pick<ModelEntry, 'reasoning_effort_map'>, capabilityLevels: readonly string[]): readonly string[] {
+  const vocabulary: readonly string[] = REASONING_LEVELS.filter((level) => level !== 'auto');
+  const mapKeys = Object.keys(entry.reasoning_effort_map);
+  return mapKeys.length > 0
+    ? vocabulary.filter((level) => mapKeys.includes(level))
+    : vocabulary.filter((level) => capabilityLevels.includes(level));
+}
+
 /** REQ-CONFIG-092/093: the four strings a provider receives unchanged; `max` → `xhigh`; a map entry wins; `auto` reaches no provider. */
 export function providerEffort(entry: Pick<ModelEntry, 'thinking' | 'reasoning_effort' | 'reasoning_effort_map'>): string | null {
   if (entry.reasoning_effort !== null) return entry.reasoning_effort;

@@ -601,11 +601,21 @@ describe('the boundaries this change must not move', () => {
     expect(headerDrawn.card).toContain('data-websearch-header-key');
     expect(filled(headerDrawn.html)).toBe(1);
     expect(headerDrawn.card).not.toContain('data-websearch-store');
-    // The two states with NOTHING to do are deliberately exempt (see the source comment): the card renders its empty
-    // state alone and offers no action, so there is no accent surface to draw — §1.7 bounds the fill from above.
+    // The empty states were both exempt in round 2 and one of them is NOT any more: R3-FND-2 corrected that, and the
+    // correction is what this case now pins. `no-entry` names the file as its remedy, so it carries ONE filled
+    // control, `Open the file` — rubric D3 counts the empty state in ("one filled control per view in every state, the
+    // empty state included") and REQ-CONFIG-437/464 make naming and opening the file the remedy.
     const noEntry = draw({ listing: listing([row({ name: 'browser', type: 'stdio' })]) });
     expect(noEntry.card).toContain('data-websearch-situation="no-entry"');
-    expect(filled(noEntry.html)).toBe(0);
+    expect(filled(noEntry.html)).toBe(1);
+    expect(noEntry.card).toContain('data-websearch-open-empty');
+    expect(noEntry.card).not.toContain('data-websearch-store');
+    // `unavailable` stays empty of any accent surface, and for a reason that OUTRANKS the rubric: REQ-CONFIG-424/478
+    // disable every control on a configuration that did not load, so there is no action to fill.
+    const fatal = { loadOk: false, fatal: '/w/.rotaris/agents.yaml: bad indentation', files: { workspace: '/w/.rotaris/agents.yaml', global: '/g/agents.yaml' } } as unknown as ConfigSnapshot;
+    const broken = draw({ fatal });
+    expect(broken.card).toContain('data-websearch-situation="unavailable"');
+    expect(filled(broken.html)).toBe(0);
   });
 
   it('a settled delete NEVER leaves focus on `body` — on the refusal path and on a throw too, not only on success (R2-FND-1, Opus 5.5 review, round 2)', async () => {
@@ -669,6 +679,42 @@ describe('the boundaries this change must not move', () => {
       const removed = await runDelete(async () => ({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: true }, refreshFailure: null }));
       expect(removed.length).toBeGreaterThan(0);
       expect(removed).not.toContain('body');
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('the delete confirmation STAYS OPEN for the length of the press, so focus is never handed to a control the press just disabled — fails if the dialog closes before the write settles (R3-FND-1, Opus 5.5 review, round 3)', async () => {
+    harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
+    vi.stubGlobal('window', { addEventListener: () => undefined, removeEventListener: () => undefined });
+    try {
+      // A write that does not settle until the test says so, the gate pattern `web-search-card.test.ts` uses.
+      let releaseDelete: (() => void) | null = null;
+      const setup = {
+        onOpenFile: async () => ({ ok: true as const }), onGetKey: async () => ({ ok: true as const }),
+        onStoreKey: async () => ({ ok: false as const, message: 'not pressed here' }),
+        onDeleteKey: () => new Promise((resolve) => {
+          releaseDelete = () => resolve({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: true }, refreshFailure: null });
+        }),
+        onProbe: async () => ({ state: 'unknown' as const }),
+      } as unknown as McpSettingsProps['webSearchSetup'];
+
+      const first = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+      (first.find('data-websearch-delete')!['onClick'] as () => void)();
+      const withDialog = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+      expect(withDialog.html).toContain('Delete the stored key?');
+      // Yes: `remove` starts and awaits the gated write — the dialog must still be there, with its answers disabled.
+      (withDialog.find('onYes')!['onYes'] as () => void)();
+      const inFlight = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+      expect(inFlight.html).toContain('data-websearch-in-flight');
+      expect(inFlight.html).toContain('Delete the stored key?');
+      // The dialog's own answers are disabled for the press (the `busy` prop it is handed), so no second answer can
+      // be taken and Escape is suppressed — nothing hands focus out to a control the press has just disabled.
+      expect(inFlight.find('onYes')?.['busy']).toBe(true);
+      // Release the write and let it settle: now the dialog closes.
+      releaseDelete?.();
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+      const after = draw({ listing: listing([row()]), webSearchSecrets: secrets([]), webSearchSetup: setup });
+      expect(after.html).not.toContain('Delete the stored key?');
+      expect(after.html).not.toContain('data-websearch-in-flight');
     } finally { vi.unstubAllGlobals(); }
   });
 

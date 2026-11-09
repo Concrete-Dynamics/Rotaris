@@ -385,7 +385,12 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   };
   const remove = async () => {
     if (busy) return;
-    setConfirmingDelete(false); setRefusal(null); setConfirmation(null); setRefreshNote(null); setInFlight('remove');
+    // R3-FND-1 (Opus 5.5 review, round 3, 2026-11-09): the confirmation used to close HERE, before anything was
+    // written — `Confirm`'s focus return then ran on a delete button that `setInFlight('remove')` had already
+    // disabled, so it did nothing and focus stood on `body` for the whole write-and-re-read window. The dialog now
+    // stays open for the press (its own `busy` prop disables its answers and suppresses Escape meanwhile) and closes
+    // in the `finally`, where the button is enabled again on the refusal and throw paths.
+    setRefusal(null); setConfirmation(null); setRefreshNote(null); setInFlight('remove');
     try {
       const r = await props.webSearchSetup.onDeleteKey(scope);
       if (!r.ok) { setRefusal(r.message); return; }
@@ -396,8 +401,9 @@ function WebSearchSetupCard(props: McpSettingsProps) {
       setRefusal(webSearchPressFailure(cause));
     } finally {
       setInFlight(null);
-      // R2-FND-1 (Opus 5.5 review, round 2, 2026-11-09): the settled attempt is bumped HERE, on all three paths — the
-      // effect above then lands focus on the delete control (refusal/throw) or on the step route (success).
+      setConfirmingDelete(false);
+      // R2-FND-1 (round 2): the settled attempt is bumped HERE, on all three paths — the effect above then lands
+      // focus on the delete control (refusal/throw, now enabled) or on the step route (success, where it is gone).
       setDeleteSettled((n) => n + 1);
     }
   };
@@ -457,9 +463,15 @@ function WebSearchSetupCard(props: McpSettingsProps) {
    * is the step-3 action and carries the fill while its body actually offers it; where step 3 does not apply — a
    * `web_search` entry of another transport, or a preset whose key travels in a header (`hideKeyStep`) — no Store
    * control is drawn and the fill moves to the step's own action, `Check status`, so the view never reaches a state
-   * with ZERO filled controls. Two states are deliberately exempt: `unavailable` and `no-entry` render the empty
-   * state alone, hold no action at all, and so carry no fill — §1.7 fixes an upper bound (at most one accent surface
-   * per screen), not a quota that a state with nothing to do must fill.
+   * with ZERO filled controls.
+   *
+   * R3-FND-2 (round 3, 2026-11-09): the `no-entry` empty state is NOT exempt after all. The first reading argued
+   * §1.7 fixes only an upper bound, but rubric D3 is explicit — "one filled control per view in every state, the
+   * empty state included" — and `no-entry` is not a state without an action: its own sentence names the file, and
+   * REQ-CONFIG-437/464 make naming and opening that file the remedy (the screen authors nothing). The empty state
+   * therefore carries ONE filled control, `Open the file`. Only `unavailable` stays empty of any accent surface, and
+   * for a reason that outranks the rubric: REQ-CONFIG-424/478 disable every control there, so there is nothing to
+   * fill.
    */
   const storeIsTheStepAction = situation !== 'other-transport' && !hideKeyStep;
 
@@ -468,6 +480,20 @@ function WebSearchSetupCard(props: McpSettingsProps) {
       <DesignCard className="card settings__card" data-mcp-websearch-setup data-websearch-situation={situation}>
         <div className="card-kicker">Set up web search</div>
         <p className="text-secondary" data-websearch-empty>{WEB_SEARCH_NO_ENTRY}</p>
+        {/*
+          R3-FND-2: the empty state's ONE filled control (rubric D3, §1.7). The sentence above names the file as the
+          remedy (REQ-CONFIG-437); this is the control that takes the user to it, and it writes nothing itself
+          (REQ-CONFIG-350/464 — the screen authors no server). It is the same press step 2 offers, so the two cannot
+          drift, and it is disabled with its reason when the listing has not answered yet.
+        */}
+        <div className="settings__action">
+          <DesignButton type="button" className="btn btn-primary btn-compact" data-websearch-open data-websearch-open-empty
+            disabled={props.listing === null}
+            title={props.listing === null ? "The configuration file's path is not known until the listing is read." : undefined}
+            aria-description={props.listing === null ? "Disabled: the configuration file's path is not known until the listing is read." : undefined}
+            onClick={() => { void openFile(); }}>Open the file</DesignButton>
+          {openFailure !== null ? <span className="composer__error" role="alert" data-websearch-open-failure>{openFailure}</span> : null}
+        </div>
         <p className="text-tertiary settings__hint" data-websearch-file>{webSearchFileLine(props.listing?.configFile ?? null)}</p>
       </DesignCard>
     );

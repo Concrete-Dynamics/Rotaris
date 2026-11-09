@@ -676,6 +676,18 @@
 .settings__hint { font-size: var(--rt-text-xs, 12px); }
 .settings__dictation-field { display: flex; flex-direction: column; gap: var(--rt-space-1); margin-top: var(--rt-space-2); }
 .settings__select { width: max-content; max-width: 100%; }
+/* C3 (UI review of PR #76, 2026-11-09): a field is sized from the token, never from the pane. The guided card's key
+   field had stretched to the card's whole content width — 1003.36 px at 1400x900, 603 px at 1000x680, for a value a
+   short key fills — while `--rt-field-min` is 140 px (UIR-010's rule: fields from the token, one axis for the form).
+   `width: max-content` is the idiom the scope select beside it already uses; the token is the floor. The card-scoped
+   selector outranks the adopted `.input { width: 100% }` by specificity, so no literal of ours decides it. */
+[data-mcp-websearch-setup] .settings__key-field { width: max-content; max-width: 100%; min-width: var(--rt-field-min); }
+/* C7: a block of prose holds `--rt-prose-measure` (340 px, the one width the adopted sheet states); code, diffs and
+   tables opt out. The guided card's prose ran pane-wide — 1003.36 px, about 82 characters per line, over the 80 WCAG
+   asks for (UIR-011's class). The stanza is a `<pre>` and the probe's detail a `.mono` line, so neither is named; the
+   path line REQ-CONFIG-437 names is one unbroken token bounded to 340 px, so it wraps inside its box rather than
+   paying out (`overflow-wrap: anywhere`, the rule the sibling MCP surfaces already carry). */
+[data-mcp-websearch-setup] :is(p, .settings__hint):not(.mono) { max-width: var(--rt-prose-measure); overflow-wrap: anywhere; }
 
 /* ── Tool rows (REQ-CHAT-060/061), diff rows (REQ-CHAT-050), approval trailer rows (REQ-CHAT-051) ── */
 .tool__header { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); width: 100%; padding: 0; border: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm, 13px); text-align: left; cursor: pointer; }

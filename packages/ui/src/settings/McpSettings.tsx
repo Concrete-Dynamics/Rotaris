@@ -446,7 +446,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
                   <div className="settings__action">
                     <label htmlFor="websearch-key">Search API key</label>
                     <DesignInput
-                      id="websearch-key" type="password" autoComplete="off" className="input" data-websearch-key-field
+                      id="websearch-key" type="password" autoComplete="off" className="input settings__key-field" data-websearch-key-field
                       aria-label="Search API key" aria-description="Never shown again after it is stored; the stored value is only ever displayed masked."
                       value={keyDraft} disabled={disabled || busy} onChange={(e) => setKeyDraft(e.currentTarget.value)}
                     />
@@ -503,6 +503,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
         <Confirm
           title="Delete the stored key?"
           body={`This removes ${WEB_SEARCH_KEY_VARIABLE} for ${WEB_SEARCH_SERVER} from the ${scopeLabels[scope]} secrets file. Storing it again means pasting the key afresh; nothing else in the file is touched.`}
+          busy={busy}
           onYes={() => { void remove(); }}
           onCancel={() => setConfirmingDelete(false)}
         />

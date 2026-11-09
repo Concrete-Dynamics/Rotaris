@@ -800,6 +800,7 @@
     "defects/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md": "b412e1b5809c2752b1e789eb0e053e022542adc0e29a700b3a483a83b5ccd206",
     "defects/a-runtime-timeout-fields-description-states-an-unsaved-value-as-stored.md": "d89769c1648692e504f723289fd72fe9e189b2a3a38bf35f0072acc111054ffc",
     "defects/a-save-or-discard-answers-before-the-stale-close-guard-is-taken-down.md": "582931a9e74657a9e0ddefd721a97438329e0a5e40b891b321e230cde89b0889",
+    "defects/a-secrets-write-whose-mode-cannot-be-established-still-replaces-the-file.md": "164ff3c2bd3ca25702d1795f899f4fc0e8565ffc19dc6c943d4161b0c718eac7",
     "defects/a-session-action-sent-with-background-true-is-refused-as-a-missing-command.md": "6ec6fcb527d4466ab729e29b4609716978cfcb87f4c7c951be8a9c8cd4ce1ab5",
     "defects/a-session-delete-leaves-its-plan-cycles-behind.md": "487bf130abad99371f0f956b5641507d4e8527e571cde370a733f8251ef684f3",
     "defects/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md": "560627404d7a1f9fe238be305c31191f2fcc90243485a8dc67f4b53e3371515d",

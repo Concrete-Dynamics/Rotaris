@@ -24,7 +24,7 @@ import type {
   Theme,
   WorkspaceServiceRequest,
 } from '@rotaris/contracts';
-import type { dataLayout, HandOver, PreferenceKey, PreferenceStore } from '@rotaris/platform';
+import type { resolveUserDirs, dataLayout, HandOver, PreferenceKey, PreferenceStore } from '@rotaris/platform';
 import type { LiveStateArbiter } from '../live-state.js';
 import type { ProviderService } from '@rotaris/providers';
 import type { ProcessLink, UpdateRelay } from '@rotaris/shell';
@@ -180,6 +180,12 @@ export interface CommandContext {
   readonly setTheme: (name: string) => Theme;
   readonly themeBackground: () => string;
   readonly requirementsPreferenceKey: (key: PreferenceKey | typeof REQUIREMENT_FOLDS_PREFERENCE_KEY) => PreferenceKey;
+  /**
+   * The per-user directories main resolved at start (`resolveUserDirs`). `shell.openConfigFile` (B2, 2026-11-09) takes
+   * the config directory from here so the path it opens is the application's own — the same value `scopeFiles` is
+   * handed at main's initialization open — rather than anything a renderer can name.
+   */
+  readonly userDirs: ReturnType<typeof resolveUserDirs>;
 
   // The coordinators main owns outright.
   readonly initialization: InitializationCoordinator;

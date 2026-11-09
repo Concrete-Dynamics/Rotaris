@@ -1,6 +1,7 @@
 import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync, chmodSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { countNoun, err, type Failure, failure, type Millis, ok, type Result, type Timers } from '@rotaris/kernel';
+import type { Protector } from './protection.js';
 
 /**
  * ADR-0004 — one document primitive, three write shapes, and a guarded read.
@@ -9,6 +10,15 @@ import { countNoun, err, type Failure, failure, type Millis, ok, type Result, ty
  * rename over the target, remove the staged file on every failure path, apply
  * the declared mode. No directory fsync — measured to fail with EPERM on
  * every spelling via the naive call, and no requirement asks for one (D-27).
+ *
+ * Where a store declares REQ-PROVIDER-016's protection (the credential store,
+ * REQ-CONFIG-216's `secrets.yaml`), it passes `protector` and the staged file
+ * is created AT `STAGED_FILE_MODE` and protected BEFORE a byte is written, then
+ * read back by the adapter: the protection travels with the rename, and a
+ * protection failure answers before the target is touched. The create-time mode
+ * is round-2 Major 1: a later `chmod` cannot revoke a descriptor another account
+ * opened on the empty file in a traversable directory (the ordering alone left
+ * that window open).
  *
  * The retry ladder: on Windows a rename over an existing file fails on a
  * transient handle (D-06) — and on shared storage 6.2 % of the time with no
@@ -35,13 +45,34 @@ export interface RetryLadder {
 export const NO_RETRY: RetryLadder = { delays: [] };
 
 export interface ReplaceOptions {
-  /** Numeric mode to apply after the rename; where given, it is read back (REQ-PROVIDER-016). */
+  /** Numeric mode to apply after the rename; where given, it is read back (REQ-PROVIDER-016). Ignored when `protector` is given. */
   readonly mode?: number;
+  /**
+   * REQ-PROVIDER-016 / REQ-CONFIG-216: the protection adapter, applied to the STAGED file BEFORE a byte of content is
+   * written and read back by the adapter itself, so the protection travels with the rename and no window exists in
+   * which the target's new content is observable at a weaker protection (the ordering `credentials/store.ts` uses for
+   * `<id>.json` and this file's one protection path for both). A refusal aborts the call BEFORE the rename: the target
+   * is never replaced, the staged file is removed best-effort, and the failure is `document.protect`.
+   */
+  readonly protector?: Protector;
   readonly ladder?: RetryLadder;
   readonly timers?: Timers;
   /** Create the parent directory when the store declares it may be missing (REQ-TRACE-061). */
   readonly createParent?: boolean;
 }
+
+/**
+ * Round-2 Major 1: the mode the staged sibling is CREATED with when a protector is supplied. The adapter establishes
+ * and reads back the exact protection afterwards (REQ-PROVIDER-016; `0600` for a file), but a mode applied by a later
+ * `chmod` cannot revoke a descriptor another account already holds: without this create-time mode the empty staged
+ * file exists at `0666 & ~umask` (typically `0644`) until the adapter runs, and `secrets.yaml`'s `.rotaris` parent is
+ * not protected the way the credential store's `0700` directory is — an account that can traverse the directory could
+ * open the empty file and keep the descriptor until the content was written. `0600 & ~umask` is `0600` for any umask
+ * that carries only group/other bits. On Windows Node IGNORES the mode argument: the empty staged file briefly
+ * carries the ACLs inherited from its directory until the adapter runs — the same residual the credential store keeps
+ * on Windows, stated rather than claimed closed; the ACL read-back is the protection on that platform.
+ */
+export const STAGED_FILE_MODE = 0o600;
 
 function stagePath(target: string): string {
   return join(dirname(target), `.${basename(target)}.staging-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
@@ -75,7 +106,34 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
     catch (e) { return err(failure('document.parent', 'The destination folder could not be created', String(e), e)); }
   }
   const staged = stagePath(target);
+  if (opts.protector !== undefined) {
+    /**
+     * REQ-CONFIG-216 ("applied explicitly on every write rather than letting the file inherit whatever mask happens to
+     * be in force") read as the ordering it is: the staged sibling is created EMPTY, AT `STAGED_FILE_MODE`, the
+     * adapter protects THAT file and reads the protection back, and only then is a byte of content written. Without
+     * the ordering the file would carry the umask's mode (typically `0644`) until a post-rename chmod; without the
+     * create-time mode it would do so even WITH the ordering, because a `chmod` cannot revoke a descriptor another
+     * account opened on the empty file in a traversable directory (round-2 Major 1; `secrets.yaml`'s `.rotaris`
+     * parent is not protected). Windows: Node ignores the mode argument here — the empty staged file briefly carries
+     * the ACLs inherited from its directory until the adapter runs, and that read-back is the protection there. The
+     * target is untouched on any refusal here (REQ-CONFIG-216's "the write does not happen").
+     */
+    try {
+      const created = openSync(staged, 'w', STAGED_FILE_MODE);
+      closeSync(created);
+    } catch (e) {
+      discard(staged);
+      return err(failure('document.stage', 'Could not write the staged file', String(e), e));
+    }
+    const protectedStaged = await opts.protector.protect(staged, 'file');
+    if (!protectedStaged.ok) {
+      discard(staged);
+      return err(failure('document.protect', 'The protection could not be established before the write, so nothing was written', protectedStaged.error.detail ?? protectedStaged.error.headline, protectedStaged.error));
+    }
+  }
   try {
+    // The file exists already when a protector created it above; the mode argument applies at creation only, so the
+    // ordinary callers (no protector) keep the umask's mode, which their own `mode` option then sets after the rename.
     const fd = openSync(staged, 'w');
     try {
       if (typeof content === 'string') writeSync(fd, content); else writeSync(fd, content);
@@ -107,11 +165,15 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
     }
   }
 
-  if (opts.mode !== undefined) {
+  if (opts.mode !== undefined && opts.protector === undefined) {
     try {
       chmodSync(target, opts.mode);
       const back = statSync(target).mode & 0o777;
-      // On Windows chmod only carries the write bit; the ACL adapter (ADR-0029) does the rest and reads it back.
+      // The mode-only path: on Windows chmod carries the write bit alone and this branch establishes NO access
+      // control there (it used to say the ACL adapter “does the rest", and replaceDocument never called one —
+      // the defect of 2026-11-09). A caller that needs REQ-PROVIDER-016's Windows protection passes `protector`
+      // instead, which protects the staged file before a byte is written and reads the ACL back; this mode-only
+      // branch keeps its post-rename check for the callers that declare a mode and nothing more.
       if (process.platform !== 'win32' && back !== opts.mode) {
         return err(failure('document.mode', 'The protection could not be established', `wanted ${opts.mode.toString(8)}, read back ${back.toString(8)}`));
       }
@@ -123,7 +185,7 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
 }
 
 /** Synchronous replace for the one gesture whose durability is part of its completion: theme selection (ADR-0042). */
-export function replaceDocumentSync(target: string, content: string | Uint8Array, opts: Omit<ReplaceOptions, 'ladder' | 'timers'> = {}): Result<{ attempts: 1 }, Failure> {
+export function replaceDocumentSync(target: string, content: string | Uint8Array, opts: Omit<ReplaceOptions, 'ladder' | 'timers' | 'protector'> = {}): Result<{ attempts: 1 }, Failure> {
   /**
    * The parent that cannot be created answers the asynchronous form's refusal, for the same reason. Until 2026-10-04 this
    * `mkdirSync` stood outside any `try` and threw EEXIST/ENOTDIR/EACCES out of the `Result`, reaching the configuration

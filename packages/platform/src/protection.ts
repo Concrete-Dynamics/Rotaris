@@ -1,12 +1,25 @@
 import { chmodSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { err, failure, ok, type Failure, type Result } from '@rotaris/kernel';
-import { spawnChild } from '@rotaris/platform';
+import { spawnChild } from './spawn.js';
 
 /**
  * REQ-PROVIDER-016 — the protection adapter (ADR-0029): applied explicitly on every platform and never
  * inherited, and READ BACK, because "no group or other bit is ever set" and "to no one else" are
  * observables. Failure anywhere aborts the caller's write before the target is touched.
+ *
+ * REQ-CONFIG-216 cites the same requirement for the one configuration file protected by what it carries
+ * (`secrets.yaml`, at mode `0600` or the equivalent explicit owner-only protection) — so this adapter is
+ * the ONE protection path for both files, and it lives below both of its callers (`providers`' credential
+ * store and `config`'s secrets writer; the package matrix lets both import `platform` and lets neither
+ * import the other). Moved here, whole, from `packages/providers/src/credentials/protect.ts` on
+ * 2026-11-09 (slice-B rework round 1): a copy in a second package would be one protection path per file,
+ * which is what REQ-CONFIG-216's reading of REQ-PROVIDER-016 forbids. `platform`'s `document.ts` applies
+ * it through `replaceDocument`'s `protector` option (protect-then-write, before any byte of content).
+ *
+ * The failure code stays `credential.protect` although the adapter no longer lives in `credentials/`: the
+ * ADR-0029 first-execution record and the credential store's tests read that code as the name of the
+ * refusal, and the secrets writer maps it to its own `protection` refusal (only the detail crosses).
  *
  * Windows, as the spike settled (`spikes/credential-protection.md`): `icacls /reset` (one call — it takes
  * no companion), then `/inheritance:r /grant:r` for the system account and the owner by SID literal, then

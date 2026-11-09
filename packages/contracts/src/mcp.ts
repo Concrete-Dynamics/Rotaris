@@ -68,6 +68,22 @@ export const McpSecretsViewSchema = z.object({
 });
 
 /**
+ * REQ-MCP-110's confirmation, and the ONLY shape a secrets write is ever answered with — main relays it to the
+ * renderer and the value the write stored never travels (REQ-MCP-081, W-01): `masked` is the one mask, `null` from a
+ * delete that removed nothing (which REQ-MCP-110 calls stating that the key was not present, not an error), and
+ * `removed` says whether the write removed a stored key (REQ-CONFIG-217). The scope is the display vocabulary
+ * `McpSecretRowSchema` already fixes.
+ */
+export const McpSecretWriteOutcomeSchema = z.object({
+  server: z.string(),
+  key: z.string(),
+  scope: z.enum(['Workspace', 'Global']),
+  masked: z.string().nullable(),
+  removed: z.boolean(),
+});
+export type McpSecretWriteOutcome = z.infer<typeof McpSecretWriteOutcomeSchema>;
+
+/**
  * ADR-0035 (Part T) / REQ-MCP-099 and REQ-MCP-112: the code-intelligence project setup as the settings category sees it.
  * Three steps in the requirement's order, each in the closed status vocabulary of REQ-MCP-099 (plus `pending` and
  * `running` for a step not yet reached or in flight); one final outcome of REQ-MCP-112's three, `unavailable` for the

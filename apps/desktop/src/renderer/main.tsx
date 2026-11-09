@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
-import { dictationSaveProblem, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
+import { dictationSaveProblem, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
 import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
 // ADR-0063 — portable skills: the catalog reader (`askUntilDiscovered`, `bindSkillsReader`, `readWhileMounted`, in the `@rotaris/ui` import above), the Settings tab's props and the composer's commands.
@@ -1055,7 +1055,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
       config={{ ...config, providersCard, confinement: confinement.verdict, onRecheckConfinement: confinement.onRecheck, planReleased: session?.planReleased === true }}
-      mcp={mcp}
+      mcp={{ ...mcp, ...(config.snapshot && !config.snapshot.loadOk ? { fatal: config.snapshot } : {}) }}
       display={{
         autoCollapseTools: display.autoCollapseTools,
         groupTools: display.groupTools,
@@ -1594,18 +1594,42 @@ function useMcp(): McpSettingsProps {
   const [probing, setProbing] = useState(false);
   const [secrets, setSecrets] = useState<McpSecretsView | null>(null);
   const [secretsServer, setSecretsServer] = useState<string | null>(null);
+  // Minor 2 (rework round 1, 2026-11-09): the guided card's OWN view, read with `server: 'web_search'` — kept apart
+  // from the chooser's `secrets` (which may be filtered to another server), so the card's stored-key state and its
+  // delete action never blank when the user filters the stored-secrets table elsewhere.
+  const [webSearchSecrets, setWebSearchSecrets] = useState<McpSecretsView | null>(null);
   const read = useCallback(async () => {
     setLoading(true);
     const r = await bridge.command({ kind: 'mcp.list' });
     setLoading(false);
     if (r.ok) { setListing(r.value as McpListing); setError(null); } else setError(r.detail ?? r.headline);
+    // Round-3 Minor: the reads ANSWER their outcome — a refused command resolves in this codebase, so a caller that
+    // needs to know (`readAfterWebSearchWrite`) must be told, not left to read a swallowed refusal as success.
+    return r.ok ? { ok: true as const } : { ok: false as const, message: r.detail ?? r.headline };
   }, []);
   const readSecrets = useCallback(async (server: string | null) => {
     const r = await bridge.command({ kind: 'mcp.secrets', ...(server === null ? {} : { server }) });
     if (r.ok) setSecrets(r.value as McpSecretsView);
+    return r.ok ? { ok: true as const } : { ok: false as const, message: r.detail ?? r.headline };
   }, []);
-  useEffect(() => { queueMicrotask(() => { void read(); void readSecrets(secretsServer); }); }, [read, readSecrets, secretsServer]);
-  useEffect(() => bridge.onConfigChanged(() => { void read(); void readSecrets(secretsServer); }), [read, readSecrets, secretsServer]);
+  const readWebSearchSecrets = useCallback(async () => {
+    const r = await bridge.command({ kind: 'mcp.secrets', server: 'web_search' });
+    if (r.ok) setWebSearchSecrets(r.value as McpSecretsView);
+    return r.ok ? { ok: true as const } : { ok: false as const, message: r.detail ?? r.headline };
+  }, []);
+  /**
+   * Round-3 Minor: the guided card's post-write re-read, reporting its OUTCOME. The three reads above set state only
+   * on `r.ok`, so a refused command used to resolve as if the refresh had happened: the card then showed a stale view
+   * with `refreshFailure: null` — the stale view round-2 Major 2 was meant to prevent. The first refusal's own words
+   * travel back; every read is still attempted (the sets that succeed are the freshest the window can show).
+   */
+  const readAfterWebSearchWrite = useCallback(async () => {
+    const answers = [await read(), await readSecrets(secretsServer), await readWebSearchSecrets()];
+    for (const r of answers) if (!r.ok) return { ok: false as const, message: r.message };
+    return { ok: true as const };
+  }, [read, readSecrets, secretsServer, readWebSearchSecrets]);
+  useEffect(() => { queueMicrotask(() => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); }); }, [read, readSecrets, secretsServer, readWebSearchSecrets]);
+  useEffect(() => bridge.onConfigChanged(() => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); }), [read, readSecrets, secretsServer, readWebSearchSecrets]);
   // ADR-0035 (Part T) / REQ-MCP-112: the project-setup action's status, read at mount and polled every 500 ms while a run is under way.
   const [setup, setSetup] = useState<McpSetupStatus | null>(null);
   const readSetup = useCallback(async () => {
@@ -1619,10 +1643,17 @@ function useMcp(): McpSettingsProps {
     return () => clearInterval(timer);
   }, [setup?.state, readSetup]);
   return {
-    listing, loading, error, health, probing, secrets,
-    onRefresh: () => { void read(); void readSecrets(secretsServer); },
+    listing, loading, error, health, probing, secrets, webSearchSecrets,
+    onRefresh: () => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); },
     onSecretsServer: (server) => { setSecretsServer(server); },
     setup,
+    // B2: the guided `web_search` card's four presses, bound to this window's bridge — the one write is
+    // `mcp.setSecret`, and the card's re-read after a write is the listing and BOTH secrets views together (B1's
+    // write fires main's existing `mcp.reload`, so the row refreshes without a restart): the chooser's own view and
+    // the card's, which is always read with `server: 'web_search'` (Minor 2). Round-3 Minor: the re-read answers its
+    // outcome (`readAfterWebSearchWrite`), so a refused read reaches the card as `refreshFailure` and the stale view
+    // is said, not swallowed.
+    webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: readAfterWebSearchWrite }),
     onSetupStart: async () => {
       const r = await bridge.command({ kind: 'mcp.setup', action: 'start' });
       if (r.ok) { setSetup(r.value as McpSetupStatus); return { ok: true, message: '' }; }

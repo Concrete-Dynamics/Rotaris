@@ -289,6 +289,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * refusal when there is none, which is the branch that reaches in a build that ships no notices file.
    */
   z.object({ kind: z.literal('shell.openThirdPartyLicenses') }),
+  /**
+   * REQ-CONFIG-437 with REQ-CONFIG-350/464 (B2, 2026-11-09): the guided `web_search` card NAMES the configuration
+   * file and offers to open it, so step 2's file edit is two actions rather than a scavenger hunt. The command
+   * carries **nothing** — the renderer names no path; main resolves the asking window's own workspace file
+   * (`<workspace>/.rotaris/agents.yaml`, the very path the MCP listing reports as `configFile`) and hands it to the
+   * platform opener, bounded as `shell.openThirdPartyLicenses`'s is. Opening a file authors nothing (REQ-CONFIG-464).
+   */
+  z.object({ kind: z.literal('shell.openConfigFile') }),
   /** REQ-TOOLS-063: the approval dialog window asks main for the request it was opened for, and how many others wait. */
   z.object({ kind: z.literal('approval.payload') }),
   /**
@@ -340,6 +348,17 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.probe'), name: z.string().max(NAME_MAX).min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().max(NAME_MAX).min(1), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), server: z.string().max(NAME_MAX).optional() }),
+  /**
+   * REQ-MCP-110/111's write half: store (or replace) and delete one secret, each naming its scope (`Workspace` when
+   * none is given — REQ-CONFIG-463's opening choice, the `config.setField` discipline). The value travels INWARD
+   * here, the existing sanctioned pattern of `provider.signIn`/`providers.save` (ADR-0030 c.2; `CommandRequestSchema`
+   * is not one of `CHANNEL_SCHEMAS`); nothing about it comes back — the answer is the masked confirmation alone
+   * (REQ-MCP-081). A value or a key that is empty is refused by the store with a notice naming the requirement unmet
+   * (REQ-MCP-084), so no `.min(1)` here: a malformed bound would replace that notice. The key and the server are
+   * bounded as every name is; the value takes the API-key bound the provider commands use.
+   */
+  z.object({ kind: z.literal('mcp.setSecret'), server: z.string().max(NAME_MAX), key: z.string().max(NAME_MAX), value: z.string().max(PATH_MAX), scope: z.enum(CONFIG_SCOPES).optional() }),
+  z.object({ kind: z.literal('mcp.unsetSecret'), server: z.string().max(NAME_MAX), key: z.string().max(NAME_MAX), scope: z.enum(CONFIG_SCOPES).optional() }),
   /**
    * ADR-0022 (Part AR) / REQ-SANDBOX-116, REQ-SANDBOX-129: the availability verdict the runtime
    * section's label shows, and the re-check control beside it. `recheck` discards the cached verdict

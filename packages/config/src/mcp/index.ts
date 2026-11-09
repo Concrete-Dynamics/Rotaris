@@ -12,6 +12,7 @@ export * from './entry.js';
 export * from './discovery-files.js';
 export * from './commands.js';
 export * from './environment.js';
+export * from './secrets-write.js';
 export * from './persona.js';
 export * from './describe.js';
 export * from './prompt.js';

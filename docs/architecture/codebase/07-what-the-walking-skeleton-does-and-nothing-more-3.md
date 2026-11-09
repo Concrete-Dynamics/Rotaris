@@ -14,7 +14,10 @@ scripts writing a scratch `agents.yaml`. `ROTARIS_CAPTURE_CLICKS` and `ROTARIS_C
 folds it and may not import `providers`.
 
 **Providers.** `packages/providers/src/` — `catalogue.ts` (the six frozen records, `validateCatalog()` at build and at
-main's start), `credentials/` (`store.ts`, the protection adapter `protect.ts` with its read-back, the adjacent lock
+main's start), `credentials/` (`store.ts`, the credential store whose protection adapter is now the shared one in
+`@rotaris/platform` — `protection.ts`, `0600` with a read-back on POSIX and the explicit owner-only ACL on Windows,
+moved in from this folder's `protect.ts` on 2026-11-09 because REQ-CONFIG-216 cites the same REQ-PROVIDER-016 for
+`secrets.yaml` and `config` may not import `providers` — and the adjacent lock
 `lock.ts`), `discovery.ts` (the generic discoverer with REQ-PROVIDER-071's total mapping), `slots.ts` with
 `tiers.data.ts` (deterministic tier assignment), `limits.data.ts` (the known-limits table), `project-settings.ts` (the
 snapshot's writer, merge and secret screen), `signin.ts` (`ProviderService`: the API-key flow, replace-key,

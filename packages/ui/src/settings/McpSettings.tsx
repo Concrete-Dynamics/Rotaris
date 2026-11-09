@@ -1,14 +1,25 @@
-import { useState } from 'react';
-import type { McpHealth, McpListing, McpProvisioning, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
-import { Button as DesignButton, Card as DesignCard, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
+import { useRef, useState } from 'react';
+import type { ConfigSnapshot, McpHealth, McpListing, McpProvisioning, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
+import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
+import { Confirm } from './Confirm.js';
+import { Fatal } from './ConfigSettings.js';
+import {
+  deletedKeySentence, mcpHealthText, presetAfter, presetTabIndex, storedKeySentence, webSearchFileLine, webSearchHeaderKeyNote, webSearchOtherTransport,
+  webSearchPreset, webSearchProbeBasis, webSearchPressFailure, webSearchSituation, webSearchStanza, webSearchStoredKey, webSearchUnresolvedNote,
+  MCP_HEALTH_TEXT,
+  WEB_SEARCH_CONTROLS, WEB_SEARCH_DECLARATION_STANDS, WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_NEEDS_ENABLED,
+  WEB_SEARCH_NO_ENTRY, WEB_SEARCH_NOT_WRITTEN_BY_US, WEB_SEARCH_PRESETS, WEB_SEARCH_REFRESH_FAILED, WEB_SEARCH_SERVER, WEB_SEARCH_TAKE_EFFECT, WEB_SEARCH_WORKING_SUMMARY, WEB_SEARCH_WRONG_ENDPOINT,
+  type WebSearchInFlight, type WebSearchPreset, type WebSearchScope, type WebSearchSetupHandlers,
+} from './web-search-setup.js';
 
 /**
  * REQ-MCP-091/092/108/109/115, REQ-CONFIG-350..353/437: the "MCP Servers" category. Structure from docs/spec; craft from
  * docs/design (tokens by name — the status dot, the toggle, the settings grid and the card are the adopted components).
  * The "Configured servers" card lists EVERY configured server, disabled ones included, with the four-state health as
  * text beside the indicator, the `{name} · {type}` label, the masked muted line, the origin word and the toggle; the
- * header's "Check status" probes sequentially through the run host; the secrets card is the READ side only (the write
- * controls of REQ-MCP-110/111 are owed, said so on the card).
+ * header's "Check status" probes sequentially through the run host; the secrets card is the READ side, and since
+ * 2026-11-09 the WRITE side of REQ-MCP-110/111 is built — the guided `Set up web search` card below (B2) stores,
+ * replaces and deletes the built-in server's key through `mcp.setSecret`/`mcp.unsetSecret` (B1).
  *
  * ADR-0035 (Part T): the "Code intelligence" card carries REQ-MCP-112's action for THIS workspace — "Set up code
  * intelligence for this workspace" — with REQ-MCP-099's three steps as text (which is in progress, which finished and
@@ -33,11 +44,28 @@ export interface McpSettingsProps {
   readonly onProbeAll: () => Promise<void>;
   readonly onToggle: (name: string, enabled: boolean) => Promise<{ ok: boolean; message: string }>;
   readonly secrets: McpSecretsView | null;
+  /**
+   * The guided card's OWN secrets view (Minor 2, 2026-11-09): read with `server: 'web_search'` and never the
+   * chooser's, so the category's stored-secrets filter (which may name another server) cannot blank the card's
+   * stored-key state or take away its delete action. The parent row's view stays `secrets`.
+   */
+  readonly webSearchSecrets: McpSecretsView | null;
   readonly onSecretsServer: (server: string | null) => void;
   /** REQ-MCP-099/112: the project setup's status as the run host holds it; null before the first read. */
   readonly setup: McpSetupStatus | null;
   readonly onSetupStart: () => Promise<{ ok: boolean; message: string }>;
   readonly onSetupCancel: () => Promise<void>;
+  /**
+   * OQ-279 / REQ-CONFIG-478: the configuration snapshot when it did not load — the guided card draws its empty state and
+   * disables its controls, as Skills, Models, Personas and Runtime do (REQ-CONFIG-424 for the no-service half).
+   */
+  readonly fatal?: ConfigSnapshot | undefined;
+  /**
+   * The guided `web_search` card's presses (REQ-MCP-110/111/092, REQ-CHAT-076, REQ-CONFIG-437): `bindWebSearchSetup`
+   * over `bridge.command` — the card itself holds no bridge, and a press's command kinds are pinned in
+   * `web-search-press.test.ts`.
+   */
+  readonly webSearchSetup: WebSearchSetupHandlers;
 }
 
 const HEALTH_TEXT: Record<McpHealth['state'], string> = { unknown: 'Unknown', checking: 'Checking…', healthy: 'Healthy', unreachable: 'Unreachable' };
@@ -159,6 +187,331 @@ function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null;
   );
 }
 
+/**
+ * THE GUIDED `web_search` CARD — the four steps of the design brief (`reports/rotaris-websearch-setting-card-design-brief.md`,
+ * `docs/design/README.md` §7 consulted): REQ-MCP-111's dedicated key control with REQ-MCP-110's add/change/delete and
+ * scope choice, REQ-CONFIG-350/464's boundary — the screen NAMES the file and hands over the stanza, it authors no
+ * server — REQ-CONFIG-437's named remedy, REQ-MCP-092's single-server probe with REQ-CONFIG-353's four-state
+ * vocabulary as TEXT beside the indicator (REQ-SHELL-149), REQ-CONFIG-424/478's empty state with the controls
+ * disabled. Steps 1, 2 and 4 write nothing; step 3 is the one write, through the commands B1 built
+ * (`mcp.setSecret`/`mcp.unsetSecret`), whose masked confirmation alone comes back (REQ-MCP-081). The enable toggle's
+ * semantics are untouched (REQ-MCP-094/115, REQ-CONFIG-349): this card offers no second enable path.
+ */
+function WebSearchSetupCard(props: McpSettingsProps) {
+  const row = (props.listing?.rows ?? []).find((r) => r.name === WEB_SEARCH_SERVER) ?? null;
+  const storedKey = webSearchStoredKey(props.webSearchSecrets);
+  const health: McpHealth = props.health[WEB_SEARCH_SERVER] ?? { state: 'unknown' };
+  const fatalLoad = props.fatal !== undefined && !props.fatal.loadOk;
+  // REQ-CONFIG-424/478: with no configuration service (the listing read's refusal) or a fatal load, the card renders
+  // its empty state and its controls are disabled; the words are the layer's that determined the condition.
+  const unavailable = fatalLoad
+    ? 'The configuration could not be loaded, so there is nothing this card can guide you to yet. Fix the reported problem, then reload this category.'
+    : props.error;
+  const [presetId, setPresetId] = useState<string | null>(null);
+  const [keyDraft, setKeyDraft] = useState('');
+  const [scope, setScope] = useState<WebSearchScope>('workspace');
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [inFlight, setInFlight] = useState<WebSearchInFlight | null>(null);
+  const [probingMessage, setProbingMessage] = useState<string | null>(null);
+  /**
+   * Rounds 2 and 3, Major 3 (as corrected): the card's own probe result and the evidence it was taken under — the
+   * BASIS (the serialised situation inputs, `webSearchProbeBasis`) and the two views the render read it from. The
+   * result is the card's alone: the parent row's health is never written by a card probe.
+   */
+  const [probe, setProbe] = useState<{ readonly basis: string; readonly health: McpHealth; readonly read: McpSecretsView | null; readonly listed: McpListing | null } | null>(null);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [openFailure, setOpenFailure] = useState<string | null>(null);
+  const [copyNote, setCopyNote] = useState<string | null>(null);
+  const preset = webSearchPreset(presetId);
+  const stanza = webSearchStanza(preset);
+  /**
+   * The inputs the card's own probe result is kept under (round-2 Major 3): the entry, the stored key and the card's
+   * other situation facts in one serialised BASIS (`webSearchProbeBasis`), the PARENT health included — a result kept
+   * under a basis that still holds is about the current state, and a newer category probe supersedes one whose inputs
+   * moved. The preset radio is not an input: the probe tests the entry in the file, and choosing a preset changes only
+   * the stanza step 2 hands over.
+   */
+  const situationInputs = webSearchProbeBasis({ unavailable, row, storedKey, health });
+  /**
+   * Round-3 Major 2 (with Major 1): the result is read only while BOTH witnesses still hold — the basis, and the
+   * IDENTITY of the two views the render read it against. A configuration change or a write re-reads the listing and
+   * the card's secrets view, and a replaced key arrives behind the one constant mask (`REDACTION_MARK`), so a fresh
+   * read of either view is the only witness the card has that something it cannot see may have changed —
+   * `webSearchProbeBasis` carries no mask for exactly that reason.
+   *
+   * A stale result is DISCARDED, never merely bypassed: the `setProbe(null)` below is React's documented adjustment
+   * of state during a render, so an older result can never come back when the inputs return to an earlier value —
+   * without it, a stale Unreachable would be read again after the parent health went Checking and back to Healthy, and
+   * a fresh read would leave `ready` standing over a key the probe never saw. A newer category probe wins outright.
+   */
+  const probeStale = probe !== null && (probe.basis !== situationInputs || probe.read !== props.webSearchSecrets || probe.listed !== props.listing);
+  if (probeStale) setProbe(null);
+  const shownHealth = probe !== null && !probeStale ? probe.health : health;
+  /** Major 1 (rework round 1, 2026-11-09): the situation reads the card's OWN probe result, so the Test step
+   * genuinely decides `ready`/`wrong-endpoint` — a Healthy probe collapses the steps, a failing one takes an
+   * already-ready card back to `wrong-endpoint`. The parent row's health is untouched (the category's probe owns it,
+   * and it supersedes a card result whose inputs or views have changed). */
+  const situation = webSearchSituation({ unavailable, row, storedKey, health: shownHealth });
+  const disabled = unavailable !== null;
+  const collapsed = situation === 'ready' && !expanded;
+  /** Major 2: ONE in-flight state covers the three file presses and the probe; every control is disabled while it
+   * holds, and the card says which one it is (design brief §4's disabled-during-write, REQ-SHELL-149 in words). */
+  const busy = inFlight !== null;
+  const radios = useRef(new Map<string, HTMLButtonElement>());
+
+  const store = async () => {
+    if (busy) return;
+    setRefusal(null); setConfirmation(null); setRefreshNote(null); setInFlight('store');
+    /**
+     * Round-2 Major 2: the press is a click handler, so nothing it awaits may reject out of it — a rejection would
+     * skip `setInFlight(null)` and leave the card disabled forever, reporting nothing. The helper is total now (it
+     * answers a failed re-read as words), and this catch/finally is the card's own guarantee that the busy state is
+     * cleared and a failure is SAID, whatever a broken binding does.
+     */
+    try {
+      const r = await props.webSearchSetup.onStoreKey(keyDraft, scope);
+      if (!r.ok) { setRefusal(r.message); return; }
+      setKeyDraft('');
+      setConfirmation(storedKeySentence(r.outcome));
+      // The write changed the key the probe observed, and the card's probe result cannot describe the new key
+      // (round-2 Major 3; round-3 Major 1: the write path is also the one replacement this card can observe — the
+      // value itself never reaches it, and the re-reads that follow the write would move the views' identity anyway).
+      setProbe(null);
+      if (r.refreshFailure !== null) setRefreshNote(WEB_SEARCH_REFRESH_FAILED(r.refreshFailure));
+    } catch (cause) {
+      setRefusal(webSearchPressFailure(cause));
+    } finally {
+      setInFlight(null);
+    }
+  };
+  const remove = async () => {
+    if (busy) return;
+    setConfirmingDelete(false); setRefusal(null); setConfirmation(null); setRefreshNote(null); setInFlight('remove');
+    try {
+      const r = await props.webSearchSetup.onDeleteKey(scope);
+      if (!r.ok) { setRefusal(r.message); return; }
+      setConfirmation(deletedKeySentence(r.outcome));
+      setProbe(null);
+      if (r.refreshFailure !== null) setRefreshNote(WEB_SEARCH_REFRESH_FAILED(r.refreshFailure));
+    } catch (cause) {
+      setRefusal(webSearchPressFailure(cause));
+    } finally {
+      setInFlight(null);
+    }
+  };
+  const openFile = async () => {
+    if (busy) return;
+    setOpenFailure(null); setInFlight('open');
+    try {
+      const r = await props.webSearchSetup.onOpenFile();
+      if (!r.ok) setOpenFailure(r.message);
+    } catch (cause) {
+      setOpenFailure(webSearchPressFailure(cause));
+    } finally {
+      setInFlight(null);
+    }
+  };
+  const getKey = async (p: WebSearchPreset) => {
+    setOpenFailure(null);
+    try {
+      const r = await props.webSearchSetup.onGetKey(p);
+      if (!r.ok) setOpenFailure(r.message);
+    } catch (cause) {
+      setOpenFailure(webSearchPressFailure(cause));
+    }
+  };
+  const check = async () => {
+    if (busy) return;
+    setInFlight('probe'); setProbingMessage(null);
+    try {
+      const result = await props.webSearchSetup.onProbe();
+      setProbe({ basis: situationInputs, health: result, read: props.webSearchSecrets, listed: props.listing });
+      setProbingMessage(result.state === 'unreachable' ? WEB_SEARCH_WRONG_ENDPOINT : `The server answered: ${mcpHealthText(result)}.`);
+    } catch (cause) {
+      setProbingMessage(webSearchPressFailure(cause));
+    } finally {
+      setInFlight(null);
+    }
+  };
+  const copy = () => {
+    setCopyNote(null);
+    // The one clipboard write of this card, as the transcript's copy and the notice's are: no value of a secret
+    // ever reaches it (the stanza carries the placeholder, never a key).
+    void navigator.clipboard?.writeText(stanza.text).then(() => setCopyNote('Copied the stanza.')).catch(() => setCopyNote('The clipboard refused the copy.'));
+  };
+  const onRadioKey = (event: { key: string; preventDefault: () => void }) => {
+    const next = presetAfter(presetId, event.key);
+    if (next === null || busy) return;
+    event.preventDefault();
+    setPresetId(next);
+    // REQ-SHELL-146 with REQ-SHELL-145: the arrows move the selection and the focus with it (roving tabIndex — the
+    // selected radio is the group's one tab station; `presetTabIndex`). Until 2026-11-09 the focus stayed put.
+    radios.current.get(next)?.focus();
+  };
+  const scopeLabels: Readonly<Record<WebSearchScope, string>> = { workspace: 'Workspace', global: 'Global' };
+  const hideKeyStep = preset !== null && !preset.keyInUrl;
+
+  if (situation === 'no-entry') {
+    return (
+      <DesignCard className="card settings__card" data-mcp-websearch-setup data-websearch-situation={situation}>
+        <div className="card-kicker">Set up web search</div>
+        <p className="text-secondary" data-websearch-empty>{WEB_SEARCH_NO_ENTRY}</p>
+        <p className="text-tertiary settings__hint" data-websearch-file>{webSearchFileLine(props.listing?.configFile ?? null)}</p>
+      </DesignCard>
+    );
+  }
+
+  // REQ-CONFIG-424/478 (the design brief §4's disabled column): with no configuration service — the listing read's
+  // refusal is `props.error` — or a configuration that did not load, the card draws its empty state and nothing is
+  // pressable; the report a fatal load owes is `Fatal`'s, the same card the Skills, Models and Runtime categories draw.
+  if (situation === 'unavailable') {
+    return (
+      <DesignCard className="card settings__card" data-mcp-websearch-setup data-websearch-situation={situation}>
+        <div className="card-kicker">Set up web search</div>
+        <p className="text-secondary" data-websearch-empty>{unavailable}</p>
+        {fatalLoad && props.fatal !== undefined ? <Fatal snapshot={props.fatal} /> : null}
+        <p className="text-tertiary settings__hint" data-websearch-file>{webSearchFileLine(props.listing?.configFile ?? null)}</p>
+      </DesignCard>
+    );
+  }
+
+  return (
+    <DesignCard className="card settings__card" data-mcp-websearch-setup data-websearch-situation={situation}>
+      <div className="providers-card__head">
+        <div className="card-kicker">Set up web search</div>
+      </div>
+      <p className="text-secondary">Point the built-in web-search server at a provider you have a key for: choose a provider, put the declaration in your configuration file, paste the key and test it.</p>
+
+      {collapsed ? (
+        <p role="status" data-websearch-summary>
+          {WEB_SEARCH_WORKING_SUMMARY(storedKey?.scope ?? scopeLabels[scope])}{' '}
+          <DesignButton type="button" className="btn btn-link btn-compact" data-websearch-change onClick={() => setExpanded(true)}>Change</DesignButton>
+        </p>
+      ) : (
+        <>
+          <div className="card-kicker" data-websearch-step="provider">Step 1</div>
+          <h2 className="settings__heading">Choose your search provider</h2>
+          <div role="radiogroup" aria-label="Search provider" data-websearch-presets onKeyDown={onRadioKey}>
+            {WEB_SEARCH_PRESETS.map((p) => (
+              <div key={p.id} className="settings__action" data-websearch-preset={p.id} data-preset-selected={presetId === p.id ? 'yes' : 'no'}>
+                <DesignButton
+                  ref={(el) => { if (el === null) radios.current.delete(p.id); else radios.current.set(p.id, el); }}
+                  type="button" role="radio" aria-checked={presetId === p.id} tabIndex={presetTabIndex(presetId, p.id)} disabled={disabled || busy}
+                  className={`seg-opt${presetId === p.id ? ' is-active' : ''}`}
+                  aria-label={`${p.name} — ${p.description}`}
+                  onClick={() => setPresetId(p.id)}
+                >
+                  {p.name}
+                </DesignButton>
+                <span className="text-secondary settings__hint">{p.description}</span>
+                {p.keyPage !== null ? (
+                  <DesignButton type="button" className="btn btn-link btn-compact" data-websearch-key={p.id} aria-label={WEB_SEARCH_CONTROLS.key(p.name)} disabled={disabled || busy} onClick={() => { void getKey(p); }}>Get a key ↗</DesignButton>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          {openFailure !== null ? <p className="composer__error" role="alert" data-websearch-open-failure>{openFailure}</p> : null}
+
+          <div className="card-kicker" data-websearch-step="declaration">Step 2</div>
+          <h2 className="settings__heading">Put this in your configuration file</h2>
+          {situation === 'needs-key' ? (
+            <p className="text-secondary" data-websearch-declaration-stands>{WEB_SEARCH_DECLARATION_STANDS}</p>
+          ) : (
+            <>
+              <pre className="mono" data-websearch-stanza>{stanza.text}</pre>
+              {stanza.note !== null ? <p className="text-tertiary settings__hint" data-websearch-example>{stanza.note}</p> : null}
+              <div className="settings__action">
+                <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-copy disabled={disabled || busy} onClick={copy}>Copy</DesignButton>
+                <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-open disabled={disabled || busy || props.listing === null} title={props.listing === null ? "The configuration file's path is not known until the listing is read." : undefined} aria-description={props.listing === null ? "Disabled: the configuration file's path is not known until the listing is read." : undefined} onClick={() => { void openFile(); }}>Open the file</DesignButton>
+                {copyNote !== null ? <span className="text-tertiary settings__hint" role="status">{copyNote}</span> : null}
+              </div>
+            </>
+          )}
+          <p className="text-tertiary settings__hint" data-websearch-file>{webSearchFileLine(props.listing?.configFile ?? null)}</p>
+          <p className="text-tertiary settings__hint" data-websearch-note>{WEB_SEARCH_NOT_WRITTEN_BY_US}</p>
+
+          {situation === 'other-transport' && row !== null ? <p className="text-secondary" data-websearch-other-transport>{webSearchOtherTransport(row.type)}</p> : null}
+
+          {situation !== 'other-transport' ? (
+            <>
+              <div className="card-kicker" data-websearch-step="key">Step 3</div>
+              <h2 className="settings__heading">Paste the key</h2>
+              {hideKeyStep && preset !== null ? (
+                <p className="text-secondary" data-websearch-header-key>{webSearchHeaderKeyNote(preset, props.listing?.configFile ?? null)}</p>
+              ) : (
+                <>
+                  <div className="settings__action">
+                    <label htmlFor="websearch-key">Search API key</label>
+                    <DesignInput
+                      id="websearch-key" type="password" autoComplete="off" className="input settings__key-field" data-websearch-key-field
+                      aria-label="Search API key" aria-description="Never shown again after it is stored; the stored value is only ever displayed masked."
+                      value={keyDraft} disabled={disabled || busy} onChange={(e) => setKeyDraft(e.currentTarget.value)}
+                    />
+                  </div>
+                  <div className="settings__action">
+                    <label htmlFor="websearch-scope">Scope</label>
+                    <DesignSelect id="websearch-scope" className="input select settings__select" aria-label="Scope" data-websearch-scope value={scope} disabled={disabled || busy} onChange={(e) => setScope(e.currentTarget.value === 'global' ? 'global' : 'workspace')}>
+                      <option value="workspace">Workspace</option>
+                      <option value="global">Global</option>
+                    </DesignSelect>
+                    <DesignButton type="button" className="btn btn-primary btn-compact" data-websearch-store aria-label={WEB_SEARCH_CONTROLS.store} disabled={disabled || busy} onClick={() => { void store(); }}>Store the key</DesignButton>
+                    {storedKey !== null ? <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-delete aria-label={WEB_SEARCH_CONTROLS.delete} disabled={disabled || busy} onClick={() => setConfirmingDelete(true)}>Delete the stored key</DesignButton> : null}
+                  </div>
+                  {storedKey !== null ? (
+                    <p className="text-secondary settings__hint" data-websearch-stored>Stored for <span className="mono">{storedKey.server}</span> in the {storedKey.scope} scope, value <span className="mono" data-mask>{storedKey.masked}</span>. Storing again replaces it; the field above never shows the stored value.</p>
+                  ) : null}
+                  {refusal !== null ? <p className="composer__error" role="alert" data-websearch-refusal>{refusal}</p> : null}
+                  {confirmation !== null ? <p role="status" data-websearch-confirmation>{confirmation}</p> : null}
+                  <p className="text-tertiary settings__hint" data-websearch-take-effect>{WEB_SEARCH_TAKE_EFFECT}</p>
+                  {situation === 'needs-enabled' ? <p className="text-secondary" data-websearch-needs-enabled>{WEB_SEARCH_NEEDS_ENABLED}</p> : null}
+                  {situation === 'needs-unresolved' ? <p className="text-secondary" data-websearch-unresolved-after-key>{webSearchUnresolvedNote(row?.unresolved ?? [], true)}</p> : null}
+                </>
+              )}
+            </>
+          ) : null}
+        </>
+      )}
+
+      {/*
+        Step 4 is OUTSIDE the collapse: the design brief §4 has the finished state collapse steps 1–3 to a summary and
+        leave the test offered ("step 4 offers the test; the card says nothing more is needed").
+      */}
+      <div className="card-kicker" data-websearch-step="test">Step 4</div>
+      <h2 className="settings__heading">Test it</h2>
+      <div className="settings__action">
+        <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-check aria-label={WEB_SEARCH_CONTROLS.check} disabled={disabled || busy} onClick={() => { void check(); }}>{inFlight === 'probe' ? 'Checking…' : 'Check status'}</DesignButton>
+        <span>
+          <span className="mcp__dot" data-state={inFlight === 'probe' ? 'checking' : shownHealth.state} aria-hidden="true" />{' '}
+          <span data-websearch-health data-health={shownHealth.state}>{inFlight === 'probe' ? MCP_HEALTH_TEXT.checking : mcpHealthText(shownHealth)}</span>
+        </span>
+      </div>
+      {inFlight !== null ? <p role="status" className="text-secondary" data-websearch-in-flight>{WEB_SEARCH_IN_FLIGHT[inFlight]}</p> : null}
+      {shownHealth.state === 'unreachable' && shownHealth.detail ? <p className="text-tertiary settings__hint mono" data-websearch-health-detail>{shownHealth.detail}</p> : null}
+      {probingMessage !== null ? <p role="status" className="text-secondary" data-websearch-probe-message>{probingMessage}</p> : null}
+      {/* Round-2 Major 2: the write stood and the re-read after it did not — said, not swallowed. Outside the
+          collapse, so it is readable in every situation (a successful store usually collapses the steps). */}
+      {refreshNote !== null ? <p className="composer__error" role="alert" data-websearch-refresh-failure>{refreshNote}</p> : null}
+      {/* REQ-CONFIG-225/371: the row's own words for why nothing connects — a placeholder still unresolved, or the host's
+          own availability detail (a remote entry's missing prerequisite). Text, never a second rule of this card's. */}
+      {row !== null && row.unresolved.length > 0 && (situation === 'fresh' || situation === 'wrong-endpoint') ? <p className="text-tertiary settings__hint" data-websearch-unresolved>{webSearchUnresolvedNote(row.unresolved, situation === 'wrong-endpoint')}</p> : null}
+      {row !== null && !row.available && row.unresolved.length === 0 ? <p className="text-tertiary settings__hint" data-websearch-blocked>{row.availabilityDetail}</p> : null}
+
+      {confirmingDelete ? (
+        <Confirm
+          title="Delete the stored key?"
+          body={`This removes ${WEB_SEARCH_KEY_VARIABLE} for ${WEB_SEARCH_SERVER} from the ${scopeLabels[scope]} secrets file. Storing it again means pasting the key afresh; nothing else in the file is touched.`}
+          busy={busy}
+          onYes={() => { void remove(); }}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      ) : null}
+    </DesignCard>
+  );
+}
+
 export function McpSettings(props: McpSettingsProps) {
   const rows = props.listing?.rows ?? [];
   const [probeMessage, setProbeMessage] = useState<string | null>(null);
@@ -189,10 +542,11 @@ export function McpSettings(props: McpSettingsProps) {
           </DesignTable>
         )}
       </DesignCard>
+      <WebSearchSetupCard {...props} />
       <SetupCard setup={props.setup} onStart={props.onSetupStart} onCancel={props.onSetupCancel} />
       <DesignCard className="card settings__card" data-mcp-secrets>
         <div className="card-kicker">Stored secrets</div>
-        <p className="text-secondary">What the two secrets files hold, per server and key, with every value masked. Adding, changing and deleting a secret here is not built yet; edit <code className="mono">secrets.yaml</code> beside the configuration file (workspace or global). A stored secret takes effect on the next configuration load.</p>
+        <p className="text-secondary">What the two secrets files hold, per server and key, with every value masked. Adding, changing and deleting a secret is built on the `Set up web search` card above, for the built-in server's key; any other server's secrets are edited in <code className="mono">secrets.yaml</code> beside the configuration file (workspace or global). A stored secret takes effect on the next configuration load.</p>
         <div className="settings__action">
           <label htmlFor="mcp-secrets-server">View</label>
           <DesignSelect id="mcp-secrets-server" className="input select settings__select" aria-label="Secrets for" value={chosen ?? ''} onChange={(e) => props.onSecretsServer(e.currentTarget.value === '' ? null : e.currentTarget.value)}>

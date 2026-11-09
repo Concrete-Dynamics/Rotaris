@@ -22,8 +22,16 @@ const render = (rows: McpListing) => renderToStaticMarkup(createElement(McpSetti
   listing: rows, loading: false, error: null, health: {}, probing: false,
   onRefresh: () => undefined, onProbeAll: async () => undefined,
   onToggle: async () => ({ ok: true, message: '' }),
-  secrets: null, onSecretsServer: () => undefined, setup: null,
+  secrets: null, webSearchSecrets: null, onSecretsServer: () => undefined, setup: null,
   onSetupStart: async () => ({ ok: true, message: '' }), onSetupCancel: async () => undefined,
+  // B2's guided card: this file's cases are about the ROW's switch, so the presses it never makes are inert.
+  webSearchSetup: {
+    onOpenFile: async () => ({ ok: true as const }),
+    onGetKey: async () => ({ ok: true as const }),
+    onStoreKey: async () => ({ ok: false as const, message: 'not pressed here' }),
+    onDeleteKey: async () => ({ ok: false as const, message: 'not pressed here' }),
+    onProbe: async () => ({ state: 'unknown' as const }),
+  },
 } satisfies McpSettingsProps));
 
 describe('the configured-off, available row\'s switch (PD-CONFIG-006)', () => {

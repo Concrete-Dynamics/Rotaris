@@ -322,13 +322,15 @@ export function webSearchAboutControlLabel(open: boolean): string {
 }
 
 /**
- * REQ-MCP-108's one venue with REQ-MCP-111's visible-anyway rule: the server row offers the way INTO the guided card,
- * and the offer stands only while it can still DO something — the row IS the shipped `http` default (the transport
- * the key control belongs to, REQ-CONFIG-181) and no key is stored for it yet (REQ-MCP-110; with a key stored, the
- * card is where it is changed, and the offer would promise nothing new).
+ * REQ-MCP-108's one venue with REQ-MCP-111's visible-anyway rule: THIS row offers the way INTO the guided card, and
+ * the offer stands only while the row is the one the card is about, the transport is the one the key control belongs
+ * to, the entry is the SHIPPED default (a user's own declaration is already guided by the card's `needs-key` step,
+ * REQ-CONFIG-225), and no key is stored for it yet (REQ-MCP-110; with a key stored, the card is where it is changed,
+ * and the offer would promise nothing new). The row's own NAME is part of the predicate, so the call site passes each
+ * row and no row other than `web_search` can ever offer it.
  */
 export function webSearchRowSetupVisible(row: McpServerRow | null, storedKey: McpSecretRow | null): boolean {
-  return row !== null && row.type === 'http' && storedKey === null;
+  return row !== null && row.name === WEB_SEARCH_SERVER && row.type === 'http' && row.origin === 'default' && storedKey === null;
 }
 
 /**

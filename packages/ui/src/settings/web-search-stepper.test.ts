@@ -40,6 +40,9 @@ import type { WebSearchSituation } from './web-search-setup.js';
 const harness = vi.hoisted(() => ({
   elements: [] as { props: Record<string, unknown> }[],
   cells: [] as { initialised: boolean; value: unknown }[],
+  effects: [] as { deps: readonly unknown[] | undefined; body: () => void | (() => void) }[],
+  pendingEffects: [] as { index: number; body: () => void | (() => void); previous: { deps: readonly unknown[] | undefined; body: () => void | (() => void) } | undefined }[],
+  cleanups: new Map<number, () => void>(),
   cursor: 0,
 }));
 /** The JSX recorder, built INSIDE the hoisted block: `vi.mock`'s factory is hoisted above every `const` in this file,
@@ -67,6 +70,19 @@ vi.mock('react', async (importOriginal) => {
       if (!cell.initialised) { cell.value = typeof init === 'function' ? (init as () => unknown)() : init; cell.initialised = true; }
       const set = (v: unknown) => { cell.value = typeof v === 'function' ? (v as (p: unknown) => unknown)(cell.value) : v; };
       return [cell.value, set];
+    },
+    /**
+     * The focus route lives in an EFFECT, and `renderToStaticMarkup` runs none — so `useEffect` is replaced by one that
+     * REGISTERS its body (with its deps and its cleanup) in `harness.effects`, and `runEffects()` below applies them in
+     * order the way React does: every changed effect's cleanup first, then its body. Without this the focus route is
+     * untestable here and an inert one would pass (`confirm-dismissal.test.ts` takes the same cut).
+     */
+    useEffect: (body: () => void | (() => void), deps: readonly unknown[] | undefined) => {
+      const idx = harness.cursor;
+      const previous = harness.effects[idx];
+      harness.cursor += 1;
+      harness.effects[idx] = { deps, body };
+      harness.pendingEffects.push({ index: idx, body, previous });
     },
   };
 });
@@ -125,6 +141,25 @@ const draw = (over: Partial<McpSettingsProps> = {}): { html: string; card: strin
 };
 /** React escapes `'` in text nodes; a sentence compared against the markup is compared in its escaped form. */
 const escaped = (text: string): string => text.replace(/&/g, '&amp;').replace(/'/g, '&#x27;');
+/**
+ * Apply the effects the last draw registered, the way React would commit them: an effect whose deps changed runs its
+ * PREVIOUS cleanup first, then its body (whose own return becomes the cleanup). Effects whose deps are unchanged are
+ * skipped, which is what makes "re-registered whenever the situation moves" assertable.
+ */
+const runEffects = (): void => {
+  for (const { index, body, previous } of harness.pendingEffects) {
+    const current = harness.effects[index]!;
+    const same = previous !== undefined && previous.deps !== undefined && current.deps !== undefined
+      && previous.deps.length === current.deps.length
+      && previous.deps.every((d, i) => Object.is(d, current.deps![i]));
+    if (same) continue;
+    harness.cleanups.get(index)?.();
+    const returned = body();
+    if (typeof returned === 'function') harness.cleanups.set(index, returned);
+    else harness.cleanups.delete(index);
+  }
+  harness.pendingEffects.length = 0;
+};
 const health = (h: McpHealth): Record<string, McpHealth> => ({ [WEB_SEARCH_SERVER]: h });
 describe('the step bar, the info control and the row offer — the pure half', () => {
   it('names exactly four steps, in order, each labelled `Step N · <title>` from its own position — fails if the numbering or the order lives anywhere but the list', () => {
@@ -149,11 +184,16 @@ describe('the step bar, the info control and the row offer — the pure half', (
     }
   });
 
-  it('offers the row control exactly while it can still do something — fails if it stands with a key already stored, without a row, or on another transport', () => {
+  it('offers the row control exactly while it can still do something — fails if it stands with a key already stored, without a row, on another transport, for another server, or for a user-declared entry', () => {
     expect(webSearchRowSetupVisible(row(), null)).toBe(true);
     expect(webSearchRowSetupVisible(row(), keyRow)).toBe(false);
     expect(webSearchRowSetupVisible(null, null)).toBe(false);
     expect(webSearchRowSetupVisible(row({ type: 'stdio' }), null)).toBe(false);
+    // The row's own NAME is part of the predicate: no other server may offer this card's way in.
+    expect(webSearchRowSetupVisible(row({ name: 'browser' }), null)).toBe(false);
+    // And it is the SHIPPED default the card is about — a user's own http declaration is the `needs-key` step's business.
+    expect(webSearchRowSetupVisible(row({ origin: 'yaml' }), null)).toBe(false);
+    expect(webSearchRowSetupVisible(row({ origin: 'session' }), null)).toBe(false);
   });
 
   it('the info control says which press it offers, and its closed name is the one constant — fails if the control keeps a `Show` name while the region is open', () => {
@@ -179,26 +219,29 @@ describe('the step bar, the info control and the row offer — the pure half', (
 });
 
 describe('the card as it renders', () => {
-  it('carries ONE named icon control in the head, whose `aria-controls` names its own region (REQ-SHELL-144/149) — fails if the icon is decoration, unnamed, or the disclosure is a bare chevron', () => {
+  it('carries ONE named icon control in the head, whose `aria-controls` names a region that is always rendered (REQ-SHELL-144/149) — fails if the icon is decoration, unnamed, a bare chevron, or its target dangles while the region is closed', () => {
     const { html, find } = draw();
     const control = find('data-websearch-about-control');
     expect(control).toBeDefined();
     expect(control!['aria-label']).toBe(WEB_SEARCH_ABOUT_CONTROL);
     expect(control!['aria-expanded']).toBe(false);
     expect(control!['aria-controls']).toBe('websearch-about');
-    // The region an expanded control names is what the open state renders (`aria-controls` never dangles).
-    expect(html).not.toContain('<div id="websearch-about"');
+    // The region the control names EXISTS while closed, and it is `hidden` — a closed fold, not a dangling id.
+    expect(html).toContain('id="websearch-about" data-websearch-about="true" hidden');
     expect(html).toContain('<i class="ph ph-info" aria-hidden="true"></i>');
     // No dialog, no second control of the kind.
     expect(harness.elements.filter((e) => e.props['data-websearch-about-control'] !== undefined)).toHaveLength(2);
   });
 
-  it('the head no longer carries the loose prose: the three sentences stand in the about region alone — fails if the explanation is still dumped in front of step 1', () => {
+  it('the head no longer carries the loose prose: the three sentences stand in the about region alone, and the region is out of sight while closed — fails if the explanation is still dumped in front of step 1', () => {
     const { card } = draw({ listing: listing([row()]), secrets: secrets([]) });
-    // Closed by default: none of the three sentences is in the markup, and none is anywhere else either.
-    expect(card).not.toContain('Point the built-in web-search server at a provider');
-    expect(card).not.toContain(escaped(WEB_SEARCH_NOT_WRITTEN_BY_US));
-    expect(card).not.toContain(escaped(WEB_SEARCH_TAKE_EFFECT));
+    // Closed by default: the region is rendered `hidden`, so nothing of it reads; and none of the three sentences is
+    // anywhere BUT inside that region (the old head paragraph and the old step-2/step-3 lines are gone).
+    expect(card).toContain('id="websearch-about" data-websearch-about="true" hidden');
+    for (const sentence of WEB_SEARCH_ABOUT) {
+      expect(card.split(escaped(sentence))).toHaveLength(2);
+      expect(card.indexOf(escaped(sentence))).toBeGreaterThan(card.indexOf('id="websearch-about"'));
+    }
     // The card is still the card, and its first step is still offered.
     expect(card).toContain('data-mcp-websearch-setup');
     expect(card).toContain('data-websearch-presets');
@@ -270,7 +313,7 @@ describe('the card as it renders', () => {
     const first = draw();
     (first.find('data-websearch-about-control')!['onClick'] as () => void)();
     const second = draw({ listing: listing([row()]), secrets: secrets([]) });
-    expect(second.html).toContain('data-websearch-about');
+    expect(second.html).toContain('id="websearch-about" data-websearch-about="true">');
     expect(second.html).toContain(escaped(WEB_SEARCH_NOT_WRITTEN_BY_US));
     expect(second.html).toContain(escaped(WEB_SEARCH_TAKE_EFFECT));
     expect(second.find('data-websearch-about-control')!['aria-expanded']).toBe(true);
@@ -302,7 +345,24 @@ describe('the card as it renders', () => {
     expect(card).toContain('data-websearch-check');
   });
 
-  it('offers the way into the card from the `web_search` row while no key is stored — fails if the row never offers it, or offers it with a key already stored', () => {
+  it('a step-4 body the user closed while the bar stood is FORCED open once the bar is gone (the `ready` collapse) — fails if a closed fold is stranded with no opener', () => {
+    harness.cells.length = 0; harness.cursor = 0; views = null;
+    // `stored` (bar drawn): close step 4.
+    const first = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]) });
+    const testStep = first.all('data-websearch-step-control').find((c) => c['data-websearch-step-control'] === 'test')!;
+    (testStep['onClick'] as () => void)();
+    const closed = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]) });
+    expect(closed.card).toContain('data-websearch-step-body="test" hidden');
+    // The category's probe now reports Healthy: the situation is `ready`, the bar disappears — and the test step is open.
+    const ready = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), health: health({ state: 'healthy', toolCount: 2 }) });
+    expect(ready.html).toContain('data-websearch-situation="ready"');
+    expect(ready.card).toContain('data-websearch-summary');
+    expect(ready.card).toContain('data-websearch-step-body="test"');
+    expect(ready.card).not.toContain('data-websearch-step-body="test" hidden');
+    expect(ready.card).toContain('data-websearch-check');
+  });
+
+  it('offers the way into the card on the `web_search` row alone, while no key is stored — fails if the row never offers it, offers it with a key already stored, or offers it from a neighbouring server\'s row', () => {
     const offered = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
     const control = offered.find('data-websearch-row-setup');
     expect(control).toBeDefined();
@@ -320,9 +380,62 @@ describe('the card as it renders', () => {
     expect(noRow.html).not.toContain('data-websearch-row-setup');
   });
 
-  it('the row control\'s press is inert with no card route registered, and never throws — fails if a press on the row rejects', () => {
-    const { find } = draw();
-    expect(() => (find('data-websearch-row-setup')!['onClick'] as () => void)()).not.toThrow();
+  it('a NEIGHBOURING server is never given this card\'s way in, and a user-declared http entry does not stand in for the shipped default — fails if one row value is shared across the table', () => {
+    // Fresh cells: `Row` runs before the card and each row takes two, so a stale store from an earlier test would
+    // misalign the card's own states (the index-keyed store the repo's card tests use).
+    harness.cells.length = 0; harness.cursor = 0; views = null;
+    // Two rows: the shipped web_search default (which may offer) and an unrelated server beside it (which may not).
+    const { html } = draw({ listing: listing([row(), row({ name: 'browser', type: 'stdio', line: 'npx -y something', origin: 'default' })]), webSearchSecrets: secrets([]) });
+    expect(html).toContain('data-mcp-server="browser"');
+    // Exactly one row carries the offer: the `web_search` row. Read it out of the markup, row by row.
+    const rows = html.slice(html.indexOf('<tbody>'), html.indexOf('</tbody>'));
+    const chunks = rows.split('<tr ').slice(1);
+    expect(chunks).toHaveLength(2);
+    for (const chunk of chunks) {
+      const isWebSearch = chunk.includes('data-mcp-server="web_search"');
+      expect(chunk.includes('data-websearch-row-setup')).toBe(isWebSearch);
+    }
+
+    // The same shipped-default shape declared by the user instead of shipped: no offer.
+    harness.cells.length = 0; harness.cursor = 0;
+    const declared = draw({ listing: listing([row({ origin: 'yaml' })]), webSearchSecrets: secrets([]) });
+    expect(declared.html).not.toContain('data-websearch-row-setup');
+  });
+
+  it('the row\'s press reaches the card\'s own focus route and lands on the CURRENT step, and an inert route cannot pass — fails if the press goes nowhere', () => {
+    harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
+    const focused: WebSearchStepId[] = [];
+
+    // `McpSettings` owns the route (`setupFocus` → its own callback → the card's effect), so the press is driven the
+    // way the product drives it: the row control's own handler, after the card's effect has been committed.
+    harness.cursor = 0;
+    const first = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    harness.cursor = 0;
+    runEffects();
+
+    // The refs the render filled: a stub stands in for the DOM node a static render never makes.
+    for (const control of first.all('data-websearch-step-control')) {
+      const id = control['data-websearch-step-control'] as WebSearchStepId;
+      (control['ref'] as ((el: unknown) => void) | undefined)?.({ focus: () => focused.push(id) });
+    }
+    (first.find('data-websearch-row-setup')!['onClick'] as () => void)();
+    // With no key stored the offer stands, and every key-less situation stands at the provider step
+    // (`webSearchStepFor`; pinned situation by situation in the pure case above) — so the press lands there.
+    expect(focused).toEqual(['provider']);
+  });
+
+  it('the card hands its route back on unmount, so no press reaches a tree that is gone — fails if the cleanup is missing', () => {
+    harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
+    harness.cursor = 0;
+    draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    harness.cursor = 0;
+    runEffects();
+    // The registration effect returned a cleanup that hands `null` back; running it is the unmount.
+    expect(harness.cleanups.size).toBeGreaterThan(0);
+    for (const cleanup of harness.cleanups.values()) cleanup();
+    // A press after it reaches nothing — and must not throw.
+    const after = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    expect(() => (after.find('data-websearch-row-setup')!['onClick'] as () => void)()).not.toThrow();
   });
 });
 

@@ -250,8 +250,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
    * step, and the one state that closes anything remains the existing `ready` collapse.
    */
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [closedSteps, setClosedSteps] = useState<ReadonlySet<WebSearchStepId>>(() => new Set<WebSearchStepId>());
-  const stepRefs = useRef(new Map<WebSearchStepId, HTMLButtonElement>());
+  const [closedSteps, setClosedSteps] = useState<ReadonlySet<WebSearchStepId>>(() => new Set<WebSearchStepId>());  const stepRefs = useRef(new Map<WebSearchStepId, HTMLButtonElement>());
   const [openFailure, setOpenFailure] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const preset = webSearchPreset(presetId);
@@ -288,8 +287,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const collapsed = situation === 'ready' && !expanded;
   /** The step the bar marks and the row control targets (REQ-SHELL-149: the position is also the number in the label). */
   const current = webSearchStepFor(situation);
-  const stepOpen = (id: WebSearchStepId) => !closedSteps.has(id);
-  const toggleStep = (id: WebSearchStepId) => setClosedSteps((closed) => { const next = new Set(closed); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const stepOpen = (id: WebSearchStepId) => !closedSteps.has(id);  const toggleStep = (id: WebSearchStepId) => setClosedSteps((closed) => { const next = new Set(closed); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   /**
    * The row's focus route, re-registered whenever the situation moves: the card HANDS the function out, the cell
    * (`McpSettings`) stores it, and the cleanup hands `null` back, so a card that unmounts leaves no route behind.
@@ -439,11 +437,15 @@ function WebSearchSetupCard(props: McpSettingsProps) {
           <i className="ph ph-info" aria-hidden="true" />
         </DesignButton>
       </div>
-      {aboutOpen ? (
-        <div id="websearch-about" data-websearch-about>
-          {WEB_SEARCH_ABOUT.map((sentence) => <p key={sentence} className="text-secondary settings__hint">{sentence}</p>)}
-        </div>
-      ) : null}
+      {/*
+        The region is ALWAYS rendered and `hidden` while closed, exactly as the step bodies are: `aria-controls`
+        from the control above then always names an element that exists (a dangling id is not a disclosure), and the
+        prose stays out of sight (`hidden`, not merely dimmed) so the closed card says what it did before. The three
+        sentences are the same three, word for word (REQ-MCP-111, REQ-CONFIG-350/464, REQ-MCP-110).
+      */}
+      <div id="websearch-about" data-websearch-about hidden={!aboutOpen}>
+        {WEB_SEARCH_ABOUT.map((sentence) => <p key={sentence} className="text-secondary settings__hint">{sentence}</p>)}
+      </div>
 
       {collapsed ? (
         <p role="status" data-websearch-summary>
@@ -560,9 +562,12 @@ function WebSearchSetupCard(props: McpSettingsProps) {
       {/*
         Step 4 is OUTSIDE the collapse: the design brief §4 has the finished state collapse steps 1–3 to a summary and
         leave the test offered ("step 4 offers the test; the card says nothing more is needed"). Like the others it has
-        its own body, open by default and closable through its bar control.
+        its own body, open by default and closable through its bar control — but where the bar is not drawn (the
+        `ready` collapse, or `expanded` leaving the summary standing) the test body is FORCED open: a body the user
+        closed while the bar stood must never be stranded hidden once the bar is gone (a fold with no opener is a
+        defect, and the test is what the finished state is for).
       */}
-      <div id="websearch-step-test" data-websearch-step-body="test" hidden={!stepOpen('test')}>
+      <div id="websearch-step-test" data-websearch-step-body="test" hidden={!collapsed && !stepOpen('test')}>
         <h2 className="settings__heading">{WEB_SEARCH_STEPS[3]?.title}</h2>
         <div className="settings__action">
           <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-check aria-label={WEB_SEARCH_CONTROLS.check} disabled={disabled || busy} onClick={() => { void check(); }}>{inFlight === 'probe' ? 'Checking…' : 'Check status'}</DesignButton>
@@ -604,13 +609,12 @@ export function McpSettings(props: McpSettingsProps) {
   /**
    * The row's way into the guided card (stepper/inline-help change, 2026-11-09): the cell holds the function the card
    * registers (the current step's bar control), and the row's control stands only while it can still do something —
-   * `webSearchRowSetupVisible` reads the SAME `web_search` row the card reads and the card's OWN secrets view (Minor
-   * 2 of 2026-11-09: never the chooser's filtered one).
+   * `webSearchRowSetupVisible` is read PER ROW at the call site below (never once for the table: one shared value
+   * would hand every server this card's way in), against the SAME `web_search` row the card reads and the card's OWN
+   * secrets view (Minor 2 of 2026-11-09: never the chooser's filtered one).
    */
   const setupFocus = useRef<(() => void) | null>(null);
   const registerSetupFocus = useCallback((focus: (() => void) | null) => { setupFocus.current = focus; }, []);
-  const webSearchRow = rows.find((r) => r.name === WEB_SEARCH_SERVER) ?? null;
-  const showWebSearchSetup = webSearchRowSetupVisible(webSearchRow, webSearchStoredKey(props.webSearchSecrets));
   return (
     <div className="settings__section" data-mcp-settings>
       <h1 className="display">MCP Servers</h1>
@@ -631,7 +635,7 @@ export function McpSettings(props: McpSettingsProps) {
           <DesignTable className="table settings__grid" aria-label="Configured MCP servers">
             <thead><tr><th>Health</th><th>Server</th><th>Origin</th><th>Enabled</th></tr></thead>
             <tbody>
-              {rows.map((row) => <Row key={row.name} row={row} health={props.health[row.name] ?? { state: 'unknown' }} probing={props.probing} onToggle={props.onToggle} showWebSearchSetup={showWebSearchSetup} onOpenWebSearchSetup={() => setupFocus.current?.()} />)}
+              {rows.map((row) => <Row key={row.name} row={row} health={props.health[row.name] ?? { state: 'unknown' }} probing={props.probing} onToggle={props.onToggle} showWebSearchSetup={webSearchRowSetupVisible(row, webSearchStoredKey(props.webSearchSecrets))} onOpenWebSearchSetup={() => setupFocus.current?.()} />)}
             </tbody>
           </DesignTable>
         )}

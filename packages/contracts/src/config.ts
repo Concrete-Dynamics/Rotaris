@@ -19,7 +19,9 @@ export const MODEL_SLOT_NAMES = ['default_summary_model', 'improvement_collector
 export type ModelSlotName = (typeof MODEL_SLOT_NAMES)[number];
 /** REQ-CONFIG-256/329 and REQ-LIBRARY-040: the startup slots the screen edits. */
 export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model', 'improvement_collector_model', 'retrospective_model'] as const;
-export const REASONING_LEVEL_NAMES = ['auto', 'low', 'medium', 'high', 'max'] as const;
+/** PD-CONFIG-007 (REQ-CONFIG-069 narrowed): the slot/model reasoning vocabulary, `off` and `xhigh` included — the mirror of `REASONING_LEVELS` in `@rotaris/config`. */
+export const REASONING_LEVEL_NAMES = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type ReasoningLevelName = (typeof REASONING_LEVEL_NAMES)[number];
 export const ROLE_REASONING_NAMES = ['default', 'provider_default', ...REASONING_LEVEL_NAMES] as const;
 export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single'] as const;
 export const RUN_START_MODE_NAMES = ['auto', 'plan'] as const;
@@ -192,8 +194,9 @@ export const ConfigSnapshotSchema = z.object({
   /** REQ-CHAT-171/172: model keys whose provider declaration accepts image input. */
   imageInputModels: z.array(z.string()),
   /**
-   * REQ-CONFIG-332/093/091/202: the reasoning-strength levels each configured `models:` key OFFERS — the slot/model
-   * vocabulary of REQ-CONFIG-069 less `auto`, filtered to a stated `reasoning_effort_map`'s keys where the entry
+   * PD-CONFIG-007 (REQ-CONFIG-069 narrowed): the slot/model vocabulary widened by `off` and `xhigh`, so a model
+   * declaring either has it offered instead of clipped away (REQ-CONFIG-332 with REQ-CONFIG-091/093/202) — the slot/model
+   * vocabulary less `auto`, filtered to a stated `reasoning_effort_map`'s keys where the entry
    * declares one, else intersected with the reasoning levels the resolved model's discovery-snapshot capability
    * record declares (`capabilities.reasoning_levels`, REQ-CONFIG-202), in the vocabulary's own order. Keyed by the
    * SAME keys `models` lists; `auto` is never present (it reaches a control only through REQ-CONFIG-332's appending

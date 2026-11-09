@@ -59,6 +59,13 @@ describe('the pending settings state (REQ-CONFIG-279..287, 335, 419, 425)', () =
     expect(live.slots).toEqual({ large_model: 'gpt-4o', small_model: 'gpt-4o-mini' });
     expect(live.delegationStrategy).toBe('orchestrator');
   });
+
+  it('PD-CONFIG-007: a level the control now offers — `off` or `xhigh` — travels in the save payload and the live state', () => {
+    const saved = pendingFrom(snapshot);
+    const pending = applyChange(applyChange(saved, { kind: 'slotThinking', slot: 'large_model', value: 'xhigh' }), { kind: 'slotThinking', slot: 'small_model', value: 'off' });
+    // The save payload carries them as the levels they are; the widened contract enum admits both (REQ-CONFIG-256).
+    expect(savePayload(saved, pending).slotThinking).toEqual({ large_model: 'xhigh', small_model: 'off' });
+  });
   it('REQ-CONFIG-446: a stored value outside the offered range shows clamped, the value itself untouched', () => {
     expect(clampForDisplay(99, 50, 95)).toBe(95);
     expect(clampForDisplay(3, 50, 95)).toBe(50);

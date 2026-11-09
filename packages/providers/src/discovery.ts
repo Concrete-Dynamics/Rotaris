@@ -5,12 +5,14 @@ import { lookupKnownLimits, type KnownLimitsTable } from './limits.data.js';
  * REQ-PROVIDER-069/071/072 — generic HTTP discovery: GET the models endpoint with `Authorization: Bearer`
  * and `User-Agent: rotaris/discovery`, 10 s default timeout; the error mapping is TOTAL (no status is left
  * unclassified, none silently treated as success); each model captured with its qualified id, display
- * name, capabilities (the image-input declaration of 149 from the payload where it reports one), limits
- * (078's key ladder, 079/080's known-limits back-fill) and the raw item. Pricing is mapped only for the
- * hosted provider (072), which this build does not sign in to, so every entry carries none.
+ * name, capabilities (the image-input declaration of 149 and the declared reasoning levels of REQ-PROVIDER-072
+ * as PD-CONFIG-007 extends it — both read from the payload where it reports them), limits (078's key ladder,
+ * 079/080's known-limits back-fill) and the raw item. Pricing is mapped only for the hosted provider (072),
+ * which this build does not sign in to, so every entry carries none.
  *
  * The codex and claude-code strategies of the discovery registry (ADR-0028) are owed; this is the one
- * discoverer, keyed by "every other provider".
+ * discoverer, keyed by "every other provider". The codex subscription catalogue's own reasoning-level capture
+ * (REQ-PROVIDER-076) stays its own build (PD-CONFIG-007) and is not added here.
  */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -19,7 +21,7 @@ export interface DiscoveredModel {
   /** `<provider-or-instance id>/<id>` (REQ-PROVIDER-072). */
   readonly qualifiedId: string;
   readonly displayName: string | null;
-  readonly capabilities: Readonly<Record<string, unknown>> & { readonly accepts_image_input?: boolean };
+  readonly capabilities: Readonly<Record<string, unknown>> & { readonly accepts_image_input?: boolean; readonly reasoning_levels?: readonly string[] };
   readonly limits: Readonly<Record<string, number>>;
   readonly pricing: Readonly<Record<string, unknown>>;
   readonly raw: unknown;
@@ -81,6 +83,29 @@ function imageInputOf(item: Record<string, unknown>): boolean | null {
   return null;
 }
 
+/**
+ * PD-CONFIG-007 (REQ-PROVIDER-072 extended): the reasoning levels the payload DECLARES, captured under the
+ * product's own name — `capabilities.reasoning_levels` — with the same three-state discipline the image-input
+ * declaration of REQ-PROVIDER-149 is read with: a payload absent, not a list, or holding no non-empty string
+ * declares none and leaves the key absent — never an empty list and never a guess. Which key paths are read is
+ * build data on REQ-PROVIDER-073's terms, so the fallbacks stay few and are stated here: the capability
+ * report's own `reasoning_levels` first, then the raw `supported_reasoning_levels` — the name REQ-PROVIDER-076's
+ * codex payload and the Data & Formats block use — under `capabilities`, then at the item's own level; the first
+ * of the three holding a list supplies the declaration. Strings are kept verbatim in the payload's own order,
+ * non-empty ones only, de-duplicated.
+ */
+function reasoningLevelsOf(item: Record<string, unknown>): readonly string[] | null {
+  const caps = item['capabilities'];
+  const capMap = caps && typeof caps === 'object' ? (caps as Record<string, unknown>) : null;
+  for (const source of [capMap?.['reasoning_levels'], capMap?.['supported_reasoning_levels'], item['supported_reasoning_levels']]) {
+    if (!Array.isArray(source)) continue;
+    const levels: string[] = [];
+    for (const level of source) if (typeof level === 'string' && level !== '' && !levels.includes(level)) levels.push(level);
+    if (levels.length > 0) return levels;
+  }
+  return null;
+}
+
 export function modelOfItem(item: Record<string, unknown>, providerId: string, known?: KnownLimitsTable): DiscoveredModel | null {
   const id = item['id'];
   if (typeof id !== 'string' || id.length === 0) return null;
@@ -97,8 +122,10 @@ export function modelOfItem(item: Record<string, unknown>, providerId: string, k
   if (inputFinal !== null) limits['context_window'] = inputFinal;
   if (outputFinal !== null) limits['max_output_tokens'] = outputFinal;
   const image = imageInputOf(item);
+  const reasoning = reasoningLevelsOf(item);
   const capabilities: Record<string, unknown> = {};
   if (image !== null) capabilities['accepts_image_input'] = image;
+  if (reasoning !== null) capabilities['reasoning_levels'] = reasoning;
   return { id, qualifiedId, displayName: display, capabilities, limits, pricing: {}, raw: item };
 }
 

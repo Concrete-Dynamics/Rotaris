@@ -1,4 +1,4 @@
-import { dictationFieldProblem, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
+import { dictationFieldProblem, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type ReasoningLevelName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
  * REQ-CONFIG-332 / REQ-CONFIG-093 / REQ-CONFIG-254: what a reasoning-strength control shows and does, derived from the
@@ -449,10 +449,11 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
 export function savePayload(saved: PendingSettings, pending: PendingSettings): DesktopSavePayload {
   const out: { -readonly [K in keyof DesktopSavePayload]: DesktopSavePayload[K] } = {};
   const slots: Partial<Record<ModelSlotName, string | null>> = {};
-  const thinking: Partial<Record<ModelSlotName, 'auto' | 'low' | 'medium' | 'high' | 'max' | null>> = {};
+  // PD-CONFIG-007: the vocabulary is the contract's (`REASONING_LEVEL_NAMES`), so `off` and `xhigh` travel here too.
+  const thinking: Partial<Record<ModelSlotName, ReasoningLevelName | null>> = {};
   for (const slot of EDITABLE_SLOTS) {
     if (pending.slots[slot] !== saved.slots[slot] && pending.slots[slot] !== null && pending.slots[slot] !== '') slots[slot] = pending.slots[slot];
-    if (pending.slotThinking[slot] !== saved.slotThinking[slot]) thinking[slot] = (pending.slotThinking[slot] ?? null) as 'auto' | 'low' | 'medium' | 'high' | 'max' | null;
+    if (pending.slotThinking[slot] !== saved.slotThinking[slot]) thinking[slot] = (pending.slotThinking[slot] ?? null) as ReasoningLevelName | null;
   }
   if (Object.keys(slots).length > 0) out.slots = slots;
   if (Object.keys(thinking).length > 0) out.slotThinking = thinking;

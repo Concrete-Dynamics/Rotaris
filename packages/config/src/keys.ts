@@ -40,8 +40,12 @@ export function keyClass(key: string): KeyClass {
   return 'unknown';
 }
 
-/** REQ-CONFIG-069: the reasoning-level vocabulary for slots and models; the per-role vocabulary adds two (REQ-CONFIG-079). */
-export const REASONING_LEVELS = ['auto', 'low', 'medium', 'high', 'max'] as const;
+/**
+ * PD-CONFIG-007 (REQ-CONFIG-069 narrowed): the reasoning-level vocabulary for slots and models — `off`, reasoning
+ * switched off, and `xhigh`, the extra-high effort, are levels in their own right, so what a model brings is not
+ * clipped away; `auto` stays configuration-only (REQ-CONFIG-093). The per-role vocabulary adds two (REQ-CONFIG-079).
+ */
+export const REASONING_LEVELS = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type ReasoningLevel = (typeof REASONING_LEVELS)[number];
 export const ROLE_REASONING_LEVELS = ['default', 'provider_default', ...REASONING_LEVELS] as const;
 export type RoleReasoning = (typeof ROLE_REASONING_LEVELS)[number];

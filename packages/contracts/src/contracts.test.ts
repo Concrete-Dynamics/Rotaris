@@ -248,6 +248,20 @@ describe('REQ-CONFIG-259/341: a role edit is held under the scope each field was
     expect(DesktopSaveSchema.safeParse({ roles: { tester: { modelScope: 'workspace', model: 'gpt-4o' } } }).success).toBe(false);
     expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { model: 'gpt-4o', scope: 'global' } } } }).success).toBe(false);
   });
+
+  it('PD-CONFIG-007: the two reasoning enums read the widened vocabulary — `off` and `xhigh` are accepted, `none` is not', async () => {
+    const { DesktopSaveSchema, LiveStateSchema } = await import('./config.js');
+    // The slot-thinking field and a role's thinking field both carry the widened set; `none` — the spelling `off` maps
+    // TO — is no level and is refused, which is what keeps it a map value and never a vocabulary member.
+    expect(DesktopSaveSchema.safeParse({ slotThinking: { large_model: 'off', medium_model: 'xhigh' } }).success).toBe(true);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { thinking: 'xhigh' }, global: { thinking: 'off' } } } }).success).toBe(true);
+    expect(DesktopSaveSchema.safeParse({ slotThinking: { large_model: 'none' } }).success).toBe(false);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { thinking: 'none' } } } }).success).toBe(false);
+    expect(LiveStateSchema.safeParse({ slotThinking: { large_model: 'off', small_model: 'xhigh' } }).success).toBe(true);
+    expect(LiveStateSchema.safeParse({ slotThinking: { large_model: 'none' } }).success).toBe(false);
+    // `auto` keeps its place: it is a level of the stored vocabulary, reachable only through the appending rule.
+    expect(DesktopSaveSchema.safeParse({ slotThinking: { large_model: 'auto' } }).success).toBe(true);
+  });
 });
 
 describe('the requirements command envelope (REQ-TRACE-472/478)', () => {

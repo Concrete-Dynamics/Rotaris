@@ -449,6 +449,10 @@ describe('ADR-0037 Tier B — the live state over the merged document, resolved 
     expect(paths({ compressorThresholdPercentage: 101 })).toEqual(['compressor.threshold_percentage']);
     expect(paths({ circuitBreakerEnabled: 'yes' })).toEqual(['circuit_breaker.enabled']);
     expect(paths({ slots: { large_model: 5 }, slotThinking: { small_model: 'extreme' } })).toEqual(['small_model_thinking', 'large_model']);
+    // PD-CONFIG-007: the Tier B handover admits the widened vocabulary's levels, `off` and `xhigh` included — a live
+    // state carrying one is not refused; `none` is still no level and is refused by the loader's own path.
+    expect(liveStateProblems({ slotThinking: { large_model: 'off', medium_model: 'xhigh' }, sessionThinking: 'off' })).toEqual([]);
+    expect(paths({ slotThinking: { large_model: 'none' } })).toEqual(['large_model_thinking']);
     expect(paths({ delegationStrategy: 'mob', sessionThinking: 'turbo' })).toEqual(['personas.<entry role>.thinking', 'rotaris.delegation_strategy']);
     // The role the state names, where it names one (accept1-17).
     expect(paths({ entryRole: 'planner', sessionThinking: 'turbo', sessionModel: 7 })).toEqual(['personas.planner.model', 'personas.planner.thinking']);

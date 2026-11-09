@@ -2117,7 +2117,8 @@ export class Sessions {
       }
       case 'setReasoning': {
         const level = text('level');
-        return level !== null && ['low', 'medium', 'high', 'max', 'unset'].includes(level) && run.setEntryReasoning(level as ThinkingLevel) ? { ok: true } : { ok: false };
+        // PD-CONFIG-007 (REQ-PROVIDER-088 narrowed): the runtime admits the widened vocabulary's levels beside `unset`.
+        return level !== null && ['off', 'low', 'medium', 'high', 'xhigh', 'max', 'unset'].includes(level) && run.setEntryReasoning(level as ThinkingLevel) ? { ok: true } : { ok: false };
       }
       case 'announceShutdown':
         // REQ-MONITOR-131: the run is asked to stop for shutdown; anything blocked on a person is released first (the stop's own rule).

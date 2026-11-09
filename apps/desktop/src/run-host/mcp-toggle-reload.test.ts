@@ -19,10 +19,15 @@ import { reloadWorkspaceConfiguration } from './mcp-reload.js';
  * performs (`reloadWorkspaceConfiguration` — the same call `dispatch`'s `mcp.reload` makes inside `createRunHost`,
  * which needs a utility process's parent port and is not reachable from a unit test).
  *
- * The counterfactuals that make this a regression test rather than a demonstration:
- *   - remove the WRITE and the row stays off after the reload (`control: without the write…`);
- *   - remove the INVALIDATION and the cached resolution still reports `false` although the file reads `true` (the
- *     "stale cache" assertion in the main case — the false green this pins out).
+ * The counterfactuals that make this a regression test rather than a demonstration, each carried by a DIFFERENT case
+ * (measured by mutation 2026-11-09, not read off the intent):
+ *   - remove the WRITE (`commitConfigFields`) and the row stays off after the reload — the `control: without the
+ *     write…` case, and the ON assertion of the main case;
+ *   - remove the INVALIDATION (`configured.delete`) and the failure-ordering case goes red — `a reload whose file no
+ *     longer loads leaves no cached resolution`; the MAIN case is NOT what catches it, because the reload re-configures
+ *     and re-sets the cache, so only the ordering (drop BEFORE the re-configure) is observable there;
+ *   - the main case additionally pins the absence of the whole reload hop: without any reload the listing still serves
+ *     the pre-write resolution although the file reads `true` (explicit stale-cache assertion) — the false green.
  */
 const scratchDirs: string[] = [];
 function scratchDir(prefix: string): string {

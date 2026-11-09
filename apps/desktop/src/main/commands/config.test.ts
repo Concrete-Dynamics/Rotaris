@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CommandOutcome, RepositoryState, RunHostRequest, WorkspaceServiceRequest } from '@rotaris/contracts';
+import { DesktopSaveSchema, type CommandOutcome, type RepositoryState, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 import { createLiveStateArbiter } from '../live-state.js';
@@ -203,5 +203,20 @@ describe('config.setField — an mcp_servers write asks the run host to reload (
     asked.length = 0;
     await facet['config.setField']({ kind: 'config.setField', patch: { runtime: { max_depth: 4 } } }, at);
     expect(asked).toEqual([]);
+  });
+
+  /**
+   * The other half of "and for nothing else": a `config.save` asks no reload, so a Debug build cannot regress the
+   * narrow shape into "every write reloads". It is also structural: `DesktopSaveSchema` carries no `mcp_servers` key
+   * (the entry is written by the scoped per-field path the press uses, never by the save bar), so a save can never
+   * write one and has nothing to reload for.
+   */
+  it('a config.save asks no reload — it cannot carry an mcp_servers key at all', async () => {
+    const asked: RunHostRequest[] = [];
+    const facet = facetOn(asked);
+    const out = await facet['config.save']({ kind: 'config.save', save: { runtime: { max_depth: 4 } } }, at);
+    expect(out.ok).toBe(true);
+    expect(asked).toEqual([]);
+    expect(Object.keys(DesktopSaveSchema.shape)).not.toContain('mcp_servers');
   });
 });

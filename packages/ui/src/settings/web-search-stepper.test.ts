@@ -11,7 +11,7 @@ import {
   WEB_SEARCH_SETUP_ROW_ACTION, WEB_SEARCH_SETUP_ROW_DESCRIPTION, WEB_SEARCH_SETUP_ROW_LABEL, WEB_SEARCH_STEPS,
   WEB_SEARCH_TAKE_EFFECT, webSearchAboutControlLabel, webSearchRowSetupVisible, webSearchStepFor, webSearchStepLabel,
 } from './web-search-setup.js';
-import type { WebSearchSituation } from './web-search-setup.js';
+import type { WebSearchSituation, WebSearchStepId } from './web-search-setup.js';
 
 /**
  * THE STEP BAR, THE INFO DISCLOSURE AND THE ROW'S OFFER (the stepper/inline-help change, 2026-11-09).
@@ -198,7 +198,7 @@ describe('the step bar, the info control and the row offer — the pure half', (
     expect(webSearchRowSetupVisible(row({ name: 'browser' }), null)).toBe(false);
     // And it is the SHIPPED default the card is about — a user's own http declaration is the `needs-key` step's business.
     expect(webSearchRowSetupVisible(row({ origin: 'yaml' }), null)).toBe(false);
-    expect(webSearchRowSetupVisible(row({ origin: 'session' }), null)).toBe(false);
+    expect(webSearchRowSetupVisible(row({ origin: 'discovered-user' }), null)).toBe(false);
   });
 
   it('the info control says which press it offers, and its closed name is the one constant — fails if the control keeps a `Show` name while the region is open', () => {

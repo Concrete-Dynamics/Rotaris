@@ -2,8 +2,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type * as React from 'react';
-import type { McpHealth, McpSecretsView, McpServerRow } from '@rotaris/contracts';
-import { WEB_SEARCH_SERVER, WEB_SEARCH_PRESETS } from './web-search-setup.js';
+import type { McpHealth, McpListing, McpSecretsView, McpServerRow } from '@rotaris/contracts';
+import { WEB_SEARCH_SERVER, WEB_SEARCH_PRESETS, bindWebSearchSetup } from './web-search-setup.js';
 import type { McpSettingsProps } from './McpSettings.js';
 
 /**
@@ -24,8 +24,10 @@ import type { McpSettingsProps } from './McpSettings.js';
  *    holds, the state is stated in words, and a second press while one is in flight sends nothing;
  *  - Major 2 (round 2): a press that FAILS — a rejected re-read, or a handler that rejected outright — clears the
  *    busy state in a finally and reports the failure; the card is never left permanently disabled;
- *  - Major 3 (round 2): the card's own probe result is keyed to the inputs it was taken under, so a Healthy result
- *    cannot survive a changed key/endpoint and an older card result cannot override a newer category probe;
+ *  - Major 3 (round 2, narrowed in round 3): the card's own probe result is kept under the inputs it was taken
+ *    under AND the identity of the views it was read against, and is DISCARDED when either moves — a Healthy result
+ *    cannot survive a changed key/endpoint, a re-read the card cannot interpret (the constant `***` mask carries no
+ *    value), or a newer category probe, and a discarded result is never read again;
  *  - Minor 1 (round 1): the preset radios are one tab station (roving `tabIndex`), with the arrow keys moving focus
  *    with the selection.
  */
@@ -75,12 +77,23 @@ let probes = 0;
 let stores = 0;
 let deletes = 0;
 let opens = 0;
+/**
+ * The views a draw hands the card, STABLE across draws within one test (round-3 Major 1/2: production's props hold
+ * one object until a read REPLACES it — React state — so identity is the card's witness that a re-read happened; a
+ * test overrides one field only to model exactly that). `reset()` rebuilds them.
+ */
+let views: { readonly listing: McpListing; readonly secrets: McpSecretsView; readonly webSearchSecrets: McpSecretsView } | null = null;
+const viewsNow = () => (views ??= {
+  listing: { configFile: '/ws/.rotaris/agents.yaml', rows: [row()] },
+  secrets: secrets([keyRow]),
+  webSearchSecrets: secrets([keyRow]),
+});
 
 const props = (over: Partial<McpSettingsProps> = {}): McpSettingsProps => ({
-  listing: { configFile: '/ws/.rotaris/agents.yaml', rows: [row()] }, loading: false, error: null, health: {}, probing: false,
+  listing: viewsNow().listing, loading: false, error: null, health: {}, probing: false,
   onRefresh: () => undefined, onProbeAll: async () => undefined,
   onToggle: async () => ({ ok: true, message: '' }),
-  secrets: secrets([keyRow]), webSearchSecrets: secrets([keyRow]), onSecretsServer: () => undefined, setup: null,
+  secrets: viewsNow().secrets, webSearchSecrets: viewsNow().webSearchSecrets, onSecretsServer: () => undefined, setup: null,
   onSetupStart: async () => ({ ok: true, message: '' }), onSetupCancel: async () => undefined,
   webSearchSetup: {
     onOpenFile: async () => { opens += 1; return { ok: true as const }; },
@@ -117,7 +130,7 @@ function draw(over: Partial<McpSettingsProps> = {}): { html: string; find: (attr
 }
 /** Let every microtask of a press settle (the handlers await one promise chain and nothing else). */
 const settle = async (): Promise<void> => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
-const reset = (): void => { harness.cells.length = 0; probes = 0; stores = 0; deletes = 0; opens = 0; storeGate = null; health = { state: 'unknown' }; };
+const reset = (): void => { harness.cells.length = 0; probes = 0; stores = 0; deletes = 0; opens = 0; storeGate = null; health = { state: 'unknown' }; views = null; };
 
 describe('the guided card\'s own probe result decides its situation (Major 1, rework round 1)', () => {
   it('a card probe that answers Healthy takes a `stored` card to `ready` — the card collapses on ITS own test — fails if the situation reads the parent\'s health instead', async () => {
@@ -260,6 +273,28 @@ describe('a failing press clears the busy state and reports it (Major 2, round 2
     expect(afterDelete.html).toContain('Render frame was disposed');
   });
 
+  it('a REFUSED re-read — the binder resolving {ok:false}, not throwing — is a failed refresh the card SAYS (round-3 Minor): the real binder is driven over a command stub, and the warning names the refusal — fails if a swallowed refusal reads as a successful refresh of a view that never arrived', async () => {
+    reset();
+    // The REAL binder, as `useMcp` spreads it in: its read answers a resolved refusal (as `bridge.command` does),
+    // and the command answers the masked write outcome.
+    const setup = bindWebSearchSetup({
+      command: async () => ({ ok: true, value: { server: WEB_SEARCH_SERVER, key: 'ROTARIS_SEARCH_API_KEY', scope: 'Workspace', masked: '***', removed: false } }),
+      read: async () => ({ ok: false as const, message: 'Open a workspace first' }),
+    });
+    const first = draw({ webSearchSetup: setup });
+    // The real binder refuses an empty value before it sends anything (REQ-MCP-084), so the draft is typed first.
+    (first.find('data-websearch-key-field')!['onChange'] as (e: { currentTarget: { value: string } }) => void)({ currentTarget: { value: 'sk-live-123' } });
+    const typed = draw({ webSearchSetup: setup });
+    (typed.find('data-websearch-store')!['onClick'] as () => void)();
+    await settle();
+    const after = draw({ webSearchSetup: setup });
+    expect(after.html).not.toContain('data-websearch-in-flight');
+    expect(after.html).toContain('Stored `ROTARIS_SEARCH_API_KEY`'); // the write stood and is reported
+    expect(after.html).toContain('data-websearch-refresh-failure');
+    expect(after.html).toContain('could not be refreshed');
+    expect(after.html).toContain('Open a workspace first');
+  });
+
   it('a handler that REJECTS outright (a broken binding, not the guarded bridge) still clears the busy state and reports the failure — fails if a rejection out of a click handler strands the card with no words', async () => {
     reset();
     const setup = {
@@ -330,17 +365,40 @@ describe('the card\'s own probe result is keyed to the inputs it was taken under
     expect(changed.html).toContain('data-websearch-situation="stored"'); // the parent's health (unknown here) decides
   });
 
-  it('a Healthy card result cannot survive a CHANGED STORED KEY — fails if the mask changing under the card leaves the old probe deciding `ready`', async () => {
+  it('a key replaced OUTSIDE this card cannot leave it `ready`: a FRESH READ of the card\'s own view — the only witness behind the one constant mask — discards the result (Major 1, round 3) — fails if a result survives a re-read it cannot interpret, leaving `ready` standing over an unprobed key', async () => {
     reset();
+    // The mask is the production constant: every value arrives as `***` (REDACTION_MARK, run-host/mcp.ts), so a
+    // replaced key is INVISIBLE in the view's content — the read itself is the only fact it carries.
+    expect(keyRow.masked).toBe('***');
     health = { state: 'healthy', toolCount: 2 };
     const first = draw();
     (first.find('data-websearch-check')!['onClick'] as () => void)();
     await settle();
     expect(draw().html).toContain('data-websearch-situation="ready"');
-    // The stored key is replaced (a new mask in the card's own view): the probe result is about the OLD key.
-    const changed = draw({ webSearchSecrets: secrets([{ ...keyRow, masked: '***new' }]) });
+    // The key is replaced by a hand edit and the category re-reads its secrets (a new view object, same `***`):
+    const changed = draw({ webSearchSecrets: secrets([keyRow]) });
     expect(changed.html).not.toContain('data-websearch-situation="ready"');
-    expect(changed.html).toContain('data-websearch-situation="stored"');
+    expect(changed.html).not.toContain('data-websearch-summary');
+    expect(changed.html).toContain('data-websearch-situation="stored"'); // the parent's health (unknown here) decides
+  });
+
+  it('a stale card result is NOT RESURRECTED when the parent health returns to its earlier value: it is discarded at the change, not merely bypassed (Major 2, round 3) — fails if a card Unreachable comes back after parent Checking → parent Healthy re-makes the old basis', async () => {
+    reset();
+    const parentHealthy = { [WEB_SEARCH_SERVER]: { state: 'healthy' as const, toolCount: 2 } };
+    const first = draw({ health: parentHealthy });
+    expect(first.html).toContain('data-websearch-situation="ready"'); // the parent's Healthy decides before any card probe
+    health = { state: 'unreachable', detail: 'connect ECONNREFUSED 127.0.0.1:9' };
+    (first.find('data-websearch-check')!['onClick'] as () => void)();
+    await settle();
+    expect(draw({ health: parentHealthy }).html).toContain('data-websearch-situation="wrong-endpoint"'); // the card's own result decides
+    // A newer category probe starts: the card's own result must be DISCARDED here, not ignored…
+    const checking = draw({ health: { [WEB_SEARCH_SERVER]: { state: 'checking' as const } } });
+    expect(checking.html).toContain('data-websearch-situation="stored"');
+    // …so when the category's probe answers the SAME Healthy it held before, the discarded result cannot come back.
+    const back = draw({ health: parentHealthy });
+    expect(back.html).toContain('data-websearch-situation="ready"');
+    expect(back.html).not.toContain('data-websearch-situation="wrong-endpoint"');
+    expect(back.html).toContain('Healthy · 2 tools');
   });
 
   it('an OLD card result cannot override a NEWER category probe — fails if an earlier Unreachable outranks the parent row\'s newer Healthy', async () => {

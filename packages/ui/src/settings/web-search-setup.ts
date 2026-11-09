@@ -248,12 +248,20 @@ export type WebSearchScope = 'workspace' | 'global';
 export const WEB_SEARCH_SCOPE_LABELS: Readonly<Record<WebSearchScope, string>> = { workspace: 'Workspace', global: 'Global' };
 
 /**
- * Round-2 Major 3: the BASIS a card probe result is kept under — the serialised situation inputs it was taken
- * against. `WebSearchFacts` IS those inputs (the entry, the stored key, the two other facts, and the health), so a
- * card's own probe result is read only while this basis still holds: a changed entry, a changed stored key, a changed
+ * Round-2 Major 3, corrected in round 3: the BASIS a card probe result is kept under — the serialised situation
+ * inputs it was taken against. `WebSearchFacts` IS those inputs (the entry, the stored key, the two other facts, and
+ * the health), so a card's own probe result is read only while this basis still holds: a changed entry, a changed
  * situation input or a changed (newer) parent health drops a result that describes an older state, so an earlier
  * Healthy can never keep a changed, untested endpoint `ready`, and an older card result can never override a newer
- * category probe.
+ * category probe. Round-3 Major 1: the basis describes only what the card can OBSERVE, and the stored key's mask is
+ * deliberately NOT part of it — production masks every value identically (`REDACTION_MARK`, `run-host/mcp.ts`'s
+ * `secrets()`), so a replaced key in the same scope arrives with a byte-identical mask and a basis carrying it would
+ * claim an invalidation it can never see (the round-2 tests steered a CHANGING mask production never supplies). The
+ * key replacement the card CAN observe is its own write, which drops the result at the press; a replacement OUTSIDE
+ * the card is invisible to the card by design (REQ-MCP-081 keeps the value from it), and the row's own state is what
+ * carries it: the entry's resolution/availability is in the basis, and the category's reload re-reads the row. Where
+ * the value can change with every observable field equal, the honest reading is the one this basis states: the card's
+ * result is about the entry it probed, not about the value behind it.
  *
  * The card's own preset selection is deliberately NOT part of the basis: the probe tests the LIVE entry in the file,
  * and the radio only chooses the stanza step 2 hands over — selecting another preset changes nothing a probe observed.
@@ -264,7 +272,8 @@ export function webSearchProbeBasis(facts: WebSearchFacts): string {
   return JSON.stringify([
     facts.unavailable,
     row === null ? null : [row.name, row.type, row.line, row.origin, row.enabled, row.overridden, row.available, row.availabilityDetail, [...row.unresolved]],
-    storedKey === null ? null : [storedKey.server, storedKey.key, storedKey.masked, storedKey.scope],
+    // Round-3 Major 1: server, key and scope only — the mask says nothing a basis could key on (see above).
+    storedKey === null ? null : [storedKey.server, storedKey.key, storedKey.scope],
     [health.state, health.toolCount ?? null, health.detail ?? null],
   ]);
 }
@@ -338,14 +347,24 @@ export type WebSearchWriteReply =
   | { readonly ok: true; readonly outcome: McpSecretWriteOutcome; readonly refreshFailure: string | null }
   | { readonly ok: false; readonly message: string };
 
+/**
+ * Round-3 Minor: the post-write re-read's OUTCOME — a refreshed view, or the refusal's own words. `bridge.command`
+ * refuses inside a RESOLVED `CommandOutcome` rather than throwing, so the binder's reads answer a refusal here; the
+ * press helper reads it (`refreshAfterWrite`) so a refused refresh travels to `refreshFailure` instead of being read
+ * as a successful refresh of a view that never arrived.
+ */
+export type WebSearchRefreshReply = { readonly ok: true } | { readonly ok: false; readonly message: string };
+
 export interface WebSearchSetupDeps {
   readonly command: (req: CommandRequest) => Promise<CommandOutcome>;
   /**
    * The re-read after a write: the listing and the secrets view. The card's own view is the one read with
    * `server: 'web_search'` (its stored key, REQ-MCP-083/110) — the category's chooser-filtered view may name another
-   * server and never blanks the card (Minor 2, 2026-11-09).
+   * server and never blanks the card (Minor 2, 2026-11-09). Round-3 Minor: the read ANSWERS — `{ ok: true }` when the
+   * view was refreshed, the refusal's words when the command refused — because a refused command resolves in this
+   * codebase rather than throwing, and a refusal the helper could not see is a stale view reported as current.
    */
-  readonly read: () => Promise<void>;
+  readonly read: () => Promise<WebSearchRefreshReply>;
 }
 
 /** ADR-0019: `bridge.command` rejects when main's handler throws or the channel is gone, and the caller is a click handler. */
@@ -371,15 +390,23 @@ export async function pressDeleteWebSearchKey(deps: WebSearchSetupDeps, scope: W
 }
 
 /**
- * The re-read after a write, made TOTAL (round-2 Major 2): the binder's `read` awaits bridge commands that CAN reject
- * and the press is a click handler, so an unguarded `await deps.read()` rejected out of the press and `McpSettings`'
- * `setInFlight(null)` — the statement after the await — never ran: the card stayed disabled forever and reported
- * nothing. The refresh's refusal comes back as words; the write still reports its masked outcome and the card says
- * the view is stale (`WEB_SEARCH_REFRESH_FAILED`).
+ * The re-read after a write, made TOTAL (round-2 Major 2) and OUTCOME-AWARE (round-3 Minor): the binder's `read`
+ * awaits bridge commands, the press is a click handler, and nothing it awaits may reject out of it. Round 2 made the
+ * refusal TRAVEL (the words come back in `refreshFailure`, the card says the view is stale — `WEB_SEARCH_REFRESH_FAILED`)
+ * and cleared the busy state in the card's `finally`; an unguarded `await deps.read()` used to reject out of the press
+ * and skip `setInFlight(null)`, leaving the card disabled forever and silent.
+ *
+ * Round-3 Minor: a THROWN failure was never the whole story. `bridge.command` answers a refused command as a resolved
+ * `{ ok: false, … }`, the binder's reads used to swallow that (`if (r.ok)`), and a refused refresh then resolved as a
+ * successful one: `refreshFailure` came back `null` and a stale view stood with no warning — the very thing round-2
+ * Major 2 was meant to prevent. `WebSearchSetupDeps.read` now ANSWERS its outcome (`WebSearchRefreshReply`), and this
+ * helper reads it beside the throw, carrying a refusal's words to the card unchanged.
  */
 async function refreshAfterWrite(deps: WebSearchSetupDeps): Promise<string | null> {
-  try { await deps.read(); return null; }
-  catch (cause) { return cause instanceof Error ? cause.message : String(cause); }
+  try {
+    const outcome = await deps.read();
+    return outcome.ok ? null : outcome.message;
+  } catch (cause) { return cause instanceof Error ? cause.message : String(cause); }
 }
 
 /** Round-2 Major 2: the write stood, the re-read after it did not — said, not swallowed (REQ-SHELL-149: text). */
@@ -396,17 +423,17 @@ export function webSearchPressFailure(cause: unknown): string {
 
 export async function pressGetWebSearchKey(deps: Pick<WebSearchSetupDeps, 'command'>, preset: WebSearchPreset): Promise<{ ok: true } | { ok: false; message: string }> {
   if (preset.keyPage === null) return { ok: false, message: `${preset.name} has no key page to open; declare its address in the configuration file.` };
-  const outcome = await send({ ...deps, read: async () => undefined }, { kind: 'shell.openExternal', url: preset.keyPage });
+  const outcome = await send({ ...deps, read: async () => ({ ok: true }) }, { kind: 'shell.openExternal', url: preset.keyPage });
   return outcome.ok ? { ok: true } : { ok: false, message: outcome.detail ?? outcome.headline };
 }
 
 export async function pressOpenWebSearchFile(deps: Pick<WebSearchSetupDeps, 'command'>): Promise<{ ok: true } | { ok: false; message: string }> {
-  const outcome = await send({ ...deps, read: async () => undefined }, { kind: 'shell.openConfigFile' });
+  const outcome = await send({ ...deps, read: async () => ({ ok: true }) }, { kind: 'shell.openConfigFile' });
   return outcome.ok ? { ok: true } : { ok: false, message: outcome.detail ?? outcome.headline };
 }
 
 export async function pressCheckWebSearch(deps: Pick<WebSearchSetupDeps, 'command'>): Promise<McpHealth> {
-  const outcome = await send({ ...deps, read: async () => undefined }, { kind: 'mcp.probe', name: WEB_SEARCH_SERVER });
+  const outcome = await send({ ...deps, read: async () => ({ ok: true }) }, { kind: 'mcp.probe', name: WEB_SEARCH_SERVER });
   if (!outcome.ok) return { state: 'unreachable', detail: outcome.detail ?? outcome.headline };
   const result = (outcome.value as { name: string; health: McpHealth }[])[0];
   return result?.health ?? { state: 'unreachable', detail: 'no answer' };

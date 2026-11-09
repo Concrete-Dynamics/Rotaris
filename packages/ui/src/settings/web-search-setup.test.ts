@@ -170,25 +170,34 @@ describe('the sentences the card says (REQ-MCP-110/084/083, REQ-CONFIG-437)', ()
 });
 
 /**
- * Round-2 Major 3: the basis a card probe result is kept under — the one place the invalidation rule lives (the card
- * in `McpSettings.tsx` keys its `liveHealth` to this). Equality means "the same inputs the probe observed", inequality
- * "this result describes an older state and the parent's health takes over".
+ * Round-2 Major 3, corrected in round 3 (Major 1): the basis a card probe result is kept under — the one place the
+ * invalidation rule's CONTENT lives (the card in `McpSettings.tsx` keys its result to this plus the identity of the
+ * two views it read). Equality means "the same inputs the probe observed", inequality "this result describes an older
+ * state and the parent's health takes over". The stored key's MASK is deliberately not part of it: production masks
+ * every value identically (`REDACTION_MARK`), so a basis carrying the mask would claim a detection it can never make.
  */
-describe('the basis a card probe result is kept under (round-2 Major 3)', () => {
+describe('the basis a card probe result is kept under (round-2 Major 3; round-3 Major 1)', () => {
   const facts = (over: Partial<Parameters<typeof webSearchProbeBasis>[0]> = {}) => ({
     unavailable: null, row: row(), storedKey: keyRow('Workspace'), health: { state: 'unknown' } as McpHealth, ...over,
   });
-  it('the same inputs give the same basis and the classification-relevant difference changes it — fails if a changed endpoint, key, availability or health leaves a stale probe result current', () => {
+  it('the same inputs give the same basis and the classification-relevant difference changes it — fails if a changed endpoint, key name/scope, availability or health leaves a stale probe result current', () => {
     expect(webSearchProbeBasis(facts())).toBe(webSearchProbeBasis(facts()));
     // The entry: a changed url/line (what a probe observes) changes the basis; so does its enablement and the row's identity.
     expect(webSearchProbeBasis(facts({ row: row({ line: 'https://elsewhere.example/mcp' }) }))).not.toBe(webSearchProbeBasis(facts()));
     expect(webSearchProbeBasis(facts({ row: row({ enabled: false }) }))).not.toBe(webSearchProbeBasis(facts()));
-    // The stored key: a replaced key (its mask changes) cannot leave the old probe deciding `ready`.
-    expect(webSearchProbeBasis(facts({ storedKey: keyRow('Workspace', { masked: '***new' }) }))).not.toBe(webSearchProbeBasis(facts()));
+    // The stored key's identity: another variable or scope is another key.
+    expect(webSearchProbeBasis(facts({ storedKey: keyRow('Workspace', { key: 'OTHER_VAR' }) }))).not.toBe(webSearchProbeBasis(facts()));
+    expect(webSearchProbeBasis(facts({ storedKey: keyRow('Global') }))).not.toBe(webSearchProbeBasis(facts()));
     // The parent health: a newer probe result supersedes the card's older one.
     expect(webSearchProbeBasis(facts({ health: { state: 'healthy', toolCount: 2 } }))).not.toBe(webSearchProbeBasis(facts()));
     // The service's own fact.
     expect(webSearchProbeBasis(facts({ unavailable: 'no workspace' }))).not.toBe(webSearchProbeBasis(facts()));
+  });
+  it('the stored key\'s MASK is NOT part of the basis — the production mask is one constant for every value, so keying on it would claim a replacement the card cannot see (round-3 Major 1) — fails if the basis carries the mask again and the card pretends to detect a value change', () => {
+    // The real mask arrives as `***` whatever the value was (redaction.ts's REDACTION_MARK, run-host/mcp.ts's
+    // `secrets()`): a `***new` fixture was an impossible input that let round 2 "prove" a detection that never fires.
+    expect(webSearchProbeBasis(facts({ storedKey: keyRow('Workspace', { masked: '***' }) }))).toBe(webSearchProbeBasis(facts()));
+    expect(webSearchProbeBasis(facts({ storedKey: keyRow('Workspace', { masked: '***new' }) }))).toBe(webSearchProbeBasis(facts()));
   });
   it('`elapsedMs` is NOT part of the basis — fails if a probe timing that says nothing about the classification invalidates a current result', () => {
     expect(webSearchProbeBasis(facts({ health: { state: 'healthy', toolCount: 2, elapsedMs: 12 } })))

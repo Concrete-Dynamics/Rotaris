@@ -12,9 +12,13 @@ import { describe, expect, it } from 'vitest';
 const source = (file: string): string => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
 
 describe('B2 wiring: the guided card\'s presses reach this window\'s bridge', () => {
-  it('useMcp binds the five presses with bindWebSearchSetup over bridge.command and the category\'s own re-read — fails if the binder is dropped, a second binder is written, or the re-read stops with the secrets view', () => {
+  it('useMcp binds the five presses with bindWebSearchSetup over bridge.command and the category\'s own re-read — fails if the binder is dropped, a second binder is written, or the re-read stops reporting its outcome or the card\'s secrets view', () => {
     const main = source('main.tsx');
-    expect(main).toContain('webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: async () => { await read(); await readSecrets(secretsServer); await readWebSearchSecrets(); } })');
+    // Round-3 Minor: the re-read answers its OUTCOME (`readAfterWebSearchWrite`), so a refused read reaches the card
+    // as words instead of resolving as a refresh that never happened.
+    expect(main).toContain('webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: readAfterWebSearchWrite })');
+    expect(main).toContain('const readAfterWebSearchWrite = useCallback(async () => {');
+    expect(main).toContain('for (const r of answers) if (!r.ok) return { ok: false as const, message: r.message };');
     // The binder is imported from the package that owns the presses, never re-derived here.
     expect(main).toContain('bindWebSearchSetup');
     expect(main.match(/bindWebSearchSetup\(/g)).toHaveLength(1);

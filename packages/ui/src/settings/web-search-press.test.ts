@@ -15,7 +15,7 @@ import {
 const recorder = (answers: (req: CommandRequest) => CommandOutcome) => {
   const sent: CommandRequest[] = [];
   let reads = 0;
-  const deps = { command: async (req: CommandRequest) => { sent.push(req); return answers(req); }, read: async () => { reads += 1; } };
+  const deps = { command: async (req: CommandRequest) => { sent.push(req); return answers(req); }, read: async () => { reads += 1; return { ok: true as const }; } };
   return { deps, sent, reads: () => reads };
 };
 const masked = (scope: 'Workspace' | 'Global' = 'Workspace') => ({ ok: true as const, value: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope, masked: '***', removed: false } });
@@ -61,6 +61,20 @@ describe('the presses the guided card sends (REQ-MCP-110/111)', () => {
     const del = await pressDeleteWebSearchKey(deps, 'workspace');
     expect(del.ok).toBe(true);
     expect(del.ok === true && del.refreshFailure).toBe('Render frame was disposed');
+  });
+
+  it('a refused re-read does not throw but is not swallowed either: the resolved {ok:false} travels as words to refreshFailure (round-3 Minor) — fails if the helper reads only a THROWN failure and reports a stale view as refreshed', async () => {
+    const sent: CommandRequest[] = [];
+    const deps = { command: async (req: CommandRequest) => { sent.push(req); return masked(); }, read: async () => ({ ok: false as const, message: 'Open a workspace first' }) };
+    const r = await pressStoreWebSearchKey(deps, 'sk-live-123', 'workspace');
+    expect(r.ok).toBe(true);
+    expect(r.ok === true && r.outcome.masked).toBe('***');
+    expect(r.ok === true && r.refreshFailure).toBe('Open a workspace first');
+    // The delete shares the shape: its re-read observes its outcome too.
+    const del = await pressDeleteWebSearchKey(deps, 'workspace');
+    expect(del.ok).toBe(true);
+    expect(del.ok === true && del.refreshFailure).toBe('Open a workspace first');
+    expect(sent).toHaveLength(2);
   });
 
   it('Delete the stored key sends one mcp.unsetSecret with the scope and re-reads — fails if the delete uses setSecret, names another scope, or leaves the listing stale', async () => {
@@ -124,7 +138,7 @@ describe('the presses the guided card sends (REQ-MCP-110/111)', () => {
   });
 
   it('a throwing bridge is answered as a refusal, never an unhandled rejection (ADR-0019) — fails if a gone channel rejects out of a click handler', async () => {
-    const deps = { command: async (): Promise<CommandOutcome> => { throw new Error('Render frame was disposed'); }, read: async () => undefined };
+    const deps = { command: async (): Promise<CommandOutcome> => { throw new Error('Render frame was disposed'); }, read: async () => ({ ok: true as const }) };
     const r: McpHealth = await pressCheckWebSearch(deps);
     expect(r.state).toBe('unreachable');
     const stored = await pressStoreWebSearchKey(deps, 'k', 'workspace');

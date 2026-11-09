@@ -214,12 +214,12 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const [refusal, setRefusal] = useState<string | null>(null);
   const [inFlight, setInFlight] = useState<WebSearchInFlight | null>(null);
   const [probingMessage, setProbingMessage] = useState<string | null>(null);
-  const [liveHealth, setLiveHealth] = useState<McpHealth | null>(null);
   /**
-   * Round-2 Major 3: the BASIS `liveHealth` was taken under — the card's own probe result is read only while the
-   * inputs it observed still hold (see `webSearchProbeBasis`).
+   * Rounds 2 and 3, Major 3 (as corrected): the card's own probe result and the evidence it was taken under — the
+   * BASIS (the serialised situation inputs, `webSearchProbeBasis`) and the two views the render read it from. The
+   * result is the card's alone: the parent row's health is never written by a card probe.
    */
-  const [probeBasis, setProbeBasis] = useState<string | null>(null);
+  const [probe, setProbe] = useState<{ readonly basis: string; readonly health: McpHealth; readonly read: McpSecretsView | null; readonly listed: McpListing | null } | null>(null);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -228,20 +228,32 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const preset = webSearchPreset(presetId);
   const stanza = webSearchStanza(preset);
   /**
-   * Round-2 Major 3 (finding: `liveHealth` was never invalidated): the card's own probe result is keyed to the inputs
-   * it was taken under — the entry, the stored key, the card's other situation inputs and the PARENT health. The
-   * moment any of those changes, `liveHealth` no longer describes the current state and the parent's health takes
-   * over, so an earlier Healthy can never keep a changed, untested endpoint `ready`/collapsed, and an older card
-   * result can never override a newer category probe. The result is also dropped after a successful write, whose key
-   * value the card cannot observe (it sees the mask alone). The preset radio is not an input: the probe tests the
-   * entry in the file, and choosing a preset changes only the stanza step 2 hands over.
+   * The inputs the card's own probe result is kept under (round-2 Major 3): the entry, the stored key and the card's
+   * other situation facts in one serialised BASIS (`webSearchProbeBasis`), the PARENT health included — a result kept
+   * under a basis that still holds is about the current state, and a newer category probe supersedes one whose inputs
+   * moved. The preset radio is not an input: the probe tests the entry in the file, and choosing a preset changes only
+   * the stanza step 2 hands over.
    */
   const situationInputs = webSearchProbeBasis({ unavailable, row, storedKey, health });
-  const shownHealth = liveHealth !== null && probeBasis === situationInputs ? liveHealth : health;
-  /** Major 1 (rework round 1, 2026-11-09): the situation reads the card's OWN probe result (`liveHealth`), so the Test
-   * step genuinely decides `ready`/`wrong-endpoint` — a Healthy probe collapses the steps, a failing one takes an
+  /**
+   * Round-3 Major 2 (with Major 1): the result is read only while BOTH witnesses still hold — the basis, and the
+   * IDENTITY of the two views the render read it against. A configuration change or a write re-reads the listing and
+   * the card's secrets view, and a replaced key arrives behind the one constant mask (`REDACTION_MARK`), so a fresh
+   * read of either view is the only witness the card has that something it cannot see may have changed —
+   * `webSearchProbeBasis` carries no mask for exactly that reason.
+   *
+   * A stale result is DISCARDED, never merely bypassed: the `setProbe(null)` below is React's documented adjustment
+   * of state during a render, so an older result can never come back when the inputs return to an earlier value —
+   * without it, a stale Unreachable would be read again after the parent health went Checking and back to Healthy, and
+   * a fresh read would leave `ready` standing over a key the probe never saw. A newer category probe wins outright.
+   */
+  const probeStale = probe !== null && (probe.basis !== situationInputs || probe.read !== props.webSearchSecrets || probe.listed !== props.listing);
+  if (probeStale) setProbe(null);
+  const shownHealth = probe !== null && !probeStale ? probe.health : health;
+  /** Major 1 (rework round 1, 2026-11-09): the situation reads the card's OWN probe result, so the Test step
+   * genuinely decides `ready`/`wrong-endpoint` — a Healthy probe collapses the steps, a failing one takes an
    * already-ready card back to `wrong-endpoint`. The parent row's health is untouched (the category's probe owns it,
-   * and it supersedes a card result whose inputs have changed). */
+   * and it supersedes a card result whose inputs or views have changed). */
   const situation = webSearchSituation({ unavailable, row, storedKey, health: shownHealth });
   const disabled = unavailable !== null;
   const collapsed = situation === 'ready' && !expanded;
@@ -264,8 +276,10 @@ function WebSearchSetupCard(props: McpSettingsProps) {
       if (!r.ok) { setRefusal(r.message); return; }
       setKeyDraft('');
       setConfirmation(storedKeySentence(r.outcome));
-      // The write changed the key the probe observed, and the card's probe result cannot describe the new key.
-      setLiveHealth(null); setProbeBasis(null);
+      // The write changed the key the probe observed, and the card's probe result cannot describe the new key
+      // (round-2 Major 3; round-3 Major 1: the write path is also the one replacement this card can observe — the
+      // value itself never reaches it, and the re-reads that follow the write would move the views' identity anyway).
+      setProbe(null);
       if (r.refreshFailure !== null) setRefreshNote(WEB_SEARCH_REFRESH_FAILED(r.refreshFailure));
     } catch (cause) {
       setRefusal(webSearchPressFailure(cause));
@@ -280,7 +294,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
       const r = await props.webSearchSetup.onDeleteKey(scope);
       if (!r.ok) { setRefusal(r.message); return; }
       setConfirmation(deletedKeySentence(r.outcome));
-      setLiveHealth(null); setProbeBasis(null);
+      setProbe(null);
       if (r.refreshFailure !== null) setRefreshNote(WEB_SEARCH_REFRESH_FAILED(r.refreshFailure));
     } catch (cause) {
       setRefusal(webSearchPressFailure(cause));
@@ -314,7 +328,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
     setInFlight('probe'); setProbingMessage(null);
     try {
       const result = await props.webSearchSetup.onProbe();
-      setLiveHealth(result); setProbeBasis(situationInputs);
+      setProbe({ basis: situationInputs, health: result, read: props.webSearchSecrets, listed: props.listing });
       setProbingMessage(result.state === 'unreachable' ? WEB_SEARCH_WRONG_ENDPOINT : `The server answered: ${mcpHealthText(result)}.`);
     } catch (cause) {
       setProbingMessage(webSearchPressFailure(cause));

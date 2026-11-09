@@ -30,7 +30,7 @@ const props = (over: Partial<McpSettingsProps> = {}): McpSettingsProps => ({
     onOpenFile: async () => ({ ok: true as const }),
     onGetKey: async () => ({ ok: true as const }),
     onStoreKey: async () => ({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: '***', removed: false }, refreshFailure: null }),
-    onDeleteKey: async () => ({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: false } }),
+    onDeleteKey: async () => ({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: false }, refreshFailure: null }),
     onProbe: async () => ({ state: 'unknown' as const }),
   },
   ...over,

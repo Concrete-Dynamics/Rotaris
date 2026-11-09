@@ -248,6 +248,28 @@ export type WebSearchScope = 'workspace' | 'global';
 export const WEB_SEARCH_SCOPE_LABELS: Readonly<Record<WebSearchScope, string>> = { workspace: 'Workspace', global: 'Global' };
 
 /**
+ * Round-2 Major 3: the BASIS a card probe result is kept under — the serialised situation inputs it was taken
+ * against. `WebSearchFacts` IS those inputs (the entry, the stored key, the two other facts, and the health), so a
+ * card's own probe result is read only while this basis still holds: a changed entry, a changed stored key, a changed
+ * situation input or a changed (newer) parent health drops a result that describes an older state, so an earlier
+ * Healthy can never keep a changed, untested endpoint `ready`, and an older card result can never override a newer
+ * category probe.
+ *
+ * The card's own preset selection is deliberately NOT part of the basis: the probe tests the LIVE entry in the file,
+ * and the radio only chooses the stanza step 2 hands over — selecting another preset changes nothing a probe observed.
+ * `elapsedMs` is left out for the same reason: it is not an input of the classification.
+ */
+export function webSearchProbeBasis(facts: WebSearchFacts): string {
+  const { row, storedKey, health } = facts;
+  return JSON.stringify([
+    facts.unavailable,
+    row === null ? null : [row.name, row.type, row.line, row.origin, row.enabled, row.overridden, row.available, row.availabilityDetail, [...row.unresolved]],
+    storedKey === null ? null : [storedKey.server, storedKey.key, storedKey.masked, storedKey.scope],
+    [health.state, health.toolCount ?? null, health.detail ?? null],
+  ]);
+}
+
+/**
  * The card's one in-flight state, one case per control that must not overlap itself (design brief §4's disabled
  * column; rework round 1, 2026-11-09): the three presses that touch the file (`store`, `remove`, `open`) and the
  * probe. While one holds, every control of the card is disabled, so two writes cannot race and a completion cannot
@@ -301,10 +323,20 @@ export const WEB_SEARCH_CONTROLS = {
 export interface WebSearchSetupHandlers {
   readonly onOpenFile: () => Promise<{ ok: true } | { ok: false; message: string }>;
   readonly onGetKey: (preset: WebSearchPreset) => Promise<{ ok: true } | { ok: false; message: string }>;
-  readonly onStoreKey: (value: string, scope: WebSearchScope) => Promise<{ ok: true; outcome: McpSecretWriteOutcome } | { ok: false; message: string }>;
-  readonly onDeleteKey: (scope: WebSearchScope) => Promise<{ ok: true; outcome: McpSecretWriteOutcome } | { ok: false; message: string }>;
+  readonly onStoreKey: (value: string, scope: WebSearchScope) => Promise<WebSearchWriteReply>;
+  readonly onDeleteKey: (scope: WebSearchScope) => Promise<WebSearchWriteReply>;
   readonly onProbe: () => Promise<McpHealth>;
 }
+
+/**
+ * REQ-MCP-110's write outcome, or the words of a refusal. `refreshFailure` is the re-read's own refusal for the case
+ * the write STOOD but the view could not be refreshed (round-2 Major 2): the card reports it instead of pretending
+ * the view is current, and it is the honest alternative to rejecting the press — a rejection out of a click handler
+ * would strand the card's in-flight state and leave the card disabled, reporting nothing.
+ */
+export type WebSearchWriteReply =
+  | { readonly ok: true; readonly outcome: McpSecretWriteOutcome; readonly refreshFailure: string | null }
+  | { readonly ok: false; readonly message: string };
 
 export interface WebSearchSetupDeps {
   readonly command: (req: CommandRequest) => Promise<CommandOutcome>;
@@ -322,20 +354,44 @@ async function send(deps: WebSearchSetupDeps, req: CommandRequest): Promise<Comm
   catch (cause) { return { ok: false, code: 'command.unreachable', headline: 'The application did not answer', detail: cause instanceof Error ? cause.message : String(cause) }; }
 }
 
-export async function pressStoreWebSearchKey(deps: WebSearchSetupDeps, value: string, scope: WebSearchScope): Promise<{ ok: true; outcome: McpSecretWriteOutcome } | { ok: false; message: string }> {
+export async function pressStoreWebSearchKey(deps: WebSearchSetupDeps, value: string, scope: WebSearchScope): Promise<WebSearchWriteReply> {
   // REQ-MCP-084/110: refused here, and changed nothing anywhere — no command leaves the window.
   if (value === '') return { ok: false, message: EMPTY_KEY_REFUSAL };
   const outcome = await send(deps, { kind: 'mcp.setSecret', server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, value, scope });
   if (!outcome.ok) return { ok: false, message: outcome.detail ?? outcome.headline };
-  await deps.read();
-  return { ok: true, outcome: outcome.value as McpSecretWriteOutcome };
+  const refreshFailure = await refreshAfterWrite(deps);
+  return { ok: true, outcome: outcome.value as McpSecretWriteOutcome, refreshFailure };
 }
 
-export async function pressDeleteWebSearchKey(deps: WebSearchSetupDeps, scope: WebSearchScope): Promise<{ ok: true; outcome: McpSecretWriteOutcome } | { ok: false; message: string }> {
+export async function pressDeleteWebSearchKey(deps: WebSearchSetupDeps, scope: WebSearchScope): Promise<WebSearchWriteReply> {
   const outcome = await send(deps, { kind: 'mcp.unsetSecret', server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope });
   if (!outcome.ok) return { ok: false, message: outcome.detail ?? outcome.headline };
-  await deps.read();
-  return { ok: true, outcome: outcome.value as McpSecretWriteOutcome };
+  const refreshFailure = await refreshAfterWrite(deps);
+  return { ok: true, outcome: outcome.value as McpSecretWriteOutcome, refreshFailure };
+}
+
+/**
+ * The re-read after a write, made TOTAL (round-2 Major 2): the binder's `read` awaits bridge commands that CAN reject
+ * and the press is a click handler, so an unguarded `await deps.read()` rejected out of the press and `McpSettings`'
+ * `setInFlight(null)` — the statement after the await — never ran: the card stayed disabled forever and reported
+ * nothing. The refresh's refusal comes back as words; the write still reports its masked outcome and the card says
+ * the view is stale (`WEB_SEARCH_REFRESH_FAILED`).
+ */
+async function refreshAfterWrite(deps: WebSearchSetupDeps): Promise<string | null> {
+  try { await deps.read(); return null; }
+  catch (cause) { return cause instanceof Error ? cause.message : String(cause); }
+}
+
+/** Round-2 Major 2: the write stood, the re-read after it did not — said, not swallowed (REQ-SHELL-149: text). */
+export const WEB_SEARCH_REFRESH_FAILED = (detail: string): string =>
+  `The write went through, but the category could not be refreshed: ${detail}. Reload the category to see the new state.`;
+
+/**
+ * Round-2 Major 2: a press whose handler rejected anyway (a binding that broke, a bridge that threw before `send`
+ * could answer it) — the card reports it, keeps its controls usable, and never leaves a rejection unhandled.
+ */
+export function webSearchPressFailure(cause: unknown): string {
+  return `The action did not finish: ${cause instanceof Error ? cause.message : String(cause)}. Try again, or reload the category if the view looks stale.`;
 }
 
 export async function pressGetWebSearchKey(deps: Pick<WebSearchSetupDeps, 'command'>, preset: WebSearchPreset): Promise<{ ok: true } | { ok: false; message: string }> {

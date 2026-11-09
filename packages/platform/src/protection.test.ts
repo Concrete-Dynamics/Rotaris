@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ok } from '@rotaris/kernel';
 import { createProtector, isExactDacl, parseDacl, SYSTEM_SID, type Protector } from './protection.js';
-import { replaceDocument } from './document.js';
+import { replaceDocument, STAGED_FILE_MODE } from './document.js';
 
 /**
  * REQ-PROVIDER-016's protection adapter (ADR-0029) and its new home in `platform` (moved whole from
@@ -84,22 +84,27 @@ describe('the protection adapter (REQ-PROVIDER-016; spikes/credential-protection
 });
 
 /**
- * ADR-0004's `replaceDocument` with a `protector` (2026-11-09, slice-B rework round 1): REQ-CONFIG-216's ordering —
- * the staged sibling is created, protected and READ BACK before a byte of content is written; a refusal answers
- * before the rename, so "the write does not happen" needs no rollback because the target was never touched.
+ * ADR-0004's `replaceDocument` with a `protector` (2026-11-09, slice-B rework rounds 1 and 2): REQ-CONFIG-216's
+ * ordering — the staged sibling is created EMPTY AND AT `STAGED_FILE_MODE`, protected and READ BACK before a byte of
+ * content is written; a refusal answers before the rename, so "the write does not happen" needs no rollback because
+ * the target was never touched.
  *
  * HOW THE ORDERING IS OBSERVED: the injected protector records what it sees — the staged file's size (0 bytes: the
- * content has not been written), which file it was handed (the staging sibling inside the target's own directory,
- * not the target), and the target's own bytes at that instant (the previous file, whole). With a post-rename
- * protection every one of those three is wrong: the staged path is never handed over, or it is handed over with the
- * content already in it.
+ * content has not been written), the mode the file was created with (`STAGED_FILE_MODE`: round-2 Major 1 closed the
+ * window in which the empty staged file sat at the umask's mode and an account that can traverse the directory could
+ * open it and keep the descriptor across the later chmod), which file it was handed (the staging sibling inside the
+ * target's own directory, not the target), and the target's own bytes at that instant (the previous file, whole).
+ * With a post-rename protection every one of those is wrong: the staged path is never handed over, or it is handed
+ * over with the content already in it. This spy IS the proof the mode cannot be observed weaker — a same-thread
+ * `setTimeout` sampler cannot see a synchronous create→chmod window and was dropped in round 2 rather than kept
+ * carrying a claim it could not make.
  */
 describe('replaceDocument protect-then-write (REQ-CONFIG-216 via REQ-PROVIDER-016)', () => {
   const observing = () => {
-    const seen: { path: string; bytesAtProtect: number; target: string | null }[] = [];
+    const seen: { path: string; bytesAtProtect: number; modeAtProtect: number; target: string | null }[] = [];
     const protector: Protector = {
       protect: async (path) => {
-        seen.push({ path, bytesAtProtect: existsSync(path) ? readFileSync(path).byteLength : -1, target: null });
+        seen.push({ path, bytesAtProtect: existsSync(path) ? readFileSync(path).byteLength : -1, modeAtProtect: existsSync(path) ? statSync(path).mode & 0o777 : -1, target: null });
         return ok(undefined);
       },
     };
@@ -117,6 +122,19 @@ describe('replaceDocument protect-then-write (REQ-CONFIG-216 via REQ-PROVIDER-01
     expect(seen[0]!.bytesAtProtect).toBe(0); // NOT ONE BYTE of content existed when protection was asked
     expect(readFileSync(target, 'utf8')).toBe('server:\n  KEY: value\n');
     expect(readdirSync(dir).filter((f) => f.includes('staging'))).toEqual([]);
+  });
+  it('creates the staged sibling ALREADY at 0600 at the instant the protector is asked — a descriptor another account opened in a traversable directory cannot outlive the later chmod (round-2 Major 1) — fails if the create is left at the umask\'s mode (0666 & umask: 0664 under this host\'s umask 002, typically 0644). Skips on Windows, where Node IGNORES the mode argument: the empty staged file briefly carries the ACLs inherited from its directory — the same residual the credential store keeps there — and the adapter\'s ACL read-back is the protection.', async () => {
+    if (process.platform === 'win32') return;
+    const target = join(dir, 'secrets.yaml');
+    const { seen, protector } = observing();
+    const r = await replaceDocument(target, 'server:\n  KEY: value\n', { protector });
+    expect(r.ok).toBe(true);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.bytesAtProtect).toBe(0); // still empty — the mode is established at CREATION, not after content
+    expect(seen[0]!.modeAtProtect).toBe(STAGED_FILE_MODE);
+    // And the mode travels with the rename although this injected protector never chmods: the create's mode is the
+    // file's own, so the target ends at 0600 too.
+    expect(statSync(target).mode & 0o777).toBe(STAGED_FILE_MODE);
   });
   it('a protector refusal answers document.protect with the target UNTOUCHED and no staging file left', async () => {
     const target = join(dir, 'secrets.yaml');
@@ -145,25 +163,5 @@ describe('replaceDocument protect-then-write (REQ-CONFIG-216 via REQ-PROVIDER-01
     const r = await replaceDocument(target, 'server:\n  KEY: value\n', { protector: createProtector({ scratchDir: dir }) });
     expect(r.ok).toBe(true);
     expect(statSync(target).mode & 0o777).toBe(0o600);
-  });
-  it('the mode is never weaker than 0600 at any observable instant: a sampler started before the call never reads a group/other bit', async () => {
-    if (process.platform === 'win32') return;
-    const target = join(dir, 'secrets.yaml');
-    const observed: number[] = [];
-    // A sampler that keeps statting the TARGET while the write is in flight, and for a while after it — so the
-    // final state is observed at least once however the loop interleaves (a no-op protector would leave 0644 there
-    // and this case would go red: the negative control of the round-1 report).
-    const sampler = (async () => {
-      for (let i = 0; i < 100; i++) {
-        try { observed.push(statSync(target).mode & 0o777); } catch { /* not yet visible: fine */ }
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
-    })();
-    const r = await replaceDocument(target, 'server:\n  KEY: super-secret\n', { protector: createProtector({ scratchDir: dir }) });
-    await sampler;
-    expect(r.ok).toBe(true);
-    expect(observed.length).toBeGreaterThan(0); // the loop ran against the finished file at least once
-    // Every sample that saw a file at all saw 0600: the content is never observable at the umask's mode.
-    expect([...new Set(observed)]).toEqual([0o600]);
   });
 });

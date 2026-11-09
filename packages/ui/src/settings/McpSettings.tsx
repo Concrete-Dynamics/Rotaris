@@ -5,10 +5,10 @@ import { Confirm } from './Confirm.js';
 import { Fatal } from './ConfigSettings.js';
 import {
   deletedKeySentence, mcpHealthText, presetAfter, presetTabIndex, storedKeySentence, webSearchFileLine, webSearchHeaderKeyNote, webSearchOtherTransport,
-  webSearchPreset, webSearchSituation, webSearchStanza, webSearchStoredKey, webSearchUnresolvedNote,
+  webSearchPreset, webSearchProbeBasis, webSearchPressFailure, webSearchSituation, webSearchStanza, webSearchStoredKey, webSearchUnresolvedNote,
   MCP_HEALTH_TEXT,
   WEB_SEARCH_CONTROLS, WEB_SEARCH_DECLARATION_STANDS, WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_NEEDS_ENABLED,
-  WEB_SEARCH_NO_ENTRY, WEB_SEARCH_NOT_WRITTEN_BY_US, WEB_SEARCH_PRESETS, WEB_SEARCH_SERVER, WEB_SEARCH_TAKE_EFFECT, WEB_SEARCH_WORKING_SUMMARY, WEB_SEARCH_WRONG_ENDPOINT,
+  WEB_SEARCH_NO_ENTRY, WEB_SEARCH_NOT_WRITTEN_BY_US, WEB_SEARCH_PRESETS, WEB_SEARCH_REFRESH_FAILED, WEB_SEARCH_SERVER, WEB_SEARCH_TAKE_EFFECT, WEB_SEARCH_WORKING_SUMMARY, WEB_SEARCH_WRONG_ENDPOINT,
   type WebSearchInFlight, type WebSearchPreset, type WebSearchScope, type WebSearchSetupHandlers,
 } from './web-search-setup.js';
 
@@ -215,16 +215,33 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const [inFlight, setInFlight] = useState<WebSearchInFlight | null>(null);
   const [probingMessage, setProbingMessage] = useState<string | null>(null);
   const [liveHealth, setLiveHealth] = useState<McpHealth | null>(null);
+  /**
+   * Round-2 Major 3: the BASIS `liveHealth` was taken under — the card's own probe result is read only while the
+   * inputs it observed still hold (see `webSearchProbeBasis`).
+   */
+  const [probeBasis, setProbeBasis] = useState<string | null>(null);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [openFailure, setOpenFailure] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const preset = webSearchPreset(presetId);
   const stanza = webSearchStanza(preset);
-  const shownHealth = liveHealth ?? health;
+  /**
+   * Round-2 Major 3 (finding: `liveHealth` was never invalidated): the card's own probe result is keyed to the inputs
+   * it was taken under — the entry, the stored key, the card's other situation inputs and the PARENT health. The
+   * moment any of those changes, `liveHealth` no longer describes the current state and the parent's health takes
+   * over, so an earlier Healthy can never keep a changed, untested endpoint `ready`/collapsed, and an older card
+   * result can never override a newer category probe. The result is also dropped after a successful write, whose key
+   * value the card cannot observe (it sees the mask alone). The preset radio is not an input: the probe tests the
+   * entry in the file, and choosing a preset changes only the stanza step 2 hands over.
+   */
+  const situationInputs = webSearchProbeBasis({ unavailable, row, storedKey, health });
+  const shownHealth = liveHealth !== null && probeBasis === situationInputs ? liveHealth : health;
   /** Major 1 (rework round 1, 2026-11-09): the situation reads the card's OWN probe result (`liveHealth`), so the Test
    * step genuinely decides `ready`/`wrong-endpoint` — a Healthy probe collapses the steps, a failing one takes an
-   * already-ready card back to `wrong-endpoint`. The parent row's health is untouched (the category's probe owns it). */
+   * already-ready card back to `wrong-endpoint`. The parent row's health is untouched (the category's probe owns it,
+   * and it supersedes a card result whose inputs have changed). */
   const situation = webSearchSituation({ unavailable, row, storedKey, health: shownHealth });
   const disabled = unavailable !== null;
   const collapsed = situation === 'ready' && !expanded;
@@ -235,40 +252,75 @@ function WebSearchSetupCard(props: McpSettingsProps) {
 
   const store = async () => {
     if (busy) return;
-    setRefusal(null); setConfirmation(null); setInFlight('store');
-    const r = await props.webSearchSetup.onStoreKey(keyDraft, scope);
-    setInFlight(null);
-    if (!r.ok) { setRefusal(r.message); return; }
-    setKeyDraft('');
-    setConfirmation(storedKeySentence(r.outcome));
+    setRefusal(null); setConfirmation(null); setRefreshNote(null); setInFlight('store');
+    /**
+     * Round-2 Major 2: the press is a click handler, so nothing it awaits may reject out of it — a rejection would
+     * skip `setInFlight(null)` and leave the card disabled forever, reporting nothing. The helper is total now (it
+     * answers a failed re-read as words), and this catch/finally is the card's own guarantee that the busy state is
+     * cleared and a failure is SAID, whatever a broken binding does.
+     */
+    try {
+      const r = await props.webSearchSetup.onStoreKey(keyDraft, scope);
+      if (!r.ok) { setRefusal(r.message); return; }
+      setKeyDraft('');
+      setConfirmation(storedKeySentence(r.outcome));
+      // The write changed the key the probe observed, and the card's probe result cannot describe the new key.
+      setLiveHealth(null); setProbeBasis(null);
+      if (r.refreshFailure !== null) setRefreshNote(WEB_SEARCH_REFRESH_FAILED(r.refreshFailure));
+    } catch (cause) {
+      setRefusal(webSearchPressFailure(cause));
+    } finally {
+      setInFlight(null);
+    }
   };
   const remove = async () => {
     if (busy) return;
-    setConfirmingDelete(false); setRefusal(null); setConfirmation(null); setInFlight('remove');
-    const r = await props.webSearchSetup.onDeleteKey(scope);
-    setInFlight(null);
-    if (!r.ok) { setRefusal(r.message); return; }
-    setConfirmation(deletedKeySentence(r.outcome));
+    setConfirmingDelete(false); setRefusal(null); setConfirmation(null); setRefreshNote(null); setInFlight('remove');
+    try {
+      const r = await props.webSearchSetup.onDeleteKey(scope);
+      if (!r.ok) { setRefusal(r.message); return; }
+      setConfirmation(deletedKeySentence(r.outcome));
+      setLiveHealth(null); setProbeBasis(null);
+      if (r.refreshFailure !== null) setRefreshNote(WEB_SEARCH_REFRESH_FAILED(r.refreshFailure));
+    } catch (cause) {
+      setRefusal(webSearchPressFailure(cause));
+    } finally {
+      setInFlight(null);
+    }
   };
   const openFile = async () => {
     if (busy) return;
     setOpenFailure(null); setInFlight('open');
-    const r = await props.webSearchSetup.onOpenFile();
-    setInFlight(null);
-    if (!r.ok) setOpenFailure(r.message);
+    try {
+      const r = await props.webSearchSetup.onOpenFile();
+      if (!r.ok) setOpenFailure(r.message);
+    } catch (cause) {
+      setOpenFailure(webSearchPressFailure(cause));
+    } finally {
+      setInFlight(null);
+    }
   };
   const getKey = async (p: WebSearchPreset) => {
     setOpenFailure(null);
-    const r = await props.webSearchSetup.onGetKey(p);
-    if (!r.ok) setOpenFailure(r.message);
+    try {
+      const r = await props.webSearchSetup.onGetKey(p);
+      if (!r.ok) setOpenFailure(r.message);
+    } catch (cause) {
+      setOpenFailure(webSearchPressFailure(cause));
+    }
   };
   const check = async () => {
     if (busy) return;
     setInFlight('probe'); setProbingMessage(null);
-    const result = await props.webSearchSetup.onProbe();
-    setInFlight(null);
-    setLiveHealth(result);
-    setProbingMessage(result.state === 'unreachable' ? WEB_SEARCH_WRONG_ENDPOINT : `The server answered: ${mcpHealthText(result)}.`);
+    try {
+      const result = await props.webSearchSetup.onProbe();
+      setLiveHealth(result); setProbeBasis(situationInputs);
+      setProbingMessage(result.state === 'unreachable' ? WEB_SEARCH_WRONG_ENDPOINT : `The server answered: ${mcpHealthText(result)}.`);
+    } catch (cause) {
+      setProbingMessage(webSearchPressFailure(cause));
+    } finally {
+      setInFlight(null);
+    }
   };
   const copy = () => {
     setCopyNote(null);
@@ -425,6 +477,9 @@ function WebSearchSetupCard(props: McpSettingsProps) {
       {inFlight !== null ? <p role="status" className="text-secondary" data-websearch-in-flight>{WEB_SEARCH_IN_FLIGHT[inFlight]}</p> : null}
       {shownHealth.state === 'unreachable' && shownHealth.detail ? <p className="text-tertiary settings__hint mono" data-websearch-health-detail>{shownHealth.detail}</p> : null}
       {probingMessage !== null ? <p role="status" className="text-secondary" data-websearch-probe-message>{probingMessage}</p> : null}
+      {/* Round-2 Major 2: the write stood and the re-read after it did not — said, not swallowed. Outside the
+          collapse, so it is readable in every situation (a successful store usually collapses the steps). */}
+      {refreshNote !== null ? <p className="composer__error" role="alert" data-websearch-refresh-failure>{refreshNote}</p> : null}
       {/* REQ-CONFIG-225/371: the row's own words for why nothing connects — a placeholder still unresolved, or the host's
           own availability detail (a remote entry's missing prerequisite). Text, never a second rule of this card's. */}
       {row !== null && row.unresolved.length > 0 && (situation === 'fresh' || situation === 'wrong-endpoint') ? <p className="text-tertiary settings__hint" data-websearch-unresolved>{webSearchUnresolvedNote(row.unresolved, situation === 'wrong-endpoint')}</p> : null}

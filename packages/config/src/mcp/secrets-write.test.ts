@@ -69,26 +69,25 @@ describe('REQ-MCP-084/110: a set stores the secret atomically at mode 0600 (REQ-
   });
 });
 
-describe('REQ-CONFIG-216: the protection is applied BEFORE the write, and the write does not happen without it (round-1 rework, 2026-11-09)', () => {
+describe('REQ-CONFIG-216: the protection is applied BEFORE the write, and the write does not happen without it (round-1 rework, 2026-11-09; round-2 Major 1 added the create-time mode)', () => {
   /*
    * HOW THE ORDERING IS OBSERVED. The adapter is injected (`SecretsWriteDeps.protector`), and what this suite's spies
    * see is the file's state at the moment the adapter is asked to protect it: the staged sibling exists, it is still
-   * EMPTY, and the target does not exist yet (or, over an existing file, still holds its own bytes). READ AT THAT
-   * MOMENT the staged file already carries the mode the adapter will establish — with the real POSIX adapter the
-   * staged file is created and protected before a byte is written, so a spy placed on the adapter sees mode 0600
-   * BEFORE any content exists; with the ordering removed (a post-rename chmod) the spy would see the umask's mode
-   * over eight characters of content. The negative control in the report stubs `protector` to a no-op: the mode then
-   * reads back as the umask's 0644 and the case goes red. A refusal is the second observable: it must leave no
-   * staged file and no target behind, which a post-rename protection cannot promise.
+   * EMPTY, it was CREATED owner-only (the mode is read back there — round-2 Major 1: `.rotaris` is not a protected
+   * directory, so a create at the umask's 0664 would sit readable until the later chmod, which cannot close a
+   * descriptor already held), and the target does not exist yet (or, over an existing file, still holds its own
+   * bytes). With the ordering removed (a post-rename chmod) the spy would see the umask's mode over eight characters
+   * of content. A refusal is the second observable: it must leave no staged file and no target behind, which a
+   * post-rename protection cannot promise.
    */
-  it('the adapter is called with the staged sibling while it is EMPTY and the target still holds the previous file — fails if the protection runs after the content is written or after the rename', async () => {
+  it('the adapter is called with the staged sibling while it is EMPTY, owner-only from its creation, and the target still holds the previous file — fails if the protection runs after the content is written, after the rename, or over a file the umask left group/other-readable', async () => {
     const dir = scratchDir('rotaris-secrets-order-');
     const file = secretsPathFor('workspace', join(dir, 'config'), ws(dir));
     mkdirSync(join(ws(dir), '.rotaris'), { recursive: true });
     writeFileSync(file, 'web_search:\n  ROTARIS_SEARCH_API_KEY: old\n');
-    /** What each protect call saw: the staged sibling's bytes, and the target's, at the moment protection was asked. */
-    const sawStaged: { path: string; emptyAtProtect: boolean; targetAtProtect: string }[] = [];
-    const spy: Protector = { protect: async (path) => { sawStaged.push({ path, emptyAtProtect: readFileSync(path, 'utf8') === '', targetAtProtect: existsSync(file) ? readFileSync(file, 'utf8') : '' }); return ok(undefined); } };
+    /** What each protect call saw: the staged sibling's bytes and mode, and the target's, at the moment protection was asked. */
+    const sawStaged: { path: string; emptyAtProtect: boolean; modeAtProtect: number; targetAtProtect: string }[] = [];
+    const spy: Protector = { protect: async (path) => { sawStaged.push({ path, emptyAtProtect: readFileSync(path, 'utf8') === '', modeAtProtect: statSync(path).mode & 0o777, targetAtProtect: existsSync(file) ? readFileSync(file, 'utf8') : '' }); return ok(undefined); } };
     const r = await setServerSecret(file, 'web_search', 'ROTARIS_SEARCH_API_KEY', 'sk-new', { protector: spy });
     expect(r.ok).toBe(true);
     expect(sawStaged).toHaveLength(1);
@@ -96,10 +95,17 @@ describe('REQ-CONFIG-216: the protection is applied BEFORE the write, and the wr
     expect(dirname(sawStaged[0]!.path)).toBe(dirname(file));
     expect(sawStaged[0]!.path).not.toBe(file);
     expect(sawStaged[0]!.emptyAtProtect).toBe(true); // NOT a byte of content existed when protection was asked
+    // Round-2 Major 1, at the SECRETS layer: `.rotaris` is not protected the way the credential store's 0700
+    // `tokens` directory is, so the staged file must be created already owner-only — a later chmod cannot revoke a
+    // descriptor another account opened on the empty file. This spy chmods NOTHING, so the mode read here is the
+    // create-time mode alone; the negative control (the create without its mode argument) reads 0664 under this
+    // host's umask 002 and this assertion goes red. Skips on Windows: Node ignores the mode argument there and the
+    // ACLs a fresh file inherits are the residual (recorded in `document.ts`), with the ACL read-back the protection.
+    if (process.platform !== 'win32') expect(sawStaged[0]!.modeAtProtect).toBe(0o600);
     // And at that moment the target still held the PREVIOUS file, untouched — the rename has not happened yet.
     expect(sawStaged[0]!.targetAtProtect).toContain('old');
     expect(sawStaged[0]!.targetAtProtect).not.toContain('sk-new');
-    // After the write the new content is in place (the injected no-op leaves the mode to the umask — the REAL
+    // After the write the new content is in place (the injected no-op leaves the mode to the create; the REAL
     // adapter's 0600 is asserted by the case below, which drives `createProtector` itself).
     expect(readFileSync(file, 'utf8')).toContain('sk-new');
   });

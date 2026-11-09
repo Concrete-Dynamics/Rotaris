@@ -13,9 +13,12 @@ import type { Protector } from './protection.js';
  *
  * Where a store declares REQ-PROVIDER-016's protection (the credential store,
  * REQ-CONFIG-216's `secrets.yaml`), it passes `protector` and the staged file
- * is protected BEFORE a byte is written, then read back by the adapter: the
- * protection travels with the rename, and a protection failure answers before
- * the target is touched.
+ * is created AT `STAGED_FILE_MODE` and protected BEFORE a byte is written, then
+ * read back by the adapter: the protection travels with the rename, and a
+ * protection failure answers before the target is touched. The create-time mode
+ * is round-2 Major 1: a later `chmod` cannot revoke a descriptor another account
+ * opened on the empty file in a traversable directory (the ordering alone left
+ * that window open).
  *
  * The retry ladder: on Windows a rename over an existing file fails on a
  * transient handle (D-06) — and on shared storage 6.2 % of the time with no
@@ -58,6 +61,19 @@ export interface ReplaceOptions {
   readonly createParent?: boolean;
 }
 
+/**
+ * Round-2 Major 1: the mode the staged sibling is CREATED with when a protector is supplied. The adapter establishes
+ * and reads back the exact protection afterwards (REQ-PROVIDER-016; `0600` for a file), but a mode applied by a later
+ * `chmod` cannot revoke a descriptor another account already holds: without this create-time mode the empty staged
+ * file exists at `0666 & ~umask` (typically `0644`) until the adapter runs, and `secrets.yaml`'s `.rotaris` parent is
+ * not protected the way the credential store's `0700` directory is — an account that can traverse the directory could
+ * open the empty file and keep the descriptor until the content was written. `0600 & ~umask` is `0600` for any umask
+ * that carries only group/other bits. On Windows Node IGNORES the mode argument: the empty staged file briefly
+ * carries the ACLs inherited from its directory until the adapter runs — the same residual the credential store keeps
+ * on Windows, stated rather than claimed closed; the ACL read-back is the protection on that platform.
+ */
+export const STAGED_FILE_MODE = 0o600;
+
 function stagePath(target: string): string {
   return join(dirname(target), `.${basename(target)}.staging-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
 }
@@ -93,13 +109,17 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
   if (opts.protector !== undefined) {
     /**
      * REQ-CONFIG-216 ("applied explicitly on every write rather than letting the file inherit whatever mask happens to
-     * be in force") read as the ordering it is: the staged sibling is created empty, the adapter protects THAT file
-     * and reads the protection back, and only then is a byte of content written. Without this step the staged file
-     * would carry the umask's mode (typically `0644`) until a post-rename chmod, which is the window this file's
-     * defect round closed. The target is untouched on any refusal here (REQ-CONFIG-216's "the write does not happen").
+     * be in force") read as the ordering it is: the staged sibling is created EMPTY, AT `STAGED_FILE_MODE`, the
+     * adapter protects THAT file and reads the protection back, and only then is a byte of content written. Without
+     * the ordering the file would carry the umask's mode (typically `0644`) until a post-rename chmod; without the
+     * create-time mode it would do so even WITH the ordering, because a `chmod` cannot revoke a descriptor another
+     * account opened on the empty file in a traversable directory (round-2 Major 1; `secrets.yaml`'s `.rotaris`
+     * parent is not protected). Windows: Node ignores the mode argument here — the empty staged file briefly carries
+     * the ACLs inherited from its directory until the adapter runs, and that read-back is the protection there. The
+     * target is untouched on any refusal here (REQ-CONFIG-216's "the write does not happen").
      */
     try {
-      const created = openSync(staged, 'w');
+      const created = openSync(staged, 'w', STAGED_FILE_MODE);
       closeSync(created);
     } catch (e) {
       discard(staged);
@@ -112,6 +132,8 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
     }
   }
   try {
+    // The file exists already when a protector created it above; the mode argument applies at creation only, so the
+    // ordinary callers (no protector) keep the umask's mode, which their own `mode` option then sets after the rename.
     const fd = openSync(staged, 'w');
     try {
       if (typeof content === 'string') writeSync(fd, content); else writeSync(fd, content);

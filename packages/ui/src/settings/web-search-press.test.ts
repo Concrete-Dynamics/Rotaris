@@ -25,6 +25,7 @@ describe('the presses the guided card sends (REQ-MCP-110/111)', () => {
     const { deps, sent, reads } = recorder(() => masked());
     const r = await pressStoreWebSearchKey(deps, 'sk-live-123', 'workspace');
     expect(r.ok).toBe(true);
+    expect(r.ok === true && r.refreshFailure).toBeNull();
     expect(sent).toEqual([{ kind: 'mcp.setSecret', server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, value: 'sk-live-123', scope: 'workspace' }]);
     expect(reads()).toBe(1);
   });
@@ -43,6 +44,23 @@ describe('the presses the guided card sends (REQ-MCP-110/111)', () => {
     expect(r).toEqual({ ok: false, message: '/ws/.rotaris/secrets.yaml: the value is empty' });
     expect(sent.map((s) => s.kind)).toEqual(['mcp.setSecret']);
     expect(reads()).toBe(0);
+  });
+
+  it('a rejected re-read after a STANDING write is answered as words, never a rejection (round-2 Major 2): the outcome travels, the failure travels beside it, and the press resolves — fails if the helper awaits `deps.read()` unguarded, which would strand the card\'s in-flight state', async () => {
+    const sent: CommandRequest[] = [];
+    const deps = { command: async (req: CommandRequest) => { sent.push(req); return masked(); }, read: async () => { throw new Error('Render frame was disposed'); } };
+    let rejected: unknown;
+    let r: Awaited<ReturnType<typeof pressStoreWebSearchKey>> | undefined;
+    try { r = await pressStoreWebSearchKey(deps, 'sk-live-123', 'workspace'); } catch (e) { rejected = e; }
+    expect(rejected).toBeUndefined();
+    expect(r?.ok).toBe(true);
+    expect(r?.ok === true && r.outcome.masked).toBe('***');
+    expect(r?.ok === true && r.refreshFailure).toBe('Render frame was disposed');
+    expect(sent).toHaveLength(1);
+    // The delete shares the shape: its re-read is total too.
+    const del = await pressDeleteWebSearchKey(deps, 'workspace');
+    expect(del.ok).toBe(true);
+    expect(del.ok === true && del.refreshFailure).toBe('Render frame was disposed');
   });
 
   it('Delete the stored key sends one mcp.unsetSecret with the scope and re-reads — fails if the delete uses setSecret, names another scope, or leaves the listing stale', async () => {

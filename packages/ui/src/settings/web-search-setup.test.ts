@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { McpHealth, McpSecretRow, McpSecretsView, McpServerRow } from '@rotaris/contracts';
 import {
-  mcpHealthText, presetAfter, presetTabIndex, storedKeySentence, deletedKeySentence, webSearchFileLine, webSearchOtherTransport, webSearchPreset, webSearchSituation,
+  mcpHealthText, presetAfter, presetTabIndex, storedKeySentence, deletedKeySentence, webSearchFileLine, webSearchOtherTransport, webSearchPreset, webSearchProbeBasis, webSearchSituation,
   webSearchStanza, webSearchStoredKey, webSearchUnresolvedNote,
   WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_PRESETS, WEB_SEARCH_SERVER, WEB_SEARCH_SHIPPED_URL,
 } from './web-search-setup.js';
@@ -166,5 +166,32 @@ describe('the sentences the card says (REQ-MCP-110/084/083, REQ-CONFIG-437)', ()
     expect(Object.keys(WEB_SEARCH_IN_FLIGHT).sort()).toEqual(['open', 'probe', 'remove', 'store']);
     expect(WEB_SEARCH_IN_FLIGHT.store).toContain('Storing');
     expect(WEB_SEARCH_IN_FLIGHT.probe).toContain('Checking');
+  });
+});
+
+/**
+ * Round-2 Major 3: the basis a card probe result is kept under — the one place the invalidation rule lives (the card
+ * in `McpSettings.tsx` keys its `liveHealth` to this). Equality means "the same inputs the probe observed", inequality
+ * "this result describes an older state and the parent's health takes over".
+ */
+describe('the basis a card probe result is kept under (round-2 Major 3)', () => {
+  const facts = (over: Partial<Parameters<typeof webSearchProbeBasis>[0]> = {}) => ({
+    unavailable: null, row: row(), storedKey: keyRow('Workspace'), health: { state: 'unknown' } as McpHealth, ...over,
+  });
+  it('the same inputs give the same basis and the classification-relevant difference changes it — fails if a changed endpoint, key, availability or health leaves a stale probe result current', () => {
+    expect(webSearchProbeBasis(facts())).toBe(webSearchProbeBasis(facts()));
+    // The entry: a changed url/line (what a probe observes) changes the basis; so does its enablement and the row's identity.
+    expect(webSearchProbeBasis(facts({ row: row({ line: 'https://elsewhere.example/mcp' }) }))).not.toBe(webSearchProbeBasis(facts()));
+    expect(webSearchProbeBasis(facts({ row: row({ enabled: false }) }))).not.toBe(webSearchProbeBasis(facts()));
+    // The stored key: a replaced key (its mask changes) cannot leave the old probe deciding `ready`.
+    expect(webSearchProbeBasis(facts({ storedKey: keyRow('Workspace', { masked: '***new' }) }))).not.toBe(webSearchProbeBasis(facts()));
+    // The parent health: a newer probe result supersedes the card's older one.
+    expect(webSearchProbeBasis(facts({ health: { state: 'healthy', toolCount: 2 } }))).not.toBe(webSearchProbeBasis(facts()));
+    // The service's own fact.
+    expect(webSearchProbeBasis(facts({ unavailable: 'no workspace' }))).not.toBe(webSearchProbeBasis(facts()));
+  });
+  it('`elapsedMs` is NOT part of the basis — fails if a probe timing that says nothing about the classification invalidates a current result', () => {
+    expect(webSearchProbeBasis(facts({ health: { state: 'healthy', toolCount: 2, elapsedMs: 12 } })))
+      .toBe(webSearchProbeBasis(facts({ health: { state: 'healthy', toolCount: 2, elapsedMs: 999 } })));
   });
 });

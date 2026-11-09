@@ -148,9 +148,9 @@ export function effectivePricing(entry: Pick<ModelEntry, 'input_cost_per_token' 
 }
 
 /**
- * PD-CONFIG-006 (REQ-CONFIG-069 narrowed) with REQ-CONFIG-332: the reasoning-strength levels a model entry OFFERS a
+ * PD-CONFIG-007 (REQ-CONFIG-069 narrowed) with REQ-CONFIG-332: the reasoning-strength levels a model entry OFFERS a
  * control. The slot/model vocabulary less `auto`, filtered to the entry's own `reasoning_effort_map` keys where that
- * map declares any — a map key that IS a level (`xhigh` among them, a level in its own right since PD-CONFIG-006)
+ * map declares any — a map key that IS a level (`xhigh` among them, a level in its own right since PD-CONFIG-007)
  * surfaces, and a map value stays a provider-dialect spelling that is never itself an offered level. Where no map is
  * declared, the levels are the vocabulary intersected with the reasoning levels the resolved model's catalog entry
  * declares (REQ-CONFIG-202's capability record, `capabilityLevels`); a model with neither offers nothing and `[]` is
@@ -167,9 +167,9 @@ export function offeredReasoningLevels(entry: Pick<ModelEntry, 'reasoning_effort
 }
 
 /**
- * PD-CONFIG-006 (REQ-CONFIG-092 extended, REQ-CONFIG-089/093): the effort string a provider receives, or null for no
+ * PD-CONFIG-007 (REQ-CONFIG-092 extended, REQ-CONFIG-089/093): the effort string a provider receives, or null for no
  * reasoning-effort field at all. An explicit `reasoning_effort` bypasses the whole path and is sent verbatim. `auto`
- * keeps the handling the build had — it sends nothing and does not consult the map (PD-CONFIG-006 leaves that
+ * keeps the handling the build had — it sends nothing and does not consult the map (PD-CONFIG-007 leaves that
  * untouched). Otherwise the map entry for the level wins and is sent verbatim, so an endpoint whose map reads
  * `off: none` is sent `none`; where the map holds none for it, `off` sends NOTHING (returning null) — "switched off"
  * is expressed by the absence of an effort, never by a guessed string, and it is a known level, so that path raises

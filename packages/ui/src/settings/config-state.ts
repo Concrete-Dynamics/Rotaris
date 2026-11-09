@@ -449,7 +449,7 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
 export function savePayload(saved: PendingSettings, pending: PendingSettings): DesktopSavePayload {
   const out: { -readonly [K in keyof DesktopSavePayload]: DesktopSavePayload[K] } = {};
   const slots: Partial<Record<ModelSlotName, string | null>> = {};
-  // PD-CONFIG-006: the vocabulary is the contract's (`REASONING_LEVEL_NAMES`), so `off` and `xhigh` travel here too.
+  // PD-CONFIG-007: the vocabulary is the contract's (`REASONING_LEVEL_NAMES`), so `off` and `xhigh` travel here too.
   const thinking: Partial<Record<ModelSlotName, ReasoningLevelName | null>> = {};
   for (const slot of EDITABLE_SLOTS) {
     if (pending.slots[slot] !== saved.slots[slot] && pending.slots[slot] !== null && pending.slots[slot] !== '') slots[slot] = pending.slots[slot];

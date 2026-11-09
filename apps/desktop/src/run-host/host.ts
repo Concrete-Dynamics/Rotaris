@@ -17,6 +17,7 @@ import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
 import { captureAfterRun, dalWhileOpen } from './improvement-capture.js';
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, postRunAnalystOf, restingCatalogueOf, type ConfiguredRun } from './configuration.js';
+import { reloadWorkspaceConfiguration } from './mcp-reload.js';
 import { leasedSetup, leaseForContinuation, LeaseReportLog, type LeasedSetup } from './launch.js';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
@@ -365,6 +366,18 @@ export function createRunHost() {
     if (!r.ok) log(r.error.reason, 'warn');
     return r.ok ? r.value : null;
   };
+  /**
+   * PD-CONFIG-006: after main persists `mcp_servers.<name>.enabled` through the scoped per-field write path, the
+   * workspace's cached resolution (`configured`) still holds the value the process read before the write, so the
+   * next `mcp.list` — and the next run start, which configures anyway — would read it. This drops that one entry and
+   * configures that workspace again (`mcp.newConfiguration` included), so the listing and the probe reflect the file.
+   * The run host itself never writes a file; main asks for this only after its own write succeeded.
+   */
+  const reloadConfiguration = (workspaceRoot: string): { readonly ok: true } | { readonly ok: false; readonly reason: string } => {
+    const r = reloadWorkspaceConfiguration(configured, (root) => configure(root, presenters.attended), workspaceRoot);
+    if (!r.ok) log(`the configuration of ${workspaceRoot} did not load on the reload a tool-server write asked for: ${r.reason}`, 'warn');
+    return r;
+  };
   const sessions = new Sessions({
     clocks,
     pid: process.pid,
@@ -585,6 +598,7 @@ export function createRunHost() {
     continuationLeaseForSession,
     retrospectiveSetup,
     configuredFor,
+    reloadConfiguration,
     sessions,
     sessionActions,
     terminalHost,

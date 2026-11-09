@@ -74,7 +74,7 @@ export const AREAS = Object.freeze({
   },
   composer: {
     title: 'Composer',
-    proofs: ['composer-proof', 'slash-proof', 'chat-controls-proof', 'dictation-proof', 'mode-reset-proof'],
+    proofs: ['composer-proof', 'slash-proof', 'chat-controls-proof', 'dictation-proof', 'mode-reset-proof', 'persona-chip-proof'],
     views: ['docs/architecture/views/04-seams.md'],
   },
   palette: {

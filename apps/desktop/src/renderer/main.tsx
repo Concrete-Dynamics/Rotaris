@@ -7,6 +7,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { dictationSaveProblem, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
+import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
 // ADR-0063 — portable skills: the catalog reader (`askUntilDiscovered`, `bindSkillsReader`, `readWhileMounted`, in the `@rotaris/ui` import above), the Settings tab's props and the composer's commands.
 import './design.css';
@@ -211,7 +212,11 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
    * configuration — the same scoped per-field write (REQ-CONFIG-441/463) the permission-mode chip already takes, so
    * "the next run starts from it" is the configuration load's own rule rather than a second mechanism beside it.
    * The persona is the run's default role (`default_persona`); the model and the reasoning are that role's own,
-   * which is what `entryOf` reads back, so the chip shows the value it just wrote.
+   * which is what `entryOf` reads back, so the chip shows the value it just wrote. Until 2026-11-08 that reading held
+   * only once a run existed: with no session and no transcript `entryOf` fell back to the literal `orchestrator`, so at
+   * rest the chip named a role no run would start as and appeared to jump to the real one when a run began. The
+   * fallback is now the configured default role (`ConfigSnapshot.defaultPersona`, `entryOf`), which is the value the
+   * write below lands on and the value the next run starts from.
    */
   const setField = useCallback(async (patch: Record<string, unknown>): Promise<{ ok: true } | { ok: false; reason: string }> => {
     const r = await bridge.command({ kind: 'config.setField', patch });
@@ -1647,9 +1652,15 @@ function useMcp(): McpSettingsProps {
       setProbing(false);
     },
     onToggle: async (name, enabled) => {
-      const r = await bridge.command({ kind: 'mcp.setEnabled', name, enabled });
-      await read();
-      return r.ok ? { ok: true, message: enabled ? `${name} enabled for this session.` : `${name} disabled for this session.` } : { ok: false, message: r.detail ?? r.headline };
+      // PD-CONFIG-006: the decision — durable write vs session override — and the order (write → override clear →
+      // re-read) live in `mcp-toggle.ts`, where a test drives them without a window.
+      const row = (listing?.rows ?? []).find((r) => r.name === name);
+      if (!row) {
+        const r = await bridge.command({ kind: 'mcp.setEnabled', name, enabled });
+        await read();
+        return r.ok ? { ok: true, message: enabled ? `${name} enabled for this session.` : `${name} disabled for this session.` } : { ok: false, message: r.detail ?? r.headline };
+      }
+      return pressMcpToggle({ command: (req) => bridge.command(req), read: async () => { await read(); } }, row, enabled);
     },
   };
 }

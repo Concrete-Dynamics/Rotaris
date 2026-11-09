@@ -204,6 +204,29 @@ describe('entryRole — the run-level agent is drawn as the latest root (REQ-MON
     expect(entryRole(roles, [], []).persona).toBe('orchestrator');
     expect(entryRole([], [row({ kind: 'agent', name: 'reviewer', persona: 'reviewer' })], [])).toEqual({ persona: 'reviewer', model: '', reasoning: 'medium', tools: [] });
   });
+  /*
+   * REQ-CHAT-006 / REQ-CHAT-009 with REQ-CONFIG-063, added 2026-11-08: the composer's three chips choose what the NEXT
+   * run starts with, so with no run and no transcript they name the role that run would start as — the CONFIGURED
+   * `default_persona` the surface was handed — and not the literal `orchestrator`. Before this the fallback was the
+   * literal, so a workspace stating `default_persona: architect` drew the persona chip `orchestrator` at rest and the
+   * chip appeared to jump to `architect` the moment a run began (the run really did start as `architect`). The wrong
+   * role named at rest also misdrew the model and reasoning chips with it, since both read the role this fallback picks.
+   */
+  it('REQ-CHAT-006/009 with REQ-CONFIG-063: with no run and no transcript the CONFIGURED default role is drawn, with its model and reasoning', () => {
+    const configured = [
+      { role: 'orchestrator', effectiveModel: 'large', rawThinking: 'high', declaredTools: ['read_file'] },
+      { role: 'architect', effectiveModel: 'arch-model', rawThinking: 'low', declaredTools: ['glob'] },
+    ];
+    // The whole fallback is measured, not just the name: the model and the reasoning come from the SAME role lookup,
+    // so the literal fallback misdrew all three chip values at once.
+    expect(entryRole(configured, [], [], [], null, [], 'architect')).toEqual({ persona: 'architect', model: 'arch-model', reasoning: 'low', tools: ['glob'] });
+    // The configured value loses to a live run's root persona and to the transcript's latest root, which stay pinned above.
+    expect(entryRole(configured, [], [], [], 'orchestrator', [], 'architect').persona).toBe('orchestrator');
+    const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' })];
+    expect(entryRole(configured, rows, [], [{ name: 'orchestrator' }], null, [], 'architect').persona).toBe('orchestrator');
+    // A caller that holds no configuration at all keeps the shipped default rather than an empty name.
+    expect(entryRole(configured, [], [], [], null, [], null).persona).toBe('orchestrator');
+  });
 });
 
 describe('agents — chips, enablement, cascade, pause (REQ-MONITOR-060/062/063/064, 274/276)', () => {

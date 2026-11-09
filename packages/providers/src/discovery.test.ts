@@ -74,12 +74,12 @@ describe('generic discovery (REQ-PROVIDER-069/071/072)', () => {
 });
 
 /**
- * PD-CONFIG-006 (REQ-PROVIDER-072 extended): the reasoning levels a payload DECLARES are captured into
+ * PD-CONFIG-007 (REQ-PROVIDER-072 extended): the reasoning levels a payload DECLARES are captured into
  * `capabilities.reasoning_levels` under the product's own name, with the same three-state discipline the image-input
  * declaration of REQ-PROVIDER-149 is read with — declared, or absent because nothing was declared; never an empty
  * list, never a guess, never inferred from a model's name or id.
  */
-describe('PD-CONFIG-006 — a payload’s declared reasoning levels (REQ-PROVIDER-072 extended)', () => {
+describe('PD-CONFIG-007 — a payload’s declared reasoning levels (REQ-PROVIDER-072 extended)', () => {
   it('a capability report declaring reasoning_levels yields them verbatim, in the payload’s order, and survives serialisation', () => {
     const model = modelOfItem({ id: 'ds41', capabilities: { reasoning_levels: ['low', 'off', 'low', 'high', 'xhigh', 'max'] } }, 'p')!;
     expect(model.capabilities.reasoning_levels).toEqual(['low', 'off', 'high', 'xhigh', 'max']);

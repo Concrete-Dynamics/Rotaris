@@ -2117,7 +2117,7 @@ export class Sessions {
       }
       case 'setReasoning': {
         const level = text('level');
-        // PD-CONFIG-006 (REQ-PROVIDER-088 narrowed): the runtime admits the widened vocabulary's levels beside `unset`.
+        // PD-CONFIG-007 (REQ-PROVIDER-088 narrowed): the runtime admits the widened vocabulary's levels beside `unset`.
         return level !== null && ['off', 'low', 'medium', 'high', 'xhigh', 'max', 'unset'].includes(level) && run.setEntryReasoning(level as ThinkingLevel) ? { ok: true } : { ok: false };
       }
       case 'announceShutdown':

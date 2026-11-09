@@ -6,13 +6,13 @@ import { lookupKnownLimits, type KnownLimitsTable } from './limits.data.js';
  * and `User-Agent: rotaris/discovery`, 10 s default timeout; the error mapping is TOTAL (no status is left
  * unclassified, none silently treated as success); each model captured with its qualified id, display
  * name, capabilities (the image-input declaration of 149 and the declared reasoning levels of REQ-PROVIDER-072
- * as PD-CONFIG-006 extends it — both read from the payload where it reports them), limits (078's key ladder,
+ * as PD-CONFIG-007 extends it — both read from the payload where it reports them), limits (078's key ladder,
  * 079/080's known-limits back-fill) and the raw item. Pricing is mapped only for the hosted provider (072),
  * which this build does not sign in to, so every entry carries none.
  *
  * The codex and claude-code strategies of the discovery registry (ADR-0028) are owed; this is the one
  * discoverer, keyed by "every other provider". The codex subscription catalogue's own reasoning-level capture
- * (REQ-PROVIDER-076) stays its own build (PD-CONFIG-006) and is not added here.
+ * (REQ-PROVIDER-076) stays its own build (PD-CONFIG-007) and is not added here.
  */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -84,7 +84,7 @@ function imageInputOf(item: Record<string, unknown>): boolean | null {
 }
 
 /**
- * PD-CONFIG-006 (REQ-PROVIDER-072 extended): the reasoning levels the payload DECLARES, captured under the
+ * PD-CONFIG-007 (REQ-PROVIDER-072 extended): the reasoning levels the payload DECLARES, captured under the
  * product's own name — `capabilities.reasoning_levels` — with the same three-state discipline the image-input
  * declaration of REQ-PROVIDER-149 is read with: a payload absent, not a list, or holding no non-empty string
  * declares none and leaves the key absent — never an empty list and never a guess. Which key paths are read is

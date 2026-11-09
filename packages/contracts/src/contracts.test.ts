@@ -249,7 +249,7 @@ describe('REQ-CONFIG-259/341: a role edit is held under the scope each field was
     expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { model: 'gpt-4o', scope: 'global' } } } }).success).toBe(false);
   });
 
-  it('PD-CONFIG-006: the two reasoning enums read the widened vocabulary — `off` and `xhigh` are accepted, `none` is not', async () => {
+  it('PD-CONFIG-007: the two reasoning enums read the widened vocabulary — `off` and `xhigh` are accepted, `none` is not', async () => {
     const { DesktopSaveSchema, LiveStateSchema } = await import('./config.js');
     // The slot-thinking field and a role's thinking field both carry the widened set; `none` — the spelling `off` maps
     // TO — is no level and is refused, which is what keeps it a map value and never a vocabulary member.

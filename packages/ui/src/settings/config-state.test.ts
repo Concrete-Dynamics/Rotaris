@@ -4,7 +4,7 @@ import { applyChange, clampForDisplay, dictationSaveProblem, isDirty, liveStateO
 import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
 
 const snapshot: ConfigSnapshot = {
-  workspaceRoot: 'C:/ws', loadOk: true, fatal: null,
+  workspaceRoot: 'C:/ws', loadOk: true, fatal: null, defaultPersona: 'orchestrator',
   slots: [
     { slot: 'large_model', value: 'gpt-4o', origin: 'default', thinking: null },
     { slot: 'small_model', value: 'gpt-4o-mini', origin: 'workspace', thinking: 'auto' },
@@ -60,7 +60,7 @@ describe('the pending settings state (REQ-CONFIG-279..287, 335, 419, 425)', () =
     expect(live.delegationStrategy).toBe('orchestrator');
   });
 
-  it('PD-CONFIG-006: a level the control now offers — `off` or `xhigh` — travels in the save payload and the live state', () => {
+  it('PD-CONFIG-007: a level the control now offers — `off` or `xhigh` — travels in the save payload and the live state', () => {
     const saved = pendingFrom(snapshot);
     const pending = applyChange(applyChange(saved, { kind: 'slotThinking', slot: 'large_model', value: 'xhigh' }), { kind: 'slotThinking', slot: 'small_model', value: 'off' });
     // The save payload carries them as the levels they are; the widened contract enum admits both (REQ-CONFIG-256).

@@ -156,7 +156,18 @@ export interface EntryRole { readonly persona: string; readonly model: string; r
  * the transcript's last row a root authored, of any kind that names its author (`agent`, `tool`, `thinking`, `diff`: every
  * row a turn writes carries the persona and the name), no child's, preferring a row named for one of the session's roots
  * (`SessionRecord.entryRoots`, so a child's row that reaches the window before its record cannot pass for one); else
- * `orchestrator`. Its model, reasoning and declared tools (REQ-MONITOR-060's stand-in) come from the snapshot's role view.
+ * the configured default role the surface was handed (`configuredDefault`, `ConfigSnapshot.defaultPersona`), and only
+ * with none at all — no snapshot, or a caller that predates the field — the literal `orchestrator`. Its model, reasoning
+ * and declared tools (REQ-MONITOR-060's stand-in) come from the snapshot's role view, so the model and reasoning chips
+ * read the role THIS fallback names; naming the wrong role there misdrew all three chips at once (see below).
+ *
+ * REQ-CHAT-006 / REQ-CHAT-009: the composer's three chips choose what the NEXT run starts with, so with no session and
+ * no transcript they must name the role that run would start as — the configured `default_persona` (REQ-CONFIG-063)
+ * — exactly as the permission-mode chip names the configured mode through `configuredMode`. A run started from this
+ * window really does start as `default_persona` (the run host logs `entry <default_persona>` and the store records it as
+ * the iteration's `root_persona`), so the literal `orchestrator` fallback showed a value no run would ever start with
+ * and then appeared to 'jump' to the real one the moment a run began. Repaired 2026-11-08: the no-run reading was
+ * `orchestrator` while the workspace stated `default_persona: architect`.
  *
  * The latest root, because the entry persona can change between runs (`default_persona` is read for every run, and
  * PD-ORCH-003 lets a plan cycle run fresh after an iteration), and the run-level agent's chips are the latest root's
@@ -170,12 +181,15 @@ export interface EntryRole { readonly persona: string; readonly model: string; r
  * steps were tool calls was drawn as the previous root until its first text, and one that had written no row at all
  * until then too (the verifier's finding; docs/archive/defects/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
  */
-export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 'role' | 'effectiveModel' | 'rawThinking' | 'declaredTools'>[], rows: readonly TranscriptRow[], agents: readonly Pick<AgentRecord, 'name'>[], roots: readonly Pick<EntryRoot, 'name'>[] = [], live: string | null = null, overrides: SessionRecord['modelOverrides'] = []): EntryRole {
+export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 'role' | 'effectiveModel' | 'rawThinking' | 'declaredTools'>[], rows: readonly TranscriptRow[], agents: readonly Pick<AgentRecord, 'name'>[], roots: readonly Pick<EntryRoot, 'name'>[] = [], live: string | null = null, overrides: SessionRecord['modelOverrides'] = [], configuredDefault: string | null = null): EntryRole {
   const childNames = new Set(agents.map((a) => a.name));
   const rootNames = new Set(roots.map((r) => r.name));
   const candidates = rows.filter((r) => AUTHORED_KINDS.has(r.kind) && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
   const latest = candidates.findLast((r) => rootNames.has(r.name!)) ?? candidates.at(-1);
-  const persona = live ?? latest?.persona ?? 'orchestrator';
+  // REQ-CHAT-006/009 with REQ-CONFIG-063: the configured default role is the fallback, so a surface with no run and no
+  // transcript names the role the NEXT run would start as. `'orchestrator'` remains only as the last resort for a caller
+  // that holds no configuration at all (its own shipped default).
+  const persona = live ?? latest?.persona ?? configuredDefault ?? 'orchestrator';
   const role = roles.find((r) => r.role === persona);
   // REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: a session-wide override of the configured key is what the next run starts
   // with, so the role names the key it runs on (`SessionRecord.modelOverrides`, already the end of the override chain).

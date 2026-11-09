@@ -14,7 +14,7 @@ import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
  * markup; the built app's reading is `settings-proof`'s run-start launches.
  */
 const snapshot: ConfigSnapshot = {
-  workspaceRoot: '/ws', loadOk: true, fatal: null,
+  workspaceRoot: '/ws', loadOk: true, fatal: null, defaultPersona: 'orchestrator',
   slots: [{ slot: 'large_model', value: 'gpt-4o', origin: 'default', thinking: null }],
   models: ['gpt-4o'], imageInputModels: [], modelReasoning: { 'gpt-4o': ['low', 'medium', 'high', 'max'] },
   roles: [],

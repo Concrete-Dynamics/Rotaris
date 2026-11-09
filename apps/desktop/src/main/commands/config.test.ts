@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CommandOutcome, RepositoryState, WorkspaceServiceRequest } from '@rotaris/contracts';
+import { DesktopSaveSchema, type CommandOutcome, type RepositoryState, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 import { createLiveStateArbiter } from '../live-state.js';
@@ -25,6 +25,9 @@ const arbiter = (lines: string[] = []) => createLiveStateArbiter({
 const ROOT = '/work/project';
 const state: RepositoryState = { gitAvailable: true, isRepository: true, branch: 'main', base: null, ahead: 0, behind: 0, touched: 1, uncommitted: 1, failed: [], readMs: 41 };
 
+/** One stub the facet now receives: the run host link (PD-CONFIG-006 asks it to reload after an `mcp_servers` write). */
+const runHostStub = (asked: RunHostRequest[] = []) => ({ request: async (req: RunHostRequest) => { asked.push(req); return { kind: 'ack' as const }; } });
+
 describe('repository.read — the repository card, relayed from the workspace service', () => {
   it('answers with the service\'s state and writes no "repository" line of its own (the service wrote it)', async () => {
     const lines: string[] = [];
@@ -32,7 +35,7 @@ describe('repository.read — the repository card, relayed from the workspace se
     const link = { request: async (req: WorkspaceServiceRequest) => { asked.push(req); return { kind: 'repository.state', state }; } };
     const services = new Map([[canonicalPath(ROOT), { link }]]) as unknown as CommandContext['services'];
     const mainWindows = { ordered: () => [] } as unknown as CommandContext['mainWindows'];
-    const facet = configCommands({ log: (m) => { lines.push(m); }, liveState: arbiter(lines), mainWindows, raiseNotice: () => undefined, services });
+    const facet = configCommands({ log: (m) => { lines.push(m); }, liveState: arbiter(lines), mainWindows, raiseNotice: () => undefined, services, runHost: runHostStub() });
     const at: CommandAt = { w: { workspaceId: 'ws-1', workspace: ROOT, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
     const out = await facet['repository.read']({ kind: 'repository.read' }, at);
     expect(out).toEqual({ ok: true, value: state });
@@ -57,7 +60,7 @@ describe('config.setField — every main window repopulates from its own workspa
     const sent = new Map<string, unknown[]>();
     const win = (workspace: string) => ({ workspace, win: { isDestroyed: () => false, webContents: { send: (_channel: string, payload: { snapshot: unknown }) => { sent.set(workspace, [...(sent.get(workspace) ?? []), payload.snapshot]); } } }, personaWindows: { list: () => [], entry: () => undefined }, terminalWindows: { current: () => null } });
     const mainWindows = { ordered: () => [win(A), win(B)] } as unknown as CommandContext['mainWindows'];
-    const facet = configCommands({ log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services });
+    const facet = configCommands({ log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services, runHost: runHostStub() });
     const at: CommandAt = { w: { workspaceId: 'ws-a', workspace: A, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
     const out = await facet['config.setField']({ kind: 'config.setField', patch: { runtime: { allow_outside_workspace: true } } }, at);
     expect(out.ok).toBe(true);
@@ -89,7 +92,7 @@ describe('config.setField — a main window\'s persona and terminal windows repo
       terminalWindows: { current: () => (terminal ? { win: electronWindow(`${name}/terminal`) } : null) },
     });
     const mainWindows = { ordered: () => [family(A, 'A', ['orchestrator', 'reviewer'], true), family(B, 'B', ['orchestrator'], false)] } as unknown as CommandContext['mainWindows'];
-    const facet = configCommands({ log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services });
+    const facet = configCommands({ log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services, runHost: runHostStub() });
     const at: CommandAt = { w: { workspaceId: 'ws-a', workspace: A, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
     const out = await facet['config.setField']({ kind: 'config.setField', patch: { runtime: { allow_outside_workspace: true } } }, at);
     expect(out.ok).toBe(true);
@@ -115,7 +118,7 @@ describe('config.setField — each announced load reaches the fatal-load notice 
     const mainWindows = { ordered: () => [win(A), win(B)] } as unknown as CommandContext['mainWindows'];
     const observed: { root: string; loadOk: boolean }[] = [];
     const configFatal = { observe: async (root: string, s: { loadOk: boolean }) => { observed.push({ root, loadOk: s.loadOk }); }, loaded: async () => undefined };
-    const facet = configCommands({ configFatal, log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services });
+    const facet = configCommands({ configFatal, log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services, runHost: runHostStub() });
     const at: CommandAt = { w: { workspaceId: 'ws-a', workspace: A, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
     expect((await facet['config.setField']({ kind: 'config.setField', patch: { runtime: { max_depth: 3 } } }, at)).ok).toBe(true);
     await vi.waitFor(() => { expect(observed).toHaveLength(2); });
@@ -134,7 +137,7 @@ describe('config.liveState — a window publishes, and letting go is the last ho
   const states: unknown[] = [];
   const facetFor = () => configCommands({
     log: () => undefined, mainWindows: { ordered: () => [] } as unknown as CommandContext['mainWindows'],
-    raiseNotice: () => undefined, services: new Map(),
+    raiseNotice: () => undefined, services: new Map(), runHost: runHostStub(),
     liveState: createLiveStateArbiter({
       log: () => undefined,
       send: (state) => { states.push(state); return Promise.resolve({ ok: true, value: {} }); },
@@ -171,5 +174,49 @@ describe('config.liveState — a window publishes, and letting go is the last ho
     expect(await facet['config.liveState']({ kind: 'config.liveState', state: {} }, at(9))).toEqual({ ok: true });
     await Promise.resolve();
     expect(states).toEqual([]);
+  });
+});
+
+/**
+ * PD-CONFIG-006: main drives the reload. A `config.setField` whose patch touches `mcp_servers` asks the run host to
+ * drop its cached resolution of that window's workspace and read the file again (`mcp.reload`), after the write
+ * succeeded; a patch that touches no `mcp_servers` key asks nothing, and no `config.save` asks (a save's own reload
+ * path covers the rest). The run host never writes the file — main does, through the workspace service.
+ */
+describe('config.setField — an mcp_servers write asks the run host to reload (PD-CONFIG-006)', () => {
+  const A = '/work/alpha';
+  const facetOn = (asked: RunHostRequest[]) => {
+    const service = { link: { request: async () => ({ kind: 'config.snapshot', snapshot: { workspaceRoot: A, runtime: {} } }) } };
+    const services = new Map([[canonicalPath(A), service]]) as unknown as CommandContext['services'];
+    const mainWindows = { ordered: () => [] } as unknown as CommandContext['mainWindows'];
+    return configCommands({ log: () => undefined, liveState: arbiter(), mainWindows, raiseNotice: () => undefined, services, runHost: runHostStub(asked) });
+  };
+  const at: CommandAt = { w: { workspaceId: 'ws-a', workspace: A, followedSessionId: null } as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
+
+  it('reloads for a patch that writes mcp_servers, and for nothing else', async () => {
+    const asked: RunHostRequest[] = [];
+    const facet = facetOn(asked);
+    const out = await facet['config.setField']({ kind: 'config.setField', patch: { mcp_servers: { browser: { enabled: true } } } }, at);
+    expect(out.ok).toBe(true);
+    expect(asked).toEqual([{ kind: 'mcp.reload', workspaceId: 'ws-a' }]);
+
+    asked.length = 0;
+    await facet['config.setField']({ kind: 'config.setField', patch: { runtime: { max_depth: 4 } } }, at);
+    expect(asked).toEqual([]);
+  });
+
+  /**
+   * The other half of "and for nothing else": a `config.save` asks no reload, so a Debug build cannot regress the
+   * narrow shape into "every write reloads". It is also structural: `DesktopSaveSchema` carries no `mcp_servers` key
+   * (the entry is written by the scoped per-field path the press uses, never by the save bar), so a save can never
+   * write one and has nothing to reload for.
+   */
+  it('a config.save asks no reload — it cannot carry an mcp_servers key at all', async () => {
+    const asked: RunHostRequest[] = [];
+    const facet = facetOn(asked);
+    const out = await facet['config.save']({ kind: 'config.save', save: { runtime: { max_depth: 4 } } }, at);
+    expect(out.ok).toBe(true);
+    expect(asked).toEqual([]);
+    expect(Object.keys(DesktopSaveSchema.shape)).not.toContain('mcp_servers');
   });
 });

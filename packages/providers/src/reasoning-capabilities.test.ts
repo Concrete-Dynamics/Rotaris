@@ -5,14 +5,14 @@ import { mergeProviderRecord, parseSnapshot, serializeSnapshot, type ProviderRec
 import { assignSlots } from './slots.js';
 
 /**
- * PD-CONFIG-006 (REQ-PROVIDER-072 extended, REQ-CONFIG-202/332): the ACCEPTANCE CHAIN, end to end —
+ * PD-CONFIG-007 (REQ-PROVIDER-072 extended, REQ-CONFIG-202/332): the ACCEPTANCE CHAIN, end to end —
  * a discovery payload → `modelOfItem` → `mergeProviderRecord` → `serializeSnapshot` → `parseSnapshot` →
  * `snapshotCapabilityRecords` + `capabilityReasoningLevels` (`@rotaris/config`) → `offeredReasoningLevels`
  * returns exactly the levels the payload declared, `off` and `xhigh` included. Every step is the real one and
  * the middle of the chain is the real serialized string, never an inspected object: what is proved is that the
  * levels survive the document that actually lands on disk.
  *
- * Before PD-CONFIG-006 the vocabulary was closed at five, so `off` and `xhigh` — levels an endpoint such as the
+ * Before PD-CONFIG-007 the vocabulary was closed at five, so `off` and `xhigh` — levels an endpoint such as the
  * owner's locally hosted `ds41` does honour — were clipped away on the last step. The negative control beside
  * this file's sibling (`packages/config/src/sections/reasoning-levels.test.ts`) runs the same declared record
  * against the pre-change five and shows them clipped.
@@ -42,7 +42,7 @@ function offeredThroughTheSnapshot(payload: Record<string, unknown>): { readonly
   return { offered, text, record };
 }
 
-describe('PD-CONFIG-006 — the acceptance chain, payload → offered levels, through the real serialized string', () => {
+describe('PD-CONFIG-007 — the acceptance chain, payload → offered levels, through the real serialized string', () => {
   it('a payload declaring off/low/high/xhigh/max has exactly those offered, through the write, the parse and the projection', () => {
     const declared = ['off', 'low', 'high', 'xhigh', 'max'];
     const { offered, text, record } = offeredThroughTheSnapshot({ id: 'ds41', display_name: 'DS41', capabilities: { reasoning_levels: declared } });
@@ -78,7 +78,7 @@ describe('PD-CONFIG-006 — the acceptance chain, payload → offered levels, th
   });
 
   it('an entry whose map declares the levels remains the model’s source, and `off` reaches the endpoint through it', () => {
-    // The other half of PD-CONFIG-006: the map route, unchanged in shape, now admitting `off` and `xhigh` as levels.
+    // The other half of PD-CONFIG-007: the map route, unchanged in shape, now admitting `off` and `xhigh` as levels.
     const entry = entryOf({ reasoning_effort_map: { off: 'none', low: 'low', high: 'high', xhigh: 'xhigh', max: 'max' } })!;
     expect(offeredReasoningLevels(entry, [])).toEqual(['off', 'low', 'high', 'xhigh', 'max']);
     // REQ-CONFIG-092 extended: `off` reaches the endpoint as its map entry; with no entry for it, nothing is sent.

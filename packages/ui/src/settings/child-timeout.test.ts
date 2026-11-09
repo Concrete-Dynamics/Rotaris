@@ -14,7 +14,7 @@ import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
  */
 const runtime = (childTimeout: number): ConfigSnapshot['runtime'] => ({ max_depth: 3, max_active_children: 6, child_timeout: childTimeout, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [] });
 const snapshotWith = (childTimeout: number): ConfigSnapshot => ({
-  workspaceRoot: '/ws', loadOk: true, fatal: null,
+  workspaceRoot: '/ws', loadOk: true, fatal: null, defaultPersona: 'orchestrator',
   slots: [{ slot: 'large_model', value: 'gpt-4o', origin: 'default', thinking: null }],
   models: ['gpt-4o'], imageInputModels: [], modelReasoning: { 'gpt-4o': ['low', 'medium', 'high', 'max'] },
   roles: [],

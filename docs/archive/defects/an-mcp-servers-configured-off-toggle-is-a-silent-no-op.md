@@ -62,3 +62,19 @@ disabled-when-unavailable rule), REQ-CONFIG-464/REQ-CONFIG-350 (the screen edits
 - `apps/desktop/src/renderer/main.tsx` — `onToggle`, the `mcp.setEnabled` request and the reload that follows.
 - `packages/contracts/src/mcp.ts` — `McpServerRowSchema`'s `enabled` and `overridden`.
 - `apps/desktop/scripts/mcp-proof.mjs` — the only press of the toggle (line 692), and its off-only shape.
+
+## Outcome — repaired 2026-11-08 ([`PD-CONFIG-006`](../../product/directives/pd-config-006.md#pd-config-006), R-095)
+
+The owner ruled the narrow fix the note said was the owner's to make: a press on an AVAILABLE row whose configured
+value is `false` persists `mcp_servers.<name>.enabled: true` into the selected scope through the scoped per-field
+write path (REQ-CONFIG-441's `config.setField`), in one press, and the run host's cached resolution of that
+workspace is dropped and read again (`mcp.reload`, one new run-host request) so the listing and the probe reflect
+the file. Every other press keeps REQ-MCP-094's session toggle, REQ-CONFIG-349's unavailable rule is unchanged, and
+no third store exists. The switch of a configured-off, available row now says in its accessible name, description
+and tooltip that switching on is the durable write, and the card's own sentence says so. Change of direction, not
+of the reading: the note's "Not repaired here, deliberately" stands as the reading the directive then narrowed —
+`PD-CONFIG-006` is its disposition, REQ-CONFIG-417's closing sentence narrowed by the same directive.
+
+Pinned by `apps/desktop/src/run-host/mcp-toggle-reload.test.ts` (red with the write removed, red again with the
+invalidation removed, both restored byte-identical), `apps/desktop/src/renderer/mcp-toggle.test.ts`,
+`packages/ui/src/settings/McpSettings.test.ts`, and the reload hop in `apps/desktop/src/main/commands/config.test.ts`.

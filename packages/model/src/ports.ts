@@ -23,8 +23,8 @@ import type { Result } from '@rotaris/kernel';
 export type Dialect = 'chat' | 'responses';
 /**
  * The RUNTIME's vocabulary: the levels a run accepts for an agent. `unset` means the provider or endpoint decides,
- * exactly as it did before PD-CONFIG-006; the widened slot/model vocabulary's non-`auto` members — `off` and `xhigh`
- * included — are admitted beside it (PD-CONFIG-006, REQ-PROVIDER-088 narrowed), so a switch the control now offers
+ * exactly as it did before PD-CONFIG-007; the widened slot/model vocabulary's non-`auto` members — `off` and `xhigh`
+ * included — are admitted beside it (PD-CONFIG-007, REQ-PROVIDER-088 narrowed), so a switch the control now offers
  * cannot be refused at dispatch.
  */
 export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'unset';

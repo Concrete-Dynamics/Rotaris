@@ -692,8 +692,12 @@
    head's right edge (it opens the info region, whose paragraphs the prose rule above already bounds), and a closed
    step body is out of the flow and out of the tab order (`hidden`; stated explicitly because an author rule that
    paints the body would otherwise outrank the user agent's own `[hidden]`). REQ-MCP-111's walk says the position in
-   TEXT — the bar's labels — so nothing here carries a fact by colour. */
-[data-mcp-websearch-setup] [data-websearch-about-control] { align-self: flex-start; margin-left: auto; }
+   TEXT — the bar's labels — so nothing here carries a fact by colour. FND-6 of the Opus 5.5 review (2026-11-09): the
+   icon control took `.btn`'s `min-height: --rt-control-height` (32 px) against `.btn-icon`'s `height: 30px`, so it
+   painted 30 x 32 — neither square nor a token height — while the two neighbouring card heads ("Configured servers",
+   "Code intelligence") carry `btn-compact` controls at `--rt-control-height-compact` (24 px), which is C2's "one
+   relationship one value across views". The square is that same token, both axes. */
+[data-mcp-websearch-setup] [data-websearch-about-control] { align-self: flex-start; margin-left: auto; width: var(--rt-control-height-compact); height: var(--rt-control-height-compact); }
 [data-mcp-websearch-setup] [data-websearch-step-body][hidden] { display: none; }
 
 /* ── Tool rows (REQ-CHAT-060/061), diff rows (REQ-CHAT-050), approval trailer rows (REQ-CHAT-051) ── */

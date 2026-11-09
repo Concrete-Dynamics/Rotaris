@@ -272,12 +272,28 @@ export const WEB_SEARCH_STEPS: readonly WebSearchStep[] = [
 ];
 
 /**
- * The visible label of one bar control: `Step 1 · Choose your search provider`. The number is made HERE, from the
+ * The bar control's accessible name: `Step 1 · Choose your search provider`. The number is made HERE, from the
  * step's position in `WEB_SEARCH_STEPS` (never spelled in the JSX), so the bar's numbering has one home and the
  * label is assertable as text (REQ-SHELL-149).
+ *
+ * F4 (Opus 5.5 review, 2026-11-09): this string is the control's NAME, not its visible text, and the short label
+ * below is what the bar shows. Bar and body carried the same title twice — 4 titles, 8 occurrences on one card —
+ * and §1.11's "no filler" leaves the title one home: the body's own heading, which is what a reader of the page
+ * sees beneath the bar. The mockup's own step marker (`Question stepper`) numbers its pills and keeps the words
+ * elsewhere, which is the shape this follows.
  */
 export function webSearchStepLabel(index: number, step: WebSearchStep): string {
   return `Step ${index + 1} · ${step.title}`;
+}
+
+/**
+ * The bar control's VISIBLE text: `Step 2`. The position is a NUMBER IN TEXT (REQ-SHELL-149) made from the same
+ * one home as the accessible name above, and the step's own title stands once, as the body's heading beneath its
+ * control (F4 of the Opus 5.5 review, 2026-11-09). WCAG 2.5.3's "label in name" holds: the visible `Step 2` is
+ * contained in the control's `Step 2 · Paste the key` name.
+ */
+export function webSearchStepShortLabel(index: number): string {
+  return `Step ${index + 1}`;
 }
 
 /**
@@ -317,12 +333,15 @@ export const WEB_SEARCH_ABOUT: readonly string[] = [
 export const WEB_SEARCH_ABOUT_CONTROL = 'About web search setup';
 
 /**
- * The control's name per state: the same control hides the region once it is open, so the name says which press is
- * offered (one sentence; the closed name is `WEB_SEARCH_ABOUT_CONTROL`, the brief's own JSX and the row of §D.2's
- * test both tie the closed state to that constant).
+ * The control's name, the SAME string in both states (FND-7 of the Opus 5.5 review, 2026-11-09). It used to swap to
+ * `Hide help about the web search setup` once open while `title` stayed `About web search setup`, so one control
+ * carried two disagreeing strings and `aria-expanded` said the state a third time. OQ-503's reading of §1.7 ("an
+ * icon-only control carries ... an accessible name and a tooltip") is satisfied by one stable pair, and the state has
+ * one home: `aria-expanded`, which the control already carries. Kept a function so the call site, the brief's own JSX
+ * and `web-search-stepper.test.ts` still read `webSearchAboutControlLabel`.
  */
-export function webSearchAboutControlLabel(open: boolean): string {
-  return open ? 'Hide help about the web search setup' : WEB_SEARCH_ABOUT_CONTROL;
+export function webSearchAboutControlLabel(_open: boolean): string {
+  return WEB_SEARCH_ABOUT_CONTROL;
 }
 
 /**

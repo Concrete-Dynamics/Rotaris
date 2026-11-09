@@ -696,8 +696,11 @@
    icon control took `.btn`'s `min-height: --rt-control-height` (32 px) against `.btn-icon`'s `height: 30px`, so it
    painted 30 x 32 — neither square nor a token height — while the two neighbouring card heads ("Configured servers",
    "Code intelligence") carry `btn-compact` controls at `--rt-control-height-compact` (24 px), which is C2's "one
-   relationship one value across views". The square is that same token, both axes. */
-[data-mcp-websearch-setup] [data-websearch-about-control] { align-self: flex-start; margin-left: auto; width: var(--rt-control-height-compact); height: var(--rt-control-height-compact); }
+   relationship one value across views". R2-FND-2 (round 2, 2026-11-09) corrected the first attempt at this: setting
+   `width`/`height` alone did NOT hold, because `.btn`'s `min-height` (32 px) still won on the block axis and the
+   control painted 24 x 32. The compact tier is stated on all three axes, and the control also carries `btn-compact`,
+   so the height token is the one the view already spends and no literal stands in for it. */
+[data-mcp-websearch-setup] [data-websearch-about-control] { align-self: flex-start; margin-left: auto; width: var(--rt-control-height-compact); height: var(--rt-control-height-compact); min-height: var(--rt-control-height-compact); }
 [data-mcp-websearch-setup] [data-websearch-step-body][hidden] { display: none; }
 
 /* ── Tool rows (REQ-CHAT-060/061), diff rows (REQ-CHAT-050), approval trailer rows (REQ-CHAT-051) ── */

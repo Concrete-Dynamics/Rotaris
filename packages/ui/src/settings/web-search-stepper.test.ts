@@ -457,7 +457,7 @@ describe('the card as it renders', () => {
 
   it('the row\'s press reaches the card\'s own focus route and lands on the CURRENT step, and an inert route cannot pass — fails if the press goes nowhere', () => {
     harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
-    const focused: WebSearchStepId[] = [];
+    const focused: string[] = [];
 
     // `McpSettings` owns the route (`setupFocus` → its own callback → the card's effect), so the press is driven the
     // way the product drives it: the row control's own handler, after the card's effect has been committed.
@@ -686,13 +686,15 @@ describe('the boundaries this change must not move', () => {
     harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
     vi.stubGlobal('window', { addEventListener: () => undefined, removeEventListener: () => undefined });
     try {
-      // A write that does not settle until the test says so, the gate pattern `web-search-card.test.ts` uses.
-      let releaseDelete: (() => void) | null = null;
+      // A write that does not settle until the test says so, the gate pattern `web-search-card.test.ts` uses. The
+      // resolver lives in a box: a bare `let` assigned only inside the promise executor is narrowed to `never` at the
+      // call site under `tsc -b` (the gate's own command), which is how this file first went red in CI.
+      const gate: { release: (() => void) | null } = { release: null };
       const setup = {
         onOpenFile: async () => ({ ok: true as const }), onGetKey: async () => ({ ok: true as const }),
         onStoreKey: async () => ({ ok: false as const, message: 'not pressed here' }),
         onDeleteKey: () => new Promise((resolve) => {
-          releaseDelete = () => resolve({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: true }, refreshFailure: null });
+          gate.release = () => resolve({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: true }, refreshFailure: null });
         }),
         onProbe: async () => ({ state: 'unknown' as const }),
       } as unknown as McpSettingsProps['webSearchSetup'];
@@ -710,7 +712,7 @@ describe('the boundaries this change must not move', () => {
       // be taken and Escape is suppressed — nothing hands focus out to a control the press has just disabled.
       expect(inFlight.find('onYes')?.['busy']).toBe(true);
       // Release the write and let it settle: now the dialog closes.
-      releaseDelete?.();
+      gate.release?.();
       for (let i = 0; i < 6; i += 1) await Promise.resolve();
       const after = draw({ listing: listing([row()]), webSearchSecrets: secrets([]), webSearchSetup: setup });
       expect(after.html).not.toContain('Delete the stored key?');

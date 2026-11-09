@@ -95,6 +95,22 @@ describe('the shared confirmation answers Escape with its declining answer (REQ-
     expect(onCancel).not.toHaveBeenCalled();
     expect(escape.preventDefault).not.toHaveBeenCalled();
   });
+
+  it('holds the answers with `aria-disabled`, never `disabled`, so the button that has focus stays focusable — fails if the held state drops focus to `body` (R4-FND-1, Opus 5.5 review, round 4)', () => {
+    const held = draw({ busy: true });
+    // The regression this guards: the `web_search` card keeps the dialog open for the length of the delete press
+    // (R3-FND-1). A `disabled` answer button cannot hold focus — the browser moves it to `body` — so the whole
+    // write-and-re-read window would sit with `body` focused, which is what the fix set out to prevent.
+    expect(held.html).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect((held.html.match(/aria-disabled="true"/g) ?? [])).toHaveLength(2);
+    // The press is ignored in the handlers, so no second answer can be taken while the prompt is held: the `aria-disabled`
+    // state is the announcement, and the guard is what makes it true.
+    expect(held.html).toContain('aria-disabled="true"');
+    // …and with `busy` false the buttons are plain again, so the ordinary path is untouched.
+    const free = draw();
+    expect(free.html).not.toContain('aria-disabled');
+    expect(free.html).not.toMatch(/\sdisabled(?:=|\s|>)/);
+  });
 });
 
 describe('the shared confirmation hands focus back to what opened it (Rubric F3; Guide 05 §4 step 6)', () => {

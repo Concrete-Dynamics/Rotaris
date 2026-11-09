@@ -40,9 +40,9 @@ export function configAnnouncer(
  * never parses YAML of its own.
  */
 export function configCommands(
-  ctx: Pick<CommandContext, 'configFatal' | 'log' | 'mainWindows' | 'raiseNotice' | 'services'> & { readonly liveState: LiveStateArbiter },
+  ctx: Pick<CommandContext, 'configFatal' | 'log' | 'mainWindows' | 'raiseNotice' | 'services' | 'runHost'> & { readonly liveState: LiveStateArbiter },
 ): Pick<CommandHandlers, 'config.read' | 'repository.read' | 'config.save' | 'config.setField' | 'config.liveState'> {
-  const { configFatal, log, liveState, mainWindows, raiseNotice, services } = ctx;
+  const { configFatal, log, liveState, mainWindows, raiseNotice, services, runHost } = ctx;
   const announce = configAnnouncer(mainWindows, services, configFatal);
   const onConfigSave = async (req: Extract<CommandRequest, { kind: 'config.save' | 'config.setField' }>, { w }: CommandAt): Promise<CommandOutcome> => {
     // ADR-0037 Tier A: the service writes and loads again; every window repopulates from the reloaded snapshot (decision 4 of the plan for REQ-CONFIG-423)
@@ -51,6 +51,7 @@ export function configCommands(
     const svc = services.get(canonicalPath(w.workspace));
     if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
     const root = canonicalPath(w.workspace);
+    const workspaceId = w.workspaceId;
     const runtimePatch = req.kind === 'config.save' ? req.save.runtime : req.patch['runtime'];
     const explicitCollectorEnable = runtimePatch !== null && typeof runtimePatch === 'object'
       && (runtimePatch as Record<string, unknown>)['improvement_collector_enabled'] === true;
@@ -68,6 +69,18 @@ export function configCommands(
     if (r.kind !== 'config.snapshot') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The configuration could not be written'); }
     void announce(root, r.snapshot);
     log(`configuration ${req.kind === 'config.save' ? 'saved' : 'field written'} for ${root}`);
+    /*
+     * PD-CONFIG-006: a written `mcp_servers` field changes what the run host's cached resolution of this workspace
+     * holds (`configure` at every run start), and the MCP category's listing reads that cache. The run host is asked
+     * to drop it and read the file again — main drives, the run host never writes. A refusal to reload leaves no
+     * stale entry behind (the cache was dropped first), so the write itself is still a success and is reported as one;
+     * the next `mcp.list` answers from a fresh read either way.
+     */
+    const mcpTouched = req.kind === 'config.setField' ? req.patch['mcp_servers'] : undefined;
+    if (mcpTouched !== undefined && mcpTouched !== null && typeof mcpTouched === 'object' && !Array.isArray(mcpTouched)) {
+      const reload = await runHost.request({ kind: 'mcp.reload', workspaceId }, millis(30_000));
+      if (reload.kind !== 'ack') log(`the run host could not reload ${root} after a tool-server write: ${reload.kind === 'refused' ? `${reload.headline}${reload.detail === undefined ? '' : ` — ${reload.detail}`}` : reload.kind}`, 'warn');
+    }
     return { ok: true, value: r.snapshot };
   };
   return {

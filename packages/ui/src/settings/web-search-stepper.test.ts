@@ -142,18 +142,23 @@ const draw = (over: Partial<McpSettingsProps> = {}): { html: string; card: strin
 /** React escapes `'` in text nodes; a sentence compared against the markup is compared in its escaped form. */
 const escaped = (text: string): string => text.replace(/&/g, '&amp;').replace(/'/g, '&#x27;');
 /**
- * Apply the effects the last draw registered, the way React would commit them: an effect whose deps changed runs its
- * PREVIOUS cleanup first, then its body (whose own return becomes the cleanup). Effects whose deps are unchanged are
- * skipped, which is what makes "re-registered whenever the situation moves" assertable.
+ * Apply the effects the last draw registered, the way React commits them: **all** changed effects' cleanups run first
+ * (the unmount/teardown phase), then their bodies (the setup phase, whose own return becomes the next cleanup).
+ * Effects whose deps are unchanged are skipped, which is what makes "re-registered whenever the situation moves"
+ * assertable.
  */
 const runEffects = (): void => {
+  const changed: { index: number; body: () => void | (() => void) }[] = [];
   for (const { index, body, previous } of harness.pendingEffects) {
     const current = harness.effects[index]!;
     const same = previous !== undefined && previous.deps !== undefined && current.deps !== undefined
       && previous.deps.length === current.deps.length
       && previous.deps.every((d, i) => Object.is(d, current.deps![i]));
     if (same) continue;
-    harness.cleanups.get(index)?.();
+    changed.push({ index, body });
+  }
+  for (const { index } of changed) harness.cleanups.get(index)?.();
+  for (const { index, body } of changed) {
     const returned = body();
     if (typeof returned === 'function') harness.cleanups.set(index, returned);
     else harness.cleanups.delete(index);
@@ -424,18 +429,28 @@ describe('the card as it renders', () => {
     expect(focused).toEqual(['provider']);
   });
 
-  it('the card hands its route back on unmount, so no press reaches a tree that is gone — fails if the cleanup is missing', () => {
+  it('the card hands its route back on unmount, so a later press reaches nothing — fails if the cleanup is a no-op', () => {
     harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
+    const focused: WebSearchStepId[] = [];
+
     harness.cursor = 0;
-    draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    const drawn = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
     harness.cursor = 0;
     runEffects();
-    // The registration effect returned a cleanup that hands `null` back; running it is the unmount.
+    // The refs the render filled (a stub stands in for the DOM node a static render never makes), then the press.
+    for (const control of drawn.all('data-websearch-step-control')) {
+      const id = control['data-websearch-step-control'] as WebSearchStepId;
+      (control['ref'] as ((el: unknown) => void) | undefined)?.({ focus: () => focused.push(id) });
+    }
+    const press = () => (drawn.find('data-websearch-row-setup')!['onClick'] as () => void)();
+    press();
+    expect(focused).toEqual(['provider']);
+
+    // The unmount: the registration effect's cleanup hands the route back, and the SAME press now reaches nothing.
     expect(harness.cleanups.size).toBeGreaterThan(0);
     for (const cleanup of harness.cleanups.values()) cleanup();
-    // A press after it reaches nothing — and must not throw.
-    const after = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
-    expect(() => (after.find('data-websearch-row-setup')!['onClick'] as () => void)()).not.toThrow();
+    press();
+    expect(focused).toEqual(['provider']);
   });
 });
 

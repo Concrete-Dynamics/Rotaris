@@ -3,7 +3,7 @@ import { AcknowledgementKindSchema, NoticeSeveritySchema } from './notices.js';
 import { z } from 'zod';
 import { FREE_TEXT_MAX } from './limits.js'; // OQ-467
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
-import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
+import { McpHealthSchema, McpListingSchema, McpSecretWriteOutcomeSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
 import { ConfinementVerdictSchema } from './confinement.js';
 import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
@@ -422,6 +422,14 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.read'), workspaceRoot: z.string() }),
   z.object({ kind: z.literal('config.save'), workspaceRoot: z.string(), save: DesktopSaveSchema }),
   z.object({ kind: z.literal('config.setField'), workspaceRoot: z.string(), scope: z.enum(CONFIG_SCOPES).optional(), patch: z.record(z.string(), z.unknown()) }),
+  /**
+   * REQ-MCP-110/111's write half (ADR-0034 part S's owed side): store (or replace) and delete ONE stored secret, in
+   * the scope the request names (`workspace` when none, REQ-CONFIG-463). The workspace service is the only writer of
+   * configuration files (05-state-ownership.md), so the file the value lands in is written here; the value travels
+   * INWARD on this boundary only and the answer is the masked confirmation (REQ-MCP-081) — never a value.
+   */
+  z.object({ kind: z.literal('mcp.setSecret'), workspaceRoot: z.string(), server: z.string(), key: z.string(), value: z.string(), scope: z.enum(CONFIG_SCOPES).optional() }),
+  z.object({ kind: z.literal('mcp.unsetSecret'), workspaceRoot: z.string(), server: z.string(), key: z.string(), scope: z.enum(CONFIG_SCOPES).optional() }),
   /** REQ-WORKSPACE-038 / REQ-PROVIDER-099: the minimal agents.yaml written only when none exists, then the load again. */
   z.object({ kind: z.literal('config.bootstrap'), workspaceRoot: z.string() }),
   /** ADR-0038 / REQ-MONITOR-168: the repository card's reads, made by the one helper the workspace service owns. */
@@ -583,6 +591,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.list'), listing: McpListingSchema }),
   z.object({ kind: z.literal('mcp.probe'), results: z.array(z.object({ name: z.string(), health: McpHealthSchema })) }),
   z.object({ kind: z.literal('mcp.secrets'), view: McpSecretsViewSchema }),
+  /** REQ-MCP-110: a secrets write's masked confirmation — server, key, scope and the one mask; never a value (REQ-MCP-081). */
+  McpSecretWriteOutcomeSchema.extend({ kind: z.literal('mcp.secretWritten') }),
   /** REQ-SANDBOX-071: the four fields are the complete answer, and every surface presents this same text. */
   z.object({ kind: z.literal('confinement.status'), verdict: ConfinementVerdictSchema }),
   /** ADR-0035 (Part T): the setup's status after the action was applied. */

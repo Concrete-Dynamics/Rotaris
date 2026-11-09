@@ -14,6 +14,7 @@ import { notAFolderAtOpen } from './not-a-folder.js';
 import { bootstrapAtOpen } from './open-bootstrap.js';
 import { assessEstablish, performEstablish } from './store-establish.js';
 import { openStoreAtOpen, RestoreInFlight } from './store-open.js';
+import { handleSecretWrite } from './secrets.js';
 
 /**
  * WORKSPACE SERVICE — one utilityProcess per open workspace, keyed by
@@ -239,6 +240,16 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       if (!r.ok) return { kind: 'refused', code: `config.${r.refusal.code}`, headline: 'The setting could not be written', detail: `${r.refusal.file}: ${r.refusal.fault}` };
       return { kind: 'config.snapshot', snapshot: r.snapshot };
     }
+    /*
+     * REQ-MCP-084/110/111 (ADR-0034 part S's owed write side): ONE stored secret stored or deleted, in the scope the
+     * request names (`workspace` when none, REQ-CONFIG-463). This process is the only writer of configuration files
+     * (05-state-ownership.md), so `secrets.yaml` is written from here through the atomic writer of
+     * `packages/config/src/mcp/secrets-write.ts`; the answer is the masked confirmation alone (REQ-MCP-081) — the
+     * value the caller sent is never echoed back and never logged. The reply's shape lives in `secrets.ts`.
+     */
+    case 'mcp.setSecret':
+    case 'mcp.unsetSecret':
+      return handleSecretWrite(req, { configDir: dirs.config, timers: clocks.timers, log });
     case 'config.bootstrap': {
       // REQ-WORKSPACE-038 / REQ-WORKSPACE-135: an existing file is never overwritten; the outcome is logged, the load follows.
       const files = scopeFiles(dirs.config, req.workspaceRoot);

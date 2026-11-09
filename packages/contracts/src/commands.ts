@@ -341,6 +341,17 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().max(NAME_MAX).min(1), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), server: z.string().max(NAME_MAX).optional() }),
   /**
+   * REQ-MCP-110/111's write half: store (or replace) and delete one secret, each naming its scope (`Workspace` when
+   * none is given — REQ-CONFIG-463's opening choice, the `config.setField` discipline). The value travels INWARD
+   * here, the existing sanctioned pattern of `provider.signIn`/`providers.save` (ADR-0030 c.2; `CommandRequestSchema`
+   * is not one of `CHANNEL_SCHEMAS`); nothing about it comes back — the answer is the masked confirmation alone
+   * (REQ-MCP-081). A value or a key that is empty is refused by the store with a notice naming the requirement unmet
+   * (REQ-MCP-084), so no `.min(1)` here: a malformed bound would replace that notice. The key and the server are
+   * bounded as every name is; the value takes the API-key bound the provider commands use.
+   */
+  z.object({ kind: z.literal('mcp.setSecret'), server: z.string().max(NAME_MAX), key: z.string().max(NAME_MAX), value: z.string().max(PATH_MAX), scope: z.enum(CONFIG_SCOPES).optional() }),
+  z.object({ kind: z.literal('mcp.unsetSecret'), server: z.string().max(NAME_MAX), key: z.string().max(NAME_MAX), scope: z.enum(CONFIG_SCOPES).optional() }),
+  /**
    * ADR-0022 (Part AR) / REQ-SANDBOX-116, REQ-SANDBOX-129: the availability verdict the runtime
    * section's label shows, and the re-check control beside it. `recheck` discards the cached verdict
    * so a user who has just installed the launcher or lifted a namespace restriction can make the

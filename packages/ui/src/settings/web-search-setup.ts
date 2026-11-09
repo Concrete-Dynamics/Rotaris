@@ -243,6 +243,115 @@ export function webSearchSituation(facts: WebSearchFacts): WebSearchSituation {
   return facts.health.state === 'healthy' ? 'ready' : 'stored';
 }
 
+/**
+ * THE STEP BAR, THE INFO DISCLOSURE AND THE ROW'S OWN OFFER (the stepper/inline-help change, 2026-11-09). The guided
+ * card is walked through four named steps (REQ-MCP-111's own walk: a provider, the declaration, the key, the test),
+ * the explanatory sentences sit behind one icon control instead of in front of the first step (progressive
+ * disclosure — nothing here is gated, every body starts open), and the server row offers the way INTO the card while
+ * it can still do something (`webSearchRowSetupVisible`). Everything in this section is data or a pure read over
+ * props, so the labels, the current step and the row control's visibility are assertable without a window
+ * (`web-search-stepper.test.ts`); `McpSettings.tsx` only draws them. REQ-SHELL-149: a step's number is TEXT
+ * (`Step 2 · …`), never colour alone; REQ-SHELL-144: each of these controls carries a name — the step label itself,
+ * `WEB_SEARCH_ABOUT_CONTROL`, `WEB_SEARCH_SETUP_ROW_LABEL`.
+ */
+export type WebSearchStepId = 'provider' | 'declaration' | 'key' | 'test';
+
+/** One step of the bar: the id its control and body are marked with, and the heading its body carries. */
+export interface WebSearchStep { readonly id: WebSearchStepId; readonly title: string; }
+
+/**
+ * The four steps in order; `title` is the body's own heading (today's `h2` texts, word for word). The list is the ONE
+ * home of the bar's order and numbering — the card maps over it, so a fifth step would be an edit here and nowhere
+ * else.
+ */
+export const WEB_SEARCH_STEPS: readonly WebSearchStep[] = [
+  { id: 'provider', title: 'Choose your search provider' },
+  { id: 'declaration', title: 'Put this in your configuration file' },
+  { id: 'key', title: 'Paste the key' },
+  { id: 'test', title: 'Test it' },
+];
+
+/**
+ * The visible label of one bar control: `Step 1 · Choose your search provider`. The number is made HERE, from the
+ * step's position in `WEB_SEARCH_STEPS` (never spelled in the JSX), so the bar's numbering has one home and the
+ * label is assertable as text (REQ-SHELL-149).
+ */
+export function webSearchStepLabel(index: number, step: WebSearchStep): string {
+  return `Step ${index + 1} · ${step.title}`;
+}
+
+/**
+ * The step that needs the user next, situation for situation (`aria-current="step"` and the row control's focus
+ * target both read this). `fresh`/`other-transport` stand at the choice — no key can be pasted before a provider is
+ * chosen, and the key control belongs to the shipped `http` default (REQ-CONFIG-181). `needs-key` and
+ * `needs-unresolved` land on `key`: step 3 owns the field and REQ-CONFIG-225's unresolved sentence.
+ * `needs-enabled` lands on `declaration` (step 2) instead: the key is ALREADY stored there (REQ-MCP-115), and what
+ * still needs the user is the durable enablement — `enabled: true` in the file, or the row switched on, which writes
+ * it — a configuration edit, which is step 2's business, not the key step's; `WEB_SEARCH_NEEDS_ENABLED` still says so
+ * in step 3's body (design note §4's own row, F2 of the PR #77 UI review, 2026-11-09). A stored key is at `test` —
+ * REQ-MCP-092's probe is what decides whether anything is left to do.
+ */
+const WEB_SEARCH_STEP_FOR: Readonly<Record<WebSearchSituation, WebSearchStepId>> = {
+  unavailable: 'provider', 'no-entry': 'provider', 'other-transport': 'provider', fresh: 'provider',
+  'needs-key': 'key', 'needs-enabled': 'declaration', 'needs-unresolved': 'key',
+  stored: 'test', 'wrong-endpoint': 'test', ready: 'test',
+};
+
+export function webSearchStepFor(situation: WebSearchSituation): WebSearchStepId {
+  return WEB_SEARCH_STEP_FOR[situation];
+}
+
+/**
+ * The sentences behind the head's icon control — the card's prose disclosure, word for word as they stood before this
+ * change (only their fundstelle moves): the flow's summary, whose content the bar now carries (REQ-MCP-111);
+ * REQ-CONFIG-350/464's boundary sentence; and REQ-MCP-110's take-effect sentence. The wording is the implementation's
+ * (REQ-CONFIG leaves it open); the three statements do not change.
+ */
+export const WEB_SEARCH_ABOUT: readonly string[] = [
+  'Point the built-in web-search server at a provider you have a key for: choose a provider, put the declaration in your configuration file, paste the key and test it.',
+  WEB_SEARCH_NOT_WRITTEN_BY_US,
+  WEB_SEARCH_TAKE_EFFECT,
+];
+
+/** REQ-SHELL-144: the icon control's accessible name and tooltip — it names the surface, never a generic `Info`. */
+export const WEB_SEARCH_ABOUT_CONTROL = 'About web search setup';
+
+/**
+ * The control's name per state: the same control hides the region once it is open, so the name says which press is
+ * offered (one sentence; the closed name is `WEB_SEARCH_ABOUT_CONTROL`, the brief's own JSX and the row of §D.2's
+ * test both tie the closed state to that constant).
+ */
+export function webSearchAboutControlLabel(open: boolean): string {
+  return open ? 'Hide help about the web search setup' : WEB_SEARCH_ABOUT_CONTROL;
+}
+
+/**
+ * REQ-MCP-108's one venue with REQ-MCP-111's visible-anyway rule: THIS row offers the way INTO the guided card, and
+ * the offer stands only while the row is the one the card is about, the transport is the one the key control belongs
+ * to, the entry is the SHIPPED default (a user's own declaration is already guided by the card's `needs-key` step,
+ * REQ-CONFIG-225), and no key is stored for it yet (REQ-MCP-110; with a key stored, the card is where it is changed,
+ * and the offer would promise nothing new). The row's own NAME is part of the predicate, so the call site passes each
+ * row and no row other than `web_search` can ever offer it.
+ */
+export function webSearchRowSetupVisible(row: McpServerRow | null, storedKey: McpSecretRow | null): boolean {
+  return row !== null && row.name === WEB_SEARCH_SERVER && row.type === 'http' && row.origin === 'default' && storedKey === null;
+}
+
+/**
+ * The row control's visible words — the surface's own name, and NOT "Add provider": REQ-CONFIG-350/464 let this
+ * screen create no server, and a string says what it does.
+ */
+export const WEB_SEARCH_SETUP_ROW_ACTION = 'Set up web search';
+
+/** REQ-SHELL-144: the row control's accessible name identifies it and its server. */
+export const WEB_SEARCH_SETUP_ROW_LABEL = `Set up web search for ${WEB_SEARCH_SERVER}`;
+
+/** What the press does, as the accessible description: the step it lands on, and the boundary REQ-CONFIG-350/464 draw.
+ *  It says `Moves to`, not `Opens`: the card is rendered unconditionally (there is no closed card the press makes
+ *  visible), and the press sets FOCUS on the current step's bar control, bringing that already-present region into
+ *  view (F4 of the PR #77 UI review, 2026-11-09). */
+export const WEB_SEARCH_SETUP_ROW_DESCRIPTION = 'Moves to the `Set up web search` card in this category at the step that needs you; the provider\'s declaration is a file edit you make.';
+
 /** `Workspace`/`Global` as the write commands' scope vocabulary (REQ-CONFIG-463's opening choice). */
 export type WebSearchScope = 'workspace' | 'global';
 export const WEB_SEARCH_SCOPE_LABELS: Readonly<Record<WebSearchScope, string>> = { workspace: 'Workspace', global: 'Global' };

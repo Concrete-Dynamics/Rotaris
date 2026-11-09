@@ -688,6 +688,13 @@
    path line REQ-CONFIG-437 names is one unbroken token bounded to 340 px, so it wraps inside its box rather than
    paying out (`overflow-wrap: anywhere`, the rule the sibling MCP surfaces already carry). */
 [data-mcp-websearch-setup] :is(p, .settings__hint):not(.mono) { max-width: var(--rt-prose-measure); overflow-wrap: anywhere; }
+/* The stepper/inline-help change (2026-11-09), card-scoped half: the head's icon control is its own focus stop at the
+   head's right edge (it opens the info region, whose paragraphs the prose rule above already bounds), and a closed
+   step body is out of the flow and out of the tab order (`hidden`; stated explicitly because an author rule that
+   paints the body would otherwise outrank the user agent's own `[hidden]`). REQ-MCP-111's walk says the position in
+   TEXT — the bar's labels — so nothing here carries a fact by colour. */
+[data-mcp-websearch-setup] [data-websearch-about-control] { align-self: flex-start; margin-left: auto; }
+[data-mcp-websearch-setup] [data-websearch-step-body][hidden] { display: none; }
 
 /* ── Tool rows (REQ-CHAT-060/061), diff rows (REQ-CHAT-050), approval trailer rows (REQ-CHAT-051) ── */
 .tool__header { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); width: 100%; padding: 0; border: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm, 13px); text-align: left; cursor: pointer; }
@@ -1650,6 +1657,22 @@
 @media (prefers-reduced-motion: reduce) { .mcp__dot[data-state="checking"] { animation: none; } }
 /* Part T: the code-intelligence setup's three steps as text (REQ-MCP-112, REQ-SHELL-149). */
 .settings__steps { list-style: none; margin: var(--rt-space-3, 12px) 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+/* Die Schritt-Leiste (REQ-MCP-111, REQ-SHELL-149): vier benannte Schritte über ihren Körpern; die
+   Aktiv-Markierung ist die etablierte Auswahlsprache der Fläche (§1.2), die Nummer ist Text. The bar is the SAME
+   list as REQ-MCP-112's steps, laid out as one wrapping row instead of a column — hence the same class beside the
+   modifier, declared after the column rule it overrides. The gap carries no literal fallback: `--rt-space-2` is a
+   theme token and the file's other 55 uses of it are written the same way (`tools/check-ui-language.mjs` counts
+   every `(px|pt)` that follows a `gap` as UI-language debt, fallback or not). */
+.settings__steps--bar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2); }
+/* The current step's own control IS the bar's selection state, in the house idiom `seg-opt.is-active` and
+   `chip-menu__item.is-active` carry: a tint plus accent ink (§1.2), never neutral body ink. The class is set on
+   exactly the step that also carries `aria-current="step"` (`current === s.id`). A second rule stood here —
+   `.settings__steps--bar .btn[aria-current='step'] { color: var(--rt-text) }` — at the SAME specificity (0,3,0) and,
+   declared after, silently overrode the accent ink above with neutral `--rt-text`, so the current step read as a tint
+   with plain ink and the rule above was half dead code (D3 medium of the PR #77 UI review, 2026-11-09). It is REMOVED
+   rather than reordered: both selectors named the one same element, so the bar's active paint has one home. The
+   position stays a NUMBER in TEXT (`Step N · …`, REQ-SHELL-149) — never colour alone. */
+.settings__steps--bar .btn.is-active { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }
 /* ── Part R: the agent surfaces — Mission, the inspector, the persona window, the table, the ring, the chips (tokens by name) ── */
 .workspace--with-sidebar { grid-template-columns: 260px 1fr auto; grid-template-areas: 'agents runhead inspector' 'agents reauth inspector' 'agents plangate inspector' 'agents transcript inspector' 'agents queue inspector' 'agents divider inspector' 'agents composer inspector'; }
 /**

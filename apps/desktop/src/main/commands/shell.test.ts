@@ -231,6 +231,8 @@ describe('shell.openThirdPartyLicenses over an opener that never answers (REQ-SH
  */
 describe('shell.openConfigFile opens the asking window\'s own configuration file (REQ-CONFIG-437, REQ-CONFIG-350/464)', () => {
   const dirs = { config: '/cfg' } as unknown as CommandContext['userDirs'];
+  /** R-021: the expectation is built the way the command builds it (`scopeFiles`'s `join`), so this proof decides on every platform. */
+  const expected = join('/work/p', '.rotaris', 'agents.yaml');
   const facet = () => shellCommands({ capturing: false, clocks: { timers: { after: () => ({ cancel: () => undefined }) } } as unknown as CommandContext['clocks'], log: () => undefined, userDirs: dirs } as unknown as Parameters<typeof shellCommands>[0]);
   afterEach(() => { opener.open = () => Promise.resolve(''); });
 
@@ -238,8 +240,8 @@ describe('shell.openConfigFile opens the asking window\'s own configuration file
     const asked: string[] = [];
     opener.open = (path) => { asked.push(path); return Promise.resolve(''); };
     const out = await facet()['shell.openConfigFile']({ kind: 'shell.openConfigFile' }, at);
-    expect(out).toEqual({ ok: true, value: { path: '/work/p/.rotaris/agents.yaml' } });
-    expect(asked).toEqual(['/work/p/.rotaris/agents.yaml']);
+    expect(out).toEqual({ ok: true, value: { path: expected } });
+    expect(asked).toEqual([expected]);
   });
 
   it('a window with no workspace is refused before the opener is reached — fails if a window that holds no workspace can open a file', async () => {
@@ -252,7 +254,7 @@ describe('shell.openConfigFile opens the asking window\'s own configuration file
 
   it('an opener that refuses answers config.open-failed naming the path — fails if the failure is silent', async () => {
     opener.open = async () => 'Failed to open path';
-    expect(await facet()['shell.openConfigFile']({ kind: 'shell.openConfigFile' }, at)).toEqual({ ok: false, code: 'config.open-failed', headline: 'The configuration file could not be opened', detail: '/work/p/.rotaris/agents.yaml — Failed to open path' });
+    expect(await facet()['shell.openConfigFile']({ kind: 'shell.openConfigFile' }, at)).toEqual({ ok: false, code: 'config.open-failed', headline: 'The configuration file could not be opened', detail: `${expected} — Failed to open path` });
   });
 });
 

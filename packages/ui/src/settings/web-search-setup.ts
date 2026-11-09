@@ -283,13 +283,17 @@ export function webSearchStepLabel(index: number, step: WebSearchStep): string {
 /**
  * The step that needs the user next, situation for situation (`aria-current="step"` and the row control's focus
  * target both read this). `fresh`/`other-transport` stand at the choice — no key can be pasted before a provider is
- * chosen, and the key control belongs to the shipped `http` default (REQ-CONFIG-181). The three key-side situations
- * land on `key`: step 3 owns the field, REQ-MCP-115's `enabled: true` sentence and REQ-CONFIG-225's unresolved
- * sentence. A stored key is at `test` — REQ-MCP-092's probe is what decides whether anything is left to do.
+ * chosen, and the key control belongs to the shipped `http` default (REQ-CONFIG-181). `needs-key` and
+ * `needs-unresolved` land on `key`: step 3 owns the field and REQ-CONFIG-225's unresolved sentence.
+ * `needs-enabled` lands on `declaration` (step 2) instead: the key is ALREADY stored there (REQ-MCP-115), and what
+ * still needs the user is the durable enablement — `enabled: true` in the file, or the row switched on, which writes
+ * it — a configuration edit, which is step 2's business, not the key step's; `WEB_SEARCH_NEEDS_ENABLED` still says so
+ * in step 3's body (design note §4's own row, F2 of the PR #77 UI review, 2026-11-09). A stored key is at `test` —
+ * REQ-MCP-092's probe is what decides whether anything is left to do.
  */
 const WEB_SEARCH_STEP_FOR: Readonly<Record<WebSearchSituation, WebSearchStepId>> = {
   unavailable: 'provider', 'no-entry': 'provider', 'other-transport': 'provider', fresh: 'provider',
-  'needs-key': 'key', 'needs-enabled': 'key', 'needs-unresolved': 'key',
+  'needs-key': 'key', 'needs-enabled': 'declaration', 'needs-unresolved': 'key',
   stored: 'test', 'wrong-endpoint': 'test', ready: 'test',
 };
 
@@ -342,8 +346,11 @@ export const WEB_SEARCH_SETUP_ROW_ACTION = 'Set up web search';
 /** REQ-SHELL-144: the row control's accessible name identifies it and its server. */
 export const WEB_SEARCH_SETUP_ROW_LABEL = `Set up web search for ${WEB_SEARCH_SERVER}`;
 
-/** What the press does, as the accessible description: the step it lands on, and the boundary REQ-CONFIG-350/464 draw. */
-export const WEB_SEARCH_SETUP_ROW_DESCRIPTION = 'Opens the `Set up web search` card in this category at the step that needs you; the provider\'s declaration is a file edit you make.';
+/** What the press does, as the accessible description: the step it lands on, and the boundary REQ-CONFIG-350/464 draw.
+ *  It says `Moves to`, not `Opens`: the card is rendered unconditionally (there is no closed card the press makes
+ *  visible), and the press sets FOCUS on the current step's bar control, bringing that already-present region into
+ *  view (F4 of the PR #77 UI review, 2026-11-09). */
+export const WEB_SEARCH_SETUP_ROW_DESCRIPTION = 'Moves to the `Set up web search` card in this category at the step that needs you; the provider\'s declaration is a file edit you make.';
 
 /** `Workspace`/`Global` as the write commands' scope vocabulary (REQ-CONFIG-463's opening choice). */
 export type WebSearchScope = 'workspace' | 'global';

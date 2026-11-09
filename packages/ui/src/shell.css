@@ -1664,8 +1664,15 @@
    theme token and the file's other 55 uses of it are written the same way (`tools/check-ui-language.mjs` counts
    every `(px|pt)` that follows a `gap` as UI-language debt, fallback or not). */
 .settings__steps--bar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2); }
+/* The current step's own control IS the bar's selection state, in the house idiom `seg-opt.is-active` and
+   `chip-menu__item.is-active` carry: a tint plus accent ink (§1.2), never neutral body ink. The class is set on
+   exactly the step that also carries `aria-current="step"` (`current === s.id`). A second rule stood here —
+   `.settings__steps--bar .btn[aria-current='step'] { color: var(--rt-text) }` — at the SAME specificity (0,3,0) and,
+   declared after, silently overrode the accent ink above with neutral `--rt-text`, so the current step read as a tint
+   with plain ink and the rule above was half dead code (D3 medium of the PR #77 UI review, 2026-11-09). It is REMOVED
+   rather than reordered: both selectors named the one same element, so the bar's active paint has one home. The
+   position stays a NUMBER in TEXT (`Step N · …`, REQ-SHELL-149) — never colour alone. */
 .settings__steps--bar .btn.is-active { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }
-.settings__steps--bar .btn[aria-current='step'] { color: var(--rt-text); }
 /* ── Part R: the agent surfaces — Mission, the inspector, the persona window, the table, the ring, the chips (tokens by name) ── */
 .workspace--with-sidebar { grid-template-columns: 260px 1fr auto; grid-template-areas: 'agents runhead inspector' 'agents reauth inspector' 'agents plangate inspector' 'agents transcript inspector' 'agents queue inspector' 'agents divider inspector' 'agents composer inspector'; }
 /**

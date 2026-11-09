@@ -460,7 +460,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
             NUMBER in TEXT (`Step 2 · …`) beside `aria-current="step"`, never colour alone. The controls are ordinary
             buttons, so no roving tabIndex moves here (that stays the preset radios', Minor 1 of 2026-11-09).
           */}
-          <ol className="settings__steps settings__steps--bar" aria-label="Setup steps" data-websearch-step-bar>
+          <ol className="settings__steps settings__steps--bar" aria-label="Web search setup steps" data-websearch-step-bar>
             {WEB_SEARCH_STEPS.map((s, i) => (
               <li key={s.id}>
                 <DesignButton

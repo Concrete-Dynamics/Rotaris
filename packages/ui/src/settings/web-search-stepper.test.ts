@@ -178,15 +178,18 @@ describe('the step bar, the info control and the row offer — the pure half', (
     ]);
   });
 
-  it('lands every situation on the step that needs the user — fails if a key-side situation points at the provider step or a stored key points anywhere but the test', () => {
+  it('lands every situation on the step that needs the user — fails if a key-side situation points at the provider step, a stored-key-but-disabled entry points at the key step instead of the enablement, or a stored key points anywhere but the test', () => {
     const expected: Readonly<Record<WebSearchSituation, ReturnType<typeof webSearchStepFor>>> = {
       unavailable: 'provider', 'no-entry': 'provider', 'other-transport': 'provider', fresh: 'provider',
-      'needs-key': 'key', 'needs-enabled': 'key', 'needs-unresolved': 'key',
+      'needs-key': 'key', 'needs-enabled': 'declaration', 'needs-unresolved': 'key',
       stored: 'test', 'wrong-endpoint': 'test', ready: 'test',
     };
     for (const [situation, step] of Object.entries(expected)) {
       expect(webSearchStepFor(situation as WebSearchSituation)).toBe(step);
     }
+    // F2 (PR #77 UI review, 2026-11-09): `needs-enabled` means the key is ALREADY stored and only the durable
+    // enablement is left (REQ-MCP-115) — a configuration edit, which is step 2's business, not the key step's.
+    expect(webSearchStepFor('needs-enabled')).toBe('declaration');
   });
 
   it('offers the row control exactly while it can still do something — fails if it stands with a key already stored, without a row, on another transport, for another server, or for a user-declared entry', () => {
@@ -220,6 +223,10 @@ describe('the step bar, the info control and the row offer — the pure half', (
     expect(WEB_SEARCH_SETUP_ROW_LABEL).toContain(WEB_SEARCH_SETUP_ROW_ACTION);
     expect(WEB_SEARCH_SETUP_ROW_LABEL).toContain(WEB_SEARCH_SERVER);
     expect(WEB_SEARCH_SETUP_ROW_DESCRIPTION).toContain('step that needs you');
+    // F4 (PR #77 UI review, 2026-11-09): the press only FOCUSES the current step's bar control — the card is rendered
+    // unconditionally, so nothing is "opened". The description says the work (`Moves to`), not the mechanism.
+    expect(WEB_SEARCH_SETUP_ROW_DESCRIPTION).not.toContain('Opens');
+    expect(WEB_SEARCH_SETUP_ROW_DESCRIPTION).toMatch(/^Moves to /);
   });
 });
 
@@ -295,6 +302,22 @@ describe('the card as it renders', () => {
     expect(bar).toBeLessThan(firstBody);
   });
 
+  it('the two step lists on the view do NOT share an accessible name — the code-intelligence setup list keeps "Setup steps", this card\'s bar names itself — fails if a screen reader hears two identically named lists (F3, PR #77 UI review, 2026-11-09)', () => {
+    const setup = {
+      provisioning: { store: '/home/u/.rotaris/runtime', servers: [] }, state: 'finished' as const,
+      steps: [{ id: 'create' as const, label: 'Create the project', status: 'succeeded' as const, detail: '', elapsedMs: 10 }],
+      outcome: 'completed' as const, message: '', containsCode: true, invocation: 'code-intel', startedAt: null, applicable: true,
+    };
+    // Both lists stand at once: the SetupCard renders unconditionally, the bar renders unless the situation is
+    // `no-entry`/`unavailable` (REQ-MCP-112's list beside REQ-MCP-111's bar).
+    const { html } = draw({ listing: listing([row()]), webSearchSecrets: secrets([]), setup });
+    expect(html).toContain('data-setup-steps');
+    expect(html).toContain('data-websearch-step-bar');
+    // The old label "Setup steps" belongs to the code-intelligence list alone; the bar carries its own, distinct name.
+    expect(html.match(/aria-label="Setup steps"/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Web search setup steps"');
+  });
+
   it('a step control closes and reopens exactly its own body (driven press) — fails if the state is shared between steps or never moves', () => {
     harness.cells.length = 0; harness.cursor = 0; views = null;
     const first = draw();
@@ -334,6 +357,8 @@ describe('the card as it renders', () => {
       String(draw(over).all('data-websearch-step-control').find((c) => c['aria-current'] === 'step')!['data-websearch-step-control']);
     expect(at({ listing: listing([row()]), webSearchSecrets: secrets([]) })).toBe('provider');
     expect(at({ listing: listing([row({ origin: 'yaml', unresolved: [WEB_SEARCH_KEY_VARIABLE] })]), webSearchSecrets: secrets([]) })).toBe('key');
+    // F2: a stored key on an entry the file holds disabled needs the ENABLEMENT, so the bar marks step 2, not step 3.
+    expect(at({ listing: listing([row({ enabled: false })]), webSearchSecrets: secrets([keyRow]) })).toBe('declaration');
     expect(at({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]) })).toBe('test');
     expect(at({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), health: health({ state: 'unreachable', detail: 'connect ECONNREFUSED' }) })).toBe('test');
   });
@@ -469,6 +494,17 @@ describe('the boundaries this change must not move', () => {
     const css = readFileSync(new URL('../shell.css', import.meta.url), 'utf8');
     expect(css).toContain('[data-mcp-websearch-setup] .settings__key-field { width: max-content; max-width: 100%; min-width: var(--rt-field-min); }');
     expect(css).toContain('[data-mcp-websearch-setup] :is(p, .settings__hint):not(.mono) { max-width: var(--rt-prose-measure); overflow-wrap: anywhere; }');
+  });
+
+  it('the current step\'s control carries the house selection ink (tint + accent, §1.2) with ONE rule deciding its colour — fails if a second rule at the same specificity overrides the accent ink with neutral `--rt-text` (D3, PR #77 UI review, 2026-11-09)', () => {
+    const raw = readFileSync(new URL('../shell.css', import.meta.url), 'utf8');
+    // Comments are read out: the file's style STATES a removed rule beside its reason, so a comment naming the old
+    // selector must not count as a live rule.
+    const css = raw.replace(/\/\*[\s\S]*?\*\//g, '');
+    // The active control is `is-active` AND `aria-current="step"` on the same element (`current === s.id`), so any
+    // second rule naming `[aria-current…]` would silently beat this one on `color` and kill the accent ink.
+    expect(css).toContain(".settings__steps--bar .btn.is-active { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }");
+    expect(css).not.toMatch(/\.settings__steps--bar \.btn\[aria-current/);
   });
 
   it('the disabled card keeps its empty state and offers no step control — fails if the bar renders over a configuration that did not load', () => {

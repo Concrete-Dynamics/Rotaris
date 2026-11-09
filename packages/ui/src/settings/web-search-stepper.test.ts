@@ -225,6 +225,14 @@ describe('the step bar, the info control and the row offer — the pure half', (
     expect(WEB_SEARCH_ABOUT_CONTROL).toContain('web search');
   });
 
+  it('names every icon the card draws with the one Phosphor family, never a unicode glyph — fails if `Get a key` carries `↗` again (FND-4, Opus 5.5 review, 2026-11-09)', () => {
+    const { card } = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    // §1.9: Phosphor icons, "no unicode-symbol icons". The row's `Get a key` link was the one `↗` in `packages/ui/src`.
+    expect(card).toContain('<i class="ph ph-arrow-square-out" aria-hidden="true"></i>');
+    expect(card).not.toContain('↗');
+    for (const glyph of ['→', '←', '⇧', '⇒', '•', '→']) expect(card).not.toContain(glyph);
+  });
+
   it('the row control\'s words are the surface\'s own and its name identifies it and its server — fails if it is labelled "Add provider" or its name drops the server', () => {
     expect(WEB_SEARCH_SETUP_ROW_ACTION).toBe('Set up web search');
     expect(WEB_SEARCH_SETUP_ROW_ACTION).not.toContain('Add provider');
@@ -607,6 +615,16 @@ describe('the boundaries this change must not move', () => {
       expect(focused.length).toBeGreaterThan(0);
     } finally { vi.unstubAllGlobals(); }
   });
+  it('the card head\'s icon control takes ONE height token, the same one both neighbouring heads carry — fails if it is left at `.btn`\'s taller min-height or loses its square (FND-6, Opus 5.5 review, 2026-11-09)', () => {
+    const css = readFileSync(new URL('../shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    // The control is an square at `--rt-control-height-compact` (24 px), the tier the two neighbouring card heads
+    // take through `btn-compact`; without this rule `.btn-icon`'s 30 px height met `.btn`'s
+    // `min-height: --rt-control-height` (32 px) and painted 30 x 32 — neither square nor one token (C2).
+    expect(css).toContain('[data-mcp-websearch-setup] [data-websearch-about-control] { align-self: flex-start; margin-left: auto; width: var(--rt-control-height-compact); height: var(--rt-control-height-compact); }');
+    // The literal pixel pair that stood for either axis is gone from the card's own rules.
+    expect(css).not.toMatch(/\[data-websearch-about-control\][^}]*\b(30|32)px/);
+  });
+
   it('the card still writes no server (REQ-CONFIG-350/464): no `writes enabled: true`, no second password field, one Store control — fails if the step bar brought a second write path with it', () => {
     const { card } = draw({ listing: listing([row({ enabled: false })]), webSearchSecrets: secrets([]) });
     // Scoped to THIS card: the sibling Configured-servers card states its own durable-write sentence, unchanged.

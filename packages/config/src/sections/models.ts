@@ -148,14 +148,15 @@ export function effectivePricing(entry: Pick<ModelEntry, 'input_cost_per_token' 
 }
 
 /**
- * REQ-CONFIG-332 with REQ-CONFIG-069/091/092/202: the reasoning-strength levels a model entry OFFERS a control. The
- * closed slot/model vocabulary less `auto`, filtered to the entry's own `reasoning_effort_map` keys where that map
- * declares any — a map value is a provider-dialect spelling, never a vocabulary level, so a key outside the vocabulary
- * (REQ-CONFIG-092's `xhigh` among them) can never surface as an offered level and the loader's `thinking` reader,
- * which rejects a stored level outside the vocabulary, can never be handed a value this rule should not have produced.
- * Where no map is declared, the levels are the vocabulary intersected with the reasoning levels the resolved model's
- * catalog entry declares (REQ-CONFIG-202's capability record, `capabilityLevels`); a model with neither offers nothing
- * and `[]` is the answer. The order is the vocabulary's own, never the map's YAML insertion order.
+ * PD-CONFIG-006 (REQ-CONFIG-069 narrowed) with REQ-CONFIG-332: the reasoning-strength levels a model entry OFFERS a
+ * control. The slot/model vocabulary less `auto`, filtered to the entry's own `reasoning_effort_map` keys where that
+ * map declares any — a map key that IS a level (`xhigh` among them, a level in its own right since PD-CONFIG-006)
+ * surfaces, and a map value stays a provider-dialect spelling that is never itself an offered level. Where no map is
+ * declared, the levels are the vocabulary intersected with the reasoning levels the resolved model's catalog entry
+ * declares (REQ-CONFIG-202's capability record, `capabilityLevels`); a model with neither offers nothing and `[]` is
+ * the answer. `auto` is never among the offered levels: it is no model's level and reaches a control only through
+ * REQ-CONFIG-332's appending rule (REQ-CONFIG-093). The order is the vocabulary's own, never the map's YAML
+ * insertion order.
  */
 export function offeredReasoningLevels(entry: Pick<ModelEntry, 'reasoning_effort_map'>, capabilityLevels: readonly string[]): readonly string[] {
   const vocabulary: readonly string[] = REASONING_LEVELS.filter((level) => level !== 'auto');
@@ -165,13 +166,23 @@ export function offeredReasoningLevels(entry: Pick<ModelEntry, 'reasoning_effort
     : vocabulary.filter((level) => capabilityLevels.includes(level));
 }
 
-/** REQ-CONFIG-092/093: the four strings a provider receives unchanged; `max` → `xhigh`; a map entry wins; `auto` reaches no provider. */
+/**
+ * PD-CONFIG-006 (REQ-CONFIG-092 extended, REQ-CONFIG-089/093): the effort string a provider receives, or null for no
+ * reasoning-effort field at all. An explicit `reasoning_effort` bypasses the whole path and is sent verbatim. `auto`
+ * keeps the handling the build had — it sends nothing and does not consult the map (PD-CONFIG-006 leaves that
+ * untouched). Otherwise the map entry for the level wins and is sent verbatim, so an endpoint whose map reads
+ * `off: none` is sent `none`; where the map holds none for it, `off` sends NOTHING (returning null) — "switched off"
+ * is expressed by the absence of an effort, never by a guessed string, and it is a known level, so that path raises
+ * no warning — while `max` reaches a provider as `xhigh` and every other level, `xhigh` included, passes through as
+ * itself.
+ */
 export function providerEffort(entry: Pick<ModelEntry, 'thinking' | 'reasoning_effort' | 'reasoning_effort_map'>): string | null {
   if (entry.reasoning_effort !== null) return entry.reasoning_effort;
   const level = entry.thinking;
   if (level === null || level === 'auto') return null;
   const mapped = entry.reasoning_effort_map[level];
   if (mapped !== undefined) return mapped;
+  if (level === 'off') return null;
   return level === 'max' ? 'xhigh' : level;
 }
 

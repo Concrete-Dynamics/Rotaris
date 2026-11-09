@@ -58,7 +58,8 @@ describe('REQ-CONFIG-332 — the slot reasoning control offers exactly the model
   it('the ds41 case: a model whose effort map offers low/high/max renders Provider default, low, high, max — and nothing else', () => {
     const markup = render(snapshotWith());
     expect(optionValues(markup, 'large_model')).toEqual(['', 'low', 'high', 'max']);
-    // Never `medium` (the endpoint does not understand it) and never `xhigh` (a value spelling, REQ-CONFIG-092).
+    // Never `medium` (the endpoint does not understand it) and never `xhigh` (its map offers no such KEY: xhigh is a
+    // level of the widened vocabulary since PD-CONFIG-006, and only an entry declaring it offers it).
     expect(optionValues(markup, 'large_model')).not.toContain('medium');
     expect(optionValues(markup, 'large_model')).not.toContain('xhigh');
     // The unset entry keeps its label and is the selection when nothing is stored.
@@ -67,6 +68,14 @@ describe('REQ-CONFIG-332 — the slot reasoning control offers exactly the model
     // The full set still reads back as the five entries (the vocabulary’s own order).
     const full = render(snapshotWith({ modelReasoning: { ds41: ['low', 'medium', 'high', 'max'], 'gpt-4o-mini': [] } }));
     expect(optionValues(full, 'large_model')).toEqual(['', 'low', 'medium', 'high', 'max']);
+  });
+
+  it('a model declaring `off` and `xhigh` renders them under their own names — the levels the old five clipped away (PD-CONFIG-006)', () => {
+    const markup = render(snapshotWith({ modelReasoning: { ds41: ['off', 'low', 'high', 'xhigh', 'max'], 'gpt-4o-mini': [] } }));
+    expect(optionValues(markup, 'large_model')).toEqual(['', 'off', 'low', 'high', 'xhigh', 'max']);
+    // Displayed literally, under its own name.
+    expect(markup).toContain('<option value="off">off</option>');
+    expect(markup).toContain('<option value="xhigh">xhigh</option>');
   });
 
   it('a capability record of low/high renders Provider default, low, high only', () => {

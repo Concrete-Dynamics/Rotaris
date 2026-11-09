@@ -429,7 +429,13 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'update', id: 'nope', text: 'x' } })).toEqual({ ok: false });
     expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'blank', text: '' } })).toEqual({ ok: false });
     expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'high' } })).toEqual({ ok: true });
+    // PD-CONFIG-006 (REQ-PROVIDER-088 narrowed): the runtime admits the widened vocabulary's own levels, so a switch
+    // the control now offers cannot be refused at dispatch; `unset` keeps its meaning, and an unknown value still refuses.
+    expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'off' } })).toEqual({ ok: true });
+    expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'xhigh' } })).toEqual({ ok: true });
+    expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'unset' } })).toEqual({ ok: true });
     expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'ultra' } })).toEqual({ ok: false });
+    expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'none' } })).toEqual({ ok: false });
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'fast' } })).toEqual({ ok: true });
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'slow' } })).toEqual({ ok: false });
     // Part AO: `forceCompression` and `clearTranscript` have arms now (`run/chat-controls.test.ts`); the synchronous `control`

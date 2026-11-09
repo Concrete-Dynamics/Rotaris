@@ -72,3 +72,41 @@ describe('generic discovery (REQ-PROVIDER-069/071/072)', () => {
     expect(modelOfItem({ name: 'no id' }, 'p')).toBeNull();
   });
 });
+
+/**
+ * PD-CONFIG-006 (REQ-PROVIDER-072 extended): the reasoning levels a payload DECLARES are captured into
+ * `capabilities.reasoning_levels` under the product's own name, with the same three-state discipline the image-input
+ * declaration of REQ-PROVIDER-149 is read with — declared, or absent because nothing was declared; never an empty
+ * list, never a guess, never inferred from a model's name or id.
+ */
+describe('PD-CONFIG-006 — a payload’s declared reasoning levels (REQ-PROVIDER-072 extended)', () => {
+  it('a capability report declaring reasoning_levels yields them verbatim, in the payload’s order, and survives serialisation', () => {
+    const model = modelOfItem({ id: 'ds41', capabilities: { reasoning_levels: ['low', 'off', 'low', 'high', 'xhigh', 'max'] } }, 'p')!;
+    expect(model.capabilities.reasoning_levels).toEqual(['low', 'off', 'high', 'xhigh', 'max']);
+    // The declaration travels with the model: it is build data the settings projection reads back (REQ-CONFIG-202/332).
+    const round = JSON.parse(JSON.stringify(model)) as { capabilities: { reasoning_levels?: readonly string[] } };
+    expect(round.capabilities.reasoning_levels).toEqual(['low', 'off', 'high', 'xhigh', 'max']);
+  });
+
+  it('reads the raw `supported_reasoning_levels` fallback — under `capabilities`, then at the item’s own level', () => {
+    expect(modelOfItem({ id: 'm', capabilities: { supported_reasoning_levels: ['off', 'xhigh'] } }, 'p')!.capabilities.reasoning_levels).toEqual(['off', 'xhigh']);
+    expect(modelOfItem({ id: 'm', supported_reasoning_levels: ['minimal', 'low'] }, 'p')!.capabilities.reasoning_levels).toEqual(['minimal', 'low']);
+    // The capability report’s own name wins where both are present; a source that is not a list falls through.
+    expect(modelOfItem({ id: 'm', capabilities: { reasoning_levels: ['max'], supported_reasoning_levels: ['low'] }, supported_reasoning_levels: ['off'] }, 'p')!.capabilities.reasoning_levels).toEqual(['max']);
+    expect(modelOfItem({ id: 'm', capabilities: { reasoning_levels: 'low' }, supported_reasoning_levels: ['off'] }, 'p')!.capabilities.reasoning_levels).toEqual(['off']);
+  });
+
+  it('a payload declaring none leaves the key absent — never an empty list, never a guess', () => {
+    for (const item of [
+      { id: 'reasoning-heavy-model' },
+      { id: 'm', capabilities: {} },
+      { id: 'm', capabilities: { reasoning_levels: [] } },
+      { id: 'm', capabilities: { reasoning_levels: ['', null, 7, false] } },
+      { id: 'm', capabilities: { reasoning_levels: 'low' } },
+    ]) {
+      const model = modelOfItem(item, 'p')!;
+      expect(Object.hasOwn(model.capabilities, 'reasoning_levels')).toBe(false);
+      expect(Object.hasOwn((JSON.parse(JSON.stringify(model)) as { capabilities: object }).capabilities, 'reasoning_levels')).toBe(false);
+    }
+  });
+});

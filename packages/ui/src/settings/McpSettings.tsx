@@ -1,15 +1,17 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConfigSnapshot, McpHealth, McpListing, McpProvisioning, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 import { Confirm } from './Confirm.js';
 import { Fatal } from './ConfigSettings.js';
 import {
-  deletedKeySentence, mcpHealthText, presetAfter, presetTabIndex, storedKeySentence, webSearchFileLine, webSearchHeaderKeyNote, webSearchOtherTransport,
-  webSearchPreset, webSearchProbeBasis, webSearchPressFailure, webSearchSituation, webSearchStanza, webSearchStoredKey, webSearchUnresolvedNote,
+  deletedKeySentence, mcpHealthText, presetAfter, presetTabIndex, storedKeySentence, webSearchAboutControlLabel, webSearchFileLine, webSearchHeaderKeyNote,
+  webSearchOtherTransport, webSearchPreset, webSearchProbeBasis, webSearchPressFailure, webSearchRowSetupVisible, webSearchSituation, webSearchStanza,
+  webSearchStepFor, webSearchStepLabel, webSearchStoredKey, webSearchUnresolvedNote,
   MCP_HEALTH_TEXT,
-  WEB_SEARCH_CONTROLS, WEB_SEARCH_DECLARATION_STANDS, WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_NEEDS_ENABLED,
-  WEB_SEARCH_NO_ENTRY, WEB_SEARCH_NOT_WRITTEN_BY_US, WEB_SEARCH_PRESETS, WEB_SEARCH_REFRESH_FAILED, WEB_SEARCH_SERVER, WEB_SEARCH_TAKE_EFFECT, WEB_SEARCH_WORKING_SUMMARY, WEB_SEARCH_WRONG_ENDPOINT,
-  type WebSearchInFlight, type WebSearchPreset, type WebSearchScope, type WebSearchSetupHandlers,
+  WEB_SEARCH_ABOUT, WEB_SEARCH_ABOUT_CONTROL, WEB_SEARCH_CONTROLS, WEB_SEARCH_DECLARATION_STANDS, WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_KEY_VARIABLE,
+  WEB_SEARCH_NEEDS_ENABLED, WEB_SEARCH_NO_ENTRY, WEB_SEARCH_PRESETS, WEB_SEARCH_REFRESH_FAILED, WEB_SEARCH_SERVER, WEB_SEARCH_SETUP_ROW_ACTION,
+  WEB_SEARCH_SETUP_ROW_DESCRIPTION, WEB_SEARCH_SETUP_ROW_LABEL, WEB_SEARCH_STEPS, WEB_SEARCH_WORKING_SUMMARY, WEB_SEARCH_WRONG_ENDPOINT,
+  type WebSearchInFlight, type WebSearchPreset, type WebSearchScope, type WebSearchSetupHandlers, type WebSearchStepId,
 } from './web-search-setup.js';
 
 /**
@@ -66,13 +68,20 @@ export interface McpSettingsProps {
    * `web-search-press.test.ts`.
    */
   readonly webSearchSetup: WebSearchSetupHandlers;
+  /**
+   * The row control's focus route (stepper/inline-help change, 2026-11-09): the card REGISTERS a function that focuses
+   * the bar control of the step the current situation needs, and unregisters it when it unmounts (`null`) — so the
+   * category's row can land the user on that step without knowing the card's step layout, and neither side reaches
+   * into the other's props (a ref passed through props may not be written by the receiver).
+   */
+  readonly onSetupFocusRoute?: ((focus: (() => void) | null) => void) | undefined;
 }
 
 const HEALTH_TEXT: Record<McpHealth['state'], string> = { unknown: 'Unknown', checking: 'Checking…', healthy: 'Healthy', unreachable: 'Unreachable' };
 const STEP_TEXT: Record<McpSetupStep['status'], string> = { pending: 'Not started', running: 'In progress…', succeeded: 'Succeeded', failed: 'Failed', 'skipped-no-code': 'Skipped — no code', 'not-attempted': 'Not attempted' };
 const OUTCOME_TEXT: Record<NonNullable<McpSetupStatus['outcome']>, string> = { completed: 'Completed', failed: 'Only partly set up', cancelled: 'Cancelled', unavailable: 'Not available' };
 
-function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: McpHealth; probing: boolean; onToggle: McpSettingsProps['onToggle'] }) {
+function Row({ row, health, probing, onToggle, onOpenWebSearchSetup, showWebSearchSetup }: { row: McpServerRow; health: McpHealth; probing: boolean; onToggle: McpSettingsProps['onToggle']; onOpenWebSearchSetup?: (() => void) | undefined; showWebSearchSetup?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const on = row.enabled && !row.overridden && row.available;
@@ -119,6 +128,17 @@ function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: Mc
       <td data-origin>{row.origin}</td>
       <td>
         <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={accessibleName} aria-description={accessibleDescription} disabled={!row.available || busy} title={title} onClick={() => { void toggle(); }} />
+        {/*
+          The way INTO the guided card, beside the switch and in the same cell (one line, one column): it stands while
+          the row IS the shipped http default with no key stored yet (`webSearchRowSetupVisible`) — the state the card
+          exists for — and its press focuses the bar control of the step the situation needs. Its visible words are
+          REQ-CONFIG-350/464's boundary said honestly: this screen sets the key up, it authors no server.
+        */}
+        {showWebSearchSetup ? (
+          <DesignButton type="button" className="btn btn-link btn-compact" data-websearch-row-setup
+            aria-label={WEB_SEARCH_SETUP_ROW_LABEL} aria-description={WEB_SEARCH_SETUP_ROW_DESCRIPTION}
+            onClick={() => onOpenWebSearchSetup?.()}>{WEB_SEARCH_SETUP_ROW_ACTION}</DesignButton>
+        ) : null}
         <div className="text-tertiary settings__hint" data-enablement>{enablement}</div>
         {message ? <div className="composer__error" role="alert">{message}</div> : null}
       </td>
@@ -223,6 +243,15 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  /**
+   * The two disclosures of this change (2026-11-09): the info region behind the head's icon control, and the step
+   * bar's own bodies. `closedSteps` names the BODIES THE USER CLOSED (`open === !closedSteps.has(id)`), so every body
+   * starts open and nothing is gated: the guide names the position (`aria-current="step"`) without withholding a
+   * step, and the one state that closes anything remains the existing `ready` collapse.
+   */
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [closedSteps, setClosedSteps] = useState<ReadonlySet<WebSearchStepId>>(() => new Set<WebSearchStepId>());
+  const stepRefs = useRef(new Map<WebSearchStepId, HTMLButtonElement>());
   const [openFailure, setOpenFailure] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const preset = webSearchPreset(presetId);
@@ -257,6 +286,21 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const situation = webSearchSituation({ unavailable, row, storedKey, health: shownHealth });
   const disabled = unavailable !== null;
   const collapsed = situation === 'ready' && !expanded;
+  /** The step the bar marks and the row control targets (REQ-SHELL-149: the position is also the number in the label). */
+  const current = webSearchStepFor(situation);
+  const stepOpen = (id: WebSearchStepId) => !closedSteps.has(id);
+  const toggleStep = (id: WebSearchStepId) => setClosedSteps((closed) => { const next = new Set(closed); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  /**
+   * The row's focus route, re-registered whenever the situation moves: the card HANDS the function out, the cell
+   * (`McpSettings`) stores it, and the cleanup hands `null` back, so a card that unmounts leaves no route behind.
+   * `stepRefs` is only read inside the call, never during the render.
+   */
+  const registerSetupFocus = props.onSetupFocusRoute;
+  useEffect(() => {
+    if (registerSetupFocus === undefined) return undefined;
+    registerSetupFocus(() => { stepRefs.current.get(current)?.focus(); });
+    return () => { registerSetupFocus(null); };
+  }, [registerSetupFocus, current]);
   /** Major 2: ONE in-flight state covers the three file presses and the probe; every control is disabled while it
    * holds, and the card says which one it is (design brief §4's disabled-during-write, REQ-SHELL-149 in words). */
   const busy = inFlight !== null;
@@ -380,10 +424,26 @@ function WebSearchSetupCard(props: McpSettingsProps) {
 
   return (
     <DesignCard className="card settings__card" data-mcp-websearch-setup data-websearch-situation={situation}>
+      {/*
+        The head: the kicker and, on its right, the ONE icon control of this change (`ph ph-info`, REQ-SHELL-144's
+        named control). The three sentences that used to stand here as loose prose now sit behind it (progressive
+        disclosure): the bar below carries the flow, so the summary of it, the boundary sentence and the
+        take-effect sentence are explanations rather than the next action. No dialog and no focus change: the
+        region is a disclosure, Escape stays the window's (REQ-SHELL-055 untouched).
+      */}
       <div className="providers-card__head">
         <div className="card-kicker">Set up web search</div>
+        <DesignButton type="button" className="btn btn-ghost btn-icon"
+          aria-label={webSearchAboutControlLabel(aboutOpen)} aria-expanded={aboutOpen} aria-controls="websearch-about" title={WEB_SEARCH_ABOUT_CONTROL}
+          data-websearch-about-control disabled={disabled} onClick={() => setAboutOpen((v) => !v)}>
+          <i className="ph ph-info" aria-hidden="true" />
+        </DesignButton>
       </div>
-      <p className="text-secondary">Point the built-in web-search server at a provider you have a key for: choose a provider, put the declaration in your configuration file, paste the key and test it.</p>
+      {aboutOpen ? (
+        <div id="websearch-about" data-websearch-about>
+          {WEB_SEARCH_ABOUT.map((sentence) => <p key={sentence} className="text-secondary settings__hint">{sentence}</p>)}
+        </div>
+      ) : null}
 
       {collapsed ? (
         <p role="status" data-websearch-summary>
@@ -392,112 +452,136 @@ function WebSearchSetupCard(props: McpSettingsProps) {
         </p>
       ) : (
         <>
-          <div className="card-kicker" data-websearch-step="provider">Step 1</div>
-          <h2 className="settings__heading">Choose your search provider</h2>
-          <div role="radiogroup" aria-label="Search provider" data-websearch-presets onKeyDown={onRadioKey}>
-            {WEB_SEARCH_PRESETS.map((p) => (
-              <div key={p.id} className="settings__action" data-websearch-preset={p.id} data-preset-selected={presetId === p.id ? 'yes' : 'no'}>
+          {/*
+            The step bar (REQ-MCP-111's walk, REQ-SHELL-149): four named controls over their own bodies. Nothing is
+            gated — every body starts OPEN and a control closes only the body it names — and the current step is a
+            NUMBER in TEXT (`Step 2 · …`) beside `aria-current="step"`, never colour alone. The controls are ordinary
+            buttons, so no roving tabIndex moves here (that stays the preset radios', Minor 1 of 2026-11-09).
+          */}
+          <ol className="settings__steps settings__steps--bar" aria-label="Setup steps" data-websearch-step-bar>
+            {WEB_SEARCH_STEPS.map((s, i) => (
+              <li key={s.id}>
                 <DesignButton
-                  ref={(el) => { if (el === null) radios.current.delete(p.id); else radios.current.set(p.id, el); }}
-                  type="button" role="radio" aria-checked={presetId === p.id} tabIndex={presetTabIndex(presetId, p.id)} disabled={disabled || busy}
-                  className={`seg-opt${presetId === p.id ? ' is-active' : ''}`}
-                  aria-label={`${p.name} — ${p.description}`}
-                  onClick={() => setPresetId(p.id)}
-                >
-                  {p.name}
-                </DesignButton>
-                <span className="text-secondary settings__hint">{p.description}</span>
-                {p.keyPage !== null ? (
-                  <DesignButton type="button" className="btn btn-link btn-compact" data-websearch-key={p.id} aria-label={WEB_SEARCH_CONTROLS.key(p.name)} disabled={disabled || busy} onClick={() => { void getKey(p); }}>Get a key ↗</DesignButton>
-                ) : null}
-              </div>
+                  ref={(el) => { if (el === null) stepRefs.current.delete(s.id); else stepRefs.current.set(s.id, el); }}
+                  type="button" className={`btn btn-ghost btn-compact${current === s.id ? ' is-active' : ''}`}
+                  aria-expanded={stepOpen(s.id)} aria-controls={`websearch-step-${s.id}`} aria-current={current === s.id ? 'step' : undefined}
+                  data-websearch-step-control={s.id} data-step-current={current === s.id ? 'yes' : 'no'}
+                  disabled={disabled} onClick={() => toggleStep(s.id)}>{webSearchStepLabel(i, s)}</DesignButton>
+              </li>
             ))}
-          </div>
-          {openFailure !== null ? <p className="composer__error" role="alert" data-websearch-open-failure>{openFailure}</p> : null}
+          </ol>
 
-          <div className="card-kicker" data-websearch-step="declaration">Step 2</div>
-          <h2 className="settings__heading">Put this in your configuration file</h2>
-          {situation === 'needs-key' ? (
-            <p className="text-secondary" data-websearch-declaration-stands>{WEB_SEARCH_DECLARATION_STANDS}</p>
-          ) : (
-            <>
-              <pre className="mono" data-websearch-stanza>{stanza.text}</pre>
-              {stanza.note !== null ? <p className="text-tertiary settings__hint" data-websearch-example>{stanza.note}</p> : null}
-              <div className="settings__action">
-                <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-copy disabled={disabled || busy} onClick={copy}>Copy</DesignButton>
-                <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-open disabled={disabled || busy || props.listing === null} title={props.listing === null ? "The configuration file's path is not known until the listing is read." : undefined} aria-description={props.listing === null ? "Disabled: the configuration file's path is not known until the listing is read." : undefined} onClick={() => { void openFile(); }}>Open the file</DesignButton>
-                {copyNote !== null ? <span className="text-tertiary settings__hint" role="status">{copyNote}</span> : null}
-              </div>
-            </>
-          )}
-          <p className="text-tertiary settings__hint" data-websearch-file>{webSearchFileLine(props.listing?.configFile ?? null)}</p>
-          <p className="text-tertiary settings__hint" data-websearch-note>{WEB_SEARCH_NOT_WRITTEN_BY_US}</p>
-
-          {situation === 'other-transport' && row !== null ? <p className="text-secondary" data-websearch-other-transport>{webSearchOtherTransport(row.type)}</p> : null}
-
-          {situation !== 'other-transport' ? (
-            <>
-              <div className="card-kicker" data-websearch-step="key">Step 3</div>
-              <h2 className="settings__heading">Paste the key</h2>
-              {hideKeyStep && preset !== null ? (
-                <p className="text-secondary" data-websearch-header-key>{webSearchHeaderKeyNote(preset, props.listing?.configFile ?? null)}</p>
-              ) : (
-                <>
-                  <div className="settings__action">
-                    <label htmlFor="websearch-key">Search API key</label>
-                    <DesignInput
-                      id="websearch-key" type="password" autoComplete="off" className="input settings__key-field" data-websearch-key-field
-                      aria-label="Search API key" aria-description="Never shown again after it is stored; the stored value is only ever displayed masked."
-                      value={keyDraft} disabled={disabled || busy} onChange={(e) => setKeyDraft(e.currentTarget.value)}
-                    />
-                  </div>
-                  <div className="settings__action">
-                    <label htmlFor="websearch-scope">Scope</label>
-                    <DesignSelect id="websearch-scope" className="input select settings__select" aria-label="Scope" data-websearch-scope value={scope} disabled={disabled || busy} onChange={(e) => setScope(e.currentTarget.value === 'global' ? 'global' : 'workspace')}>
-                      <option value="workspace">Workspace</option>
-                      <option value="global">Global</option>
-                    </DesignSelect>
-                    <DesignButton type="button" className="btn btn-primary btn-compact" data-websearch-store aria-label={WEB_SEARCH_CONTROLS.store} disabled={disabled || busy} onClick={() => { void store(); }}>Store the key</DesignButton>
-                    {storedKey !== null ? <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-delete aria-label={WEB_SEARCH_CONTROLS.delete} disabled={disabled || busy} onClick={() => setConfirmingDelete(true)}>Delete the stored key</DesignButton> : null}
-                  </div>
-                  {storedKey !== null ? (
-                    <p className="text-secondary settings__hint" data-websearch-stored>Stored for <span className="mono">{storedKey.server}</span> in the {storedKey.scope} scope, value <span className="mono" data-mask>{storedKey.masked}</span>. Storing again replaces it; the field above never shows the stored value.</p>
+          <div id="websearch-step-provider" data-websearch-step-body="provider" hidden={!stepOpen('provider')}>
+            <h2 className="settings__heading">{WEB_SEARCH_STEPS[0]?.title}</h2>
+            <div role="radiogroup" aria-label="Search provider" data-websearch-presets onKeyDown={onRadioKey}>
+              {WEB_SEARCH_PRESETS.map((p) => (
+                <div key={p.id} className="settings__action" data-websearch-preset={p.id} data-preset-selected={presetId === p.id ? 'yes' : 'no'}>
+                  <DesignButton
+                    ref={(el) => { if (el === null) radios.current.delete(p.id); else radios.current.set(p.id, el); }}
+                    type="button" role="radio" aria-checked={presetId === p.id} tabIndex={presetTabIndex(presetId, p.id)} disabled={disabled || busy}
+                    className={`seg-opt${presetId === p.id ? ' is-active' : ''}`}
+                    aria-label={`${p.name} — ${p.description}`}
+                    onClick={() => setPresetId(p.id)}
+                  >
+                    {p.name}
+                  </DesignButton>
+                  <span className="text-secondary settings__hint">{p.description}</span>
+                  {p.keyPage !== null ? (
+                    <DesignButton type="button" className="btn btn-link btn-compact" data-websearch-key={p.id} aria-label={WEB_SEARCH_CONTROLS.key(p.name)} disabled={disabled || busy} onClick={() => { void getKey(p); }}>Get a key ↗</DesignButton>
                   ) : null}
-                  {refusal !== null ? <p className="composer__error" role="alert" data-websearch-refusal>{refusal}</p> : null}
-                  {confirmation !== null ? <p role="status" data-websearch-confirmation>{confirmation}</p> : null}
-                  <p className="text-tertiary settings__hint" data-websearch-take-effect>{WEB_SEARCH_TAKE_EFFECT}</p>
-                  {situation === 'needs-enabled' ? <p className="text-secondary" data-websearch-needs-enabled>{WEB_SEARCH_NEEDS_ENABLED}</p> : null}
-                  {situation === 'needs-unresolved' ? <p className="text-secondary" data-websearch-unresolved-after-key>{webSearchUnresolvedNote(row?.unresolved ?? [], true)}</p> : null}
-                </>
-              )}
-            </>
-          ) : null}
+                </div>
+              ))}
+            </div>
+            {openFailure !== null ? <p className="composer__error" role="alert" data-websearch-open-failure>{openFailure}</p> : null}
+          </div>
+
+          <div id="websearch-step-declaration" data-websearch-step-body="declaration" hidden={!stepOpen('declaration')}>
+            <h2 className="settings__heading">{WEB_SEARCH_STEPS[1]?.title}</h2>
+            {situation === 'needs-key' ? (
+              <p className="text-secondary" data-websearch-declaration-stands>{WEB_SEARCH_DECLARATION_STANDS}</p>
+            ) : (
+              <>
+                <pre className="mono" data-websearch-stanza>{stanza.text}</pre>
+                {stanza.note !== null ? <p className="text-tertiary settings__hint" data-websearch-example>{stanza.note}</p> : null}
+                <div className="settings__action">
+                  <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-copy disabled={disabled || busy} onClick={copy}>Copy</DesignButton>
+                  <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-open disabled={disabled || busy || props.listing === null} title={props.listing === null ? "The configuration file's path is not known until the listing is read." : undefined} aria-description={props.listing === null ? "Disabled: the configuration file's path is not known until the listing is read." : undefined} onClick={() => { void openFile(); }}>Open the file</DesignButton>
+                  {copyNote !== null ? <span className="text-tertiary settings__hint" role="status">{copyNote}</span> : null}
+                </div>
+              </>
+            )}
+            <p className="text-tertiary settings__hint" data-websearch-file>{webSearchFileLine(props.listing?.configFile ?? null)}</p>
+          </div>
+
+          {/*
+            The key body stands in EVERY situation (never omitted): its bar control names step 3, and where the
+            control does not apply — a `web_search` entry of another transport (REQ-CONFIG-181: the key control
+            belongs to the shipped http default) — the body says so in words (REQ-SHELL-149) instead of leaving the
+            bar's `aria-controls` pointing at no element.
+          */}
+          <div id="websearch-step-key" data-websearch-step-body="key" hidden={!stepOpen('key')}>
+            <h2 className="settings__heading">{WEB_SEARCH_STEPS[2]?.title}</h2>
+            {situation === 'other-transport' && row !== null ? (
+              <p className="text-secondary" data-websearch-other-transport>{webSearchOtherTransport(row.type)}</p>
+            ) : hideKeyStep && preset !== null ? (
+              <p className="text-secondary" data-websearch-header-key>{webSearchHeaderKeyNote(preset, props.listing?.configFile ?? null)}</p>
+            ) : (
+              <>
+                <div className="settings__action">
+                  <label htmlFor="websearch-key">Search API key</label>
+                  <DesignInput
+                    id="websearch-key" type="password" autoComplete="off" className="input settings__key-field" data-websearch-key-field
+                    aria-label="Search API key" aria-description="Never shown again after it is stored; the stored value is only ever displayed masked."
+                    value={keyDraft} disabled={disabled || busy} onChange={(e) => setKeyDraft(e.currentTarget.value)}
+                  />
+                </div>
+                <div className="settings__action">
+                  <label htmlFor="websearch-scope">Scope</label>
+                  <DesignSelect id="websearch-scope" className="input select settings__select" aria-label="Scope" data-websearch-scope value={scope} disabled={disabled || busy} onChange={(e) => setScope(e.currentTarget.value === 'global' ? 'global' : 'workspace')}>
+                    <option value="workspace">Workspace</option>
+                    <option value="global">Global</option>
+                  </DesignSelect>
+                  <DesignButton type="button" className="btn btn-primary btn-compact" data-websearch-store aria-label={WEB_SEARCH_CONTROLS.store} disabled={disabled || busy} onClick={() => { void store(); }}>Store the key</DesignButton>
+                  {storedKey !== null ? <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-delete aria-label={WEB_SEARCH_CONTROLS.delete} disabled={disabled || busy} onClick={() => setConfirmingDelete(true)}>Delete the stored key</DesignButton> : null}
+                </div>
+                {storedKey !== null ? (
+                  <p className="text-secondary settings__hint" data-websearch-stored>Stored for <span className="mono">{storedKey.server}</span> in the {storedKey.scope} scope, value <span className="mono" data-mask>{storedKey.masked}</span>. Storing again replaces it; the field above never shows the stored value.</p>
+                ) : null}
+                {refusal !== null ? <p className="composer__error" role="alert" data-websearch-refusal>{refusal}</p> : null}
+                {confirmation !== null ? <p role="status" data-websearch-confirmation>{confirmation}</p> : null}
+                {situation === 'needs-enabled' ? <p className="text-secondary" data-websearch-needs-enabled>{WEB_SEARCH_NEEDS_ENABLED}</p> : null}
+                {situation === 'needs-unresolved' ? <p className="text-secondary" data-websearch-unresolved-after-key>{webSearchUnresolvedNote(row?.unresolved ?? [], true)}</p> : null}
+              </>
+            )}
+          </div>
         </>
       )}
 
       {/*
         Step 4 is OUTSIDE the collapse: the design brief §4 has the finished state collapse steps 1–3 to a summary and
-        leave the test offered ("step 4 offers the test; the card says nothing more is needed").
+        leave the test offered ("step 4 offers the test; the card says nothing more is needed"). Like the others it has
+        its own body, open by default and closable through its bar control.
       */}
-      <div className="card-kicker" data-websearch-step="test">Step 4</div>
-      <h2 className="settings__heading">Test it</h2>
-      <div className="settings__action">
-        <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-check aria-label={WEB_SEARCH_CONTROLS.check} disabled={disabled || busy} onClick={() => { void check(); }}>{inFlight === 'probe' ? 'Checking…' : 'Check status'}</DesignButton>
-        <span>
-          <span className="mcp__dot" data-state={inFlight === 'probe' ? 'checking' : shownHealth.state} aria-hidden="true" />{' '}
-          <span data-websearch-health data-health={shownHealth.state}>{inFlight === 'probe' ? MCP_HEALTH_TEXT.checking : mcpHealthText(shownHealth)}</span>
-        </span>
+      <div id="websearch-step-test" data-websearch-step-body="test" hidden={!stepOpen('test')}>
+        <h2 className="settings__heading">{WEB_SEARCH_STEPS[3]?.title}</h2>
+        <div className="settings__action">
+          <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-check aria-label={WEB_SEARCH_CONTROLS.check} disabled={disabled || busy} onClick={() => { void check(); }}>{inFlight === 'probe' ? 'Checking…' : 'Check status'}</DesignButton>
+          <span>
+            <span className="mcp__dot" data-state={inFlight === 'probe' ? 'checking' : shownHealth.state} aria-hidden="true" />{' '}
+            <span data-websearch-health data-health={shownHealth.state}>{inFlight === 'probe' ? MCP_HEALTH_TEXT.checking : mcpHealthText(shownHealth)}</span>
+          </span>
+        </div>
+        {inFlight !== null ? <p role="status" className="text-secondary" data-websearch-in-flight>{WEB_SEARCH_IN_FLIGHT[inFlight]}</p> : null}
+        {shownHealth.state === 'unreachable' && shownHealth.detail ? <p className="text-tertiary settings__hint mono" data-websearch-health-detail>{shownHealth.detail}</p> : null}
+        {probingMessage !== null ? <p role="status" className="text-secondary" data-websearch-probe-message>{probingMessage}</p> : null}
+        {/* Round-2 Major 2: the write stood and the re-read after it did not — said, not swallowed. Outside the
+            collapse, so it is readable in every situation (a successful store usually collapses the steps). */}
+        {refreshNote !== null ? <p className="composer__error" role="alert" data-websearch-refresh-failure>{refreshNote}</p> : null}
+        {/* REQ-CONFIG-225/371: the row's own words for why nothing connects — a placeholder still unresolved, or the host's
+            own availability detail (a remote entry's missing prerequisite). Text, never a second rule of this card's. */}
+        {row !== null && row.unresolved.length > 0 && (situation === 'fresh' || situation === 'wrong-endpoint') ? <p className="text-tertiary settings__hint" data-websearch-unresolved>{webSearchUnresolvedNote(row.unresolved, situation === 'wrong-endpoint')}</p> : null}
+        {row !== null && !row.available && row.unresolved.length === 0 ? <p className="text-tertiary settings__hint" data-websearch-blocked>{row.availabilityDetail}</p> : null}
       </div>
-      {inFlight !== null ? <p role="status" className="text-secondary" data-websearch-in-flight>{WEB_SEARCH_IN_FLIGHT[inFlight]}</p> : null}
-      {shownHealth.state === 'unreachable' && shownHealth.detail ? <p className="text-tertiary settings__hint mono" data-websearch-health-detail>{shownHealth.detail}</p> : null}
-      {probingMessage !== null ? <p role="status" className="text-secondary" data-websearch-probe-message>{probingMessage}</p> : null}
-      {/* Round-2 Major 2: the write stood and the re-read after it did not — said, not swallowed. Outside the
-          collapse, so it is readable in every situation (a successful store usually collapses the steps). */}
-      {refreshNote !== null ? <p className="composer__error" role="alert" data-websearch-refresh-failure>{refreshNote}</p> : null}
-      {/* REQ-CONFIG-225/371: the row's own words for why nothing connects — a placeholder still unresolved, or the host's
-          own availability detail (a remote entry's missing prerequisite). Text, never a second rule of this card's. */}
-      {row !== null && row.unresolved.length > 0 && (situation === 'fresh' || situation === 'wrong-endpoint') ? <p className="text-tertiary settings__hint" data-websearch-unresolved>{webSearchUnresolvedNote(row.unresolved, situation === 'wrong-endpoint')}</p> : null}
-      {row !== null && !row.available && row.unresolved.length === 0 ? <p className="text-tertiary settings__hint" data-websearch-blocked>{row.availabilityDetail}</p> : null}
 
       {confirmingDelete ? (
         <Confirm
@@ -517,6 +601,16 @@ export function McpSettings(props: McpSettingsProps) {
   const [probeMessage, setProbeMessage] = useState<string | null>(null);
   const probeAll = async () => { setProbeMessage(null); await props.onProbeAll(); setProbeMessage('Probed every configured server.'); };
   const chosen = props.secrets?.server ?? null;
+  /**
+   * The row's way into the guided card (stepper/inline-help change, 2026-11-09): the cell holds the function the card
+   * registers (the current step's bar control), and the row's control stands only while it can still do something —
+   * `webSearchRowSetupVisible` reads the SAME `web_search` row the card reads and the card's OWN secrets view (Minor
+   * 2 of 2026-11-09: never the chooser's filtered one).
+   */
+  const setupFocus = useRef<(() => void) | null>(null);
+  const registerSetupFocus = useCallback((focus: (() => void) | null) => { setupFocus.current = focus; }, []);
+  const webSearchRow = rows.find((r) => r.name === WEB_SEARCH_SERVER) ?? null;
+  const showWebSearchSetup = webSearchRowSetupVisible(webSearchRow, webSearchStoredKey(props.webSearchSecrets));
   return (
     <div className="settings__section" data-mcp-settings>
       <h1 className="display">MCP Servers</h1>
@@ -537,12 +631,12 @@ export function McpSettings(props: McpSettingsProps) {
           <DesignTable className="table settings__grid" aria-label="Configured MCP servers">
             <thead><tr><th>Health</th><th>Server</th><th>Origin</th><th>Enabled</th></tr></thead>
             <tbody>
-              {rows.map((row) => <Row key={row.name} row={row} health={props.health[row.name] ?? { state: 'unknown' }} probing={props.probing} onToggle={props.onToggle} />)}
+              {rows.map((row) => <Row key={row.name} row={row} health={props.health[row.name] ?? { state: 'unknown' }} probing={props.probing} onToggle={props.onToggle} showWebSearchSetup={showWebSearchSetup} onOpenWebSearchSetup={() => setupFocus.current?.()} />)}
             </tbody>
           </DesignTable>
         )}
       </DesignCard>
-      <WebSearchSetupCard {...props} />
+      <WebSearchSetupCard {...props} onSetupFocusRoute={registerSetupFocus} />
       <SetupCard setup={props.setup} onStart={props.onSetupStart} onCancel={props.onSetupCancel} />
       <DesignCard className="card settings__card" data-mcp-secrets>
         <div className="card-kicker">Stored secrets</div>

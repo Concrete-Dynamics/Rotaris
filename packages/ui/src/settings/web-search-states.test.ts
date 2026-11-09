@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ConfigSnapshot, McpHealth, McpListing, McpSecretRow, McpSecretsView, McpServerRow } from '@rotaris/contracts';
 import { McpSettings, type McpSettingsProps } from './McpSettings.js';
-import { WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_SERVER, WEB_SEARCH_SHIPPED_URL } from './web-search-setup.js';
+import { WEB_SEARCH_ABOUT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_NOT_WRITTEN_BY_US, WEB_SEARCH_SERVER, WEB_SEARCH_SHIPPED_URL, WEB_SEARCH_TAKE_EFFECT } from './web-search-setup.js';
 
 /**
  * THE GUIDED CARD'S STATES, rendered (the design brief §4/§10's table; `renderToStaticMarkup` as `skills-fatal.test.ts`).
@@ -146,17 +146,21 @@ describe('the guided Set up web search card — every state of the brief\'s tabl
 
   it('step 2 states in words that this is a file edit the screen does not make (REQ-CONFIG-350/464) — fails if the boundary sentence disappears or the screen claims to write the declaration', () => {
     const html = render({ secrets: null });
-    expect(html).toContain('Rotaris does not write this for you');
     expect(html).toContain('Open the file');
     expect(html).toContain('File: /ws/.rotaris/agents.yaml');
     // The card writes no url or enabled (REQ-CONFIG-350/464): its only write commands are the secret ones.
     expect(html).not.toContain('writes enabled: true');
+    // The boundary sentence itself moved behind the head's info control (stepper/inline-help change, 2026-11-09):
+    // its claim is unchanged, only its fundstelle — it is read in the about region, word for word.
+    expect(WEB_SEARCH_ABOUT).toContain(WEB_SEARCH_NOT_WRITTEN_BY_US);
   });
 
   it('step 3 says a stored secret takes effect on the next load and that the row refreshes with it — fails if the take-effect sentence is missing', () => {
     const html = render({ secrets: null });
-    expect(html).toContain('takes effect on the next configuration load');
-    expect(html).toContain('the row above refreshes with it');
+    expect(WEB_SEARCH_ABOUT).toContain(WEB_SEARCH_TAKE_EFFECT);
+    expect(WEB_SEARCH_TAKE_EFFECT).toContain('takes effect on the next configuration load');
+    expect(WEB_SEARCH_TAKE_EFFECT).toContain('the row above refreshes with it');
+    expect(html).not.toContain('data-websearch-take-effect');
   });
 
   it('the key field carries no autofill hook and no second control for the key — fails if a second, unmasked control for the key appears', () => {

@@ -22,7 +22,7 @@ const render = (rows: McpListing) => renderToStaticMarkup(createElement(McpSetti
   listing: rows, loading: false, error: null, health: {}, probing: false,
   onRefresh: () => undefined, onProbeAll: async () => undefined,
   onToggle: async () => ({ ok: true, message: '' }),
-  secrets: null, onSecretsServer: () => undefined, setup: null,
+  secrets: null, webSearchSecrets: null, onSecretsServer: () => undefined, setup: null,
   onSetupStart: async () => ({ ok: true, message: '' }), onSetupCancel: async () => undefined,
   // B2's guided card: this file's cases are about the ROW's switch, so the presses it never makes are inert.
   webSearchSetup: {

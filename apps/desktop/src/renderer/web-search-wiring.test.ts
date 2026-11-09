@@ -14,10 +14,25 @@ const source = (file: string): string => readFileSync(new URL(`./${file}`, impor
 describe('B2 wiring: the guided card\'s presses reach this window\'s bridge', () => {
   it('useMcp binds the five presses with bindWebSearchSetup over bridge.command and the category\'s own re-read — fails if the binder is dropped, a second binder is written, or the re-read stops with the secrets view', () => {
     const main = source('main.tsx');
-    expect(main).toContain('webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: async () => { await read(); await readSecrets(secretsServer); } })');
+    expect(main).toContain('webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: async () => { await read(); await readSecrets(secretsServer); await readWebSearchSecrets(); } })');
     // The binder is imported from the package that owns the presses, never re-derived here.
     expect(main).toContain('bindWebSearchSetup');
     expect(main.match(/bindWebSearchSetup\(/g)).toHaveLength(1);
+  });
+
+  it('Minor 2: the guided card\'s own secrets view is read with server web_search, apart from the chooser\'s — fails if the card is fed the chooser-filtered view (a chooser naming another server would blank the stored-key state and its delete action)', () => {
+    const main = source('main.tsx');
+    // The card's view exists, is read with the card's own server, and is what `useMcp` hands the props.
+    expect(main).toContain("{ kind: 'mcp.secrets', server: 'web_search' }");
+    expect(main).toContain('readWebSearchSecrets');
+    expect(main).toContain('secrets, webSearchSecrets,');
+    expect(main).toContain('onRefresh: () => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); },');
+    // Both reads run at mount and on the configuration change, and the card's is refreshed after every write.
+    expect(main.match(/readWebSearchSecrets/g)!.length).toBeGreaterThanOrEqual(5);
+    // And the card reads ITS view, never the chooser's, for the stored key (McpSettings.tsx).
+    const card = readFileSync(new URL('../../../../packages/ui/src/settings/McpSettings.tsx', import.meta.url), 'utf8');
+    expect(card).toContain('webSearchStoredKey(props.webSearchSecrets)');
+    expect(card).not.toContain('webSearchStoredKey(props.secrets)');
   });
 
   it('the mcp category is handed the props, with the fatal snapshot folded in as Skills does (REQ-CONFIG-478) — fails if the card is starved of the props or a fatal load is hidden from it', () => {

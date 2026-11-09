@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { FakeClock, millis, ok, err, failure } from '@rotaris/kernel';
+import { createProtector, type Protector } from '@rotaris/platform';
 import { CredentialStore, credentialStatus, decodeCredential, headerValidKey, KEY_CONTROL, KEY_NOT_ASCII } from './credentials/store.js';
-import { createProtector, isExactDacl, parseDacl, SYSTEM_SID, type Protector } from './credentials/protect.js';
 import { LOCK_BUSY, withLock, type LockDeps } from './credentials/lock.js';
 
 let dir: string;
@@ -133,51 +133,10 @@ describe('the adjacent lock (REQ-PROVIDER-152)', () => {
   });
 });
 
-describe('the protection adapter (REQ-PROVIDER-016; spikes/credential-protection.md)', () => {
-  it('parses SDDL and demands exactly the two trustees, full control, protected, nothing inherited', () => {
-    const me = 'S-1-5-21-1-2-3-1001';
-    expect(isExactDacl(parseDacl(`D:PAI(A;;FA;;;${me})(A;;FA;;;SY)`), me)).toBeNull();
-    expect(isExactDacl(parseDacl(`D:AI(A;ID;FA;;;${me})(A;ID;FA;;;SY)`), me)).toMatch(/inheritance/);
-    expect(isExactDacl(parseDacl(`D:PAI(A;;FA;;;${me})(A;;FA;;;SY)(A;;FR;;;BU)`), me)).toMatch(/two/);
-    expect(isExactDacl(parseDacl(`D:PAI(A;;FR;;;${me})(A;;FA;;;SY)`), me)).toMatch(/full control/);
-    expect(isExactDacl(parseDacl(`D:PAI(A;;FA;;;${me})(A;;FA;;;BA)`), me)).toMatch(/trustees/);
-    expect(isExactDacl(parseDacl('O:BAG:BA'), me)).toMatch(/no DACL/);
-    // The built-in Administrator and Guest read back as SDDL's `LA` / `LG`, and are the owner only for that account.
-    const admin = 'S-1-5-21-4159254826-2043646976-2705649753-500';
-    expect(isExactDacl(parseDacl('D:PAI(A;OICI;FA;;;LA)(A;OICI;FA;;;SY)'), admin)).toBeNull();
-    expect(isExactDacl(parseDacl('D:PAI(A;;FA;;;LG)(A;;FA;;;SY)'), 'S-1-5-21-1-2-3-501')).toBeNull();
-    expect(isExactDacl(parseDacl('D:PAI(A;;FA;;;LA)(A;;FA;;;SY)'), me)).toMatch(/trustees/);
-    expect(isExactDacl(parseDacl('D:PAI(A;;FA;;;LG)(A;;FA;;;SY)'), admin)).toMatch(/trustees/);
-    expect(parseDacl(`D:PAI(A;;FA;;;${SYSTEM_SID})`)?.aces[0]?.sid).toBe(SYSTEM_SID);
-  });
-  it('the Windows adapter runs /reset, then /inheritance:r /grant:r with SID literals, then reads back — and refuses when the read-back is not exact', async () => {
-    const calls: string[][] = [];
-    let sddl = 'D:PAI(A;;FA;;;S-1-5-21-9-9-9-1001)(A;;FA;;;SY)';
-    const exec = async (cmd: string, args: readonly string[]) => {
-      calls.push([cmd, ...args]);
-      if (cmd.endsWith('whoami.exe')) return { status: 0, stdout: '"host\\me","S-1-5-21-9-9-9-1001"\r\n', stderr: '' };
-      if (args.includes('/save')) { writeFileSync(args[args.indexOf('/save') + 1]!, Buffer.concat([Buffer.from('\uFEFF', 'utf16le'), Buffer.from(`name\r\n${sddl}\r\n`, 'utf16le')])); return { status: 0, stdout: '', stderr: '' }; }
-      return { status: 0, stdout: '', stderr: '' };
-    };
-    const p = createProtector({ platform: 'win32', env: { SystemRoot: 'C:\\W' }, exec, scratchDir: dir, random: () => 'z' });
-    expect(await p.protect(join(dir, 'f.json'), 'file')).toEqual({ ok: true, value: undefined });
-    const icacls = calls.filter((c) => c[0]!.endsWith('icacls.exe')).map((c) => c.slice(2));
-    expect(icacls[0]).toEqual(['/reset']);
-    expect(icacls[1]).toEqual(['/inheritance:r', '/grant:r', '*S-1-5-18:F', '*S-1-5-21-9-9-9-1001:F']);
-    expect(icacls[2]?.[0]).toBe('/save');
-    expect(readdirSync(dir).filter((f) => f.startsWith('.acl-'))).toEqual([]);
-    sddl = 'D:PAI(A;;FA;;;S-1-5-21-9-9-9-1001)(A;;FA;;;SY)(A;;FR;;;BU)';
-    const r = await p.protect(join(dir, 'g.json'), 'file');
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.detail).toMatch(/two/);
-    calls.length = 0;
-    await p.protect(join(dir, 'd'), 'directory');
-    expect(calls.some((c) => c.includes('*S-1-5-18:(OI)(CI)F'))).toBe(true);
-    expect(calls.some((c) => c[0]!.endsWith('whoami.exe'))).toBe(false);
-  });
-  // REQ-PROVIDER-016 has two halves and the adapter picks between them by platform, so each half is proved on
-  // the host that has it. Until 2026-09-16 only the Windows half had a real-filesystem proof, which left the
-  // POSIX branch — the one that protects every stored credential on Linux and macOS — executed by nothing.
+describe('the credential store uses the shared protection adapter (REQ-PROVIDER-016; ADR-0029)', () => {
+  // The adapter's own behaviour is pinned in `@rotaris/platform` (`packages/platform/src/protection.test.ts`),
+  // where it lives since 2026-11-09: REQ-CONFIG-216 cites the same requirement for `secrets.yaml`, so the one
+  // adapter moved below both callers. What stays HERE is the store's use of it — the ordering and the substitution.
   it.skipIf(process.platform !== 'win32')('on this machine: a foreign explicit ACE planted before a save does not survive it (the spike\'s finding)', async () => {
     const s = new CredentialStore({ dir: join(dir, 'tokens'), protector: createProtector({ scratchDir: dir }), lock: lockDeps(), random: () => 'live', warn: () => {}, info: () => {} });
     expect((await s.ensureDirectory()).ok).toBe(true);
@@ -191,23 +150,6 @@ describe('the protection adapter (REQ-PROVIDER-016; spikes/credential-protection
     expect(await p.protect(target, 'file')).toEqual({ ok: true, value: undefined });
     expect(s.strayEntries()).toEqual([]);
   });
-  it.skipIf(process.platform === 'win32')('on this machine: 0700 on the directory and 0600 on the file, applied explicitly over a loose mode and read back', async () => {
-    const p = createProtector({ scratchDir: dir });
-    const loose = join(dir, 'loose.json');
-    writeFileSync(loose, '{}', { mode: 0o666 });
-    chmodSync(loose, 0o666); // `mode:` is masked by the umask; this is the condition the requirement forbids inheriting
-    expect(await p.protect(loose, 'file')).toEqual({ ok: true, value: undefined });
-    expect(statSync(loose).mode & 0o777).toBe(0o600);
-    const sub = join(dir, 'sub');
-    mkdirSync(sub, { mode: 0o777 });
-    chmodSync(sub, 0o777);
-    expect(await p.protect(sub, 'directory')).toEqual({ ok: true, value: undefined });
-    expect(statSync(sub).mode & 0o777).toBe(0o700);
-    // REQ-PROVIDER-016: protection that cannot be applied is a refusal on this code, never a silent pass.
-    const missing = await p.protect(join(dir, 'not-here.json'), 'file');
-    expect(missing.ok).toBe(false);
-    if (!missing.ok) expect(missing.error.code).toBe('credential.protect');
-  });
   it.skipIf(process.platform === 'win32')('on this machine: a real save leaves the directory 0700, the credential 0600 and no staged file behind', async () => {
     const s = new CredentialStore({ dir: join(dir, 'tokens'), protector: createProtector({ scratchDir: dir }), lock: lockDeps(), random: () => 'live', warn: () => {}, info: () => {} });
     expect((await s.ensureDirectory()).ok).toBe(true);
@@ -217,5 +159,17 @@ describe('the protection adapter (REQ-PROVIDER-016; spikes/credential-protection
     expect(statSync(join(s.directory, 'deepseek.json')).mode & 0o777).toBe(0o600);
     expect(readdirSync(s.directory).filter((f) => f.endsWith('.tmp'))).toEqual([]);
     expect(s.strayEntries()).toEqual([]);
+  });
+  it('a save protects the staged temp BEFORE a byte is written: the substitution sees an empty, not-yet-existing-as-target file (REQ-PROVIDER-016/018)', async () => {
+    const seen: { path: string; kind: string; bytes: number }[] = [];
+    const spy: Protector = { protect: async (path, kind) => { seen.push({ path, kind, bytes: kind === 'file' ? readFileSync(path).byteLength : -1 }); return ok(undefined); } };
+    const s = new CredentialStore({ dir: join(dir, 'tokens'), protector: spy, lock: lockDeps(), random: () => 'r3', warn: () => {}, info: () => {} });
+    expect(await s.save('deepseek', cred)).toEqual({ ok: true, value: undefined });
+    // Two protects: the directory, then the staged file — the latter EMPTY, and named `<id><random>.tmp` in the dir.
+    expect(seen.filter((v) => v.kind === 'directory')).toHaveLength(1);
+    const staged = seen.filter((v) => v.kind === 'file');
+    expect(staged).toHaveLength(1);
+    expect(staged[0]!.path).toBe(join(dir, 'tokens', 'deepseekr3.tmp'));
+    expect(staged[0]!.bytes).toBe(0);
   });
 });

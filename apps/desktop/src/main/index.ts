@@ -15,7 +15,7 @@ import { createLibraryRevision } from './library.js';
 import { everyHandlerThrows, startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
-import { requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
+import { requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
 import { createImprovementCoordinator } from './improvements.js';
@@ -36,7 +36,7 @@ import { diagnosticsCommands } from './commands/diagnostics.js'; // REQ-SHELL-16
 import { DiagnosticsCaptures, isExistingDirectory } from './diagnostics.js'; // REQ-STARTUP-129..133, hardening D2, PD-STARTUP-011
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
-import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
+import { CATALOGUE, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator, serviceMarkerWriter } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)

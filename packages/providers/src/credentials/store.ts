@@ -2,7 +2,7 @@ import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, ren
 import { basename, dirname, join } from 'node:path';
 import { err, failure, ok, type Failure, type Result } from '@rotaris/kernel';
 import { guardedRead } from '@rotaris/platform';
-import type { Protector } from './protect.js';
+import type { Protector } from '@rotaris/platform';
 import { withLock, type LockDeps } from './lock.js';
 
 /**

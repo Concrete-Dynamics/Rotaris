@@ -1,5 +1,4 @@
 export * from './catalogue.js';
-export * from './credentials/protect.js';
 export * from './credentials/lock.js';
 export * from './credentials/store.js';
 export * from './discovery.js';

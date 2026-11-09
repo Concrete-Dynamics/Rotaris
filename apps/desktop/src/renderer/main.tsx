@@ -1594,6 +1594,10 @@ function useMcp(): McpSettingsProps {
   const [probing, setProbing] = useState(false);
   const [secrets, setSecrets] = useState<McpSecretsView | null>(null);
   const [secretsServer, setSecretsServer] = useState<string | null>(null);
+  // Minor 2 (rework round 1, 2026-11-09): the guided card's OWN view, read with `server: 'web_search'` — kept apart
+  // from the chooser's `secrets` (which may be filtered to another server), so the card's stored-key state and its
+  // delete action never blank when the user filters the stored-secrets table elsewhere.
+  const [webSearchSecrets, setWebSearchSecrets] = useState<McpSecretsView | null>(null);
   const read = useCallback(async () => {
     setLoading(true);
     const r = await bridge.command({ kind: 'mcp.list' });
@@ -1604,8 +1608,12 @@ function useMcp(): McpSettingsProps {
     const r = await bridge.command({ kind: 'mcp.secrets', ...(server === null ? {} : { server }) });
     if (r.ok) setSecrets(r.value as McpSecretsView);
   }, []);
-  useEffect(() => { queueMicrotask(() => { void read(); void readSecrets(secretsServer); }); }, [read, readSecrets, secretsServer]);
-  useEffect(() => bridge.onConfigChanged(() => { void read(); void readSecrets(secretsServer); }), [read, readSecrets, secretsServer]);
+  const readWebSearchSecrets = useCallback(async () => {
+    const r = await bridge.command({ kind: 'mcp.secrets', server: 'web_search' });
+    if (r.ok) setWebSearchSecrets(r.value as McpSecretsView);
+  }, []);
+  useEffect(() => { queueMicrotask(() => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); }); }, [read, readSecrets, secretsServer, readWebSearchSecrets]);
+  useEffect(() => bridge.onConfigChanged(() => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); }), [read, readSecrets, secretsServer, readWebSearchSecrets]);
   // ADR-0035 (Part T) / REQ-MCP-112: the project-setup action's status, read at mount and polled every 500 ms while a run is under way.
   const [setup, setSetup] = useState<McpSetupStatus | null>(null);
   const readSetup = useCallback(async () => {
@@ -1619,14 +1627,15 @@ function useMcp(): McpSettingsProps {
     return () => clearInterval(timer);
   }, [setup?.state, readSetup]);
   return {
-    listing, loading, error, health, probing, secrets,
-    onRefresh: () => { void read(); void readSecrets(secretsServer); },
+    listing, loading, error, health, probing, secrets, webSearchSecrets,
+    onRefresh: () => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); },
     onSecretsServer: (server) => { setSecretsServer(server); },
     setup,
     // B2: the guided `web_search` card's four presses, bound to this window's bridge — the one write is
-    // `mcp.setSecret`, and the card's re-read after a write is the listing and the secrets view together (B1's
-    // write fires main's existing `mcp.reload`, so the row refreshes without a restart).
-    webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: async () => { await read(); await readSecrets(secretsServer); } }),
+    // `mcp.setSecret`, and the card's re-read after a write is the listing and BOTH secrets views together (B1's
+    // write fires main's existing `mcp.reload`, so the row refreshes without a restart): the chooser's own view and
+    // the card's, which is always read with `server: 'web_search'` (Minor 2).
+    webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: async () => { await read(); await readSecrets(secretsServer); await readWebSearchSecrets(); } }),
     onSetupStart: async () => {
       const r = await bridge.command({ kind: 'mcp.setup', action: 'start' });
       if (r.ok) { setSetup(r.value as McpSetupStatus); return { ok: true, message: '' }; }

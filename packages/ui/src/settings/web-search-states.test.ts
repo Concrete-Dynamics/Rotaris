@@ -24,7 +24,7 @@ const props = (over: Partial<McpSettingsProps> = {}): McpSettingsProps => ({
   listing: listing([row()]), loading: false, error: null, health: {}, probing: false,
   onRefresh: () => undefined, onProbeAll: async () => undefined,
   onToggle: async () => ({ ok: true, message: '' }),
-  secrets: secrets([]), onSecretsServer: () => undefined, setup: null,
+  secrets: secrets([]), webSearchSecrets: secrets([]), onSecretsServer: () => undefined, setup: null,
   onSetupStart: async () => ({ ok: true, message: '' }), onSetupCancel: async () => undefined,
   webSearchSetup: {
     onOpenFile: async () => ({ ok: true as const }),
@@ -64,14 +64,14 @@ describe('the guided Set up web search card — every state of the brief\'s tabl
   });
 
   it('a key stored but the entry still enabled:false says the file still needs enabled: true (REQ-MCP-115) — fails if the card implies the key alone turns the server on', () => {
-    const html = render({ listing: listing([row({ enabled: false })]), secrets: secrets([keyRow()]) });
+    const html = render({ listing: listing([row({ enabled: false })]), secrets: secrets([keyRow()]), webSearchSecrets: secrets([keyRow()]) });
     expect(html).toContain('data-websearch-situation="needs-enabled"');
     expect(html).toContain('enabled: true');
     expect(html).toContain('stays off until the file says so');
   });
 
   it('everything working collapses steps 1–3 to a one-line summary with a Change action — fails if the finished state stays permanent furniture', () => {
-    const html = render({ secrets: secrets([keyRow()]), health: health({ state: 'healthy', toolCount: 2 }) });
+    const html = render({ secrets: secrets([keyRow()]), webSearchSecrets: secrets([keyRow()]), health: health({ state: 'healthy', toolCount: 2 }) });
     expect(html).toContain('data-websearch-situation="ready"');
     expect(html).toContain('data-websearch-summary');
     expect(html).toContain('Change');
@@ -82,7 +82,7 @@ describe('the guided Set up web search card — every state of the brief\'s tabl
   });
 
   it('a wrong endpoint: step 4 says Unreachable with the server\'s own detail, and never the working summary — fails if the unreachable detail is dropped or the state claims success', () => {
-    const html = render({ secrets: secrets([keyRow()]), health: health({ state: 'unreachable', detail: 'connect ECONNREFUSED 127.0.0.1:9' }) });
+    const html = render({ secrets: secrets([keyRow()]), webSearchSecrets: secrets([keyRow()]), health: health({ state: 'unreachable', detail: 'connect ECONNREFUSED 127.0.0.1:9' }) });
     expect(html).toContain('data-websearch-situation="wrong-endpoint"');
     expect(html).toContain('Unreachable');
     expect(html).toContain('connect ECONNREFUSED 127.0.0.1:9');
@@ -90,7 +90,7 @@ describe('the guided Set up web search card — every state of the brief\'s tabl
   });
 
   it('a key already stored shows only the mask, never a value, and the field is still empty (REQ-MCP-110/081) — fails if the stored value or mask is put into the field', () => {
-    const html = render({ secrets: secrets([keyRow('Global', '***')]) });
+    const html = render({ secrets: secrets([keyRow('Global', '***')]), webSearchSecrets: secrets([keyRow('Global', '***')]) });
     expect(html).toContain('data-websearch-situation="stored"');
     expect(html).toContain('Storing again replaces it');
     expect(html).toContain('data-mask');
@@ -101,10 +101,23 @@ describe('the guided Set up web search card — every state of the brief\'s tabl
   });
 
   it('a web_search entry of another transport says the key control belongs to the http default and points at the file — fails if a stdio entry renders the key step', () => {
-    const html = render({ listing: listing([row({ type: 'stdio', line: 'npx -y something' })]), secrets: null });
+    const html = render({ listing: listing([row({ type: 'stdio', line: 'npx -y something' })]), secrets: null, webSearchSecrets: null });
     expect(html).toContain('data-websearch-situation="other-transport"');
     expect(html).toContain('This key control belongs to the shipped http default');
     expect(html).not.toContain('data-websearch-key-field');
+  });
+
+  it('Minor 2 (rework round 1): a chooser filtered to another server does not blank the card\'s stored-key state — the card reads its OWN view, and its delete action stays — fails if the card is fed the chooser\'s rows', () => {
+    // The chooser's view names another server and holds no web_search row; the card's own view holds the key.
+    const chooser: McpSecretsView = { servers: ['other'], rows: [{ server: 'other', key: 'TOKEN', masked: '***', scope: 'Workspace' }], expected: [], server: 'other' };
+    const html = render({ secrets: chooser, webSearchSecrets: secrets([keyRow()]) });
+    expect(html).toContain('data-websearch-situation="stored"');
+    expect(html).toContain('Storing again replaces it');
+    expect(html).toContain('data-websearch-delete');
+    // And the reverse: the card's view holding no key means no stored state, whatever the chooser shows.
+    const empty = render({ secrets: chooser, webSearchSecrets: secrets([]) });
+    expect(empty).toContain('data-websearch-situation="fresh"');
+    expect(empty).not.toContain('Delete the stored key');
   });
 
   it('no web_search entry at all renders the empty state naming the file (REQ-CONFIG-437) — fails if the card appears for a server the file does not declare', () => {

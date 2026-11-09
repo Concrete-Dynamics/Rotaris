@@ -200,6 +200,20 @@ export function presetAfter(current: string | null, key: string): string | null 
   return ids[next] ?? null;
 }
 
+/**
+ * REQ-SHELL-145/146 with REQ-CONFIG-348's selection idiom: the preset radios are ONE tab station — the selected
+ * radio carries `tabIndex` 0 and every other −1, and, the group holding no selection yet, the FIRST is the station,
+ * so the group is reachable by Tab and the arrows (which move the selection with the focus, `presetAfter`) stay the
+ * way in. Roving tabIndex, 2026-11-09: every radio used to be its own tab stop.
+ */
+export function presetTabIndex(current: string | null, id: string): 0 | -1 {
+  const first = WEB_SEARCH_PRESETS[0]?.id ?? null;
+  // A stale id (a preset withdrawn since the selection was made) leaves the group reachable all the same: the
+  // station falls back to the first radio rather than to none, which would make the whole group unreachable.
+  const station = WEB_SEARCH_PRESETS.some((p) => p.id === current) ? current : first;
+  return id === station ? 0 : -1;
+}
+
 export interface WebSearchFacts {
   /** The sentence naming why the card is disabled (no workspace/service, or a fatal load), or null. */
   readonly unavailable: string | null;
@@ -232,6 +246,22 @@ export function webSearchSituation(facts: WebSearchFacts): WebSearchSituation {
 /** `Workspace`/`Global` as the write commands' scope vocabulary (REQ-CONFIG-463's opening choice). */
 export type WebSearchScope = 'workspace' | 'global';
 export const WEB_SEARCH_SCOPE_LABELS: Readonly<Record<WebSearchScope, string>> = { workspace: 'Workspace', global: 'Global' };
+
+/**
+ * The card's one in-flight state, one case per control that must not overlap itself (design brief §4's disabled
+ * column; rework round 1, 2026-11-09): the three presses that touch the file (`store`, `remove`, `open`) and the
+ * probe. While one holds, every control of the card is disabled, so two writes cannot race and a completion cannot
+ * clear a draft typed meanwhile.
+ */
+export type WebSearchInFlight = 'store' | 'remove' | 'open' | 'probe';
+
+/** The in-flight state said in words (REQ-SHELL-149: a state readable as text, never by a disabled control alone). */
+export const WEB_SEARCH_IN_FLIGHT: Readonly<Record<WebSearchInFlight, string>> = {
+  store: 'Storing the key…',
+  remove: 'Deleting the stored key…',
+  open: 'Opening the configuration file…',
+  probe: 'Checking the server…',
+};
 
 /** REQ-MCP-110's confirmation, re-worded from the write's own masked outcome (the B1 reply) — never a value. */
 export function storedKeySentence(outcome: Pick<McpSecretWriteOutcome, 'server' | 'key' | 'scope' | 'masked'>): string {
@@ -278,7 +308,11 @@ export interface WebSearchSetupHandlers {
 
 export interface WebSearchSetupDeps {
   readonly command: (req: CommandRequest) => Promise<CommandOutcome>;
-  /** The re-read after a write: the listing and the secrets view (`mcp.list` / `mcp.secrets`). */
+  /**
+   * The re-read after a write: the listing and the secrets view. The card's own view is the one read with
+   * `server: 'web_search'` (its stored key, REQ-MCP-083/110) — the category's chooser-filtered view may name another
+   * server and never blanks the card (Minor 2, 2026-11-09).
+   */
   readonly read: () => Promise<void>;
 }
 

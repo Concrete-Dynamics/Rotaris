@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { ok } from '@rotaris/kernel';
+import { windowsProtector, type Exec, type Protector } from '@rotaris/platform';
 import { loadConfiguration } from '../load.js';
 import { SECRETS_FILE, readSecretsFile, resolveRemoteUrl } from './environment.js';
 import { SECRETS_FILE_MODE, secretsPathFor, setServerSecret, unsetServerSecret, clearServerSecrets } from './secrets-write.js';
@@ -11,7 +13,8 @@ import { SHIPPED_MCP_SERVERS } from './defaults.js';
 /*
  * REQ-MCP-084/110/111's write side: each case fails for exactly one reason, stated on it. The main case — "after a
  * store the file holds that entry and mode 0600" — goes red the moment `setServerSecret` stops committing (the
- * negative control in the slice's report stashed exactly that commit call).
+ * negative control in the slice's report stashed exactly that commit call), and the ordering case goes red when the
+ * protect-then-write ordering of REQ-CONFIG-216 is removed (round-1 rework, 2026-11-09).
  */
 
 const scratchDirs: string[] = [];
@@ -37,6 +40,7 @@ describe('REQ-MCP-084/110: a set stores the secret atomically at mode 0600 (REQ-
     // REQ-CONFIG-216, NOT REQ-CONFIG-444's 0644: this file is protected by what it carries.
     if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(SECRETS_FILE_MODE);
     // The staging sibling ADR-0004's primitive makes is gone whatever happened.
+    expect(readdirSync(dirname(file)).filter((f) => f.includes('staging'))).toEqual([]);
     expect(readFileSync(file, 'utf8')).toMatch(/^web_search:\n {2}ROTARIS_SEARCH_API_KEY: sk-live-1\n$/);
   });
 
@@ -62,6 +66,114 @@ describe('REQ-MCP-084/110: a set stores the secret atomically at mode 0600 (REQ-
     expect(r.ok).toBe(true);
     expect(globalFile).toBe(join(dir, 'config', SECRETS_FILE));
     expect(readFileSync(globalFile, 'utf8')).toBe('brand_new:\n  KEY: v\n');
+  });
+});
+
+describe('REQ-CONFIG-216: the protection is applied BEFORE the write, and the write does not happen without it (round-1 rework, 2026-11-09)', () => {
+  /*
+   * HOW THE ORDERING IS OBSERVED. The adapter is injected (`SecretsWriteDeps.protector`), and what this suite's spies
+   * see is the file's state at the moment the adapter is asked to protect it: the staged sibling exists, it is still
+   * EMPTY, and the target does not exist yet (or, over an existing file, still holds its own bytes). READ AT THAT
+   * MOMENT the staged file already carries the mode the adapter will establish — with the real POSIX adapter the
+   * staged file is created and protected before a byte is written, so a spy placed on the adapter sees mode 0600
+   * BEFORE any content exists; with the ordering removed (a post-rename chmod) the spy would see the umask's mode
+   * over eight characters of content. The negative control in the report stubs `protector` to a no-op: the mode then
+   * reads back as the umask's 0644 and the case goes red. A refusal is the second observable: it must leave no
+   * staged file and no target behind, which a post-rename protection cannot promise.
+   */
+  it('the adapter is called with the staged sibling while it is EMPTY and the target still holds the previous file — fails if the protection runs after the content is written or after the rename', async () => {
+    const dir = scratchDir('rotaris-secrets-order-');
+    const file = secretsPathFor('workspace', join(dir, 'config'), ws(dir));
+    mkdirSync(join(ws(dir), '.rotaris'), { recursive: true });
+    writeFileSync(file, 'web_search:\n  ROTARIS_SEARCH_API_KEY: old\n');
+    /** What each protect call saw: the staged sibling's bytes, and the target's, at the moment protection was asked. */
+    const sawStaged: { path: string; emptyAtProtect: boolean; targetAtProtect: string }[] = [];
+    const spy: Protector = { protect: async (path) => { sawStaged.push({ path, emptyAtProtect: readFileSync(path, 'utf8') === '', targetAtProtect: existsSync(file) ? readFileSync(file, 'utf8') : '' }); return ok(undefined); } };
+    const r = await setServerSecret(file, 'web_search', 'ROTARIS_SEARCH_API_KEY', 'sk-new', { protector: spy });
+    expect(r.ok).toBe(true);
+    expect(sawStaged).toHaveLength(1);
+    // The staged sibling sits INSIDE the target's own directory (the primitive's staging rule) and is not the target.
+    expect(dirname(sawStaged[0]!.path)).toBe(dirname(file));
+    expect(sawStaged[0]!.path).not.toBe(file);
+    expect(sawStaged[0]!.emptyAtProtect).toBe(true); // NOT a byte of content existed when protection was asked
+    // And at that moment the target still held the PREVIOUS file, untouched — the rename has not happened yet.
+    expect(sawStaged[0]!.targetAtProtect).toContain('old');
+    expect(sawStaged[0]!.targetAtProtect).not.toContain('sk-new');
+    // After the write the new content is in place (the injected no-op leaves the mode to the umask — the REAL
+    // adapter's 0600 is asserted by the case below, which drives `createProtector` itself).
+    expect(readFileSync(file, 'utf8')).toContain('sk-new');
+  });
+
+  it('a protection refusal answers BEFORE the rename: the target keeps its own bytes and no staged file is left — fails if a refused protection can still replace the file', async () => {
+    const dir = scratchDir('rotaris-secrets-order-');
+    const file = secretsPathFor('workspace', join(dir, 'config'), ws(dir));
+    mkdirSync(join(ws(dir), '.rotaris'), { recursive: true });
+    writeFileSync(file, 'web_search:\n  ROTARIS_SEARCH_API_KEY: old\n');
+    const before = sha(file);
+    const refusing: Protector = { protect: async () => ({ ok: false as const, error: { code: 'credential.protect', headline: 'The protection could not be applied', detail: 'the volume has no access-control list' } }) };
+    const r = await setServerSecret(file, 'web_search', 'ROTARIS_SEARCH_API_KEY', 'sk-new', { protector: refusing });
+    expect(r.ok).toBe(false);
+    expect(r.ok ? '' : r.error.code).toBe('protection');
+    expect(r.ok ? '' : r.error.fault).toContain('no access-control list');
+    expect(sha(file)).toBe(before); // byte-identical: "the write does not happen"
+    expect(readdirSync(dirname(file)).filter((f) => f.includes('staging'))).toEqual([]);
+  });
+
+  it('a protection refusal on a file that does not exist yet creates NOTHING — fails if a refused first write leaves an empty or partially written secrets.yaml', async () => {
+    const dir = scratchDir('rotaris-secrets-order-');
+    const file = secretsPathFor('workspace', join(dir, 'config'), ws(dir));
+    const refusing: Protector = { protect: async () => ({ ok: false as const, error: { code: 'credential.protect', headline: 'no', detail: 'the directory could not be protected' } }) };
+    const r = await setServerSecret(file, 'web_search', 'ROTARIS_SEARCH_API_KEY', 'sk-new', { protector: refusing });
+    expect(r.ok ? '' : r.error.code).toBe('protection');
+    expect(existsSync(file)).toBe(false);
+    expect(existsSync(join(ws(dir), '.rotaris'))).toBe(true); // the parent may exist; the FILE must not
+    expect(readdirSync(join(ws(dir), '.rotaris'))).toEqual([]);
+  });
+
+  it('on this machine: the real adapter protects the staged file before the content, and the file ends at 0600 with the staged sibling gone', async () => {
+    // The default protector is the platform's own (`createProtector`): POSIX chmod+stat on this host.
+    if (process.platform === 'win32') return;
+    const dir = scratchDir('rotaris-secrets-order-');
+    const file = secretsPathFor('workspace', join(dir, 'config'), ws(dir));
+    // The condition REQ-PROVIDER-016 forbids inheriting: a parent directory left loose, so an umask-masked staged
+    // file would read back 0644 rather than 0600 if the mode were not applied explicitly.
+    mkdirSync(join(ws(dir), '.rotaris'), { recursive: true });
+    const r = await setServerSecret(file, 'web_search', 'ROTARIS_SEARCH_API_KEY', 'sk-real');
+    expect(r.ok).toBe(true);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(readdirSync(dirname(file)).filter((f) => f.includes('staging'))).toEqual([]);
+  });
+
+  it('on Windows the same path routes through the ACL adapter: a refusal is the protection refusal and nothing is written — the path exists and is driven with the adapter injected; it is NOT measured on a real Windows host (none is available to this build)', async () => {
+    const dir = scratchDir('rotaris-secrets-order-');
+    const file = secretsPathFor('workspace', join(dir, 'config'), ws(dir));
+    mkdirSync(join(ws(dir), '.rotaris'), { recursive: true });
+    writeFileSync(file, 'web_search:\n  ROTARIS_SEARCH_API_KEY: old\n');
+    const before = sha(file);
+    // A Windows shape: the ACL adapter refuses the read-back (the DACL that came back is not the exact one).
+    const calls: string[][] = [];
+    const exec: Exec = async (cmd, args) => {
+      calls.push([cmd, ...args]);
+      if (cmd.endsWith('whoami.exe')) return { status: 0, stdout: '"host\\me","S-1-5-21-9-9-9-1001"\r\n', stderr: '' };
+      if (args.includes('/save')) { writeFileSync(args[args.indexOf('/save') + 1]!, Buffer.concat([Buffer.from('\uFEFF', 'utf16le'), Buffer.from('name\r\nD:PAI(A;;FA;;;S-1-5-21-9-9-9-1001)(A;;FA;;;SY)(A;;FR;;;BU)\r\n', 'utf16le')])); return { status: 0, stdout: '', stderr: '' }; }
+      return { status: 0, stdout: '', stderr: '' };
+    };
+    const protector = windowsProtector({ exec, env: { SystemRoot: 'C:\\W' }, scratchDir: dir, random: () => 'z' });
+    const refused = await setServerSecret(file, 'web_search', 'ROTARIS_SEARCH_API_KEY', 'sk-new', { protector });
+    expect(refused.ok).toBe(false);
+    expect(refused.ok ? '' : refused.error.code).toBe('protection');
+    expect(refused.ok ? '' : refused.error.fault).toMatch(/two/); // the DACL's own complaint, read back
+    expect(calls.some((c) => c.includes('/inheritance:r'))).toBe(true); // icacls ran at all — the path is wired
+    expect(sha(file)).toBe(before);
+    // And an exact DACL lets the same write through.
+    const exact: Exec = async (cmd, args) => {
+      if (cmd.endsWith('whoami.exe')) return { status: 0, stdout: '"host\\me","S-1-5-21-9-9-9-1001"\r\n', stderr: '' };
+      if (args.includes('/save')) { writeFileSync(args[args.indexOf('/save') + 1]!, Buffer.concat([Buffer.from('\uFEFF', 'utf16le'), Buffer.from('name\r\nD:PAI(A;;FA;;;S-1-5-21-9-9-9-1001)(A;;FA;;;SY)\r\n', 'utf16le')])); return { status: 0, stdout: '', stderr: '' }; }
+      return { status: 0, stdout: '', stderr: '' };
+    };
+    const accepted = await setServerSecret(file, 'web_search', 'ROTARIS_SEARCH_API_KEY', 'sk-new', { protector: windowsProtector({ exec: exact, env: { SystemRoot: 'C:\\W' }, scratchDir: dir, random: () => 'y' }) });
+    expect(accepted.ok).toBe(true);
+    expect(readFileSync(file, 'utf8')).toContain('sk-new');
   });
 });
 

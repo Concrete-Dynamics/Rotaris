@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { McpHealth, McpSecretRow, McpSecretsView, McpServerRow } from '@rotaris/contracts';
 import {
-  mcpHealthText, presetAfter, storedKeySentence, deletedKeySentence, webSearchFileLine, webSearchOtherTransport, webSearchPreset, webSearchSituation,
+  mcpHealthText, presetAfter, presetTabIndex, storedKeySentence, deletedKeySentence, webSearchFileLine, webSearchOtherTransport, webSearchPreset, webSearchSituation,
   webSearchStanza, webSearchStoredKey, webSearchUnresolvedNote,
-  WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_PRESETS, WEB_SEARCH_SERVER, WEB_SEARCH_SHIPPED_URL,
+  WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_PRESETS, WEB_SEARCH_SERVER, WEB_SEARCH_SHIPPED_URL,
 } from './web-search-setup.js';
 
 /**
@@ -152,5 +152,19 @@ describe('the sentences the card says (REQ-MCP-110/084/083, REQ-CONFIG-437)', ()
     expect(presetAfter(ids[1]!, 'Home')).toBe(ids[0]);
     expect(presetAfter(ids[1]!, 'End')).toBe(ids[ids.length - 1]);
     expect(presetAfter(ids[1]!, 'Enter')).toBeNull();
+  });
+
+  it('the radios are ONE tab station (REQ-SHELL-145; roving tabIndex, rework round 1): the selected radio carries 0 and every other −1, and the first is the station while nothing is selected — fails if every radio is its own tab stop', () => {
+    expect(WEB_SEARCH_PRESETS.map((p) => presetTabIndex(null, p.id))).toEqual([0, -1, -1, -1]);
+    expect(WEB_SEARCH_PRESETS.map((p) => presetTabIndex('brave', p.id))).toEqual([-1, 0, -1, -1]);
+    expect(WEB_SEARCH_PRESETS.map((p) => presetTabIndex('other', p.id))).toEqual([-1, -1, -1, 0]);
+    // A stale id (a preset withdrawn since the selection was made) leaves the group reachable all the same.
+    expect(WEB_SEARCH_PRESETS.map((p) => presetTabIndex('gone', p.id))).toEqual([0, -1, -1, -1]);
+  });
+
+  it('the in-flight vocabulary names each press that must not overlap itself (design brief §4\'s disabled-during-write; rework round 1, Major 2) — fails if a press the card blocks is missing from the words', () => {
+    expect(Object.keys(WEB_SEARCH_IN_FLIGHT).sort()).toEqual(['open', 'probe', 'remove', 'store']);
+    expect(WEB_SEARCH_IN_FLIGHT.store).toContain('Storing');
+    expect(WEB_SEARCH_IN_FLIGHT.probe).toContain('Checking');
   });
 });

@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ConfigSnapshot, McpHealth, McpListing, McpProvisioning, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 import { Confirm } from './Confirm.js';
 import { Fatal } from './ConfigSettings.js';
 import {
-  deletedKeySentence, mcpHealthText, presetAfter, storedKeySentence, webSearchFileLine, webSearchHeaderKeyNote, webSearchOtherTransport,
+  deletedKeySentence, mcpHealthText, presetAfter, presetTabIndex, storedKeySentence, webSearchFileLine, webSearchHeaderKeyNote, webSearchOtherTransport,
   webSearchPreset, webSearchSituation, webSearchStanza, webSearchStoredKey, webSearchUnresolvedNote,
   MCP_HEALTH_TEXT,
-  WEB_SEARCH_CONTROLS, WEB_SEARCH_DECLARATION_STANDS, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_NEEDS_ENABLED,
+  WEB_SEARCH_CONTROLS, WEB_SEARCH_DECLARATION_STANDS, WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_NEEDS_ENABLED,
   WEB_SEARCH_NO_ENTRY, WEB_SEARCH_NOT_WRITTEN_BY_US, WEB_SEARCH_PRESETS, WEB_SEARCH_SERVER, WEB_SEARCH_TAKE_EFFECT, WEB_SEARCH_WORKING_SUMMARY, WEB_SEARCH_WRONG_ENDPOINT,
-  type WebSearchPreset, type WebSearchScope, type WebSearchSetupHandlers,
+  type WebSearchInFlight, type WebSearchPreset, type WebSearchScope, type WebSearchSetupHandlers,
 } from './web-search-setup.js';
 
 /**
@@ -44,6 +44,12 @@ export interface McpSettingsProps {
   readonly onProbeAll: () => Promise<void>;
   readonly onToggle: (name: string, enabled: boolean) => Promise<{ ok: boolean; message: string }>;
   readonly secrets: McpSecretsView | null;
+  /**
+   * The guided card's OWN secrets view (Minor 2, 2026-11-09): read with `server: 'web_search'` and never the
+   * chooser's, so the category's stored-secrets filter (which may name another server) cannot blank the card's
+   * stored-key state or take away its delete action. The parent row's view stays `secrets`.
+   */
+  readonly webSearchSecrets: McpSecretsView | null;
   readonly onSecretsServer: (server: string | null) => void;
   /** REQ-MCP-099/112: the project setup's status as the run host holds it; null before the first read. */
   readonly setup: McpSetupStatus | null;
@@ -193,7 +199,7 @@ function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null;
  */
 function WebSearchSetupCard(props: McpSettingsProps) {
   const row = (props.listing?.rows ?? []).find((r) => r.name === WEB_SEARCH_SERVER) ?? null;
-  const storedKey = webSearchStoredKey(props.secrets);
+  const storedKey = webSearchStoredKey(props.webSearchSecrets);
   const health: McpHealth = props.health[WEB_SEARCH_SERVER] ?? { state: 'unknown' };
   const fatalLoad = props.fatal !== undefined && !props.fatal.loadOk;
   // REQ-CONFIG-424/478: with no configuration service (the listing read's refusal) or a fatal load, the card renders
@@ -201,13 +207,12 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const unavailable = fatalLoad
     ? 'The configuration could not be loaded, so there is nothing this card can guide you to yet. Fix the reported problem, then reload this category.'
     : props.error;
-  const situation = webSearchSituation({ unavailable, row, storedKey, health });
   const [presetId, setPresetId] = useState<string | null>(null);
   const [keyDraft, setKeyDraft] = useState('');
   const [scope, setScope] = useState<WebSearchScope>('workspace');
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
-  const [checking, setChecking] = useState(false);
+  const [inFlight, setInFlight] = useState<WebSearchInFlight | null>(null);
   const [probingMessage, setProbingMessage] = useState<string | null>(null);
   const [liveHealth, setLiveHealth] = useState<McpHealth | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -217,26 +222,39 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const preset = webSearchPreset(presetId);
   const stanza = webSearchStanza(preset);
   const shownHealth = liveHealth ?? health;
+  /** Major 1 (rework round 1, 2026-11-09): the situation reads the card's OWN probe result (`liveHealth`), so the Test
+   * step genuinely decides `ready`/`wrong-endpoint` — a Healthy probe collapses the steps, a failing one takes an
+   * already-ready card back to `wrong-endpoint`. The parent row's health is untouched (the category's probe owns it). */
+  const situation = webSearchSituation({ unavailable, row, storedKey, health: shownHealth });
   const disabled = unavailable !== null;
   const collapsed = situation === 'ready' && !expanded;
-  const busy = checking;
+  /** Major 2: ONE in-flight state covers the three file presses and the probe; every control is disabled while it
+   * holds, and the card says which one it is (design brief §4's disabled-during-write, REQ-SHELL-149 in words). */
+  const busy = inFlight !== null;
+  const radios = useRef(new Map<string, HTMLButtonElement>());
 
   const store = async () => {
-    setRefusal(null); setConfirmation(null);
+    if (busy) return;
+    setRefusal(null); setConfirmation(null); setInFlight('store');
     const r = await props.webSearchSetup.onStoreKey(keyDraft, scope);
+    setInFlight(null);
     if (!r.ok) { setRefusal(r.message); return; }
     setKeyDraft('');
     setConfirmation(storedKeySentence(r.outcome));
   };
   const remove = async () => {
-    setConfirmingDelete(false); setRefusal(null); setConfirmation(null);
+    if (busy) return;
+    setConfirmingDelete(false); setRefusal(null); setConfirmation(null); setInFlight('remove');
     const r = await props.webSearchSetup.onDeleteKey(scope);
+    setInFlight(null);
     if (!r.ok) { setRefusal(r.message); return; }
     setConfirmation(deletedKeySentence(r.outcome));
   };
   const openFile = async () => {
-    setOpenFailure(null);
+    if (busy) return;
+    setOpenFailure(null); setInFlight('open');
     const r = await props.webSearchSetup.onOpenFile();
+    setInFlight(null);
     if (!r.ok) setOpenFailure(r.message);
   };
   const getKey = async (p: WebSearchPreset) => {
@@ -245,10 +263,11 @@ function WebSearchSetupCard(props: McpSettingsProps) {
     if (!r.ok) setOpenFailure(r.message);
   };
   const check = async () => {
-    setChecking(true); setProbingMessage(null);
+    if (busy) return;
+    setInFlight('probe'); setProbingMessage(null);
     const result = await props.webSearchSetup.onProbe();
+    setInFlight(null);
     setLiveHealth(result);
-    setChecking(false);
     setProbingMessage(result.state === 'unreachable' ? WEB_SEARCH_WRONG_ENDPOINT : `The server answered: ${mcpHealthText(result)}.`);
   };
   const copy = () => {
@@ -259,9 +278,12 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   };
   const onRadioKey = (event: { key: string; preventDefault: () => void }) => {
     const next = presetAfter(presetId, event.key);
-    if (next === null) return;
+    if (next === null || busy) return;
     event.preventDefault();
     setPresetId(next);
+    // REQ-SHELL-146 with REQ-SHELL-145: the arrows move the selection and the focus with it (roving tabIndex — the
+    // selected radio is the group's one tab station; `presetTabIndex`). Until 2026-11-09 the focus stayed put.
+    radios.current.get(next)?.focus();
   };
   const scopeLabels: Readonly<Record<WebSearchScope, string>> = { workspace: 'Workspace', global: 'Global' };
   const hideKeyStep = preset !== null && !preset.keyInUrl;
@@ -310,7 +332,8 @@ function WebSearchSetupCard(props: McpSettingsProps) {
             {WEB_SEARCH_PRESETS.map((p) => (
               <div key={p.id} className="settings__action" data-websearch-preset={p.id} data-preset-selected={presetId === p.id ? 'yes' : 'no'}>
                 <DesignButton
-                  type="button" role="radio" aria-checked={presetId === p.id} disabled={disabled || busy}
+                  ref={(el) => { if (el === null) radios.current.delete(p.id); else radios.current.set(p.id, el); }}
+                  type="button" role="radio" aria-checked={presetId === p.id} tabIndex={presetTabIndex(presetId, p.id)} disabled={disabled || busy}
                   className={`seg-opt${presetId === p.id ? ' is-active' : ''}`}
                   aria-label={`${p.name} — ${p.description}`}
                   onClick={() => setPresetId(p.id)}
@@ -335,8 +358,8 @@ function WebSearchSetupCard(props: McpSettingsProps) {
               <pre className="mono" data-websearch-stanza>{stanza.text}</pre>
               {stanza.note !== null ? <p className="text-tertiary settings__hint" data-websearch-example>{stanza.note}</p> : null}
               <div className="settings__action">
-                <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-copy disabled={disabled} onClick={copy}>Copy</DesignButton>
-                <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-open disabled={disabled || props.listing === null} title={props.listing === null ? "The configuration file's path is not known until the listing is read." : undefined} aria-description={props.listing === null ? "Disabled: the configuration file's path is not known until the listing is read." : undefined} onClick={() => { void openFile(); }}>Open the file</DesignButton>
+                <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-copy disabled={disabled || busy} onClick={copy}>Copy</DesignButton>
+                <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-open disabled={disabled || busy || props.listing === null} title={props.listing === null ? "The configuration file's path is not known until the listing is read." : undefined} aria-description={props.listing === null ? "Disabled: the configuration file's path is not known until the listing is read." : undefined} onClick={() => { void openFile(); }}>Open the file</DesignButton>
                 {copyNote !== null ? <span className="text-tertiary settings__hint" role="status">{copyNote}</span> : null}
               </div>
             </>
@@ -393,12 +416,13 @@ function WebSearchSetupCard(props: McpSettingsProps) {
       <div className="card-kicker" data-websearch-step="test">Step 4</div>
       <h2 className="settings__heading">Test it</h2>
       <div className="settings__action">
-        <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-check aria-label={WEB_SEARCH_CONTROLS.check} disabled={disabled || busy} onClick={() => { void check(); }}>{checking ? 'Checking…' : 'Check status'}</DesignButton>
+        <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-check aria-label={WEB_SEARCH_CONTROLS.check} disabled={disabled || busy} onClick={() => { void check(); }}>{inFlight === 'probe' ? 'Checking…' : 'Check status'}</DesignButton>
         <span>
-          <span className="mcp__dot" data-state={checking ? 'checking' : shownHealth.state} aria-hidden="true" />{' '}
-          <span data-websearch-health data-health={shownHealth.state}>{checking ? MCP_HEALTH_TEXT.checking : mcpHealthText(shownHealth)}</span>
+          <span className="mcp__dot" data-state={inFlight === 'probe' ? 'checking' : shownHealth.state} aria-hidden="true" />{' '}
+          <span data-websearch-health data-health={shownHealth.state}>{inFlight === 'probe' ? MCP_HEALTH_TEXT.checking : mcpHealthText(shownHealth)}</span>
         </span>
       </div>
+      {inFlight !== null ? <p role="status" className="text-secondary" data-websearch-in-flight>{WEB_SEARCH_IN_FLIGHT[inFlight]}</p> : null}
       {shownHealth.state === 'unreachable' && shownHealth.detail ? <p className="text-tertiary settings__hint mono" data-websearch-health-detail>{shownHealth.detail}</p> : null}
       {probingMessage !== null ? <p role="status" className="text-secondary" data-websearch-probe-message>{probingMessage}</p> : null}
       {/* REQ-CONFIG-225/371: the row's own words for why nothing connects — a placeholder still unresolved, or the host's

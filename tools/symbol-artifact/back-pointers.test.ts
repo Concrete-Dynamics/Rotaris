@@ -155,7 +155,10 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
     expect(narrowed('REQ-SHELL-021')).toEqual(['PD-SHELL-001', 'PD-SHELL-009', 'PD-SHELL-010']);
     expect(narrowed('REQ-CONFIG-464')).toEqual(['PD-CONFIG-001', 'PD-WORKSPACE-002']);
     expect(narrowed('REQ-CONFIG-256')).toEqual(['PD-CONFIG-003', 'PD-WORKSPACE-002']);
-    expect(narrowed('REQ-CONFIG-417')).toEqual(['PD-CONFIG-003', 'PD-WORKSPACE-002']);
+    // PD-CONFIG-006 (R-095, 2026-11-08) narrows a THIRD, disjoint case beside these two: an ON press on an available,
+    // configured-off tool server writes `mcp_servers.<name>.enabled` — the Runtime timeouts (PD-CONFIG-003) and the
+    // instruction-file switches (PD-WORKSPACE-002) are neither touched nor overlapped.
+    expect(narrowed('REQ-CONFIG-417')).toEqual(['PD-CONFIG-003', 'PD-CONFIG-006', 'PD-WORKSPACE-002']);
     // The bounded re-read's own finds: a closed set widened is a narrowing (F15).
     expect(narrowed('REQ-TOOLS-152')).toEqual(['PD-ORCH-004', 'PD-TOOLS-006']);
     expect(narrowed('REQ-LIBRARY-099')).toEqual(['PD-LIBRARY-001', 'PD-LIBRARY-004']);
@@ -167,6 +170,7 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
       ['REQ-CONFIG-464', 'PD-WORKSPACE-002'],
       ['REQ-CONFIG-256', 'PD-WORKSPACE-002'],
       ['REQ-CONFIG-417', 'PD-WORKSPACE-002'],
+      ['REQ-CONFIG-417', 'PD-CONFIG-006'],
       ['REQ-TOOLS-152', 'PD-ORCH-004'],
       ['REQ-LIBRARY-099', 'PD-LIBRARY-001'],
       ['REQ-TOOLS-148', 'PD-LIBRARY-001'],

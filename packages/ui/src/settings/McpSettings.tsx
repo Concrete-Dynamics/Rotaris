@@ -50,6 +50,10 @@ function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: Mc
   const on = row.enabled && !row.overridden && row.available;
   const stateText = health.state === 'healthy' ? `${HEALTH_TEXT.healthy} · ${health.toolCount ?? 0} tool${health.toolCount === 1 ? '' : 's'}` : HEALTH_TEXT[health.state];
   const tooltip = health.state === 'unreachable' ? health.detail ?? '' : undefined;
+  // PD-CONFIG-006: an available row whose configured value is `false` is the one case the press is DURABLE — it writes
+  // `mcp_servers.<name>.enabled: true` through the scoped per-field write path, so its switch, its accessible name and
+  // its hint say so rather than promising a session toggle (REQ-MCP-115: the category says plainly which control is in
+  // force and names `enabled` and the file as the way to make it persistent).
   // REQ-MCP-115: which of the two controls is in force, as text. REQ-MCP-091/092 fix the tooltip sentence for the case
   // those requirements were written for — a stdio entry whose command was not found on the executable search path — and
   // it is kept verbatim for every stdio row. REQ-CONFIG-371 gives the general rule the sentence is an instance of ("the
@@ -59,6 +63,12 @@ function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: Mc
   // a remote row named a command the entry does not have.
   const unavailableText = row.type !== 'stdio' && row.availabilityDetail !== '' ? row.availabilityDetail : 'the command was not found on the executable search path';
   const enablement = !row.enabled ? 'Configured off (enabled: false in the configuration file).' : row.overridden ? 'Overridden for this session — not persistent. To make it durable, set enabled in the configuration file.' : row.available ? 'On.' : `Off: ${unavailableText}`;
+  const durablePress = !row.enabled && row.available;
+  const accessibleName = durablePress ? `Enable ${row.name}` : `Enable ${row.name} for this session`;
+  const accessibleDescription = durablePress
+    ? `Configured off (enabled: false in the configuration file). Switching on writes enabled: true to the configuration file; the change is persistent.`
+    : enablement;
+  const title = !row.available ? unavailableText : durablePress ? 'Switching this on writes enabled: true to the configuration file; the change is persistent.' : undefined;
   const toggle = async () => {
     if (busy || !row.available) return;
     setBusy(true);
@@ -80,7 +90,7 @@ function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: Mc
       </td>
       <td data-origin>{row.origin}</td>
       <td>
-        <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={`Enable ${row.name} for this session`} aria-description={enablement} disabled={!row.available || busy} title={!row.available ? unavailableText : undefined} onClick={() => { void toggle(); }} />
+        <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={accessibleName} aria-description={accessibleDescription} disabled={!row.available || busy} title={title} onClick={() => { void toggle(); }} />
         <div className="text-tertiary settings__hint" data-enablement>{enablement}</div>
         {message ? <div className="composer__error" role="alert">{message}</div> : null}
       </td>
@@ -165,7 +175,7 @@ export function McpSettings(props: McpSettingsProps) {
             <DesignButton type="button" className="btn btn-primary btn-compact" aria-description="Probe every configured MCP server" disabled={props.probing || rows.length === 0} onClick={() => { void probeAll(); }} data-action="check-status">{props.probing ? 'Checking…' : 'Check status'}</DesignButton>
           </div>
         </div>
-        <p className="text-secondary">Every server the configuration declares, whether or not it is enabled. Health is probed on demand and never remembered across launches; the switch turns a server off for this session only.</p>
+        <p className="text-secondary">Every server the configuration declares, whether or not it is enabled. Health is probed on demand and never remembered across launches; the switch turns a server off for this session only, and switching on a server the configuration holds disabled writes `enabled: true` to the configuration file.</p>
         {props.error ? <p className="composer__error" role="alert">{props.error}</p> : null}
         {probeMessage ? <p className="text-secondary" role="status">{probeMessage}</p> : null}
         {rows.length === 0 ? (

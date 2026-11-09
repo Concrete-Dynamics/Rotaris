@@ -198,6 +198,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.list'), workspaceId: z.string() }),
   z.object({ kind: z.literal('mcp.probe'), workspaceId: z.string(), name: z.string().min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
+  /**
+   * PD-CONFIG-006: after main writes `mcp_servers.<name>.enabled: true` through `config.setField`, the run host's
+   * cached resolution of that workspace is stale — a listing read answers from `configuredFor`. One request drops
+   * that workspace's entry and configures it again from the file; answered `ack`. The run host never writes the file.
+   */
+  z.object({ kind: z.literal('mcp.reload'), workspaceId: z.string() }),
   z.object({ kind: z.literal('mcp.secrets'), workspaceId: z.string(), server: z.string().optional() }),
   /**
    * ADR-0022 (Part AR): the confinement availability verdict, and REQ-SANDBOX-129's explicit re-check.

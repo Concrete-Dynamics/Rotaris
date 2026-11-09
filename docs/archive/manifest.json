@@ -897,6 +897,7 @@
     "defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md": "e1d1071402966fde99794e95ed8f3a0a8474c3dcad35ee3c4d90d7f8d1537d68",
     "defects/an-mcp-or-fetch-timeout-files-a-terminal-timeout-issue-that-names-a-terminal-command.md": "a2ecd6e989f499478206276319767778f75fa85c46b0e4c959896ed9488484e1",
     "defects/an-mcp-server-whose-tool-discovery-failed-reads-as-connected.md": "9c66e7bd9ed8dda50ef886d22727a2fb2f225bc4cdadca5791307d8dabb46fd3",
+    "defects/an-mcp-servers-configured-off-toggle-is-a-silent-no-op.md": "8f1060a7fcc1fc19593706fd45683eb79d74fbc64f0f84189bb7056696299d77",
     "defects/an-mcp-tool-call-that-fails-its-advertised-input-schema-reaches-the-server.md": "b19619f214bfcd8887f917367a7623fc580e84afdd7c0223d8d6265414bd75c9",
     "defects/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md": "4d0a50a7a01c34dfbd6070e6f31d331af4a00d30799cbac46a473c9a90d5b8fe",
     "defects/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md": "d3a32de65d99fb6020565e21e7202ab7d9c6c4728b85ecb1c128eb79bb854b40",

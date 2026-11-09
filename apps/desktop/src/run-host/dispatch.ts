@@ -76,6 +76,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     continuationLeaseForSession,
     retrospectiveSetup,
     configuredFor,
+    reloadConfiguration,
     sessions,
     sessionActions,
     terminalHost,
@@ -768,6 +769,16 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     case 'mcp.setEnabled':
       mcp.setEnabled(req.name, req.enabled);
       return { kind: 'ack' };
+    // PD-CONFIG-006: main wrote `mcp_servers.<name>.enabled` through the scoped per-field path and the cached
+    // resolution above is stale; drop it and read the file again, so the next listing and the next run see the write.
+    case 'mcp.reload': {
+      const s = stores.get(req.workspaceId);
+      if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
+      const r = reloadConfiguration(s.root);
+      if (!r.ok) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded', detail: r.reason };
+      log(`mcp: reloaded the configuration of ${s.root} after a tool-server write (PD-CONFIG-006)`);
+      return { kind: 'ack' };
+    }
     case 'mcp.secrets': {
       const s = stores.get(req.workspaceId);
       if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };

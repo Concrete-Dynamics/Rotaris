@@ -289,6 +289,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * refusal when there is none, which is the branch that reaches in a build that ships no notices file.
    */
   z.object({ kind: z.literal('shell.openThirdPartyLicenses') }),
+  /**
+   * REQ-CONFIG-437 with REQ-CONFIG-350/464 (B2, 2026-11-09): the guided `web_search` card NAMES the configuration
+   * file and offers to open it, so step 2's file edit is two actions rather than a scavenger hunt. The command
+   * carries **nothing** — the renderer names no path; main resolves the asking window's own workspace file
+   * (`<workspace>/.rotaris/agents.yaml`, the very path the MCP listing reports as `configFile`) and hands it to the
+   * platform opener, bounded as `shell.openThirdPartyLicenses`'s is. Opening a file authors nothing (REQ-CONFIG-464).
+   */
+  z.object({ kind: z.literal('shell.openConfigFile') }),
   /** REQ-TOOLS-063: the approval dialog window asks main for the request it was opened for, and how many others wait. */
   z.object({ kind: z.literal('approval.payload') }),
   /**

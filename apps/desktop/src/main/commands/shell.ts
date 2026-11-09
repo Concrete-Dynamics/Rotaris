@@ -2,6 +2,7 @@ import { BrowserWindow, app, nativeTheme, shell } from 'electron';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type DisplayPreferenceKey } from '@rotaris/contracts';
 import { buildIdentifier, thirdPartyLicensesPath } from '../about.js';
 import { productVersion } from '../version.js';
+import { scopeFiles } from '@rotaris/config';
 import { composerDraftKey, PANE_LAYOUT_PANES, PANE_LAYOUT_VIEWS, paneLayoutKeys, type PaneLayoutView } from '@rotaris/platform';
 import { homedir } from 'node:os';
 import { millis, redact } from '@rotaris/kernel';
@@ -39,9 +40,9 @@ export function announceDisplayPreference(key: DisplayPreferenceKey, value: bool
 }
 
 export function shellCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground' | 'updater'>,
-): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.current' | 'notice.report'> {
-  const { capturing, clocks, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground, updater } = ctx;
+  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground' | 'updater' | 'userDirs'>,
+): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'shell.openConfigFile' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.current' | 'notice.report'> {
+  const { capturing, clocks, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground, updater, userDirs } = ctx;
   return {
     'shell.hello': async (_req, { w }) => {
       const cb = w.workspaceId
@@ -106,6 +107,24 @@ export function shellCommands(
       const opened = await openFile(path, (p) => shell.openPath(p), clocks.timers);
       if (!opened.ok) return { ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: opened.reason };
       log(`opened licenses: ${path}`);
+      return { ok: true, value: { path } };
+    },
+    /**
+     * REQ-CONFIG-437 with REQ-CONFIG-350/464 (B2, 2026-11-09): the guided `web_search` card's `Open the file`. The
+     * renderer names no path and carries no field — main resolves the asking window's own workspace configuration
+     * file (`<workspace>/.rotaris/agents.yaml`, the exact path the MCP listing answers as `configFile`) and hands it
+     * to the platform opener, bounded exactly as the licence bundle's open is. Opening a file for reading authors
+     * nothing (REQ-CONFIG-464); the file's own edit stays the user's.
+     */
+    'shell.openConfigFile': async (_req, { w }) => {
+      if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before opening its configuration file' };
+      const path = scopeFiles(userDirs.config, w.workspace).workspace.agents;
+      const scripted = __ROTARIS_SEAMS__ && capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
+      if (scripted === 'fail') { log(`capture: open-config REFUSED ${path}`); return { ok: false, code: 'config.open-failed', headline: 'The configuration file could not be opened', detail: `${path} — the system refused to open it (scripted).` }; }
+      if (scripted === 'record') { log(`capture: open-config ${path}`); return { ok: true, value: { path } }; }
+      const opened = await openFile(path, (p) => shell.openPath(p), clocks.timers);
+      if (!opened.ok) { log(`the configuration file could not be opened: ${path} — ${opened.reason}`); return { ok: false, code: 'config.open-failed', headline: 'The configuration file could not be opened', detail: `${path} — ${opened.reason}` }; }
+      log(`opened the configuration file: ${path}`);
       return { ok: true, value: { path } };
     },
     'theme.get': () => {

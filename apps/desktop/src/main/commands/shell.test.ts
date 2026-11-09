@@ -224,6 +224,39 @@ describe('shell.openThirdPartyLicenses over an opener that never answers (REQ-SH
 });
 
 /**
+ * B2 (2026-11-09), REQ-CONFIG-437 with REQ-CONFIG-350/464: the guided `web_search` card's `Open the file` — the command
+ * carries nothing, main resolves the asking window's own workspace configuration file and hands it to the platform
+ * opener, bounded as the licence bundle's open is. Until this command existed the card had no way to name-and-open the
+ * file REQ-CONFIG-437 makes the empty state name; the strand check is that the renderer names NO path.
+ */
+describe('shell.openConfigFile opens the asking window\'s own configuration file (REQ-CONFIG-437, REQ-CONFIG-350/464)', () => {
+  const dirs = { config: '/cfg' } as unknown as CommandContext['userDirs'];
+  const facet = () => shellCommands({ capturing: false, clocks: { timers: { after: () => ({ cancel: () => undefined }) } } as unknown as CommandContext['clocks'], log: () => undefined, userDirs: dirs } as unknown as Parameters<typeof shellCommands>[0]);
+  afterEach(() => { opener.open = () => Promise.resolve(''); });
+
+  it('resolves <workspace>/.rotaris/agents.yaml — the listing\'s own configFile — with no field on the wire, and answers the path', async () => {
+    const asked: string[] = [];
+    opener.open = (path) => { asked.push(path); return Promise.resolve(''); };
+    const out = await facet()['shell.openConfigFile']({ kind: 'shell.openConfigFile' }, at);
+    expect(out).toEqual({ ok: true, value: { path: '/work/p/.rotaris/agents.yaml' } });
+    expect(asked).toEqual(['/work/p/.rotaris/agents.yaml']);
+  });
+
+  it('a window with no workspace is refused before the opener is reached — fails if a window that holds no workspace can open a file', async () => {
+    const asked: string[] = [];
+    opener.open = (path) => { asked.push(path); return Promise.resolve(''); };
+    const none: CommandAt = { w: { workspaceId: null, workspace: '(no workspace)' } as unknown as MainWindowState, senderId: 1, awaitWorkspace: async () => undefined };
+    expect(await facet()['shell.openConfigFile']({ kind: 'shell.openConfigFile' }, none)).toEqual({ ok: false, code: 'workspace.none', headline: 'Open a workspace before opening its configuration file' });
+    expect(asked).toEqual([]);
+  });
+
+  it('an opener that refuses answers config.open-failed naming the path — fails if the failure is silent', async () => {
+    opener.open = async () => 'Failed to open path';
+    expect(await facet()['shell.openConfigFile']({ kind: 'shell.openConfigFile' }, at)).toEqual({ ok: false, code: 'config.open-failed', headline: 'The configuration file could not be opened', detail: '/work/p/.rotaris/agents.yaml — Failed to open path' });
+  });
+});
+
+/**
  * R-091 (hardening §3.2 row 4; REQ-NOTIFY-005, REQ-NOTIFY-023): a renderer's own failure reaches main as `notice.report` at
  * `error` (`renderer/render-failure.ts`). Main raises the persistent notice with the detail block it was given and writes ONE
  * `error` line carrying that detail — until 2026-11-04 every renderer report was one `info` line naming only the title, so a

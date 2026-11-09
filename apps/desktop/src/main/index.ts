@@ -2012,7 +2012,7 @@ async function main(): Promise<void> {
     measurePersonaPaint, terminalWindowCommand, surface,
     notices, raiseNotice, raiseNoticeKeyed, recoveryFor, configFatal, raiseTransient: (w, kind, title) => raiseTransient(w, kind, title), announceRepairs, updater,
     providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange,
-    preferences, diagnostics, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey,
+    preferences, diagnostics, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey, userDirs: dirs,
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
     retrospectivePending: (workspaceId) => improvementCoordinator.retrospectivePending(workspaceId),

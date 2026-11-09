@@ -94,7 +94,11 @@ relays each to the **workspace service** (the only writer of configuration files
 server, key, scope and the one mask (REQ-MCP-081), `masked: null` from a delete that found nothing (not an error,
 REQ-CONFIG-217) — never a value. After a write that CHANGED the store (every set; a delete that removed a key) main fires
 the EXISTING `mcp.reload {workspaceId}` (PD-CONFIG-006's seam, no second one), so the category's listing and probe read the
-store without a restart; a delete that found nothing wrote nothing and asks for none.
+store without a restart; a delete that found nothing wrote nothing and asks for none. **The same day the guided `Set up web
+_search` card (B2, REQ-MCP-111) reads those two and adds one opener of its own: `shell.openConfigFile`** — no path on the
+wire, main resolving the asking window's workspace `agents.yaml` and opening it through the platform opener, bounded as
+`shell.openThirdPartyLicenses` is, so the card can NAME the file REQ-CONFIG-437 requires and offer step 2's edit without
+authoring anything (REQ-CONFIG-350/464).
 
 **Confinement (Part AR; ADR-0022's first execution).** Renderer → main: `confinement.status {recheck?}`; main relays it
 to the run host unchanged and answers with `{available, backend, reason, remediation}` — REQ-SANDBOX-071's four fields,

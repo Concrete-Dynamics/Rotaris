@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
-import { dictationSaveProblem, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
+import { dictationSaveProblem, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
 import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
 // ADR-0063 — portable skills: the catalog reader (`askUntilDiscovered`, `bindSkillsReader`, `readWhileMounted`, in the `@rotaris/ui` import above), the Settings tab's props and the composer's commands.
@@ -1055,7 +1055,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
       config={{ ...config, providersCard, confinement: confinement.verdict, onRecheckConfinement: confinement.onRecheck, planReleased: session?.planReleased === true }}
-      mcp={mcp}
+      mcp={{ ...mcp, ...(config.snapshot && !config.snapshot.loadOk ? { fatal: config.snapshot } : {}) }}
       display={{
         autoCollapseTools: display.autoCollapseTools,
         groupTools: display.groupTools,
@@ -1623,6 +1623,10 @@ function useMcp(): McpSettingsProps {
     onRefresh: () => { void read(); void readSecrets(secretsServer); },
     onSecretsServer: (server) => { setSecretsServer(server); },
     setup,
+    // B2: the guided `web_search` card's four presses, bound to this window's bridge — the one write is
+    // `mcp.setSecret`, and the card's re-read after a write is the listing and the secrets view together (B1's
+    // write fires main's existing `mcp.reload`, so the row refreshes without a restart).
+    webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: async () => { await read(); await readSecrets(secretsServer); } }),
     onSetupStart: async () => {
       const r = await bridge.command({ kind: 'mcp.setup', action: 'start' });
       if (r.ok) { setSetup(r.value as McpSetupStatus); return { ok: true, message: '' }; }

@@ -56,9 +56,10 @@ reported to the owner and recorded as a defect note (`docs/defects/README.md`). 
 count line, a link a moved note left behind), the orchestrator repairs it forward on its own branch in its own
 worktree from origin/main, the note moved to `docs/archive/defects/` and registered by `pnpm archive:migrate` (Records) in
 the same commit, landed with the gate green before the next bundle's merge gate meets it; a red that needs code goes to the owner or into a plan. Their commit is never reverted
-(`AGENTS.md`, "The agent workflow": surface a collision with the owner's commit, never reset it).
+(`docs/clean-room/agent-workflow.md`, "Rebase onto main, and persevere": surface a collision with the owner's
+commit, never reset it).
 
-## Worktrees and branches — `AGENTS.md`, "The agent workflow"
+## Worktrees and branches — `docs/clean-room/agent-workflow.md`, "Work on a temporary branch in a temporary worktree"
 
 One temporary branch in one temporary worktree per bundle (`<repo>-wt-<short>`), cut from `origin/main`. The primary
 checkout is not a place to write. **Main's history is linear**: a reviewed bundle lands by a rebase onto `origin/main`

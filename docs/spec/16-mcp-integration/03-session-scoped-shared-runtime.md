@@ -1,6 +1,6 @@
 # MCP Server Integration — Session-Scoped Shared Runtime
 
-Part 3 of 6 of [domain 16](../16-mcp-integration.md), which indexes every part. Defines REQ-MCP-066 – REQ-MCP-111.
+Part 3 of 7 of [domain 16](../16-mcp-integration.md), which indexes every part. Defines REQ-MCP-066 – REQ-MCP-111.
 
 ### Session-Scoped Shared Runtime
 

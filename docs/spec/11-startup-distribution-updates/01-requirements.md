@@ -10,6 +10,13 @@ Part 1 of 10 of [domain 11](../11-startup-distribution-updates.md), which indexe
 
 **REQ-STARTUP-002** — Exactly one executable entry point SHALL exist and be shipped as a standalone binary: the desktop application `rotaris`, which on Windows opens no console window. No console, headless, benchmark or other secondary executable SHALL be published, and no installation SHALL make one available. The one exception is not an entry point a user invokes: the application launches its own executable as a child process to host the bundled code-intelligence tool server, on the terms of REQ-MCP-033 and REQ-STARTUP-015.
 
+> **Narrowed by [`PD-EVENTS-001`](../../product/directives/pd-events-001.md#pd-events-001), 2026-11-10.** What is narrowed is
+> the entry-point closure, not the rule about executables, and nothing above changes: an inbound listener still adds no
+> second executable — the one shipped binary hosts it in a `utilityProcess` of the running instance, the reason ADR-0002
+> carries for its own process kinds — so what this requirement forbids stays forbidden and no installation makes a
+> second executable available. Read as "exactly one way in, and none besides", the closure would have forbidden every
+> inbound surface; it now admits this one non-executable, user-switched surface and nothing else.
+
 **REQ-STARTUP-003** — *Withdrawn.* Its only surface was a command-line invocation of the application as a module of its language runtime, which this product does not offer; the single desktop entry point is REQ-STARTUP-002.
 
 **REQ-STARTUP-004** — The product SHALL report its version from its own installation metadata. When that metadata is absent, the reported version SHALL be the literal string `0+unknown`. Standalone bundles SHALL always report the true release version and never `0+unknown`.

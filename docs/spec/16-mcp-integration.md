@@ -16,7 +16,8 @@ The product integrates external MCP (Model Context Protocol) servers as tool pro
 Since 2026-10-26 this domain's requirements, data and formats and open questions are in [`16-mcp-integration/`](16-mcp-integration/), one
 file per section or run of sections, moved there verbatim and in order so that one part loads without the rest
 ([the document budget](../README.md#the-document-budget)). Every identifier and every anchor kept its text; a
-link to one now names its part.
+link to one now names its part. Part 07 was not a move: it was added 2026-11-10 for the inbound surface, whose
+identifiers are decided rather than derived (the amendment round of [R-094](../product/requests.md#r-094)).
 
 | Part | Sections | Requirements it defines |
 |---|---|---|
@@ -26,3 +27,4 @@ link to one now names its part.
 | [04](16-mcp-integration/04-desktop-application-surfaces.md) | Desktop Application Surfaces; Prompt Rendering of the MCP Surface; Validation and Launch Error Semantics | REQ-MCP-091 – REQ-MCP-107 (19) |
 | [05](16-mcp-integration/05-data-formats.md) | Data & Formats; `mcp.json` discovery files; YAML configuration (server + persona surface); Normalized runtime server description; Per-server enablement; Secrets — `secrets.yaml`; Ordering; Health probe outcome; Session diagnostics and run state; Project setup step status; Setup warm steps; Timing and pinning constants | — |
 | [06](16-mcp-integration/06-open-questions.md) | Open Questions | — |
+| [07](16-mcp-integration/07-inbound-surface.md) | The Inbound Surface | REQ-MCP-119 – REQ-MCP-130 (12) |

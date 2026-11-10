@@ -334,12 +334,24 @@
       ]
     },
     "MCP": {
-      "uncited": 4,
+      "uncited": 16,
       "requirements": [
         "REQ-MCP-012",
         "REQ-MCP-013",
         "REQ-MCP-093",
-        "REQ-MCP-106"
+        "REQ-MCP-106",
+        "REQ-MCP-119",
+        "REQ-MCP-120",
+        "REQ-MCP-121",
+        "REQ-MCP-122",
+        "REQ-MCP-123",
+        "REQ-MCP-124",
+        "REQ-MCP-125",
+        "REQ-MCP-126",
+        "REQ-MCP-127",
+        "REQ-MCP-128",
+        "REQ-MCP-129",
+        "REQ-MCP-130"
       ]
     },
     "MONITOR": {

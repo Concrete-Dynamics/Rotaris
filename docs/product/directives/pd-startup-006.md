@@ -34,6 +34,11 @@ and a reader comparing it with REQ-STARTUP-160's words finds two moments missing
 
 > **Narrows:** REQ-STARTUP-160
 
+*Revised 2026-11-10 — a second directive narrows the same requirement.*
+[`PD-EVENTS-001`](pd-events-001.md#pd-events-001) adds the inbound surface to the disclosure's content; this directive
+keeps deciding which moments a build names. The two share no case, `REQ-STARTUP-160` carries a note for each, and each
+directive names the other.
+
 *Ruled 2026-10-13 by the consortium under the owner's delegation ([R-072](../requests.md#r-072)), the ruling of
 [OQ-261](../../archive/architecture/open-questions/56-spikes-and-later-questions-23.md#oq-261).*
 

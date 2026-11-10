@@ -1,6 +1,6 @@
 # MCP Server Integration — Server Configuration Model
 
-Part 1 of 6 of [domain 16](../16-mcp-integration.md), which indexes every part. Defines REQ-MCP-001 – REQ-MCP-027.
+Part 1 of 7 of [domain 16](../16-mcp-integration.md), which indexes every part. Defines REQ-MCP-001 – REQ-MCP-027.
 
 ## Requirements
 

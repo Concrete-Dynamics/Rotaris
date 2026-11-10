@@ -18,10 +18,10 @@ how any other implementation achieves it.
   reading (its reference record, `docs/clean-room/reference-record.md`, was removed 2026-10-26)
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **4,003** identifiers across the 20 shipping domains, of which **258** are withdrawn
-  in place, leaving **3,745** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **4,015** identifiers across the 20 shipping domains, of which **258** are withdrawn
+  in place, leaving **3,757** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,447** identifiers in all, **268** of them withdrawn.
+  are not part of the shipping total — **4,459** identifiers in all, **268** of them withdrawn.
   *(Corrected 2026-10-13: this read 3,954, 3,696 and 4,398, with REQ-TOOLS at 192 and REQ-MCP at 117 below. REQ-MCP-118
   of the code-intelligence round and REQ-TOOLS-193 of the OQ-61 round were minted and never counted;
   `tools/symbol-artifact/spec-readme-counts.test.ts` now holds every figure here to the generated artifact.)*
@@ -33,6 +33,11 @@ how any other implementation achieves it.
   when domain 22 and REQ-ADOPT-001 to REQ-ADOPT-030 were minted at the owner's explicit ask under
   [R-088](../product/requests.md#r-088). They are **decided, not derived**, as R-084's are; `PD-TRACE-001` carries what
   they displace. The amendment is in [`resolutions/22-requirements-adoption.md`](resolutions/22-requirements-adoption.md).)*
+  *(2026-11-10: 4,003, 3,745 and 4,447 became 4,015, 3,757 and 4,459 when REQ-MCP-119 to REQ-MCP-130 were minted for the
+  product's one inbound surface, at the owner's ruling [R-094](../product/requests.md#r-094) and its record
+  [ADR-0067](../architecture/adr/0067-the-loopback-mcp-server-for-external-agents.md). Like R-084's and R-088's they are
+  **decided, not derived** and say so at their section's heading; `PD-EVENTS-001` carries what they displace. The amendment
+  is in [`resolutions/16-mcp-integration.md`](resolutions/16-mcp-integration.md).)*
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
@@ -160,7 +165,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 13 | [Workspace Handling, Context Injection, and Project Onboarding](13-workspace-context-onboarding.md) | `REQ-WORKSPACE` | 153 | 17 | secondary |
 | 14 | [Library, Artifacts, and Improvement Proposals](14-library-artifacts-improvements.md) | `REQ-LIBRARY` | 176 | 14 | secondary |
 | 15 | [Settings and Configuration](15-settings-configuration.md) | `REQ-CONFIG` | 478 | 16 | secondary |
-| 16 | [MCP Server Integration](16-mcp-integration.md) | `REQ-MCP` | 118 | 11 | secondary |
+| 16 | [MCP Server Integration](16-mcp-integration.md) | `REQ-MCP` | 130 | 11 | secondary |
 | 17 | [Interactive Terminal UI](17-terminal-ui.md) | `REQ-TUI` | 207 | 1 | **retired** |
 | 18 | [Command-Line and Headless Entry Points](18-cli-headless.md) | `REQ-CLI` | 237 | 9 | **retired** |
 | 19 | [Notifications, Error Handling, and Recovery](19-notifications-errors-recovery.md) | `REQ-NOTIFY` | 268 | 4 | secondary |

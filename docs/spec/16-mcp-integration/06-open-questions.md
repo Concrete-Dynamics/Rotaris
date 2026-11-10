@@ -1,6 +1,6 @@
 # MCP Server Integration — Open Questions
 
-Part 6 of 6 of [domain 16](../16-mcp-integration.md), which indexes every part.
+Part 6 of 7 of [domain 16](../16-mcp-integration.md), which indexes every part.
 
 ## Open Questions
 

@@ -1,6 +1,6 @@
 # MCP Server Integration — Desktop Application Surfaces
 
-Part 4 of 6 of [domain 16](../16-mcp-integration.md), which indexes every part. Defines REQ-MCP-091 – REQ-MCP-107.
+Part 4 of 7 of [domain 16](../16-mcp-integration.md), which indexes every part. Defines REQ-MCP-091 – REQ-MCP-107.
 
 ### Desktop Application Surfaces
 

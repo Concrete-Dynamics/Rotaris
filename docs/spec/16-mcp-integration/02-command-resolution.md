@@ -1,6 +1,6 @@
 # MCP Server Integration — Command Resolution
 
-Part 2 of 6 of [domain 16](../16-mcp-integration.md), which indexes every part. Defines REQ-MCP-028 – REQ-MCP-065.
+Part 2 of 7 of [domain 16](../16-mcp-integration.md), which indexes every part. Defines REQ-MCP-028 – REQ-MCP-065.
 
 ### Command Resolution
 

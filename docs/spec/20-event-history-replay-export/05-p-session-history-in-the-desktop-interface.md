@@ -86,4 +86,13 @@ Three obligations attach to every export this requirement governs.
 
 **REQ-EVENTS-178** — The product is one desktop application and offers no embedding surface and no programmatic entry point: there is no library, package, plugin host, or endpoint through which code the user did not launch may start a run, drive a run, or subscribe to this application's runs, and no requirement of this document is satisfied by one. The consumer contracts of REQ-EVENTS-164 and REQ-EVENTS-165 are not an exception and MUST NOT be read as one: the consumer they describe is this application consuming its own runs in its own process — the session-history surface of Section P, the run views, and the desktop notice channel — so the interface version REQ-EVENTS-164 fixes versions an internal contract and not a published one. What may leave the application is a file, never a connection: the exported history of REQ-EVENTS-172 and the exported trajectory document of Section O, each readable with a stock JSON parser and nothing else (REQ-EVENTS-166). This is a deliberate exclusion rather than an omission — a programmatic driving surface would be a second way to start work, carrying its own permission, approval, and sandbox behavior to hold in step with the desktop one — and it is why the withdrawn surfaces of Section A are not partially reinstated in another form.
 
+> **Narrowed by [`PD-EVENTS-001`](../../product/directives/pd-events-001.md#pd-events-001), 2026-11-10.** One local surface
+> is opened and the exclusion holds everywhere else: a single loopback listener, on an ephemeral port, off until the user
+> switches it on for that session and revoked when the application quits, reachable from this machine only. It carries no
+> role, account or network-reachability dimension, and it proxies no tool call — its whole vocabulary is two coarse
+> run-oriented tools, one that starts a run in an already open workspace and one that reads that run's state. The gates,
+> approvals, sandbox and workspace fences are the ones every run has, unchanged, and an approval or a question is
+> answered by a person at the desktop and never by the calling agent. `REQ-EVENTS-081` keeps its own words and needs no
+> note here: it spans every run through the shared lifecycle and does not close its enumeration.
+
 ---

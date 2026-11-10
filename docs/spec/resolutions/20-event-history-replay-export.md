@@ -8,6 +8,28 @@ status: resolved
 # Resolution Record — Domain 20, Machine-Readable Event Stream, Replay, and Trajectory Export
 
 
+> ## Amendment, 2026-11-10 — the loopback inbound surface (R-094, ADR-0067): one deliberate exclusion narrowed
+>
+> The owner's ruling [R-094](../../product/requests.md#r-094) of 2026-11-04 opened this record's deliberate exclusion for
+> one narrow local surface, and [ADR-0067](../../architecture/adr/0067-the-loopback-mcp-server-for-external-agents.md)
+> takes it down to a decision: **one** inbound surface, loopback only on an ephemeral port, off by default, switched on by
+> the user for a session and revoked when the application quits, defended by a per-exposure bearer token and an
+> `Origin`/`Host` check against loopback, offering exactly two coarse run-oriented tools and **no proxied tool call**. It
+> carries no role, account or network-reachability dimension; the gates, approvals, sandbox and workspace fences stay the
+> ones every run has, and approvals and questions are answered by a person at the desktop, never by the calling agent.
+>
+> **What this narrows, and what it does not.** `REQ-EVENTS-178` is the exclusion itself and is narrowed **to what
+> ADR-0067 names and stays everywhere else**; its text keeps its wording and gains the back-pointer at its definition,
+> where [`PD-EVENTS-001`](../../product/directives/pd-events-001.md#pd-events-001) carries the disposition. The
+> requirement's own argument — that a programmatic driving surface "would be a second way to start work, carrying its own
+> permission, approval, and sandbox behavior to hold in step with the desktop one" — is answered rather than dropped:
+> the surface ADR-0067 decides starts runs of the one lifecycle and so holds no model of its own to keep in step.
+>
+> **`REQ-EVENTS-081` is left as it stands.** Its enumeration of the ways a run can be started cites `REQ-SESSION-080` and
+> says in its own words that the guarantee spans every run through the shared lifecycle and that a way added later is
+> inside it from the moment it exists. The surface is such a way, so the requirement needs no amendment and no
+> back-pointer, and the dispositions below are unchanged.
+
 > ## Superseded by the storage rulings (2026-09-01)
 >
 > The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and

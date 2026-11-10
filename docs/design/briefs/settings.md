@@ -1,6 +1,6 @@
 # Settings — brief
 
-**Status:** proposed
+**Status:** built 2026-11-10 on the branch `feat/r-097-ui-ux-overhaul` (not landed; the brief and its build are one pass under R-097, so no approval stands between them)
 **Written:** 2026-11-10 by `design-ui` (brief, then audit), for [R-097](../../product/requests.md#r-097)
 **Surface:** the Settings primary view; §7 row "Settings panes and save bar"; mockup section `SETTINGS`; nearest built code `packages/ui/src/SettingsView.tsx`, `packages/ui/src/settings/`; theme `rotaris-dim`
 
@@ -64,9 +64,9 @@ No string is written or changed.
 
 Density tier: "a settings pane breathing" (rubric C4), from the mockup's `SETTINGS` section.
 
-One axis per category body. A row's label stands in a label column of `calc(2 * var(--rt-label-column))`; every control, value and action begins at the column's end plus `--rt-space-3`; a caption stands under the control it describes, on that same edge, bounded to `calc(2 * var(--rt-prose-measure))`. A row with no label (an action) begins on the control edge. Rows of one group stand `--rt-space-3` apart; a group heading stands `--rt-space-6` from the group above it. Inside a `Card` the same axis holds.
+One axis per category body. A row's label stands in a label column of `calc(2 * var(--rt-label-column))`; every control and switch begins at the column's end plus `--rt-space-3`; a caption stands under the control it describes, on that same edge, bounded to `calc(2 * var(--rt-prose-measure))`. A row with no label (an action) keeps the label edge, an edge the body already has, and its caption stands under its button. A fact row takes the token itself as its column, which holds every fact label. A list row's field grows from `--rt-field-min` to `--rt-prose-measure` with its Add beside it, and its entries stand under the field. A category's own prose holds the caption measure. Rows of one group stand `--rt-space-3` apart; a group heading stands `--rt-space-6` from the group above it. Inside a `Card` the column gives back the card's inset, so the card's controls stand on the edge the rows outside it stand on.
 
-Relations (published on the Settings root): `align-x` over the first control of every row of the open category (`settings-field`), within 1 px; `text-fit` on row labels (`settings-label`).
+Relations (published on the category body, `settings-body`): `containment` in the primary view; `viewport-scroll` on the x axis, expected false. *2026-11-10, while building: the `align-x` relation first written here needs one published target per row, some 120 call sites; the axis is held instead by the unit test over the rules (`layout-regression.test.ts`) and measured by the drive in §11.*
 
 | Region | 1400×900 | above 1180 | 1180–1080 | below 1080 | 1000×680 |
 |---|---|---|---|---|---|
@@ -113,3 +113,17 @@ Capture: `pnpm ui-audit --views=7 --sizes=1400x900,1000x680`; then `pnpm app:dri
 
 ### Open-question candidates
 - OQ-546, above.
+
+## Execution 2026-11-10
+
+By `build-ui`, on `feat/r-097-ui-ux-overhaul`. Evidence: `pnpm ui-audit` at 1400×900 and 1000×680 (0 findings; view 7 carries 12 contracts, 10 before); drives of Runtime, Interface, Display, Project and About at both sizes, each read with one `eval` over the rows.
+
+| # | Must move | Before | After | Must hold |
+|---|---|---|---|---|
+| 1 | distinct left edges among the labelled rows' controls, 1400×900 | Runtime 16, Display 7, Interface 4, About 5 | 1 each (x 584; About's facts x 464, on the token's own column) | view 7: 0 findings at both sizes — held |
+| 2 | widest caption, as text | 1042 px | 677 px at 1400×900; 386 px at 1000×680, wrapped inside the control column | no caption cut; `scrollWidth` = `clientWidth` on the body (1042/1042, 642/642) — held |
+| 3 | a group heading's top gap | 16 px | 24 px (`--rt-space-6`) | — |
+
+What was built beyond the three items, each inside §8: "Depth cap" and "Fan-out limit", and "Compression threshold" and "Iteration cap", are one field to a row (Runtime's rows 19 → 21; the order `REQ-CONFIG-320` fixes is unchanged); the security policy's three list rows stand on the axis (their field took a line of its own, off it); a category's own prose holds the caption measure (Display's introductions and the MCP Servers card's statement ran the pane's width).
+
+Not driven: Personas, Skills, Instructions, Hooks, MCP Servers, Plugins and Tools beyond one capture each at 1400×900; `nocturne` and `high-contrast`. A defect noticed on the way and not repaired: [the web-search card's provider choices](../../defects/the-web-search-setup-cards-provider-choices-stand-on-three-different-edges.md).

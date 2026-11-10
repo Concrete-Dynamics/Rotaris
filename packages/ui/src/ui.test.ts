@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CheckpointListPayload, SessionListItemPayload, GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, OVERVIEW_DIVIDER_WIDTH, formatTokens, sessionDot, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, branchFitKey, stateFitKey, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, keepWaitingAction, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, OVERVIEW_DIVIDER_WIDTH, formatTokens, sessionDot, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, filesColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, branchFitKey, stateFitKey, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, keepWaitingAction, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import { resolveTheme, isBusy, presentationStatus, EXECUTION_STATUSES, PRESENTATION_STATUSES } from '@rotaris/contracts';
 
 describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
@@ -224,6 +224,13 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     expect(tableFit(110, 152)).toEqual({ '--git-state-fit': '110px', '--git-branch-fit': '152px' });
     expect(tableFit(null, 152)).toEqual({ '--git-branch-fit': '152px' });
     expect(tableFit(110, null)).toEqual({ '--git-state-fit': '110px' });
+    // R-097: the Files column's floor reaches the table the same way. The figures the unrepaired build painted at 1440x900:
+    // `+0 -0 / 112` 79 px, `+5300 -431 / 102` 115 px, 17 px of padding — the 92 px (12ch) column did not hold the wider one.
+    expect(filesColumnFit([79, 115, 108], 17)).toBe(132);
+    expect(filesColumnFit([], 17)).toBeNull();
+    expect(tableFit(null, null, null)).toBeUndefined();
+    expect(tableFit(110, 152, 132)).toEqual({ '--git-state-fit': '110px', '--git-branch-fit': '152px', '--git-files-fit': '132px' });
+    expect(tableFit(null, null, 132)).toEqual({ '--git-files-fit': '132px' });
   });
   it('REQ-GIT-077, REQ-GIT-109: a row whose path changes is measured again, though its branch, tags and phrase stay the same', () => {
     // Each worktree row's `tr` is keyed by its path, so a moved worktree remounts its row. Until 2026-10-04 the Branch and

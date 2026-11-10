@@ -10,7 +10,14 @@ import { SkillsSettings, type SkillsSettingsProps } from './settings/SkillsSetti
 import { ProjectInitSettings, TraceabilitySettings, type ProjectInitSettingsProps, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2, Part AS
 import { useShellState } from './shell-state.js';
 import { RUNTIME_CATEGORY_LABEL } from './settings/config-state.js';
-import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';
+import { Button as DesignButton, Select as DesignSelect, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
+
+/**
+ * R-097 (docs/design/briefs/settings.md, §8): the category body gives way on one axis only. Its rows stand on a label
+ * column and its captions take a whole line each, so the body scrolls down and never sideways, at 1400x900 and at the
+ * minimum window alike; `pnpm ui-audit` reads the relation from the built view.
+ */
+const SETTINGS_BODY_LAYOUT: UiLayoutContract = { id: 'settings-body', relations: [{ kind: 'containment', target: 'shell-primary-view' }, { kind: 'viewport-scroll', axis: 'x', expected: false }] };
 
 /**
  * The Settings view: the thirteen categories in REQ-CONFIG-268's order with
@@ -155,7 +162,7 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
           })}
         </ul>
       </nav>
-      <section className="settings__body" aria-label={SETTINGS_CATEGORIES.find((c) => c.id === category)!.label}>
+      <section className="settings__body" aria-label={SETTINGS_CATEGORIES.find((c) => c.id === category)!.label} {...layoutContractAttributes(SETTINGS_BODY_LAYOUT)}>
         {/* REQ-CONFIG-270: one bar, above every category's content, acting on the whole set of pending changes. */}
         {config && <SaveBar dirty={config.dirty} serviceAvailable={config.serviceAvailable} onSave={config.onSave} onDiscard={config.onDiscard} />}
         {category === 'interface' ? (

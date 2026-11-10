@@ -13,8 +13,8 @@ Rules:
 | Surface | Brief | Last audit |
 |---|---|---|
 | Overview | [`overview.md`](overview.md), an index of [`overview/`](overview/) | 2026-11-02; its executable items implemented 2026-11-03 (items 1, 3–6, 8–10, 12–16, P1–P4) and 2026-11-05 (items 2 and 11, after OQ-537, OQ-539, OQ-540) |
-| Transcript rows, run header | [`transcript-rows.md`](transcript-rows.md) — an audit of the run header alone, with the brief's §1, §8, §10 and §11 | 2026-11-10 (R-097), proposed |
-| Git | [`git.md`](git.md) — an audit, with the brief's §1, §8, §10 and §11 | 2026-11-10 (R-097), proposed |
-| Library | [`library.md`](library.md) — an audit of the Prompts tab, with the brief's §1, §4, §8, §10 and §11 | 2026-11-10 (R-097), proposed |
-| Settings | [`settings.md`](settings.md) — the brief for how a category arranges its rows, and its audit | 2026-11-10 (R-097), proposed |
-| Requirements board | [`requirements-board.md`](requirements-board.md) — the brief for the view's frame (header, empty states, foot), and its audit | 2026-11-10 (R-097), proposed |
+| Transcript rows, run header | [`transcript-rows.md`](transcript-rows.md) — an audit of the run header alone, with the brief's §1, §8, §10 and §11 | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+| Git | [`git.md`](git.md) — an audit, with the brief's §1, §8, §10 and §11 | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+| Library | [`library.md`](library.md) — an audit of the Prompts tab, with the brief's §1, §4, §8, §10 and §11 | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+| Settings | [`settings.md`](settings.md) — the brief for how a category arranges its rows, and its audit | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+| Requirements board | [`requirements-board.md`](requirements-board.md) — the brief for the view's frame (header, empty states, foot), and its audit | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |

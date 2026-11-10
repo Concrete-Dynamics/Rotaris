@@ -137,10 +137,18 @@ export function branchLineFloor(nameFloor: number, tagWidths: readonly number[],
  * nothing was measured, which leaves the column at its CSS floor (the heading's 9ch). Same rule as `stateColumnFit`.
  */
 export const branchColumnFit = (lineFloors: readonly number[], cellPadding: number): number | null => stateColumnFit(lineFloors, cellPadding);
+/**
+ * REQ-GIT-077: the Files column's width — the widest figure the table draws plus the cell's padding, in CSS px; `null` when
+ * nothing was measured, which leaves the column at its CSS floor. Same rule as `stateColumnFit`, for the same reason: the
+ * floor (`12ch`) was sized for `+0 -0 / 0`, and a real worktree's `+5300 -431 / 102` measured 115 px of text in the 92 px
+ * cell and ran 24 px under the row's delete button (R-097; `docs/design/briefs/git.md`, audit item 1). A figure never
+ * wraps and never elides (REQ-GIT-077 fixes its form), so the column takes what its widest one needs.
+ */
+export const filesColumnFit = (figureWidths: readonly number[], cellPadding: number): number | null => stateColumnFit(figureWidths, cellPadding);
 /** The worktree table's measured column floors, as the custom properties shell.css reads; none when nothing was measured. */
-export function tableFit(stateFit: number | null, branchFit: number | null): CSSProperties | undefined {
-  if (stateFit === null && branchFit === null) return undefined;
-  return { ...(stateFit === null ? {} : { '--git-state-fit': `${stateFit}px` }), ...(branchFit === null ? {} : { '--git-branch-fit': `${branchFit}px` }) } as CSSProperties;
+export function tableFit(stateFit: number | null, branchFit: number | null, filesFit: number | null = null): CSSProperties | undefined {
+  if (stateFit === null && branchFit === null && filesFit === null) return undefined;
+  return { ...(stateFit === null ? {} : { '--git-state-fit': `${stateFit}px` }), ...(branchFit === null ? {} : { '--git-branch-fit': `${branchFit}px` }), ...(filesFit === null ? {} : { '--git-files-fit': `${filesFit}px` }) } as CSSProperties;
 }
 /**
  * What the State and Branch fits are measured again on. Each carries the row's path beside what the column draws, because
@@ -347,6 +355,27 @@ export function GitView(props: GitViewProps) {
     return () => { observer.disconnect(); };
   }, [branchKey]);
 
+  // REQ-GIT-077: the Files column measured to its widest figure, as the State column is to its widest phrase. Each figure
+  // is an inline-block that never wraps, so its width is its own text's and widening the column cannot move it.
+  const [filesFit, setFilesFit] = useState<number | null>(null);
+  const filesKey = rows.map((r) => filesCell(r)).join('|');
+  useLayoutEffect(() => {
+    const table = worktreeTable.current;
+    if (!table) return;
+    const figures = Array.from(table.querySelectorAll<HTMLElement>('.git__files-figure'));
+    const measure = () => {
+      const cell = figures[0]?.closest('td');
+      const style = cell ? getComputedStyle(cell) : null;
+      const padding = style ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) : 0;
+      setFilesFit(filesColumnFit(figures.map((f) => f.getBoundingClientRect().width), padding));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    for (const f of figures) observer.observe(f);
+    return () => { observer.disconnect(); };
+  }, [filesKey]);
+
   const eligible = mergeEligible(rows, selected, join);
   const hasBranch = state?.isRepository === true && state.branch !== null;
   const existingBranches = rows.flatMap((r) => (r.branch === null ? [] : [r.branch]));
@@ -462,7 +491,7 @@ export function GitView(props: GitViewProps) {
             {rows.length === 0 ? (
               <DesignEmptyState className="empty-state git__empty" data-testid="git-worktrees-empty"><span className="empty-state-title">No Git worktrees found for this workspace.</span></DesignEmptyState>
             ) : (
-              <DesignTable ref={worktreeTable} style={tableFit(stateFit, branchFit)} className="table git__table git__worktree-table" aria-multiselectable="true" aria-label="Worktrees" aria-description="Scroll horizontally when the worktree columns exceed the card width.">
+              <DesignTable ref={worktreeTable} style={tableFit(stateFit, branchFit, filesFit)} className="table git__table git__worktree-table" aria-multiselectable="true" aria-label="Worktrees" aria-description="Scroll horizontally when the worktree columns exceed the card width.">
                 {/* Seven columns whose content floor is wider than this pane at the minimum window. The five
                     that cannot give way take the width they need; Branch and Session elide (UIR-002) and share
                     whatever is left. See `.git__worktree-table` in shell.css for the measured figures. */}
@@ -493,7 +522,7 @@ export function GitView(props: GitViewProps) {
                         <td className="git__cell-state"><span className="git__state-phrase">{phrase.status}<span className="git__merge-status text-secondary"> · {phrase.merge}</span></span></td>
                         <td className="mono">{emptyOr(row.ahead)}</td>
                         <td className="mono">{emptyOr(row.behind)}</td>
-                        <td className="mono">{filesCell(row)}</td>
+                        <td className="mono git__cell-files"><span className="git__files-figure">{filesCell(row)}</span></td>
                         <td className="git__cell-actions">
                           {!row.isBase && !row.isActive && (
                             <DesignButton type="button" className="btn btn-danger btn-compact git__delete" aria-label={`Delete worktree ${row.branch ?? 'detached'}`} title="Delete this worktree" disabled={busy} onClick={(e) => { e.stopPropagation(); setDialog({ kind: 'confirm', row }); }}>Delete</DesignButton>

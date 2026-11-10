@@ -3,7 +3,16 @@ import type { SessionRecord } from '@rotaris/contracts';
 import { REASONING_LEVELS, RUN_STATE_TAGS, runHeaderControlReason, runStateLabel, runTimingLabel, runTimingSeconds, type RunState } from './composer.js';
 import { markMotionStart } from './motion.js';
 import { COMPRESS_DESCRIPTION, COMPRESS_LABEL, COMPRESSING_LABEL, compressNow, useChatControls } from './slash/host.js';
-import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect } from './design-system/index.js'; // Part AO
+import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js'; // Part AO
+
+/**
+ * R-097 (docs/design/briefs/transcript-rows.md, §8): the header never scrolls sideways, and its end group — the compress
+ * control and the two selectors — stays inside it whole, on the header's first line or on a second of its own.
+ */
+const RUN_HEADER_LAYOUT = {
+  root: { id: 'run-header', relations: [{ kind: 'viewport-scroll', axis: 'x', expected: false }] },
+  end: { id: 'run-header-end', relations: [{ kind: 'containment', target: 'run-header' }, { kind: 'text-fit', axis: 'x' }] },
+} satisfies Record<string, UiLayoutContract>;
 import { ImprovementActivity } from './ImprovementActivity.js';
 import { annotatedModelOptions } from './model-options.js';
 import { useShellState } from './shell-state.js';
@@ -103,7 +112,7 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
    */
   const improvementAnalysis = useShellState((s) => s.improvementAnalysis);
   return (
-    <div className="run-header" role="group" aria-label="Run" data-state={runState} data-testid="run-header">
+    <div className="run-header" role="group" aria-label="Run" data-state={runState} data-testid="run-header" {...layoutContractAttributes(RUN_HEADER_LAYOUT.root)}>
       {/* The design's Tag with a status dot, which is how the material draws a run's state (README §7). */}
       <span className={`tag ${RUN_STATE_TAGS[runState].tone} run-header__state`} data-testid="run-state">
         <span ref={(element) => { if (element && RUN_STATE_TAGS[runState].live) markMotionStart(element); }}
@@ -112,38 +121,42 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
       </span>
       <RunTiming session={session} busy={runActive} stepStartedAt={stepStartedAt} />
       <ImprovementActivity active={improvementAnalysis.active} pass={improvementAnalysis.pass} placement="run-header" />
-      {/* Part AO: the header's third live-run control, in the same region as the two selectors (REQ-CHAT-078). */}
-      <div className="run-controls" aria-label="Active run controls">
-        <CompressControl runState={runState} runActive={runActive} />
-      </div>
-      {(onSetModel || onSetReasoning) && (
-        <div className="run-controls" aria-label="Active run model and reasoning">
-          <span className="visually-hidden" id="run-controls-reason">{headerReason ?? ''}</span>
-          {onSetModel && models.length > 0 && (
-            <>
-              {/* PD-CHAT-001's icon clause: the wording rides as the accessible name; the icon leads. */}
-              <i className="ph ph-cpu run-controls__icon" aria-hidden="true" />
-              <DesignSearchableSelect className="input select chip-control__select" ariaLabel="Active run model" data-testid="run-model" value="" disabled={headerReason !== null}
-                title={headerReason ?? 'Switch the live run to another model from its next iteration, for the rest of this run.'} aria-describedby="run-controls-reason"
-                filterPlaceholder="Filter models…"
-                /* REQ-MONITOR-194: a key the session holds out of quota is annotated, still choosable — the switch clears it. */
-                options={[{ value: '', label: 'Switch model…' }, ...annotatedModelOptions(models, session?.excludedModels ?? [])]}
-                onChange={(v) => { if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) onError(r.reason); }); }} />
-            </>
-          )}
-          {onSetReasoning && (
-            <>
-              <i className="ph ph-brain run-controls__icon" aria-hidden="true" />
-              <DesignSelect className="input select chip-control__select" aria-label="Active run reasoning" data-testid="run-reasoning" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
-                title={headerReason ?? 'Switch the live run to another reasoning effort from its next iteration, for the rest of this run.'} aria-describedby="run-controls-reason"
-                onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetReasoning(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
-                <option value="">Switch reasoning…</option>
-                {REASONING_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-              </DesignSelect>
-            </>
-          )}
+      {/* R-097: the header's end group — the compress control and the two selectors hold together as one unit that never
+          wraps inside itself (`.run-header__end`, shell.css). It is a layout box only: each group keeps its own name. */}
+      <div className="run-header__end" {...layoutContractAttributes(RUN_HEADER_LAYOUT.end)}>
+        {/* Part AO: the header's third live-run control, in the same region as the two selectors (REQ-CHAT-078). */}
+        <div className="run-controls" aria-label="Active run controls">
+          <CompressControl runState={runState} runActive={runActive} />
         </div>
-      )}
+        {(onSetModel || onSetReasoning) && (
+          <div className="run-controls" aria-label="Active run model and reasoning">
+            <span className="visually-hidden" id="run-controls-reason">{headerReason ?? ''}</span>
+            {onSetModel && models.length > 0 && (
+              <>
+                {/* PD-CHAT-001's icon clause: the wording rides as the accessible name; the icon leads. */}
+                <i className="ph ph-cpu run-controls__icon" aria-hidden="true" />
+                <DesignSearchableSelect className="input select chip-control__select" ariaLabel="Active run model" data-testid="run-model" value="" disabled={headerReason !== null}
+                  title={headerReason ?? 'Switch the live run to another model from its next iteration, for the rest of this run.'} aria-describedby="run-controls-reason"
+                  filterPlaceholder="Filter models…"
+                  /* REQ-MONITOR-194: a key the session holds out of quota is annotated, still choosable — the switch clears it. */
+                  options={[{ value: '', label: 'Switch model…' }, ...annotatedModelOptions(models, session?.excludedModels ?? [])]}
+                  onChange={(v) => { if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) onError(r.reason); }); }} />
+              </>
+            )}
+            {onSetReasoning && (
+              <>
+                <i className="ph ph-brain run-controls__icon" aria-hidden="true" />
+                <DesignSelect className="input select chip-control__select" aria-label="Active run reasoning" data-testid="run-reasoning" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
+                  title={headerReason ?? 'Switch the live run to another reasoning effort from its next iteration, for the rest of this run.'} aria-describedby="run-controls-reason"
+                  onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetReasoning(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
+                  <option value="">Switch reasoning…</option>
+                  {REASONING_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                </DesignSelect>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

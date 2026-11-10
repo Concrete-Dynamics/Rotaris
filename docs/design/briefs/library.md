@@ -1,10 +1,10 @@
 # Library — brief
 
-**Status:** proposed
+**Status:** built 2026-11-10 on the branch `feat/r-097-ui-ux-overhaul` (not landed; the brief and its build are one pass under R-097, so no approval stands between them)
 **Written:** 2026-11-10 by `design-ui` (audit; the brief's sections only where R-097 touches the view), for [R-097](../../product/requests.md#r-097)
 **Surface:** the Library primary view's Prompts tab; §7 row "Library tabs and cards"; mockup section `LIBRARY`; nearest built code `packages/ui/src/library/PromptsTab.tsx`; theme `rotaris-dim`
 
-An audit with the sections its one item needs. Sections 2, 3, 5, 6, 7 and 9 are not written: R-097 changes no journey, content, interaction, string, accessible name or component here.
+An audit with the sections its two items need. Sections 2, 3, 5, 6, 7 and 9 are not written: R-097 changes no journey, content, interaction, string, accessible name or component here.
 
 ## 1. Authority
 
@@ -47,12 +47,13 @@ Capture: `pnpm ui-audit --views=6`; drive: `click ".nav-item" --text=Library`, `
 **Status:** proposed
 **Pack:** `3927eda58823` (the base); `pnpm ui-audit` view 6; drive at 1440×900 with no prompts; theme `rotaris-dim`; by `design-ui`
 **Unaudited:** Artifacts and Improvement proposals beyond a free read; a filled list; `nocturne`, `high-contrast`
-**Count:** rows answered 2 of 2 asked (F2, C3); no 1 (medium 1); not captured 0
+**Count:** rows answered 3 of 3 asked (F2, C3, C1); no 2 (medium 2); not captured 0
 **Summary:** The tabs, the search field and the two cards follow `REQ-LIBRARY-103`. An empty card's actions hang under a small box in the card's upper third and move to the foot when the first prompt arrives.
 
 | # | Criterion | Severity | Observation (with numbers; evidence) | Cause | Bounded change | Executes | Must move (now → passes) | Must hold | Answers to |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | F2 | medium | with no prompts each card's actions stand 135 px from the card's top and 406 px above its foot, under an empty state of 164×84 px in a 573 px card (`6-library.png`; drive) | `.library__empty { flex: 0 0 auto }`, where the list it replaces is `flex: 1` | the empty state takes the list's region (§8) | debug-ui | gap to the foot 406 px → the card's padding | view 6: 0 findings | §4, F2 |
+| 2 | C1 | medium | the three tabs are drawn in Arial at 12 px, the only controls of the view outside the adopted faces (drive, `getComputedStyle`; found while building item 1) | the design `Tabs` draws each tab as a `button`, which does not inherit its face, and the adopted `.tab` names none | the tab inherits the face and keeps the adopted size and weight | debug-ui | controls outside the adopted faces 3 → 0 | the adopted `.tab`'s size and weight | §1.4, C1, UIR-005 |
 
 ### Taste
 - "Use and remove" is the filled control of a card whose list is empty.
@@ -62,3 +63,14 @@ Capture: `pnpm ui-audit --views=6`; drive: `click ".nav-item" --text=Library`, `
 
 ### Open-question candidates
 - None.
+
+## Execution 2026-11-10
+
+By `debug-ui`, on `feat/r-097-ui-ux-overhaul`. Evidence: `pnpm ui-audit` at both sizes (0 findings); a drive at 1400×900 with no prompts.
+
+| # | Must move | Before | After | Must hold |
+|---|---|---|---|---|
+| 1 | the gap between a prompt card's actions and the card's foot, list empty | 406 px (135 px from the card's top) | 17 px, the card's padding and hairline; the empty state takes the list's region | view 6: 0 findings — held |
+| 2 | controls outside the adopted faces | 3 (Arial) | 0 (`Manrope`) | the tabs' size and weight — held |
+
+Not driven: a filled list; Artifacts and Improvement proposals.

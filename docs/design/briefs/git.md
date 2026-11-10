@@ -1,6 +1,6 @@
 # Git — brief
 
-**Status:** proposed
+**Status:** built 2026-11-10 on the branch `feat/r-097-ui-ux-overhaul` (not landed; the brief and its build are one pass under R-097, so no approval stands between them)
 **Written:** 2026-11-10 by `design-ui` (audit; the brief's sections only where R-097 touches the view), for [R-097](../../product/requests.md#r-097)
 **Surface:** the Git primary view; §7 row "Git worktrees, commits, diffs"; mockup section `GIT`; nearest built code `packages/ui/src/GitView.tsx`; theme `rotaris-dim`
 
@@ -18,7 +18,7 @@ The Files column takes the larger of its `12ch` floor and its widest figure plus
 
 The page frame is the shared one ([`overview/04-audit-2026-11-10.md`](overview/04-audit-2026-11-10.md)).
 
-Relations: `text-fit` on the Files cell (`git-files`); `hit-test` on the row's delete button.
+Relations: none published; the delete button is held by `ui-audit`'s `STACKING` sweep, and the column's rule by `layout-regression.test.ts`.
 
 | Region | 1400×900 | above 1180 | 1180–1080 | below 1080 | 1000×680 |
 |---|---|---|---|---|---|
@@ -55,3 +55,15 @@ Capture: `pnpm ui-audit --views=5`; drive on a repository whose worktrees carry 
 
 ### Open-question candidates
 - None.
+
+## Execution 2026-11-10
+
+By `debug-ui`, on `feat/r-097-ui-ux-overhaul`. Evidence: `pnpm ui-audit` at both sizes (0 findings); a drive at 1440×900 on this checkout, five worktrees.
+
+| # | Must move | Before | After | Must hold |
+|---|---|---|---|---|
+| 1 | the Files figure's overrun under the delete button | 24 px on one row, 16 px on three | 0: the figure ends 17 to 24 px before the button; the column is 132 px (`--git-files-fit`), 92 before | view 5: 0 findings; the delete button 54×24 px; the table 778 px in its 780 px card, no sideways scroll — held |
+
+The test that pinned `width: 12ch` now pins `max(12ch, var(--git-files-fit, 12ch))` and the figure's `inline-block` and `nowrap`, the State column's form; the table's minimum reads `34ch` plus the three measured columns, the same sum at the floors.
+
+Not run: `git-proof`.

@@ -1,6 +1,6 @@
 # Requirements board — brief
 
-**Status:** proposed
+**Status:** built 2026-11-10 on the branch `feat/r-097-ui-ux-overhaul` (not landed; the brief and its build are one pass under R-097, so no approval stands between them)
 **Written:** 2026-11-10 by `design-ui` (brief, then audit), for [R-097](../../product/requests.md#r-097)
 **Surface:** the Requirements primary view's header, board body and foot; §7 row "Requirements board, review, new requirement"; mockup section `REQUIREMENTS`; nearest built code `packages/ui/src/requirements/RequirementsView.tsx`; theme `rotaris-dim`
 
@@ -53,15 +53,15 @@ No string is written or changed.
 
 Density tier: dense, from the mockup's `REQUIREMENTS` section — the header steers, the board holds the height.
 
-The header is a grid of two columns: the control rows in the first, the analysis statement in the second, top-aligned with the controls row and bounded to `--rt-prose-measure`; the title row, the filters row and the inline errors span both. Where the header is too narrow for both columns (below `calc(3 * var(--rt-prose-measure))` of header width), the statement returns under the rows.
+Under the title row the header holds one wrapping line of two items: the rows that steer the board (controls, move, and the filters when shown), which ask for two measures, and the analysis statement, which asks for one and is top-aligned with the controls row. The statement stands beside the rows wherever the header holds three measures and the gap between them, and returns under the rows where it does not; no breakpoint is written. Beside the rows it is one to two measures wide; under them it takes two. The inline errors keep the header's whole width. *2026-11-10, while building: first written as a two-column grid behind a media query, which `tools/check-ui-language.mjs` counted as two new pixel literals; the wrapping line decides from the tokens alone.*
 
 The board body bounds its empty state: the state stands at the body's top with `--rt-space-4` above it, and the body scrolls vertically when it is shorter than the state.
 
-Relations: `containment` of the empty state in the board body (`req-body`, `req-empty`); `hit-test` on the adoption strip's controls.
+Relations (published on the header, `req-header`): `containment` in the primary view; `viewport-scroll` on the x axis, expected false (`REQ-TRACE-489`). The adoption strip's controls are held by `ui-audit`'s `STACKING` sweep. *2026-11-10: `containment` of the empty state in the body is not published — the relation is geometric, and a state the body scrolls stands partly outside the body's box by design.*
 
 | Region | 1400×900 | above 1180 | 1180–1080 | below 1080 | 1000×680 |
 |---|---|---|---|---|---|
-| header | two columns | two columns | two columns | two columns while the header holds them | two columns; the controls row wraps inside the first |
+| header | the statement beside the rows | beside, while the header holds three measures and the gap | under the rows, two measures wide | under the rows | under the rows, two measures wide: three lines |
 | board body | holds the remaining height | same | same | same | scrolls an empty state taller than itself; never paints over the adoption strip or the foot |
 
 ## 9. Components
@@ -102,3 +102,17 @@ Capture: `pnpm ui-audit --views=4 --sizes=1400x900,1000x680`; drive: `click ".na
 
 ### Open-question candidates
 - None beyond [OQ-544](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-544).
+
+## Execution 2026-11-10
+
+By `debug-ui` (items 1, 3) and `build-ui` (item 2), on `feat/r-097-ui-ux-overhaul`. Evidence: `pnpm ui-audit` at both sizes (0 findings; view 4 carries 12 contracts, 10 before); drives at 1400×900, 1180×900 and 1000×680 on a workspace with a source and no documents, a persistent notice open.
+
+| # | Must move | Before | After | Must hold |
+|---|---|---|---|---|
+| 1 | `STACKING` at 1000×680; the empty state's paint outside the body | 2; 45 px above, 45 px below | 0; 0 — the state starts at the body's top and the body scrolls the rest | view 4 at 1400×900: 0 findings — held |
+| 2 | header height | 248 px at 1400×900; 254 px at 1000×680 | 141 px; 202 px (196 px at 1180×900) | the statement whole and visible; header `scrollWidth` = `clientWidth` (1268/1268, 868/868) — held |
+| 3 | the reading line's inset | 0 | `--rt-space-3` block, `--rt-space-5` inline | — |
+
+The board body at 1000×680 with the notice open: 133 px → 169 px. A capture taken after `waitFor` on the empty state shows the body scrolled 28 px: the driver centres what it matches (`apps/desktop/src/main/driver.ts`, `scrollIntoView`), the product does not.
+
+Not driven: a populated board, the filters row shown, the panes, the detail panel; `nocturne` and `high-contrast`.

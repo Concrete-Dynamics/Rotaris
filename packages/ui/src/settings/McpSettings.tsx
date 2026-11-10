@@ -6,7 +6,7 @@ import { Fatal } from './ConfigSettings.js';
 import {
   deletedKeySentence, mcpHealthText, presetAfter, presetTabIndex, storedKeySentence, webSearchAboutControlLabel, webSearchFileLine, webSearchHeaderKeyNote,
   webSearchOtherTransport, webSearchPreset, webSearchProbeBasis, webSearchPressFailure, webSearchRowSetupVisible, webSearchSituation, webSearchStanza,
-  webSearchStepFor, webSearchStepLabel, webSearchStoredKey, webSearchUnresolvedNote,
+  webSearchStepFor, webSearchStepLabel, webSearchStepShortLabel, webSearchStoredKey, webSearchUnresolvedNote,
   MCP_HEALTH_TEXT,
   WEB_SEARCH_ABOUT, WEB_SEARCH_ABOUT_CONTROL, WEB_SEARCH_CONTROLS, WEB_SEARCH_DECLARATION_STANDS, WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_KEY_VARIABLE,
   WEB_SEARCH_NEEDS_ENABLED, WEB_SEARCH_NO_ENTRY, WEB_SEARCH_PRESETS, WEB_SEARCH_REFRESH_FAILED, WEB_SEARCH_SERVER, WEB_SEARCH_SETUP_ROW_ACTION,
@@ -180,7 +180,7 @@ function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null;
         <div className="providers-card__actions">
           {running
             ? <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { void onCancel(); }} data-action="setup-cancel">Cancel</DesignButton>
-            : <DesignButton type="button" className="btn btn-primary btn-compact" disabled={setup === null} onClick={() => { void start(); }} data-action="setup-start">{setup?.state === 'finished' ? 'Set up again' : 'Set up code intelligence for this workspace'}</DesignButton>}
+            : <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={setup === null} onClick={() => { void start(); }} data-action="setup-start">{setup?.state === 'finished' ? 'Set up again' : 'Set up code intelligence for this workspace'}</DesignButton>}
         </div>
       </div>
       <p className="text-secondary">Creates the bundled runtime's project for this workspace, indexes it and initialises its project memories — three steps, in order, each bounded; a workspace without code gets the project only. Runs in the background; you can cancel between steps or while a step is running.</p>
@@ -244,13 +244,27 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const [expanded, setExpanded] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   /**
+   * FND-2 of the Opus 5.5 review (2026-11-09), extended in round 2 (R2-FND-1): after **Yes** the confirmation
+   * closes, and `Confirm`'s own focus return finds its opener unusable — the delete button is `disabled` while the
+   * press is in flight (`busy` holds it) and is removed outright once the key is gone — so focus fell to `body` on the
+   * success path AND on both failure paths (a refused press, and a thrown one), because only the success branch moved
+   * it. This counter is bumped in the press's `finally`, so EVERY settled delete attempt lands focus: on the delete
+   * control while it is still there and enabled (the refusal and throw paths — the user was there), and on the step
+   * that needs the user now when the control went with the key (the success path). A counter, not a boolean, so two
+   * deletes in a row each move focus.
+   */
+  const [deleteSettled, setDeleteSettled] = useState(0);
+  const deleteRef = useRef<HTMLButtonElement | null>(null);
+  /**
    * The two disclosures of this change (2026-11-09): the info region behind the head's icon control, and the step
    * bar's own bodies. `closedSteps` names the BODIES THE USER CLOSED (`open === !closedSteps.has(id)`), so every body
    * starts open and nothing is gated: the guide names the position (`aria-current="step"`) without withholding a
    * step, and the one state that closes anything remains the existing `ready` collapse.
    */
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [closedSteps, setClosedSteps] = useState<ReadonlySet<WebSearchStepId>>(() => new Set<WebSearchStepId>());  const stepRefs = useRef(new Map<WebSearchStepId, HTMLButtonElement>());
+  const [closedSteps, setClosedSteps] = useState<ReadonlySet<WebSearchStepId>>(() => new Set<WebSearchStepId>());
+  const stepRefs = useRef(new Map<WebSearchStepId, HTMLButtonElement>());
+  const stepBodyRefs = useRef(new Map<WebSearchStepId, HTMLDivElement>());
   const [openFailure, setOpenFailure] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const preset = webSearchPreset(presetId);
@@ -287,18 +301,58 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   const collapsed = situation === 'ready' && !expanded;
   /** The step the bar marks and the row control targets (REQ-SHELL-149: the position is also the number in the label). */
   const current = webSearchStepFor(situation);
-  const stepOpen = (id: WebSearchStepId) => !closedSteps.has(id);  const toggleStep = (id: WebSearchStepId) => setClosedSteps((closed) => { const next = new Set(closed); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const stepOpen = (id: WebSearchStepId) => !closedSteps.has(id);
+  const toggleStep = (id: WebSearchStepId) => setClosedSteps((closed) => { const next = new Set(closed); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   /**
-   * The row's focus route, re-registered whenever the situation moves: the card HANDS the function out, the cell
-   * (`McpSettings`) stores it, and the cleanup hands `null` back, so a card that unmounts leaves no route behind.
-   * `stepRefs` is only read inside the call, never during the render.
+   * The row's focus route (FND-1 of the Opus 5.5 review, 2026-11-09): the press lands the user on the step's OWN
+   * first control — the provider radios, `Copy`, the key field, `Check status` — and NOT on the bar control, which is
+   * a disclosure toggle: focusing that one made the next Enter/Space CLOSE the very body the user had just been sent
+   * to, while `WEB_SEARCH_SETUP_ROW_DESCRIPTION` says "Moves to ... the step that needs you". A body the user had
+   * closed is OPENED first (never focused through a fold), and the bar control stays the fallback for the case the
+   * body holds nothing focusable — so the route always lands somewhere and never strands focus.
+   *
+   * `current` is read through a ref that an effect keeps up to date, so the route is REGISTERED once and a re-render
+   * never leaves a stale closure behind; `McpSettings` holds the function and the cleanup hands `null` back, so a card
+   * that unmounts leaves no route behind.
    */
+  const currentRef = useRef(current);
+  useEffect(() => { currentRef.current = current; }, [current]);
+  /** A press that had to OPEN a body lands once that state has committed (the `closedSteps` effect below). */
+  const [pendingLand, setPendingLand] = useState(0);
+  const focusCurrentStep = useCallback(() => {
+    const id = currentRef.current;
+    const body = stepBodyRefs.current.get(id);
+    // A static render (the tests) hands a stub here, not a DOM node; a stub has no `querySelector` and no `hidden`.
+    const queryable = body !== undefined && typeof body.querySelector === 'function' ? body : null;
+    if (queryable !== null && queryable.hidden) {
+      setClosedSteps((closed) => { if (!closed.has(id)) return closed; const next = new Set(closed); next.delete(id); return next; });
+      setPendingLand((n) => n + 1);
+      return;
+    }
+    const inner = queryable?.querySelector<HTMLElement>('[tabindex="0"]')
+      ?? queryable?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)');
+    (inner ?? stepRefs.current.get(id))?.focus();
+  }, []);
   const registerSetupFocus = props.onSetupFocusRoute;
   useEffect(() => {
     if (registerSetupFocus === undefined) return undefined;
-    registerSetupFocus(() => { stepRefs.current.get(current)?.focus(); });
+    registerSetupFocus(focusCurrentStep);
     return () => { registerSetupFocus(null); };
-  }, [registerSetupFocus, current]);
+  }, [registerSetupFocus, focusCurrentStep]);
+  /** The body a press had to open is committed now: land inside it. */
+  useEffect(() => {
+    if (pendingLand === 0) return;
+    focusCurrentStep();
+  }, [pendingLand, focusCurrentStep]);
+  /** FND-2 / R2-FND-1: a settled delete attempt always lands focus — never leaves it on `body`. */
+  useEffect(() => {
+    if (deleteSettled === 0) return;
+    const opener = deleteRef.current;
+    // On a refusal or a throw the delete control is still present and enabled (the key was not removed), so the
+    // ergonomic target is the control the user pressed. On success it went with the key, so the step route takes over.
+    if (opener !== null && !opener.disabled) opener.focus();
+    else focusCurrentStep();
+  }, [deleteSettled, focusCurrentStep]);
   /** Major 2: ONE in-flight state covers the three file presses and the probe; every control is disabled while it
    * holds, and the card says which one it is (design brief §4's disabled-during-write, REQ-SHELL-149 in words). */
   const busy = inFlight !== null;
@@ -331,7 +385,12 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   };
   const remove = async () => {
     if (busy) return;
-    setConfirmingDelete(false); setRefusal(null); setConfirmation(null); setRefreshNote(null); setInFlight('remove');
+    // R3-FND-1 (Opus 5.5 review, round 3, 2026-11-09): the confirmation used to close HERE, before anything was
+    // written — `Confirm`'s focus return then ran on a delete button that `setInFlight('remove')` had already
+    // disabled, so it did nothing and focus stood on `body` for the whole write-and-re-read window. The dialog now
+    // stays open for the press (its own `busy` prop disables its answers and suppresses Escape meanwhile) and closes
+    // in the `finally`, where the button is enabled again on the refusal and throw paths.
+    setRefusal(null); setConfirmation(null); setRefreshNote(null); setInFlight('remove');
     try {
       const r = await props.webSearchSetup.onDeleteKey(scope);
       if (!r.ok) { setRefusal(r.message); return; }
@@ -342,6 +401,10 @@ function WebSearchSetupCard(props: McpSettingsProps) {
       setRefusal(webSearchPressFailure(cause));
     } finally {
       setInFlight(null);
+      setConfirmingDelete(false);
+      // R2-FND-1 (round 2): the settled attempt is bumped HERE, on all three paths — the effect above then lands
+      // focus on the delete control (refusal/throw, now enabled) or on the step route (success, where it is gone).
+      setDeleteSettled((n) => n + 1);
     }
   };
   const openFile = async () => {
@@ -395,12 +458,42 @@ function WebSearchSetupCard(props: McpSettingsProps) {
   };
   const scopeLabels: Readonly<Record<WebSearchScope, string>> = { workspace: 'Workspace', global: 'Global' };
   const hideKeyStep = preset !== null && !preset.keyInUrl;
+  /**
+   * R2-FND-3 (Opus 5.5 review, round 2, 2026-11-09): §1.7's fill follows the STEP the card stands on. `Store the key`
+   * is the step-3 action and carries the fill while its body actually offers it; where step 3 does not apply — a
+   * `web_search` entry of another transport, or a preset whose key travels in a header (`hideKeyStep`) — no Store
+   * control is drawn and the fill moves to the step's own action, `Check status`, so the view never reaches a state
+   * with ZERO filled controls.
+   *
+   * R3-FND-2 (round 3, 2026-11-09): the `no-entry` empty state is NOT exempt after all. The first reading argued
+   * §1.7 fixes only an upper bound, but rubric D3 is explicit — "one filled control per view in every state, the
+   * empty state included" — and `no-entry` is not a state without an action: its own sentence names the file, and
+   * REQ-CONFIG-437/464 make naming and opening that file the remedy (the screen authors nothing). The empty state
+   * therefore carries ONE filled control, `Open the file`. Only `unavailable` stays empty of any accent surface, and
+   * for a reason that outranks the rubric: REQ-CONFIG-424/478 disable every control there, so there is nothing to
+   * fill.
+   */
+  const storeIsTheStepAction = situation !== 'other-transport' && !hideKeyStep;
 
   if (situation === 'no-entry') {
     return (
       <DesignCard className="card settings__card" data-mcp-websearch-setup data-websearch-situation={situation}>
         <div className="card-kicker">Set up web search</div>
         <p className="text-secondary" data-websearch-empty>{WEB_SEARCH_NO_ENTRY}</p>
+        {/*
+          R3-FND-2: the empty state's ONE filled control (rubric D3, §1.7). The sentence above names the file as the
+          remedy (REQ-CONFIG-437); this is the control that takes the user to it, and it writes nothing itself
+          (REQ-CONFIG-350/464 — the screen authors no server). It is the same press step 2 offers, so the two cannot
+          drift, and it is disabled with its reason when the listing has not answered yet.
+        */}
+        <div className="settings__action">
+          <DesignButton type="button" className="btn btn-primary btn-compact" data-websearch-open data-websearch-open-empty
+            disabled={props.listing === null}
+            title={props.listing === null ? "The configuration file's path is not known until the listing is read." : undefined}
+            aria-description={props.listing === null ? "Disabled: the configuration file's path is not known until the listing is read." : undefined}
+            onClick={() => { void openFile(); }}>Open the file</DesignButton>
+          {openFailure !== null ? <span className="composer__error" role="alert" data-websearch-open-failure>{openFailure}</span> : null}
+        </div>
         <p className="text-tertiary settings__hint" data-websearch-file>{webSearchFileLine(props.listing?.configFile ?? null)}</p>
       </DesignCard>
     );
@@ -431,7 +524,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
       */}
       <div className="providers-card__head">
         <div className="card-kicker">Set up web search</div>
-        <DesignButton type="button" className="btn btn-ghost btn-icon"
+        <DesignButton type="button" className="btn btn-ghost btn-icon btn-compact"
           aria-label={webSearchAboutControlLabel(aboutOpen)} aria-expanded={aboutOpen} aria-controls="websearch-about" title={WEB_SEARCH_ABOUT_CONTROL}
           data-websearch-about-control disabled={disabled} onClick={() => setAboutOpen((v) => !v)}>
           <i className="ph ph-info" aria-hidden="true" />
@@ -467,13 +560,14 @@ function WebSearchSetupCard(props: McpSettingsProps) {
                   ref={(el) => { if (el === null) stepRefs.current.delete(s.id); else stepRefs.current.set(s.id, el); }}
                   type="button" className={`btn btn-ghost btn-compact${current === s.id ? ' is-active' : ''}`}
                   aria-expanded={stepOpen(s.id)} aria-controls={`websearch-step-${s.id}`} aria-current={current === s.id ? 'step' : undefined}
+                  aria-label={webSearchStepLabel(i, s)}
                   data-websearch-step-control={s.id} data-step-current={current === s.id ? 'yes' : 'no'}
-                  disabled={disabled} onClick={() => toggleStep(s.id)}>{webSearchStepLabel(i, s)}</DesignButton>
+                  disabled={disabled} onClick={() => toggleStep(s.id)}>{webSearchStepShortLabel(i)}</DesignButton>
               </li>
             ))}
           </ol>
 
-          <div id="websearch-step-provider" data-websearch-step-body="provider" hidden={!stepOpen('provider')}>
+          <div id="websearch-step-provider" data-websearch-step-body="provider" hidden={!stepOpen('provider')} ref={(el) => { if (el === null) stepBodyRefs.current.delete('provider'); else stepBodyRefs.current.set('provider', el); }}>
             <h2 className="settings__heading">{WEB_SEARCH_STEPS[0]?.title}</h2>
             <div role="radiogroup" aria-label="Search provider" data-websearch-presets onKeyDown={onRadioKey}>
               {WEB_SEARCH_PRESETS.map((p) => (
@@ -489,7 +583,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
                   </DesignButton>
                   <span className="text-secondary settings__hint">{p.description}</span>
                   {p.keyPage !== null ? (
-                    <DesignButton type="button" className="btn btn-link btn-compact" data-websearch-key={p.id} aria-label={WEB_SEARCH_CONTROLS.key(p.name)} disabled={disabled || busy} onClick={() => { void getKey(p); }}>Get a key ↗</DesignButton>
+                    <DesignButton type="button" className="btn btn-link btn-compact" data-websearch-key={p.id} aria-label={WEB_SEARCH_CONTROLS.key(p.name)} disabled={disabled || busy} onClick={() => { void getKey(p); }}>Get a key <i className="ph ph-arrow-square-out" aria-hidden="true" /></DesignButton>
                   ) : null}
                 </div>
               ))}
@@ -497,7 +591,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
             {openFailure !== null ? <p className="composer__error" role="alert" data-websearch-open-failure>{openFailure}</p> : null}
           </div>
 
-          <div id="websearch-step-declaration" data-websearch-step-body="declaration" hidden={!stepOpen('declaration')}>
+          <div id="websearch-step-declaration" data-websearch-step-body="declaration" hidden={!stepOpen('declaration')} ref={(el) => { if (el === null) stepBodyRefs.current.delete('declaration'); else stepBodyRefs.current.set('declaration', el); }}>
             <h2 className="settings__heading">{WEB_SEARCH_STEPS[1]?.title}</h2>
             {situation === 'needs-key' ? (
               <p className="text-secondary" data-websearch-declaration-stands>{WEB_SEARCH_DECLARATION_STANDS}</p>
@@ -521,7 +615,7 @@ function WebSearchSetupCard(props: McpSettingsProps) {
             belongs to the shipped http default) — the body says so in words (REQ-SHELL-149) instead of leaving the
             bar's `aria-controls` pointing at no element.
           */}
-          <div id="websearch-step-key" data-websearch-step-body="key" hidden={!stepOpen('key')}>
+          <div id="websearch-step-key" data-websearch-step-body="key" hidden={!stepOpen('key')} ref={(el) => { if (el === null) stepBodyRefs.current.delete('key'); else stepBodyRefs.current.set('key', el); }}>
             <h2 className="settings__heading">{WEB_SEARCH_STEPS[2]?.title}</h2>
             {situation === 'other-transport' && row !== null ? (
               <p className="text-secondary" data-websearch-other-transport>{webSearchOtherTransport(row.type)}</p>
@@ -543,8 +637,8 @@ function WebSearchSetupCard(props: McpSettingsProps) {
                     <option value="workspace">Workspace</option>
                     <option value="global">Global</option>
                   </DesignSelect>
-                  <DesignButton type="button" className="btn btn-primary btn-compact" data-websearch-store aria-label={WEB_SEARCH_CONTROLS.store} disabled={disabled || busy} onClick={() => { void store(); }}>Store the key</DesignButton>
-                  {storedKey !== null ? <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-delete aria-label={WEB_SEARCH_CONTROLS.delete} disabled={disabled || busy} onClick={() => setConfirmingDelete(true)}>Delete the stored key</DesignButton> : null}
+                  <DesignButton type="button" className={`btn ${storeIsTheStepAction ? 'btn-primary' : 'btn-secondary'} btn-compact`} data-websearch-store aria-label={WEB_SEARCH_CONTROLS.store} disabled={disabled || busy} onClick={() => { void store(); }}>Store the key</DesignButton>
+                  {storedKey !== null ? <DesignButton ref={deleteRef} type="button" className="btn btn-secondary btn-compact" data-websearch-delete aria-label={WEB_SEARCH_CONTROLS.delete} disabled={disabled || busy} onClick={() => setConfirmingDelete(true)}>Delete the stored key</DesignButton> : null}
                 </div>
                 {storedKey !== null ? (
                   <p className="text-secondary settings__hint" data-websearch-stored>Stored for <span className="mono">{storedKey.server}</span> in the {storedKey.scope} scope, value <span className="mono" data-mask>{storedKey.masked}</span>. Storing again replaces it; the field above never shows the stored value.</p>
@@ -567,10 +661,10 @@ function WebSearchSetupCard(props: McpSettingsProps) {
         closed while the bar stood must never be stranded hidden once the bar is gone (a fold with no opener is a
         defect, and the test is what the finished state is for).
       */}
-      <div id="websearch-step-test" data-websearch-step-body="test" hidden={!collapsed && !stepOpen('test')}>
+      <div id="websearch-step-test" data-websearch-step-body="test" hidden={!collapsed && !stepOpen('test')} ref={(el) => { if (el === null) stepBodyRefs.current.delete('test'); else stepBodyRefs.current.set('test', el); }}>
         <h2 className="settings__heading">{WEB_SEARCH_STEPS[3]?.title}</h2>
         <div className="settings__action">
-          <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-check aria-label={WEB_SEARCH_CONTROLS.check} disabled={disabled || busy} onClick={() => { void check(); }}>{inFlight === 'probe' ? 'Checking…' : 'Check status'}</DesignButton>
+          <DesignButton type="button" className={collapsed || !storeIsTheStepAction ? 'btn btn-primary btn-compact' : 'btn btn-secondary btn-compact'} data-websearch-check aria-label={WEB_SEARCH_CONTROLS.check} disabled={disabled || busy} onClick={() => { void check(); }}>{inFlight === 'probe' ? 'Checking…' : 'Check status'}</DesignButton>
           <span>
             <span className="mcp__dot" data-state={inFlight === 'probe' ? 'checking' : shownHealth.state} aria-hidden="true" />{' '}
             <span data-websearch-health data-health={shownHealth.state}>{inFlight === 'probe' ? MCP_HEALTH_TEXT.checking : mcpHealthText(shownHealth)}</span>
@@ -623,7 +717,12 @@ export function McpSettings(props: McpSettingsProps) {
           <div className="card-kicker">Configured servers</div>
           <div className="providers-card__actions">
             <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={props.onRefresh} disabled={props.loading}>Reload</DesignButton>
-            <DesignButton type="button" className="btn btn-primary btn-compact" aria-description="Probe every configured MCP server" disabled={props.probing || rows.length === 0} onClick={() => { void probeAll(); }} data-action="check-status">{props.probing ? 'Checking…' : 'Check status'}</DesignButton>
+            {/* FND-3 of the Opus 5.5 review (2026-11-09): §1.7's one filled control is per screen/view, and this
+                view carried THREE `.btn-primary` at once (this one, the guided card's `Store the key`, and the code
+                intelligence card's action). The card-head action is the mockup's own secondary variant —
+                `SETTINGS`' Providers card head draws `Check status` as `btn btn-secondary btn-compact` — so the
+                fill belongs to the one control that writes something, the guided card's `Store the key`. */}
+            <DesignButton type="button" className="btn btn-secondary btn-compact" aria-description="Probe every configured MCP server" disabled={props.probing || rows.length === 0} onClick={() => { void probeAll(); }} data-action="check-status">{props.probing ? 'Checking…' : 'Check status'}</DesignButton>
           </div>
         </div>
         <p className="text-secondary">Every server the configuration declares, whether or not it is enabled. Health is probed on demand and never remembered across launches; the switch turns a server off for this session only, and switching on a server the configuration holds disabled writes `enabled: true` to the configuration file.</p>

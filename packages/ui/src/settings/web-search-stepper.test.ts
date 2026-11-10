@@ -9,7 +9,7 @@ import type { McpSettingsProps } from './McpSettings.js';
 import {
   WEB_SEARCH_ABOUT, WEB_SEARCH_ABOUT_CONTROL, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_NOT_WRITTEN_BY_US, WEB_SEARCH_SERVER,
   WEB_SEARCH_SETUP_ROW_ACTION, WEB_SEARCH_SETUP_ROW_DESCRIPTION, WEB_SEARCH_SETUP_ROW_LABEL, WEB_SEARCH_STEPS,
-  WEB_SEARCH_TAKE_EFFECT, webSearchAboutControlLabel, webSearchRowSetupVisible, webSearchStepFor, webSearchStepLabel,
+  WEB_SEARCH_TAKE_EFFECT, webSearchAboutControlLabel, webSearchRowSetupVisible, webSearchStepFor, webSearchStepLabel, webSearchStepShortLabel,
 } from './web-search-setup.js';
 import type { WebSearchSituation, WebSearchStepId } from './web-search-setup.js';
 
@@ -20,12 +20,13 @@ import type { WebSearchSituation, WebSearchStepId } from './web-search-setup.js'
  * sentences behind a single icon control, and offers the way into the card from the `web_search` row while there is
  * still something for it to do. These cases pin exactly that, and each names the one reason it can fail:
  *
- *  - the pure half (`WEB_SEARCH_STEPS`, `webSearchStepLabel`, `webSearchStepFor`, `webSearchRowSetupVisible`) so the
- *    labels, the current step and the row control's visibility are assertable without a window;
+ *  - the pure half (`WEB_SEARCH_STEPS`, `webSearchStepLabel`, `webSearchStepShortLabel`, `webSearchStepFor`,
+ *    `webSearchRowSetupVisible`) so the labels, the current step and the row control's visibility are assertable
+ *    without a window;
  *  - the rendered markup: ONE `ph ph-info` control in the head with a name and `aria-expanded`, `aria-controls` onto
- *    its region; FOUR step controls, `Step N · <title>`, exactly one `aria-current="step"`; every control's
- *    `aria-controls` naming an element that is actually in the markup (a dangling id is the shape of a broken
- *    disclosure); every body OPEN by default (`hidden` absent);
+ *    its region; FOUR step controls whose accessible name is `Step N · <title>` and whose visible text is `Step N`,
+ *    exactly one `aria-current="step"`; every control's `aria-controls` naming an element that is actually in the
+ *    markup (a dangling id is the shape of a broken disclosure); every body OPEN by default (`hidden` absent);
  *  - the row control: present for the shipped `http` default with no key, absent once a key is stored or on another
  *    transport;
  *  - the boundaries this change must NOT move: the card still writes no server, still carries one password field, and
@@ -167,7 +168,7 @@ const runEffects = (): void => {
 };
 const health = (h: McpHealth): Record<string, McpHealth> => ({ [WEB_SEARCH_SERVER]: h });
 describe('the step bar, the info control and the row offer — the pure half', () => {
-  it('names exactly four steps, in order, each labelled `Step N · <title>` from its own position — fails if the numbering or the order lives anywhere but the list', () => {
+  it('names exactly four steps, in order, each labelled `Step N · <title>` for its name and `Step N` for its visible text — fails if the numbering or the order lives anywhere but the list (FND-5, Opus 5.5 review, 2026-11-09)', () => {
     expect(WEB_SEARCH_STEPS.map((s) => s.id)).toEqual(['provider', 'declaration', 'key', 'test']);
     // `Array.map` passes (value, index), and `webSearchStepLabel` takes (index, step) — so the callback is explicit.
     expect(WEB_SEARCH_STEPS.map((step, index) => webSearchStepLabel(index, step))).toEqual([
@@ -176,6 +177,9 @@ describe('the step bar, the info control and the row offer — the pure half', (
       'Step 3 · Paste the key',
       'Step 4 · Test it',
     ]);
+    // FND-5: the VISIBLE text is the number alone; the title keeps one home, the body's own heading. WCAG 2.5.3 holds:
+    // the visible `Step 2` is contained in the control's name `Step 2 · …`.
+    expect(WEB_SEARCH_STEPS.map((_, index) => webSearchStepShortLabel(index))).toEqual(['Step 1', 'Step 2', 'Step 3', 'Step 4']);
   });
 
   it('lands every situation on the step that needs the user — fails if a key-side situation points at the provider step, a stored-key-but-disabled entry points at the key step instead of the enablement, or a stored key points anywhere but the test', () => {
@@ -204,9 +208,14 @@ describe('the step bar, the info control and the row offer — the pure half', (
     expect(webSearchRowSetupVisible(row({ origin: 'discovered-user' }), null)).toBe(false);
   });
 
-  it('the info control says which press it offers, and its closed name is the one constant — fails if the control keeps a `Show` name while the region is open', () => {
+  it('the info control carries ONE name and ONE tooltip in both states, and the state has one home (`aria-expanded`) — fails if the name swaps while the tooltip stays, so a screen reader and a pointer user are told different things (FND-7, Opus 5.5 review, 2026-11-09)', () => {
     expect(webSearchAboutControlLabel(false)).toBe(WEB_SEARCH_ABOUT_CONTROL);
-    expect(webSearchAboutControlLabel(true)).not.toBe(WEB_SEARCH_ABOUT_CONTROL);
+    // FND-7: the name no longer swaps. It used to read `Hide help about the web search setup` while `title` stayed
+    // `About web search setup`, so the control carried two disagreeing strings and `aria-expanded` said the state a
+    // third time. One stable pair now; OQ-503 (ruled 2026-11-03 under R-072) asks for a name and a tooltip, not for a
+    // state word.
+    expect(webSearchAboutControlLabel(true)).toBe(WEB_SEARCH_ABOUT_CONTROL);
+    expect(WEB_SEARCH_ABOUT_CONTROL).not.toContain('Hide');
   });
 
   it('the about region holds exactly the three sentences that moved, word for word, and never a generic `Info` — fails if a sentence was reworded, dropped, or if the control is named by the banned noun', () => {
@@ -215,6 +224,14 @@ describe('the step bar, the info control and the row offer — the pure half', (
     expect(WEB_SEARCH_ABOUT).toContain(WEB_SEARCH_TAKE_EFFECT);
     expect(WEB_SEARCH_ABOUT_CONTROL).not.toBe('Info');
     expect(WEB_SEARCH_ABOUT_CONTROL).toContain('web search');
+  });
+
+  it('names every icon the card draws with the one Phosphor family, never a unicode glyph — fails if `Get a key` carries `↗` again (FND-4, Opus 5.5 review, 2026-11-09)', () => {
+    const { card } = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    // §1.9: Phosphor icons, "no unicode-symbol icons". The row's `Get a key` link was the one `↗` in `packages/ui/src`.
+    expect(card).toContain('<i class="ph ph-arrow-square-out" aria-hidden="true"></i>');
+    expect(card).not.toContain('↗');
+    for (const glyph of ['→', '←', '⇧', '⇒', '•', '→']) expect(card).not.toContain(glyph);
   });
 
   it('the row control\'s words are the surface\'s own and its name identifies it and its server — fails if it is labelled "Add provider" or its name drops the server', () => {
@@ -285,10 +302,15 @@ describe('the card as it renders', () => {
       expect(html).not.toContain(`id="websearch-step-${step.id}" data-websearch-step-body="${step.id}" hidden`);
       expect(html).toContain(`data-websearch-step-body="${step.id}"`);
     }
-    // The four bodies carry the four headings word for word — the old kickers are gone.
+    // The four bodies carry the four headings word for word — the old kickers are gone. FND-5 of the Opus 5.5
+    // review (2026-11-09): the bar used to repeat the whole title, so each of the four stood 2x on the open card (8
+    // occurrences, §1.11's "no filler"). The title now has one home, the body's own heading, and the bar carries the
+    // number it must carry as TEXT (REQ-SHELL-149).
     for (const step of WEB_SEARCH_STEPS) expect(html).toContain(`>${step.title}<`);
-    expect(html).not.toContain('>Step 1<');
-    expect(html).not.toContain('>Step 4<');
+    expect(html.match(/>Choose your search provider</g)).toHaveLength(1);
+    // The bar's visible words are the numbers; the full `Step N · <title>` is the control's accessible NAME.
+    for (let i = 0; i < WEB_SEARCH_STEPS.length; i += 1) expect(html).toContain(`>Step ${i + 1}<`);
+    expect(html).not.toContain(`>Step ${WEB_SEARCH_STEPS.length + 1}<`);
   });
 
   it('keeps the four bodies apart, in order, so a control can withhold only its own — fails if the bodies are nested (a fold inside a fold) or reordered', () => {
@@ -345,7 +367,9 @@ describe('the card as it renders', () => {
     expect(second.html).toContain(escaped(WEB_SEARCH_NOT_WRITTEN_BY_US));
     expect(second.html).toContain(escaped(WEB_SEARCH_TAKE_EFFECT));
     expect(second.find('data-websearch-about-control')!['aria-expanded']).toBe(true);
-    expect(second.find('data-websearch-about-control')!['aria-label']).not.toBe(WEB_SEARCH_ABOUT_CONTROL);
+    // FND-7: the name stays the one constant while open; the state is carried by `aria-expanded` above alone.
+    expect(second.find('data-websearch-about-control')!['aria-label']).toBe(WEB_SEARCH_ABOUT_CONTROL);
+    expect(second.find('data-websearch-about-control')!['title']).toBe(WEB_SEARCH_ABOUT_CONTROL);
     // Every sentence of the region is bounded by the card's prose rule (the region is C7's business like the rest).
     const at = second.html.indexOf('<div id="websearch-about"');
     const region = second.html.slice(at, second.html.indexOf('</div>', at));
@@ -434,7 +458,7 @@ describe('the card as it renders', () => {
 
   it('the row\'s press reaches the card\'s own focus route and lands on the CURRENT step, and an inert route cannot pass — fails if the press goes nowhere', () => {
     harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
-    const focused: WebSearchStepId[] = [];
+    const focused: string[] = [];
 
     // `McpSettings` owns the route (`setupFocus` → its own callback → the card's effect), so the press is driven the
     // way the product drives it: the row control's own handler, after the card's effect has been committed.
@@ -443,15 +467,63 @@ describe('the card as it renders', () => {
     harness.cursor = 0;
     runEffects();
 
-    // The refs the render filled: a stub stands in for the DOM node a static render never makes.
+    // The refs the render filled: a stub stands in for the DOM node a static render never makes. With no body
+    // recorded the route falls back to the bar control, which is the one thing the route may always land on.
     for (const control of first.all('data-websearch-step-control')) {
       const id = control['data-websearch-step-control'] as WebSearchStepId;
       (control['ref'] as ((el: unknown) => void) | undefined)?.({ focus: () => focused.push(id) });
     }
+    for (const body of first.all('data-websearch-step-body')) {
+      const id = body['data-websearch-step-body'] as WebSearchStepId;
+      (body['ref'] as ((el: unknown) => void) | undefined)?.({ id, hidden: false, querySelector: (sel: string) => (id === 'provider' && sel.startsWith('button') ? { focus: () => focused.push(`in:${id}`) } : null) });
+    }
     (first.find('data-websearch-row-setup')!['onClick'] as () => void)();
-    // With no key stored the offer stands, and every key-less situation stands at the provider step
-    // (`webSearchStepFor`; pinned situation by situation in the pure case above) — so the press lands there.
-    expect(focused).toEqual(['provider']);
+    // FND-1 (Opus 5.5 review, 2026-11-09): the press lands on the step's OWN first control, `in:provider` — NOT on the
+    // bar control, whose next Enter/Space would close the very body the user was sent to. The bar control is the
+    // fallback only (asserted by the stub-less case above).
+    expect(focused).toEqual(['in:provider']);
+  });
+
+  it('a step body the user had CLOSED is opened by the press, and focus lands inside it afterwards — fails if the route focuses through a fold or lands on the fold\'s own toggle (FND-1)', () => {
+    harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
+    const focused: string[] = [];
+    // `fresh` (no key stored) is the situation the row's offer stands in, and its current step is `provider`: close
+    // exactly that body, so the only way the press can land is by reopening it.
+    const first = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    const providerStep = first.all('data-websearch-step-control').find((c) => c['data-websearch-step-control'] === 'provider')!;
+    (providerStep['onClick'] as () => void)();
+
+    harness.cursor = 0;
+    const second = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    expect(second.card).toContain('data-websearch-step-body="provider" hidden');
+    expect(second.find('data-websearch-row-setup')).toBeDefined();
+    harness.cursor = 0;
+    runEffects();
+
+    let bodyHidden = true;
+    const stubRefs = (drawn: ReturnType<typeof draw>): void => {
+      for (const control of drawn.all('data-websearch-step-control')) {
+        const id = control['data-websearch-step-control'] as WebSearchStepId;
+        (control['ref'] as ((el: unknown) => void) | undefined)?.({ focus: () => focused.push(`bar:${id}`) });
+      }
+      for (const body of drawn.all('data-websearch-step-body')) {
+        const id = body['data-websearch-step-body'] as WebSearchStepId;
+        (body['ref'] as ((el: unknown) => void) | undefined)?.({ id, get hidden() { return id === 'provider' ? bodyHidden : false; }, querySelector: (sel: string) => (id === 'provider' && !bodyHidden && sel.startsWith('button') ? { focus: () => focused.push('in:provider') } : null) });
+      }
+    };
+    stubRefs(second);
+    // The press: the current step's body is hidden, so it is opened — and NOTHING is focused on the fold itself.
+    (second.find('data-websearch-row-setup')!['onClick'] as () => void)();
+    expect(focused).toEqual([]);
+    // The reopened body is now in the markup (nothing is gated) and the landing effect focuses inside it.
+    bodyHidden = false;
+    harness.cursor = 0;
+    const third = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    expect(third.card).not.toContain('data-websearch-step-body="provider" hidden');
+    stubRefs(third);
+    harness.cursor = 0;
+    runEffects();
+    expect(focused).toEqual(['in:provider']);
   });
 
   it('the card hands its route back on unmount, so a later press reaches nothing — fails if the cleanup is a no-op', () => {
@@ -480,6 +552,234 @@ describe('the card as it renders', () => {
 });
 
 describe('the boundaries this change must not move', () => {
+  it('the view carries at most ONE filled control in every state it can reach — fails if a second `.btn-primary` joins the MCP category (FND-3, Opus 5.5 review, 2026-11-09)', () => {
+    // §1.7: "a dense screen carries exactly one accent surface". Before this fix the view held THREE at once — the
+    // card-head `Check status`, the guided card's `Store the key` and the code-intelligence card's action.
+    const filled = (html: string): number => (html.match(/class="btn btn-primary[^"]*"/g) ?? []).length;
+    const fresh = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    expect(filled(fresh.html)).toBe(1);
+    // …and `Store the key` is the one that keeps the fill: it is the only control on the view that WRITES.
+    expect(fresh.card.match(/btn-primary/g) ?? []).toHaveLength(1);
+    expect(fresh.card).toContain('data-websearch-store');
+    // The state where nothing is being set up (a working card) falls back to `Check status`, still exactly one.
+    const ready = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), health: health({ state: 'healthy', toolCount: 2 }) });
+    expect(filled(ready.html)).toBe(1);
+    // The card-head and the code-intelligence action are secondary now, as the mockup's own Providers card head draws
+    // its `Check status`. The class is read off the markup so a later edit cannot silently restore the fill.
+    const head = fresh.html.slice(fresh.html.indexOf('data-mcp-servers'), fresh.html.indexOf('data-mcp-websearch-setup'));
+    expect(head).toContain('btn btn-secondary btn-compact');
+    expect(head).not.toContain('btn-primary');
+  });
+
+  it('EVERY reachable state holds exactly ONE filled control — fails if a state falls to 0 because step 3 does not apply (R2-FND-3, Opus 5.5 review, round 2)', () => {
+    const filled = (html: string): number => (html.match(/class="btn btn-primary[^"]*"/g) ?? []).length;
+    const cases: { name: string; over: Partial<McpSettingsProps> }[] = [
+      { name: 'fresh (the shipped default, no key)', over: { listing: listing([row()]), webSearchSecrets: secrets([]) } },
+      { name: 'needs-key (a user declaration, no key)', over: { listing: listing([row({ origin: 'yaml' })]), webSearchSecrets: secrets([]) } },
+      { name: 'needs-enabled (key stored, entry disabled)', over: { listing: listing([row({ enabled: false })]), webSearchSecrets: secrets([keyRow]) } },
+      { name: 'needs-unresolved (a placeholder still open)', over: { listing: listing([row({ unresolved: [WEB_SEARCH_KEY_VARIABLE] })]), webSearchSecrets: secrets([keyRow]) } },
+      { name: 'stored (keyed, resolved, enabled, unprobed)', over: { listing: listing([row()]), webSearchSecrets: secrets([keyRow]) } },
+      { name: 'wrong-endpoint (the probe refused)', over: { listing: listing([row()]), webSearchSecrets: secrets([keyRow]), health: health({ state: 'unreachable', detail: 'ECONNREFUSED' }) } },
+      { name: 'ready (the probe is healthy)', over: { listing: listing([row()]), webSearchSecrets: secrets([keyRow]), health: health({ state: 'healthy', toolCount: 2 }) } },
+      // The two states the reviewer named: step 3 does not apply, so no `Store the key` is drawn at all.
+      { name: 'other-transport (a stdio web_search entry)', over: { listing: listing([row({ type: 'stdio', line: 'npx -y x' })]), webSearchSecrets: null } },
+    ];
+    for (const c of cases) {
+      const drawn = draw(c.over);
+      expect(`${c.name}: ${filled(drawn.html)}`).toBe(`${c.name}: 1`);
+      expect(drawn.card).toContain('data-websearch-check');
+    }
+    // The header-auth preset hides step 3 inside a live card (`hideKeyStep`): the fill moves to `Check status`.
+    const headerCase = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    const brave = headerCase.all('data-websearch-preset').find((e) => e['data-websearch-preset'] === 'brave');
+    expect(brave).toBeDefined();
+    // Select Brave (the header-auth preset): step 3 hides itself, so nothing in the card writes and `Check status`
+    // takes the fill — the state the reviewer named as reaching 0 before this fix.
+    const braveRadio = harness.elements.find((e) => typeof e.props['aria-label'] === 'string' && e.props['aria-label'].startsWith('Brave Search') && typeof e.props['onClick'] === 'function')?.props;
+    expect(braveRadio).toBeDefined();
+    (braveRadio!['onClick'] as () => void)();
+    const headerDrawn = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    expect(headerDrawn.card).toContain('data-websearch-header-key');
+    expect(filled(headerDrawn.html)).toBe(1);
+    expect(headerDrawn.card).not.toContain('data-websearch-store');
+    // The empty states were both exempt in round 2 and one of them is NOT any more: R3-FND-2 corrected that, and the
+    // correction is what this case now pins. `no-entry` names the file as its remedy, so it carries ONE filled
+    // control, `Open the file` — rubric D3 counts the empty state in ("one filled control per view in every state, the
+    // empty state included") and REQ-CONFIG-437/464 make naming and opening the file the remedy.
+    const noEntry = draw({ listing: listing([row({ name: 'browser', type: 'stdio' })]) });
+    expect(noEntry.card).toContain('data-websearch-situation="no-entry"');
+    expect(filled(noEntry.html)).toBe(1);
+    expect(noEntry.card).toContain('data-websearch-open-empty');
+    expect(noEntry.card).not.toContain('data-websearch-store');
+    // `unavailable` stays empty of any accent surface, and for a reason that OUTRANKS the rubric: REQ-CONFIG-424/478
+    // disable every control on a configuration that did not load, so there is no action to fill.
+    const fatal = { loadOk: false, fatal: '/w/.rotaris/agents.yaml: bad indentation', files: { workspace: '/w/.rotaris/agents.yaml', global: '/g/agents.yaml' } } as unknown as ConfigSnapshot;
+    const broken = draw({ fatal });
+    expect(broken.card).toContain('data-websearch-situation="unavailable"');
+    expect(filled(broken.html)).toBe(0);
+  });
+
+  it('a settled delete NEVER leaves focus on `body` — on the refusal path and on a throw too, not only on success (R2-FND-1, Opus 5.5 review, round 2)', async () => {
+    const stubRefs = (drawn: ReturnType<typeof draw>): void => {
+      for (const control of drawn.all('data-websearch-step-control')) {
+        const id = control['data-websearch-step-control'] as WebSearchStepId;
+        (control['ref'] as ((el: unknown) => void) | undefined)?.({ focus: () => focused.push(`bar:${id}`) });
+      }
+      for (const body of drawn.all('data-websearch-step-body')) {
+        const id = body['data-websearch-step-body'] as WebSearchStepId;
+        (body['ref'] as ((el: unknown) => void) | undefined)?.({ id, hidden: false, querySelector: (sel: string) => (id === 'provider' && sel.startsWith('button') ? { focus: () => focused.push('in:provider') } : null) });
+      }
+    };
+    let focused: string[] = [];
+    vi.stubGlobal('window', { addEventListener: () => undefined, removeEventListener: () => undefined });
+    try {
+      // ONE driver for all three paths: the binder's answer (and whether it throws) is what differs.
+      const runDelete = async (answer: () => Promise<unknown>): Promise<string> => {
+        harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
+        focused = [];
+        const setup = {
+          onOpenFile: async () => ({ ok: true as const }), onGetKey: async () => ({ ok: true as const }),
+          onStoreKey: async () => ({ ok: false as const, message: 'not pressed here' }),
+          onDeleteKey: answer, onProbe: async () => ({ state: 'unknown' as const }),
+        } as unknown as McpSettingsProps['webSearchSetup'];
+        const first = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+        stubRefs(first);
+        // The delete control's own ref: a stub standing in for the node, `disabled` false as it is at rest.
+        const del = first.find('data-websearch-delete')!;
+        const setRef = (props: Record<string, unknown> | undefined, el: unknown): void => {
+          const r = props?.['ref'];
+          // React sets a ref OBJECT's `.current`; a callback ref is called. Both shapes are honoured here, because the
+          // card uses `useRef` and a static render never commits either one.
+          if (typeof r === 'function') (r as (node: unknown) => void)(el);
+          else if (r !== null && typeof r === 'object' && 'current' in r) r.current = el;
+        };
+        setRef(del, { disabled: false, focus: () => focused.push('delete') });
+        harness.cursor = 0;
+        runEffects();
+        (del['onClick'] as () => void)();
+        const withDialog = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+        (withDialog.find('onYes')!['onYes'] as () => void)();
+        for (let i = 0; i < 6; i += 1) await Promise.resolve();
+        // The landing effect reads the refs of the LAST draw, so the state after settling is drawn and its refs stubbed.
+        const after = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+        stubRefs(after);
+        const delAfter = after.find('data-websearch-delete');
+        if (delAfter !== undefined) setRef(delAfter, { disabled: false, focus: () => focused.push('delete') });
+        harness.cursor = 0;
+        runEffects();
+        return focused.join(',');
+      };
+
+      // (a) the refusal path — the write did not go through, so the delete control is still there and enabled.
+      const refused = await runDelete(async () => ({ ok: false as const, message: 'the store refused the delete' }));
+      expect(refused).toContain('delete');
+      // (b) the THROW path — the binder broke; same landing target.
+      const thrown = await runDelete(async () => { throw new Error('the command channel is gone'); });
+      expect(thrown).toContain('delete');
+      // (c) the success path — the control went with the key, so the step route lands instead.
+      const removed = await runDelete(async () => ({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: true }, refreshFailure: null }));
+      expect(removed.length).toBeGreaterThan(0);
+      expect(removed).not.toContain('body');
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('the delete confirmation STAYS OPEN for the length of the press, so focus is never handed to a control the press just disabled — fails if the dialog closes before the write settles (R3-FND-1, Opus 5.5 review, round 3)', async () => {
+    harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
+    vi.stubGlobal('window', { addEventListener: () => undefined, removeEventListener: () => undefined });
+    try {
+      // A write that does not settle until the test says so, the gate pattern `web-search-card.test.ts` uses. The
+      // resolver lives in a box: a bare `let` assigned only inside the promise executor is narrowed to `never` at the
+      // call site under `tsc -b` (the gate's own command), which is how this file first went red in CI.
+      const gate: { release: (() => void) | null } = { release: null };
+      const setup = {
+        onOpenFile: async () => ({ ok: true as const }), onGetKey: async () => ({ ok: true as const }),
+        onStoreKey: async () => ({ ok: false as const, message: 'not pressed here' }),
+        onDeleteKey: () => new Promise((resolve) => {
+          gate.release = () => resolve({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: true }, refreshFailure: null });
+        }),
+        onProbe: async () => ({ state: 'unknown' as const }),
+      } as unknown as McpSettingsProps['webSearchSetup'];
+
+      const first = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+      (first.find('data-websearch-delete')!['onClick'] as () => void)();
+      const withDialog = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+      expect(withDialog.html).toContain('Delete the stored key?');
+      // Yes: `remove` starts and awaits the gated write — the dialog must still be there, with its answers disabled.
+      (withDialog.find('onYes')!['onYes'] as () => void)();
+      const inFlight = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+      expect(inFlight.html).toContain('data-websearch-in-flight');
+      expect(inFlight.html).toContain('Delete the stored key?');
+      // The dialog's own answers are disabled for the press (the `busy` prop it is handed), so no second answer can
+      // be taken and Escape is suppressed — nothing hands focus out to a control the press has just disabled.
+      expect(inFlight.find('onYes')?.['busy']).toBe(true);
+      // Release the write and let it settle: now the dialog closes.
+      gate.release?.();
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+      const after = draw({ listing: listing([row()]), webSearchSecrets: secrets([]), webSearchSetup: setup });
+      expect(after.html).not.toContain('Delete the stored key?');
+      expect(after.html).not.toContain('data-websearch-in-flight');
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('a successful delete hands focus to the step that needs the user, never to `body` — fails if the press leaves the view with nothing focused (FND-2, Opus 5.5 review, 2026-11-09)', async () => {
+    harness.cells.length = 0; harness.cursor = 0; harness.effects.length = 0; harness.cleanups.clear(); harness.pendingEffects.length = 0; views = null;
+    const focused: string[] = [];
+    const setup = {
+      onOpenFile: async () => ({ ok: true as const }),
+      onGetKey: async () => ({ ok: true as const }),
+      onStoreKey: async () => ({ ok: false as const, message: 'not pressed here' }),
+      onDeleteKey: async () => ({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: true }, refreshFailure: null }),
+      onProbe: async () => ({ state: 'unknown' as const }),
+    };
+    const stubRefs = (drawn: ReturnType<typeof draw>): void => {
+      for (const control of drawn.all('data-websearch-step-control')) {
+        const id = control['data-websearch-step-control'] as WebSearchStepId;
+        (control['ref'] as ((el: unknown) => void) | undefined)?.({ focus: () => focused.push(`bar:${id}`) });
+      }
+      for (const body of drawn.all('data-websearch-step-body')) {
+        const id = body['data-websearch-step-body'] as WebSearchStepId;
+        (body['ref'] as ((el: unknown) => void) | undefined)?.({ id, hidden: false, querySelector: (sel: string) => (id === 'provider' && sel.startsWith('button') ? { focus: () => focused.push('in:provider') } : null) });
+      }
+    };
+    // The confirmation is rendered here too, and `Confirm` registers a `window` keydown listener in an effect — the
+    // repo mounts no DOM under a test environment, so a minimal `window` stands in (as `confirm-dismissal.test.ts`).
+    vi.stubGlobal('window', { addEventListener: () => undefined, removeEventListener: () => undefined });
+    try {
+      // `stored` (a key is there): the delete button that opens the confirmation is present.
+      const first = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+      stubRefs(first);
+      harness.cursor = 0;
+      runEffects();
+      (first.find('data-websearch-delete')!['onClick'] as () => void)();
+      const withDialog = draw({ listing: listing([row()]), webSearchSecrets: secrets([keyRow]), webSearchSetup: setup });
+      // Yes answers the confirmation; `remove` runs and, on success, bumps the counter the landing effect reads.
+      (withDialog.find('onYes')!['onYes'] as () => void)();
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+      // The key is gone by now (production would have re-read the view as empty): `fresh`, whose step is `provider`.
+      const after = draw({ listing: listing([row()]), webSearchSecrets: secrets([]), webSearchSetup: setup });
+      expect(after.card).toContain('data-websearch-situation="fresh"');
+      stubRefs(after);
+      harness.cursor = 0;
+      runEffects();
+      // Focus was MOVED. `Confirm`'s own opener return had nothing to hand it to (its opener was disabled while the
+      // press was in flight and is gone now), so without this the view would be left with `body` focused.
+      expect(focused.length).toBeGreaterThan(0);
+    } finally { vi.unstubAllGlobals(); }
+  });
+  it('the card head\'s icon control takes ONE height token, the same one both neighbouring heads carry — fails if it is left at `.btn`\'s taller min-height or loses its square (FND-6, Opus 5.5 review, 2026-11-09)', () => {
+    const css = readFileSync(new URL('../shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    // The control is squared at `--rt-control-height-compact` (24 px), the tier the two neighbouring card heads take
+    // through `btn-compact`. R2-FND-2 (round 2): `width`/`height` ALONE did not hold — `.btn`'s
+    // `min-height: var(--rt-control-height)` (32 px) still won on the block axis and the control painted 24 x 32 — so
+    // the token is stated on all three axes, and the assertion reads it off the markup rather than only the string.
+    expect(css).toMatch(/\[data-mcp-websearch-setup\] \[data-websearch-about-control\] \{[^}]*width: var\(--rt-control-height-compact\)[^}]*height: var\(--rt-control-height-compact\)[^}]*min-height: var\(--rt-control-height-compact\)[^}]*\}/);
+    expect(css).not.toMatch(/\[data-websearch-about-control\][^}]*\b(30|32)px/);
+    // And the control carries the compact class, so the tier is stated where the cascade reads it: the rule above is
+    // the belt to `btn-compact`'s braces (a later `.btn` rule cannot outrank the class the element itself carries).
+    const { find } = draw({ listing: listing([row()]), webSearchSecrets: secrets([]) });
+    expect(String(find('data-websearch-about-control')!['className'])).toContain('btn-compact');
+  });
+
   it('the card still writes no server (REQ-CONFIG-350/464): no `writes enabled: true`, no second password field, one Store control — fails if the step bar brought a second write path with it', () => {
     const { card } = draw({ listing: listing([row({ enabled: false })]), webSearchSecrets: secrets([]) });
     // Scoped to THIS card: the sibling Configured-servers card states its own durable-write sentence, unchanged.

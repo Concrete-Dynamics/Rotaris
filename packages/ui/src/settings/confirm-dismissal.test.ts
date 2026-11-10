@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -94,6 +95,44 @@ describe('the shared confirmation answers Escape with its declining answer (REQ-
     harness.listeners[0]!(escape);
     expect(onCancel).not.toHaveBeenCalled();
     expect(escape.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('holds the answers with `aria-disabled`, never `disabled`, so the button that has focus stays focusable — fails if the held state drops focus to `body` (R4-FND-1, Opus 5.5 review, round 4)', () => {
+    const held = draw({ busy: true });
+    // The regression this guards: the `web_search` card keeps the dialog open for the length of the delete press
+    // (R3-FND-1). A `disabled` answer button cannot hold focus — the browser moves it to `body` — so the whole
+    // write-and-re-read window would sit with `body` focused, which is what the fix set out to prevent.
+    expect(held.html).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect((held.html.match(/aria-disabled="true"/g) ?? [])).toHaveLength(2);
+    // The press is ignored in the handlers, so no second answer can be taken while the prompt is held: the `aria-disabled`
+    // state is the announcement, and the guard is what makes it true.
+    expect(held.html).toContain('aria-disabled="true"');
+    // …and with `busy` false the buttons are plain again, so the ordinary path is untouched.
+    const free = draw();
+    expect(free.html).not.toContain('aria-disabled');
+    expect(free.html).not.toMatch(/\sdisabled(?:=|\s|>)/);
+  });
+
+  it('paints the held answers as held — fails if `aria-disabled` is announced but nothing draws it (R5-FND-1, Opus 5.5 review, round 5)', () => {
+    // Rubric D3: what acts looks like it acts. `aria-disabled` alone paints nothing — `.btn:disabled` was the only
+    // rule that drew a held control, so after R4-FND-1 (which replaced `disabled` with `aria-disabled` to keep the
+    // focused answer focusable) the held answers read as fully live. The rules below restore the look, in the tokens
+    // the house already spends, scoped to an alertdialog's answers (the one place an answer is HELD rather than
+    // disabled). R6-FND-1: the resting rule must fix ALL FOUR (colour, ground, edge, cursor) and the `:hover` rule
+    // must hold the SAME values — a resting rule that left the background and the edge to `.btn-secondary`/
+    // `.btn-warning` let the pointer still move the control.
+    const css = readFileSync(new URL('../shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rest = css.match(/\[role="alertdialog"\] \.dialog-actions \.btn\[aria-disabled='true'\] \{([^}]*)\}/);
+    const hover = css.match(/\[role="alertdialog"\] \.dialog-actions \.btn\[aria-disabled='true'\]:hover \{([^}]*)\}/);
+    expect(rest).not.toBeNull();
+    expect(hover).not.toBeNull();
+    for (const decl of ['color: var(--rt-text-disabled)', 'background: var(--rt-bg)', 'border-color: var(--rt-border)', 'cursor: not-allowed']) {
+      expect(rest![1]).toContain(decl);
+    }
+    // The hover rule repeats colour, ground and edge, so a hovered held answer paints EXACTLY what it paints at rest.
+    for (const decl of ['color: var(--rt-text-disabled)', 'background: var(--rt-bg)', 'border-color: var(--rt-border)']) {
+      expect(hover![1]).toContain(decl);
+    }
   });
 });
 

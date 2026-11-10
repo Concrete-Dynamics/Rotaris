@@ -692,9 +692,33 @@
    head's right edge (it opens the info region, whose paragraphs the prose rule above already bounds), and a closed
    step body is out of the flow and out of the tab order (`hidden`; stated explicitly because an author rule that
    paints the body would otherwise outrank the user agent's own `[hidden]`). REQ-MCP-111's walk says the position in
-   TEXT — the bar's labels — so nothing here carries a fact by colour. */
-[data-mcp-websearch-setup] [data-websearch-about-control] { align-self: flex-start; margin-left: auto; }
+   TEXT — the bar's labels — so nothing here carries a fact by colour. FND-6 of the Opus 5.5 review (2026-11-09): the
+   icon control took `.btn`'s `min-height: --rt-control-height` (32 px) against `.btn-icon`'s `height: 30px`, so it
+   painted 30 x 32 — neither square nor a token height — while the two neighbouring card heads ("Configured servers",
+   "Code intelligence") carry `btn-compact` controls at `--rt-control-height-compact` (24 px), which is C2's "one
+   relationship one value across views". R2-FND-2 (round 2, 2026-11-09) corrected the first attempt at this: setting
+   `width`/`height` alone did NOT hold, because `.btn`'s `min-height` (32 px) still won on the block axis and the
+   control painted 24 x 32. The compact tier is stated on all three axes, and the control also carries `btn-compact`,
+   so the height token is the one the view already spends and no literal stands in for it. */
+[data-mcp-websearch-setup] [data-websearch-about-control] { align-self: flex-start; margin-left: auto; width: var(--rt-control-height-compact); height: var(--rt-control-height-compact); min-height: var(--rt-control-height-compact); }
 [data-mcp-websearch-setup] [data-websearch-step-body][hidden] { display: none; }
+/* R5-FND-1 (Opus 5.5 review, round 5, 2026-11-09): the shared confirmation prompt holds its answers with
+   `aria-disabled` during the delete press (R4-FND-1: a `disabled` element cannot hold the focus), and
+   `aria-disabled` alone paints nothing — `.btn:disabled` was the only rule that drew the held look, so the held
+   answers read as fully live controls with a pointer cursor and hover while they answer nothing (rubric D3, "what
+   acts looks like it acts, and nothing else"). R6-FND-1 (round 6) then found the first attempt half-done: it set
+   only `color` and `cursor`, so the RESTING state still carried `.btn-secondary`'s `--rt-boundary-strong` edge and
+   `.btn-warning`'s amber, and the `:hover` rule visibly changed both — a held answer still reacted to the pointer.
+   The resting rule now fixes all four, extending `.mission__actions .btn[aria-disabled='true']` (which fixes
+   colour, edge and cursor but leaves the ground to its variant), and the `:hover` rule holds the SAME values, so
+   nothing moves. The tokens are the house's own: `--rt-text-disabled` (§1.7's disabled treatment, below half the
+   enabled contrast per REQ-SHELL-145), `--rt-bg` and `--rt-border`.
+   The `:active` variants (`.btn-secondary:active`, `.btn-warning:active` at 0,2,0) need no rule of their own: the
+   resting selector's specificity (0,4,0 — four class/attribute selectors, no type selector) already outranks them,
+   so a pointer press on a held answer paints the same as its rest. Scoped to the prompt, the one surface on which
+   an answer is HELD rather than disabled. */
+[role="alertdialog"] .dialog-actions .btn[aria-disabled='true'] { color: var(--rt-text-disabled); background: var(--rt-bg); border-color: var(--rt-border); cursor: not-allowed; }
+[role="alertdialog"] .dialog-actions .btn[aria-disabled='true']:hover { color: var(--rt-text-disabled); background: var(--rt-bg); border-color: var(--rt-border); }
 
 /* ── Tool rows (REQ-CHAT-060/061), diff rows (REQ-CHAT-050), approval trailer rows (REQ-CHAT-051) ── */
 .tool__header { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); width: 100%; padding: 0; border: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm, 13px); text-align: left; cursor: pointer; }

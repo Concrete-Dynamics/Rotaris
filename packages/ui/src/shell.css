@@ -709,12 +709,14 @@
    acts looks like it acts, and nothing else"). R6-FND-1 (round 6) then found the first attempt half-done: it set
    only `color` and `cursor`, so the RESTING state still carried `.btn-secondary`'s `--rt-boundary-strong` edge and
    `.btn-warning`'s amber, and the `:hover` rule visibly changed both — a held answer still reacted to the pointer.
-   The resting rule now fixes all four the way `.mission__actions .btn[aria-disabled='true']` already does, and the
-   `:hover` rule holds the SAME values, so nothing moves. The tokens are the house's own: `--rt-text-disabled`
-   (§1.7's disabled treatment, below half the enabled contrast per REQ-SHELL-145), `--rt-bg` and `--rt-border`.
+   The resting rule now fixes all four, extending `.mission__actions .btn[aria-disabled='true']` (which fixes
+   colour, edge and cursor but leaves the ground to its variant), and the `:hover` rule holds the SAME values, so
+   nothing moves. The tokens are the house's own: `--rt-text-disabled` (§1.7's disabled treatment, below half the
+   enabled contrast per REQ-SHELL-145), `--rt-bg` and `--rt-border`.
    The `:active` variants (`.btn-secondary:active`, `.btn-warning:active` at 0,2,0) need no rule of their own: the
-   resting selector's specificity (0,4,2) already outranks them, so a pointer press on a held answer paints the same
-   as its rest. Scoped to the prompt, the one surface on which an answer is HELD rather than disabled. */
+   resting selector's specificity (0,4,0 — four class/attribute selectors, no type selector) already outranks them,
+   so a pointer press on a held answer paints the same as its rest. Scoped to the prompt, the one surface on which
+   an answer is HELD rather than disabled. */
 [role="alertdialog"] .dialog-actions .btn[aria-disabled='true'] { color: var(--rt-text-disabled); background: var(--rt-bg); border-color: var(--rt-border); cursor: not-allowed; }
 [role="alertdialog"] .dialog-actions .btn[aria-disabled='true']:hover { color: var(--rt-text-disabled); background: var(--rt-bg); border-color: var(--rt-border); }
 

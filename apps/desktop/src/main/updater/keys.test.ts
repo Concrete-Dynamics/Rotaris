@@ -5,7 +5,7 @@ import { RELEASE_SIGNING_KEYS, SIGNATURE_ALGORITHM, SIGNATURE_BYTES, verifyDetac
 /** A test key pair, generated per run: the repository never holds a private half (REQ-STARTUP-167). */
 function pair() {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-  return { pem: publicKey.export({ type: 'spki', format: 'pem' }) as string, privateKey };
+  return { pem: publicKey.export({ type: 'spki', format: 'pem' }), privateKey };
 }
 const MANIFEST = Buffer.from(`${'a'.repeat(64)}  Rotaris-0.2.0-windows-x64-setup.exe\n`);
 
@@ -76,7 +76,7 @@ describe('the compiled-in key set — REQ-STARTUP-167, REQ-STARTUP-168 (a), REQ-
     // An unparsable first key does not stop the second from verifying.
     expect(verifyDetachedSignature(MANIFEST, signature, ['-----BEGIN PUBLIC KEY-----\nnot a key\n-----END PUBLIC KEY-----', pem])).toEqual({ verified: true, keyIndex: 1 });
     // A key of another algorithm never verifies an Ed25519 signature.
-    const rsa = generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey.export({ type: 'spki', format: 'pem' }) as string;
+    const rsa = generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey.export({ type: 'spki', format: 'pem' });
     expect(verifyDetachedSignature(MANIFEST, signature, [rsa])).toEqual({ verified: false, reason: 'not-verified' });
   });
 });

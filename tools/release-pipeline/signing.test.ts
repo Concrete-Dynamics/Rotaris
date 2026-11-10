@@ -27,8 +27,8 @@ import {
 function pair() {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   return {
-    publicPem: publicKey.export({ type: 'spki', format: 'pem' }) as string,
-    privatePem: privateKey.export({ type: 'pkcs8', format: 'pem' }) as string,
+    publicPem: publicKey.export({ type: 'spki', format: 'pem' }),
+    privatePem: privateKey.export({ type: 'pkcs8', format: 'pem' }),
   };
 }
 
@@ -71,7 +71,7 @@ describe('one key set, one verifier', () => {
   });
 
   it('refuses a key that is not an Ed25519 private key, naming the variable', () => {
-    const rsa = generateKeyPairSync('rsa', { modulusLength: 1024 }).privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+    const rsa = generateKeyPairSync('rsa', { modulusLength: 1024 }).privateKey.export({ type: 'pkcs8', format: 'pem' });
     expect(() => signManifest(MANIFEST, rsa)).toThrow(/ROTARIS_RELEASE_SIGNING_KEY holds a rsa key/);
     expect(() => signManifest(MANIFEST, 'not a key')).toThrow(/ROTARIS_RELEASE_SIGNING_KEY does not hold a private key/);
   });

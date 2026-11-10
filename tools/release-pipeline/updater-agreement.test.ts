@@ -41,7 +41,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 function pair() {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-  return { publicPem: publicKey.export({ type: 'spki', format: 'pem' }) as string, privatePem: privateKey.export({ type: 'pkcs8', format: 'pem' }) as string };
+  return { publicPem: publicKey.export({ type: 'spki', format: 'pem' }), privatePem: privateKey.export({ type: 'pkcs8', format: 'pem' }) };
 }
 
 /** The pipeline's stages over the directory; every stage must pass, as in the workflow. */

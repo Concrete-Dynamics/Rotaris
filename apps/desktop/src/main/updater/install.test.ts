@@ -14,7 +14,7 @@ const digest = createHash('sha256').update(payload).digest('hex');
 
 function keyPair() {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-  return { pem: publicKey.export({ type: 'spki', format: 'pem' }) as string, privateKey };
+  return { pem: publicKey.export({ type: 'spki', format: 'pem' }), privateKey };
 }
 
 /** A release as published: the manifest bytes, their signature, and the asset, all served by name. */

@@ -706,12 +706,15 @@
    `aria-disabled` during the delete press (R4-FND-1: a `disabled` element cannot hold the focus), and
    `aria-disabled` alone paints nothing — `.btn:disabled` was the only rule that drew the held look, so the held
    answers read as fully live controls with a pointer cursor and hover while they answer nothing (rubric D3, "what
-   acts looks like it acts, and nothing else"). The `cursor` half is the state this element really is; the tint half
-   is §1.7's own disabled treatment (`--rt-text-disabled`, below half the enabled contrast per REQ-SHELL-145), the
-   same two tokens `.btn:disabled` and the Mission card's pause control already spend. Scoped to the prompt, which is
-   the one surface on which an answer is HELD rather than disabled. */
-[role="alertdialog"] .dialog-actions .btn[aria-disabled='true'] { color: var(--rt-text-disabled); cursor: not-allowed; }
-[role="alertdialog"] .dialog-actions .btn[aria-disabled='true']:hover { background: var(--rt-bg); border-color: var(--rt-border); }
+   acts looks like it acts, and nothing else"). R6-FND-1 (round 6) then found the first attempt half-done: it set
+   only `color` and `cursor`, so the RESTING state still carried `.btn-secondary`'s `--rt-boundary-strong` edge and
+   `.btn-warning`'s amber, and the `:hover` rule visibly changed both — a held answer still reacted to the pointer.
+   The resting rule now fixes all four the way `.mission__actions .btn[aria-disabled='true']` already does, and the
+   `:hover` rule holds the SAME values, so nothing moves. The tokens are the house's own: `--rt-text-disabled`
+   (§1.7's disabled treatment, below half the enabled contrast per REQ-SHELL-145), `--rt-bg` and `--rt-border`.
+   Scoped to the prompt, the one surface on which an answer is HELD rather than disabled. */
+[role="alertdialog"] .dialog-actions .btn[aria-disabled='true'] { color: var(--rt-text-disabled); background: var(--rt-bg); border-color: var(--rt-border); cursor: not-allowed; }
+[role="alertdialog"] .dialog-actions .btn[aria-disabled='true']:hover { color: var(--rt-text-disabled); background: var(--rt-bg); border-color: var(--rt-border); }
 
 /* ── Tool rows (REQ-CHAT-060/061), diff rows (REQ-CHAT-050), approval trailer rows (REQ-CHAT-051) ── */
 .tool__header { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); width: 100%; padding: 0; border: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm, 13px); text-align: left; cursor: pointer; }

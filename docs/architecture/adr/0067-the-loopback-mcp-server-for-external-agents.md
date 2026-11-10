@@ -78,10 +78,10 @@ run host keeps every session lock and the sole right to write a session's histor
 no inbound network face. **Decided 2026-11-10, when the amendment round landed: the listener lives in a `utilityProcess` of its own**, not in main.
 Main keeps its case as the instance's front door on the 100 ms interface budget (`REQ-SHELL-150`): a relay there would give
 it a second endpoint role and put unbounded inbound work on the hot path, for a surface that is not a window operation and
-needs nothing the window registry holds. The listener placed there costs the run host's authority nothing, because the
+needs nothing the window registry holds. Placing the listener outside main costs the run host's authority nothing, because the
 ordering constraint holds either way: the listener speaks to the run host in the run host's existing terms, and main never
-gains the right to write a session's store. Whichever way it went, the listener is one more process of the one shipped
-binary — the amendment to ADR-0002's "four process kinds, and no others" this point announced — and `REQ-MCP-127` states it.
+gains the right to write a session's store. Either way the listener is one more process of the one shipped binary — the
+amendment to ADR-0002's "four process kinds, and no others" this point announced — and `REQ-MCP-127` states it.
 
 **8. Every external invocation is as auditable as a click.** What the caller asked for is recorded where the product
 records its own acts — the run record, the session's history and the timeline. This record mints no store and no event

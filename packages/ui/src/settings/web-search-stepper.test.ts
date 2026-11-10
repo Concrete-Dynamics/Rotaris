@@ -212,7 +212,8 @@ describe('the step bar, the info control and the row offer — the pure half', (
     expect(webSearchAboutControlLabel(false)).toBe(WEB_SEARCH_ABOUT_CONTROL);
     // FND-7: the name no longer swaps. It used to read `Hide help about the web search setup` while `title` stayed
     // `About web search setup`, so the control carried two disagreeing strings and `aria-expanded` said the state a
-    // third time. One stable pair now; OQ-503's reading of §1.7 asks for a name and a tooltip, not for a state word.
+    // third time. One stable pair now; OQ-503 (ruled 2026-11-03 under R-072) asks for a name and a tooltip, not for a
+    // state word.
     expect(webSearchAboutControlLabel(true)).toBe(WEB_SEARCH_ABOUT_CONTROL);
     expect(WEB_SEARCH_ABOUT_CONTROL).not.toContain('Hide');
   });

@@ -335,10 +335,10 @@ export const WEB_SEARCH_ABOUT_CONTROL = 'About web search setup';
 /**
  * The control's name, the SAME string in both states (FND-7 of the Opus 5.5 review, 2026-11-09). It used to swap to
  * `Hide help about the web search setup` once open while `title` stayed `About web search setup`, so one control
- * carried two disagreeing strings and `aria-expanded` said the state a third time. OQ-503's reading of §1.7 ("an
- * icon-only control carries ... an accessible name and a tooltip") is satisfied by one stable pair, and the state has
- * one home: `aria-expanded`, which the control already carries. Kept a function so the call site, the brief's own JSX
- * and `web-search-stepper.test.ts` still read `webSearchAboutControlLabel`.
+ * carried two disagreeing strings and `aria-expanded` said the state a third time. OQ-503 was ruled 2026-11-03 under
+ * R-072: an icon-only control carries "an accessible name and a tooltip", in one of the two cue inks — so one stable
+ * pair satisfies it, and the state has one home: `aria-expanded`, which the control already carries. Kept a function
+ * so the call site, the brief's own JSX and `web-search-stepper.test.ts` still read `webSearchAboutControlLabel`.
  */
 export function webSearchAboutControlLabel(_open: boolean): string {
   return WEB_SEARCH_ABOUT_CONTROL;

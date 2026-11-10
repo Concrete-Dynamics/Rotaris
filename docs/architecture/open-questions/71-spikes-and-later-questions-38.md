@@ -37,3 +37,33 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** OQ-540 as ruled and built: the axes in `--rt-viz-grid`, the name "No token history yet", the caption the cost label alone.
 
 **What decides it.** One ruling: the empty form stands (explicit by its name and its shape, and a chart rule needs no contrast floor), or REQ-MONITOR-166's "explicit" is read to need a visible statement — a mark at the 3:1 floor in a token §1.3 already names, or a visible word inside the sparkline's box so the card still does not reflow.
+
+<a id="oq-544"></a>
+
+**OQ-544 — Does a request to "overhaul the information architecture" with a free hand authorise a change to the structure the specification fixes, or only what is designed within it?** *(REQ-SHELL-023, REQ-SHELL-027, REQ-SHELL-049, REQ-CONFIG-268, REQ-CONFIG-269, REQ-LIBRARY-103, REQ-TRACE-232, `docs/design/README.md` §2, `docs/product/README.md`. Raised 2026-11-10 while classifying [R-097](../../product/requests.md#r-097); numbered after OQ-543.)*
+
+**What is open.** R-097 asks for the information architecture, the UI and the UX to be overhauled "with a free hand". `docs/design/README.md` §2 does not adopt the design material's information architecture and names the requirements that fix this product's: the seven primary views and their order, the rail labels, the shortcuts, the Settings categories, the Library tabs and the board columns. `docs/product/README.md` gives a change to any of them one route, a directive naming the requirement it governs, and R-097's words name none. Read one way, the request is covered: an overhaul of what is designed inside that structure (`docs/research/design/03-information-architecture-within-a-fixed-structure.md`). Read the other way, it asks for the structure itself to move, and each such move is a directive the owner has not yet worded.
+
+**What the build proceeds under.** The first reading. R-097 builds composition, alignment, how a surface gives way and where a state is placed, and changes no view, tab, order, label or required string. A wish that would need more is not built and is listed in the pull request.
+
+**What decides it.** One ruling: R-097 is covered as built and closes there, or the owner names the structural changes wanted, each then minted as a `PD-<DOMAIN>-<NNN>` over the requirement it names before anything is drawn.
+
+<a id="oq-545"></a>
+
+**OQ-545 — Does the Mission view take a row in `docs/design/README.md` §7, now that it is built from the language alone, so that it can have a brief and an audit?** *(REQ-MONITOR-274, REQ-MONITOR-275, `docs/design/README.md` §3.2 and §7, `.agents/skills/design-ui/references/design-brief.md` "Which slug". Raised 2026-11-10 by the survey for [R-097](../../product/requests.md#r-097); numbered after OQ-544.)*
+
+**What is open.** §3.2 records that Mission has no design, and §7's table has no row for it; `design-brief.md` therefore gives it no slug and says a surface with no §7 row "is an open question, not a new row". The view is built (`packages/ui/src/MissionView.tsx`), `pnpm ui-audit` captures it as view 3, and two review rounds have repaired it (UIR-010, UIR-024, recorded in `packages/ui/src/shell.css`). So the one primary view with no brief route is one that is drawn, measured and repaired like the other six.
+
+**What the build proceeds under.** No row is added and no brief is written. R-097 makes two bounded repairs to Mission through `debug-ui`'s route, both stated in its register row: the page frame the other titled views share, and the setting captions' column.
+
+**What decides it.** One ruling: §7 gains a "Mission" row naming `MissionView.tsx` and "no mockup section (§3.2)", which gives it the slug `mission`; or Mission stays outside the brief route and is repaired by bounded defect only.
+
+<a id="oq-546"></a>
+
+**OQ-546 — Does `--rt-label-column` grow to hold the longest label of a Settings form, or does Settings keep a multiple of it?** *(`packages/contracts/src/theme/themes.ts` (the `size` group and the comment under it), UIR-010, REQ-CONFIG-268, REQ-CONFIG-320, REQ-CONFIG-323, `docs/design/README.md` §1.5. Raised 2026-11-10 by the Settings brief for [R-097](../../product/requests.md#r-097) ([the brief](../../design/briefs/settings.md)); numbered after OQ-545.)*
+
+**What is open.** The token's own comment says it gives "a settings form ONE axis: a label column wide enough for the longest label in the product's forms", and its value is 120 px. Until R-097 only the Mission view's two settings used it; the thirteen Settings categories drew each row as label, control and caption in one wrapping line, so a control began wherever its label ended. Measured on 2026-11-10 at the labels' own type, the longest Settings labels are 224 px ("Auto-collapse older tool outputs"), 214 px ("Improvement analysis timeout") and 198 px ("Group consecutive tool calls"); 21 of the 37 row labels are wider than 100 px and 11 are wider than the token. The token cannot hold what its comment says it holds.
+
+**What the build proceeds under.** Settings takes `calc(2 * var(--rt-label-column))`, which holds every label on one line; Mission keeps the token as it is. No token is added or changed.
+
+**What decides it.** One ruling: the token stays and the multiple is Settings' own figure; or the token's value moves to the longest label and Mission's card is re-measured against it; or a second token is named for the wide form.

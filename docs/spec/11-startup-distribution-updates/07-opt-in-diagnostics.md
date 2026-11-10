@@ -64,6 +64,13 @@ Part 7 of 10 of [domain 11](../11-startup-distribution-updates.md), which indexe
 > for what the machine lacks — and names first-launch machine setup, cache warm-up and the tool-archive hosts only in a
 > build that carries them; the other statements and clauses are unchanged.
 
+> **Narrowed by [`PD-EVENTS-001`](../../product/directives/pd-events-001.md#pd-events-001), 2026-11-10.** Beside the note
+> above, and narrowing the same requirement: the content clause's closed set of three statements gains one element, and
+> the clause that refuses to name a host, endpoint or request this document does not require is narrowed for the inbound
+> surface of `REQ-MCP-119` onward — required by the specification in domain 16, not by this document — which the
+> disclosure SHALL name when the build carries it. The other statements, the surface, and the rule that no host is
+> named are unchanged.
+
 ### Persistence, environment, and exit codes
 
 **REQ-STARTUP-145** — Per-user directories SHALL be the platform-conventional configuration and data directories for the application name `rotaris`; per-workspace state lives at `<workspace>/.rotaris/`. There is no legacy directory to adopt: the product SHALL read, rename, import from, or otherwise adopt no per-user or per-workspace directory belonging to any earlier or differently named product, and SHALL create its own directories on first use instead.

@@ -1,10 +1,10 @@
 # ADR-0067 — The product opens one loopback MCP surface, off by default, that starts and watches runs and nothing else
 
-- **Status:** proposed
+- **Status:** accepted, 2026-11-10 — the amendment round has landed and building under this record may begin.
 - **Date:** 2026-11-04
 - **Origin:** [R-094](../../product/requests.md#r-094), the owner's ruling of 2026-11-04 that the deliberate exclusion of REQ-EVENTS-178 is opened for one narrow local surface.
 - **Depends on:** ADR-0002 (process topology), ADR-0017 (the permission policy), ADR-0019 (approvals and the presenter capability), ADR-0029 and ADR-0030 (the credential store, sign-in flows and the loopback precedent), ADR-0033 and ADR-0034 (the MCP client), ADR-0044 (the IPC contract).
-- **Requirements:** `REQ-EVENTS-178` (the exclusion this record narrows); `REQ-STARTUP-002`, `REQ-STARTUP-015`, `REQ-STARTUP-160`, `REQ-STARTUP-161`, `REQ-STARTUP-164` (one entry point, the reserved token, the disclosure, one instance); `REQ-MCP-033`, `REQ-MCP-113` (the internal server child, the standard streams); `REQ-EVENTS-098`, `REQ-SESSION-056`, `REQ-SESSION-080`, `REQ-SESSION-083` (one writer, the lock, one run lifecycle); `REQ-TOOLS-087`, `REQ-SANDBOX-018` (the meaning of loopback); `REQ-SHELL-150` (the 100 ms budget); `REQ-EVENTS-166`; `REQ-CONFIG-126` and `REQ-TOOLS-177` (the approval wait, and how a teardown releases it); `REQ-TRACE-464` with `PD-ORCH-005`.
+- **Requirements:** `REQ-MCP-119` to `REQ-MCP-130` (the inbound surface this record decides, minted by its amendment round, 2026-11-10); `REQ-EVENTS-178` (the exclusion this record narrows); `REQ-EVENTS-081` (whose guarantee the surface's runs fall under); `REQ-STARTUP-002`, `REQ-STARTUP-015`, `REQ-STARTUP-160`, `REQ-STARTUP-161`, `REQ-STARTUP-164` (one entry point, the reserved token, the disclosure, one instance); `REQ-MCP-033`, `REQ-MCP-113` (the internal server child, the standard streams); `REQ-EVENTS-098`, `REQ-SESSION-056`, `REQ-SESSION-080`, `REQ-SESSION-083` (one writer, the lock, one run lifecycle); `REQ-TOOLS-087`, `REQ-SANDBOX-018` (the meaning of loopback); `REQ-SHELL-150` (the 100 ms budget); `REQ-EVENTS-166`; `REQ-CONFIG-126` and `REQ-TOOLS-177` (the approval wait, and how a teardown releases it); `REQ-TRACE-464` with `PD-ORCH-005`.
 
 ## Context
 
@@ -75,10 +75,13 @@ path is stated here in principle; its numbers are the owner's.
 
 **7. The relay is thin, and the run host's authority is unchanged.** The MCP surface is not placed in the run host. The
 run host keeps every session lock and the sole right to write a session's history (`REQ-EVENTS-098`, ADR-0002) and gains
-no inbound network face. Whether the listener lives in main as a relay or in a `utilityProcess` of its own is **left
-open** for the owner and architecture. Either choice amends ADR-0002's "four process kinds, and no others", and this
-record says so plainly rather than working around it. The ordering constraint holds for both: the listener speaks to the
-run host in the run host's existing terms, and main never gains the right to write a session's store.
+no inbound network face. **Decided 2026-11-10, when the amendment round landed: the listener lives in a `utilityProcess` of its own**, not in main.
+Main keeps its case as the instance's front door on the 100 ms interface budget (`REQ-SHELL-150`): a relay there would give
+it a second endpoint role and put unbounded inbound work on the hot path, for a surface that is not a window operation and
+needs nothing the window registry holds. The listener placed there costs the run host's authority nothing, because the
+ordering constraint holds either way: the listener speaks to the run host in the run host's existing terms, and main never
+gains the right to write a session's store. Whichever way it went, the listener is one more process of the one shipped
+binary — the amendment to ADR-0002's "four process kinds, and no others" this point announced — and `REQ-MCP-127` states it.
 
 **8. Every external invocation is as auditable as a click.** What the caller asked for is recorded where the product
 records its own acts — the run record, the session's history and the timeline. This record mints no store and no event
@@ -129,33 +132,41 @@ outlive the application: closing it ends the run by `quit` and a later continue 
 narrowed by `PD-ORCH-005`). That is a property of the surface, not a defect.
 
 The listener must not endanger the 100 ms interface budget (`REQ-SHELL-150`). The client path is untouched. An incoming
-listener is a new kind of thing for the network disclosure of `REQ-STARTUP-160`; whether it belongs there is owed below.
+listener is a new kind of thing for the network disclosure of `REQ-STARTUP-160`, and **it belongs there: decided
+2026-11-10**, when the round landed — a build that carries the surface names it in the disclosure, and the requirement's
+closed content clause is narrowed for it by [`PD-EVENTS-001`](../../product/directives/pd-events-001.md#pd-events-001).
 
 ## What this record does not decide, and what is owed
 
-**No requirement body is edited by this record.** The amendment round is where a requirement's text may change, and it
-is **owed and has not been run**. Until it runs, the exclusion stands as written and **nothing may be built under this
-record**. The round reaches:
+**The round has landed, 2026-11-10.** This section used to read "the amendment round ... is **owed and has not been
+run**. Until it runs, the exclusion stands as written and **nothing may be built under this record**." It has now run,
+and the prohibition is lifted with it: the surface the Decision above fixes may be built, and nothing beyond it may.
+Every displacement the round made is `PD-EVENTS-001`'s, and each requirement that directive narrows carries the note at
+its own definition. The round reached:
 
-- **domain 20** — `REQ-EVENTS-178`, the exclusion itself, which the round narrows in its own words;
-- **domain 16** — an inbound server needs identifiers of its own; the existing outbound requirements are not re-read to
-  mean an inbound surface;
-- **domain 11** — `REQ-STARTUP-002` and the single-entry-point rule, and whether an incoming listener joins the
-  disclosure of `REQ-STARTUP-160`.
+- **domain 20** — `REQ-EVENTS-178`, the exclusion itself, narrowed in its own words to the one surface this record names
+  and untouched everywhere else; `REQ-EVENTS-081` needed no note, because it spans every run through the shared lifecycle
+  and says in its own words that its enumeration of the ways one can be started is not closed;
+- **domain 16** — the inbound server has identifiers of its own, `REQ-MCP-119` to `REQ-MCP-130`, in a new part
+  ([`07-inbound-surface.md`](../../spec/16-mcp-integration/07-inbound-surface.md)); the existing outbound requirements were
+  not re-read to mean an inbound surface;
+- **domain 11** — `REQ-STARTUP-002` keeps its force on executables and admits this one non-executable entry point, and the
+  incoming listener **joins** the disclosure of `REQ-STARTUP-160`.
 
 Decisions the owner has not yet taken:
 
-- the process location (point 7), and with it the amendment to ADR-0002;
 - the approval model, should it ever change from desktop-only;
-- the quota numbers of point 6;
+- the quota numbers of point 6, marked *reserved* where `REQ-MCP-126` states the ceiling in principle;
 - how an external caller is told that a run ended by `quit` (`REQ-TRACE-464`).
 
-No code is written under this record and no dependency is added: `@modelcontextprotocol/server` is not a dependency of
-this product.
+The process location is no longer one of them: point 7 decides it, and with it the amendment to ADR-0002.
+
+No code is written under this record and no dependency is added **by it**: `@modelcontextprotocol/server` is still not a
+dependency of this product, and the change that builds the surface is the one that adds it.
 
 ## Revisit if
 
-- the owner decides the process location;
+- the owner decides the process location *(decided 2026-11-10: a `utilityProcess` of its own, `REQ-MCP-127`)*;
 - the owner withdraws or narrows the decision;
 - the amendment round lands and changes what the surface may do;
 - a measurement of the listener contradicts a constraint above, the 100 ms budget or the loopback binding among them.

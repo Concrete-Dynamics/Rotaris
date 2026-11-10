@@ -1,6 +1,6 @@
 # MCP Server Integration — `mcp.json` discovery files
 
-Part 5 of 6 of [domain 16](../16-mcp-integration.md), which indexes every part.
+Part 5 of 7 of [domain 16](../16-mcp-integration.md), which indexes every part.
 
 ## Data & Formats
 

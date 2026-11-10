@@ -9,6 +9,14 @@ and `REQ-STARTUP-015` are satisfied because each is the shipped Electron binary 
 `utilityProcess` fork of it: no second executable is installed or published, and no user-typable
 argument vocabulary is defined.
 
+**Added, 2026-11-10 ([ADR-0067](../0067-the-loopback-mcp-server-for-external-agents.md), the owner's ruling
+[R-094](../../../product/requests.md#r-094)).** The inbound MCP surface of `REQ-MCP-119` to `REQ-MCP-130` is **one more
+process of that same kind — a `utilityProcess` forked from the one shipped binary — and no fifth mechanism**: no second
+executable is installed, published or made available (`REQ-STARTUP-002`), which is the property the paragraph above exists
+to hold. It is the fifth entry beside the four, and its role is the only thing new about it: it holds no session lock and
+writes no session's store (`REQ-EVENTS-098`), it is placed neither in main nor in the run host, and it speaks to the run
+host in the run host's existing terms. ADR-0067 announced this amendment in its point 7 and `REQ-MCP-127` states it.
+
 **1. Main (Electron main).** The instance claim and the hand-over listener (ADR-0055,
 `REQ-STARTUP-161`, `REQ-STARTUP-164`); window lifecycle and the window registry; native choosers and
 message boxes; the quit guards and the force-exit backstop; the self-update path; the desktop

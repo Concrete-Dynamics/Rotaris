@@ -8,6 +8,21 @@ status: resolved
 # Resolution Record — Domain 16, MCP Server Integration
 
 
+> ## Amendment, 2026-11-10 — the inbound surface (R-094, ADR-0067): REQ-MCP-119 to REQ-MCP-130 minted
+>
+> This domain was written about the product as an MCP **client**. [R-094](../../product/requests.md#r-094) and
+> [ADR-0067](../../architecture/adr/0067-the-loopback-mcp-server-for-external-agents.md) add the other direction: one
+> inbound surface, loopback only, off by default, that starts and watches runs and nothing else. **Twelve identifiers are
+> minted for it — `REQ-MCP-119` to `REQ-MCP-130` — in a new part,
+> [`16-mcp-integration/07-inbound-surface.md`](../16-mcp-integration/07-inbound-surface.md).** No requirement above is
+> re-read to mean an inbound surface, and no identifier is renumbered, reused or deleted.
+>
+> The minting resolves what ADR-0067 decided rather than deciding anew: each of the record's nine points has at least one
+> identifier of its own, the two questions it left to the owner are answered here rather than left open — the process
+> location of its point 7 is `REQ-MCP-127`, and the network-disclosure question it puts to `REQ-STARTUP-160` is answered
+> by [`PD-EVENTS-001`](../../product/directives/pd-events-001.md#pd-events-001), which carries that requirement's
+> disposition. The existing outbound requirements and every disposition below are unchanged.
+
 > ## Superseded by the storage rulings (2026-09-01)
 >
 > The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and

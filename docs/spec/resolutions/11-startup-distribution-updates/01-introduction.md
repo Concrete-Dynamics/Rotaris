@@ -5,6 +5,29 @@ Part 1 of 5 of [domain 11's resolutions](../11-startup-distribution-updates.md),
 
 
 
+> ## Amendment, 2026-11-10 — the inbound listener against one entry point, and the disclosure (R-094, ADR-0067)
+>
+> [ADR-0067](../../../architecture/adr/0067-the-loopback-mcp-server-for-external-agents.md) adds one inbound loopback MCP
+> surface to a product that was only a client, which puts two requirements of this domain under a question. **Neither
+> requirement's text changes**, and both dispositions are
+> [`PD-EVENTS-001`](../../../product/directives/pd-events-001.md#pd-events-001)'s.
+>
+> `REQ-STARTUP-002` SHALL keep its force on what it fixes — exactly one executable entry point, no second executable — and
+> the listener does not breach it, for the reason ADR-0002 carries for its process kinds: the surface is the one shipped
+> binary, hosted in a `utilityProcess` of the running instance, so no second executable is installed, published or made
+> available. What is narrowed is the entry-point closure itself: read as "exactly one way in", it would forbid every
+> inbound surface, and it now admits this one non-executable, user-switched surface and nothing else.
+>
+> `REQ-STARTUP-160`'s disclosure states the network activity **this document** specifies, and its content clause is a
+> closed set of three statements. **Decided 2026-11-10: the inbound surface is added to that content** — a user reading
+> the one place this product states what it does on the network must learn that this build can accept inbound connections
+> from local programs once it is switched on, and the clause that refuses to name a host, endpoint or request this
+> document does not require is narrowed for exactly that one, which the specification requires in domain 16
+> ([`REQ-MCP-119`](../../16-mcp-integration/07-inbound-surface.md) onward) rather than here. A build that does not
+> carry the surface names nothing about it, as `PD-STARTUP-006` already requires of the moments a build does not carry;
+> the other statements, the surface and the clause that names no host are unchanged. The two directives narrow one
+> requirement, so each names the other, and the requirement's definition carries a note for each.
+
 > ## Amendment, 2026-10-22 — the background download and the next-start apply (R-084): thirteen identifiers decided, not derived
 >
 > `REQ-STARTUP-169` to `REQ-STARTUP-181` are minted under a new subsection of domain 11, "Background download, the pending

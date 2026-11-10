@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -110,6 +111,17 @@ describe('the shared confirmation answers Escape with its declining answer (REQ-
     const free = draw();
     expect(free.html).not.toContain('aria-disabled');
     expect(free.html).not.toMatch(/\sdisabled(?:=|\s|>)/);
+  });
+
+  it('paints the held answers as held — fails if `aria-disabled` is announced but nothing draws it (R5-FND-1, Opus 5.5 review, round 5)', () => {
+    // Rubric D3: what acts looks like it acts. `aria-disabled` alone paints nothing — `.btn:disabled` was the only
+    // rule that drew a held control, so after R4-FND-1 (which replaced `disabled` with `aria-disabled` to keep the
+    // focused answer focusable) the held answers read as fully live. The rule below restores the look, in the same two
+    // tokens `.btn:disabled` already spends, scoped to an alertdialog's answers (the one place an answer is HELD
+    // rather than disabled).
+    const css = readFileSync(new URL('../shell.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(css).toMatch(/\[role="alertdialog"\] \.dialog-actions \.btn\[aria-disabled='true'\] \{[^}]*color: var\(--rt-text-disabled\)[^}]*cursor: not-allowed[^}]*\}/);
+    expect(css).toMatch(/\[role="alertdialog"\] \.dialog-actions \.btn\[aria-disabled='true'\]:hover \{[^}]*background: var\(--rt-bg\)[^}]*border-color: var\(--rt-border\)[^}]*\}/);
   });
 });
 

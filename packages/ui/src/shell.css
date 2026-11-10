@@ -702,6 +702,16 @@
    so the height token is the one the view already spends and no literal stands in for it. */
 [data-mcp-websearch-setup] [data-websearch-about-control] { align-self: flex-start; margin-left: auto; width: var(--rt-control-height-compact); height: var(--rt-control-height-compact); min-height: var(--rt-control-height-compact); }
 [data-mcp-websearch-setup] [data-websearch-step-body][hidden] { display: none; }
+/* R5-FND-1 (Opus 5.5 review, round 5, 2026-11-09): the shared confirmation prompt holds its answers with
+   `aria-disabled` during the delete press (R4-FND-1: a `disabled` element cannot hold the focus), and
+   `aria-disabled` alone paints nothing — `.btn:disabled` was the only rule that drew the held look, so the held
+   answers read as fully live controls with a pointer cursor and hover while they answer nothing (rubric D3, "what
+   acts looks like it acts, and nothing else"). The `cursor` half is the state this element really is; the tint half
+   is §1.7's own disabled treatment (`--rt-text-disabled`, below half the enabled contrast per REQ-SHELL-145), the
+   same two tokens `.btn:disabled` and the Mission card's pause control already spend. Scoped to the prompt, which is
+   the one surface on which an answer is HELD rather than disabled. */
+[role="alertdialog"] .dialog-actions .btn[aria-disabled='true'] { color: var(--rt-text-disabled); cursor: not-allowed; }
+[role="alertdialog"] .dialog-actions .btn[aria-disabled='true']:hover { background: var(--rt-bg); border-color: var(--rt-border); }
 
 /* ── Tool rows (REQ-CHAT-060/061), diff rows (REQ-CHAT-050), approval trailer rows (REQ-CHAT-051) ── */
 .tool__header { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); width: 100%; padding: 0; border: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm, 13px); text-align: left; cursor: pointer; }

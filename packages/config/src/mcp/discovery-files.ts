@@ -28,7 +28,6 @@ function pathsFor(platform: NodeJS.Platform) {
 }
 
 export function discoveryLocations(workspaceRoot: string, platform: NodeJS.Platform, env: Readonly<Record<string, string | undefined>>, home: string): DiscoveryLocations {
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- node:path's functions read no `this`.
   const { join } = pathsFor(platform);
   const project = join(workspaceRoot, '.mcp.json');
   if (platform === 'win32') {
@@ -82,7 +81,6 @@ function substitutePlaceholders(value: string, workspaceRoot: string, env: Reado
 interface FileRead { readonly file: string; readonly origin: McpOrigin; readonly servers: Record<string, McpServerEntry>; readonly stated: Record<string, Record<string, unknown>>; readonly diagnostics: Diagnostic[] }
 
 function readOneFile(file: string, origin: McpOrigin, workspaceRoot: string, platform: NodeJS.Platform, env: Readonly<Record<string, string | undefined>>, read: (path: string) => string | null): FileRead {
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- node:path's functions read no `this`.
   const { dirname, normalize, resolve } = pathsFor(platform);
   const diagnostics: Diagnostic[] = [];
   const servers: Record<string, McpServerEntry> = {};

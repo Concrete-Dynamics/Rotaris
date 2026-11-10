@@ -27,7 +27,6 @@ export function canonicalPath(p: string, platform: NodeJS.Platform = process.pla
   // A Windows spelling asked off Windows therefore keeps its resolved spelling without the realpath step —
   // the comparison still folds separators and case, which is the rule the requirement states; existence is
   // the host's to know and the caller's to decide about.
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- node:path's functions read no `this`.
   const { resolve, sep } = platform === 'win32' ? win32 : posix;
   let abs = resolve(p);
   if (platform === process.platform) {

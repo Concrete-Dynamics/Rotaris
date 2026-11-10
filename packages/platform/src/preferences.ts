@@ -244,7 +244,6 @@ export interface PreferenceRootEnv { readonly platform: NodeJS.Platform; readonl
 export function resolvePreferenceRoot(e: PreferenceRootEnv = { platform: process.platform, env: process.env, home: homedir() }): string {
   // The platform is a PARAMETER, so the separator comes from IT and not from the host — the same rule
   // `canonicalPath` and `resolveUserDirs` follow, and for the same reason.
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- node:path's functions read no `this`.
   const { join } = e.platform === 'win32' ? win32 : posix;
   const overridden = e.env['ROTARIS_PREFERENCES_ROOT'];
   if (overridden) return overridden;

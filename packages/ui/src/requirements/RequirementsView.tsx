@@ -912,6 +912,8 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
               <label className="req-header__field"><span className="field-label">Sort</span>
                 <DesignSelect className="input select req-header__select" data-testid="req-sort" value={sort} onChange={(e) => setSort(sortOrderOf(e.currentTarget.value))} aria-label="Sort order" style={{ width: CLOSED_DROPDOWN_WIDTH }}>{SORT_ORDERS.map((s) => <option key={s} value={s}>{s === 'priority' ? 'Priority, then identifier' : s === 'identifier' ? 'Identifier' : 'Health, then identifier'}</option>)}</DesignSelect></label>
               <DesignCheckbox className="check req-header__field req-header__check" title={BLOCKED_COLUMN_DESCRIPTION} data-testid="req-blocked-column" checked={blockedColumn} onChange={(e) => setBlockedColumn(e.currentTarget.checked)} aria-description={BLOCKED_COLUMN_DESCRIPTION} label={BLOCKED_COLUMN_LABEL} />
+              {/* R-097: the end of the row's first line — what the board shows above, what is done to it below (`.req-header__break`). */}
+              <span className="req-header__break" aria-hidden="true" />
               {/* REQ-TRACE-488: the toggle's accessible name alternates; hiding removes the controls from the tab sequence and returns focus here. */}
               <DesignButton ref={filterToggleRef} type="button" className="btn btn-secondary btn-compact" data-testid="req-filter-toggle" aria-expanded={filtersShown} onClick={() => { setFiltersShown((v) => !v); if (filtersShown) requestAnimationFrame(() => filterToggleRef.current?.focus()); }}>{filtersShown ? FILTER_HIDE : FILTER_SHOW}</DesignButton>
               {/* Part R2 — the two board-level panes of REQ-TRACE-375 reachable from the board itself; every other pane is

@@ -16,12 +16,12 @@ An audit with the sections its two items need. Sections 2, 3, 5, 6, 7 and 9 are 
 
 | Region | ideal | empty: first use | empty: cleared | empty: no results | filtered | cannot-show | loading | streaming / partial | error | success | disabled | permission-needed |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| prompt card's list | rows; the list holds the card's height | `EmptyState` filling the list's own region, its sentence unchanged | same cell | same cell, its sentence unchanged | rows | n/a: prompts are always readable | n/a: read with the view | n/a | n/a | n/a | n/a | n/a |
+| prompt card's list | rows; the list holds the card's height | `EmptyState` at the size of its sentence, at the top of the list's region, unchanged | same cell | same cell, its sentence unchanged | rows | n/a: prompts are always readable | n/a: read with the view | n/a | n/a | n/a | n/a | n/a |
 | prompt card's actions | at the card's foot | at the card's foot, disabled | same | same | at the foot | n/a | n/a | n/a | n/a | n/a | disabled while no row is selected, unchanged | n/a |
 
 ## 8. Composition intent
 
-A prompt card's empty state takes the region its list takes, so the card's actions stand at the card's foot in every state.
+A prompt card's actions take the free space above them, so they stand at the card's foot in every state of the list; the empty state keeps the size of its sentence. *2026-11-10: first written and built as "the empty state takes the region its list takes" — the fault UIR-007 and UIR-016 recorded (a one-sentence panel stretched to 56 % of the view) and `.library__empty`'s `flex: 0 0 auto` had repaired; the critique read it back as UIR-005.*
 
 The page frame is the shared one ([`overview/04-audit-2026-11-10.md`](overview/04-audit-2026-11-10.md)).
 
@@ -70,7 +70,15 @@ By `debug-ui`, on `feat/r-097-ui-ux-overhaul`. Evidence: `pnpm ui-audit` at both
 
 | # | Must move | Before | After | Must hold |
 |---|---|---|---|---|
-| 1 | the gap between a prompt card's actions and the card's foot, list empty | 406 px (135 px from the card's top) | 17 px, the card's padding and hairline; the empty state takes the list's region | view 6: 0 findings — held |
+| 1 | the gap between a prompt card's actions and the card's foot, list empty | 406 px (135 px from the card's top) | 17 px, the card's padding and hairline; the empty state is the size it was (164×84 px) | view 6: 0 findings — held |
 | 2 | controls outside the adopted faces | 3 (Arial) | 0 (`Manrope`) | the tabs' size and weight — held |
 
 Not driven: a filled list; Artifacts and Improvement proposals.
+
+## Critique 2026-11-10
+
+The critique is the independent, report-only `review-ui` reading of the pack `9401038db662/iteration-1` (18 findings: 4 high, 7 medium, 7 low; `critique.json` is not committed, `.ui-review/` being ignored). A finding repaired here is `implemented`, not `verified-resolved`: that takes a fresh pack read in a fresh context.
+
+| Finding | Severity | What it read | Outcome |
+|---|---|---|---|
+| UIR-005 | medium | the first build's empty states took 56.1 % of the view at 1400×900 (438×473 and 698×473 px) to hold one sentence each, 2.9 % before | implemented: the actions are pinned instead and the empty state is message-sized again |

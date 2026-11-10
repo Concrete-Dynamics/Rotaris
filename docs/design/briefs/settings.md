@@ -64,7 +64,7 @@ No string is written or changed.
 
 Density tier: "a settings pane breathing" (rubric C4), from the mockup's `SETTINGS` section.
 
-One axis per category body. A row's label stands in a label column of `calc(2 * var(--rt-label-column))`; every control and switch begins at the column's end plus `--rt-space-3`; a caption stands under the control it describes, on that same edge, bounded to `calc(2 * var(--rt-prose-measure))`. A row with no label (an action) keeps the label edge, an edge the body already has, and its caption stands under its button. A fact row takes the token itself as its column, which holds every fact label. A list row's field grows from `--rt-field-min` to `--rt-prose-measure` with its Add beside it, and its entries stand under the field. A category's own prose holds the caption measure. Rows of one group stand `--rt-space-3` apart; a group heading stands `--rt-space-6` from the group above it. Inside a `Card` the column gives back the card's inset, so the card's controls stand on the edge the rows outside it stand on.
+One axis per category body. A row's label stands in a label column of `calc(2 * var(--rt-label-column))`; every control and switch begins at the column's end plus `--rt-space-3`; a caption stands under the control it describes, on that same edge, bounded to `--rt-prose-measure`. A row with no label (an action) keeps the label edge, an edge the body already has, and its caption stands under its button. A fact row takes the token itself as its column, which holds every fact label. A list row's field grows from `--rt-field-min` to `--rt-prose-measure` with its Add beside it, and its entries stand under the field. A category's prose at the caption's size holds the same measure; its prose at the body's size takes two measures, under OQ-547. Rows of one group stand `--rt-space-3` apart; a group heading is the section kicker (OQ-500's ruling) and stands `--rt-space-6` from the group above it. Inside a `Card` the column gives back the card's inset, so the card's controls stand on the edge the rows outside it stand on.
 
 Relations (published on the category body, `settings-body`): `containment` in the primary view; `viewport-scroll` on the x axis, expected false. *2026-11-10, while building: the `align-x` relation first written here needs one published target per row, some 120 call sites; the axis is held instead by the unit test over the rules (`layout-regression.test.ts`) and measured by the drive in §11.*
 
@@ -81,13 +81,14 @@ Earned surfaces: the two `Card`s the Runtime category already draws. None added.
 ## 10. Disagreements and gaps
 
 - The token's comment says `--rt-label-column` holds the longest label of the product's forms; eleven Settings labels are wider than it. Raised as [OQ-546](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-546); the build proceeds under a multiple of the token.
+- The one measure the material names is the caption's; held to it, body-size prose stands at 35 to 49 characters a line. Raised as [OQ-547](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-547); the build proceeds under two measures for body-size prose and the token for captions.
 - The mockup draws a field as `.field`, label above control. This brief takes the side label instead, because the token above and UIR-010's repair of the Mission card already chose it for this product's forms, and because a Settings category is scanned by value (§2). Not raised: both arrangements are in the adopted material.
 
 ## 11. Evidence plan
 
 Capture: `pnpm ui-audit --views=7 --sizes=1400x900,1000x680`; then `pnpm app:drive` for each of Runtime, Interface, Display, Project and About at both sizes, each after `waitFor ".settings__section"`. Rubric rows to pass: C3, C7, D4, C2.
 
-**Must move** (Runtime, 1400×900): distinct left edges among the rows' first controls 16 → 1; widest caption 1042 px → at most 680 px.
+**Must move** (Runtime, 1400×900): distinct left edges among the rows' first controls 16 → 1; widest caption 1042 px → at most the measure, 340 px *(first written "at most 680 px", twice the measure; the critique's UIR-007 and OQ-535 held it to the token)*.
 **Must hold:** `pnpm ui-audit` findings for view 7 at both sizes, 0; `scrollWidth` equal to `clientWidth` on `.settings__body`; every proof selector under `.settings__body` and `.save-bar` (`settings-proof`, `config-proof`); the unit tests under `packages/ui/src/settings/`.
 
 ## Audit 2026-11-10
@@ -121,9 +122,25 @@ By `build-ui`, on `feat/r-097-ui-ux-overhaul`. Evidence: `pnpm ui-audit` at 1400
 | # | Must move | Before | After | Must hold |
 |---|---|---|---|---|
 | 1 | distinct left edges among the labelled rows' controls, 1400×900 | Runtime 16, Display 7, Interface 4, About 5 | 1 each (x 584; About's facts x 464, on the token's own column) | view 7: 0 findings at both sizes — held |
-| 2 | widest caption, as text | 1042 px | 677 px at 1400×900; 386 px at 1000×680, wrapped inside the control column | no caption cut; `scrollWidth` = `clientWidth` on the body (1042/1042, 642/642) — held |
-| 3 | a group heading's top gap | 16 px | 24 px (`--rt-space-6`) | — |
+| 2 | widest caption, as text | 1042 px | 339 px at 1400×900 and at 1000×680, the token's 340 (677 px in the first build, at twice the measure) | no caption cut; `scrollWidth` = `clientWidth` on the body (1042/1042, 642/642) — held |
+| 3 | a group heading's top gap, and its form | 16 px; 12 px at weight 500 in the primary ink | 24 px (`--rt-space-6`); the section kicker | — |
 
-What was built beyond the three items, each inside §8: "Depth cap" and "Fan-out limit", and "Compression threshold" and "Iteration cap", are one field to a row (Runtime's rows 19 → 21; the order `REQ-CONFIG-320` fixes is unchanged); the security policy's three list rows stand on the axis (their field took a line of its own, off it); a category's own prose holds the caption measure (Display's introductions and the MCP Servers card's statement ran the pane's width).
+What was built beyond the three items, each inside §8: "Depth cap" and "Fan-out limit", and "Compression threshold" and "Iteration cap", are one field to a row (Runtime's rows 19 → 21; the order `REQ-CONFIG-320` fixes is unchanged); the security policy's three list rows stand on the axis (their field took a line of its own, off it); a category's own prose is bounded (Display's introductions and the MCP Servers card's statement ran the pane's width): to the measure at the caption's size, to two measures at the body's size (OQ-547).
 
 Not driven: Personas, Skills, Instructions, Hooks, MCP Servers, Plugins and Tools beyond one capture each at 1400×900; `nocturne` and `high-contrast`. A defect noticed on the way and not repaired: [the web-search card's provider choices](../../defects/the-web-search-setup-cards-provider-choices-stand-on-three-different-edges.md).
+
+## Critique 2026-11-10
+
+The critique is the independent, report-only `review-ui` reading of the pack `9401038db662/iteration-1` (18 findings: 4 high, 7 medium, 7 low; `critique.json` is not committed, `.ui-review/` being ignored). A finding repaired here is `implemented`, not `verified-resolved`: that takes a fresh pack read in a fresh context.
+
+| Finding | Severity | What it read | Outcome |
+|---|---|---|---|
+| UIR-007 | medium | captions at twice the measure ran 673 px, up to 125 characters a line, against OQ-535's ruling that the measure keeps its 340 px | implemented: captions hold the token (339 px measured); body-size prose is raised as OQ-547 |
+| UIR-008 | medium | Plugins' one sentence ran 1044 px: it stands in `.view__empty`, which the prose rule did not reach | implemented: the rule reaches it |
+| UIR-014 | low | a group heading at 12 px and weight 500 over 14 px labels, neither `--rt-h5` nor the kicker | implemented: the section kicker |
+| UIR-001 | high | seven filled controls on Models ("Add endpoint" and six "Authenticate") where §1.7 allows one per view; predates R-097 | open: an open-question candidate, since `REQ-CONFIG-371` names a row primary |
+| UIR-009 | medium | Dictation's "Model source" select is 1042 px wide for three short options, its label above it, off the axis; predates R-097 | open: `PD-CONFIG-005` and OQ-457 are read first |
+| UIR-010 | medium | "Sign out" breaks onto two lines in the providers table at 1000×680 (60×36 px against 24 px neighbours); not verified against the base | open |
+| UIR-015 | low | "No portable skills were discovered." starts 2 px inside its card's hairline; not verified against the base | open |
+
+Two findings off this surface were repaired in the same change because each is one rule: UIR-003, a bare `strong` at the browser's 700 where §1.4 stops at 500 (now the medium weight; "No task plan" measured 500), and UIR-011, the session browser's empty sentence set right-aligned by its table's last-cell rule (now centred).

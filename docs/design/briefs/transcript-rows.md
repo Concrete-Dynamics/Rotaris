@@ -65,3 +65,14 @@ By `debug-ui`, on `feat/r-097-ui-ux-overhaul`. Evidence: `pnpm ui-audit` at both
 The header with the indicator shown is 59 px, two lines; about 66 px before, read off the capture. With no indicator it is the one line it was, and "Compress context" stands with the selectors at the end instead of alone in the middle.
 
 Not driven: a live run's header at 1000×680 with the indicator shown.
+
+## Critique 2026-11-10
+
+The critique is the independent, report-only `review-ui` reading of the pack `9401038db662/iteration-1` (18 findings: 4 high, 7 medium, 7 low; `critique.json` is not committed, `.ui-review/` being ignored). A finding repaired here is `implemented`, not `verified-resolved`: that takes a fresh pack read in a fresh context.
+
+Checked and sound on this surface: the header is one 33 px line at both sizes with no indicator, the end group 459 px and whole; with the indicator shown, "Compress context" is one line, the selectors one row, the indicator's label one line.
+
+| Finding | Severity | What it read | Outcome |
+|---|---|---|---|
+| UIR-003 | high | "No task plan" in the task plan pane drawn at the browser's `bolder`, a bare `strong` with no rule, where §1.4 stops at 500; seven more call sites; predates R-097 | implemented: one `strong` rule at `--rt-weight-medium` (500 measured) |
+| UIR-016 | low | the inspector's persona menu is 28 px high, a fourth control height, where the same component is 24 px in the run header; counted baseline debt; predates R-097 | open |

@@ -53,15 +53,15 @@ No string is written or changed.
 
 Density tier: dense, from the mockup's `REQUIREMENTS` section — the header steers, the board holds the height.
 
-Under the title row the header holds one wrapping line of two items: the rows that steer the board (controls, move, and the filters when shown), which ask for two measures, and the analysis statement, which asks for one and is top-aligned with the controls row. The statement stands beside the rows wherever the header holds three measures and the gap between them, and returns under the rows where it does not; no breakpoint is written. Beside the rows it is one to two measures wide; under them it takes two. The inline errors keep the header's whole width. *2026-11-10, while building: first written as a two-column grid behind a media query, which `tools/check-ui-language.mjs` counted as two new pixel literals; the wrapping line decides from the tokens alone.*
+Under the title row the header holds one wrapping line of two items: the rows that steer the board (controls, move, and the filters when shown), which ask for two measures, and the analysis statement, which asks for one and is top-aligned with the controls row. The statement stands beside the rows wherever the header holds three measures and the gap between them, and returns under the rows where it does not; no breakpoint is written. Its lines hold one measure in both places: beside the rows it is one measure wide and the rows take the line's free space; alone under them it is set in two columns of one measure each. The controls row is two decided lines: what the board shows (group, sort, the blocked column), then what is done to it (filters, queue, new requirement, the filter's sentence). The inline errors keep the header's whole width. *2026-11-10, while building: first written as a two-column grid behind a media query, which `tools/check-ui-language.mjs` counted as two new pixel literals; the wrapping line decides from the tokens alone.*
 
-The board body bounds its empty state: the state stands at the body's top with `--rt-space-4` above it, and the body scrolls vertically when it is shorter than the state.
+The board body bounds its empty state: the body takes a block inset of `--rt-space-4`; the state is centred in it while the body holds it, stands at its top when it does not, and the body scrolls vertically for the rest.
 
 Relations (published on the header, `req-header`): `containment` in the primary view; `viewport-scroll` on the x axis, expected false (`REQ-TRACE-489`). The adoption strip's controls are held by `ui-audit`'s `STACKING` sweep. *2026-11-10: `containment` of the empty state in the body is not published — the relation is geometric, and a state the body scrolls stands partly outside the body's box by design.*
 
 | Region | 1400×900 | above 1180 | 1180–1080 | below 1080 | 1000×680 |
 |---|---|---|---|---|---|
-| header | the statement beside the rows | beside, while the header holds three measures and the gap | under the rows, two measures wide | under the rows | under the rows, two measures wide: three lines |
+| header | the statement beside the rows, one measure | beside, while the header holds three measures and the gap | under the rows, in two columns of one measure | under the rows | under the rows, in two columns: three lines |
 | board body | holds the remaining height | same | same | same | scrolls an empty state taller than itself; never paints over the adoption strip or the foot |
 
 ## 9. Components
@@ -109,10 +109,21 @@ By `debug-ui` (items 1, 3) and `build-ui` (item 2), on `feat/r-097-ui-ux-overhau
 
 | # | Must move | Before | After | Must hold |
 |---|---|---|---|---|
-| 1 | `STACKING` at 1000×680; the empty state's paint outside the body | 2; 45 px above, 45 px below | 0; 0 — the state starts at the body's top and the body scrolls the rest | view 4 at 1400×900: 0 findings — held |
-| 2 | header height | 248 px at 1400×900; 254 px at 1000×680 | 141 px; 202 px (196 px at 1180×900) | the statement whole and visible; header `scrollWidth` = `clientWidth` (1268/1268, 868/868) — held |
+| 1 | `STACKING` at 1000×680; the empty state's paint outside the body | 2; 45 px above, 45 px below | 0; 0 — the state starts 16 px under the body's top and the body scrolls the remaining 67 px | view 4 at 1400×900: 0 findings — held |
+| 2 | header height | 248 px at 1400×900; 254 px at 1000×680 | 138 px; 198 px (198 px at 1180×900) | the statement whole and visible, its longest line 316 px in both arrangements; header `scrollWidth` = `clientWidth` (1268/1268, 1048/1048, 868/868) — held |
 | 3 | the reading line's inset | 0 | `--rt-space-3` block, `--rt-space-5` inline | — |
 
-The board body at 1000×680 with the notice open: 133 px → 169 px. A capture taken after `waitFor` on the empty state shows the body scrolled 28 px: the driver centres what it matches (`apps/desktop/src/main/driver.ts`, `scrollIntoView`), the product does not.
+The board body at 1000×680 with the notice open: 133 px → 173 px. A capture taken after `waitFor` on the empty state shows the body scrolled 28 px: the driver centres what it matches (`apps/desktop/src/main/driver.ts`, `scrollIntoView`), the product does not.
 
 Not driven: a populated board, the filters row shown, the panes, the detail panel; `nocturne` and `high-contrast`.
+
+## Critique 2026-11-10
+
+The critique is the independent, report-only `review-ui` reading of the pack `9401038db662/iteration-1` (18 findings: 4 high, 7 medium, 7 low; `critique.json` is not committed, `.ui-review/` being ignored). A finding repaired here is `implemented`, not `verified-resolved`: that takes a fresh pack read in a fresh context.
+
+| Finding | Severity | What it read | Outcome |
+|---|---|---|---|
+| UIR-006 | medium | the empty state stood 0 px under the adoption strip at 1000×680, where §8 said `--rt-space-4`; brief and rule disagreed | implemented: the body's block inset (16 px measured); §8 reworded to what is built |
+| UIR-012 | low | the controls row broke after a different control at each width (three on its first line at 1400×900, four at 1000×680) | implemented: two decided lines at every width; the header is 138 and 198 px |
+
+Found by the same pass in this brief's own first build and corrected: the statement was one to two measures wide (434 px beside the rows, 680 px under them); it holds one measure a line in both arrangements now.

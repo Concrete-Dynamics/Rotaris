@@ -67,3 +67,14 @@ By `debug-ui`, on `feat/r-097-ui-ux-overhaul`. Evidence: `pnpm ui-audit` at both
 The test that pinned `width: 12ch` now pins `max(12ch, var(--git-files-fit, 12ch))` and the figure's `inline-block` and `nowrap`, the State column's form; the table's minimum reads `34ch` plus the three measured columns, the same sum at the floors.
 
 Not run: `git-proof`.
+
+## Critique 2026-11-10
+
+The critique is the independent, report-only `review-ui` reading of the pack `9401038db662/iteration-1` (18 findings: 4 high, 7 medium, 7 low; `critique.json` is not committed, `.ui-review/` being ignored). A finding repaired here is `implemented`, not `verified-resolved`: that takes a fresh pack read in a fresh context.
+
+| Finding | Severity | What it read | Outcome |
+|---|---|---|---|
+| UIR-013 | low | the card kickers of one column stand on two edges (x 147 against 154; 896 against 901): a table card's head is inset 14 px, a plain card 20 px; predates R-097 | open |
+| UIR-018 | low | two scrollbar treatments 175 px apart at 1000×680, a plain thumb on the worktrees card and a thumb between platform arrows on the checkpoint table; predates R-097 | open |
+
+Checked and sound: the Files figures whole on the real repository, ending 17 px before "Delete".

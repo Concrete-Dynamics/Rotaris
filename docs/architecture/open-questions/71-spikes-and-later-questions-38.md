@@ -67,3 +67,13 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** Settings takes `calc(2 * var(--rt-label-column))`, which holds every label on one line; Mission keeps the token as it is. No token is added or changed.
 
 **What decides it.** One ruling: the token stays and the multiple is Settings' own figure; or the token's value moves to the longest label and Mission's card is re-measured against it; or a second token is named for the wide form.
+
+<a id="oq-547"></a>
+
+**OQ-547 — Which measure holds prose at the body's size, when the one measure the material names is the caption's 340 px?** *(`--rt-prose-measure` in `packages/contracts/src/theme/themes.ts`, `docs/design/system/components.css` (`.empty-state-hint`), [OQ-535](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-2.md#oq-535), UIR-011, rubric C7, guide 07 §2. Raised 2026-11-10 by the Settings brief for [R-097](../../product/requests.md#r-097) ([the brief](../../design/briefs/settings.md)), after the independent critique of its built pack; numbered after OQ-546.)*
+
+**What is open.** `--rt-prose-measure` is the adopted sheet's one stated width for a block of secondary text, taken from `.empty-state-hint`, which is set at `--rt-text-xs`; OQ-535 ruled that it stays a length of 340 px and is not restated in characters. A Settings category also carries prose at the body's size: Display's two introductions, Hooks' and Skills' opening paragraphs, the MCP Servers card's statement, Project's statements, About's paragraphs. Unbounded, they ran the pane's width, about 150 characters a line at 1400×900. Held to the token, Project's two statements stood at 35 to 49 characters a line, most lines under the 45 that guide 07 gives as the floor (counted from a drive capture of 2026-11-10). At twice the token Display's introduction measured 665 px and 94 characters, over the same guide's 90. No figure the material names fits body-size prose.
+
+**What the build proceeds under.** A Settings caption and any other text at the caption's size hold the token. Body-size prose in a Settings category is bounded to `calc(2 * var(--rt-prose-measure))`. Nothing outside Settings is changed, and no token is added.
+
+**What decides it.** One ruling: body prose takes the token as it is, short lines included; or a second length is named for it by a §1 amendment (the two measurements bracket it: 340 px gave 35 to 49 characters, 665 px gave 94); or the multiple stands as Settings' own figure.

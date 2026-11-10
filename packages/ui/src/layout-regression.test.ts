@@ -214,12 +214,13 @@ describe('minimum-window layout regressions', () => {
     // measure, so its text stands under the control it describes.
     const rows = ':is(.settings__section, .settings__card, .settings__actions) > .settings__action';
     expect(rule('.settings__body')).toContain('--settings-label-column: calc(2 * var(--rt-label-column))');
-    expect(rule('.settings__body')).toContain('--settings-caption-measure: calc(2 * var(--rt-prose-measure))');
     expect(rule(`${rows} > :is(label, span):first-child:not(.settings__hint)`)).toContain('flex: 0 0 var(--settings-label-column)');
     const caption = rule(`${rows} > .settings__hint`);
     expect(caption).toContain('flex: 0 0 100%');
     expect(caption).toContain('padding-left: calc(var(--settings-label-column) + var(--rt-space-3))');
-    expect(caption).toContain('var(--settings-caption-measure)');
+    // The measure is the token itself: OQ-535 ruled that it keeps its 340 px, and the caption was first built at twice it.
+    expect(caption).toContain('var(--rt-prose-measure)');
+    expect(caption).not.toContain('2 * var(--rt-prose-measure)');
   });
 
   it('bounds the Requirements board body\'s empty state inside the body at the minimum window (R-097; REQ-SHELL-022)', () => {
@@ -227,6 +228,7 @@ describe('minimum-window layout regressions', () => {
     // its 224 px overflowed both ways — 45 px over the adoption strip, 45 px over the foot, two controls covered
     // (`ui-audit` STACKING x2). Auto margins centre while there is room and collapse to the start when there is none.
     expect(rule('.req-body:has(> .req-empty)')).toContain('overflow-y: auto');
+    expect(rule('.req-body:has(> .req-empty)')).toContain('padding-block: var(--rt-space-4)');
     expect(rule('.req-body > .req-empty')).toContain('align-self: flex-start');
     expect(rule('.req-body > .req-empty')).toContain('margin: auto');
   });
@@ -242,9 +244,12 @@ describe('minimum-window layout regressions', () => {
   });
 
   it('stands a prompt card\'s actions at the card\'s foot whether its list is empty or not, and draws the tabs in the adopted face (R-097; REQ-LIBRARY-103)', () => {
-    // docs/design/briefs/library.md, audit items 1 and 2: the empty state takes the region the list takes; a `button.tab`
-    // inherits the face and keeps the adopted `.tab`'s size and weight.
-    expect(rule('.library-card > .library__empty')).toContain('flex: 1 1 auto');
+    // docs/design/briefs/library.md, audit items 1 and 2: the actions take the free space above them, and the empty state
+    // keeps the size of its sentence — stretching it to the list's region was UIR-007's and UIR-016's fault, built again
+    // and read back by the 2026-11-10 critique (its finding 5). A `button.tab` inherits the face and keeps the adopted size and weight.
+    expect(rule('.library-card > .library-card__actions')).toContain('margin-top: auto');
+    expect(rule('.library__empty')).toContain('flex: 0 0 auto');
+    expect(rule('.library-card > .library__empty')).toBe('');
     expect(rule('.tabs .tab')).toContain('font-family: inherit');
     expect(rule('.tabs .tab')).not.toContain('font: inherit');
   });
@@ -259,5 +264,15 @@ describe('minimum-window layout regressions', () => {
     expect(rule('.git')).toMatch(/padding: var\(--rt-space-4(, 16px)?\) var\(--rt-space-5(, 20px)?\)/u);
     expect(rule('.req')).toContain('padding-top: var(--rt-space-4)');
     expect(rule('.req-header')).toContain('padding: 0 var(--rt-space-5) var(--rt-space-2)');
+  });
+
+  it('holds emphasis to the medium weight and centres the session browser\'s empty sentence (R-097, findings 3 and 11 of the 2026-11-10 critique)', () => {
+    // §1.4: "Nothing in the system goes above 500". A bare `strong` took the browser's `bolder`; the empty sentence's one
+    // spanning cell is also `td:last-child`, whose rule right-aligned it 545 px from the table's first heading.
+    expect(css).toMatch(/^strong \{ font-weight: var\(--rt-weight-medium\); \}$/mu);
+    const empty = rule('.session-browser__table td.session-browser__empty');
+    expect(empty).toContain('text-align: center');
+    expect(empty).toContain('width: auto');
+    expect(empty).toContain('white-space: normal');
   });
 });

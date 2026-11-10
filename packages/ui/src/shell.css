@@ -692,19 +692,21 @@
    · the leading label takes a fixed column, so every control, value and switch starts on one edge. The column is twice
      the token: 11 of the 37 Settings labels are wider than its 120 px at their own type, the longest 224 (OQ-546);
    · a caption takes a line of its own and stands UNDER the control it describes (UIR-024's rule, already Mission's),
-     bounded to twice the prose measure. It is padded, not margined: a basis of 100% is what breaks the line at every
-     pane width, and the padding is what keeps the text between the field edge and the measure;
+     bounded to the prose measure. It is padded, not margined: a basis of 100% is what breaks the line at every
+     pane width, and the padding is what keeps the text between the field edge and the measure. (First built at twice
+     the measure, 673 px and up to 125 characters a line at 1400x900; OQ-535 ruled that the measure keeps its 340 px,
+     and finding 7 of the 2026-11-10 critique of the built pack (`9401038db662`) held the caption to it);
    · a row that opens with a button has no label to align, so it keeps the label edge — an edge the body already has —
      and its caption stands under the button.
    Inside a `Card` the column gives back the card's own inset and hairline, so a card's controls stand on the edge the
    rows outside it stand on. The guided web-search card keeps its own reviewed arrangement (its rows sit in wrappers
    this selector does not reach). */
-.settings__body { --settings-label-column: calc(2 * var(--rt-label-column)); --settings-caption-measure: calc(2 * var(--rt-prose-measure)); }
+.settings__body { --settings-label-column: calc(2 * var(--rt-label-column)); }
 .settings__body .settings__card { --settings-label-column: calc(2 * var(--rt-label-column) - var(--rt-space-5) - var(--rt-hairline-width)); }
 .settings__section > .settings__action { margin-top: var(--rt-space-3); }
 :is(.settings__section, .settings__card, .settings__actions) > .settings__action { gap: var(--rt-space-1) var(--rt-space-3); }
 :is(.settings__section, .settings__card, .settings__actions) > .settings__action > :is(label, span):first-child:not(.settings__hint) { flex: 0 0 var(--settings-label-column); min-width: 0; overflow-wrap: anywhere; }
-:is(.settings__section, .settings__card, .settings__actions) > .settings__action > .settings__hint { flex: 0 0 100%; box-sizing: border-box; padding-left: calc(var(--settings-label-column) + var(--rt-space-3)); padding-right: max(0%, calc(100% - var(--settings-label-column) - var(--rt-space-3) - var(--settings-caption-measure))); }
+:is(.settings__section, .settings__card, .settings__actions) > .settings__action > .settings__hint { flex: 0 0 100%; box-sizing: border-box; padding-left: calc(var(--settings-label-column) + var(--rt-space-3)); padding-right: max(0%, calc(100% - var(--settings-label-column) - var(--rt-space-3) - var(--rt-prose-measure))); }
 /* A fact row (About's "Version", "Build", …) is a label and a value, and every one of its labels fits the token itself
    (the longest, "Security contact", is 114 px): it takes the column as named, so a value stands by its label. */
 :is(.settings__section, .settings__card, .settings__actions) > .settings__action:has(> .about__value) > :is(label, span):first-child { flex-basis: var(--rt-label-column); }
@@ -714,11 +716,21 @@
    the field, on the field's edge, as the caption does. */
 :is(.settings__section, .settings__card, .settings__actions) > .settings__action > .settings__entry { flex: 1 1 var(--rt-field-min); width: auto; min-width: var(--rt-field-min); max-width: var(--rt-prose-measure); }
 :is(.settings__section, .settings__card, .settings__actions) > .settings__action > .settings__chips { flex: 1 1 100%; margin-block: 0; margin-left: calc(var(--settings-label-column) + var(--rt-space-3)); }
-/* A category's own prose — a group's introduction, a card's statement, About's paragraphs — holds the caption measure
-   too (rubric C7): Display's two introductions and the MCP Servers card's statement ran the pane's width, about 150
-   characters a line. Code and paths (`.mono`, `pre`) opt out, as the measure's rule says. */
-.settings__section p:not(.mono), .settings__section .about__caption { max-width: var(--settings-caption-measure); }
-:is(.settings__section, .settings__card, .settings__actions) > .settings__action:has(> .btn:first-child) > .settings__hint { padding-left: 0; padding-right: max(0%, calc(100% - var(--settings-caption-measure))); }
+/* A category's own prose — a group's introduction, a card's statement, About's paragraphs, the one sentence of a
+   category with nothing to show (Plugins) — is bounded too (rubric C7): Display's two introductions and the MCP Servers
+   card's statement ran the pane's width, about 150 characters a line. Text at the caption's size holds the prose
+   measure itself. Text at the body's size takes TWO measures: the one measure the material names is the caption's,
+   and held to it Project's two statements stood at 35 to 49 characters a line (counted from a capture,
+   2026-11-10), most lines under the 45 guide 07 gives as the floor. Which measure body prose takes is OQ-547's to rule. Code and
+   paths (`.mono`, `pre`) opt out, as the measure's rule says. */
+.settings__section p:not(.mono), .settings__body .view__empty p { max-width: calc(2 * var(--rt-prose-measure)); }
+.settings__section p.settings__hint, .settings__section .about__caption { max-width: var(--rt-prose-measure); }
+/* A group's heading is the section kicker (OQ-500's ruling: "group headers the kicker"), the declaration the adopted
+   `.card-kicker` carries and the category's own cards already head themselves with. It was 12 px at weight 500 in the
+   primary ink, smaller than the 14 px labels and introductions it headed and told from them by nothing else (the
+   2026-11-10 critique's finding 14). The guided web-search card's step titles are not group headings and keep their rule. */
+.settings__section .settings__heading:not([data-mcp-websearch-setup] *) { font-size: var(--rt-text-2xs); font-weight: var(--rt-weight-medium); letter-spacing: var(--rt-tracking-label); text-transform: uppercase; color: var(--rt-text-tertiary); }
+:is(.settings__section, .settings__card, .settings__actions) > .settings__action:has(> .btn:first-child) > .settings__hint { padding-left: 0; padding-right: max(0%, calc(100% - var(--rt-prose-measure))); }
 .settings__dictation-field { display: flex; flex-direction: column; gap: var(--rt-space-1); margin-top: var(--rt-space-2); }
 .settings__select { width: max-content; max-width: 100%; }
 /* C3 (UI review of PR #76, 2026-11-09): a field is sized from the token, never from the pane. The guided card's key
@@ -1268,6 +1280,11 @@
 .session-browser__stale { color: var(--rt-warn); border-color: var(--rt-warn); }
 .session-browser__error { margin: 0; color: var(--rt-danger-300); font-size: var(--rt-text-xs); }
 .session-browser__empty, .session-browser__loading { padding: var(--rt-space-5); text-align: center; color: var(--rt-text-tertiary); }
+/* R-097, finding 11 of the 2026-11-10 critique: the empty sentence is one cell spanning the six columns, so it is also the
+   row's LAST cell, and `.session-browser__table td:last-child` above — the Open column's rule, at a higher specificity —
+   set it right-aligned, on one line and at 1% of the table: the sentence began 545 px right of the "Session" heading
+   (ink x 864 to 1129 in a table from 261 to 1139, at 1400x900). The cell says what `.session-browser__empty` meant. */
+.session-browser__table td.session-browser__empty { width: auto; white-space: normal; text-align: center; }
 .session-browser__loading { margin: 0; }
 /* Part U (REQ-SESSION-182/191/041/200): the browser's actions — tokens by name, every state as text. */
 .session-browser__toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--rt-space-4); flex-wrap: wrap; }
@@ -1936,11 +1953,15 @@
 /* A list column's empty state sits where its first row would, not centred in the column: centring left
    248 px of bare card above it and 214 px below (UIR-016). */
 .library__empty { flex: 0 0 auto; align-self: stretch; max-width: none; }
-/* R-097 (docs/design/briefs/library.md, audit item 1): in a prompt card the empty state stands for the LIST, so it takes
-   the region the list takes (`.library-list`'s `flex: 1`). It was `flex: 0 0 auto` there, a 164x84 px box in the upper
-   third of a 573 px card, and the card's actions hung 406 px above the foot — then dropped to it when the first prompt
-   arrived. A control keeps its place across the states of the list above it. */
-.library-card > .library__empty { flex: 1 1 auto; height: auto; margin-inline: 0; }
+/* R-097 (docs/design/briefs/library.md, audit item 1): a prompt card's actions stand at the card's FOOT in every state of
+   the list above them. With no prompts they hung under the empty state, 135 px from the card's top and 406 px above its
+   foot, and dropped to the foot when the first prompt arrived. The actions take the free space above them
+   (`margin-top: auto`); the empty state keeps the size of its sentence.
+   FALSIFIED, 2026-11-10, kept beside its replacement: this change first gave the empty state the list's `flex: 1`, so
+   that it filled the region the list fills. That is the fault UIR-007 and UIR-016 recorded and `.library__empty`'s
+   `flex: 0 0 auto` repaired — a one-sentence panel stretched to 473 px, 56 % of the view at 1400x900 — and the
+   independent critique of the built pack (`9401038db662`, 2026-11-10) read it back as its finding 5. */
+.library-card > .library-card__actions { margin-top: auto; }
 .library__placeholder { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
 
 .library-prompts { display: grid; align-items: stretch; gap: 0; flex: 1; min-height: 0; }
@@ -2068,6 +2089,10 @@
 .md__h2 { font-size: var(--rt-text-md, 14px); }
 .md__h3, .md__h4, .md__h5, .md__h6 { font-size: var(--rt-text-sm, 13px); }
 .md__strong { font-weight: var(--rt-weight-display); }
+/* R-097, finding 3 of the 2026-11-10 critique: emphasis is the medium weight everywhere, as it is in Markdown above. A bare
+   `strong` took the browser's `bolder` — 700, where "nothing in the system goes above 500" (§1.4) — on the task plan's
+   "No task plan", Project's "Initialization failed" and six more lines of the shell. */
+strong { font-weight: var(--rt-weight-medium); }
 .md__em { font-style: italic; }
 .md__strike { text-decoration: line-through; }
 .md__code { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs, 12px); background: var(--rt-surface-2); border-radius: var(--rt-radius-sm, 4px); padding: 0 3px; }
@@ -2502,12 +2527,21 @@
    248 px header, and the frame took two thirds of the view at the minimum window. `.req-header__steer` is one wrapping
    line of two items: the rows ask for two measures and the statement for one, so the statement stands beside the rows
    wherever the header holds three measures and a gap, and returns under them where it does not — no breakpoint is
-   written, the tokens decide. Beside the rows it is one to two measures wide; under them it grows to two, so five lines
-   become three at the size where the board has least. The DOM order, and so what a reader and the Tab key meet, is
-   unchanged: the statement holds no control. */
+   written, the tokens decide. Its lines hold ONE measure in both places (OQ-535: the measure keeps its 340 px): beside
+   the rows it is one measure wide, the rows taking the line's free space; alone under them it is set in two columns
+   of one measure each, so five lines become three at the size where the board has least. The DOM order, and so what a
+   reader and the Tab key meet, is unchanged: the statement holds no control.
+   The controls row is two DECIDED lines — what the board shows (group, sort, the blocked column), then what is done
+   to it (filters, queue, new requirement, the filter's own sentence) — where it broke after a different control at
+   each width (the 2026-11-10 critique's finding 12). `.req-header__break` is the line's end: a layout box with no content. */
 .req-header__steer { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--rt-space-2) var(--rt-space-5); min-width: 0; }
-.req-header__rows { flex: 1 1 calc(2 * var(--rt-prose-measure)); min-width: 0; display: flex; flex-direction: column; gap: var(--rt-space-2); }
-.req-header__steer > .req-header__analysis { flex: 1 1 var(--rt-prose-measure); max-width: calc(2 * var(--rt-prose-measure)); }
+.req-header__rows { flex: 9999 1 calc(2 * var(--rt-prose-measure)); min-width: 0; display: flex; flex-direction: column; gap: var(--rt-space-2); }
+/* `display: block`: the statement also carries `.card-meta`, which is a flex line, and a flex container sets no columns. */
+.req-header__steer > .req-header__analysis { display: block; flex: 1 1 var(--rt-prose-measure); max-width: calc(2 * var(--rt-prose-measure) + var(--rt-space-5)); column-width: var(--rt-prose-measure); column-gap: var(--rt-space-5); }
+/* The break is a line of its own, of no height, so the row's gap falls on both sides of it: `--rt-space-1` twice is the
+   `--rt-space-2` the header's rows stand apart by. */
+.req-header__controls { row-gap: var(--rt-space-1); }
+.req-header__break { flex: 0 0 100%; height: 0; }
 .req-header__controls, .req-header__filters, .req-header__move { min-height: 0; }
 .req-header__count { font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
 .req-header__spacer { flex: 1 1 auto; }
@@ -2563,9 +2597,10 @@
    empty state is `align-self: center` (`.empty-state`), and in a body shorter than itself — 133 px for its 224 at
    1000x680 with a notice open — a centred box overflows both ways: it painted 45 px over the adoption strip and 45 px
    over the foot, and `ui-audit` read "Details" and "Run adoption" as covered (STACKING x2). Auto margins centre it while
-   there is room and collapse to the start when there is none, and the body scrolls what is left. The reading line takes
-   the inset the columns take, where it stood flush in the body's corner. */
-.req-body:has(> .req-empty) { overflow-y: auto; }
+   there is room and collapse to the start when there is none, and the body scrolls what is left; the body's own block
+   inset keeps the state `--rt-space-4` off the strip above it and the foot below it in both cases. The reading line
+   takes the inset the columns take, where it stood flush in the body's corner. */
+.req-body:has(> .req-empty) { overflow-y: auto; padding-block: var(--rt-space-4); }
 .req-body > .req-empty { align-self: flex-start; margin: auto; }
 .req-body > .req-status { margin: var(--rt-space-3) var(--rt-space-5); }
 .req-empty__errors { margin: var(--rt-space-2) 0 0; padding: 0; list-style: none; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); text-align: left; }

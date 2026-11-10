@@ -59,17 +59,19 @@ Two independent walls, both measured here, either of which blocks the gate on it
     ❯ sourceFileOf packages/workspace/src/traceability/parser.ts:84:62
    ```
 
-   The gate log names 135 `error TS` in `packages/workspace/src/traceability/parser.ts`, plus the same break in six more
+   The gate log names 135 `error TS` in `packages/workspace/src/traceability/parser.ts`, plus the same break in seven more
    files that read the compiler API (`consumer.test.ts`, and `tools/{check-ui-language,check-plural-markers,
    check-timeline-vocabulary,migrate-ui-primitives,ui-contract-publisher}.mjs`, `tools/typecheck-projects.test.ts`). This
    half is repairable in principle — the parser already loads the compiler through `createRequire`, so it *could* point
    at a classic-API package (`@typescript/typescript6`, registry latest 6.0.2, classic API confirmed present) — but that
    repair cannot land while wall (1) stands, and it is a change to how the product loads its parser, not a version bump.
 
-**The break is `typescript` alone.** Holding only `typescript`/`typescript-eslint` (the linter must move with the compiler
-it parses) and applying the other five resolved cleanly: the scoped parser and consumer suites pass, and the full local
-`vitest run` is green (§3). `@types/node` 26, `vitest` 5, `eslint` 10.14 and `eslint-plugin-boundaries` 7.4 are not
-implicated by any error in the PR's log or in this lane's run.
+**The break is `typescript` alone.** In a scratch worktree on #52's head, holding `typescript` and the linter that
+parses with it (`typescript-eslint 8.69`) and applying the remaining updates resolved cleanly: the scoped parser and
+consumer suites pass there. On the lane head the manifest holds **only** `typescript` (at 5.9.3) and moves the other
+six — `typescript-eslint 8.72.1` is one of the six, and `eslint@10.14` accepts it because 8.72 peers `typescript
+>=4.8.4 <6.1.0`, which 5.9.3 satisfies. `@types/node` 26, `vitest` 5, `eslint` 10.14 and `eslint-plugin-boundaries`
+7.4 are not implicated by any error in the PR's log or in this lane's run.
 
 ## 3. Verification
 
@@ -79,21 +81,25 @@ implicated by any error in the PR's log or in this lane's run.
   - `eslint . --max-warnings 0` (lint, with the bump's own 10.14 + boundaries 7.4 + typescript-eslint 8.72): **exit 0**.
   - `vitest run` (tests): **576 passed | 5 skipped (581)**, exit 0.
   - `pnpm peers check`: **no peer dependency issues**; the lockfile resolves cleanly.
-  - Resolved versions on the head: `typescript 5.9.3`, `typescript-eslint 8.72.1`, `@types/node 26.6.6`, `vitest 5.1.0`,
-    `@vitest/coverage-v8 5.1.0`, `eslint 10.14.0`, `eslint-plugin-boundaries 7.4.0`.
+  - Resolved versions in the head's `pnpm-lock.yaml`: `typescript 5.9.3`, `typescript-eslint 8.72.1`, `@types/node
+    26.6.6`, `vitest 5.1.0`, `@vitest/coverage-v8 5.1.0`, `eslint 10.14.0`, `eslint-plugin-boundaries 7.4.1`.
+    `vitest` is a caret (`^5.1.0`) and the provider an exact `5.1.0`; the pair agrees **in the current lockfile**
+    (`vitest 5.1.0` + `@vitest/coverage-v8 5.1.0`), and Dependabot moves both together in this group, so a later
+    vitest publishes a fresh PR that moves them together again rather than silently skewing the tree.
 - **The bump's own linter found 18 real findings and they are repaired in this diff**, not suppressed: the tightened
-  `@typescript-eslint` rules left 11 `no-unnecessary-type-assertion` errors (5 test files: the updater tests and the
-  release-pipeline tests) and 7 `unbound-method` `eslint-disable` directives that the newer analysis no longer needs
-  (`packages/{platform,config,workspace}`). The assertions are dropped and the directives removed; the affected suites
-  and a scoped lint both pass.
+  `@typescript-eslint` rules left 11 `no-unnecessary-type-assertion` errors (6 test files: three under
+  `apps/desktop/src/main/updater/` and three under `tools/release-pipeline/`) and 7 `unbound-method` `eslint-disable`
+  directives that the newer analysis no longer needs (5 production files: `packages/{platform,config,workspace}`). The
+  assertions are dropped and the directives removed; the affected suites and a scoped lint both pass.
 - **CI is the authority for the Windows half** (the `package` job and the Windows gate run on the pushed head).
 
 ## 4. What this lane does not do
 
 No merge, no force-push, no push to `main`. It holds one dependency of a Dependabot group and lands the rest; the hold
-is named in the PR body and here, with its lifting condition (`typescript-eslint` supporting TS 7). It changes no source
-file: the repo-wide typecheck and the suites pass on `main`'s code unchanged, because nothing in the six landed updates
-needs a code change.
+is named in the PR body and here, with its lifting condition (`typescript-eslint` supporting TS 7). The only source
+edits are the lint repairs §3 names — five production files lose an obsolete `eslint-disable` line and six test files
+lose a redundant `as string`; **no runtime behaviour changes**, and the repo-wide typecheck and the suites pass on
+`main`'s product code otherwise unchanged, because nothing in the six landed updates needs a code change.
 
 ## 5. Re-evaluation condition
 

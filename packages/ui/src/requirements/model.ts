@@ -180,16 +180,20 @@ export const ANALYSIS_ON_SENTENCE = 'Change analysis is enabled for this workspa
 /** REQ-TRACE-345: what the pass left unjudged, by identifier. This build's pass judges nothing, so the list is what it reports: none. */
 export const AWAITING_JUDGEMENT_NONE = 'Awaiting judgement: none — this pass records no analyses, so no requirement is waiting on one.';
 /**
- * REQ-TRACE-507 and REQ-TRACE-334, in what the reader sees. The board listens for what this application changed: a
- * command of the board's own, or a run. Nothing watches the repository, so a change made outside the application
- * shows only after a re-evaluation; and the channel the board listens on reports no failure of its own, so
- * Re-evaluate stays the guaranteed route to a current board. Until 2026-11-11 the sentence said this in the build's
+ * REQ-TRACE-507 and REQ-TRACE-334, in what the reader sees. The board is told of a change by a reply to a command of
+ * its own (a move, an acceptance, an edit, a creation) or of a run it started; the requirement documents are read
+ * again only then and on Re-evaluate. Nothing watches the repository, so a document written by hand, by a session
+ * that is not one of the board's runs, or by a checkout shows only after a re-evaluation; and the channel the board
+ * listens on reports no failure of its own, so Re-evaluate stays the guaranteed route to a current board.
+ *
+ * Two rewordings were false and are kept here as that. Until 2026-11-11 the sentence said the fact in the build's
  * terms ("Live refresh follows the engine over channel 10; the channel reports no failure of its own, so a stopped
  * watcher cannot be told from a quiet one here"), UIR-312 of that day's critique. Its first rewording, "The board
- * refreshes itself as the repository changes", was false and is kept here as the falsified one: the second critique
- * of the same day read the relay and found no watcher behind it (UIR-401).
+ * refreshes itself as the repository changes", claimed a watcher nobody built (UIR-401). Its second, "The board
+ * updates itself when a change is made through Rotaris", was still too wide: a session's own writes and the Git
+ * view's are made through the application and do not reach the board (UIR-502).
  */
-export const SUBSCRIPTION_SENTENCE: readonly Phrase[] = ['The board updates itself when a change is made through Rotaris. A change made outside it shows after ', { whole: 'Re-evaluate' }, ', which is always the way to a current board.'];
+export const SUBSCRIPTION_SENTENCE: readonly Phrase[] = ['The board updates itself for what is done on it and for the runs it starts. Any other change shows after ', { whole: 'Re-evaluate' }, ', which is always the way to a current board.'];
 export const PROJECTION_UNAVAILABLE = 'The board could not be read';
 export const READING_LABEL = 'Reading the board…';
 /** REQ-TRACE-397: a refusal persists and can be acted on — the dismiss control's name. */

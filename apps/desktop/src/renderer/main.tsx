@@ -1684,7 +1684,9 @@ function useMcp(): McpSettingsProps {
 
 function useProviders(): ProvidersCardProps {
   const [rows, setRows] = useState<readonly ProviderRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Reading from the first paint: the read starts on mount, and a list not yet read is not an empty list (REQ-CONFIG-388's
+  // state stood for one frame under "No providers were discovered." before the first answer).
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const read = useCallback(async () => {
     setLoading(true);

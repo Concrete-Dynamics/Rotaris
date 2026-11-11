@@ -60,12 +60,15 @@ export function authenticatePress(row: Pick<ProviderRow, 'method' | 'authenticat
 
 /**
  * REQ-CONFIG-372: the action's TEXT follows stored credentials, its ACCESSIBLE NAME whether the provider is connected
- * now. A row nobody has checked yet (`health` null) is not known to be connected, so it is named "Authenticate":
- * until 2026-11-11 a null health fell to "Re-authenticate", and every row of a fresh list showed one word and was
- * named the other (UIR-405 of that day's second critique).
+ * now. Connected is a health that says so: `healthy`, or `warning` ("Partly usable"). A row nobody has checked
+ * (`health` null), one being checked, one in error and one unavailable are not known to be connected and are named
+ * "Authenticate". Until 2026-11-11 the name was taken from the set REQ-CONFIG-372 gives the dialog's re-authentication
+ * flag (everything outside `unauthenticated` and `unknown`), and a null health fell to "Re-authenticate": every row
+ * of a fresh list showed one word and was named the other (UIR-405 of that day's critiques).
  */
+const CONNECTED_STATES: readonly ProviderStateName[] = ['healthy', 'warning'];
 export function authenticateWords(row: Pick<ProviderRow, 'authenticated' | 'health'>): { readonly text: 'Authenticate' | 'Re-authenticate'; readonly name: 'Authenticate' | 'Re-authenticate' } {
-  const connected = row.health !== null && !['unauthenticated', 'unknown'].includes(row.health.state);
+  const connected = row.health !== null && CONNECTED_STATES.includes(row.health.state);
   return { text: row.authenticated ? 'Re-authenticate' : 'Authenticate', name: connected ? 'Re-authenticate' : 'Authenticate' };
 }
 
@@ -250,7 +253,9 @@ export function ProvidersCard(props: ProvidersCardProps) {
         // A read in flight is not an empty list: it stood under "Reading providers…" with the sentence "No providers
         // were discovered." beneath it. REQ-CONFIG-388's state is drawn once the read has answered, and names the head's
         // control rather than drawing a second "Add endpoint" 60 px under the first (PD-CONFIG-009; REQ-NOTIFY-006).
-        props.loading ? <p className="text-secondary providers-card__reading" role="status" data-providers-reading>{READING_PROVIDERS}</p> : (
+        // A read that failed is stated by the error above and by nothing else: the empty state's sentence is for a
+        // read that answered with no provider.
+        props.loading ? <p className="text-secondary providers-card__reading" role="status" data-providers-reading>{READING_PROVIDERS}</p> : props.error !== null ? null : (
           <EmptyState
             icon="ph-plugs-connected"
             title="No providers yet"

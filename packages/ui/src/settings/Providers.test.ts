@@ -49,6 +49,13 @@ describe('the providers card draws one filled control (PD-CONFIG-009, over REQ-C
     expect(NO_PROVIDERS_HINT).toMatch(/Add endpoint above\.$/);
   });
 
+  it('states a read that failed by its error alone, never as an empty list', () => {
+    const html = card([], { error: 'The provider list could not be read.' });
+    expect(html).toContain('The provider list could not be read.');
+    expect(html).not.toContain('data-providers-empty');
+    expect(html).not.toContain('No providers were discovered');
+  });
+
   it('states a read in flight as a read, never as an empty list', () => {
     const html = card([], { loading: true });
     expect(html).toContain(`data-providers-reading="true">${READING_PROVIDERS}<`);
@@ -98,10 +105,13 @@ describe('the words on Authenticate (REQ-CONFIG-372)', () => {
     expect(card(SIX)).not.toContain('aria-label="Re-authenticate');
   });
 
-  it('names a connected row "Re-authenticate" and an unauthenticated or unknown one "Authenticate"', () => {
+  it('names a connected row "Re-authenticate": healthy, or partly usable', () => {
     expect(authenticateWords({ authenticated: true, health: health('healthy') }).name).toBe('Re-authenticate');
     expect(authenticateWords({ authenticated: true, health: health('warning') }).name).toBe('Re-authenticate');
+  });
+
+  it('names every row not known to be connected "Authenticate": unauthenticated, unknown, being checked, in error, unavailable', () => {
     expect(authenticateWords({ authenticated: true, health: health('unauthenticated') })).toEqual({ text: 'Re-authenticate', name: 'Authenticate' });
-    expect(authenticateWords({ authenticated: false, health: health('unknown') }).name).toBe('Authenticate');
+    for (const state of ['unknown', 'checking', 'error', 'coming_soon'] as const) expect(authenticateWords({ authenticated: true, health: health(state) }).name).toBe('Authenticate');
   });
 });

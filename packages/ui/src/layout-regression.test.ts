@@ -251,7 +251,8 @@ describe('minimum-window layout regressions', () => {
     expect(name).toContain('flex: 0 1 auto');
     expect(name).toContain('min-width: 0');
     expect(name).toContain('text-overflow: ellipsis');
-    expect(rule('.provider-row__status > .settings__origin')).toContain('flex: 0 999 auto');
+    // A ratio, not an order: at 999 the name lost 0.1 px of 180 and drew its ellipsis (UIR-501).
+    expect(rule('.provider-row__status > .settings__origin')).toContain('flex: 0 1000000 auto');
     expect(rule('.provider-row__status > .provider-row__word')).toContain('flex: none');
     expect(rule('.provider-row__status > .provider-row__word')).toContain('padding-left: 0');
   });

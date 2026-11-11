@@ -520,7 +520,12 @@ describe('the empty states\' and the foot\'s sentences (REQ-TRACE-231, REQ-TRACE
     // The falsified sentence, kept out: nothing watches the repository (`apps/desktop/src/main/requirements.ts` broadcasts
     // only from a reply that carries `changed`), so the board does not refresh "as the repository changes".
     expect(foot).not.toMatch(/as the repository changes|refreshes itself/);
-    expect(foot).toMatch(/A change made outside it shows after Re-evaluate, which is always the way to a current board\.$/);
+    // The second falsified sentence, kept out too: a session's writes and the Git view's are made "through Rotaris" and
+    // do not reach the board (`apps/desktop/src/workspace-service/delivery.ts` reads the store again only for the board's
+    // own commands and on a refresh).
+    expect(foot).not.toMatch(/through Rotaris/);
+    expect(foot).toMatch(/^The board updates itself for what is done on it and for the runs it starts\. /);
+    expect(foot).toMatch(/Any other change shows after Re-evaluate, which is always the way to a current board\.$/);
   });
 });
 

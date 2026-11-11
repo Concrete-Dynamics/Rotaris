@@ -1387,7 +1387,10 @@
    it did, and then the name is cut with an ellipsis, its whole text in its tooltip. */
 .providers-card__table td:first-child { width: 100%; max-width: 0; }
 .provider-row__status > .provider-row__name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.provider-row__status > .settings__origin { flex: 0 999 auto; }
+/* The factor is a ratio, not an order: at 999 the name still took its share of every shortfall, 0.1 px of 180, which is
+   enough to draw the ellipsis on "Rotaris Cloud (recommended)" (UIR-501). At a million its share is under the layout's
+   own unit, so the identifier gives all it has before the name gives anything. */
+.provider-row__status > .settings__origin { flex: 0 1000000 auto; }
 /* The word keeps the line's own gap before it and drops the second 8 px its padding added: with one row reading
    "Re-authenticate" the action cell is 17 px wider, and that padding was what cut "Rotaris Cloud (recommended)" at 1000x680. */
 .provider-row__status > .provider-row__word { flex: none; padding-left: 0; }
@@ -1395,7 +1398,8 @@
    (`docs/design/system/components/patterns/TableCard.jsx`), which the product's copy had dropped, so "Add endpoint"
    stood beside the kicker, 740 px short of the card's edge at 1400x900 (UIR-403). */
 .table-card-head > .card-kicker { margin-right: auto; }
-.providers-card__reading { margin: 0; padding: var(--rt-space-3) var(--rt-space-4); }
+/* Centred, as the empty state that may follow it is: a line with no left edge of its own cannot miss the card's keyline. */
+.providers-card__reading { margin: 0; padding: var(--rt-space-6) var(--rt-space-4); text-align: center; }
 /* The expanded per-row settings: a form region, not a nested card. */
 .provider-settings > td { padding-top: 0; }
 .provider-settings__panel { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-3, 12px); margin: var(--rt-space-2, 8px) 0; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); }

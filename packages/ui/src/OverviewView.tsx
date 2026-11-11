@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { PROPOSAL_STATUSES, isBusy, presentationChildState, presentationStatus, STATUS_LABELS, type AgentRecord, type ImprovementArtifactRecord, type ImprovementProposal, type PaneLayout, type ProposalStatus, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
-import { AgentTree } from './AgentTree.js';
+import { AgentActivityCard, DelegationGraphCard, type DelegationProps } from './DelegationCards.js';
 import { categoryLabel, ProposalDecisionDialog, RetrospectiveGesture, statusLabel } from './library/ProposalsTab.js';
 import { Button as DesignButton, Card as DesignCard, EmptyState as DesignEmptyState, KpiCard as DesignKpiCard, layoutContractAttributes, PageHeader as DesignPageHeader, Sparkline as DesignSparkline, Spinner as DesignSpinner, Tag as DesignTag, type UiLayoutContract } from './design-system/index.js';
 
@@ -9,8 +9,10 @@ import { Button as DesignButton, Card as DesignCard, EmptyState as DesignEmptySt
  * resizable columns, the metric grid's reflow, the onboarding empty state), 166 (tokens, the sparkline the RUN
  * sampled, the cost label with its qualifier), 167 (tool calls), 168 (repository), 169 (agents), 170 (the total's
  * fallback), 171/172 (the sessions card as a run switcher, no requirement tag when none exists), 173 (the right
- * column's four tiles in order), 174 (refresh from notifications, nothing while hidden — this component is mounted
+ * column's tiles), 174 (refresh from notifications, nothing while hidden — this component is mounted
  * only while shown) — and REQ-MONITOR-038 (the agent tree is the SAME component the Workspace sidebar uses).
+ * PD-MONITOR-009 makes it the one monitoring view: the delegation graph with Pause and Cancel selection leads the right
+ * column in place of 173's read-only tree card, and the agent activity table stands under the metric cards.
  * Language from docs/design/system: Card, KPI, Tag, Status dot, Empty state; tokens by name. The Overview audit of
  * 2026-11-02 (`docs/design/briefs/overview.md`) is cited by item where its repair of 2026-11-03 stands.
  */
@@ -30,7 +32,7 @@ export const OVERVIEW_NO_SESSION_CAPTION = 'Describes the focused session; none 
 export const OVERVIEW_SESSIONS_FAILED = 'The session list could not be read.';
 /** REQ-SHELL-137: the spinner that stands in for the body while the first read is pending is named for its wait (audit P3). */
 export const OVERVIEW_LOADING_LABEL = 'Reading the session list';
-/** The tree card's keyline (audit item 13): the kicker and the first row's dot share one x, within 1 px. */
+/** The graph card's keyline (audit item 13, kept by PD-MONITOR-009's card): the kicker and the run row's dot share one x, within 1 px. */
 export const OVERVIEW_AGENTS_KICKER_UI: UiLayoutContract = { id: 'overview-agents-kicker', relations: [] };
 export const OVERVIEW_AGENTS_FIRST_DOT_UI: UiLayoutContract = { id: 'overview-agents-first-dot', relations: [{ kind: 'align-x', target: 'overview-agents-kicker', edge: 'left', tolerance: 1 }] };
 /** Card above card takes one gap in both columns, `--rt-space-4` (audit item 16), published for `pnpm ui-audit`. */
@@ -72,7 +74,12 @@ export interface OverviewProps {
   readonly onRefresh: () => void;
   readonly onOpenSession: (sessionId: string) => void;
   readonly onContinueSession: (sessionId: string) => void;
-  readonly onGoTo: (view: 'workspace' | 'mission' | 'library') => void;
+  readonly onGoTo: (view: 'workspace' | 'library') => void;
+  /**
+   * PD-MONITOR-009: the delegation graph with its run controls and the agent activity table, which stood on the Mission view
+   * until PD-SHELL-015. The graph card leads the right column (clause 2) and the table card follows the metric cards (clause 3).
+   */
+  readonly delegation: DelegationProps;
   /**
    * OQ-537: whether the provider rows list an authenticated provider — main's own predicate for REQ-WORKSPACE-152 (3)'s notice
    * (`providers.list().some((row) => row.authenticated)`), so the hint and the notice cannot disagree. `null` until read; the
@@ -233,7 +240,6 @@ export function OverviewView(props: OverviewProps) {
   const counts = useMemo(() => agentCounts(session?.agents ?? []), [session]);
   const total = session ? tokenTotal(session) : 0;
   const samples = useMemo(() => (session?.usageHistory ?? []).map((sample) => sample[1]), [session]);
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [newSessionError, setNewSessionError] = useState<string | null>(null);
   const [proposalDecision, setProposalDecision] = useState<{ artifactId: string; versionsDue: number; proposal: ImprovementProposal; status: ProposalStatus } | null>(null);
   const proposalRows = useMemo(() => props.improvements.flatMap((record) => record.artifact.proposals.map((proposal) => ({ artifactId: record.artifact.artifact_id, versionsDue: record.versions_due, proposal }))), [props.improvements]);
@@ -320,6 +326,8 @@ export function OverviewView(props: OverviewProps) {
                 <div className={`card-meta${session ? ' mono' : ''}`} data-testid="overview-agent-states">{session ? agentStatesLine(counts) : OVERVIEW_NO_SESSION_CAPTION}</div>
               </DesignKpiCard>
             </div>
+            {/* PD-MONITOR-009 clause 3 (REQ-MONITOR-116's place for the agents of the run): the activity table, under the figures it explains. */}
+            <AgentActivityCard session={session} selectedAgentId={props.delegation.selectedAgentId} onSelect={props.delegation.onSelect} nowIso={props.delegation.nowIso} onOpen={props.delegation.onOpen} onPopOut={props.delegation.onPopOut} refresh={props.delegation.refresh} />
             <Card kicker="Sessions" className="ov-card--sessions" actions={<span className="card-meta"><span><span className="mono">{sessions.length}</span> listed</span></span>}>
               {sessionsState === 'loading' && sessions.length === 0 ? <div className="card-body">Loading sessions…</div>
                 : sessionsState === 'error' ? (
@@ -357,15 +365,15 @@ export function OverviewView(props: OverviewProps) {
           <div className="overview__divider" role="separator" aria-orientation="vertical" aria-label="Resize the right column" aria-valuemin={OVERVIEW_RIGHT_MIN} aria-valuemax={OVERVIEW_RIGHT_MAX} aria-valuenow={right} tabIndex={0}
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onKeyDown={onDividerKey} data-testid="overview-divider" />
           <aside className="overview__right" style={{ width: right }} {...layoutContractAttributes(columnUi('overview-right'))}>
+            {/* PD-MONITOR-009 clause 2: the graph card leads the column, above REQ-MONITOR-173's credit tile — it carries the run's Pause and
+                Cancel, which must stand on screen at REQ-SHELL-022's minimum height. */}
+            <DelegationGraphCard {...props.delegation} kickerUi={OVERVIEW_AGENTS_KICKER_UI} runDotUi={OVERVIEW_AGENTS_FIRST_DOT_UI} />
             <Card kicker="Cloud credit" className="ov-card--credit">
               <div className="kpi-row"><span className="kpi-value">—</span><span className="kpi-unit">credit</span></div>
               <div className="card-meta">No hosted account is connected in this build; a balance appears here once one is.</div>
             </Card>
             <Card kicker="Subscription limits">
               <div className="card-body">No usage figures for the signed-in providers yet.</div>
-            </Card>
-            <Card kicker="Agents" className="ov-card--tree" kickerUi={OVERVIEW_AGENTS_KICKER_UI} actions={<DesignButton type="button" className="btn btn-link" onClick={() => props.onGoTo('mission')}>Open Mission</DesignButton>}>
-              <AgentTree agents={session?.agents ?? []} selected={selectedAgent} onSelect={setSelectedAgent} nowIso={nowIso} firstDotUi={OVERVIEW_AGENTS_FIRST_DOT_UI} />
             </Card>
             <Card kicker="Improvement proposals" className="ov-card--proposals" actions={<><DesignTag kind="accent">{pendingProposals} new</DesignTag>
               {/* PD-LIBRARY-002's gesture, on the second of its three surfaces — the same opener the Library tab and the palette raise. */}

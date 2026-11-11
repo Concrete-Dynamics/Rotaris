@@ -51,6 +51,9 @@
  *
  * Evidence under `.proof/mcp-proof/`: one log and PNG per launch, `<name>.steps.json` for each driven launch (every
  * step, when it ran, what it answered), `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): Settings is the sixth view; the driven launches open it by Ctrl+6 (Ctrl+7 until then, bound
+ * to nothing now). PD-CONFIG-008: MCP Servers is still found by its name among `.nav-list__item`.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -259,10 +262,10 @@ async function drivenLaunch(name, extra, { files = {}, boundMs = 150_000 } = {},
   if (stopped.exit.code !== 0) throw new Error(`${name} exited ${stopped.exit.code ?? stopped.exit.signal} on the driver's quit; see ${name}.log`);
   return { log, value, elapsedMs: Date.now() - started, png };
 }
-/** Settings → MCP Servers as a person reaches it: Ctrl+7 (REQ-SHELL-049), then the category by its name. */
+/** Settings → MCP Servers as a person reaches it: Ctrl+6 (REQ-SHELL-049 under PD-SHELL-015; Ctrl+7 until 2026-11-11), then the category by its name. */
 async function openMcpSettings(d, step) {
   await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
-  await step('Ctrl+7', d.chord('Ctrl+7'));
+  await step('Ctrl+6', d.chord('Ctrl+6'));
   await step('the Settings view', d.waitFor('.app-shell[data-view="settings"]'));
   await step('the MCP Servers category', d.click('.nav-list__item', { text: 'MCP Servers' }));
   await step('the configured servers card', d.waitFor('[data-mcp-servers]'));

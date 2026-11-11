@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543, OQ-548; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542, OQ-544 – OQ-547 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
 
 - OQ-523 — Is a `--rt-viz-2` persona label one stop from `--rt-run` a “state colour” under PD-CHAT-005?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-523)
 - OQ-524 — Is Workspace compact mode measured by the view's own width or by the viewport, when REQ-SHELL-059 and REQ-MONITOR-051 name different ones?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-524)
@@ -38,42 +38,17 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 
 **What decides it.** One ruling: the empty form stands (explicit by its name and its shape, and a chart rule needs no contrast floor), or REQ-MONITOR-166's "explicit" is read to need a visible statement — a mark at the 3:1 floor in a token §1.3 already names, or a visible word inside the sparkline's box so the card still does not reflow.
 
-<a id="oq-544"></a>
+- OQ-544 — Does a request to "overhaul the information architecture" with a free hand authorise a change to the structure the specification fixes, or …; ruled 2026-11-11; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-544)
+- OQ-545 — Does the Mission view take a row in `docs/design/README.md` §7, now that it is built from the language alone, so that it can have a brief …; ruled 2026-11-11; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-545)
+- OQ-546 — Does `--rt-label-column` grow to hold the longest label of a Settings form, or does Settings keep a multiple of it?; ruled 2026-11-11; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-546)
+- OQ-547 — Which measure holds prose at the body's size, when the one measure the material names is the caption's 340 px?; ruled 2026-11-11; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-547)
 
-**OQ-544 — Does a request to "overhaul the information architecture" with a free hand authorise a change to the structure the specification fixes, or only what is designed within it?** *(REQ-SHELL-023, REQ-SHELL-027, REQ-SHELL-049, REQ-CONFIG-268, REQ-CONFIG-269, REQ-LIBRARY-103, REQ-TRACE-232, `docs/design/README.md` §2, `docs/product/README.md`. Raised 2026-11-10 while classifying [R-097](../../product/requests.md#r-097); numbered after OQ-543.)*
+<a id="oq-548"></a>
 
-**What is open.** R-097 asks for the information architecture, the UI and the UX to be overhauled "with a free hand". `docs/design/README.md` §2 does not adopt the design material's information architecture and names the requirements that fix this product's: the seven primary views and their order, the rail labels, the shortcuts, the Settings categories, the Library tabs and the board columns. `docs/product/README.md` gives a change to any of them one route, a directive naming the requirement it governs, and R-097's words name none. Read one way, the request is covered: an overhaul of what is designed inside that structure (`docs/research/design/03-information-architecture-within-a-fixed-structure.md`). Read the other way, it asks for the structure itself to move, and each such move is a directive the owner has not yet worded.
+**OQ-548 — Which view does a relaunch show: Overview, as REQ-SHELL-026 states, or the view that was active when the application was quit, as REQ-TRACE-230 says of the requirements board?** *(REQ-SHELL-026, REQ-TRACE-230, REQ-SHELL-025, REQ-SHELL-006, REQ-CONFIG-271, [OQ-506](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-506), [`PD-SHELL-015`](../../product/directives/pd-shell-015.md#pd-shell-015). Raised 2026-11-11 by the critique of the information-architecture map for [R-098](../../product/requests.md#r-098) ([the map](../../design/information-architecture.md), section 7); numbered after OQ-547.)*
 
-**What the build proceeds under.** The first reading. R-097 builds composition, alignment, how a surface gives way and where a state is placed, and changes no view, tab, order, label or required string. A wish that would need more is not built and is listed in the pull request.
+**What is open.** REQ-SHELL-026 reads "The view shown at startup is Overview." REQ-TRACE-230 requires the requirements board to be "restored as the active view after a restart". Both cannot hold for a user who quits on the board. No key in REQ-SHELL-006's preference table records the active view (the Settings category has one, `interface/settingsTab`, REQ-CONFIG-271), and the built application opens on Overview at every launch. The map's first draft proposed a third answer, opening on the Workspace, which its critique refused: OQ-506's ruling rests on the returning operator landing on the Overview's sessions card, and no usage data says whether a launch more often starts new work or resumes parked work.
 
-**What decides it.** One ruling: R-097 is covered as built and closes there, or the owner names the structural changes wanted, each then minted as a `PD-<DOMAIN>-<NNN>` over the requirement it names before anything is drawn.
+**What the build proceeds under.** REQ-SHELL-026 as built: every launch opens on Overview. PD-SHELL-015 clause 5 states that it does not change this.
 
-<a id="oq-545"></a>
-
-**OQ-545 — Does the Mission view take a row in `docs/design/README.md` §7, now that it is built from the language alone, so that it can have a brief and an audit?** *(REQ-MONITOR-274, REQ-MONITOR-275, `docs/design/README.md` §3.2 and §7, `.agents/skills/design-ui/references/design-brief.md` "Which slug". Raised 2026-11-10 by the survey for [R-097](../../product/requests.md#r-097); numbered after OQ-544.)*
-
-**What is open.** §3.2 records that Mission has no design, and §7's table has no row for it; `design-brief.md` therefore gives it no slug and says a surface with no §7 row "is an open question, not a new row". The view is built (`packages/ui/src/MissionView.tsx`), `pnpm ui-audit` captures it as view 3, and two review rounds have repaired it (UIR-010, UIR-024, recorded in `packages/ui/src/shell.css`). So the one primary view with no brief route is one that is drawn, measured and repaired like the other six.
-
-**What the build proceeds under.** No row is added and no brief is written. R-097 makes two bounded repairs to Mission through `debug-ui`'s route, both stated in its register row: the page frame the other titled views share, and the setting captions' column.
-
-**What decides it.** One ruling: §7 gains a "Mission" row naming `MissionView.tsx` and "no mockup section (§3.2)", which gives it the slug `mission`; or Mission stays outside the brief route and is repaired by bounded defect only.
-
-<a id="oq-546"></a>
-
-**OQ-546 — Does `--rt-label-column` grow to hold the longest label of a Settings form, or does Settings keep a multiple of it?** *(`packages/contracts/src/theme/themes.ts` (the `size` group and the comment under it), UIR-010, REQ-CONFIG-268, REQ-CONFIG-320, REQ-CONFIG-323, `docs/design/README.md` §1.5. Raised 2026-11-10 by the Settings brief for [R-097](../../product/requests.md#r-097) ([the brief](../../design/briefs/settings.md)); numbered after OQ-545.)*
-
-**What is open.** The token's own comment says it gives "a settings form ONE axis: a label column wide enough for the longest label in the product's forms", and its value is 120 px. Until R-097 only the Mission view's two settings used it; the thirteen Settings categories drew each row as label, control and caption in one wrapping line, so a control began wherever its label ended. Measured on 2026-11-10 at the labels' own type, the longest Settings labels are 224 px ("Auto-collapse older tool outputs"), 214 px ("Improvement analysis timeout") and 198 px ("Group consecutive tool calls"); 21 of the 37 row labels are wider than 100 px and 11 are wider than the token. The token cannot hold what its comment says it holds.
-
-**What the build proceeds under.** Settings takes `calc(2 * var(--rt-label-column))`, which holds every label on one line; Mission keeps the token as it is. No token is added or changed.
-
-**What decides it.** One ruling: the token stays and the multiple is Settings' own figure; or the token's value moves to the longest label and Mission's card is re-measured against it; or a second token is named for the wide form.
-
-<a id="oq-547"></a>
-
-**OQ-547 — Which measure holds prose at the body's size, when the one measure the material names is the caption's 340 px?** *(`--rt-prose-measure` in `packages/contracts/src/theme/themes.ts`, `docs/design/system/components.css` (`.empty-state-hint`), [OQ-535](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-2.md#oq-535), UIR-011, rubric C7, guide 07 §2. Raised 2026-11-10 by the Settings brief for [R-097](../../product/requests.md#r-097) ([the brief](../../design/briefs/settings.md)), after the independent critique of its built pack; numbered after OQ-546.)*
-
-**What is open.** `--rt-prose-measure` is the adopted sheet's one stated width for a block of secondary text, taken from `.empty-state-hint`, which is set at `--rt-text-xs`; OQ-535 ruled that it stays a length of 340 px and is not restated in characters. A Settings category also carries prose at the body's size: Display's two introductions, Hooks' and Skills' opening paragraphs, the MCP Servers card's statement, Project's statements, About's paragraphs. Unbounded, they ran the pane's width, about 150 characters a line at 1400×900. Held to the token, Project's two statements stood at 35 to 49 characters a line, most lines under the 45 that guide 07 gives as the floor (counted from a drive capture of 2026-11-10). At twice the token Display's introduction measured 665 px and 94 characters, over the same guide's 90. No figure the material names fits body-size prose.
-
-**What the build proceeds under.** A Settings caption and any other text at the caption's size hold the token. Body-size prose in a Settings category is bounded to `calc(2 * var(--rt-prose-measure))`. Nothing outside Settings is changed, and no token is added.
-
-**What decides it.** One ruling: body prose takes the token as it is, short lines included; or a second length is named for it by a §1 amendment (the two measurements bracket it: 340 px gave 35 to 49 characters, 665 px gave 94); or the multiple stands as Settings' own figure.
+**What decides it.** One ruling: REQ-SHELL-026 governs and REQ-TRACE-230's clause is read as met by the rail's ordinary path (it is then narrowed by a directive that says so); or the active view is restored at launch for every view, by a directive that registers its key in REQ-SHELL-006's table, says what a first launch and a stale key show, and re-rules where OQ-506's returning operator reads what waits. Not ruled in this round: the second answer needs a preference key and a first-paint path that were neither built nor measured, and the first would narrow a requirement of the traceability domain on no evidence about how the board is used.

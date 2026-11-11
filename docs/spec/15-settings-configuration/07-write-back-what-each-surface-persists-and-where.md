@@ -48,6 +48,10 @@ Part 7 of 13 of [domain 15](../15-settings-configuration.md), which indexes ever
 
 - **REQ-CONFIG-267** — Settings is a full view inside the application's navigation, not a modal dialog. Leaving it is therefore a navigation event, and the unsaved-changes guard lives in the navigation path rather than in a dialog dismissal.
 - **REQ-CONFIG-268** — The screen presents categories in exactly this order: Models, Personas, Runtime, Interface, Display, Skills, Instructions, Hooks, MCP Servers, Plugins, Tools, Project, About. The first eleven are the configuration categories; Project (initialization) and About (about and legal) complete the bar.
+  > **Extended by [`PD-CONFIG-008`](../../product/directives/pd-config-008.md#pd-config-008), 2026-11-11.** The order
+  > above still governs in full. The directive adds four headings beside it — Agents (Models, Personas, Runtime),
+  > Application (Interface, Display), Extensions (Skills to Tools) and Project and about (Project, About) — which are
+  > text, take no focus and move no category.
 - **REQ-CONFIG-269** — The category identifiers are exactly `models`, `personas`, `runtime`, `interface`, `display`, `skills`, `instructions`, `hooks`, `mcp`, `plugins`, `tools`, `project`, `about`, in the order the categories are presented (REQ-CONFIG-268). The identifier is the value persisted under `interface/settingsTab` (REQ-CONFIG-405). The vocabulary may gain a value, and a value may be retired, but a value that has been used is never reassigned to a different category (REQ-CONFIG-459). An identifier that is not in the list — retired, unknown or absent — selects `models` (REQ-CONFIG-271).
 - **REQ-CONFIG-270** — Save, Discard and the save-status indicator are visible and operable from every category: no category's own content can push them out of view, and each acts on the whole set of pending settings changes rather than on the category currently displayed.
 - **REQ-CONFIG-271** — The selected category persists as a **user-wide** preference (not per workspace). On restart the last valid category is restored; a missing, stale or unknown identifier falls back to **Models**.

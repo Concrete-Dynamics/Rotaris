@@ -2,9 +2,9 @@ import { execFile } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
 import { millis, textOf } from '@rotaris/kernel';
-import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
+import { CHANNEL, CONTRACT_SCHEMA_VERSION, viewPosition, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
 import { inputEvent, submitEvents, textEvents } from './probe.js';
-import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, gripOffset, onStep, parseSelectors, parseSteps, pause, pressCategory, releaseProbe, selectWait, settleAt, settled, stepFailed, targetProbe } from './host.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, captureViewPosition, centre, centreWhen, chordEvent, clickAt, doubleClickAt, gripOffset, onStep, parseSelectors, parseSteps, pause, pressCategory, releaseProbe, selectWait, settleAt, settled, stepFailed, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -23,6 +23,8 @@ import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreW
  * in a window the user had signed into, for anything that could set a variable in the app's environment.
  * The proofs need that surface; the product never did.
  */
+
+export { captureViewPosition };
 
 export interface SeamOptions {
   /** The typed prompt, when there is one — the stop control's seam only means something after a submit. */
@@ -67,15 +69,20 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     }, failed));
   }
 
-  // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, select the category ROTARIS_CAPTURE_SETTINGS names
-  // (Project by default). The first press still lands 200 ms after the chord; it is then verified (`pressCategory`).
-  const view = Number(process.env['ROTARIS_CAPTURE_VIEW'] ?? 0);
-  if (view > 0) {
+  // ROTARIS_CAPTURE_VIEW=<id>|<n>: open that primary view by its Ctrl+<digit> chord and, for Settings, select the category
+  // ROTARIS_CAPTURE_SETTINGS names (Project by default). The value is a view's identifier (`settings`, `overview`, ...) or
+  // its 1-based place in the rail; the identifier is the form to write, since PD-SHELL-015 moved four digits once and a
+  // proof that names the view it means does not move with the rail. An identifier that names no view (a retired one
+  // included) is reported and presses nothing. The first press still lands 200 ms after the chord; it is then verified
+  // (`pressCategory`).
+  const view = captureViewPosition(process.env['ROTARIS_CAPTURE_VIEW']);
+  if (view === null) log(`capture: ROTARIS_CAPTURE_VIEW=${process.env['ROTARIS_CAPTURE_VIEW'] ?? ''} names no primary view`);
+  else if (view > 0) {
     clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_VIEW_MS'] ?? 600)), settled(async () => {
       const wc = win.webContents;
       wc.sendInputEvent({ type: 'keyDown', keyCode: String(view), modifiers: ['control'] });
       wc.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
-      if (view === 7) {
+      if (view === viewPosition('settings')) {
         await pause(host, 200);
         await pressCategory(host, process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project', 5_000);
       }
@@ -448,11 +455,14 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // the steer card's text set and "Send steer" clicked inside it (REQ-MONITOR-070). ROTARIS_CAPTURE_PERSONA_CLICKS="selector@ms;;…":
   // the first element matching the selector clicked inside that window (its `click()`, so the handler has run when the
   // line is logged) — a tab, the run instance's Cancel and its confirmation (acceptance A35, REQ-MONITOR-127/130).
-  // ROTARIS_CAPTURE_VIEWS="n@ms;;n@ms": Ctrl+n at each time — a sequence of views in one launch (the parity probes of REQ-MONITOR-038).
+  // ROTARIS_CAPTURE_VIEWS="view@ms;;view@ms": that view's Ctrl+<digit> at each time — a sequence of views in one launch (the
+  // parity probes of REQ-MONITOR-038). A view is written as `ROTARIS_CAPTURE_VIEW` writes it: its identifier, or its place.
   for (const step of steps(process.env['ROTARIS_CAPTURE_VIEWS'])) {
+    const place = captureViewPosition(step.selector);
+    if (place === null || place === 0) { log(`capture: ROTARIS_CAPTURE_VIEWS names no primary view: ${step.selector}`); continue; }
     clocks.timers.after(millis(step.at), () => {
-      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: step.selector, modifiers: ['control'] });
-      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: step.selector, modifiers: ['control'] });
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: String(place), modifiers: ['control'] });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: String(place), modifiers: ['control'] });
       log(`capture: view ${step.selector} at ${step.at}`);
     });
   }

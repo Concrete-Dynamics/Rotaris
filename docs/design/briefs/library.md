@@ -37,7 +37,7 @@ None.
 
 ## 11. Evidence plan
 
-Capture: `pnpm ui-audit --views=6`; drive: `click ".nav-item" --text=Library`, `waitFor "[data-testid=prompts-tab]"`. Rubric rows: F2, C3.
+Capture: `pnpm ui-audit --views=library` (`--views=6` when this was written; `5` since PD-SHELL-015 of 2026-11-11); drive: `click ".nav-item" --text=Library`, `waitFor "[data-testid=prompts-tab]"`. Rubric rows: F2, C3.
 
 **Must move:** the gap between a prompt card's actions and the card's foot when the list is empty, 406 px at 1440×900 → the card's own padding.
 **Must hold:** `ui-audit` view 6 at both sizes: 0 findings; `packages/ui/src/library/library.test.ts`.

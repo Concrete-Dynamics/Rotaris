@@ -16,8 +16,8 @@ import { PANE_LAYOUT_PANES, PANE_LAYOUT_VIEWS, PREFERENCE_KEYS, PreferenceStore,
 const SPEC = resolve(dirname(fileURLToPath(import.meta.url)), '../../../docs/spec/12-desktop-shell-windows.md');
 /** The domain's parts, in order: since 2026-10-26 its file is an index (docs/README.md, "The document budget"). */
 const SPEC_PARTS = SPEC.replace(/\.md$/, '');
-/** REQ-SHELL-069's per-view key strings, the values `{view-key}` takes. */
-const VIEW_KEYS = ['overview', 'workspace', 'mission', 'requirements', 'git', 'library', 'settings'];
+/** REQ-SHELL-069's per-view key strings as PD-SHELL-015 narrows them (no `mission` key), the values `{view-key}` takes. */
+const VIEW_KEYS = ['overview', 'workspace', 'requirements', 'git', 'library', 'settings'];
 
 /** Every literal key the table's rows name, braces expanded and `{view-key}` taken over REQ-SHELL-069's views. */
 function registeredKeys(): Set<string> {

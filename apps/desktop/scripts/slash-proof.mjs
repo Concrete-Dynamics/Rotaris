@@ -48,6 +48,10 @@
  *
  * Evidence under `.proof/slash-proof/`: `catalogue.png` (the end), `popup.png` (the popup open), `catalogue.log`,
  * one log and PNG per later launch, `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`workspace`), not by its digit, the
+ * form that does not move when the rail does (Mission is no view; Settings is the sixth). No chord this script
+ * presses moved.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
@@ -82,7 +86,7 @@ async function launch(name, workspace, local, preferences, extra, timeoutMs = 15
     cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
-      ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_VIEW: 'workspace', ROTARIS_CAPTURE_VIEW_MS: '1000', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...extra,
     },
   });

@@ -75,7 +75,11 @@ Part 15 of 16 of [the runtime view](../03-runtime-view.md), which indexes every 
   announcements landing in one tick chain (since 2026-10-03, fin13: before, the previous saved values came from a ref an
   effect refreshed after render, and the second was rebased against the values from before the first). The permission
   mode is the one exception (REQ-CONFIG-423): a snapshot whose mode differs from the last saved one displaces an unsaved
-  selection; one whose mode is unchanged keeps it (the reading OQ-197 raises).
+  selection; one whose mode is unchanged keeps it (the reading OQ-197 raises). The delegation strategy and the depth
+  cap have one editor, Settings › Runtime, committed by Save: the Overview's delegation graph card shows the strategy
+  off the configuration snapshot and writes nothing, its one control opening that category
+  ([`PD-MONITOR-009`](../../../product/directives/pd-monitor-009.md#pd-monitor-009) clause 6; until 2026-11-11 the
+  Mission view wrote both at once through `config.setField`).
 - **Tier B** — at every run start the run host loads the files — layer 3, the discovery snapshot, folded first
   (REQ-CONFIG-034: an authenticated provider's models as entries keyed by qualified id with `auth_provider`, and its
   slot picks) — and overlays the screen's live state (`config.liveState`, handed over on every pending change), then
@@ -120,7 +124,8 @@ Part 15 of 16 of [the runtime view](../03-runtime-view.md), which indexes every 
   `tool_input_max_lines`, unlimited written as `0`) and read back into the same view field names. They are **not** in
   Tier B's live state — they change what is drawn, never what a run does — and the renderer publishes its pending
   values to the transcript so what is drawn follows the screen rather than the file. What that last clause can be
-  observed to do is narrowed by the shell itself: Settings replaces the Workspace among REQ-SHELL-023's seven views,
+  observed to do is narrowed by the shell itself: Settings replaces the Workspace among the six primary views
+  (REQ-SHELL-023 as [`PD-SHELL-015`](../../../product/directives/pd-shell-015.md#pd-shell-015) narrows it),
   and REQ-CONFIG-286's guard will not let a dirty form be left, so pending and file cannot be seen to disagree over a
   visible transcript in the main window.
 - **The Instructions inventory rides the same snapshot** (REQ-CONFIG-277, Part AG; narrowed by `PD-WORKSPACE-002`):

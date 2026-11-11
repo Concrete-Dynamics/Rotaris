@@ -258,7 +258,8 @@ describe('minimum-window layout regressions', () => {
     // docs/design/briefs/overview/04-audit-2026-11-10.md, item 1: the page title moved by up to 4 px sideways and 16 px
     // vertically between views. One block inset, one inline inset; the Requirements board carries the inline one per band.
     const inset = 'padding: var(--rt-space-4) var(--rt-space-5)';
-    expect(rule('.mission')).toContain(inset);
+    // PD-SHELL-015: Mission is not a view, so it has no page frame; its two cards are the Overview's (PD-MONITOR-009).
+    expect(rule('.mission')).toBe('');
     expect(rule('.library')).toContain(inset);
     expect(rule('.overview')).toMatch(/padding: var\(--rt-space-4(, 16px)?\) var\(--rt-space-5(, 20px)?\)/u);
     expect(rule('.git')).toMatch(/padding: var\(--rt-space-4(, 16px)?\) var\(--rt-space-5(, 20px)?\)/u);

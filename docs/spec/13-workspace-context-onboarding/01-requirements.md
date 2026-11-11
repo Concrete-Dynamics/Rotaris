@@ -52,6 +52,8 @@ Part 1 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
 - **REQ-WORKSPACE-014** — Post-show activation order SHALL be: window shown → git refresh starts (skipped until machine setup completes on a bundled first run) → workspace-storage determination starts (REQ-STARTUP-043, REQ-STARTUP-166; skipped entirely in a demo window) → update check starts → cloud-credit polling starts (skipped entirely in a demo window, REQ-SHELL-162). The enumeration here is this domain's view of the same activation REQ-STARTUP-043 fixes; where the two differ, REQ-STARTUP-043 governs and this line is the defect.
 
 - **REQ-WORKSPACE-015** — The main window SHALL be titled "Rotaris" and SHALL host exactly the seven primary views of REQ-SHELL-023, in the fixed order that requirement states; this domain SHALL NOT name a parallel view vocabulary of its own. Its opening geometry and its minimum size are those of the desktop shell specification (REQ-SHELL-022), and every control this domain adds SHALL be reachable and fully labelled at that minimum size.
+  > **Narrowed by [`PD-SHELL-015`](../../product/directives/pd-shell-015.md#pd-shell-015), 2026-11-11.** The window
+  > hosts exactly that directive's six primary views, in its order. Every other sentence above still governs.
 
 ### Desktop Workspace and Branch Display
 

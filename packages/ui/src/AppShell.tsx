@@ -28,7 +28,7 @@ const SHELL_LAYOUT = {
  * REQ-SHELL-024 — vertical layout, top to bottom: title bar; a
  * persistent-notice banner slot; the navigation rail beside the active view;
  * status strip. REQ-SHELL-048/049 (Part W): the ONE shortcut handler is
- * `useCommandShortcuts` over the command registry — Ctrl+1..7, Ctrl+K, Ctrl+,,
+ * `useCommandShortcuts` over the command registry — Ctrl+1..6 (PD-SHELL-015), Ctrl+K, Ctrl+,,
  * Ctrl+L, Ctrl+Return, F1 — and the two application-modal dialogs (the
  * palette, the keyboard help) are mounted here, once per main window.
  *

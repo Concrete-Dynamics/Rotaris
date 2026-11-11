@@ -678,6 +678,15 @@
 .nav-list__item:hover { background: var(--rt-hover); color: var(--rt-text); }
 .nav-list__item.is-selected { border-left-color: var(--rt-accent-300); color: var(--rt-text); background: var(--rt-accent-tint-10); }
 .nav-list__item:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+/* PD-CONFIG-008: the categories stand in four headed groups. A group is set off from the one above by `--rt-space-4`, wider
+   than the list's own rhythm, and its heading is the adopted kicker on the items' text axis (the item's rule plus its inset). */
+/* The list is taller by its four headings: where the window is at its minimum height and a notice stands above the view, it
+   scrolls on its own axis and the category body keeps its place. */
+.settings__categories { min-height: 0; overflow-y: auto; }
+.nav-list--grouped { gap: var(--rt-space-4); }
+.nav-list__group { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.nav-list--grouped { --nav-list-rule: 3px; }
+.nav-list__heading { padding-inline-start: calc(var(--nav-list-rule) + var(--rt-space-3)); }
 .settings__body { min-width: 0; overflow: auto; }
 .settings__section h1 { margin: 0 0 var(--rt-space-3, 12px); }
 .settings__heading { margin: var(--rt-space-6) 0 var(--rt-space-2); font-size: var(--rt-text-sm, 13px); font-weight: var(--rt-weight-medium, 500); color: var(--rt-text); }
@@ -944,7 +953,7 @@
 .btn-secondary, .input, .select, .seg { border-color: var(--rt-boundary-strong); }
 .input:hover { border-color: var(--rt-boundary-strong); }
 .agent-tree--empty { font-size: var(--rt-text-xs, 12px); }
-/* The row's rule and its inset are named once, so the Overview's tree card can pull them out (`.ov-card--tree .agent-row`, below). */
+/* The row's rule and its inset are named once, so the Overview's graph card can pull them out (`.mission__graph .agent-row`, below). */
 .agent-row { --agent-row-rule: 3px; --agent-row-pad: 6px; display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: var(--agent-row-pad); padding: 4px var(--agent-row-pad); border-left: var(--agent-row-rule) solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .agent-row:hover { background: var(--rt-hover); }
 .agent-row.is-selected { border-left-color: var(--rt-accent-300); background: var(--rt-accent-tint-10); }
@@ -1460,13 +1469,14 @@
 .ov-dot--info { background: var(--rt-info-300); }
 .ov-dot--fail { background: var(--rt-danger-300); }
 .ov-dot--idle { background: var(--rt-text-tertiary); }
-.ov-card--tree .agent-tree--empty { color: var(--rt-text-tertiary); font-size: var(--rt-text-xs, 12px); }
-/* Audit item 13: inside the tree card the row's rule and padding are pulled out past the card's content edge, and the gap after a
-   depth-0 row's empty prefix track is dropped, so the first dot shares the kicker's x (`align-x`, `overview-agents-first-dot` on
-   `overview-agents-kicker`); the selection tint keeps its room in the card's padding. The tree in Workspace and Mission is unchanged. */
-.ov-card--tree .agent-row { margin-inline-start: calc(-1 * (var(--agent-row-rule) + var(--agent-row-pad))); column-gap: 0; }
-.ov-card--tree .agent-row > * + * { margin-inline-start: var(--agent-row-pad); }
-.ov-card--tree .agent-row__prefix:empty + .status-dot { margin-inline-start: 0; }
+.mission__graph .agent-tree--empty { color: var(--rt-text-tertiary); font-size: var(--rt-text-xs, 12px); }
+/* Audit item 13, kept by PD-MONITOR-009's graph card: the card's first dot shares the kicker's x (`align-x`, `overview-agents-first-dot`
+   on `overview-agents-kicker`). The first dot is the run row's now (`.mission__run-row`, which pulls its own rule and inset out);
+   the tree's rows pull theirs out the same way and then stand one step in under the run, the selection tint keeping its room. */
+.mission__graph .agent-tree { padding-inline-start: var(--rt-space-3); }
+.mission__graph .agent-row { margin-inline-start: calc(-1 * (var(--agent-row-rule) + var(--agent-row-pad))); column-gap: 0; }
+.mission__graph .agent-row > * + * { margin-inline-start: var(--agent-row-pad); }
+.mission__graph .agent-row__prefix:empty + .status-dot { margin-inline-start: 0; }
 /* Audit item 10: a card's own empty case — the title in the empty-state tier over the hint as card body, within the prose measure. */
 .ov-card__empty { display: flex; flex-direction: column; gap: var(--rt-space-1); }
 .ov-card__empty-hint { max-width: var(--rt-prose-measure); }
@@ -1865,37 +1875,26 @@
 .workspace__drawer-bar .is-active { color: var(--rt-accent-200); }
 /* R-097, the page frame (docs/design/briefs/overview/04-audit-2026-11-10.md, item 1): every titled primary view's root takes
    ONE inset — `--rt-space-4` on the block axis, `--rt-space-5` on the inline — and its page header the control height, as
-   the Overview and Git already did. Mission set no inset of its own (its header and its body each carried the inline one,
-   its title stood 16 px higher than Git's), and Library and Requirements set `--rt-space-4` on the inline axis, 4 px left
-   of the others: changing view moved the page title by up to 4 px sideways and 16 px vertically. */
-.mission { display: flex; flex-direction: column; gap: var(--rt-space-4); height: 100%; min-height: 0; padding: var(--rt-space-4) var(--rt-space-5); overflow: auto; }
-.mission__subtitle { color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 12px); }
-.mission__body { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); grid-template-areas: 'graph table' 'settings table'; gap: var(--rt-space-4, 16px); align-content: start; }
-.mission__graph { grid-area: graph; }
-.mission__settings { grid-area: settings; }
-.mission__table { grid-area: table; min-width: 0; overflow: auto; }
-.mission .card, .persona-window .card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
-.mission__run-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--rt-space-2, 8px); padding: 6px 8px; border-left: 3px solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text); }
+   the Overview and Git already did (`.overview`, above, is the rule the others cite). The Mission view, which set no inset
+   of its own until that repair, is not a view since PD-SHELL-015. */
+/* PD-MONITOR-009: the Overview's two delegation cards. They were the Mission view's until PD-SHELL-015; `mission` stays their
+   prefix (REQ-MONITOR-213's "mission graph"). Both are `.ov-card`s, which gives them the Overview's card rhythm.
+   The run row carries the tree's selection rule and inset, and is pulled out by exactly those, so its dot stands on the
+   card's keyline under the kicker (the Overview audit of 2026-11-02, item 13, as the tree card's first row did); the agents
+   under it stand one step in, which is the hierarchy: the run, then what it delegated. */
+.persona-window .card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+.mission__run-row { --run-row-rule: 3px; --run-row-pad: var(--rt-space-2); display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--rt-space-2, 8px); padding: 6px var(--run-row-pad); margin-inline-start: calc(-1 * (var(--run-row-rule) + var(--run-row-pad))); border-left: var(--run-row-rule) solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text); }
 .mission__run-row:hover { background: var(--rt-hover); }
 .mission__run-row.is-selected { border-left-color: var(--rt-accent-300); background: var(--rt-accent-tint-10); }
-.mission__run-row + .agent-tree { padding-left: var(--rt-space-3, 12px); }
+.mission__run-row:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .mission__actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; padding-top: var(--rt-space-2, 8px); border-top: 1px solid var(--rt-divider); }
 .mission__actions .btn[aria-disabled='true'] { color: var(--rt-text-disabled); border-color: var(--rt-border); cursor: not-allowed; }
 .mission__reason { font-size: var(--rt-text-2xs, 10px); flex-basis: 100%; }
-/* UIR-010: a fixed label column, and a field bounded to its own content.
-   `auto 1fr` placed each field by the length of ITS label, so the two selects' left edges differed by
-   51.04 px — exactly the difference between "Strategy" and "Maximum depth" — and the card carried two
-   competing vertical axes with only its right edge holding them together. The field also stretched to
-   729.2 px at the minimum width to hold the word "single", against the rule that a dropdown sizes
-   itself to its selected entry. */
-.mission__setting { display: grid; grid-template-columns: var(--rt-label-column) minmax(0, max-content); align-items: center; gap: var(--rt-space-2, 8px); }
-.mission__setting > label { min-width: 0; }
-.mission__setting .select, .mission__setting .input { width: max-content; max-width: 100%; min-width: var(--rt-field-min); }
-/* UIR-024 — the caption hangs under the control it describes, not under the label of it.
-   Spanning both columns gave the form THREE left edges where the label column was introduced to give
-   it two: label ink at x 145, field at x 272.98, and a caption starting at 145 that belongs to the
-   field — so "Stored as rotaris.delegation_strategy." read as a property of the label above it. */
-.mission__setting .settings__hint { grid-column: 2; font-size: var(--rt-text-2xs, 10px); }
+/* Clause 6: the strategy the next run takes, read here; its editor is one press away and is not this card. */
+.mission__next-run { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2); flex-wrap: wrap; }
+/* Clause 3: the table card is its table's query container, so a row gives way by the width the CARD has — the window's
+   width says nothing about it once the column divider has been moved. */
+.mission__table { container-type: inline-size; }
 .agent-table { font-size: var(--rt-text-xs, 12px); }
 .agent-table__row { cursor: pointer; }
 .agent-table__row:hover { background: var(--rt-hover); }
@@ -1913,7 +1912,36 @@
 .agent-table__context { white-space: nowrap; }
 .agent-table__actions { white-space: nowrap; }
 .agent-table__empty { padding: var(--rt-space-4, 16px); }
-@media (max-width: 1179px) { .mission__body { grid-template-columns: 1fr; grid-template-areas: 'graph' 'settings' 'table'; } }
+/* PD-MONITOR-009 clause 3 — the table in a card too narrow for one line a row. On the Mission view the window gave the table
+   its whole width below 1180 px; the Overview keeps its two columns there (REQ-MONITOR-165), which leaves the card about
+   470 px at REQ-SHELL-022's minimum, where nine columns cannot stand and the two controls of a row would be reached only by
+   scrolling sideways. So below 40rem of card a row takes three lines and keeps every value: state, agent, elapsed and the
+   two controls; persona and activity; the three figures, each named by its column's words (`data-label`, since the header
+   row is out of sight — it keeps its place in the accessibility tree, the roles being written in the markup). The
+   threshold is in rem, not px, because what it measures is nine columns of text. */
+@container (max-width: 40rem) {
+  .mission__table .agent-table, .mission__table .agent-table tbody { display: block; }
+  .mission__table .agent-table thead { display: block; height: 0; overflow: hidden; }
+  /* The row keeps the inline inset the one-line form's cells gave it, so its text clears the selection rule down its left edge. */
+  .mission__table .agent-table__row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: 'state name elapsed actions' 'persona activity activity activity' 'calls context context compressions'; align-items: baseline; row-gap: var(--rt-space-1); padding-inline: var(--rt-space-2); }
+  /* A cell is a box of the row's grid: its own inset goes, the step to the next cell on its line stays, and the adopted
+     table's rule under a row is kept by the cells of the row's last line alone, which stand edge to edge to draw it whole. */
+  .mission__table .agent-table__row > td { display: block; min-width: 0; padding: 0 var(--rt-space-3) 0 0; }
+  .mission__table .agent-table__row > td:not([data-label]) { border-bottom: 0; }
+  .mission__table .agent-table__row > .agent-table__state, .mission__table .agent-table__row > .agent-table__name, .mission__table .agent-table__row > .agent-table__elapsed, .mission__table .agent-table__row > .agent-table__actions { padding-top: var(--rt-space-2); }
+  .mission__table .agent-table__row > td[data-label] { padding-bottom: var(--rt-space-2); }
+  .mission__table .agent-table__row > .agent-table__actions, .mission__table .agent-table__row > .agent-table__activity, .mission__table .agent-table__row > .agent-table__compressions { padding-inline-end: 0; }
+  .mission__table .agent-table__state { grid-area: state; }
+  .mission__table .agent-table__row > .agent-table__name { grid-area: name; display: flex; flex-direction: row; align-items: baseline; gap: var(--rt-space-2); }
+  .mission__table .agent-table__elapsed { grid-area: elapsed; }
+  .mission__table .agent-table__actions { grid-area: actions; }
+  .mission__table .agent-table__persona { grid-area: persona; max-width: none; color: var(--rt-text-secondary); }
+  .mission__table .agent-table__activity { grid-area: activity; max-width: none; }
+  .mission__table .agent-table__calls { grid-area: calls; }
+  .mission__table .agent-table__context { grid-area: context; }
+  .mission__table .agent-table__compressions { grid-area: compressions; text-align: end; }
+  .mission__table .agent-table__row > td[data-label]::before { content: attr(data-label) ' '; font-family: var(--rt-font-body); color: var(--rt-text-tertiary); }
+}
 .persona-window { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4, 16px); height: 100vh; overflow: auto; box-sizing: border-box; }
 .persona-window__header { align-items: baseline; gap: var(--rt-space-3, 12px); }
 .persona-window__title { margin: 0; font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-size: var(--rt-text-xl, 20px); }
@@ -1934,7 +1962,7 @@
 /* ── The Library view (Part X; REQ-LIBRARY-102..107, REQ-LIBRARY-141) ──────────────────────────────
    Structure from docs/spec, craft from docs/design/system: page header, Tabs, Card (accented for the
    stash), Empty state. Every value a token; nothing here names a colour or a size the design does not. */
-/* R-097, the page frame: the inline inset is `--rt-space-5`, the titled views' one (see `.mission`). */
+/* R-097, the page frame: the inline inset is `--rt-space-5`, the titled views' one (see `.overview`). */
 .library { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4) var(--rt-space-5); height: 100%; overflow: hidden; box-sizing: border-box; }
 
 .library__spacer { flex: 1; }
@@ -2516,7 +2544,7 @@ strong { font-weight: var(--rt-weight-medium); }
  * primary control 32 high, every other 24), REQ-TRACE-490 (the drop-down bounds are set by the view, 240 / 150).
  * Colour never carries a fact alone: every state that paints also prints a word or a glyph (REQ-TRACE-241/247/398).
  */
-/* R-097, the page frame (see `.mission`): the board's rules run edge to edge, so the inset is carried by each band — the
+/* R-097, the page frame (see `.overview`): the board's rules run edge to edge, so the inset is carried by each band — the
    block one by the root, the inline one (`--rt-space-5`) by the header, the two strips, the columns and the foot. The
    title row is the control height; with the root's inset above it the band is the mockup's 48 px, as it was. */
 .req { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; padding-top: var(--rt-space-4); }

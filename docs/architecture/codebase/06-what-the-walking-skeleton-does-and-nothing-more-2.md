@@ -229,7 +229,7 @@ The theme write is synchronous and flushed. `ROTARIS_CAPTURE_THEME`, `ROTARIS_CA
 `ROTARIS_THEME_PROOF_DIR` are verification seams.
 
 **What `pnpm theme-proof` does.** It builds Electron and launches one isolated process for each of three themes
-at scale factors 1, 1.25, 1.5, 1.75 and 2. Each process captures all seven views, all thirteen Settings
+at scale factors 1, 1.25, 1.5, 1.75 and 2. Each process captures every primary view (seven when this was written, six since PD-SHELL-015 of 2026-11-11), all thirteen Settings
 categories, keyboard focus positions and a live theme switch. The script samples painted PNG pixels, checks
 focus bands, rail-label fit, vector-icon scale, complete recolouring, preserved composer/view state and
 renderer errors, then writes its result table under `.proof/theme-proof/`. Since 2026-09-30 a text's contrast is read

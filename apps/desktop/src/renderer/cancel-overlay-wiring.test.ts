@@ -18,9 +18,9 @@ describe('REQ-MONITOR-128: every agent surface of a window reads the session und
     expect(source('shell.ts')).toContain('replica.subscribe((s) => { cancelOverlays.getState().witness(s.session); });');
     expect(source('session-view.ts')).toContain('shownSession(session, { overlays, orderOf })');
   });
-  it('main.tsx: the Workspace, Mission and Overview roots read the shown session, never the replica\'s record directly', () => {
+  it('main.tsx: the Workspace and Overview roots read the shown session, never the replica\'s record directly (the Overview draws the delegation cards since PD-MONITOR-009)', () => {
     const text = source('main.tsx');
-    for (const root of ['Workspace', 'Mission', 'Overview']) {
+    for (const root of ['Workspace', 'Overview']) {
       const body = text.slice(text.indexOf(`function ${root}(`));
       expect(body.slice(0, body.indexOf('\n}\n')), root).toContain('const session = useShownSession();');
     }

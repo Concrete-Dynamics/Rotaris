@@ -54,9 +54,9 @@ export interface OmittedCommand {
 }
 
 const VIEW_KEYWORDS: Record<ViewId, readonly string[]> = {
-  overview: ['dashboard', 'home', 'summary', 'start'],
+  // PD-MONITOR-009: the delegation graph and the agent table stand on the Overview, so the words that found Mission find it.
+  overview: ['dashboard', 'home', 'summary', 'start', 'agents', 'delegation', 'tree', 'team', 'mission'],
   workspace: ['chat', 'composer', 'transcript', 'run', 'conversation'],
-  mission: ['agents', 'delegation', 'tree', 'team'],
   requirements: ['board', 'reqs', 'backlog', 'stories'],
   git: ['branch', 'worktree', 'checkpoints', 'repository', 'commits', 'source'],
   library: ['artifacts', 'proposals', 'skills', 'documents'],
@@ -66,7 +66,7 @@ const VIEW_KEYWORDS: Record<ViewId, readonly string[]> = {
 const always = (): boolean => true;
 
 export const COMMANDS: readonly Command[] = [
-  // REQ-SHELL-049: Ctrl+1 … Ctrl+7 open the seven views in view order, labelled "Open {Label}".
+  // REQ-SHELL-049 as PD-SHELL-015 narrows it: Ctrl+1 … Ctrl+6 open the six views in view order, labelled "Open {Label}"; Ctrl+7 is bound to nothing.
   ...PRIMARY_VIEWS.map((view, index): Command => ({
     id: `view.${view.id}`,
     label: `Open ${view.label}`,
@@ -77,7 +77,7 @@ export const COMMANDS: readonly Command[] = [
   })),
   // REQ-SHELL-049 names no label for Ctrl+K ("opens the command palette"); "Open command palette" is the reading taken.
   { id: 'palette.open', label: 'Open command palette', shortcut: 'Ctrl+K', keywords: ['commands', 'actions', 'search', 'find'], available: always, run: (ctx) => ctx.openPalette() },
-  // REQ-SHELL-049: Ctrl+, "Open Settings" — the same label as Ctrl+7's entry and a second row; both are the spec's.
+  // REQ-SHELL-049: Ctrl+, "Open Settings" — the same label as Ctrl+6's entry (PD-SHELL-015) and a second row; both are the record's.
   { id: 'settings.open', label: 'Open Settings', shortcut: 'Ctrl+,', keywords: VIEW_KEYWORDS.settings, available: always, run: (ctx) => ctx.switchView('settings') },
   // REQ-SHELL-049 / REQ-CHAT-074: Ctrl+F "Search transcript" — switches to Workspace, then opens the pane's search panel.
   // This entry is the ONE binding of Ctrl+F: the pane's own window listener is gone and `/search` runs this command, so

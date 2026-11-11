@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and twenty-three.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and twenty-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -59,6 +59,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CONFIG-005](directives/pd-config-005.md) | the Models category also holds the dictation model |
 | [PD-CONFIG-006](directives/pd-config-006.md) | the MCP Servers row's ON press writes `enabled` for a configured-off server |
 | [PD-CONFIG-007](directives/pd-config-007.md) | the reasoning vocabulary is what the models bring, and `off` and `xhigh` are levels |
+| [PD-CONFIG-008](directives/pd-config-008.md) | the Settings category list stands under four headings |
 
 ### EVENTS
 
@@ -71,6 +72,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | Directive | What it decides |
 |---|---|
 | [PD-GIT-001](directives/pd-git-001.md) | isolation counts the runs that could share the launch's working tree |
+| [PD-GIT-002](directives/pd-git-002.md) | the Git view is titled "Git" |
 
 ### HOOKS
 
@@ -110,6 +112,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-MONITOR-006](directives/pd-monitor-006.md) | a switch of the entry model or reasoning level from the run header holds for its own run |
 | [PD-MONITOR-007](directives/pd-monitor-007.md) | helper model calls follow the session's override and stay off a model held out of quota |
 | [PD-MONITOR-008](directives/pd-monitor-008.md) | Workspace compact mode's 1180 px is the view's own width, not the viewport's |
+| [PD-MONITOR-009](directives/pd-monitor-009.md) | the Overview is the one monitoring view: it holds the delegation graph, its run controls and the agent activity table, and the two delegation settings leave monitoring |
 
 ### NOTIFY
 
@@ -173,6 +176,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-SHELL-012](directives/pd-shell-012.md) | the terminal window speaks the shown terminal's output politely, only while active, at most 20 lines per update |
 | [PD-SHELL-013](directives/pd-shell-013.md) | the main window opens clamped to its display's work area, each dimension on its own, and never below its minimum |
 | [PD-SHELL-014](directives/pd-shell-014.md) | a persona window and the terminal window have a floor, and what each shows there |
+| [PD-SHELL-015](directives/pd-shell-015.md) | six primary views: Mission is not one |
 
 ### STARTUP
 

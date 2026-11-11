@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { CaptureHost } from './host.js';
 import { submitEvents, textEvents } from './probe.js';
-import { installSeams } from './seams.js';
+import { captureViewPosition, installSeams } from './seams.js';
 
 /**
  * The scriptable seams, driven against a window stand-in whose document is a small model: the few facts a seam reads
@@ -16,13 +16,13 @@ afterEach(() => {
   for (const v of VARIABLES) { if (saved[v] === undefined) delete process.env[v]; else process.env[v] = saved[v]; }
 });
 
-/** Settings' categories in their drawn order (`SETTINGS_CATEGORIES`), one 40 px row each. */
+/** Settings' categories in their drawn order (`SETTINGS_CATEGORIES`), one 40 px row each; the model draws no group heading, which the seam never reads. */
 const CATEGORIES = ['Models', 'Personas', 'Runtime', 'Interface', 'Display', 'Skills', 'Instructions', 'Hooks', 'MCP Servers', 'Plugins', 'Tools', 'Project', 'About'];
 const ROW = 40;
 const TOP = 100;
 
 /**
- * Settings as the seam meets it: Ctrl+7 opens it on Models, a press selects the category under the pointer, and a
+ * Settings as the seam meets it: Ctrl+6 opens it on Models (PD-SHELL-015 clause 3), a press selects the category under the pointer, and a
  * notice banner drawn above the view moves the whole list down by `shiftBy` — in the SAME instant as the seam's
  * first read, which is what `code-intel-proof`'s `setup-again` met on 2026-09-29.
  */
@@ -37,7 +37,7 @@ function settings(options: { shiftOnFirstRead: number; deflectEveryRead?: boolea
   const rowAt = (y: number) => { const i = Math.floor((y - TOP - shift) / ROW); return i >= 0 && i < CATEGORIES.length ? CATEGORIES[i]! : null; };
   const webContents = {
     sendInputEvent: (event: { type: string; keyCode?: string; modifiers?: string[]; x?: number; y?: number }) => {
-      if (event.type === 'keyDown' && event.keyCode === '7' && event.modifiers?.includes('control')) open = true;
+      if (event.type === 'keyDown' && event.keyCode === '6' && event.modifiers?.includes('control')) open = true;
       if (event.type === 'mouseUp' && event.y !== undefined) {
         const landed = rowAt(event.y);
         presses.push({ x: event.x ?? 0, y: event.y, landed });
@@ -67,9 +67,9 @@ async function run(clock: FakeClock, ms: number): Promise<void> {
   }
 }
 
-describe('ROTARIS_CAPTURE_VIEW=7 selects the Settings category it names, and says so (seams.ts)', () => {
+describe('ROTARIS_CAPTURE_VIEW=settings selects the Settings category it names, and says so (seams.ts)', () => {
   it('presses again when a notice drawn in the same instant deflects the first press onto the category above', async () => {
-    process.env['ROTARIS_CAPTURE_VIEW'] = '7';
+    process.env['ROTARIS_CAPTURE_VIEW'] = 'settings';
     process.env['ROTARIS_CAPTURE_SETTINGS'] = 'MCP Servers';
     delete process.env['ROTARIS_CAPTURE_VIEW_MS'];
     const s = settings({ shiftOnFirstRead: ROW });
@@ -83,7 +83,7 @@ describe('ROTARIS_CAPTURE_VIEW=7 selects the Settings category it names, and say
   });
 
   it('presses once when nothing moves, and not at all when the category is already the selected one', async () => {
-    process.env['ROTARIS_CAPTURE_VIEW'] = '7';
+    process.env['ROTARIS_CAPTURE_VIEW'] = 'settings';
     process.env['ROTARIS_CAPTURE_SETTINGS'] = 'Runtime';
     const once = settings({ shiftOnFirstRead: 0 });
     installSeams(once.host, { prompt: undefined, resumeWanted: undefined });
@@ -100,7 +100,7 @@ describe('ROTARIS_CAPTURE_VIEW=7 selects the Settings category it names, and say
   });
 
   it('logs that the category never became selected when every press is deflected, and stops pressing at the deadline', async () => {
-    process.env['ROTARIS_CAPTURE_VIEW'] = '7';
+    process.env['ROTARIS_CAPTURE_VIEW'] = 'settings';
     process.env['ROTARIS_CAPTURE_SETTINGS'] = 'Project';
     const s = settings({ shiftOnFirstRead: ROW, deflectEveryRead: true });
     installSeams(s.host, { prompt: undefined, resumeWanted: undefined });
@@ -256,5 +256,20 @@ describe('ROTARIS_CAPTURE_PERSONA_PROBE_AT reads the first persona window (seams
     expect(p.lines.filter((l) => l.startsWith('capture: persona-probe-at'))).toEqual([
       'capture: persona-probe-at ~60000 [data-testid="persona-compressions"] → [{"text":"2 compressions across the run.","data":{}}]',
     ]);
+  });
+});
+
+describe('ROTARIS_CAPTURE_VIEW names a primary view by identifier or by its place in the rail (PD-SHELL-015)', () => {
+  it('reads an identifier as that view\'s place, so a proof that names its view does not move when the rail does', () => {
+    expect(['overview', 'workspace', 'requirements', 'git', 'library', 'settings'].map(captureViewPosition)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('reads a digit inside the rail as itself, and nothing set as no view', () => {
+    expect(['1', '6'].map(captureViewPosition)).toEqual([1, 6]);
+    expect([undefined, '', '0'].map(captureViewPosition)).toEqual([0, 0, 0]);
+  });
+
+  it('refuses a retired identifier and a place past the last view, rather than pressing an unbound chord', () => {
+    expect(['mission', '7', 'home', '1.5'].map(captureViewPosition)).toEqual([null, null, null, null]);
   });
 });

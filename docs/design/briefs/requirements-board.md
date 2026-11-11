@@ -74,7 +74,7 @@ Relations (published on the header, `req-header`): `containment` in the primary 
 
 ## 11. Evidence plan
 
-Capture: `pnpm ui-audit --views=4 --sizes=1400x900,1000x680`; drive: `click ".nav-item" --text=Requirements`, `waitFor "[data-testid=req-empty-store], [data-testid=req-empty-source], .req-columns"`, at both sizes. Rubric rows: D4, F2, C4.
+Capture: `pnpm ui-audit --views=requirements --sizes=1400x900,1000x680` (`--views=4` when this was written; `3` since PD-SHELL-015 of 2026-11-11); drive: `click ".nav-item" --text=Requirements`, `waitFor "[data-testid=req-empty-store], [data-testid=req-empty-source], .req-columns"`, at both sizes. Rubric rows: D4, F2, C4.
 
 **Must move:** `STACKING` findings at 1000×680, 2 → 0; the empty state's paint outside the board body at 1000×680, 45 px above and 45 px below → 0; header height at 1400×900, 248 px → at most 170 px.
 **Must hold:** `ui-audit` view 4 at 1400×900: 0 findings; the four statements' text; `packages/ui/src/requirements/requirements.test.ts`; `layout-regression.test.ts`'s `.req-rail` rules.
@@ -101,7 +101,7 @@ Capture: `pnpm ui-audit --views=4 --sizes=1400x900,1000x680`; drive: `click ".na
 - The adoption strip's place above the board when nothing is to adopt.
 
 ### Open-question candidates
-- None beyond [OQ-544](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-544).
+- None beyond [OQ-544](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-544).
 
 ## Execution 2026-11-10
 

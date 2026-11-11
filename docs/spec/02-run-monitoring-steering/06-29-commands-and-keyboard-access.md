@@ -25,10 +25,20 @@ Part 6 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 ### 30. Mission view
 
 **REQ-MONITOR-274** — A mission view must present a live delegation graph and an agent activity table, with actions to open an agent, pause the selection (graceful and valid only for the run-level agent), and cancel the selection (marked destructive). Pause and cancel actions sit under the graph, and pause carries an availability explanation.
+  > **Narrowed by [`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009), 2026-11-11.** No
+  > mission view exists (PD-SHELL-015): the Overview presents the delegation graph, in its right column's first card,
+  > and the agent activity table, in its left column, with the same actions on the same terms; pause and cancel sit
+  > under the graph. Every other sentence above still governs.
 
 **REQ-MONITOR-275** — The mission view's strategy selector and depth control must mirror the delegation settings, and its activity table refreshes row by row under the same hidden-surface deferral as other always-alive surfaces.
+  > **Narrowed by [`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009), 2026-11-11.** The
+  > strategy selector and the depth control are drawn on no monitoring surface: the Settings view's Runtime category is
+  > their one editor, and the Overview's graph card shows the strategy as text and leads there. The activity table's
+  > row-by-row refresh and its deferral while hidden govern as written, on the Overview.
 
 **REQ-MONITOR-276** — A pause requested from the mission view for a non-run-level agent must be refused, consistent with the whole-run-only pause rule.
+  > **Narrowed by [`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009), 2026-11-11.** The pause
+  > is requested from the Overview's delegation graph card, and is refused there as stated above.
 
 ### 31. Agent navigation, run warnings, and quitting during a run
 

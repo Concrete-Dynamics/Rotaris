@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { millis } from '@rotaris/kernel';
+import { PRIMARY_VIEWS, viewPosition } from '@rotaris/contracts';
 import { type CaptureHost, pause, settled, stepFailed } from './host.js';
 import { onConsoleWarning } from './console-relay.js';
 
@@ -10,7 +11,7 @@ import { onConsoleWarning } from './console-relay.js';
  * bundle. Guarding only the `if` was the first attempt and it left the variable's name in the shipped
  * build, which fails the seam check in `scripts/package.mjs`.
  *
- * It walks seven views, every Settings category and a tab through every focusable control, writing a PNG
+ * It walks the primary views (six since PD-SHELL-015), every Settings category and a tab through every focusable control, writing a PNG
  * and a JSON of measured geometry, colour and contrast for each, then switches theme once and measures
  * that the composer's draft survived it.
  */
@@ -72,8 +73,9 @@ export function runThemeProof(host: CaptureHost, proofDir: string): void {
     if (counterfactual === 'text') await win.webContents.executeJavaScript(`document.documentElement.style.setProperty('--rt-text', 'oklch' + '(45% 0 0)')`);
     if (counterfactual === 'focus') await win.webContents.executeJavaScript(`document.documentElement.style.setProperty('--rt-focus', 'oklch' + '(40% 0 0)')`);
 
-    for (let view = 1; view <= 7; view += 1) { await keyView(view); await take(`view-${view}`); }
-    await keyView(7);
+    // PD-SHELL-015: every primary view by its place in the rail, then Settings by its identifier — never by a count written here.
+    for (let view = 1; view <= PRIMARY_VIEWS.length; view += 1) { await keyView(view); await take(`view-${view}`); }
+    await keyView(viewPosition('settings'));
     const categories = await win.webContents.executeJavaScript(`[...document.querySelectorAll('.nav-list__item')].map((element) => (element.textContent || '').trim())`) as string[];
     for (let index = 0; index < categories.length; index += 1) {
       await win.webContents.executeJavaScript(`document.querySelectorAll('.nav-list__item')[${index}]?.click()`);

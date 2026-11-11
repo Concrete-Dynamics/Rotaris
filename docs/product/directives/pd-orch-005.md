@@ -833,3 +833,5 @@ revision 4 as [R-064](../requests.md#r-064), revision 5 as [R-067](../requests.m
 > the gate now writes the run's list over every port (`Run.pendingApprovals`). Measured by the run host's `tools.test.ts`
 > with two real ports, red before, and the engine's `children.test.ts` (a root and two children, every port handed all
 > three approvals, red with the gathering or its wiring removed); not driven in the built app.
+
+*Cross-reference, 2026-11-11 (no clause above changes).* Where this directive names the Mission view, it names the Overview's delegation graph card and agent table card since [`PD-MONITOR-009`](pd-monitor-009.md#pd-monitor-009) clause 7; Mission is not a primary view ([`PD-SHELL-015`](pd-shell-015.md#pd-shell-015)).

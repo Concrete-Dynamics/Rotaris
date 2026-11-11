@@ -8,12 +8,21 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/renderer-console.mjs';
 
 /**
- * Part R's first execution in the built app — the agent surfaces: the Mission view (REQ-MONITOR-274..276), the per-agent
- * inspector (REQ-MONITOR-050..067), the persona windows (REQ-SHELL-072..078, REQ-MONITOR-068..073; ADR-0048's registry
- * first executed) and the shared selection (REQ-MONITOR-042). Scripted client, scratch stores, the launches the plan
- * names (eight, two of them in two parts):
+ * Part R's first execution in the built app — the agent surfaces: the delegation graph and the agent table
+ * (REQ-MONITOR-274..276), the per-agent inspector (REQ-MONITOR-050..067), the persona windows (REQ-SHELL-072..078,
+ * REQ-MONITOR-068..073; ADR-0048's registry first executed) and the shared selection (REQ-MONITOR-042). Scripted client,
+ * scratch stores, the launches the plan names (eight, two of them in two parts):
  *
- *   1. painted     — Mission opened by Ctrl+3 during a run with three live children: the header, the run row, the tree,
+ * PD-SHELL-015, PD-MONITOR-009 (2026-11-11): Mission is no primary view, and what it drew stands on the Overview as two
+ * cards, the graph (`mission-graph`, first in the right column) and the table (`mission-table`, in the left column under
+ * the metric cards); every launch that opened Mission by Ctrl+3 opens the Overview by its identifier. The run's state is
+ * read from the Overview's header (`overview-session`, "session {label} · {status} · {runtime}") where the Mission
+ * subtitle gave it; parity is between two trees, not three; item 7's strategy selector and depth control are gone from
+ * the monitoring view, and the card's read-only strategy, its "Open Runtime settings" and the Settings fields are
+ * measured in their place. "Mission" below names the two cards where it is kept in a file or result name.
+ *
+ *   1. painted     — the Overview opened during a run with three live children: the two cards in their places and the
+ *                    retired surfaces absent, the header, the run row, the tree,
  *                    the table with one row per agent and state text, elapsed advancing between two probes 1.5 s apart.
  *   1b. waiting    — the model's slot cap one, two children waiting behind it: every row's Elapsed cell and tree meta
  *                    carries a figure, and a waiting row's advances (REQ-MONITOR-107/111).
@@ -25,16 +34,18 @@ import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/rendere
  *                    IN_PROGRESS, two side by side while their children run, and no todo call is refused;
  *                    named ones run, and each child's record holds its item.
  *   1f. stalled    — a child silent past a 3 s stall threshold: REQ-ORCH-089's `stalled Ns` tag in the Workspace sidebar's
- *                    row and the Mission table's state cell, and their geometry (the persona on one line in the sidebar row and in the table, the card unscrolled).
- *   2. parity      — the Mission tree, the Overview card and the Workspace sidebar probed in one run: identical ids and
- *                    states; then a 23-agent record (20 seeded) refreshed with Mission visible, the apply-to-paint time.
+ *                    row and the agent table's state cell, and their geometry (the persona on one line in the sidebar row and in the table, the card unscrolled).
+ *   2. parity      — the Overview's graph card and the Workspace sidebar probed in one run: identical ids and
+ *                    states (two surfaces since PD-MONITOR-009); then a 23-agent record (20 seeded) refreshed with the
+ *                    Overview visible, the apply-to-paint time; then that table at 1440×900 and at 1000×680, where its
+ *                    card is narrower than 40rem: each row a three-line grid that keeps every value (PD-MONITOR-009 clause 3).
  *   3. pause       — a child selected → Pause refused with the explanation, no control sent; the run selected → accepted,
  *                    `pausing` then `paused`; at rest the still-mounted view's Pause reads `Pause`, not `Pausing…`.
  *   4. cancel      — a child with a live descendant: the confirmation names it and the cascade; the child cancelled, the run on;
  *                    the rows sampled just after the confirm (REQ-MONITOR-128's optimistic cancel) and overwritten by the
  *                    engine's record at 9 s (REQ-MONITOR-296).
- *   4b. cancel run — the run row selected, "Cancel selection" confirmed: every sample after the confirm reads the subtitle and
- *                    the run row `Cancelling` or the run at rest — never `Running` nor another active
+ *   4b. cancel run — the run row selected, "Cancel selection" confirmed: every sample after the confirm reads the Overview's
+ *                    header and the run row `cancelling` or the run at rest — never `running` nor another active
  *                    status; how many land inside the `Cancelling` window is host timing, recorded and not asserted
  *                    (acceptance A35, REQ-MONITOR-127/130).
  *   4c. persona    — the inspector pops out the run-level agent; the window's Cancel on the run's own instance confirmed: every
@@ -47,7 +58,10 @@ import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/rendere
  *                    reused for a second instance, hidden on close, shown again; a new session destroys it.
  *   6. inspector   — following the latest author, pinned on selection, chips in one order across a state change, Steer
  *                    through the persona window recorded against that agent.
- *   7. settings    — the strategy selector and the depth control write their keys; Settings shows the same; the toggle writes.
+ *   7. settings    — PD-MONITOR-009 clause 6: the graph card shows the configured strategy as text, with no selector and no
+ *                    depth control on the monitoring view; "Open Runtime settings" lands on Settings › Runtime, whose
+ *                    "Delegation strategy" and "Depth cap" fields write their keys on Save; the toggle writes; relaunched,
+ *                    the card reads the strategy the file now holds.
  *   8. reconcile   — a child left `running` on a completed session presents settled on every surface.
  *
  * Evidence under `.proof/mission-proof/`: PNGs, logs, `results.json`. `--skip-build` skips the build.
@@ -122,6 +136,8 @@ const probesAt = (log, at, selector) => { const m = log.match(new RegExp(`captur
 const personaProbesAt = (log, at, selector) => { const m = log.match(new RegExp(`capture: persona-probe-at ${at} ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\]|null)`)); return m ? JSON.parse(m[1]) : null; };
 const endProbe = (log, selector) => { const m = log.match(new RegExp(`capture: probe ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`)); return m ? JSON.parse(m[1]) : null; };
 const windowsAt = (log, at) => { const m = log.match(new RegExp(`capture: windows-at ${at} → (\\[.*\\])`)); return m ? JSON.parse(m[1]) : null; };
+/** Every `eval-at` of the launch whose answer is an object, parsed; a reading is found by the `kind` it names itself. */
+const evalsOf = (log) => [...log.matchAll(/capture: eval-at \d+ .*? → (\{.*\})\s*$/gm)].map((m) => JSON.parse(m[1]));
 const results = {};
 // The replica's run-start decline is REQ-SESSION-161's own recovery, read from the code and left as a diagnostic
 // (docs/archive/defects/a-row-settled-below-the-last-is-published-without-the-rows-after-it.md, "The declined increment at run
@@ -138,22 +154,42 @@ const seconds = (label) => { const m = /(?:(\d+)m )?(\d+)s/.exec(label); return 
 // (`plan:3` writes three, each `delegate` names the next, `done` completes them so REQ-ORCH-075 holds the task by none).
 const THREE = 'plan:3,delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:codebase-analyst:gamma,done,answer';
 
-// 1. Mission painted during a run with three live children.
+// PD-MONITOR-009: the run's state where the Mission subtitle gave it — the Overview's header, "session {label} · {status} ·
+// {runtime}", the status being the presentation status in lower case. Read from the end, since a label is free text.
+const HEADER = '[data-testid="overview-session"]';
+const headerStatus = (text) => { const parts = (text ?? '').split(' · '); return parts.length >= 3 ? parts[parts.length - 2] : null; };
+// PD-MONITOR-009 clauses 2, 3 and 6, and PD-SHELL-015: where the two cards stand, what each carries, and what is gone —
+// the Mission view's root and subtitle, its "Delegation settings" card with the depth control, any selector in the graph
+// card, and the Overview's old read-only tree card. One evaluation, so the reading is of one instant.
+const CARDS = `(() => { const q = (s) => document.querySelector(s); const graph = q('[data-testid="mission-graph"]'); const table = q('[data-testid="mission-table"]'); const strategy = q('[data-testid="mission-strategy"]'); return { kind: 'cards', view: q('.app-shell')?.getAttribute('data-view') ?? null, rail: [...document.querySelectorAll('.nav-item')].map((el) => (el.textContent ?? '').trim()), graphFirstInRight: graph !== null && q('.overview__right')?.firstElementChild === graph, tableInLeft: table !== null && table.parentElement === q('.overview__left'), tableAfterMetrics: table?.previousElementSibling?.classList.contains('overview__metrics') === true, graphSelected: graph?.getAttribute('data-selected') ?? null, tableRefresh: table === null ? null : [table.hasAttribute('data-refresh-ms'), table.hasAttribute('data-refresh-agents')], strategyTag: strategy?.tagName ?? null, strategyText: strategy?.textContent ?? null, openRuntime: q('[data-testid="mission-open-runtime"]')?.textContent ?? null, gone: { root: q('[data-testid="mission"]') !== null, subtitle: q('[data-testid="mission-subtitle"]') !== null, settingsCard: q('[data-testid="mission-settings"]') !== null, depth: q('[data-testid="mission-depth"]') !== null, selects: graph?.querySelectorAll('select').length ?? null, treeCard: q('.ov-card--tree') !== null } }; })()`;
+
+// 1. The Overview's two delegation cards painted during a run with three live children (the Mission view, until PD-SHELL-015).
 const s1 = scenario('painted');
 {
   const r = await launch('painted', s1, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'delegate to three agents',
-    ROTARIS_CAPTURE_VIEWS: '3@3500',
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-subtitle"]@6000;;[data-testid="mission-run-row"]@6000;;.agent-table__row@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.agent-table__state-text@6000;;.mission__run-row + .agent-tree .agent-row@6000',
+    // The prompt seam leaves the startup view for the Workspace to type; the Overview is opened again by its identifier.
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
+    ROTARIS_CAPTURE_PROBE_AT: `${HEADER}@6000;;[data-testid="mission-run-row"]@6000;;.agent-table__row@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.agent-table__state-text@6000;;.mission__run-row + .agent-tree .agent-row@6000`,
+    ROTARIS_CAPTURE_EVAL_AT: `${CARDS}@6000`,
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'mission.png')}@7000`,
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '3', ROTARIS_CAPTURE_END_VIEW_MS: '1500',
-    ROTARIS_CAPTURE_PROBE: '[data-testid="mission"];;.agent-table__row;;[data-testid="mission-refresh"];;.app-shell',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'overview', ROTARIS_CAPTURE_END_VIEW_MS: '1500',
+    ROTARIS_CAPTURE_PROBE: '[data-testid="mission-graph"];;[data-testid="mission-table"];;.agent-table__row;;[data-testid="mission-refresh"];;.app-shell',
   });
   const db = open(s1); const row = session(db); const kids = children(db, row.session_id); db.close();
   expect(row.execution_status === 'completed', `the run ended ${row.execution_status} (${row.stop_reason})`);
   expect(kids.length === 3, `the ledger holds ${kids.length} children`);
-  const subtitle = probesAt(r.log, 6000, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
-  expect(/^delegation tree · /.test(subtitle), `the header's subtitle: "${subtitle}"`);
+  // PD-MONITOR-009: this read the Mission header's subtitle, "delegation tree · {label} · {status}"; the Overview's header
+  // carries the session and its state now.
+  const subtitle = probesAt(r.log, 6000, HEADER)?.[0]?.text ?? '';
+  expect(/^session .+ · running · \S+$/.test(subtitle), `the Overview's header: "${subtitle}" (PD-MONITOR-009: "session {label} · {status} · {runtime}")`);
+  const cards = evalsOf(r.log).find((e) => e.kind === 'cards');
+  expect(cards, 'no reading of the two delegation cards (see painted.log)');
+  expect(cards.view === 'overview' && JSON.stringify(cards.rail) === JSON.stringify(['Overview', 'Workspace', 'Requirements', 'Git', 'Library', 'Settings']), `the view and the rail: ${cards.view}, ${JSON.stringify(cards.rail)} (PD-SHELL-015: six views, Mission none)`);
+  expect(cards.graphFirstInRight && cards.tableInLeft && cards.tableAfterMetrics, `the cards' places: ${JSON.stringify(cards)} (PD-MONITOR-009 clauses 2 and 3: the graph first in the right column, the table in the left under the metric cards)`);
+  expect(cards.graphSelected !== null && cards.tableRefresh?.every((present) => present === true), `the cards' attributes: ${JSON.stringify(cards)} (the shared selection on the graph card, the refresh figures on the table card)`);
+  expect(cards.strategyTag === 'SPAN' && cards.strategyText === 'orchestrator' && cards.openRuntime === 'Open Runtime settings', `the graph card's last line: ${JSON.stringify(cards)} (PD-MONITOR-009 clause 6)`);
+  expect(!cards.gone.root && !cards.gone.subtitle && !cards.gone.settingsCard && !cards.gone.depth && cards.gone.selects === 0 && !cards.gone.treeCard, `a retired surface is still drawn: ${JSON.stringify(cards.gone)} (PD-MONITOR-009, PD-SHELL-015)`);
   const runRow = probesAt(r.log, 6000, '[data-testid="mission-run-row"]')?.[0]?.text ?? '';
   expect(/Run · orchestrator/.test(runRow), `the run row: "${runRow}"`);
   const rows6 = probesAt(r.log, 6000, '.agent-table__row') ?? [];
@@ -172,9 +208,9 @@ const s1 = scenario('painted');
   expect(e6.length === 3 && e75.length === 3 && e6.every((v, i) => v !== null && e75[i] !== null && e75[i] > v), `elapsed did not advance for the live rows: ${JSON.stringify(e6)} → ${JSON.stringify(e75)} at ${JSON.stringify(states6)} (REQ-MONITOR-107)`);
   const endRows = endProbe(r.log, '.agent-table__row') ?? [];
   expect(endRows.length === 3 && endRows.every((p) => p.data['data-state'] === 'done'), `after the run the rows read ${JSON.stringify(endRows.map((p) => p.data['data-state']))}`);
-  expect(endProbe(r.log, '.app-shell')?.[0]?.data?.['data-view'] === 'mission', 'the capture was not on Mission');
+  expect(endProbe(r.log, '.app-shell')?.[0]?.data?.['data-view'] === 'overview', 'the capture was not on the Overview');
   expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
-  results.painted = { replicaDeclines: replicaRunStartDeclines(r.errors), subtitle, runRow, statesAt6s: states6, elapsedAt6s: e6, elapsedAt7_5s: e75, finalStates: endRows.map((p) => p.data['data-state']), png: join(output, 'mission.png') };
+  results.painted = { replicaDeclines: replicaRunStartDeclines(r.errors), header: subtitle, cards, runRow, statesAt6s: states6, elapsedAt6s: e6, elapsedAt7_5s: e75, finalStates: endRows.map((p) => p.data['data-state']), png: join(output, 'mission.png') };
 }
 
 // 1b. A waiting agent's clock (REQ-MONITOR-107/111, resolution item 25; the note "a waiting agent's elapsed time is not
@@ -188,11 +224,12 @@ const s1b = scenario('waiting');
   writeFileSync(yaml, readFileSync(yaml, 'utf8').replace('model_id: scripted }', 'model_id: scripted, max_parallel: 1 }'));
   const r = await launch('waiting', s1b, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'delegate to three agents behind one slot',
-    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
     ROTARIS_CAPTURE_PROBE_AT: '.agent-table__state-text@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.mission__run-row + .agent-tree .agent-row__meta@6000;;.mission__run-row + .agent-tree .agent-row__meta@7500',
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'mission-waiting.png')}@7000`,
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
   });
+  // PD-MONITOR-009: the table and the tree read here are the Overview's two cards (the Mission view's, until 2026-11-11).
   const states6 = probesAt(r.log, 6000, '.agent-table__state-text')?.map((p) => p.text) ?? [];
   const waitingAt6 = states6.map((t, i) => (t === 'waiting' || t === 'queued' ? i : -1)).filter((i) => i >= 0);
   expect(states6.length === 3 && waitingAt6.length > 0, `no waiting or queued row at 6 s behind the slot cap: ${JSON.stringify(states6)}`);
@@ -243,16 +280,16 @@ const s1c = scenario('todo-list-owed');
 // so where its failure shows. The limit is set to 3 s (`runtime.child_timeout`), so the seconds form is what is read here;
 // the minutes forms are pinned by packages/ui/src/agent-timeout.test.ts. Launch A: a child that completed a call (making
 // progress) — selected in the Workspace sidebar, the inspector's line under its unchanged meta line, the tree row's tag on a
-// line of its own (the persona keeps its width), the persona window's line under its state; then Mission's table and tree.
+// line of its own (the persona keeps its width), the persona window's line under its state; then the Overview's table and
+// tree (PD-MONITOR-009: the two cards; Mission's, until 2026-11-11).
 // Launch B: a child that made no call — the table's tag titled with the line, no "while making progress", the card not
 // scrolled sideways. Before the repair every one of these read `failed` and nothing else.
 const TIMEOUT_LINE = (progress) => `Cut off at its per-agent timeout of 3 seconds${progress ? ' while making progress' : ''}. Settings › Runtime › Per-agent timeout sets this limit for runs started from now.`;
-const evalsOf = (log) => [...log.matchAll(/capture: eval-at \d+ .*? → (\{.*\})\s*$/gm)].map((m) => JSON.parse(m[1]));
 const s1d = scenario('timed-out', ['  child_timeout: 3']);
 {
   const box = 'const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; };';
   const geometry = `(() => { ${box} const row = document.querySelector('.agent-row'); const line = document.querySelector('[data-testid="inspector-timeout"]'); const path = line?.querySelector('.agent-timeout__path'); const lh = parseFloat(getComputedStyle(path).lineHeight) || 0; return { kind: 'workspace', treeRow: box(row), treeMain: box(row?.querySelector('.agent-row__main')), treePersona: box(row?.querySelector('.agent-row__persona')), treeMeta: box(row?.querySelector('.agent-row__meta')), treeMetaClass: row?.querySelector('.agent-row__meta')?.className ?? null, tag: box(row?.querySelector('[data-testid="agent-timed-out"]')), personaLineHeight: parseFloat(getComputedStyle(row.querySelector('.agent-row__persona')).lineHeight) || 0, meta: document.querySelector('[data-testid="inspector-meta"]')?.textContent ?? null, metaThenLine: document.querySelector('[data-testid="inspector-meta"]')?.nextElementSibling === line, line: line?.textContent ?? null, lineBox: box(line), pathBox: box(path), pathLineHeight: lh, inspectorScroll: (() => { const b = document.querySelector('.inspector__body'); return b ? [b.scrollWidth, b.clientWidth] : null; })() }; })()`;
-  // The end probes carry `data-*` attributes only, so the tags' class and title are read by an evaluation once Mission shows them.
+  // The end probes carry `data-*` attributes only, so the tags' class and title are read by an evaluation once the Overview's cards show them.
   const missionTags = `(() => { const read = (el) => el ? { text: el.textContent, className: el.className, title: el.getAttribute('title'), description: el.getAttribute('aria-description') } : null; return { kind: 'mission-tags', table: read(document.querySelector('.agent-table__row [data-testid="agent-timed-out"]')), tree: read(document.querySelector('.mission__run-row + .agent-tree [data-testid="agent-timed-out"]')), state: document.querySelector('.agent-table__state-text')?.textContent ?? null }; })()`;
   const r = await launch('timed-out', s1d, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'read,wait:6000,answer', ROTARIS_CAPTURE_PROMPT: 'delegate one long job',
@@ -260,7 +297,7 @@ const s1d = scenario('timed-out', ['  child_timeout: 3']);
     ROTARIS_CAPTURE_EVAL_AT: `${geometry}>>[data-testid="inspector-timeout"]@~45000;;${missionTags}>>.agent-table__row [data-testid="agent-timed-out"]@~70000`,
     ROTARIS_CAPTURE_PNG_WHEN: '[data-testid="inspector-timeout"]', ROTARIS_CAPTURE_PNG_AT: `${join(output, 'timed-out-workspace.png')}@~45000`,
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: '[data-testid="persona-timeout"]@~50000;;[data-testid="persona-agent-state"]@~50000',
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '8000', ROTARIS_CAPTURE_END_VIEW: '3', ROTARIS_CAPTURE_END_VIEW_MS: '3000',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '8000', ROTARIS_CAPTURE_END_VIEW: 'overview', ROTARIS_CAPTURE_END_VIEW_MS: '3000',
     ROTARIS_CAPTURE_PROBE: '.agent-table__row [data-testid="agent-timed-out"];;.agent-table__state-text;;.mission__run-row + .agent-tree [data-testid="agent-timed-out"]',
   });
   const db = open(s1d); const row = session(db); const kids = children(db, row.session_id);
@@ -279,10 +316,10 @@ const s1d = scenario('timed-out', ['  child_timeout: 3']);
   const personaState = personaProbesAt(r.log, '~50000', '[data-testid="persona-agent-state"]')?.[0]?.text ?? null;
   expect(persona === TIMEOUT_LINE(true) && personaState === 'failed', `the persona window: state "${personaState}", line "${persona}"`);
   const tags = evalsOf(r.log).find((e) => e.kind === 'mission-tags');
-  expect(tags, 'no reading of the Mission view\'s tags (see timed-out.log)');
+  expect(tags, 'no reading of the tags on the Overview\'s two cards (see timed-out.log)');
   const tableTag = tags.table; const treeTag = tags.tree;
-  expect(tableTag?.text === 'timed out' && /\btag-fail\b/.test(tableTag.className) && tableTag.title === TIMEOUT_LINE(true) && tableTag.description === TIMEOUT_LINE(true), `the Mission table's tag: ${JSON.stringify(tableTag)}`);
-  expect(treeTag?.text === 'timed out' && /\btag-fail\b/.test(treeTag.className) && treeTag.title === TIMEOUT_LINE(true), `the Mission tree's tag: ${JSON.stringify(treeTag)}`);
+  expect(tableTag?.text === 'timed out' && /\btag-fail\b/.test(tableTag.className) && tableTag.title === TIMEOUT_LINE(true) && tableTag.description === TIMEOUT_LINE(true), `the agent table's tag: ${JSON.stringify(tableTag)}`);
+  expect(treeTag?.text === 'timed out' && /\btag-fail\b/.test(treeTag.className) && treeTag.title === TIMEOUT_LINE(true), `the graph card's tree tag: ${JSON.stringify(treeTag)}`);
   expect(tags.state === 'failed' && endProbe(r.log, '.agent-table__state-text')?.[0]?.text === 'failed', 'the table row no longer reads failed');
   expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
   results.timedOut = { replicaDeclines: replicaRunStartDeclines(r.errors), report: { error: 'Child timed out after 3s', cutOff: true }, workspace: g, personaWindow: { state: personaState, line: persona }, missionTable: tableTag.title, missionTree: treeTag.title, png: [join(output, 'timed-out-workspace.png'), r.png] };
@@ -290,12 +327,12 @@ const s1d = scenario('timed-out', ['  child_timeout: 3']);
   const tableGeometry = `(() => { const tbl = document.querySelector('.agent-table'); const row = tbl.querySelector('.agent-table__row'); const card = tbl.parentElement; return { kind: 'mission', title: row.querySelector('[data-testid="agent-timed-out"]').getAttribute('title'), cells: [...row.children].map((c) => Math.round(c.getBoundingClientRect().width)), rowHeight: Math.round(row.getBoundingClientRect().height), cardScroll: [card.scrollWidth, card.clientWidth], tagOwnLine: (() => { const t = row.querySelector('[data-testid="agent-timed-out"]').getBoundingClientRect(); const s = row.querySelector('.agent-table__state-text').getBoundingClientRect(); return t.top >= s.bottom - 1; })() }; })()`;
   const r2 = await launch('timed-out-idle', s1d, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:6000,answer', ROTARIS_CAPTURE_PROMPT: 'delegate one idle job',
-    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
     ROTARIS_CAPTURE_EVAL_AT: `${tableGeometry}>>.agent-table__row [data-testid="agent-timed-out"]@~45000`,
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
   });
   const t = evalsOf(r2.log).find((e) => e.kind === 'mission');
-  expect(t && t.cardScroll[0] <= t.cardScroll[1] && t.tagOwnLine, `the Mission table with the tag: ${JSON.stringify(t)} (the card scrolled sideways, or the tag sat beside the state)`);
+  expect(t && t.cardScroll[0] <= t.cardScroll[1] && t.tagOwnLine, `the agent table with the tag: ${JSON.stringify(t)} (the card scrolled sideways, or the tag sat beside the state)`);
   expect(t.title === TIMEOUT_LINE(false), `the idle child's tag title: "${t.title}"`);
   expect(unexpected(r2.errors).length === 0, `renderer errors: ${unexpected(r2.errors).join(' | ')}`);
   results.timedOutIdle = { table: t, png: r2.png };
@@ -364,7 +401,8 @@ const s1e = scenario('todo-item');
 // timed-out tag of 1d took its own line because beside the state it squeezed the sidebar row's persona onto two lines and
 // scrolled the Mission card sideways; the stalled tag sat in the same nowrap label and the same cell. A child that reads
 // once and then holds its next call silent for 25 s with `child_stall_timeout: 3` is stalled for about 20 s: its sidebar row
-// is read while the tag shows, then Mission's table row, whose persona cell must read on one line (fin36).
+// is read while the tag shows, then the agent table's row — on the Overview's table card since PD-MONITOR-009 — whose
+// persona cell must read on one line (fin36).
 const s1f = scenario('stalled', ['  child_stall_timeout: 3']);
 {
   const box = 'const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), bottom: Math.round(r.bottom) }; };';
@@ -373,37 +411,42 @@ const s1f = scenario('stalled', ['  child_stall_timeout: 3']);
   const r = await launch('stalled', s1f, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'read,wait:25000,answer', ROTARIS_CAPTURE_PROMPT: 'delegate one quiet job',
     ROTARIS_CAPTURE_EVAL_AT: `${sidebar}>>.agent-row [data-testid="agent-stalled"]@~20000;;${table}>>.agent-table__row [data-testid="agent-stalled"]@~30000`,
-    ROTARIS_CAPTURE_PNG_WHEN: '.agent-row [data-testid="agent-stalled"]', ROTARIS_CAPTURE_PNG_AT: `${join(output, 'stalled-workspace.png')}@~20000;;${join(output, 'stalled-mission.png')}@19000`,
-    ROTARIS_CAPTURE_VIEWS: '3@17000',
+    ROTARIS_CAPTURE_PNG_WHEN: '.agent-row [data-testid="agent-stalled"]', ROTARIS_CAPTURE_PNG_AT: `${join(output, 'stalled-workspace.png')}@~20000;;${join(output, 'stalled-overview.png')}@19000`,
+    ROTARIS_CAPTURE_VIEWS: 'overview@17000',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
   });
   const g = evalsOf(r.log).find((e) => e.kind === 'stalled-sidebar');
   expect(g && /^stalled\u00a0\d+s$/.test(g.tagText ?? '') && /\btag-wait\b/.test(g.tagClass ?? ''), `no stalled tag read in the Workspace sidebar: ${JSON.stringify(g)} (see stalled.log)`);
   expect(g.treePersona && g.treePersona.h <= Math.ceil(g.personaLineHeight) + 1, `the sidebar row: persona ${JSON.stringify(g.treePersona)} at line height ${g.personaLineHeight}, main ${JSON.stringify(g.treeMain)}, meta ${JSON.stringify(g.treeMeta)} ${g.treeMetaClass} (the stalled tag squeezed the persona onto two lines)`);
   const t = evalsOf(r.log).find((e) => e.kind === 'stalled-mission');
-  expect(t && t.tagText && t.cardScroll[0] <= t.cardScroll[1] && t.tagOwnLine, `the Mission table with the stalled tag: ${JSON.stringify(t)} (the card scrolled sideways, or the tag sat beside the state)`);
+  expect(t && t.tagText && t.cardScroll[0] <= t.cardScroll[1] && t.tagOwnLine, `the agent table with the stalled tag: ${JSON.stringify(t)} (the card scrolled sideways, or the tag sat beside the state)`);
   // The persona cell on one line (docs/archive/defects/the-mission-tables-persona-cell-breaks-a-hyphenated-persona-over-two-lines.md):
   // before the repair "coding-agent" read "coding-" over "agent" in a 65 to 71 px column.
-  expect(t.persona?.text === 'coding-agent' && t.persona.lines === 1, `the Mission table's persona cell: ${JSON.stringify(t.persona)} (the persona broke over two lines)`);
+  expect(t.persona?.text === 'coding-agent' && t.persona.lines === 1, `the agent table's persona cell: ${JSON.stringify(t.persona)} (the persona broke over two lines)`);
   expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
-  results.stalled = { sidebar: g, mission: t, png: [join(output, 'stalled-workspace.png'), join(output, 'stalled-mission.png'), r.png] };
+  results.stalled = { sidebar: g, table: t, png: [join(output, 'stalled-workspace.png'), join(output, 'stalled-overview.png'), r.png] };
 }
 
-// 2. Parity across the three trees, then the 23-agent refresh with Mission visible.
+// 2. Parity across the two trees, then the 23-agent refresh with the Overview visible. PD-MONITOR-009 (2026-11-11): the
+// trees are two — the Overview's graph card and the Workspace sidebar — where they were three (the Mission tree, the
+// Overview's read-only tree card and the sidebar); the graph card is the one tree the Overview draws.
 const s2 = scenario('parity');
 {
   const r = await launch('parity', s2, {
-    ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'three trees',
-    // Probed while all three children are still inside their own 14 s wait, so the states are steady across the three views (a state change between probes is not a parity fault).
-    ROTARIS_CAPTURE_VIEWS: '3@7000;;1@8000;;2@9000',
-    ROTARIS_CAPTURE_PROBE_AT: '.agent-row@7500;;.app-shell@7500;;.agent-row@8500;;.app-shell@8500;;.agent-row@9500;;.app-shell@9500',
+    ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'two trees',
+    // Probed while all three children are still inside their own 14 s wait, so the states are steady across the two views (a state change between probes is not a parity fault).
+    ROTARIS_CAPTURE_VIEWS: 'overview@7000;;workspace@9000',
+    ROTARIS_CAPTURE_PROBE_AT: '.agent-row@7500;;[data-testid="mission-graph"] .agent-row@7500;;.app-shell@7500;;.agent-row@9500;;.app-shell@9500',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
   });
-  const trees = [7500, 8500, 9500].map((at) => ({ view: probesAt(r.log, at, '.app-shell')?.[0]?.data?.['data-view'], rows: (probesAt(r.log, at, '.agent-row') ?? []).map((p) => `${p.data['data-task-id']}:${p.data['data-state']}`) }));
-  expect(trees[0].view === 'mission' && trees[1].view === 'overview' && trees[2].view === 'workspace', `the views probed: ${JSON.stringify(trees.map((t) => t.view))}`);
-  expect(trees[0].rows.length === 3 && JSON.stringify(trees[0].rows) === JSON.stringify(trees[1].rows) && JSON.stringify(trees[1].rows) === JSON.stringify(trees[2].rows), `the three trees differ: ${JSON.stringify(trees)} (REQ-MONITOR-038)`);
+  const trees = [7500, 9500].map((at) => ({ view: probesAt(r.log, at, '.app-shell')?.[0]?.data?.['data-view'], rows: (probesAt(r.log, at, '.agent-row') ?? []).map((p) => `${p.data['data-task-id']}:${p.data['data-state']}`) }));
+  expect(trees[0].view === 'overview' && trees[1].view === 'workspace', `the views probed: ${JSON.stringify(trees.map((t) => t.view))}`);
+  // The Overview draws ONE tree, the graph card's: every tree row on the view is inside that card (the old tree card is gone).
+  const inGraph = (probesAt(r.log, 7500, '[data-testid="mission-graph"] .agent-row') ?? []).map((p) => `${p.data['data-task-id']}:${p.data['data-state']}`);
+  expect(JSON.stringify(inGraph) === JSON.stringify(trees[0].rows), `the Overview draws tree rows outside its graph card: ${JSON.stringify({ all: trees[0].rows, inGraph })} (PD-MONITOR-009)`);
+  expect(trees[0].rows.length === 3 && JSON.stringify(trees[0].rows) === JSON.stringify(trees[1].rows), `the two trees differ: ${JSON.stringify(trees)} (REQ-MONITOR-038, PD-MONITOR-009)`);
   results.parity = { views: trees.map((t) => t.view), rows: trees[0].rows };
-  // 2b. Twenty more agents on the record, the session re-opened with Mission already visible: one publication, the apply-to-paint time.
+  // 2b. Twenty more agents on the record, the session re-opened with the Overview already visible: one publication, the apply-to-paint time.
   const dbw = new Database(oneDatabase(s2.local));
   const row = dbw.prepare('SELECT session_id FROM sessions ORDER BY created_at DESC').get();
   const insert = dbw.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, spawned_at, completed_at, tool_calls)
@@ -415,18 +458,43 @@ const s2 = scenario('parity');
   }
   dbw.close();
   const r2 = await launch('parity-20', s2, {
-    // Opening a stored session lands on the Workspace; Mission is opened after it, and one whole read is asked for while Mission is visible.
-    ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: '3@2600', ROTARIS_CAPTURE_RECONCILE_AT: '3200',
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission"]@4000;;.agent-table__row@4000',
-    ROTARIS_CAPTURE_AFTER_MS: '4000', ROTARIS_CAPTURE_END_VIEW: '3', ROTARIS_CAPTURE_END_VIEW_MS: '500', ROTARIS_CAPTURE_PROBE: '[data-testid="mission"];;.agent-table__row',
+    // Opening a stored session lands on the Workspace; the Overview is opened after it, and one whole read is asked for while it is visible.
+    // PD-MONITOR-009: the refresh figures are the table card's attributes (the Mission view root's, until 2026-11-11).
+    ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: 'overview@2600', ROTARIS_CAPTURE_RECONCILE_AT: '3200',
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-table"]@4000;;.agent-table__row@4000',
+    ROTARIS_CAPTURE_AFTER_MS: '4000', ROTARIS_CAPTURE_END_VIEW: 'overview', ROTARIS_CAPTURE_END_VIEW_MS: '500', ROTARIS_CAPTURE_PROBE: '[data-testid="mission-table"];;.agent-table__row',
   });
-  const mission = probesAt(r2.log, 4000, '[data-testid="mission"]')?.[0]?.data ?? {};
+  const mission = probesAt(r2.log, 4000, '[data-testid="mission-table"]')?.[0]?.data ?? {};
   const rows20 = probesAt(r2.log, 4000, '.agent-table__row') ?? [];
   expect(rows20.length === 23, `the table held ${rows20.length} rows, not 23`);
   const refreshMs = Number(mission['data-refresh-ms']);
   expect(Number(mission['data-refresh-agents']) === 23 && Number.isFinite(refreshMs), `the refresh figure was not recorded for the 23-agent publication: ${JSON.stringify(mission)}`);
   expect(refreshMs < 250, `a 23-agent refresh took ${refreshMs} ms, over the 250 ms budget (REQ-MONITOR-038)`);
   results.parity20 = { agents: Number(mission['data-refresh-agents']), refreshMs, rows: rows20.length };
+
+  // 2c. PD-MONITOR-009 clause 3: the table's two forms, on that 23-agent record. At 1440×900 a row is one line of a table; at
+  // REQ-SHELL-022's minimum, 1000×680, the table's card is narrower than 40rem and each row is a three-line grid that keeps
+  // every value. The card's own width decides the form, so it is read beside the row rather than assumed from the window's.
+  // `lines` counts the bands the first row's cells stand in: a cell starts a new band where its top is at or under the
+  // bottom of every cell before it, so cells aligned on a baseline inside one band are one line.
+  const tableForm = (kind) => `(() => { const card = document.querySelector('[data-testid="mission-table"]'); const rows = [...document.querySelectorAll('.agent-table__row')]; const row = rows[0]; if (!card || !row) return { kind: ${JSON.stringify(kind)}, row: null }; const rem = parseFloat(getComputedStyle(document.documentElement).fontSize); const boxes = [...row.children].map((c) => c.getBoundingClientRect()).sort((a, b) => a.top - b.top); let lines = 0; let bottom = -Infinity; for (const b of boxes) { if (b.top >= bottom - 1) { lines += 1; bottom = b.bottom; } else bottom = Math.max(bottom, b.bottom); } return { kind: ${JSON.stringify(kind)}, window: [innerWidth, innerHeight], cardWidthRem: Math.round((card.clientWidth / rem) * 10) / 10, cardScroll: [card.scrollWidth, card.clientWidth], rows: rows.length, displays: [...new Set(rows.map((r) => getComputedStyle(r).display))], lines, roles: [row.getAttribute('role'), ...new Set([...row.children].map((c) => c.getAttribute('role')))], values: rows.map((r) => [...r.children].filter((c) => !c.classList.contains('agent-table__actions')).map((c) => (c.textContent ?? '').trim())), shown: rows.every((r) => [...r.children].every((c) => { const b = c.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(c).visibility !== 'hidden'; })), actions: rows.every((r) => [...r.querySelectorAll('.agent-table__actions .btn')].map((b) => (b.textContent ?? '').trim()).join(',') === 'Open,Pop out') }; })()`;
+  const r3 = await launch('table-forms', s2, {
+    ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: 'overview@2600',
+    ROTARIS_CAPTURE_EVAL_AT: `${tableForm('table-wide')}@4000;;${tableForm('table-narrow')}@6000`,
+    ROTARIS_CAPTURE_RESIZE: '1000x680@4600',
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'table-narrow.png')}@6200`,
+    ROTARIS_CAPTURE_AFTER_MS: '7000',
+  });
+  const wide = evalsOf(r3.log).find((e) => e.kind === 'table-wide');
+  const narrow = evalsOf(r3.log).find((e) => e.kind === 'table-narrow');
+  expect(wide?.rows === 23 && narrow?.rows === 23, `the table's rows at the two sizes: ${wide?.rows} and ${narrow?.rows}, not 23 each (see table-forms.log)`);
+  expect(wide.window[0] === 1440 && JSON.stringify(wide.displays) === JSON.stringify(['table-row']) && wide.lines === 1, `at ${wide.window.join('×')} the rows are not the one-line table: display ${JSON.stringify(wide.displays)}, ${wide.lines} line(s), card ${wide.cardWidthRem}rem (PD-MONITOR-009 clause 3)`);
+  expect(narrow.window[0] === 1000 && narrow.cardWidthRem < 40, `at ${narrow.window.join('×')} the table's card is ${narrow.cardWidthRem}rem wide, not under the 40rem at which the rows give way`);
+  expect(JSON.stringify(narrow.displays) === JSON.stringify(['grid']) && narrow.lines === 3, `in a card ${narrow.cardWidthRem}rem wide the rows are not the three-line grid: display ${JSON.stringify(narrow.displays)}, ${narrow.lines} line(s) (PD-MONITOR-009 clause 3)`);
+  expect(JSON.stringify(narrow.values) === JSON.stringify(wide.values) && narrow.shown && narrow.actions, `the narrow rows dropped or changed a value: wide ${JSON.stringify(wide.values[0])}, narrow ${JSON.stringify(narrow.values[0])}, every cell drawn ${narrow.shown}, both controls ${narrow.actions} (PD-MONITOR-009 clause 3: every value kept)`);
+  expect(narrow.cardScroll[0] <= narrow.cardScroll[1], `the narrow table's card scrolls sideways: ${JSON.stringify(narrow.cardScroll)}`);
+  expect(JSON.stringify(narrow.roles) === JSON.stringify(['row', 'cell']), `the rows' roles in the grid form: ${JSON.stringify(narrow.roles)} (a grid costs a table its semantics unless each box carries its role)`);
+  results.tableForms = { wide: { window: wide.window, cardWidthRem: wide.cardWidthRem, display: wide.displays, lines: wide.lines }, narrow: { window: narrow.window, cardWidthRem: narrow.cardWidthRem, display: narrow.displays, lines: narrow.lines, roles: narrow.roles }, valuesKept: true, png: join(output, 'table-narrow.png') };
 }
 
 // 3. Pause refused for a child, honoured for the run.
@@ -434,12 +502,12 @@ const s3 = scenario('pause');
 {
   const r = await launch('pause', s3, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:9000,answer', ROTARIS_CAPTURE_PROMPT: 'pause me',
-    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;[data-testid="mission-pause"]@5400;;[data-testid="mission-run-row"]@6200;;[data-testid="mission-pause"]@6600',
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-pause"]@5800;;[data-testid="mission-message"]@5800;;[data-testid="mission-pause-reason"]@5800;;[data-testid="mission-subtitle"]@5800;;[data-testid="mission-pause"]@6400;;[data-testid="mission-message"]@7200;;[data-testid="mission-subtitle"]@7200',
+    ROTARIS_CAPTURE_PROBE_AT: `[data-testid="mission-pause"]@5800;;[data-testid="mission-message"]@5800;;[data-testid="mission-pause-reason"]@5800;;${HEADER}@5800;;[data-testid="mission-pause"]@6400;;[data-testid="mission-message"]@7200;;${HEADER}@7200`,
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
     // The view stays mounted from the accepted pause until the session rests: what its Pause reads then (REQ-MONITOR-296).
-    ROTARIS_CAPTURE_PROBE: '[data-testid="mission-pause"];;[data-testid="mission-pause-reason"];;[data-testid="mission-subtitle"]',
+    ROTARIS_CAPTURE_PROBE: `[data-testid="mission-pause"];;[data-testid="mission-pause-reason"];;${HEADER}`,
   });
   const db = open(s3); const row = session(db); const names = timeline(db, row.session_id).map((t) => t.name); db.close();
   const refused = probesAt(r.log, 5800, '[data-testid="mission-pause"]')?.[0]?.data?.['data-enabled'];
@@ -447,26 +515,26 @@ const s3 = scenario('pause');
   const reason = probesAt(r.log, 5800, '[data-testid="mission-pause-reason"]')?.[0]?.text ?? '';
   expect(refused === '0', `Pause was enabled with a child selected (data-enabled=${refused})`);
   expect(message === 'Pause applies to the whole run; select the run to pause it.' && reason === message, `the refusal text: message "${message}", reason "${reason}" (REQ-MONITOR-276)`);
-  // The run's state from the Mission subtitle: REQ-SHELL-038's status strip names no run state (its repair, 2026-10-02, dropped
-  // the `run …` item this read until then).
-  const sub58 = probesAt(r.log, 5800, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
-  expect(/· Running$/.test(sub58), `the run was not still running after the refused pause: "${sub58}"`);
+  // The run's state from the Overview's header (PD-MONITOR-009; the Mission subtitle until 2026-11-11): REQ-SHELL-038's status
+  // strip names no run state (its repair, 2026-10-02, dropped the `run …` item this read until then).
+  const sub58 = probesAt(r.log, 5800, HEADER)?.[0]?.text ?? '';
+  expect(headerStatus(sub58) === 'running', `the run was not still running after the refused pause: "${sub58}"`);
   const enabled = probesAt(r.log, 6400, '[data-testid="mission-pause"]')?.[0]?.data?.['data-enabled'];
   expect(enabled === '1', `Pause was not enabled with the run selected (data-enabled=${enabled})`);
   const accepted = probesAt(r.log, 7200, '[data-testid="mission-message"]')?.[0]?.text ?? '';
-  const sub72 = probesAt(r.log, 7200, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
+  const sub72 = probesAt(r.log, 7200, HEADER)?.[0]?.text ?? '';
   expect(/Pause accepted/.test(accepted), `the accepted pause's message: "${accepted}"`);
-  expect(/· (Pausing|Paused)$/.test(sub72), `the subtitle after the accepted pause: "${sub72}" (REQ-MONITOR-124)`);
+  expect(['pausing', 'paused'].includes(headerStatus(sub72)), `the Overview's header after the accepted pause: "${sub72}" (REQ-MONITOR-124)`);
   expect(row.execution_status === 'paused', `the session ended ${row.execution_status} (${row.stop_reason}), not paused`);
   // REQ-MONITOR-296 / REQ-NOTIFY-050: the accepted pause's pending mark belongs to the run that accepted it, so once the
-  // session rests `paused` the still-mounted view's Pause reads `Pause` beside the subtitle's Paused, never `Pausing…`
-  // (the note "the Mission view's pause reads pausing after the session rests").
+  // session rests `paused` the still-mounted view's Pause reads `Pause` beside the header's `paused`, never `Pausing…`
+  // (the note "the Mission view's pause reads pausing after the session rests"; the control is the graph card's now).
   const restPause = endProbe(r.log, '[data-testid="mission-pause"]')?.[0];
-  const restSubtitle = endProbe(r.log, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
+  const restSubtitle = endProbe(r.log, HEADER)?.[0]?.text ?? '';
   const restReason = endProbe(r.log, '[data-testid="mission-pause-reason"]')?.[0]?.text ?? '';
-  expect(/· Paused$/.test(restSubtitle), `the subtitle at rest: "${restSubtitle}"`);
+  expect(headerStatus(restSubtitle) === 'paused', `the Overview's header at rest: "${restSubtitle}"`);
   expect(restPause?.text === 'Pause' && restPause?.data?.['data-enabled'] === '0' && restReason === 'Pause is unavailable because no active run exists.', `the Pause control at rest read "${restPause?.text}" (data-enabled=${restPause?.data?.['data-enabled']}) beside "${restReason}" (REQ-MONITOR-296)`);
-  results.pause = { pauseAtRest: restPause?.text ?? null, subtitleAtRest: restSubtitle, refusedMessage: message, subtitleAfterRefusal: sub58, subtitleAfterAccept: sub72, finalStatus: row.execution_status, timeline: names.filter((n) => /pause/.test(n)) };
+  results.pause = { pauseAtRest: restPause?.text ?? null, headerAtRest: restSubtitle, refusedMessage: message, headerAfterRefusal: sub58, headerAfterAccept: sub72, finalStatus: row.execution_status, timeline: names.filter((n) => /pause/.test(n)) };
 }
 
 // 4. Cancel a child with a live descendant: the confirmation names it and the cascade count; the child cancelled, the run on.
@@ -476,7 +544,7 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
   const r = await launch('cancel', s4, {
     // Each child walks this list from its own first step (run-host/scripted-client.ts): alpha delegates `sub`, and its next call waits 16 s; sub's first step names `delegate`, which a coding-agent is not granted, so the client answers instead, and sub's next call waits 16 s — both are live when the cancel lands.
     ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel a child',
-    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@7000;;[data-testid="mission-cancel"]@7400;;.dialog-actions .btn-danger@8200',
     ROTARIS_CAPTURE_PROBE_AT: '.agent-table__row@6800;;[data-testid="mission-confirm"]@7900;;[data-testid="mission-confirm"] .btn-danger@7900;;.agent-table__row@8205;;.agent-table__row@8215;;.agent-table__row@8240;;.agent-table__row@9000',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
@@ -511,32 +579,32 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
   results.cancel = { justAfterConfirm: justAfter, dialog, confirmLabel, alphaState: alpha?.state, descendants: kids.filter((k) => k.parent_id === alpha?.task_id).map((k) => `${k.canonical_name}:${k.state}`), rowsAfter: after9, runStatus: row.execution_status, cancelEntry: names.find((n) => n.name === 'child_user_cancelled')?.message ?? null, teardowns };
 }
 
-// 4b. Cancel the run from the Mission view (acceptance A35, REQ-MONITOR-127/130/296): the run row selected, "Cancel selection",
+// 4b. Cancel the run from the Overview's graph card (PD-MONITOR-009; the Mission view until 2026-11-11; acceptance A35, REQ-MONITOR-127/130/296): the run row selected, "Cancel selection",
 // confirmed. The session is shown `cancelling` from the confirmation — first by the window's own overlay, then, since OQ-165
 // was ruled (2026-10-06), by the record itself, the engine saving `cancelling` when it accepts the explicit cancel and keeping
 // it to the run's end (before the ruling its records read `running` until the run's end) — and no sample from the confirm to the run's end
-// reads `Running`, in the subtitle or the run row (the status strip names no run state since 2026-10-02, REQ-SHELL-038). Before the repair only the Workspace set anything, and the Mission view read `Running` throughout.
+// reads the run running, in the Overview's header or the run row (the status strip names no run state since 2026-10-02, REQ-SHELL-038). Before the repair only the Workspace set anything, and the Mission view read `Running` throughout.
 const s4b = scenario('cancel-run', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
 {
   const SAMPLES = [8210, 8220, 8230, 8240, 8250, 8270, 8300, 8500, 9000, 10000];
-  // One selector list, so each sample is ONE querySelectorAll — the dialog, the subtitle and the run row read in
+  // One selector list, so each sample is ONE querySelectorAll — the dialog, the Overview's header and the run row read in
   // the same instant. The confirm click is an input event the renderer handles after the main process logs "clicked", and a
   // separate probe can run before it (seen 2026-10-01: the click and a probe reading `Running` logged in the same
   // millisecond, the next probe 6 ms later reading `Cancelling`). The dialog closes in the same commit that lays the
   // overlay (`confirmCancel`: `setConfirming(null)`, then `cancelRun`'s `beginRun`, in one handler), so a snapshot without
   // the dialog was read after the click was handled — on the base build as on the repair.
-  const SNAPSHOT = '[data-testid="mission-confirm"], [data-testid="mission-subtitle"], [data-testid="mission-run-row"]';
+  const SNAPSHOT = `[data-testid="mission-confirm"], ${HEADER}, [data-testid="mission-run-row"]`;
   const r = await launch('cancel-run', s4b, {
     ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel the run',
-    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
     ROTARIS_CAPTURE_CLICKS: '[data-testid="mission-run-row"]@7000;;[data-testid="mission-cancel"]@7400;;.dialog-actions .btn-danger@8200',
-    ROTARIS_CAPTURE_PROBE_AT: ['[data-testid="mission-subtitle"]@6800', '[data-testid="mission-confirm"]@7900', ...SAMPLES.map((at) => `${SNAPSHOT}@${at}`)].join(';;'),
+    ROTARIS_CAPTURE_PROBE_AT: [`${HEADER}@6800`, '[data-testid="mission-confirm"]@7900', ...SAMPLES.map((at) => `${SNAPSHOT}@${at}`)].join(';;'),
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'cancel-run.png')}@8240`,
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
   }, { timeout: 200_000 });
   const db = open(s4b); const row = session(db); db.close();
-  const before = probesAt(r.log, 6800, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
-  expect(/· Running$/.test(before), `the run was not running before the cancel: "${before}"`);
+  const before = probesAt(r.log, 6800, HEADER)?.[0]?.text ?? '';
+  expect(headerStatus(before) === 'running', `the run was not running before the cancel: "${before}"`);
   const dialog = probesAt(r.log, 7900, '[data-testid="mission-confirm"]')?.[0]?.text ?? '';
   expect(/Cancel the run\?/.test(dialog), `the run's confirmation did not open: "${dialog}" (REQ-MONITOR-126)`);
   // Only the snapshots the log records after the confirm click AND that no longer hold the dialog count: a click scheduled
@@ -548,19 +616,21 @@ const s4b = scenario('cancel-run', ['personas:', '  lead:', '    name: lead', ' 
   const byTestId = (snap, id) => snap.find((p) => p.data['data-testid'] === id)?.text ?? null;
   const snapshots = SAMPLES.map((at) => ({ at, snap: probesAt(afterConfirm, at, SNAPSHOT) })).filter((x) => x.snap !== null);
   const pending = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') !== null).map((x) => x.at);
-  const samples = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') === null).map(({ at, snap }) => ({ at, subtitle: byTestId(snap, 'mission-subtitle'), runRow: byTestId(snap, 'mission-run-row') })).filter((x) => x.subtitle !== null);
+  const samples = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') === null).map(({ at, snap }) => ({ at, subtitle: byTestId(snap, 'overview-session'), runRow: byTestId(snap, 'mission-run-row') })).filter((x) => x.subtitle !== null);
   expect(samples.length >= 3, `fewer than three samples landed after the confirm was handled: ${JSON.stringify(samples)} (still showing the dialog: ${JSON.stringify(pending)})`);
-  const status = (text) => (text === null ? null : text.split('·').pop().trim());
-  // REQ-MONITOR-127/130: from the confirmation on, the Mission view never reads the run `Running` again — each
-  // sample reads `Cancelling` until the run's record at rest arrives (REQ-ORCH-082: `user_cancelled` rests `paused`).
-  const running = samples.filter((x) => status(x.subtitle) === 'Running' || /Running$/.test(x.runRow ?? ''));
-  expect(running.length === 0, `the Mission view read the cancelled run Running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127, acceptance A35)`);
-  // A sample that is not yet at rest is inside the cancel's window, so it reads `Cancelling` and no other active status.
-  const ACTIVE = ['Running', 'Waiting', 'Starting', 'Pausing', 'Background'];
+  // The header's status is the presentation status in lower case (`headerStatus`); the run row still reads the label.
+  const status = headerStatus;
+  // REQ-MONITOR-127/130: from the confirmation on, the Overview never reads the run running again, in its header or in the
+  // graph card's run row — each sample reads `cancelling` until the run's record at rest arrives (REQ-ORCH-082:
+  // `user_cancelled` rests `paused`).
+  const running = samples.filter((x) => status(x.subtitle) === 'running' || /Running$/.test(x.runRow ?? ''));
+  expect(running.length === 0, `the Overview read the cancelled run running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127, acceptance A35)`);
+  // A sample that is not yet at rest is inside the cancel's window, so it reads `cancelling` and no other active status.
+  const ACTIVE = ['running', 'waiting', 'starting', 'pausing', 'background'];
   const otherActive = samples.filter((x) => ACTIVE.includes(status(x.subtitle)));
-  expect(otherActive.length === 0, `a sample after the confirm read an active status other than Cancelling: ${JSON.stringify(otherActive)} (REQ-MONITOR-127)`);
+  expect(otherActive.length === 0, `a sample after the confirm read an active status other than cancelling: ${JSON.stringify(otherActive)} (REQ-MONITOR-127)`);
   // Whether a sample lands inside the cancel's window depends on the host's timing: recorded, not asserted.
-  const cancellingSamples = samples.filter((x) => status(x.subtitle) === 'Cancelling').length;
+  const cancellingSamples = samples.filter((x) => status(x.subtitle) === 'cancelling').length;
   expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);
   results.cancelRun = { before, dialog, samples, stillShowingDialog: pending, cancellingSamples, finalStatus: row.execution_status, stopReason: row.stop_reason };
 }
@@ -656,7 +726,8 @@ const s5 = scenario('open');
 {
   const r = await launch('open-off', s5, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:10000,answer', ROTARIS_CAPTURE_PROMPT: 'open an agent',
-    ROTARIS_CAPTURE_VIEWS: '3@3500', ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;[data-testid="mission-open"]@5500',
+    // PD-MONITOR-009: the row is the Overview's table card's, and Open is the graph card's control for the shared selection.
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500', ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;[data-testid="mission-open"]@5500',
     ROTARIS_CAPTURE_PROBE_AT: '.app-shell@6200;;[data-testid="inspector-tag"]@6200;;[data-testid="inspector-name"]@6200;;.inspector@6200',
     ROTARIS_CAPTURE_WINDOWS_AT: '6200',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1000',
@@ -672,7 +743,7 @@ const s5 = scenario('open');
   setPreference(s5, 'interface/agentPopout', true);
   const r2 = await launch('open-on', s5, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'pop out an agent',
-    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;.agent-table__row:nth-child(2) .btn>>Pop out@7500;;.agent-table__row:nth-child(2) .btn>>Pop out@10500',
     ROTARIS_CAPTURE_WINDOWS_AT: '6500;;8500;;9800;;11500',
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: '[data-testid="persona-agent-name"]@6500;;[data-testid="persona-count"]@6500;;.persona-window__tabs .tab@6500;;[data-testid="persona-agent-name"]@8500;;[data-testid="persona-agent-state"]@11500;;[data-testid="persona-context-line"]@11500;;[data-testid="persona-transcript"]@11500',
@@ -704,7 +775,8 @@ const s5 = scenario('open');
 
   // 5c. A new session destroys every persona window (REQ-SHELL-078): the stored session reopened, a window popped out, then New session → Start session → a prompt.
   const r3 = await launch('open-new-session', s5, {
-    ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: '3@2500;;1@5000',
+    // One view step where there were two (Mission for the Pop out, then the Overview for "New session"): both stand on the Overview.
+    ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: 'overview@2500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row .btn>>Pop out@3500;;.btn>>New session@5600;;[data-testid="start-session-accept"]@6400',
     ROTARIS_CAPTURE_TYPE: 'second session>>composer@7600',
     ROTARIS_CAPTURE_WINDOWS_AT: '4600;;9800',
@@ -758,23 +830,62 @@ const s6 = scenario('inspector');
   results.inspector = { following: { tag: tag3, name: name3, chips: rootChips }, pinned: { tag: tag45, name: name45 }, chipsBefore: chips45, chipsAfter: chips85, meta, note, ring, steer: steered ? JSON.parse(steered.metadata) : null, png: join(output, 'inspector-live.png') };
 }
 
-// 7. The strategy selector and the depth control write their keys; Settings shows the same values; the pop-out toggle writes its preference.
+// 7. PD-MONITOR-009 clause 6 (2026-11-11). Until then this launch chose the strategy and the depth in two selectors on the
+// Mission view's "Delegation settings" card, which wrote their keys per field, and read Settings afterwards. That card is
+// drawn on no view now: the graph card's last line shows the configured strategy as text and leads to its one editor. So:
+// the card's strategy read (a span, `orchestrator`, the scratch file naming none), with no selector and no depth control on
+// the Overview; "Open Runtime settings" pressed, landing on the Settings view at Runtime; there "Delegation strategy" chosen
+// and "Depth cap" typed, the save bar reading unsaved until Save writes both keys; Settings shows the same values at the end;
+// the pop-out toggle writes its preference, as before. A second launch reads the card's strategy from the file just written.
+// The Overview draws its cards once a session is listed (its empty state otherwise), so the launch runs one scripted answer first.
 const s7 = scenario('settings');
 {
+  const card = `(() => { const q = (s) => document.querySelector(s); const strategy = q('[data-testid="mission-strategy"]'); return { kind: 'strategy-card', view: q('.app-shell')?.getAttribute('data-view') ?? null, tag: strategy?.tagName ?? null, text: strategy?.textContent ?? null, line: q('[data-testid="mission-next-run"]')?.textContent ?? null, editable: strategy === null ? null : strategy.matches('select, input, textarea, [contenteditable="true"], [role="combobox"], [role="listbox"]'), controls: document.querySelectorAll(':is([data-testid="mission-graph"], [data-testid="mission-table"]) :is(select, input, [role="combobox"], [role="listbox"])').length, depth: q('[data-testid="mission-depth"]') !== null, settingsCard: q('[data-testid="mission-settings"]') !== null }; })()`;
   const r = await launch('settings', s7, {
-    ROTARIS_CAPTURE_VIEWS: '3@1200;;7@4200',
-    ROTARIS_CAPTURE_SELECT: '[data-testid="mission-strategy"]>>swarm@2200;;[data-testid="mission-depth"]>>2@3000',
-    ROTARIS_CAPTURE_CLICKS: '.nav-list__item>>Interface@4800;;[data-testid="agent-pop-out-toggle"]@5200;;.nav-list__item>>Runtime@5700',
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-strategy"]@3800;;[data-testid="mission-depth"]@3800',
-    ROTARIS_CAPTURE_AFTER_MS: '6800', ROTARIS_CAPTURE_PROBE: '#strategy;;#max-depth;;[data-testid="agent-pop-out-toggle"]',
+    ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: 'one run, so that the Overview draws its cards',
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
+    // The card is read 2.5 s after the Overview is opened, as item 1 reads it, and not the instant it is drawn: the view reads
+    // the configuration when it mounts and the card draws a dash until that answers (a reading 321 ms after the view step
+    // read "—" on 2026-11-11). The press waits from 6.2 s on, so the reading comes first.
+    ROTARIS_CAPTURE_EVAL_AT: `${card}@6000`,
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="mission-open-runtime"]@6200~14000;;#max-depth@8400;;.save-bar .btn-primary>>Save@10800;;.nav-list__item>>Interface@12200;;[data-testid="agent-pop-out-toggle"]@12700;;.nav-list__item>>Runtime@13300',
+    ROTARIS_CAPTURE_SELECT: '#strategy>>swarm@7800',
+    // The depth cap typed as a person types it: the field's text selected, the digit typed over it, Tab to commit the draft.
+    ROTARIS_CAPTURE_CHORDS: 'Ctrl+A@8900', ROTARIS_CAPTURE_TYPE_AT: '2@9300', ROTARIS_CAPTURE_KEYS: 'Tab@10000',
+    ROTARIS_CAPTURE_PROBE_AT: '.app-shell@7400;;.nav-list__item.is-selected@7400;;.save-bar__status@10400',
+    ROTARIS_CAPTURE_AFTER_MS: '14600', ROTARIS_CAPTURE_PROBE: '#strategy;;#max-depth;;[data-testid="agent-pop-out-toggle"];;.save-bar__status;;.nav-list__item.is-selected',
   });
+  const shown = evalsOf(r.log).find((e) => e.kind === 'strategy-card');
+  expect(shown, 'no reading of the graph card\'s strategy (see settings.log)');
+  expect(shown.view === 'overview' && shown.tag === 'SPAN' && shown.text === 'orchestrator' && shown.editable === false, `the graph card's strategy: ${JSON.stringify(shown)} (PD-MONITOR-009 clause 6: the configured strategy, shown and never edited there)`);
+  expect(shown.controls === 0 && !shown.depth && !shown.settingsCard, `the Overview's delegation cards still draw a selector or a field: ${JSON.stringify(shown)} (PD-MONITOR-009 clause 6: the selector and the depth control are drawn on no monitoring view)`);
+  expect(/capture: clicked "\[data-testid="mission-open-runtime"\]"/.test(r.log), 'the "Open Runtime settings" press was not recorded (see settings.log)');
+  const landedView = probesAt(r.log, 7400, '.app-shell')?.[0]?.data?.['data-view'];
+  const landedCategory = probesAt(r.log, 7400, '.nav-list__item.is-selected')?.map((p) => p.text) ?? [];
+  expect(landedView === 'settings' && JSON.stringify(landedCategory) === JSON.stringify(['Runtime']), `"Open Runtime settings" landed on ${landedView} at ${JSON.stringify(landedCategory)}, not Settings › Runtime (PD-MONITOR-009 clause 6)`);
+  const dirty = probesAt(r.log, 10400, '.save-bar__status')?.[0]?.text ?? null;
+  expect(dirty === 'Unsaved changes', `the save bar after the two edits and before Save: ${JSON.stringify(dirty)}`);
   const yaml = readFileSync(join(s7.workspace, '.rotaris', 'agents.yaml'), 'utf8');
   expect(/delegation_strategy: swarm/.test(yaml) && /max_depth: 2\b/.test(yaml), `the file after the writes:\n${yaml}`);
   const strategy = endProbe(r.log, '#strategy')?.[0]?.value; const depth = endProbe(r.log, '#max-depth')?.[0]?.value;
   expect(strategy === 'swarm' && depth === '2', `Settings → Runtime shows strategy ${strategy}, depth ${depth}`);
+  const saved = endProbe(r.log, '.save-bar__status')?.[0]?.text ?? null;
+  expect(saved === 'All changes saved', `the save bar at the end: ${JSON.stringify(saved)}`);
   const prefs = JSON.parse(readFileSync(join(s7.preferences, 'preferences.json'), 'utf8'));
   expect(prefs['interface/agentPopout'] === true, `the toggle did not persist: ${JSON.stringify(prefs)} (REQ-SHELL-073)`);
-  results.settings = { yamlStrategy: 'swarm', yamlDepth: 2, settingsStrategy: strategy, settingsDepth: depth, popOutPreference: prefs['interface/agentPopout'] };
+  expect(unexpected(r.errors).length === 0, `renderer errors: ${unexpected(r.errors).join(' | ')}`);
+
+  // 7b. Relaunched on the same scratch profile, no session focused and one listed: the graph card reads the strategy the file holds.
+  // The card draws a dash until the configuration is read, so the reading is taken once the waited-for text has had its
+  // 9 s to arrive; a card that never shows it is read all the same, and fails on what it shows.
+  const r2 = await launch('settings-card', s7, {
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-strategy"]>>swarm@~9000',
+    ROTARIS_CAPTURE_EVAL_AT: `${card}@9200`,
+    ROTARIS_CAPTURE_AFTER_MS: '9600',
+  });
+  const after = evalsOf(r2.log).find((e) => e.kind === 'strategy-card');
+  expect(after && after.view === 'overview' && after.tag === 'SPAN' && after.text === 'swarm', `the graph card after the write: ${JSON.stringify(after ?? null)} — it shows the strategy Settings › Runtime saved (PD-MONITOR-009 clause 6)`);
+  results.settings = { cardStrategy: shown.text, cardLine: shown.line, landed: { view: landedView, category: landedCategory[0] }, yamlStrategy: 'swarm', yamlDepth: 2, settingsStrategy: strategy, settingsDepth: depth, saveBar: { afterEdit: dirty, atEnd: saved }, cardStrategyAfter: after.text, popOutPreference: prefs['interface/agentPopout'] };
 }
 
 // 8. Reconciliation: a child left `running` on a completed session presents settled on every surface (REQ-MONITOR-211/213).
@@ -785,7 +896,8 @@ const s7 = scenario('settings');
     VALUES (?, 'bg_0000dead', 'zombie', 'Zombie', 'coding-agent', 'running', 'root:1', 1, 1, 'scripted', 'quick', 1, 'a child the run left running', '[]', '[]', '["read_file"]', '{}', '2026-09-05T10:00:00.000Z', 0)`).run(row.session_id);
   dbw.close();
   const r = await launch('reconcile', s1, {
-    ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: '3@2500',
+    // PD-MONITOR-009: "every surface" is the Overview's table card, the Workspace's inspector and sidebar tree, and the persona window.
+    ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: 'overview@2500',
     ROTARIS_CAPTURE_CLICKS: '[data-agent-id="bg_0000dead"]@3500;;[data-testid="mission-open"]@4000;;.inspector__actions .btn>>Pop out@5000',
     ROTARIS_CAPTURE_PROBE_AT: '[data-agent-id="bg_0000dead"]@3800;;.agent-table__row@3800;;[data-testid="inspector-name"]@4600;;[data-testid="inspector-meta"]@4600;;.agent-row[data-task-id="bg_0000dead"]@4600',
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: '[data-testid="persona-agent-name"]@6500;;[data-testid="persona-agent-state"]@6500',
@@ -798,7 +910,7 @@ const s7 = scenario('settings');
   // the same settled state and none shows the agent running.
   const tableRow = probesAt(r.log, 3800, '[data-agent-id="bg_0000dead"]')?.[0];
   const settled = tableRow?.data?.['data-state'];
-  expect(settled === 'cancelled' || settled === 'done', `the Mission table row: ${JSON.stringify(tableRow)}`);
+  expect(settled === 'cancelled' || settled === 'done', `the agent table's row: ${JSON.stringify(tableRow)}`);
   const all = (probesAt(r.log, 3800, '.agent-table__row') ?? []).map((p) => p.data['data-state']);
   expect(all.length === 4 && all.every((st) => st === 'done' || st === 'cancelled'), `the table's states: ${JSON.stringify(all)}`);
   const meta = probesAt(r.log, 4600, '[data-testid="inspector-meta"]')?.[0]?.text ?? '';

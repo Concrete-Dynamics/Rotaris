@@ -69,6 +69,9 @@ import { hostLoad, keepEvidence, keepRed } from './lib/proof-reds.mjs';
  * `red.json` (the scenario, the error, the commit, the host's load and the results so far, `lib/proof-reds.mjs`), where
  * the next run, which clears `.proof/slice-proof/`, does not remove it. Each launch's load is recorded in
  * `results.json`'s `loads`: a timing red, such as a classification at its 12 s bound (OQ-114), is judged beside it.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`settings`), not by its digit.
+ * Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -211,7 +214,7 @@ if (PASTE && !replay('first-launch')) {
   console.error('================================================================================\n');
 }
 const log1 = replay('first-launch') ? readFileSync(join(output, 'first-launch.log'), 'utf8') : await launch('first-launch', {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_CLICKS: '[data-action="add-endpoint"]@2200',
   ROTARIS_CAPTURE_PROVIDER_FILL: PASTE ? `${LABEL}>>${BASE_URL}` : `${LABEL}>>${BASE_URL}>>${endpoint.key}`,
   ROTARIS_CAPTURE_WAIT: `file:${tokensFile}`, ROTARIS_CAPTURE_WAIT_MS: String(KEY_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
@@ -281,7 +284,7 @@ results.firstLaunch = { notice: 'raised', outcome: added[1], discovered, credent
 scenario = 'slots';
 // 2. The three tier slots pinned to the proof model and saved (or, on a one-model endpoint, already its discovered picks).
 const log2 = replay('slots') ? readFileSync(join(output, 'slots.log'), 'utf8') : await launch('slots', {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Models',
   // The slot's model control is the design system's SearchableSelect, not a native `<select>`: named by its label alone,
   // the capture seam drives either kind (`docs/archive/defects/slice-proof-names-the-model-slots-as-native-selects.md`).
   ROTARIS_CAPTURE_SELECT: `[aria-label="Model for small_model"]>>${QUALIFIED}@2200;;[aria-label="Model for medium_model"]>>${QUALIFIED}@2500;;[aria-label="Model for large_model"]>>${QUALIFIED}@2800`,
@@ -473,7 +476,7 @@ results.spike6 = { exit: spike ? spike.status : spikeSkipped ? 'skipped' : 'repl
 scenario = 'sign-out';
 // 5. Sign out from the providers card; the file gone, the snapshot kept.
 const log5 = replay('sign-out') ? readFileSync(join(output, 'sign-out.log'), 'utf8') : await launch('sign-out', {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Models',
   // The row's own "Sign out", then the confirmation's (REQ-PROVIDER's sign-out asks first); the settings panel the step
   // opened before holds no Sign out (`docs/archive/defects/slice-proof-signs-out-from-a-panel-that-no-longer-holds-sign-out.md`).
   ROTARIS_CAPTURE_CLICKS: `[data-provider="${PROVIDER_ID}"] .provider-row__actions button>>Sign out@2200;;[role="dialog"] .dialog-actions button>>Sign out@3200`,

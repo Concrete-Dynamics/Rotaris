@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
-import { dictationSaveProblem, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
+import { dictationSaveProblem, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
 import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
 // ADR-0063 — portable skills: the catalog reader (`askUntilDiscovered`, `bindSkillsReader`, `readWhileMounted`, in the `@rotaris/ui` import above), the Settings tab's props and the composer's commands.
@@ -373,58 +373,41 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
 }
 
 /**
- * REQ-SHELL-023's Mission view (Part R; REQ-MONITOR-274..276). Mounted only while shown (REQ-MONITOR-039/275: a hidden
- * surface refreshes nothing and runs no timer); the strategy and the depth are the settings' own values, written through
- * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, and cancel is `cancelAgent` — for the run row the reserved run id, final (`cancelRun`, PD-ORCH-005 clause 15).
+ * REQ-SHELL-026: the startup view. Mounted only while shown, so nothing here runs while it is hidden
+ * (REQ-MONITOR-174); the session list and the repository are read on mount and again whenever the followed
+ * run reaches a terminal state; the configured caps come from the configuration snapshot (REQ-MONITOR-169).
+ *
+ * PD-MONITOR-009: it is the one monitoring view, so it also hands the view the delegation graph's and the agent table's
+ * facts, which the Mission root handed its view until PD-SHELL-015 (Part R; REQ-MONITOR-274..276): the shared selection
+ * (REQ-MONITOR-042), the run-level agent and the resting fact from `restingView`, the one call the Workspace makes too;
+ * pause is the existing `pause` control, and cancel is `cancelAgent` — for the run row the reserved run id, final
+ * (`cancelRun`, PD-ORCH-005 clause 15). Being mounted only while shown is also what REQ-MONITOR-039 and REQ-MONITOR-275 ask
+ * of the table: a hidden surface refreshes nothing and runs no timer. The strategy is read from the configuration snapshot
+ * and never written here (clause 6): its editor is the Settings view's Runtime category.
  */
-function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) {
+const UNREAD_REPOSITORY: RepositoryState = { gitAvailable: false, isRepository: false, branch: null, base: null, ahead: 0, behind: 0, touched: 0, uncommitted: 0, failed: ['request'], readMs: 0 };
+function Overview({ workspace, popOut, layout, onLayout, reducedMotion, onListSessions, onOpenSession, onNewSession, libraryRevision }: { workspace: string; popOut: boolean; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; reducedMotion: boolean; onListSessions: () => void; onOpenSession: (id: string) => Promise<{ ok: true } | { ok: false; reason: string }>; onNewSession: () => Promise<{ ok: true } | { ok: false; reason: string }>; libraryRevision: number }) {
   // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
   const session = useShownSession();
+  // PD-MONITOR-009: the delegation cards' facts (the Mission root's, until PD-SHELL-015).
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const selectedAgentId = useShellState((st) => st.selectedAgentId);
   const selectAgent = useShellState((st) => st.selectAgent);
   const snapshot = useConfigSnapshot(workspace);
-  const refresh = useStore(refreshStats, (st) => st);
+  const refreshed = useStore(refreshStats, (st) => st);
   const entry = useMemo(() => entryOf(snapshot, rows, session), [snapshot, rows, session]);
   // PD-ORCH-005 clauses 13 and 16 (OQ-100, OQ-101): in REQ-CHAT-008's recovery state the run-level agent presents `paused`,
   // as its agents do, and a paused child offers "Cancel selection" while its session rests — both from `restingView`,
   // the one call the Workspace makes too.
   const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
   const { runLevel, resting } = useMemo(() => restingView(session, entry, needsRecovery), [session, entry, needsRecovery]);
-  const nowIso = useElapsedTick(session);
-  const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
-  useEffect(() => { if (workspace !== '(no workspace)') queueMicrotask(() => { void bridge.command({ kind: 'session.list' }).then((r) => { if (r.ok) setSessions((r.value as { sessions: SessionListItemPayload[] }).sessions); }); }); }, [workspace, session?.id]);
-  const label = session ? sessions.find((x) => x.sessionId === session.id)?.label ?? null : null;
-  const setField = async (patch: Record<string, unknown>): Promise<{ ok: true } | { ok: false; reason: string }> => {
-    const r = await bridge.command({ kind: 'config.setField', patch });
-    return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
-  };
-  const open = (agent: AgentRecord) => {
+  const agentClock = useElapsedTick(session);
+  const openAgent = (agent: AgentRecord) => {
     // REQ-MONITOR-072 / REQ-SHELL-073: the preference decides; the Workspace inspector shows the agent pinned otherwise.
     if (popOut && agent.id !== RUN_AGENT_ID) { void openPersona(agent, false); return; }
     selectAgent(agent.id);
     useShellState.getState().switchView('workspace');
   };
-  return <MissionView
-    session={session} sessionLabel={label} runLevel={runLevel} resting={resting} recovery={needsRecovery} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
-    onSelect={(id, source) => { selectAgent(id); if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
-    strategy={snapshot?.delegationStrategy ?? null} maxDepth={snapshot?.runtime.max_depth ?? null}
-    onSetStrategy={(value) => setField({ rotaris: { delegation_strategy: value } })} onSetDepth={(value) => setField({ runtime: { max_depth: value } })}
-    onPause={() => control('pause', {}, 'Pause is unavailable because no active run exists.')}
-    onCancelAgent={cancelAgent} onCancelRun={cancelRun}
-    onOpen={open} onPopOut={(agent) => { void openPersona(agent, false); }}
-  />;
-}
-
-/**
- * REQ-SHELL-026: the startup view. Mounted only while shown, so nothing here runs while it is hidden
- * (REQ-MONITOR-174); the session list and the repository are read on mount and again whenever the followed
- * run reaches a terminal state; the configured caps come from the configuration snapshot (REQ-MONITOR-169).
- */
-const UNREAD_REPOSITORY: RepositoryState = { gitAvailable: false, isRepository: false, branch: null, base: null, ahead: 0, behind: 0, touched: 0, uncommitted: 0, failed: ['request'], readMs: 0 };
-function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, onOpenSession, onNewSession, libraryRevision }: { workspace: string; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; reducedMotion: boolean; onListSessions: () => void; onOpenSession: (id: string) => Promise<{ ok: true } | { ok: false; reason: string }>; onNewSession: () => Promise<{ ok: true } | { ok: false; reason: string }>; libraryRevision: number }) {
-  // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
-  const session = useShownSession();
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
   // The list starts as pending, not idle: at `idle` with nothing listed the view drew the onboarding empty state before the first
   // read began, then the nine-card grid with zero figures for the read's length, then the empty state again, on every switch to
@@ -433,7 +416,6 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
   const [sessionsState, setSessionsState] = useState<'idle' | 'loading' | 'error'>('loading');
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [repository, setRepository] = useState<RepositoryState | null>(null);
-  const [caps, setCaps] = useState<{ depth: number; fanOut: number } | null>(null);
   const [improvements, setImprovements] = useState<readonly ImprovementArtifactRecord[]>([]);
   const [nowIso, setNowIso] = useState(() => new Date().toISOString());
   // OQ-537: the onboarding empty state keys its hint and control to the provider precondition by main's own predicate for
@@ -469,12 +451,9 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
     setRepository(repo.ok ? (repo.value as RepositoryState) : UNREAD_REPOSITORY);
   }, [hasWorkspace]);
   useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh, refreshKey]);
-  useEffect(() => {
-    if (!hasWorkspace) return;
-    const apply = (snapshot: ConfigSnapshot) => setCaps({ depth: snapshot.runtime.max_depth, fanOut: snapshot.runtime.max_active_children });
-    queueMicrotask(() => { void bridge.command({ kind: 'config.read' }).then((r) => { if (r.ok) apply(r.value as ConfigSnapshot); }); });
-    return bridge.onConfigChanged((p) => apply((p as { snapshot: ConfigSnapshot }).snapshot));
-  }, [hasWorkspace]);
+  // REQ-MONITOR-169: the configured delegation caps, from the one configuration snapshot the delegation cards read too
+  // (until 2026-11-11 a second `config.read` of this root's own).
+  const caps = useMemo(() => (snapshot === null ? null : { depth: snapshot.runtime.max_depth, fanOut: snapshot.runtime.max_active_children }), [snapshot]);
   useEffect(() => {
     if (!session || !isBusy(session.executionStatus)) return;
     const t = setInterval(() => setNowIso(new Date().toISOString()), 1000);
@@ -487,6 +466,14 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
     onOpenSession={(id) => { void onOpenSession(id); }} onContinueSession={(id) => { void onOpenSession(id); }}
     onGoTo={(view) => useShellState.getState().switchView(view)}
     providerAuthenticated={providerAuthenticated} onOpenSettings={(category) => useShellState.getState().openSettings(category)}
+    delegation={{
+      session, runLevel, resting, recovery: needsRecovery, selectedAgentId, nowIso: agentClock, refresh: refreshed,
+      onSelect: (id, source) => { selectAgent(id); if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } },
+      strategy: snapshot?.delegationStrategy ?? null, onOpenRuntimeSettings: () => useShellState.getState().openSettings('runtime'),
+      onPause: () => control('pause', {}, 'Pause is unavailable because no active run exists.'),
+      onCancelAgent: cancelAgent, onCancelRun: cancelRun,
+      onOpen: openAgent, onPopOut: (agent) => { void openPersona(agent, false); },
+    }}
     improvements={improvements}
     onOpenProposal={(proposalId) => useShellState.getState().openLibrary('proposals', proposalId)}
     onReviewProposal={async (artifactId, proposalId, proposalStatus, expectedVersionsDue) => {
@@ -1530,16 +1517,15 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
       onChooseWorkspace={chooseWorkspace}
       statusItems={status}
       views={{
-        overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} libraryRevision={prompts.revision} />,
+        overview: <Overview workspace={workspace} popOut={popOut} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} libraryRevision={prompts.revision} />,
         // Part AL2: the terminal host around the Workspace — the row previews, the pop-out click and the toolbar control read it (REQ-SHELL-079/080/108).
         workspace: <TerminalHostProvider host={terminalHost}><Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} onOpenTrailer={openTrailer}
           // REQ-NOTIFY-071 / ADR-0048: the followed session's re-authentication prompt (REQ-NOTIFY-030), drawn by the Workspace
           // view in its own row beside the continuing run (OQ-181) — in flow, so no control of the window or the view is under it.
           reauthPrompt={reauth.prompt !== null ? <ReauthPrompt key={reauth.prompt.sessionId} prompt={reauth.prompt} onSubmit={reauth.onSubmit} onDismiss={reauth.onDismiss} /> : null} /></TerminalHostProvider>,
-        mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
         library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,
-        requirements: <RequirementsBoard bridge={bridge} workspace={workspace} onOpenSession={openRequirementSession} />, // Part AK2 — the fourth view of REQ-SHELL-023 (REQ-TRACE-230/381): the board over the bridge; the host lives in `ui/requirements/host.tsx`.
+        requirements: <RequirementsBoard bridge={bridge} workspace={workspace} onOpenSession={openRequirementSession} />, // Part AK2 — the Requirements view, the third since PD-SHELL-015 (REQ-TRACE-230/381): the board over the bridge; the host lives in `ui/requirements/host.tsx`.
         settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} home={home} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} popOut={popOut} onPopOut={changePopOut} />,
       }}
       notice={notice}

@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
-import { MissionView, missionCancelBody, missionConfirmation } from './MissionView.js';
+import { DelegationGraphCard, missionCancelBody, missionConfirmation } from './DelegationCards.js';
 import { CANCEL_RUN_TEXT, cancelConfirmation, cancelUnavailableReason, PAUSE_NO_RUN, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, restingView } from './agents.js';
 import { Inspector } from './Inspector.js';
 import { useShellState } from './shell-state.js';
@@ -37,9 +37,10 @@ const inspector = (selected: string, over: { runActive?: boolean; resting?: bool
   session: over.session ?? session(), rows: [], personas: [], runLevel: null, selectedAgentId: selected, onSelect: () => undefined, models: [], compressionThresholdPercent: 60, runActive: over.runActive ?? false, resting: over.resting ?? true, nowIso: null,
   onSteer: () => undefined, onCancel: () => undefined, onPopOut: () => undefined,
 }));
-const mission = (selected: string, over: { resting?: boolean; recovery?: boolean; session?: SessionRecord; runLevel?: AgentRecord | null } = {}) => renderToStaticMarkup(createElement(MissionView, {
-  session: over.session ?? session(), sessionLabel: null, runLevel: over.runLevel ?? null, resting: over.resting ?? true, recovery: over.recovery ?? false, selectedAgentId: selected, onSelect: () => undefined, nowIso: null, strategy: null, maxDepth: null,
-  onSetStrategy: ok, onSetDepth: ok, onPause: ok, onCancelAgent: ok, onCancelRun: ok, onOpen: () => undefined, onPopOut: () => undefined,
+/** The delegation graph card, the Mission view's until PD-SHELL-015 (PD-MONITOR-009 clause 2). */
+const mission = (selected: string, over: { resting?: boolean; recovery?: boolean; session?: SessionRecord; runLevel?: AgentRecord | null } = {}) => renderToStaticMarkup(createElement(DelegationGraphCard, {
+  session: over.session ?? session(), runLevel: over.runLevel ?? null, resting: over.resting ?? true, recovery: over.recovery ?? false, selectedAgentId: selected, onSelect: () => undefined, nowIso: null, strategy: null,
+  onOpenRuntimeSettings: () => undefined, onPause: ok, onCancelAgent: ok, onCancelRun: ok, onOpen: () => undefined, onPopOut: () => undefined,
 }));
 /** The attributes of the one button a test id names. */
 const button = (html: string, testId: string) => html.match(new RegExp(`<button[^>]*data-testid="${testId}"[^>]*>`))?.[0] ?? '';
@@ -96,11 +97,11 @@ describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-100/OQ-101): the Mission
     // The same busy status with a run under way here still offers it.
     expect(button(mission(RUN_AGENT_ID, { session: recovery, resting: false, recovery: false, runLevel: restingRun }), 'mission-pause')).toContain('data-enabled="1"');
   });
-  it('in REQ-CHAT-008\'s recovery state the Mission view\'s run row and subtitle read the recovery label, not "Running" beside a root drawn `paused`', () => {
+  // The Mission view's subtitle carried the label too; the card has none (PD-MONITOR-009), and the Overview's header is REQ-MONITOR-164's.
+  it('in REQ-CHAT-008\'s recovery state the graph card\'s run row reads the recovery label, not "Running" beside a root drawn `paused`', () => {
     const recovery = session({ executionStatus: 'running' });
     const html = mission(RUN_AGENT_ID, { session: recovery, recovery: true, runLevel: restingRun });
     expect(html).toMatch(/data-testid="mission-run-row"[\s\S]*?mission__run-state[^>]*>Run needs recovery</);
-    expect(html).toContain('· Run needs recovery</span>');
     expect(html).not.toMatch(/>Running</);
     // With a run under way here the same status still reads as running.
     expect(mission(RUN_AGENT_ID, { session: recovery, resting: false, recovery: false, runLevel: restingRun })).toMatch(/mission__run-state[^>]*>Running</);

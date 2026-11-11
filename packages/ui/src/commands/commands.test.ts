@@ -29,10 +29,12 @@ function context(): CommandContext & { readonly calls: string[] } {
 const chord = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({ key, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, ...mods });
 
 describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () => {
-  it('carries REQ-SHELL-049\'s table: seven view entries in view order, the five other chords, and the palette-only About entry', () => {
+  it('carries REQ-SHELL-049\'s table under PD-SHELL-015: six view entries in view order, the five other chords, and the palette-only About entry', () => {
     const rows = COMMANDS.map((c) => [c.id, c.label, c.shortcut ?? null] as const);
-    expect(rows.slice(0, 7)).toEqual(PRIMARY_VIEWS.map((v, i) => [`view.${v.id}`, `Open ${v.label}`, `Ctrl+${i + 1}`]));
-    expect(rows.slice(7)).toEqual([
+    expect(rows.slice(0, 6)).toEqual(PRIMARY_VIEWS.map((v, i) => [`view.${v.id}`, `Open ${v.label}`, `Ctrl+${i + 1}`]));
+    expect(rows.slice(0, 6).map((row) => row[1])).toEqual(['Open Overview', 'Open Workspace', 'Open Requirements', 'Open Git', 'Open Library', 'Open Settings']);
+    expect(rows.some((row) => row[1] === 'Open Mission' || row[2] === 'Ctrl+7')).toBe(false);
+    expect(rows.slice(6)).toEqual([
       ['palette.open', 'Open command palette', 'Ctrl+K'],
       ['settings.open', 'Open Settings', 'Ctrl+,'],
       // N71 (2026-10-13): REQ-SHELL-049's Ctrl+F row, in the table's own place — back from the omitted list.
@@ -185,7 +187,10 @@ describe('chords — REQ-SHELL-057, REQ-SHELL-058, REQ-SHELL-165', () => {
 
   it('resolves an event to at most one command and ignores an unbound chord (REQ-SHELL-165: nothing compensates)', () => {
     expect(commandForEvent(chord('k', { ctrlKey: true }))?.id).toBe('palette.open');
-    expect(commandForEvent(chord('3', { ctrlKey: true }))?.id).toBe(`view.${PRIMARY_VIEWS[2].id}`);
+    expect(commandForEvent(chord('3', { ctrlKey: true }))?.id).toBe('view.requirements');
+    expect(commandForEvent(chord('6', { ctrlKey: true }))?.id).toBe('view.settings');
+    // PD-SHELL-015 clause 3: Ctrl+7 is bound to nothing.
+    expect(commandForEvent(chord('7', { ctrlKey: true }))).toBeNull();
     expect(commandForEvent(chord(',', { ctrlKey: true }))?.id).toBe('settings.open');
     // Part AL2: Ctrl+Shift+T is bound now (REQ-SHELL-080); Ctrl+T alone stays unbound.
     expect(commandForEvent(chord('T', { ctrlKey: true, shiftKey: true }))?.id).toBe('terminal.open');

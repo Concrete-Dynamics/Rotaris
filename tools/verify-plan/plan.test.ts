@@ -61,8 +61,9 @@ describe('verification planner — complete suites', () => {
     expect(proofs).not.toContain('part-h-proof');
   });
 
-  it('MissionView takes mission-proof and not the terminal suite', () => {
-    expect(proofsOf(['packages/ui/src/MissionView.tsx'])).toEqual(['mission-proof']);
+  it('the delegation cards take mission-proof and not the terminal suite, and the Overview that draws them takes both proofs (PD-MONITOR-009)', () => {
+    expect(proofsOf(['packages/ui/src/DelegationCards.tsx'])).toEqual(['mission-proof']);
+    expect(proofsOf(['packages/ui/src/OverviewView.tsx'])).toEqual(['mission-proof', 'overview-proof']);
   });
 
   it('a transcript file takes transcript, rows and update-depth together', () => {
@@ -74,7 +75,7 @@ describe('verification planner — complete suites', () => {
   it('union of two areas keeps both complete suites', () => {
     const proofs = proofsOf([
       'packages/engine/src/run/run.ts',
-      'packages/ui/src/MissionView.tsx',
+      'packages/ui/src/DelegationCards.tsx',
     ]);
     expect(proofs).toEqual([...new Set([...AREAS.run!.proofs, 'mission-proof'])].sort());
   });

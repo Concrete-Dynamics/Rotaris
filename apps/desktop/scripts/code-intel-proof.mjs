@@ -73,6 +73,9 @@
  * Evidence under `.proof/code-intel-proof/`: one log and PNG per launch, `results.json` (its `bundle` names the recipe, pins
  * hash and target the launches ran on, and whether this run built it). `--skip-build` skips the desktop build only: the
  * bundle is checked (`bundle.mjs --check`) and rebuilt when absent or stale either way.
+ *
+ * PD-SHELL-015 (2026-11-11): Settings is the sixth view; the setup launches open it by the chord Ctrl+6 (Ctrl+7 until
+ * then, bound to nothing now). PD-CONFIG-008: MCP Servers is still found by its name among `.nav-list__item`.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -381,12 +384,12 @@ if (want(4)) {
 // Every setup launch raises one notice at the open's 800 ms slot ("No model provider is authenticated yet": the profile
 // has no provider, REQ-WORKSPACE-152), and that persistent banner, drawn above the view, moves Settings down by its own
 // height. A press whose point was read before it drew lands on whatever sat above its target. The shared seam's
-// `ROTARIS_CAPTURE_VIEW=7` read its category's point once and pressed there once, at ~800 ms, the same instant, so it was
+// `ROTARIS_CAPTURE_VIEW=7` (written `settings` since PD-SHELL-015) read its category's point once and pressed there once, at ~800 ms, the same instant, so it was
 // deflected onto a category above more than once: in `setup-again` on 2026-09-29, and then in `setup-cancel`, where
 // Start had already been pressed and the card, Cancel with it, left the screen before Cancel could be pressed (the fix
 // round's verifier, three reds in seven runs; the seam's own note,
 // `docs/archive/defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`,
-// repaired 2026-09-30: the seam now presses again until the category is selected). These launches still do not use that seam. They open Settings with the Ctrl+7 chord, which has no point to miss, and every press waits until the notice
+// repaired 2026-09-30: the seam now presses again until the category is selected). These launches still do not use that seam. They open Settings with its chord (Ctrl+6 since PD-SHELL-015, 2026-11-11; Ctrl+7 until then), which has no point to miss, and every press waits until the notice
 // has been drawn (`body:has([data-testid="notice"])`), so no point is read before the one shift of the launch. The
 // category press is made only if MCP Servers is not the selected category. Start is pressed as soon as it is drawn
 // enabled, which is once the setup status has arrived. `settledPresses` refuses a launch whose Start was never
@@ -395,7 +398,7 @@ const AFTER_NOTICE = 'body:has([data-testid="notice"])';
 const NAV_TO_MCP = `${AFTER_NOTICE} .nav-list__item:not(.is-selected)>>MCP Servers@~20000`;
 const PRESS_START = `${AFTER_NOTICE} button[data-action="setup-start"]:not([disabled])@~30000`;
 const PRESS_CANCEL = `${AFTER_NOTICE} button[data-action="setup-cancel"]@~30000`;
-const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_CHORDS: 'Ctrl+7@600', ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START}`, ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
+const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_CHORDS: 'Ctrl+6@600', ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START}`, ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
 function setupSteps(log) {
   const probe = lines(log, /capture: probe \[data-setup-step\]/).at(-1) ?? '';
   const found = JSON.parse(probe.slice(probe.indexOf('→') + 2) || '[]');

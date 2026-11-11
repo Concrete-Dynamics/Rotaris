@@ -25,6 +25,10 @@
  *
  * Evidence under `.proof/update-depth-proof/`: `two-streams.log` and `.png`, `results.json`. `--skip-build` skips the
  * build. Under Xvfb on Linux (`xvfb-run -a -s "-screen 0 1600x1000x24"`).
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`workspace`), not by its digit, the
+ * form that does not move when the rail does (Mission is no view; Settings is the sixth). No chord this script
+ * presses moved.
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -76,7 +80,7 @@ const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'
       ROTARIS_SCRIPT: 'plan:2,delegate:coding-agent:alpha,delegate:coding-agent:beta,done,answer',
       ROTARIS_CHILD_SCRIPT: `think:${DELTAS}:${DELTA_MS},answer`,
       ROTARIS_CAPTURE_PROMPT: 'delegate two long deliberations at once',
-      ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1200',
+      ROTARIS_CAPTURE_VIEW: 'workspace', ROTARIS_CAPTURE_VIEW_MS: '1200',
       // Installed before the prompt is submitted, read every 3 s while the children stream.
       ROTARIS_CAPTURE_EVAL_AT: lanesTrapSteps({ installAtMs: 1500, readEveryMs: 3000, untilMs: 90_000 }),
       ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '1500',

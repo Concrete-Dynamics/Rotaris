@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron';
 import type { Clocks } from '@rotaris/kernel';
 import { millis } from '@rotaris/kernel';
 import type { CommandOutcome, ProcessReply, RunHostRequest } from '@rotaris/contracts';
+import { isViewId, PRIMARY_VIEWS, viewPosition } from '@rotaris/contracts';
 import type { ProcessLink } from '@rotaris/shell';
 import type { PersonaWindows } from '../windows.js';
 import type { NoticeStore } from '../notices.js';
@@ -327,4 +328,15 @@ export function onStep(host: CaptureHost, step: CaptureStep, body: () => void | 
     await settleAt(host, step);
     await body();
   })();
+}
+
+/**
+ * A capture variable's view (`ROTARIS_CAPTURE_VIEW`, a step of `ROTARIS_CAPTURE_VIEWS`, `ROTARIS_CAPTURE_END_VIEW`) as a place in
+ * the rail: 0 when unset, the 1-based place for a view identifier or for a digit inside the rail, and null for anything else (an identifier that names no primary view, a place past the last).
+ */
+export function captureViewPosition(value: string | undefined): number | null {
+  if (value === undefined || value === '' || value === '0') return 0;
+  if (isViewId(value)) return viewPosition(value);
+  const place = Number(value);
+  return Number.isInteger(place) && place >= 1 && place <= PRIMARY_VIEWS.length ? place : null;
 }

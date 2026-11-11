@@ -14,6 +14,8 @@ The design material shows **six** rail entries: Home, Workspace, Reqs, Git, Libr
 Nothing below changes anything. The specification governs; this section states exactly where the
 design does not yet cover it, and that list is the design work still to do.
 
+*Added 2026-11-11 ([R-098](../../product/requests.md#r-098)); the section below is kept as written.* Since [`PD-SHELL-015`](../../product/directives/pd-shell-015.md#pd-shell-015) the product has **six** primary views — Overview, Workspace, Requirements, Git, Library, Settings, on `Ctrl+1` … `Ctrl+6` — and Mission is not one: its row in 3.1 and its paragraph in 3.2 describe a view that no longer exists, and what they list (the delegation graph, the activity table, pause and cancel) is drawn on the Overview ([`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009); the brief is [`briefs/overview/05-brief-2026-11-11.md`](../briefs/overview/05-brief-2026-11-11.md)). The strategy selector and depth control 3.2 cites from `REQ-MONITOR-275` are drawn on no monitoring surface. The Settings categories of 3.2 stand under four headings ([`PD-CONFIG-008`](../../product/directives/pd-config-008.md#pd-config-008)). The design material still shows six rail entries of its own choosing; the count now agrees and nothing else was taken from it.
+
 ### 3.1 Specified view → design material
 
 | # | View (`REQ-SHELL-023`) | Design material that serves it | Coverage |

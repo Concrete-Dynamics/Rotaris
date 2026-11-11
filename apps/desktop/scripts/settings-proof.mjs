@@ -77,6 +77,9 @@
  * between a killed run and the next is kept, not taken for the proof's (`lib/staged-resources.mjs`).
  *
  * Evidence under `.proof/settings-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`settings`), not by its digit.
+ * Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
@@ -196,8 +199,8 @@ const results = {};
 /** Each launch with no workspace argument, and the workspace it opened: the proof's working directory, as `launch` asserts. */
 const openedWithoutArgument = {};
 
-/** Open Settings (Ctrl+7) on a named category, and give the view time to paint. */
-const openCategory = (label, atMs = 900) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_VIEW_MS: String(atMs), ROTARIS_CAPTURE_SETTINGS: label });
+/** Open Settings (the view named by identifier; Ctrl+6 since PD-SHELL-015) on a named category, and give the view time to paint. */
+const openCategory = (label, atMs = 900) => ({ ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_VIEW_MS: String(atMs), ROTARIS_CAPTURE_SETTINGS: label });
 
 // ── 1. No workspace: About, Tools and the empty Instructions ────────────────────────────────────────────────
 // The About page's two files are the proof's from here until launch 1′ ends: whatever a build left is moved aside, so
@@ -329,7 +332,11 @@ if (!dragged) throw new Error('the pointer selection across the disclosure did n
 const selected = JSON.parse(dragged[1]);
 if (typeof selected !== 'string') throw new Error(`the disclosure was not found at the minimum size: ${dragged[1]}`);
 const flat = (s) => s.replace(/\s+/g, ' ').trim();
-for (const statement of [heading, ...disclosureOf(minimum.probes)]) if (!flat(selected).includes(flat(statement))) throw new Error(`a pointer selection across the disclosure at 1000×680 did not read "${statement}"; it read ${JSON.stringify(selected)}`);
+// The heading is drawn as the adopted section kicker since R-097 (UIR-014: `text-transform: uppercase` on a Settings group
+// heading), and a selection reads a transformed text as it is drawn, so the heading is found whatever its case; its own text
+// is held exactly above (`heading !== 'Network activity'`), and each statement of the disclosure is still read verbatim.
+if (!flat(selected).toLowerCase().includes(flat(heading).toLowerCase())) throw new Error(`a pointer selection across the disclosure at 1000×680 did not read its heading "${heading}"; it read ${JSON.stringify(selected)}`);
+for (const statement of disclosureOf(minimum.probes)) if (!flat(selected).includes(flat(statement))) throw new Error(`a pointer selection across the disclosure at 1000×680 did not read "${statement}"; it read ${JSON.stringify(selected)}`);
 if (JSON.stringify(disclosureOf(minimum.probes)) !== JSON.stringify(disclosure)) throw new Error('the disclosure at the minimum size differs from the one at the default size');
 results.networkDisclosure = { heading, statements: disclosure.length, minimumSize: `${resized[1]}×${resized[2]}`, selectedAtMinimum: flat(selected).length };
 
@@ -431,7 +438,7 @@ results.reopen = { tool_result_lines: resultCap, tool_input_lines: inputCap, cle
 // puts the new value on the row that was already drawn.
 //
 // **What this launch does NOT show, and why:** REQ-CONFIG-472 says a change reaches the rows already on screen
-// the moment the control moves. In this shell Settings *replaces* the Workspace (REQ-SHELL-023's seven views),
+// the moment the control moves. In this shell Settings *replaces* the Workspace (one primary view at a time; six since PD-SHELL-015),
 // and a dirty form cannot be left without answering the guard — so a state in which the pending value and the
 // file disagree while a transcript is visible is unreachable in the main window. The renderer publishes its
 // pending caps to the transcript all the same (`pendingDisplay`), which is what makes Discard show immediately
@@ -441,7 +448,7 @@ const live = await launch('live-apply', workspace, local, preferences, {
   ROTARIS_CAPTURE_PROMPT: 'Read the file.',
   // The timings clear code intelligence's discovery at run start (~5 s, Part T), so the tool row exists first.
   ROTARIS_CAPTURE_PROBE_AT: '.tool__preview@13000;;.dialog-title@18000',
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_VIEW_MS: '14000', ROTARIS_CAPTURE_SETTINGS: 'Display',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_VIEW_MS: '14000', ROTARIS_CAPTURE_SETTINGS: 'Display',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="show-tool-results"]@15500;;.dialog-actions .btn-primary>>Save@18500',
   ROTARIS_CAPTURE_CHORDS: 'Ctrl+2@17500',
   ROTARIS_CAPTURE_PROBE: [...PROBES, '.tool__preview', '.dialog-title'].join(';;'),

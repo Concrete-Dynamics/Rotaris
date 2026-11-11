@@ -1,6 +1,6 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
-import { type CaptureHost, parseSelectors, parseSteps, pause, settleAt, settled, stepFailed } from './host.js';
+import { type CaptureHost, captureViewPosition, parseSelectors, parseSteps, pause, settleAt, settled, stepFailed } from './host.js';
 
 /**
  * THE PACKAGED PROBE — the part of a capture a shipped build still answers.
@@ -170,7 +170,11 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
   // (docs/archive/defects/a-packaged-build-still-answers-capture-variables-beyond-the-probes-three.md).
   const wait = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_WAIT'] : undefined;
   const waitBound = Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_WAIT_MS'] : undefined) ?? 600_000);
-  const endView = Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW'] : undefined) ?? 0);
+  // The last view, written as `ROTARIS_CAPTURE_VIEW` writes one: its identifier, or its place in the rail (PD-SHELL-015).
+  const endViewWanted = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW'] : undefined;
+  const endViewPlace = captureViewPosition(endViewWanted);
+  if (endViewPlace === null) host.log(`capture: ROTARIS_CAPTURE_END_VIEW=${endViewWanted ?? ''} names no primary view`);
+  const endView = endViewPlace ?? 0;
   const endViewUntil = parseSteps(__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW_UNTIL'] : undefined)[0] ?? null;
   const probes = parseSelectors(__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROBE'] : undefined);
 

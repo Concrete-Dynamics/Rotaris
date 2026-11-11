@@ -12,16 +12,21 @@
  * (`docs/archive/defects/artifacts-proofs-publish-launch-reads-the-empty-library-in-a-window-a-startup-stall-closes.md`).
  *
  * The schedule now follows the Library instead of guessing at it:
- *  - Ctrl+6 is still the first appointment, at 1200 ms;
+ *  - the Library's own chord is still the first appointment, at 1200 ms (Ctrl+6 until 2026-11-11; the launch now names
+ *    the view `library`, whose chord is Ctrl+5 since PD-SHELL-015);
  *  - the Artifacts tab is pressed when it is drawn (`@from~ms`, looking from the view switch on), and
  *  - the reading is taken when the Artifacts tab has LOADED its read and drawn either its empty state or a row, in ONE
  *    probe, so "no row" and "the empty state" are one instant's reading rather than two;
  *  - nothing leaves the Library before the reading's deadline: the separate Ctrl+2 is gone, and the leave is the
  *    prompt seam's own Ctrl+2 (`installPromptSeam`), which now comes after that deadline, and the run that publishes
  *    starts only from that submit;
- *  - the return (Ctrl+6 at 14000 ms) is an appointment again, and its tab press waits for the tab the same way.
+ *  - the return (the Library's chord at 14000 ms) is an appointment again, and its tab press waits for the tab the same way.
  * The window a startup stall must exceed to make the launch red grew from about 0.4 s to 4.6 s, and a red that does
  * come says which step never matched rather than reading a view nobody meant to read.
+ *
+ * PD-SHELL-015 (2026-11-11): the schedule names its view by identifier (`library@ms`), the form the capture seam
+ * keeps when the rail moves; the Library is the fifth primary view (Ctrl+5) since Mission is none. The 2026-10-03
+ * history above keeps the chords as they were pressed then.
  *
  * Nothing here is product code. It runs only from the proof and its test.
  */
@@ -46,7 +51,7 @@ export const BEFORE_PUBLISH_AT = `~${READ_DEADLINE_MS}`;
 
 /** The capture variables of the launch's schedule; the proof adds the prompt's text, the script and the end probes. */
 export const PUBLISH_SCHEDULE = Object.freeze({
-  ROTARIS_CAPTURE_VIEWS: [`6@${VIEW_MS}`, `6@${RETURN_MS}`].join(';;'),
+  ROTARIS_CAPTURE_VIEWS: [`library@${VIEW_MS}`, `library@${RETURN_MS}`].join(';;'),
   ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@${VIEW_MS}~${READ_DEADLINE_MS}`, `${ARTIFACTS_TAB}@${RETURN_MS}~${RETURN_DEADLINE_MS}`].join(';;'),
   ROTARIS_CAPTURE_PROBE_AT: `${BEFORE_PUBLISH}@${VIEW_MS}~${READ_DEADLINE_MS}`,
   ROTARIS_CAPTURE_PROMPT_MS: String(PROMPT_MS),

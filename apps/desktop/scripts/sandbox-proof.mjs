@@ -32,6 +32,10 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  * so no run of this proof on one platform discharges it (the note
  * `docs/archive/defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md` is why the proof reads
  * the host).
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`settings`), not by its digit.
+ * Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view. PD-CONFIG-008: a Settings category
+ * is still found by its name among `.nav-list__item`, under its group heading.
  */
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -158,7 +162,7 @@ const results = {};
  *    the reason names the one mechanism the platform chose and the remediation is that mechanism's own.
  */
 const s1 = scenario('verdict', WORKSPACE_OFF);
-const log1 = await launch('verdict', s1, { ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime', ROTARIS_CAPTURE_AFTER_MS: '4000' });
+const log1 = await launch('verdict', s1, { ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime', ROTARIS_CAPTURE_AFTER_MS: '4000' });
 const verdictLine = log1.split('\n').find((line) => line.includes('confinement:')) ?? '';
 const hostReading = { platform: process.platform, mechanism: mechanism?.name ?? null, launcher: launcherPath, trial, expected };
 if (expected === 'available') {
@@ -189,7 +193,7 @@ const READ_SECURITY = `({
   mode: document.querySelector('[data-testid="sandbox-mode"]')?.value ?? ''
 })`.replace(/\n\s*/g, ' ');
 const log2 = await launch('settings', s1, {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
   // Read as soon as the card exists rather than at a clock: this state is left behind by something the
   // product did when it was ready, and pinning that read to a timer reports whatever the timer found.
   ROTARIS_CAPTURE_EVAL_AT: `${READ_SECURITY}>>[data-testid="security-policy"]@~6000`,
@@ -293,7 +297,7 @@ results.downgrade = { started: true, note: 'the kept mode is asserted by the eng
  */
 const s5 = scenario('round-trip', WORKSPACE_OFF);
 await launch('round-trip', s5, {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
   // Every step waits for what it acts on rather than for a clock: on a first launch the Runtime category can
   // be drawn after the view's own click has looked for it, and a fixed 1800 ms then chose into Models and
   // saved nothing (measured on Linux, 2026-09-28). The category is pressed again when it is there, and Save

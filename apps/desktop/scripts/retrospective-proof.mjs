@@ -73,6 +73,9 @@
  *
  * Evidence under `.proof/retrospective-proof/`: a PNG per scenario, each launch's `app.log`, `results.json`.
  * `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`library`), not by its digit. The
+ * Library is the fifth view (Ctrl+5); Mission is no view.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -777,7 +780,7 @@ await (async () => {
     `${/improvement_collector_timeout=\d+ s/.exec(askLog)?.[0] ?? 'no improvement_collector_timeout line'}; settled after ${settledAfterMs(askLog)} ms; ${post.outcome}, ${post.proposals} proposal(s), notice ${post.noticeMatches} (${notices.map((n) => n.text.slice(0, 60)).join(' | ')})`);
 
   const retroLog = await capture('live-shape-retrospective', {
-    ROTARIS_IMPROVEMENT_SCRIPT: 'wait:4000', ROTARIS_CAPTURE_VIEW: '6',
+    ROTARIS_IMPROVEMENT_SCRIPT: 'wait:4000', ROTARIS_CAPTURE_VIEW: 'library',
     ROTARIS_CAPTURE_CLICKS: '[data-testid="library-tab"][data-tab="proposals"]@~10000;;[data-testid="library-retrospective"]:not([aria-disabled="true"])@~20000',
     ROTARIS_CAPTURE_WAIT: settledWait('retrospective'), ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '2500', ROTARIS_CAPTURE_PROBE: '[data-testid="notice"]',
   }, 150_000);

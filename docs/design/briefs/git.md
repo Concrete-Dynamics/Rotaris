@@ -30,7 +30,7 @@ None.
 
 ## 11. Evidence plan
 
-Capture: `pnpm ui-audit --views=5`; drive on a repository whose worktrees carry four-digit additions (this checkout): `click ".nav-item" --text=Git`, `waitFor ".git__worktree-table tbody tr:nth-child(3)"`. Rubric rows: C3, D4.
+Capture: `pnpm ui-audit --views=git` (`--views=5` when this was written; `4` since PD-SHELL-015 of 2026-11-11); drive on a repository whose worktrees carry four-digit additions (this checkout): `click ".nav-item" --text=Git`, `waitFor ".git__worktree-table tbody tr:nth-child(3)"`. Rubric rows: C3, D4.
 
 **Must move:** the Files figure's overrun under the delete button, 16 to 24 px on four of five rows at 1440×900 → 0.
 **Must hold:** `ui-audit` view 5 at both sizes: 0 findings; `layout-regression.test.ts`'s worktree rules, with the Files rule restated in the State rule's form; `git-proof`.

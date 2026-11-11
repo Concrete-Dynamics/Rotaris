@@ -8,7 +8,7 @@ The design language's pair — consult before, match after (`docs/design/README.
 
 | # | Step | Why it is mandatory |
 |---|---|---|
-| 1 | `pnpm mockup`, read the surface | craft, **never** structure; structure is `docs/spec/` (`REQ-SHELL-023` governs) |
+| 1 | `pnpm mockup`, read the surface | craft, **never** structure; structure is `docs/spec/` and the directives over it (`REQ-SHELL-023` as `PD-SHELL-015` narrows it: six primary views) |
 | 2 | Build from `packages/ui/src/design-system/` | `tools/check-ui-language.mjs` refuses a design-equivalent control written anywhere else in `packages/ui/src` or `apps/desktop/src/renderer` |
 | 3 | Cite tokens by name | never a literal colour or pixel value |
 | 4 | Publish a contract on the root — `layoutContractAttributes` from `design-system/layout-contract.ts` | it marks the box with `data-ui` / `data-ui-contract` (the relations **array**), which is what `pnpm ui-audit` evaluates against live geometry after layout settles. It is the only publisher: `tools/check-ui-language.mjs` (`tools/ui-contract-publisher.mjs`) fails `pnpm lint` on a `data-ui-contract` written anywhere else in the drawing roots, the design system included — a hand-written object on the window controls once made the audit throw on every view |
@@ -27,7 +27,8 @@ builds an `AgentRecord` gains the field. The words are written once in `agents.t
 path to a control is built from the labels Settings itself renders, never typed again (`perAgentTimeoutPath`). The four
 surfaces draw it where the design gives a qualifier: a row's closes its meta label with a design `Tag` in the slot the stalled
 tag uses (`AgentTree.tsx`, `AgentTable.tsx`) — on a line of its own under the state, because beside it the tag took its width
-from the persona column (112 → 35 px in the 235 px sidebar) and scrolled the Mission card sideways; the stalled tag takes the
+from the persona column (112 → 35 px in the 235 px sidebar) and scrolled the Mission card sideways (the agent activity
+card, the Overview's since PD-MONITOR-009); the stalled tag takes the
 same line of its own since fin35, for the same measured reason (`pnpm mission-proof` item 1f), and since fin36 the table's
 persona cell does not wrap (`.agent-table__persona`, `white-space: nowrap`), since the table's automatic layout broke
 "coding-agent" at its hyphen in a 71 px column with or without a tag, and since fin38 it is bounded (`max-width: 24ch`,
@@ -36,6 +37,35 @@ inspector and a
 persona window's instance tab a sentence of their own under the line the specification fixes (`TimeoutLine.tsx` in
 `Inspector.tsx` and `PersonaWindow.tsx`), so REQ-MONITOR-052's meta-line form is kept. `agent-timeout.test.ts` renders all
 four; `pnpm mission-proof` item 1d reads them and their geometry in the built app.
+
+**A primary view, and the retiring of one** (worked example:
+[`PD-SHELL-015`](../../../product/directives/pd-shell-015.md#pd-shell-015) with
+[`PD-MONITOR-009`](../../../product/directives/pd-monitor-009.md#pd-monitor-009), 2026-11-11: Mission retired, six views).
+`PRIMARY_VIEWS` in `packages/contracts/src/views.ts` is the one definition, in rail order, and what counts the views reads
+it: the rail's items (`AppShell.tsx`), the `view.<id>` commands with their `Ctrl+<digit>`
+(`packages/ui/src/commands/registry.ts`, generated from the list, so a view that leaves moves every later digit and the
+digit after the last is bound to nothing; `VIEW_KEYWORDS` is typed to one entry a view), the notice action's view
+(`contracts/src/notices.ts`), `switchView`'s `isViewId` guard (`shell-state.ts`: an identifier outside the list is a no-op,
+REQ-SHELL-025) and `viewPosition(id)`, a view's 1-based place and its digit. A retired identifier goes into
+`RETIRED_VIEW_IDS` and is never reassigned (`packages/shell/src/shell.test.ts` holds the two lists apart). The view's body
+is one entry of the `views` map the `App` root hands `AppShell` in `apps/desktop/src/renderer/main.tsx`, from a container
+there that is mounted only while its view is shown. What a retired view drew moves as components, not as a view: the
+Mission view's graph and table are `DelegationGraphCard` and `AgentActivityCard` (`packages/ui/src/DelegationCards.tsx`,
+one `DelegationProps`), drawn by `OverviewView` in its right and left columns from the `delegation` prop the `Overview`
+container fills — the shared selection (`shell-state.ts`'s `selectedAgentId`), `restingView`, `useNeedsRecovery`, the
+`pause` control, `cancelAgent` and `cancelRun`. They keep `mission` as the prefix of their classes and test ids, and
+`pnpm mission-proof` measures them (`tools/verify-plan/map.mjs` sends `DelegationCards` and `OverviewView` to it). The
+table card is its own query container (`shell.css`, `.mission__table`): at 40rem or narrower a row is a three-line grid that
+keeps every value, which is why `AgentTable.tsx` writes the table roles into its markup and names three figures by
+`data-label`. A proof names a view to the capture seams by identifier (`ROTARIS_CAPTURE_VIEW`, `_VIEWS`, `_END_VIEW`;
+`captureViewPosition` in `apps/desktop/src/main/capture/host.ts`), so it does not move when the rail does.
+
+**A Settings category** ([`PD-CONFIG-008`](../../../product/directives/pd-config-008.md#pd-config-008), 2026-11-11). The
+list is `SETTINGS_CATEGORY_GROUPS` in `packages/ui/src/SettingsView.tsx`: four headings over the thirteen categories, in
+REQ-CONFIG-268's order and with REQ-CONFIG-269's identifiers. A category is written into its group there;
+`SETTINGS_CATEGORIES` is the groups flattened, and it is what the view's own lookups and the renderer's check of a notice
+action's category read. A heading is text and no option of the listbox, and `categoryFocusMove` answers where Arrow Up,
+Arrow Down, Home and End move focus, across the groups and without changing the selection (REQ-SHELL-153).
 
 **A status-strip item** (worked examples: REQ-SANDBOX-121's sandbox indicator, 2026-10-02; the strip rebuilt to
 REQ-SHELL-038's list, fin10, the same day). The strip's items are **values**: `stripItems(width, facts)` in

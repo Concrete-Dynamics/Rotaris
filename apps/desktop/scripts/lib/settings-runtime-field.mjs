@@ -1,6 +1,6 @@
 /**
  * One number field of Settings › Runtime set and saved as a person does it, through the capture seams of one launch: the
- * Settings view (Ctrl+7) opened on its Runtime category, the field clicked as soon as it is drawn, its text selected
+ * Settings view (named by identifier; Ctrl+6 since PD-SHELL-015, 2026-11-11) opened on its Runtime category, the field clicked as soon as it is drawn, its text selected
  * (Ctrl+A), the new value typed character by character over the selection, Tab to leave the field (its blur commits a
  * draft), and the save bar's Save pressed. The save bar's status is probed after the edit and read again at the end.
  *
@@ -31,7 +31,7 @@ export function runtimeFieldSteps({ id, value, at = 8_000 }) {
   if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`a Settings field id is a bare id: ${id}`);
   if (!/^\d+$/.test(String(value))) throw new Error(`a Runtime number field takes whole digits: ${value}`);
   return {
-    ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+    ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
     ROTARIS_CAPTURE_CLICKS: `#${id}@~${at};;.save-bar .btn-primary>>Save@${at + 2_600}`,
     ROTARIS_CAPTURE_CHORDS: `Ctrl+A@${at + 500}`,
     ROTARIS_CAPTURE_TYPE_AT: `${value}@${at + 900}`,

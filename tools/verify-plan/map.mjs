@@ -92,8 +92,9 @@ export const AREAS = Object.freeze({
     proofs: ['library-proof', 'artifacts-proof', 'improvements-proof', 'retrospective-proof'],
     views: ['docs/architecture/views/04-seams.md'],
   },
+  // PD-MONITOR-009: the area keeps its name, the proof's; what it measures stands on the Overview since PD-SHELL-015.
   mission: {
-    title: 'Mission',
+    title: 'Delegation graph and agent table (the Overview\'s cards, the Mission view\'s until PD-SHELL-015)',
     proofs: ['mission-proof'],
     views: ['docs/architecture/views/04-seams.md'],
   },
@@ -319,7 +320,7 @@ export const RULES = Object.freeze([
   { paths: ['packages/ui/src/ImprovementActivity', 'packages/ui/src/improvement-activity', 'packages/ui/src/ArtifactLinks'],
     areas: ['library'] },
   { paths: ['packages/ui/src/markdown/'], areas: ['library', 'transcript'] },
-  { paths: ['packages/ui/src/MissionView', 'packages/ui/src/AgentTree', 'packages/ui/src/AgentTable',
+  { paths: ['packages/ui/src/DelegationCards', 'packages/ui/src/AgentTree', 'packages/ui/src/AgentTable',
     'packages/ui/src/Inspector', 'packages/ui/src/PersonaWindow', 'packages/ui/src/TimeoutLine',
     'packages/ui/src/agents', 'packages/ui/src/agent-', 'packages/ui/src/cancel-'], areas: ['mission'] },
   { paths: ['packages/ui/src/GitView', 'packages/ui/src/WorktreeDialog'], areas: ['git'] },
@@ -329,7 +330,8 @@ export const RULES = Object.freeze([
     areas: ['themeLayout'] },
   { paths: ['packages/ui/src/AppShell', 'packages/ui/src/NavRail', 'packages/ui/src/WorkspaceView',
     'packages/ui/src/layout-regression', 'packages/ui/src/label-measure'], areas: ['themeLayout'] },
-  { paths: ['packages/ui/src/OverviewView'], areas: ['overview'] },
+  // PD-MONITOR-009: the Overview draws the delegation cards, so a change to it re-runs their proof too.
+  { paths: ['packages/ui/src/OverviewView'], areas: ['overview', 'mission'] },
   { paths: ['packages/ui/src/SettingsView', 'packages/ui/src/settings/'], areas: ['configStartup'] },
   { paths: ['packages/ui/src/PlanGate', 'packages/ui/src/plan-gate'], areas: ['run'] },
   { paths: ['packages/ui/src/ApprovalDialog'], areas: ['tools'] },

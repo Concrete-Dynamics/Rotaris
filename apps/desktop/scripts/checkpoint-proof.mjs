@@ -31,6 +31,9 @@
  *
  * Evidence under `.proof/checkpoint-proof/`: one PNG and one log per launch, the confirmation dialog's PNG, `results.json`
  * with the capture, preview and restore times and the Git invocation counts. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`git`), not by its digit. Git is the
+ * fourth view (Ctrl+4); Mission is no view.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -168,7 +171,7 @@ const NOTES_EDITED = '# Notes\n\nWritten by the scripted agent (edited) through 
 const before1 = fingerprint(workspace);
 const capture1 = await launch('capture-1', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer', ROTARIS_CAPTURE_PROMPT: 'Write the notes.',
-  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 });
 const session = latestSession();
 const sid = session.session_id;
@@ -200,7 +203,7 @@ const sid = session.session_id;
 // 2. Capture, iteration 2: the session resumed from the browser and continued from the composer.
 const capture2 = await launch('capture-2', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'readnotes,edit,answer', ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_PROMPT: 'Edit the notes.',
-  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 });
 {
   const rows = checkpointsOf(sid);
@@ -235,13 +238,13 @@ writeFileSync(join(workspace, 'NOTES.md'), NOTES_HAND);
 const before4 = fingerprint(workspace);
 const dialogPng = join(output, 'restore-dialog.png');
 const restored = await launch('restore', workspace, local, preferences, {
-  ROTARIS_CAPTURE_VIEW: '5',
+  ROTARIS_CAPTURE_VIEW: 'git',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-checkpoint-row"][data-sequence="1"]@3500;;[data-testid="git-restore"]@4200;;[data-testid="checkpoint-overwrite"]@9500;;[data-testid="checkpoint-restore-confirm"]@10200',
   ROTARIS_CAPTURE_SHOT: `${dialogPng}@9000`,
   // REQ-GIT-097 / REQ-GIT-152: the face the preview field is drawn in, read where the cascade settles it — in the renderer, while
   // the dialog is up (docs/archive/defects/the-restore-confirmations-preview-field-is-not-drawn-in-the-monospace-face.md).
   ROTARIS_CAPTURE_EVAL_AT: `${PREVIEW_FACE}@9000`,
-  ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '17000',
+  ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '17000',
 });
 {
   const s = restored.shots;
@@ -291,7 +294,7 @@ commit('notes as restored');
 writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), agentsYaml(['checkpoints:', '  enabled: true', '  max_per_session: 2']));
 const retention = await launch('retention', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'readnotes,edit,answer', ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_PROMPT: 'Edit the notes again.',
-  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 });
 {
   const rows = checkpointsOf(sid);
@@ -307,7 +310,7 @@ git(workspace, 'add', 'NOTES.md');
 commit('notes edited again');
 const noRows = await launch('no-rows', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'read,answer', ROTARIS_CAPTURE_PROMPT: 'Read only.',
-  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 });
 const emptySid = latestSession().session_id;
 {
@@ -324,10 +327,10 @@ const emptySid = latestSession().session_id;
 // (b) A checkpoint whose ref was deleted from outside: gate 2's second sentence.
 git(workspace, 'update-ref', '-d', `refs/rotaris/checkpoints/${sid}/4`);
 const refGone = await launch('ref-gone', workspace, local, preferences, {
-  ROTARIS_CAPTURE_VIEW: '5',
+  ROTARIS_CAPTURE_VIEW: 'git',
   ROTARIS_CAPTURE_SELECT: `[data-testid="git-checkpoint-session"]>>${sid}@3000`,
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-checkpoint-row"][data-sequence="4"]@4500;;[data-testid="git-restore"]@5200',
-  ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '10000',
+  ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '10000',
 });
 {
   const message = text(refGone.probes, '[data-testid="checkpoint-message"]')[0] ?? '';
@@ -365,8 +368,8 @@ const live = await launch('live', workspace, local, preferences, {
 
 // (d) REQ-GIT-094: opening that session's checkpoints repairs it — interrupted, the lock released, the notice raised.
 const repaired = await launch('repaired', workspace, local, preferences, {
-  ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_SELECT: `[data-testid="git-checkpoint-session"]>>${sid}@3000`,
-  ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '6000',
+  ROTARIS_CAPTURE_VIEW: 'git', ROTARIS_CAPTURE_SELECT: `[data-testid="git-checkpoint-session"]>>${sid}@3000`,
+  ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '6000',
 });
 {
   const row = sessionRow(sid);
@@ -397,7 +400,7 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer',
   ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes in a worktree.>>composer@4400',
-  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 }, 180_000);
 const iso = latestSession();
 {
@@ -423,9 +426,9 @@ const iso = latestSession();
   // The restore rewrites the worktree only.
   writeFileSync(join(binding.worktree_path, 'NOTES.md'), NOTES_HAND);
   const isoRestore = await launch('isolated-restore', workspace, local, preferences, {
-    ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_SELECT: `[data-testid="git-checkpoint-session"]>>${iso.session_id}@3000`,
+    ROTARIS_CAPTURE_VIEW: 'git', ROTARIS_CAPTURE_SELECT: `[data-testid="git-checkpoint-session"]>>${iso.session_id}@3000`,
     ROTARIS_CAPTURE_CLICKS: '[data-testid="git-checkpoint-row"][data-sequence="1"]@4500;;[data-testid="git-restore"]@5200;;[data-testid="checkpoint-overwrite"]@10500;;[data-testid="checkpoint-restore-confirm"]@11200',
-    ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '18000',
+    ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '18000',
   });
   if (readFileSync(join(binding.worktree_path, 'NOTES.md'), 'utf8') !== NOTES_ORIGINAL) throw new Error('the worktree was not restored');
   if (existsSync(join(workspace, 'NOTES.md'))) throw new Error('the base tree was touched by the isolated restore');
@@ -439,7 +442,7 @@ const disabled = await launch('disabled', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer',
   ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes with checkpoints off.>>composer@4400',
-  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 }, 180_000);
 {
   const s = latestSession();
@@ -482,7 +485,7 @@ const disabled = await launch('disabled', workspace, local, preferences, {
   const loaded = await launch('loaded-restore', workspace, local, preferences, {
     ROTARIS_SCRIPT: 'read,answer', ROTARIS_CAPTURE_RESUME: iso.session_id, ROTARIS_CAPTURE_PROMPT: 'Read the notes.',
     ROTARIS_CAPTURE_CLICKS: '.nav-item>>Git@16000;;[data-testid="git-checkpoint-row"][data-sequence="1"]@18500;;[data-testid="git-restore"]@19200;;[data-testid="checkpoint-overwrite"]@24500;;[data-testid="checkpoint-restore-confirm"]@25200',
-    ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '32000',
+    ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '32000',
   }, 180_000);
   clearInterval(planter);
   const lock = db.prepare('SELECT pid, host FROM session_locks WHERE session_id = ?').get(iso.session_id);

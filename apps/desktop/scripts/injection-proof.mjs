@@ -64,6 +64,9 @@
  *
  * Evidence under `.proof/injection-proof/`: one PNG, one log and one model-call file per launch; `results.json`;
  * `latency.json`. Flags: `--skip-build`, `--skip-latency`, `--latency-runs=<n>` or `--latency-runs <n>` (n ≥ 20).
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`settings`), not by its digit.
+ * Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view.
  */
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -268,7 +271,7 @@ results.push({ launch: 'all-on', received: sourcesOf(allOnSystem), suppressed: '
 const SWITCHED_OFF = 'user-agents:CLAUDE.md';
 const OVERRIDE_OFF = 'workspace:AGENTS.override.md';
 const switched = await launch('switch', profile, workspace, {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_VIEW_MS: '900', ROTARIS_CAPTURE_SETTINGS: 'Instructions',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_VIEW_MS: '900', ROTARIS_CAPTURE_SETTINGS: 'Instructions',
   ROTARIS_CAPTURE_CLICKS: `[data-testid="instruction-toggle"][data-id="${SWITCHED_OFF}"]@1800;;[data-testid="instruction-toggle"][data-id="${OVERRIDE_OFF}"]@2400;;.save-bar .btn-primary>>Save@3400`,
   ROTARIS_CAPTURE_AFTER_MS: '6000',
 });

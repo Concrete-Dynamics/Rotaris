@@ -476,7 +476,8 @@ export function GitView(props: GitViewProps) {
   return (
     <div className="git" data-testid="git">
       <DesignPageHeader className="git__header page-header">
-        <h1 className="display git__title">Git workspace</h1>
+        {/* PD-GIT-002 (narrowing REQ-GIT-075): the title is the rail label; "workspace" names another view. */}
+        <h1 className="display git__title">Git</h1>
         <span className="git__branch mono" data-testid="git-branch" data-detached={state?.detached ? '1' : '0'} data-repository={state?.isRepository ? '1' : '0'}>{headerBranch(state)}</span>
         <span className="git__sync mono" data-testid="git-sync" aria-live="polite">{syncLabel(state, refreshing)}</span>
         <span className="git__spacer" />

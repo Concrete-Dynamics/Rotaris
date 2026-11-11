@@ -80,13 +80,13 @@ Earned surfaces: the two `Card`s the Runtime category already draws. None added.
 
 ## 10. Disagreements and gaps
 
-- The token's comment says `--rt-label-column` holds the longest label of the product's forms; eleven Settings labels are wider than it. Raised as [OQ-546](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-546); the build proceeds under a multiple of the token.
-- The one measure the material names is the caption's; held to it, body-size prose stands at 35 to 49 characters a line. Raised as [OQ-547](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-547); the build proceeds under two measures for body-size prose and the token for captions.
+- The token's comment says `--rt-label-column` holds the longest label of the product's forms; eleven Settings labels are wider than it. Raised as [OQ-546](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-546); the build proceeds under a multiple of the token.
+- The one measure the material names is the caption's; held to it, body-size prose stands at 35 to 49 characters a line. Raised as [OQ-547](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-547); the build proceeds under two measures for body-size prose and the token for captions.
 - The mockup draws a field as `.field`, label above control. This brief takes the side label instead, because the token above and UIR-010's repair of the Mission card already chose it for this product's forms, and because a Settings category is scanned by value (§2). Not raised: both arrangements are in the adopted material.
 
 ## 11. Evidence plan
 
-Capture: `pnpm ui-audit --views=7 --sizes=1400x900,1000x680`; then `pnpm app:drive` for each of Runtime, Interface, Display, Project and About at both sizes, each after `waitFor ".settings__section"`. Rubric rows to pass: C3, C7, D4, C2.
+Capture: `pnpm ui-audit --views=settings --sizes=1400x900,1000x680` (`--views=7` when this was written; `6` since PD-SHELL-015 of 2026-11-11); then `pnpm app:drive` for each of Runtime, Interface, Display, Project and About at both sizes, each after `waitFor ".settings__section"`. Rubric rows to pass: C3, C7, D4, C2.
 
 **Must move** (Runtime, 1400×900): distinct left edges among the rows' first controls 16 → 1; widest caption 1042 px → at most the measure, 340 px *(first written "at most 680 px", twice the measure; the critique's UIR-007 and OQ-535 held it to the token)*.
 **Must hold:** `pnpm ui-audit` findings for view 7 at both sizes, 0; `scrollWidth` equal to `clientWidth` on `.settings__body`; every proof selector under `.settings__body` and `.save-bar` (`settings-proof`, `config-proof`); the unit tests under `packages/ui/src/settings/`.
@@ -144,3 +144,19 @@ The critique is the independent, report-only `review-ui` reading of the pack `94
 | UIR-015 | low | "No portable skills were discovered." starts 2 px inside its card's hairline; not verified against the base | open |
 
 Two findings off this surface were repaired in the same change because each is one rule: UIR-003, a bare `strong` at the browser's 700 where §1.4 stops at 500 (now the medium weight; "No task plan" measured 500), and UIR-011, the session browser's empty sentence set right-aligned by its table's last-cell rule (now centred).
+
+## Addendum 2026-11-11 — the category list under four headings
+
+*Written by the model (`claude-fable-5-2`) under [R-098](../../product/requests.md#r-098), for decision D3 of [the information-architecture map](../information-architecture.md); built the same day on `feat/r-097-ui-ux-overhaul`, not landed. The brief above is about a category's body and is unchanged.*
+
+**Authority.** [`PD-CONFIG-008`](../../product/directives/pd-config-008.md#pd-config-008) (the four headings over REQ-CONFIG-268's unchanged order; a heading is text, takes no focus, names its group); REQ-SHELL-153 (the selected entry's rule and its two descriptions; Arrow Up, Arrow Down, Home and End move focus and leave the selection); REQ-CONFIG-269 and -271 (identifiers and the fallback, untouched).
+
+**Content.** Agents: Models, Personas, Runtime. Application: Interface, Display. Extensions: Skills, Instructions, Hooks, MCP Servers, Plugins, Tools. Project and about: Project, About.
+
+**Composition.** A heading is the adopted `SectionLabel` (the kicker: `--rt-text-2xs`, `--rt-tracking-label`, `--rt-text-tertiary`), on the entries' text axis (the entry's 3 px rule plus `--rt-space-3`). A group is set off from the one above by `--rt-space-4`, a heading from its first entry by `--rt-space-1`; the entries keep the control height and their 2 px step. The list scrolls on its own axis where it is taller than the view, and the body keeps its place.
+
+**Accessibility.** `ul[role=listbox]` › `li[role=group][aria-labelledby]` › the heading and a presentational list of `button[role=option]`. The four keys move focus across group borders as though no heading stood there; Tab still reaches each entry. **Not verified:** no screen reader was run over the grouped list.
+
+**Measured after building** (`pnpm app:drive`, 1000×680, no notice above the view): the list is 563 px in a 570 px column, the last entry ends at y = 627 and the status strip begins at 654. With a notice above the view the list is taller than its column and scrolls.
+
+**Not taken.** Moving Interface, Display and About into one group at the foot of the list, with Project in a group of its own: refused by the map's critique (section 7 there).

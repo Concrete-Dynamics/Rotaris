@@ -9,6 +9,9 @@ Part 2 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 **REQ-MONITOR-037** — An agent whose recorded parent is the run itself, or whose recorded parent id is unknown, must render as a root row rather than being dropped.
 
 **REQ-MONITOR-038** — Several delegation-tree surfaces (workspace sidebar, overview dashboard, mission view) may be visible at the same time. Whenever more than one is visible, each must show the same agent set in the same states; no visible surface may trail another by more than the 250 ms visibility budget. A refresh of a tree holding the maximum supported agent count (20, REQ-MONITOR-285) must complete inside that same budget, and the time a refresh takes must not increase with how long the run has been going or with how many transcript rows the session holds.
+  > **Narrowed by [`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009), 2026-11-11.** The tree
+  > surfaces are two, the Workspace sidebar and the Overview; no mission view exists (PD-SHELL-015). The parity, the
+  > budget and the refresh bound above still govern over the two.
 
 **REQ-MONITOR-039** — A tree surface that is not visible must defer its refresh until it is shown, and must then catch up to current state.
 

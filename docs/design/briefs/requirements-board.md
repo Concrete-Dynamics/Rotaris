@@ -127,3 +127,26 @@ The critique is the independent, report-only `review-ui` reading of the pack `94
 | UIR-012 | low | the controls row broke after a different control at each width (three on its first line at 1400×900, four at 1000×680) | implemented: two decided lines at every width; the header is 138 and 198 px |
 
 Found by the same pass in this brief's own first build and corrected: the statement was one to two measures wide (434 px beside the rows, 680 px under them); it holds one measure a line in both arrangements now.
+
+## Execution 2026-11-11 — the empty states' and the foot's sentences
+
+*By the model (`claude-fable-5-2`) under [R-098](../../product/requests.md#r-098), for [R-099](../../product/requests.md#r-099): UIR-310 (high) and UIR-312 (low) of [the 2026-11-11 critique](overview/05-brief-2026-11-11.md), which the brief above had left as "a copy pass, with its own request". Built on `feat/r-097-ui-ux-overhaul`, not landed. The frame of §8 is unchanged; this section changes strings, which the brief above did not.*
+
+**Authority.** `REQ-TRACE-231` (no source: what a source is, how one is configured, never a blank pane); `REQ-TRACE-515` (the store that will not parse is told apart; unchanged here); `REQ-NOTIFY-006` (a region holding nothing names why and gives an instruction or control that would put something in it); `REQ-TRACE-444` (creation is offered only where the source declares it); `REQ-TRACE-507` (no dead refresh inferred from silence; Re-evaluate the guaranteed route); §1.4 (a path, a key, a file name is set in the mono face); guide 10 (the reader's terms; an empty state says which empty, with a way forward). No requirement fixes any of these sentences.
+
+**What was found, beyond the critique's two parts.** The critique read the second state as "a configured source". Measured (`pnpm app:drive`, `ab29f51b`): the same state is drawn for a workspace with no layout file and no `docs/requirements` directory, because the layout always resolves to its default (`REQ-TRACE-038`); `REQ-TRACE-231`'s own state appeared only when the layout file could not be read. Which state a missing default directory is, is raised as [OQ-549](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-549); the sentences below are true of both readings.
+
+| # | Must move | Before | After | Must hold |
+|---|---|---|---|---|
+| 1 | Markdown backticks drawn in the empty states; names in the mono face | 6 backticks, around three names in the body face; 1 name in mono (the directory) | 0 backticks; 3 names in JetBrains Mono in each state, at both sizes | `req-empty-source` still says what a source is and how one is configured (`REQ-TRACE-231`) |
+| 2 | the help under the store that holds nothing | "Source: docs/requirements. Configure one by placing a … then re-evaluate. …", the no-source instruction | the first document: by "New requirement" where the store offers creation, by hand into the named directory in either case, then Re-evaluate; then how to name another directory | no control added; the state's box inside the body at 1000×680 (the body scrolls 240 and 257 px of content in 173) |
+| 3 | the store state's title | "The requirement source is configured but holds no requirement documents yet.", over a workspace nobody configured | "The requirement source holds no requirement documents yet." | `REQ-TRACE-515`'s state and sentences unchanged |
+| 4 | the foot | "Live refresh follows the engine over channel 10; the channel reports no failure of its own, so a stopped watcher cannot be told from a quiet one here. Re-evaluate is always the route to a current board." | "The board refreshes itself as the repository changes. It cannot tell a refresh that has stopped from a repository where nothing changed, so Re-evaluate is always the way to a current board." | one line of 27 px at 1400×900; the fact stated is the same |
+
+Also changed in the no-source instruction: its last sentence, "The board reads the source through the traceability engine and never keeps a copy of it", reads "The board reads the documents where they stand and keeps no copy of them". A name in a hint goes to the next line whole (it broke at its hyphen, "rotaris-" / "traceability.json").
+
+**Considered, and not taken.** Deleting the backticks and leaving the names in the body face: §1.4 sets a path and a key in mono, and the directory beside them already was. A control in the empty state ("New requirement" or "Run adoption"): both stand in the header 150 px above, and guide 10 allows an empty state one action at most, which this one would have to choose between. Reporting a missing directory as no source: the projection's to say, OQ-549.
+
+**Evidence.** `packages/ui/src/requirements/requirements.test.ts` (no backtick in any drawn sentence; the names as parts of their own; the store state never told to configure a source; the board's control named only where creation is offered; the foot without the build's words); `layout-regression.test.ts` (the name's rule). Drives at 1400×900 and 1000×680 of three workspaces: neither file nor directory, an empty `docs/requirements`, and a layout file that does not parse.
+
+Not driven: a read-only directory; a configured directory with a long path; `nocturne` and `high-contrast`; a screen reader over the states.

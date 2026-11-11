@@ -13,7 +13,7 @@ import { EpicCardView } from './EpicCardView.js';
 import { EvidencePane, evidenceOpenerSelector } from './EvidencePane.js';
 import { MoveControl } from './MoveControl.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
+import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_ELSEWHERE, EMPTY_STORE_SENTENCE, NEW_REQUIREMENT_LABEL, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, emptyStoreHow, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable, type Phrase } from './model.js';
 // Part R2 — the five panes Part AP built and nothing hosted, the elevation's disclosure, and the relationship graph.
 import { GRAPH_DEPTH_DEFAULT, buildGraph, clampDepth } from './graph.js';
 import { GraphPane } from './GraphPane.js';
@@ -151,6 +151,8 @@ const NO_ANSWERS: ReadonlyMap<DeliveryColumn, Reachability> = new Map();
 
 function withEntry<K, V>(map: ReadonlyMap<K, V>, key: K, value: V): ReadonlyMap<K, V> { const next = new Map(map); next.set(key, value); return next; }
 function withoutEntry<K, V>(map: ReadonlyMap<K, V>, key: K): ReadonlyMap<K, V> { if (!map.has(key)) return map; const next = new Map(map); next.delete(key); return next; }
+/** A model sentence drawn: each named file, key or path in the mono face, as the store's directory beside it is (UIR-310). */
+function phrase(parts: readonly Phrase[]): ReactNode[] { return parts.map((part, i) => (typeof part === 'string' ? part : <span key={i} className="mono">{part.mono}</span>)); }
 function sentenceCase(action: BoardAction): string { const s = action.replaceAll('-', ' '); return `${s[0]!.toUpperCase()}${s.slice(1)}`; }
 
 declare global { interface Window { __rotarisBoard?: BoardObservable } }
@@ -831,7 +833,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
         <DesignEmptyState className="empty-state req-empty" data-testid="req-empty-source">
           <span className="empty-state-title">{EMPTY_SOURCE_TITLE}</span>
           <span className="empty-state-hint">{EMPTY_SOURCE_WHAT}</span>
-          <span className="empty-state-hint">{EMPTY_SOURCE_HOW}</span>
+          <span className="empty-state-hint">{phrase(EMPTY_SOURCE_HOW)}</span>
           {board.parseErrors.length > 0 && errorList}
         </DesignEmptyState>
       );
@@ -849,7 +851,15 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
       );
     }
     if (stated === 'store') {
-      return <DesignEmptyState className="empty-state req-empty" data-testid="req-empty-store"><span className="empty-state-title">{EMPTY_STORE_SENTENCE}</span><span className="empty-state-hint">Source: <span className="mono">{dir}</span>. {EMPTY_SOURCE_HOW}</span></DesignEmptyState>;
+      // UIR-310: this state's own help — the first document, then how to point the board elsewhere — where the
+      // no-source instruction stood under a sentence saying a source exists.
+      return (
+        <DesignEmptyState className="empty-state req-empty" data-testid="req-empty-store">
+          <span className="empty-state-title">{EMPTY_STORE_SENTENCE}</span>
+          <span className="empty-state-hint" data-testid="req-empty-store-how">{phrase(emptyStoreHow(dir, board.source.kind === 'store' && board.source.canCreate))}</span>
+          <span className="empty-state-hint">{phrase(EMPTY_STORE_ELSEWHERE)}</span>
+        </DesignEmptyState>
+      );
     }
     // Part R2 — REQ-TRACE-322: the graph is a PRESENTATION of this board centred on one requirement, not a grouping
     // axis (an axis has no centre), so it takes the body while the header keeps the board's own state; the columns
@@ -920,7 +930,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
                   opened against ONE requirement and is therefore reached from its detail. Both are 24 high, as
                   REQ-TRACE-491 fixes every header control but the one primary. */}
               <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-queue-open" onClick={() => openPane('queue', null)} aria-label={`${QUEUE_CONTROL_LABEL}: the scheduler's order, its reasons and its four controls`}>{QUEUE_CONTROL_LABEL}</DesignButton>
-              <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-create-open" onClick={() => openPane('create', null)} disabled={board === null || board.source.kind === 'none'} aria-label="New requirement, written into the project's own source">New requirement</DesignButton>
+              <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-create-open" onClick={() => openPane('create', null)} disabled={board === null || board.source.kind === 'none'} aria-label={`${NEW_REQUIREMENT_LABEL}, written into the project's own source`}>{NEW_REQUIREMENT_LABEL}</DesignButton>
               <span className="req-header__filter card-meta" data-testid="req-filter-summary" data-active={filterActive(filter)} data-populating={populating}>{filterSentence}</span>
               {filterActive(filter) && <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-filter-clear" onClick={() => { setFilter(EMPTY_FILTER); setTyped(''); }}>{FILTER_CLEAR}</DesignButton>}
             </div>

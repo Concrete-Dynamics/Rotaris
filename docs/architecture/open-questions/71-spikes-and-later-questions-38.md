@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543, OQ-548; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542, OQ-544 – OQ-547 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543, OQ-548 – OQ-550; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542, OQ-544 – OQ-547 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
 
 - OQ-523 — Is a `--rt-viz-2` persona label one stop from `--rt-run` a “state colour” under PD-CHAT-005?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-523)
 - OQ-524 — Is Workspace compact mode measured by the view's own width or by the viewport, when REQ-SHELL-059 and REQ-MONITOR-051 name different ones?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-524)
@@ -52,3 +52,23 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** REQ-SHELL-026 as built: every launch opens on Overview. PD-SHELL-015 clause 5 states that it does not change this.
 
 **What decides it.** One ruling: REQ-SHELL-026 governs and REQ-TRACE-230's clause is read as met by the rail's ordinary path (it is then narrowed by a directive that says so); or the active view is restored at launch for every view, by a directive that registers its key in REQ-SHELL-006's table, says what a first launch and a stale key show, and re-rules where OQ-506's returning operator reads what waits. Not ruled in this round: the second answer needs a preference key and a first-paint path that were neither built nor measured, and the first would narrow a requirement of the traceability domain on no evidence about how the board is used.
+
+<a id="oq-549"></a>
+
+**OQ-549 — Is a workspace with no layout file and no requirement directory REQ-TRACE-231's workspace "with no requirement source", or a source that holds no documents?** *(REQ-TRACE-231, REQ-TRACE-515, REQ-TRACE-038, REQ-TRACE-039, REQ-NOTIFY-006. Raised 2026-11-11 while repairing UIR-310 of that day's critique for [R-099](../../product/requests.md#r-099) ([the requirements-board brief](../../design/briefs/requirements-board.md)); numbered after OQ-548.)*
+
+**What is open.** REQ-TRACE-231 gives "a workspace with no requirement source" an empty state that "says what a requirement source is and describes how one is configured". The layout always resolves, to the default directory `docs/requirements` where no `rotaris-traceability.json` names one (REQ-TRACE-038, REQ-TRACE-039), so the engine reports a store for a workspace nobody configured and whose default directory does not exist. Measured on the built application at `ab29f51b` (`pnpm app:drive`, a workspace with neither the file nor the directory): the board drew the state of a store that holds nothing, under the sentence "The requirement source is configured but holds no requirement documents yet." REQ-TRACE-231's own state was reached only when the layout file could not be read. Nothing states which of the two a missing default directory is.
+
+**What the build proceeds under.** The engine's report, unchanged: a resolved layout is a store. The sentences of that state were rewritten on 2026-11-11 to be true of both readings: the title no longer says "is configured", and the help says where the board looks, what a requirement document is, and how to name another directory, which is what REQ-TRACE-231 asks of its own state. The projection carries no fact that tells a missing directory from an empty one (`BoardProjection.source` holds the directory and whether it can be written).
+
+**What decides it.** One ruling: a missing default directory with no layout file is "no requirement source", and the projection says so (the board then draws REQ-TRACE-231's state and its "New requirement" control is unavailable, as it is there); or the default layout is a source whether or not its directory exists, and REQ-TRACE-231's state is the one a layout that cannot be read shows. Not ruled in this round: the first changes what the workspace service's projection reports, which the round's surfaces do not reach and no proof of the board was run against.
+
+<a id="oq-550"></a>
+
+**OQ-550 — On a Settings category whose body draws a filled control, which fill yields while the save bar's Save stands?** *([§1.7](../../design/README/01-1-the-design-language.md) "One filled control", REQ-CONFIG-270, REQ-CONFIG-329, [`PD-CONFIG-009`](../../product/directives/pd-config-009.md#pd-config-009). Raised 2026-11-11 by the decision of UIR-307 for [R-099](../../product/requests.md#r-099); numbered after OQ-549.)*
+
+**What is open.** §1.7 allows a view one filled control. The save bar, which REQ-CONFIG-270 keeps reachable from every category, draws its Save filled while unsaved changes stand. Three categories draw a filled control in their body as well: Models ("Add endpoint", PD-CONFIG-009), Project and MCP Servers. On each of them two fills stand while the configuration is unsaved. PD-CONFIG-009 counts the category's body and says so; the 2026-11-09 repair of MCP Servers (FND-3, the comment in `packages/ui/src/settings/McpSettings.tsx`) counted three fills in the body and did not name the save bar.
+
+**What the build proceeds under.** The body's fill stays and the save bar's Save is filled beside it.
+
+**What decides it.** One ruling for all thirteen categories: §1.7's count on Settings is the category body's and the save bar is the frame's; or a body's fill is drawn as a hairline while Save stands; or the save bar's Save is a hairline wherever a body holds a fill. Not ruled in this round: the second and third each change a control's drawing in answer to state elsewhere on the view, on three categories of which two were not captured.

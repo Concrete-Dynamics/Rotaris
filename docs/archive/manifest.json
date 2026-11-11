@@ -683,6 +683,7 @@
     "defects/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md": "6ab8583f3328c8b20e5532bb4b668af30683ad713119f9e679d2e96fc83b7d32",
     "defects/a-hard-timeout-reset-respawned-the-shell-at-its-defaults.md": "3be656b198a2cdc1eaf7c5e6992e6cd928f545f07e45d5bc8ca5f645e579177a",
     "defects/a-hook-review-notice-for-another-workspace-opens-nothing.md": "66843a54629fcc055ddf40aa281a0cde8f7f98f279bee912547a9cebe1832801",
+    "defects/a-key-providers-authenticate-changes-nothing-on-screen-while-its-settings-are-closed.md": "b692368fe250659b50efd885e41065902880e82ca658e972d1e9ca8f274adea8",
     "defects/a-kill-from-the-terminal-window-resets-the-session-without-restoring-its-state.md": "f52aaacce2eee7faf5a86e9b7e52580d0965a461a1f43cb06a406b26ce10729c",
     "defects/a-kill-of-a-background-session-that-has-already-ended-says-it-was-killed.md": "7c8685a719dd3fe1c9eefc13667c14744423db681e9512e1af4b9bb3816dfc88",
     "defects/a-launch-whose-run-host-misses-the-hello-bound-ends-on-an-unhandled-main-rejection.md": "61f9f331b12e12ed3659af54a27c400be2388c5bf113928066b2cf846714ef05",

@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ISOLATION_HINT, ISOLATION_REQUIRED_HINT, ISOLATION_REQUIRED_TOOLTIP, isolationRequiredOf, StartSessionDialog } from './StartSessionDialog.js';
+import { ISOLATION_HINT, ISOLATION_REQUIRED_HINT, ISOLATION_REQUIRED_TOOLTIP, isolationRequiredOf, START_SESSION_LEDE, StartSessionDialog } from './StartSessionDialog.js';
 
 /**
  * PD-GIT-001 (OQ-224): the launch dialog shows main's answer — `session.newId`'s `isolationRequired`, the same count
@@ -35,5 +35,14 @@ describe("the launch dialog's isolation lock is main's answer (PD-GIT-001, REQ-G
     expect(isolationRequiredOf({ sessionId: 's1' })).toBe(true);
     expect(isolationRequiredOf(null)).toBe(true);
     expect(isolationRequiredOf({ sessionId: 's1', isolationRequired: false })).toBe(false);
+  });
+});
+
+describe('the sentence under the dialog\'s title (REQ-SHELL-125, REQ-ORCH-152; UIR-311 of the 2026-11-11 critique)', () => {
+  it('counts nothing: it said "Two optional choices" over three sections', () => {
+    const html = dialog({ sessionId: 's1', isolationRequired: false });
+    expect(html).toContain(START_SESSION_LEDE);
+    expect(START_SESSION_LEDE).not.toMatch(/\b(two|three|four|\d+)\b/i);
+    expect([...html.matchAll(/class="card-kicker"/g)]).toHaveLength(3);
   });
 });

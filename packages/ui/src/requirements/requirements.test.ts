@@ -10,6 +10,7 @@ import { cardDescription } from './Card.js';
 import { DETAIL_SECTIONS, SECTION_EMPTY } from './DetailPanel.js';
 import {
   ALERT_GLYPH, CLOSED_DROPDOWN_WIDTH, COLUMN_GAP, COLUMN_MAX, COLUMN_MIN, COLUMN_OVERSCAN_PX, CONFIRM_ACTIONS, OPEN_DROPDOWN_WIDTH, OTHER_CONTROL_HEIGHT, OVERSCAN_CARDS, PRIMARY_CONTROL_HEIGHT, PRIVATE_TRANSFER_TYPE, RAIL_CHARS, RAIL_MARGIN, RELEASED_POOL_CAP, SEARCH_DEBOUNCE_MS,
+  EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_ELSEWHERE, EMPTY_STORE_SENTENCE, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, emptyStoreHow, phraseText, type Phrase,
   alertSeverity, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, dropTargetOptions, epicSummary, epicSummaryLine, headingAccessibleName, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveRefusedSentence, moveReachableSentence, moveStartsRun, nothingSelectedSentence, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, railAccessibleName, realisedBand, rejectedDocumentsSentence, visibleColumnBand,
 } from './model.js';
 
@@ -445,6 +446,61 @@ describe('a blocker answer held behind the launch disclosure (REQ-TRACE-453/454/
     expect(rereads).toBe(0);
     await rereadWhenTaken({ ok: true }, () => { rereads += 1; });
     expect(rereads).toBe(1);
+  });
+});
+
+/**
+ * UIR-310 and UIR-312 of the 2026-11-11 critique. The empty states' sentences are drawn as written, so a name set in
+ * Markdown backticks reached the screen with its backticks (six of them, around three names in the body face); the
+ * store that holds nothing printed the instruction for configuring a source under a sentence saying one exists; and
+ * the foot named the build's own parts to a reader who has never met them.
+ */
+describe('the empty states\' and the foot\'s sentences (REQ-TRACE-231, REQ-TRACE-507, REQ-NOTIFY-006)', () => {
+  const sentences: readonly (string | readonly Phrase[])[] = [
+    EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_SOURCE_HOW, EMPTY_STORE_SENTENCE, EMPTY_STORE_ELSEWHERE, UNPARSED_STORE_SENTENCE, UNPARSED_STORE_HOW, SUBSCRIPTION_SENTENCE,
+    emptyStoreHow('docs/requirements', true), emptyStoreHow('docs/requirements', false),
+  ];
+  const text = (s: string | readonly Phrase[]) => (typeof s === 'string' ? s : phraseText(s));
+  const names = (s: readonly Phrase[]) => s.flatMap((p) => (typeof p === 'string' ? [] : [p.mono]));
+
+  it('carries no Markdown backtick in any sentence the view draws as written', () => {
+    for (const s of sentences) expect(text(s)).not.toContain('`');
+  });
+
+  it('names the file, the key and the default directory as parts of their own, which the view draws in the mono face', () => {
+    expect(names(EMPTY_SOURCE_HOW)).toEqual(['rotaris-traceability.json', 'layout.requirements_dir', 'docs/requirements']);
+    expect(names(EMPTY_STORE_ELSEWHERE)).toEqual(['layout.requirements_dir', 'rotaris-traceability.json']);
+    expect(names(emptyStoreHow('specs/reqs', true))).toEqual(['specs/reqs']);
+  });
+
+  it('says what a source is and how one is configured where there is none (REQ-TRACE-231)', () => {
+    expect(EMPTY_SOURCE_WHAT).toMatch(/^A requirement source is /);
+    expect(phraseText(EMPTY_SOURCE_HOW)).toMatch(/^Configure one by placing a rotaris-traceability\.json at the repository root/);
+  });
+
+  it('tells a store that holds nothing its next act, and never how to configure a source it has', () => {
+    for (const canCreate of [true, false]) {
+      const how = phraseText(emptyStoreHow('specs/reqs', canCreate));
+      expect(how).not.toMatch(/Configure one/);
+      expect(how).toContain('specs/reqs');
+      expect(how).toMatch(/then re-evaluate\.$/);
+    }
+    expect(phraseText(EMPTY_STORE_ELSEWHERE)).not.toMatch(/Configure one/);
+  });
+
+  it('names the board\'s own control only where the store offers creation (REQ-TRACE-444)', () => {
+    expect(phraseText(emptyStoreHow('specs/reqs', true))).toMatch(/^Add the first one with New requirement, or write it into specs\/reqs /);
+    expect(phraseText(emptyStoreHow('specs/reqs', false))).toMatch(/^Write the first one into specs\/reqs /);
+    expect(phraseText(emptyStoreHow('specs/reqs', false))).not.toContain('New requirement');
+  });
+
+  it('claims no more than holds for a default directory nobody configured', () => {
+    expect(EMPTY_STORE_SENTENCE).not.toMatch(/configured/);
+  });
+
+  it('states the foot in the reader\'s terms and keeps Re-evaluate as the route to a current board (REQ-TRACE-507)', () => {
+    expect(SUBSCRIPTION_SENTENCE).not.toMatch(/channel|engine|watcher|subscription/i);
+    expect(SUBSCRIPTION_SENTENCE).toMatch(/Re-evaluate is always the way to a current board\.$/);
   });
 });
 

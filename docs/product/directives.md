@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and twenty-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and twenty-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -60,6 +60,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CONFIG-006](directives/pd-config-006.md) | the MCP Servers row's ON press writes `enabled` for a configured-off server |
 | [PD-CONFIG-007](directives/pd-config-007.md) | the reasoning vocabulary is what the models bring, and `off` and `xhigh` are levels |
 | [PD-CONFIG-008](directives/pd-config-008.md) | the Settings category list stands under four headings |
+| [PD-CONFIG-009](directives/pd-config-009.md) | the providers card draws one filled control, the add-endpoint action in its head |
 
 ### EVENTS
 

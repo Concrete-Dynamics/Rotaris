@@ -1374,6 +1374,13 @@
 .provider-row__word { font-size: var(--rt-text-xs, 12px); margin-left: auto; padding-left: var(--rt-space-2, 8px); white-space: nowrap; }
 .provider-row__detail { margin-top: var(--rt-space-1, 4px); font-size: var(--rt-text-xs, 12px); max-width: 46ch; overflow-wrap: anywhere; }
 .provider-row__actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); justify-content: flex-end; }
+/* UIR-308, UIR-309 (the 2026-11-11 critique): the action cell is a table cell that takes exactly its row of controls,
+   and no label in it breaks. It was `.settings__action`, a wrapping flex line standing in the cell's place: the box
+   ended with its own buttons, so the rule under it stood 17 px above the rule under the first cell, and at 1000×680
+   it squeezed "Sign out" onto two lines (60×36 px beside 24 px neighbours). The first cell gives way instead: its
+   detail and its identifier wrap. */
+.providers-card__table td.provider-row__action-cell { width: 0; white-space: nowrap; }
+.provider-row__actions > .btn { flex: none; white-space: nowrap; }
 /* The expanded per-row settings: a form region, not a nested card. */
 .provider-settings > td { padding-top: 0; }
 .provider-settings__panel { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-3, 12px); margin: var(--rt-space-2, 8px) 0; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); }
@@ -2635,6 +2642,10 @@ strong { font-weight: var(--rt-weight-medium); }
 .req-body:has(> .req-empty) { overflow-y: auto; padding-block: var(--rt-space-4); }
 .req-body > .req-empty { align-self: flex-start; margin: auto; }
 .req-body > .req-status { margin: var(--rt-space-3) var(--rt-space-5); }
+/* UIR-310: a file, a key or a path named in a hint is one word. It goes to the next line whole, where the line broke
+   it at its hyphen ("rotaris-" / "traceability.json"); only a name longer than the hint's own measure breaks, and then
+   anywhere, inside the hint. */
+.req-empty .empty-state-hint .mono { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
 .req-empty__errors { margin: var(--rt-space-2) 0 0; padding: 0; list-style: none; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); text-align: left; }
 /* REQ-TRACE-238: an open column is at least 276 and at most 340 wide, spare width spent up to the cap; REQ-TRACE-310: its margin is 10 on every side. */
 .req-column { flex: 1 0 276px; min-width: 276px; max-width: 340px; display: flex; flex-direction: column; min-height: 0; padding: 10px; border-radius: var(--rt-radius-md); }

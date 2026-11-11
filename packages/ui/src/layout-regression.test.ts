@@ -223,6 +223,26 @@ describe('minimum-window layout regressions', () => {
     expect(caption).not.toContain('2 * var(--rt-prose-measure)');
   });
 
+  it('keeps a file, a key or a path named in the board\'s empty state on one line unless it is longer than the hint (UIR-310)', () => {
+    const name = rule('.req-empty .empty-state-hint .mono');
+    expect(name).toContain('display: inline-block');
+    expect(name).toContain('max-width: 100%');
+    expect(name).toContain('overflow-wrap: anywhere');
+  });
+
+  it('keeps a provider row\'s action cell a table cell that takes its row of controls whole (UIR-308, UIR-309; REQ-CONFIG-367)', () => {
+    // docs/design/briefs/settings.md, "Critique 2026-11-11": the cell carried `.settings__action`, a wrapping flex line, so
+    // it was no table cell: its rule stood 17 px above the first cell's at 1400x900, and at 1000x680 its 252 px squeezed
+    // "Sign out" onto two lines (60x36 px beside 24 px neighbours). Neither rule may come back as a flex or a grid box.
+    const cell = rule('.providers-card__table td.provider-row__action-cell');
+    expect(cell).toContain('width: 0');
+    expect(cell).toContain('white-space: nowrap');
+    expect(cell).not.toMatch(/display:/);
+    const control = rule('.provider-row__actions > .btn');
+    expect(control).toContain('flex: none');
+    expect(control).toContain('white-space: nowrap');
+  });
+
   it('bounds the Requirements board body\'s empty state inside the body at the minimum window (R-097; REQ-SHELL-022)', () => {
     // docs/design/briefs/requirements-board.md, audit item 1: `.empty-state` is `align-self: center`, and in a 133 px body
     // its 224 px overflowed both ways — 45 px over the adoption strip, 45 px over the foot, two controls covered

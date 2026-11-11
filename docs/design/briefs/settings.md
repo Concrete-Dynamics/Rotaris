@@ -160,3 +160,25 @@ Two findings off this surface were repaired in the same change because each is o
 **Measured after building** (`pnpm app:drive`, 1000×680, no notice above the view): the list is 563 px in a 570 px column, the last entry ends at y = 627 and the status strip begins at 654. With a notice above the view the list is taller than its column and scrolls.
 
 **Not taken.** Moving Interface, Display and About into one group at the foot of the list, with Project in a group of its own: refused by the map's critique (section 7 there).
+
+## Execution 2026-11-11 — the providers card
+
+*By the model (`claude-fable-5-2`) under [R-098](../../product/requests.md#r-098), for [R-099](../../product/requests.md#r-099): UIR-307 (high), UIR-308 and UIR-309 (medium) of [the 2026-11-11 critique](overview/05-brief-2026-11-11.md), which are UIR-001 and UIR-010 of the critique above read on a later pack. Built on `feat/r-097-ui-ux-overhaul`, not landed. The brief above is about a category's rows and is unchanged; its "Deliberately left" named this card.*
+
+**Authority.** [`PD-CONFIG-009`](../../product/directives/pd-config-009.md#pd-config-009) (one filled control on the card, the head's add-endpoint action; a row's primary first and a hairline), minted for UIR-307 over `REQ-CONFIG-329`, `REQ-CONFIG-371` and `REQ-PROVIDER-141`; `REQ-CONFIG-367` (a row's status line and its right-aligned action row); `REQ-CONFIG-372` (the label and the accessible name of Authenticate); `REQ-SHELL-022` (the minimum window); §1.7 with OQ-503's reading (a hairline is the strong boundary).
+
+| # | Must move | Before (`ab29f51b`) | After | Must hold |
+|---|---|---|---|---|
+| 1 | filled controls on Settings › Models, both sizes | 7: "Add endpoint" and six "Authenticate"; a row's open settings added a filled Save (read in the source, not measured) | 1: "Add endpoint", also with DeepSeek's settings open | every row keeps its three controls in `REQ-CONFIG-371`'s order; labels and accessible names unchanged |
+| 2 | the row rule's step between the first cell and the action cell | 16.7 to 17.8 px at 1400×900; 4.4 to 17.9 px at 1000×680 | 0 at both, all six rows | the table's scroll width equals its client width (1040/1040, 640/640) |
+| 3 | "Sign out" at 1000×680 | 60.1×36.4 px on two lines, beside 24 px neighbours | 65.5×24 px on one line | the action cell holds its three controls (257.4 px, 252 before); the first cell gives way |
+
+**Cause of 2 and 3.** The action cell carried `.settings__action`, the wrapping flex line of a Settings row, so it was not a table cell: its box ended with its own buttons, the rule under it stood above the rule under the first cell, and at the minimum window it shrank its buttons until a label broke. It is a table cell that takes its row of controls whole; no label in it breaks.
+
+**Found on the way and repaired.** A press of Authenticate on a provider that signs in with a stored key (three of the six built-in rows) changed nothing on screen while the row's settings were closed; it opens them and states its sentence there ([the note](../../archive/defects/a-key-providers-authenticate-changes-nothing-on-screen-while-its-settings-are-closed.md)).
+
+**Found and not repaired.** The unavailable provider's Authenticate is enabled ([the note](../../defects/an-unavailable-providers-authenticate-is-enabled.md)). At 1000×680 the identifier `concrete-cloud` breaks at its hyphen inside the first cell, as it did before. While unsaved changes stand, the save bar's Save is a second fill ([OQ-550](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-550)).
+
+**Evidence.** `packages/ui/src/settings/Providers.test.ts` (one filled control over six rows and over none; the hairline first in each row; the cell's class; what a press does); `layout-regression.test.ts` (the cell's rules). Drives at 1400×900 and 1000×680, each read with one `eval` over the rows.
+
+Not driven: a row with stored credentials (the scratch profile holds none), so "Re-authenticate" and an enabled "Sign out" were read in the unit test only; a user-defined endpoint's Delete; the add-endpoint dialog; `nocturne` and `high-contrast`; a screen reader.

@@ -90,8 +90,47 @@ export const BOARD_TITLE = 'Requirements';
 /** REQ-TRACE-231: never a blank pane — what a requirement source is and how one is configured. */
 export const EMPTY_SOURCE_TITLE = 'No requirement source';
 export const EMPTY_SOURCE_WHAT = 'A requirement source is a directory of Markdown documents, one requirement per document (or several per document under their own headings), each opening with a frontmatter block that declares its identifier, its lifecycle and its title.';
-export const EMPTY_SOURCE_HOW = 'Configure one by placing a `rotaris-traceability.json` at the repository root whose `layout.requirements_dir` names that directory (the default is `docs/requirements`), then re-evaluate. The board reads the source through the traceability engine and never keeps a copy of it.';
-export const EMPTY_STORE_SENTENCE = 'The requirement source is configured but holds no requirement documents yet.';
+/**
+ * A sentence that names a file, a key or a path: the name is its own part, so the view draws it in the mono face
+ * (`.mono`, as the store's directory beside it already was) and the sentence carries no markup of its own. UIR-310 of
+ * the 2026-11-11 critique: the names stood inside Markdown backticks in a hint that draws its text as written, so
+ * six backticks were on screen around three names in the body face.
+ */
+export type Phrase = string | { readonly mono: string };
+export const phraseText = (parts: readonly Phrase[]): string => parts.map((p) => (typeof p === 'string' ? p : p.mono)).join('');
+export const TRACEABILITY_FILE = 'rotaris-traceability.json';
+export const REQUIREMENTS_DIR_KEY = 'layout.requirements_dir';
+export const DEFAULT_REQUIREMENTS_DIR = 'docs/requirements';
+export const EMPTY_SOURCE_HOW: readonly Phrase[] = [
+  'Configure one by placing a ', { mono: TRACEABILITY_FILE }, ' at the repository root whose ', { mono: REQUIREMENTS_DIR_KEY },
+  ' names that directory (the default is ', { mono: DEFAULT_REQUIREMENTS_DIR }, '), then re-evaluate. The board reads the documents where they stand and keeps no copy of them.',
+];
+/**
+ * The store that holds nothing. The engine reports a store whenever the layout resolves, and the layout always
+ * resolves to at least its default (REQ-TRACE-038/039): this state is drawn for a directory named in the file, for
+ * the default one, and for a default one that does not exist. The sentence therefore says only what holds in all
+ * three — it said "is configured but holds no requirement documents yet" until 2026-11-11, over a workspace nobody
+ * had configured.
+ */
+export const EMPTY_STORE_SENTENCE = 'The requirement source holds no requirement documents yet.';
+/**
+ * UIR-310's second part: under that sentence the view printed `EMPTY_SOURCE_HOW`, the instruction for configuring a
+ * source, to a reader it had just told a source exists. What this state owes is the next act (REQ-NOTIFY-006): put
+ * the first document where the board looks, by the board's own control where the directory can be written
+ * (`canCreate`, REQ-TRACE-444) and by hand where it cannot; and, second, how to make the board look elsewhere. What
+ * a requirement document is stays in it, since REQ-TRACE-231's reader, who has no source in any ordinary sense,
+ * meets this state and not the other when the default directory is merely absent.
+ */
+export const NEW_REQUIREMENT_LABEL = 'New requirement';
+export function emptyStoreHow(dir: string, canCreate: boolean): readonly Phrase[] {
+  const document = ' as a Markdown document that opens with a frontmatter block declaring its identifier, its lifecycle and its title, then re-evaluate.';
+  return canCreate
+    ? [`Add the first one with ${NEW_REQUIREMENT_LABEL}, or write it into `, { mono: dir }, document]
+    : ['Write the first one into ', { mono: dir }, document];
+}
+export const EMPTY_STORE_ELSEWHERE: readonly Phrase[] = [
+  'To read requirements from another directory, name it as ', { mono: REQUIREMENTS_DIR_KEY }, ' in a ', { mono: TRACEABILITY_FILE }, ' at the repository root.',
+];
 /**
  * REQ-TRACE-515, over REQ-TRACE-022/026: a document whose `req-id` is not an identifier is REJECTED and
  * contributes nothing, so a store
@@ -128,8 +167,14 @@ export const ANALYSIS_OFF_SENTENCE = 'Change analysis is switched off for this w
 export const ANALYSIS_ON_SENTENCE = 'Change analysis is enabled for this workspace; a refresh that might reach a model announces itself for its duration and can be stopped. No such refresh exists in this build.';
 /** REQ-TRACE-345: what the pass left unjudged, by identifier. This build's pass judges nothing, so the list is what it reports: none. */
 export const AWAITING_JUDGEMENT_NONE = 'Awaiting judgement: none — this pass records no analyses, so no requirement is waiting on one.';
-/** REQ-TRACE-507: the subscription is supervised where a failure can be observed; channel 10 reports none, and the board says so rather than guessing. */
-export const SUBSCRIPTION_SENTENCE = 'Live refresh follows the engine over channel 10; the channel reports no failure of its own, so a stopped watcher cannot be told from a quiet one here. Re-evaluate is always the route to a current board.';
+/**
+ * REQ-TRACE-507: the board does not infer a stopped refresh from silence, and Re-evaluate stays the guaranteed route
+ * to a current board. The sentence says that in what the reader sees. Until 2026-11-11 it said it in the build's
+ * terms ("follows the engine over channel 10; the channel reports no failure of its own, so a stopped watcher cannot
+ * be told from a quiet one here"): UIR-312 of that day's critique, and guide 10's "the reader's terms, not the
+ * system's". The fact behind it is unchanged: the channel the board listens on reports no failure of its own.
+ */
+export const SUBSCRIPTION_SENTENCE = 'The board refreshes itself as the repository changes. It cannot tell a refresh that has stopped from a repository where nothing changed, so Re-evaluate is always the way to a current board.';
 export const PROJECTION_UNAVAILABLE = 'The board could not be read';
 export const READING_LABEL = 'Reading the board…';
 /** REQ-TRACE-397: a refusal persists and can be acted on — the dismiss control's name. */

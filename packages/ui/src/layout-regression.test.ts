@@ -243,6 +243,29 @@ describe('minimum-window layout regressions', () => {
     expect(control).toContain('white-space: nowrap');
   });
 
+  it('lets a provider row\'s first cell give way: it never widens the table, the identifier yields first and then the name is cut (UIR-407)', () => {
+    const first = rule('.providers-card__table td:first-child');
+    expect(first).toContain('width: 100%');
+    expect(first).toContain('max-width: 0');
+    const name = rule('.provider-row__status > .provider-row__name');
+    expect(name).toContain('flex: 0 1 auto');
+    expect(name).toContain('min-width: 0');
+    expect(name).toContain('text-overflow: ellipsis');
+    expect(rule('.provider-row__status > .settings__origin')).toContain('flex: 0 999 auto');
+    expect(rule('.provider-row__status > .provider-row__word')).toContain('flex: none');
+    expect(rule('.provider-row__status > .provider-row__word')).toContain('padding-left: 0');
+  });
+
+  it('stands a table card\'s actions at the end of its head, as the adopted TableCard does (REQ-CONFIG-329, UIR-403)', () => {
+    expect(rule('.table-card-head > .card-kicker')).toContain('margin-right: auto');
+  });
+
+  it('keeps a control\'s name whole inside a sentence of the board, and sets the foot as one text (UIR-412)', () => {
+    expect(rule('.req-whole')).toContain('white-space: nowrap');
+    // `.card-meta` is a flex line; the foot's sentence holds a span, and as flex items its parts stood in three columns.
+    expect(rule('.req-foot.card-meta')).toContain('display: block');
+  });
+
   it('bounds the Requirements board body\'s empty state inside the body at the minimum window (R-097; REQ-SHELL-022)', () => {
     // docs/design/briefs/requirements-board.md, audit item 1: `.empty-state` is `align-self: center`, and in a 133 px body
     // its 224 px overflowed both ways — 45 px over the adoption strip, 45 px over the foot, two controls covered

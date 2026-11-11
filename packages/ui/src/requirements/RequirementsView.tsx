@@ -13,7 +13,7 @@ import { EpicCardView } from './EpicCardView.js';
 import { EvidencePane, evidenceOpenerSelector } from './EvidencePane.js';
 import { MoveControl } from './MoveControl.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_ELSEWHERE, EMPTY_STORE_SENTENCE, NEW_REQUIREMENT_LABEL, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, emptyStoreHow, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable, type Phrase } from './model.js';
+import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_ELSEWHERE, EMPTY_STORE_SENTENCE, NEW_REQUIREMENT_LABEL, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, UNREAD_SOURCE_HOW, UNREAD_SOURCE_SENTENCE, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, emptyStoreHow, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable, type Phrase } from './model.js';
 // Part R2 — the five panes Part AP built and nothing hosted, the elevation's disclosure, and the relationship graph.
 import { GRAPH_DEPTH_DEFAULT, buildGraph, clampDepth } from './graph.js';
 import { GraphPane } from './GraphPane.js';
@@ -152,7 +152,7 @@ const NO_ANSWERS: ReadonlyMap<DeliveryColumn, Reachability> = new Map();
 function withEntry<K, V>(map: ReadonlyMap<K, V>, key: K, value: V): ReadonlyMap<K, V> { const next = new Map(map); next.set(key, value); return next; }
 function withoutEntry<K, V>(map: ReadonlyMap<K, V>, key: K): ReadonlyMap<K, V> { if (!map.has(key)) return map; const next = new Map(map); next.delete(key); return next; }
 /** A model sentence drawn: each named file, key or path in the mono face, as the store's directory beside it is (UIR-310). */
-function phrase(parts: readonly Phrase[]): ReactNode[] { return parts.map((part, i) => (typeof part === 'string' ? part : <span key={i} className="mono">{part.mono}</span>)); }
+function phrase(parts: readonly Phrase[]): ReactNode[] { return parts.map((part, i) => (typeof part === 'string' ? part : 'mono' in part ? <span key={i} className="mono">{part.mono}</span> : <span key={i} className="req-whole">{part.whole}</span>)); }
 function sentenceCase(action: BoardAction): string { const s = action.replaceAll('-', ' '); return `${s[0]!.toUpperCase()}${s.slice(1)}`; }
 
 declare global { interface Window { __rotarisBoard?: BoardObservable } }
@@ -828,13 +828,23 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     const errorList = (
       <ul className="req-empty__errors">{board.parseErrors.map((e, i) => <li key={`${e.path}-${i}`} className="mono">{e.path}{e.line === undefined ? '' : `:${e.line}`} — {e.message}</li>)}</ul>
     );
+    // UIR-408: a source the engine could not read is stated as that, with its report — not as a workspace with no
+    // source, whose instruction ("Configure one by placing …") stood above the line naming the file that failed.
+    if (stated === 'unread') {
+      return (
+        <DesignEmptyState className="empty-state req-empty" data-testid="req-empty-unread" role="alert">
+          <span className="empty-state-title">{UNREAD_SOURCE_SENTENCE}</span>
+          <span className="empty-state-hint">{phrase(UNREAD_SOURCE_HOW)}</span>
+          {errorList}
+        </DesignEmptyState>
+      );
+    }
     if (stated === 'source') {
       return (
         <DesignEmptyState className="empty-state req-empty" data-testid="req-empty-source">
           <span className="empty-state-title">{EMPTY_SOURCE_TITLE}</span>
           <span className="empty-state-hint">{EMPTY_SOURCE_WHAT}</span>
           <span className="empty-state-hint">{phrase(EMPTY_SOURCE_HOW)}</span>
-          {board.parseErrors.length > 0 && errorList}
         </DesignEmptyState>
       );
     }
@@ -951,7 +961,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
               </div>
             )}
           </div>
-          <p className="req-header__analysis card-meta" data-testid="req-analysis">{board?.analysisEnabled ? ANALYSIS_ON_SENTENCE : ANALYSIS_OFF_SENTENCE} {AWAITING_JUDGEMENT_NONE}</p>
+          <p className="req-header__analysis card-meta" data-testid="req-analysis">{board?.analysisEnabled ? ANALYSIS_ON_SENTENCE : phrase(ANALYSIS_OFF_SENTENCE)} {AWAITING_JUDGEMENT_NONE}</p>
         </div>
         {/* REQ-TRACE-515's part clause, defect 81's quieter half: a store that parses in part draws a board, and the
             rejected documents are on no card. The count and the engine's own errors are stated here, in the alert
@@ -1036,7 +1046,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
           </div>
         )}
       </div>
-      <p className="req-foot card-meta" data-testid="req-subscription">{SUBSCRIPTION_SENTENCE}</p>
+      <p className="req-foot card-meta" data-testid="req-subscription">{phrase(SUBSCRIPTION_SENTENCE)}</p>
       {evidenceCard !== undefined && <EvidencePane card={evidenceCard} detail={detail} onClose={closeEvidence} onOpenSession={host.openSession} />}
       {/* Part R2 — REQ-TRACE-472: the elevation's disclosure, raised by the FIRST action of a launch that would start
           a run and before anything at all has been sent. Abandoning it sends nothing; accepting sends the act (or the

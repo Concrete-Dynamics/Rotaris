@@ -94,17 +94,27 @@ export const EMPTY_SOURCE_WHAT = 'A requirement source is a directory of Markdow
  * A sentence that names a file, a key or a path: the name is its own part, so the view draws it in the mono face
  * (`.mono`, as the store's directory beside it already was) and the sentence carries no markup of its own. UIR-310 of
  * the 2026-11-11 critique: the names stood inside Markdown backticks in a hint that draws its text as written, so
- * six backticks were on screen around three names in the body face.
+ * six backticks were on screen around three names in the body face. A `whole` part is a control's name or its verb
+ * in the body face, kept on one line: "Re-" / "evaluate" broke at the hyphen at the minimum window (UIR-412).
  */
-export type Phrase = string | { readonly mono: string };
-export const phraseText = (parts: readonly Phrase[]): string => parts.map((p) => (typeof p === 'string' ? p : p.mono)).join('');
+export type Phrase = string | { readonly mono: string } | { readonly whole: string };
+export const phraseText = (parts: readonly Phrase[]): string => parts.map((p) => (typeof p === 'string' ? p : 'mono' in p ? p.mono : p.whole)).join('');
 export const TRACEABILITY_FILE = 'rotaris-traceability.json';
 export const REQUIREMENTS_DIR_KEY = 'layout.requirements_dir';
 export const DEFAULT_REQUIREMENTS_DIR = 'docs/requirements';
 export const EMPTY_SOURCE_HOW: readonly Phrase[] = [
   'Configure one by placing a ', { mono: TRACEABILITY_FILE }, ' at the repository root whose ', { mono: REQUIREMENTS_DIR_KEY },
-  ' names that directory (the default is ', { mono: DEFAULT_REQUIREMENTS_DIR }, '), then re-evaluate. The board reads the documents where they stand and keeps no copy of them.',
+  ' names that directory (the default is ', { mono: DEFAULT_REQUIREMENTS_DIR }, '), then ', { whole: 're-evaluate' }, '. The board reads the documents where they stand and keeps no copy of them.',
 ];
+/**
+ * The source that could not be read at all — the layout file does not parse, or the read failed. The engine then
+ * reports no store, and the view drew REQ-TRACE-231's state over the engine's error: "Configure one by placing a
+ * rotaris-traceability.json …" above a line saying that very file could not be read (UIR-408 of the second critique
+ * of 2026-11-11). A failed read is not a workspace with no source: it is stated as what it is, with the report, as
+ * REQ-TRACE-515 states the store whose documents were rejected.
+ */
+export const UNREAD_SOURCE_SENTENCE = 'The requirement source could not be read.';
+export const UNREAD_SOURCE_HOW: readonly Phrase[] = ['The reason is reported below. Where it names a file, correct that file, then ', { whole: 're-evaluate' }, '.'];
 /**
  * The store that holds nothing. The engine reports a store whenever the layout resolves, and the layout always
  * resolves to at least its default (REQ-TRACE-038/039): this state is drawn for a directory named in the file, for
@@ -123,10 +133,10 @@ export const EMPTY_STORE_SENTENCE = 'The requirement source holds no requirement
  */
 export const NEW_REQUIREMENT_LABEL = 'New requirement';
 export function emptyStoreHow(dir: string, canCreate: boolean): readonly Phrase[] {
-  const document = ' as a Markdown document that opens with a frontmatter block declaring its identifier, its lifecycle and its title, then re-evaluate.';
+  const byHand: readonly Phrase[] = [{ mono: dir }, ' as a Markdown document that opens with a frontmatter block declaring its identifier, its lifecycle and its title, then ', { whole: 're-evaluate' }, '.'];
   return canCreate
-    ? [`Add the first one with ${NEW_REQUIREMENT_LABEL}, or write it into `, { mono: dir }, document]
-    : ['Write the first one into ', { mono: dir }, document];
+    ? ['Use ', { whole: NEW_REQUIREMENT_LABEL }, ' above to add the first one. Or write it into ', ...byHand]
+    : ['Write the first one into ', ...byHand];
 }
 export const EMPTY_STORE_ELSEWHERE: readonly Phrase[] = [
   'To read requirements from another directory, name it as ', { mono: REQUIREMENTS_DIR_KEY }, ' in a ', { mono: TRACEABILITY_FILE }, ' at the repository root.',
@@ -143,7 +153,8 @@ export const UNPARSED_STORE_SENTENCE = 'The requirement source is configured, bu
 export const UNPARSED_STORE_HOW = 'Each rejection is listed below as the engine reported it. Correct the documents it names and re-evaluate; until then the board has nothing to show.';
 /**
  * REQ-TRACE-380 with REQ-TRACE-515: which stated state the body shows is decided here, as a pure function of the projection, rather
- * than by a chain of conditions inside the drawn tree — `source` for no configured source, `unparsed` for a store
+ * than by a chain of conditions inside the drawn tree — `source` for no configured source, `unread` for a source the
+ * engine could not read at all (it reports no store and an error), `unparsed` for a store
  * that yielded errors and no cards, `store` for one that is genuinely empty, and `null` when there is a board.
  */
 /**
@@ -153,8 +164,8 @@ export const UNPARSED_STORE_HOW = 'Each rejection is listed below as the engine 
  */
 export const rejectedDocumentsSentence = (n: number): string =>
   `${n} document${n === 1 ? '' : 's'} in the requirement source ${n === 1 ? 'was' : 'were'} rejected and ${n === 1 ? 'is' : 'are'} not on the board.`;
-export function bodyStateOf(board: Pick<BoardProjection, 'source' | 'cards' | 'parseErrors'>): 'source' | 'unparsed' | 'store' | null {
-  if (board.source.kind === 'none') return 'source';
+export function bodyStateOf(board: Pick<BoardProjection, 'source' | 'cards' | 'parseErrors'>): 'source' | 'unread' | 'unparsed' | 'store' | null {
+  if (board.source.kind === 'none') return board.parseErrors.length > 0 ? 'unread' : 'source';
   if (board.cards.length > 0) return null;
   return board.parseErrors.length > 0 ? 'unparsed' : 'store';
 }
@@ -163,18 +174,22 @@ export const REEVALUATE_LABEL = 'Re-evaluate';
 export const REEVALUATE_DESCRIPTION = 'Re-reads the sources and the delivery store and applies the propagation rules. Consults no model and measures nothing; cards a rule moves will move.';
 export const EVALUATING_LABEL = 'Re-evaluating…';
 /** REQ-TRACE-346: the pass reports whether analysis is enabled; the board states the fact and deduces nothing. */
-export const ANALYSIS_OFF_SENTENCE = 'Change analysis is switched off for this workspace (requirements.change.analyze_changes), as the pass reports; no analysis runs on refresh and nothing is put on offer.';
+export const ANALYSIS_KEY = 'requirements.change.analyze_changes';
+export const ANALYSIS_OFF_SENTENCE: readonly Phrase[] = ['Change analysis is switched off for this workspace (', { mono: ANALYSIS_KEY }, '), as the pass reports; no analysis runs on refresh and nothing is put on offer.'];
 export const ANALYSIS_ON_SENTENCE = 'Change analysis is enabled for this workspace; a refresh that might reach a model announces itself for its duration and can be stopped. No such refresh exists in this build.';
 /** REQ-TRACE-345: what the pass left unjudged, by identifier. This build's pass judges nothing, so the list is what it reports: none. */
 export const AWAITING_JUDGEMENT_NONE = 'Awaiting judgement: none — this pass records no analyses, so no requirement is waiting on one.';
 /**
- * REQ-TRACE-507: the board does not infer a stopped refresh from silence, and Re-evaluate stays the guaranteed route
- * to a current board. The sentence says that in what the reader sees. Until 2026-11-11 it said it in the build's
- * terms ("follows the engine over channel 10; the channel reports no failure of its own, so a stopped watcher cannot
- * be told from a quiet one here"): UIR-312 of that day's critique, and guide 10's "the reader's terms, not the
- * system's". The fact behind it is unchanged: the channel the board listens on reports no failure of its own.
+ * REQ-TRACE-507 and REQ-TRACE-334, in what the reader sees. The board listens for what this application changed: a
+ * command of the board's own, or a run. Nothing watches the repository, so a change made outside the application
+ * shows only after a re-evaluation; and the channel the board listens on reports no failure of its own, so
+ * Re-evaluate stays the guaranteed route to a current board. Until 2026-11-11 the sentence said this in the build's
+ * terms ("Live refresh follows the engine over channel 10; the channel reports no failure of its own, so a stopped
+ * watcher cannot be told from a quiet one here"), UIR-312 of that day's critique. Its first rewording, "The board
+ * refreshes itself as the repository changes", was false and is kept here as the falsified one: the second critique
+ * of the same day read the relay and found no watcher behind it (UIR-401).
  */
-export const SUBSCRIPTION_SENTENCE = 'The board refreshes itself as the repository changes. It cannot tell a refresh that has stopped from a repository where nothing changed, so Re-evaluate is always the way to a current board.';
+export const SUBSCRIPTION_SENTENCE: readonly Phrase[] = ['The board updates itself when a change is made through Rotaris. A change made outside it shows after ', { whole: 'Re-evaluate' }, ', which is always the way to a current board.'];
 export const PROJECTION_UNAVAILABLE = 'The board could not be read';
 export const READING_LABEL = 'Reading the board…';
 /** REQ-TRACE-397: a refusal persists and can be acted on — the dismiss control's name. */

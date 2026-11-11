@@ -52,8 +52,12 @@ export interface StartSessionDialogProps {
   readonly onCancel: () => void;
 }
 
-/** The dialog's one sentence under its title (REQ-SHELL-125, REQ-ORCH-152). It names what the sections are, optional choices, and never how many. */
-export const START_SESSION_LEDE = 'Optional choices for the session the next message starts. The workspace is the one this window has open.';
+/**
+ * The dialog's one sentence under its title (REQ-SHELL-125, REQ-ORCH-152). It never says how many sections follow,
+ * and it does not call them optional: while another run is active the worktree is required (PD-GIT-001), and what
+ * holds of every section then is that it can be left as it stands.
+ */
+export const START_SESSION_LEDE = 'Choices for the session the next message starts; each can be left as it stands. The workspace is the one this window has open.';
 export const ISOLATION_HINT = 'Choose an isolated Git worktree when this task may run beside other sessions.';
 /** REQ-GIT-119's hint, from its one home in `@rotaris/contracts`, which main's forced-placement notice says too (PD-GIT-001). */
 export { ISOLATION_REQUIRED_HINT };

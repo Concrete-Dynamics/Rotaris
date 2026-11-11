@@ -163,22 +163,50 @@ Two findings off this surface were repaired in the same change because each is o
 
 ## Execution 2026-11-11 — the providers card
 
-*By the model (`claude-fable-5-2`) under [R-098](../../product/requests.md#r-098), for [R-099](../../product/requests.md#r-099): UIR-307 (high), UIR-308 and UIR-309 (medium) of [the 2026-11-11 critique](overview/05-brief-2026-11-11.md), which are UIR-001 and UIR-010 of the critique above read on a later pack. Built on `feat/r-097-ui-ux-overhaul`, not landed. The brief above is about a category's rows and is unchanged; its "Deliberately left" named this card.*
+*By the model (`claude-fable-5-2`) under [R-098](../../product/requests.md#r-098), for [R-099](../../product/requests.md#r-099): UIR-307 (high), UIR-308 and UIR-309 (medium) of [the 2026-11-11 critique](overview/05-brief-2026-11-11.md), which are UIR-001 and UIR-010 of the critique above read on a later pack. Built on `feat/r-097-ui-ux-overhaul` in two commits, the second after the critique below; not landed. The brief above is about a category's rows and is unchanged; its "Deliberately left" named this card.*
 
-**Authority.** [`PD-CONFIG-009`](../../product/directives/pd-config-009.md#pd-config-009) (one filled control on the card, the head's add-endpoint action; a row's primary first and a hairline), minted for UIR-307 over `REQ-CONFIG-329`, `REQ-CONFIG-371` and `REQ-PROVIDER-141`; `REQ-CONFIG-367` (a row's status line and its right-aligned action row); `REQ-CONFIG-372` (the label and the accessible name of Authenticate); `REQ-SHELL-022` (the minimum window); §1.7 with OQ-503's reading (a hairline is the strong boundary).
+**Authority.** [`PD-CONFIG-009`](../../product/directives/pd-config-009.md#pd-config-009) (one filled control on the card, the head's add-endpoint action; a row's primary first and a hairline), minted for UIR-307: it narrows `REQ-CONFIG-371` and extends `REQ-CONFIG-329` and `REQ-PROVIDER-141`. `REQ-CONFIG-367` (a row's status line and its right-aligned action row); `REQ-CONFIG-372` (the label and the accessible name of Authenticate); `REQ-PROVIDER-141` (a key provider's press moves focus to the key field); `REQ-CONFIG-388`, `REQ-NOTIFY-006` (the empty list); `REQ-SHELL-022` (the minimum window); §1.7 with OQ-503's reading (a hairline is the strong boundary).
 
-| # | Must move | Before (`ab29f51b`) | After | Must hold |
+Measured with `pnpm app:drive` on the built application, one `eval` over the rows at each size; "before" is `ab29f51b`.
+
+| # | Must move | Before | After | Must hold |
 |---|---|---|---|---|
-| 1 | filled controls on Settings › Models, both sizes | 7: "Add endpoint" and six "Authenticate"; a row's open settings added a filled Save (read in the source, not measured) | 1: "Add endpoint", also with DeepSeek's settings open | every row keeps its three controls in `REQ-CONFIG-371`'s order; labels and accessible names unchanged |
+| 1 | filled controls on Settings › Models, both sizes | 7: "Add endpoint" and six "Authenticate"; a row's open settings added a filled Save (read in the source) | 1: "Add endpoint", also with DeepSeek's settings open | every row keeps its three controls in `REQ-CONFIG-371`'s order; labels unchanged |
 | 2 | the row rule's step between the first cell and the action cell | 16.7 to 17.8 px at 1400×900; 4.4 to 17.9 px at 1000×680 | 0 at both, all six rows | the table's scroll width equals its client width (1040/1040, 640/640) |
-| 3 | "Sign out" at 1000×680 | 60.1×36.4 px on two lines, beside 24 px neighbours | 65.5×24 px on one line | the action cell holds its three controls (257.4 px, 252 before); the first cell gives way |
+| 3 | "Sign out" at 1000×680 | 60.1×36.4 px on two lines, beside 24 px neighbours | 65.5×24 px on one line | the action cell holds its three controls (257.4 px; 274.5 px with one label reading "Re-authenticate") |
+| 4 | "Add endpoint" against the card's right edge (`REQ-CONFIG-329`) | 739.6 px short at 1400×900, 339.6 px at 1000×680 (the critique's reading of the pack) | 15 px at both: the head's own inset | the kicker keeps its place |
+| 5 | Authenticate's accessible name on a row nobody has checked (`REQ-CONFIG-372`) | "Re-authenticate …" under the label "Authenticate", all six rows (read in the source) | "Authenticate …", all six rows | the label still follows stored credentials |
+| 6 | a press of Authenticate on a key provider, its settings closed | nothing on screen | the settings open, focus on "API key for DeepSeek", the sentence its description | every other provider's press starts its flow |
 
-**Cause of 2 and 3.** The action cell carried `.settings__action`, the wrapping flex line of a Settings row, so it was not a table cell: its box ended with its own buttons, the rule under it stood above the rule under the first cell, and at the minimum window it shrank its buttons until a label broke. It is a table cell that takes its row of controls whole; no label in it breaks.
+**Cause of 2 and 3.** The action cell carried `.settings__action`, the wrapping flex line of a Settings row, so it was not a table cell: its box ended with its own buttons, the rule under it stood above the rule under the first cell, and at the minimum window it shrank its buttons until a label broke. It is a table cell that takes its row of controls whole, and the first cell gives way: the identifier first, as before, and then the name, cut with an ellipsis and whole in its tooltip.
 
-**Found on the way and repaired.** A press of Authenticate on a provider that signs in with a stored key (three of the six built-in rows) changed nothing on screen while the row's settings were closed; it opens them and states its sentence there ([the note](../../archive/defects/a-key-providers-authenticate-changes-nothing-on-screen-while-its-settings-are-closed.md)).
+**A long name** (the text of two names replaced in the DOM by 40 and 80 characters, 1000×680; a user-defined endpoint's label may be 1,024): the table stays 640/640, the names are drawn at 189 and 177 px of their 263 and 501. With one action label replaced by "Re-authenticate", the six built-in names stay whole (180 of 180 px for the longest).
 
-**Found and not repaired.** The unavailable provider's Authenticate is enabled ([the note](../../defects/an-unavailable-providers-authenticate-is-enabled.md)). At 1000×680 the identifier `concrete-cloud` breaks at its hyphen inside the first cell, as it did before. While unsaved changes stand, the save bar's Save is a second fill ([OQ-550](../../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-550)).
+**The empty list.** A read in flight is stated as "Reading providers…" and no longer under the empty state's sentence; the settled state names the head's control and draws none of its own. Held by the unit test; not captured, since the list always holds the built-in providers once read (`PD-CONFIG-002`).
 
-**Evidence.** `packages/ui/src/settings/Providers.test.ts` (one filled control over six rows and over none; the hairline first in each row; the cell's class; what a press does); `layout-regression.test.ts` (the cell's rules). Drives at 1400×900 and 1000×680, each read with one `eval` over the rows.
+**A change this made elsewhere.** `TableCard`'s head stands its actions at the card's end, as the adopted pattern does, so the Skills category's card moved its switch and two buttons from beside the kicker to the right edge (kicker to x 446, first action from x 1037 at 1400×900).
 
-Not driven: a row with stored credentials (the scratch profile holds none), so "Re-authenticate" and an enabled "Sign out" were read in the unit test only; a user-defined endpoint's Delete; the add-endpoint dialog; `nocturne` and `high-contrast`; a screen reader.
+**Evidence.** `packages/ui/src/settings/Providers.test.ts`; `layout-regression.test.ts` (the cells' and the head's rules); `pnpm ui-audit` at both sizes, 0 findings.
+
+Not driven: a row with stored credentials (the scratch profile holds none), so "Re-authenticate", an enabled "Sign out" and the replacement-key sentence were read in the unit test and by a replaced label only; a user-defined endpoint's Delete; the add-endpoint dialog; the unavailable provider's press; `nocturne` and `high-contrast`; a screen reader.
+
+## Critique 2026-11-11, of the providers card
+
+The round's own critique: an independent, report-only `review-ui` reading of the first build, pack `a687b37052f6/iteration-1` and sixteen driven captures, by an agent that had built nothing and launched nothing (`critique.json` is not committed). Seventeen findings for the round's three surfaces, six high, five medium, six low; seven new in that build, ten older. This table holds the card's and the dialog's; the board's are in [the requirements-board brief](requirements-board.md). A finding repaired here is `implemented`, not `verified-resolved`.
+
+| Finding | Severity | What it read | Outcome |
+|---|---|---|---|
+| UIR-402 | high, new | the key provider's press opened the settings and moved no focus, against `REQ-PROVIDER-141`; one sentence for a first key and a stored one | implemented: focus on the key field, the sentence its description, the replacement-key sentence where a key is stored |
+| UIR-403 | high, older | "Add endpoint" 739.6 px short of the card's right edge, against `REQ-CONFIG-329` | implemented: the head's spacer, row 4 above |
+| UIR-404 | high, older | the save bar scrolls away with its category, against `REQ-CONFIG-270` | recorded, measured (y −463 at the scroll's end), not repaired: [the note](../../defects/the-settings-save-bar-scrolls-out-of-view-with-its-category.md) |
+| UIR-405 | high, older | the accessible name the inverse of `REQ-CONFIG-372` on an unchecked row | implemented: row 5 above |
+| UIR-406 | medium, new | the directive's second cost claimed the status word and the indicator tell a stored credential; they state the connection | the cost is corrected in the directive. Stating the credential in words in the row is not taken: it is new row content, and `REQ-CONFIG-367` fixes the row's parts |
+| UIR-407 | medium, new | with the action cell rigid, an unbounded name could widen the table | implemented and measured: "A long name" above |
+| UIR-415 | medium, older and the directive's | "Reading providers…" over "No providers were discovered."; two "Add endpoint" in the settled state | implemented: "The empty list" above; the directive's "MAY keep" clause is withdrawn |
+| UIR-414 | low, kept | the Start session sentence said "Optional choices" while a run locks the worktree | implemented: "Choices for the session the next message starts; each can be left as it stands. …" |
+| UIR-416 | low, older | `concrete-cloud` breaks at its hyphen at 1000×680; that row is 69 px against 56 | open |
+| UIR-417 | low, older | the kicker "PROVIDERS" 37 px above the column header "PROVIDER" | open |
+
+**Refused by the critique, and what was done.** "Extends: REQ-CONFIG-371": it narrows, and the directive and the back-pointer say so. Ruling Quick Start's drawing at all, a control this build does not draw: kept, because a directive that allows the card one fill cannot leave a row's "primary action" to mean a second; the directive now says it is stated and not captured. The directive's line that it had been read against a critique of the built change: no such critique existed at that commit; the line now names this one. Archiving the key-provider note as repaired: it was not, until the focus moved; the note says so.
+
+**Checked and found sound by the critique:** one filled control on Settings and on Requirements at both sizes; `btn-danger` a hairline, so Delete does not break the count; three compact controls per row at 24 px; the rule's step 0 and "Sign out" 65.52×24 in the pack; `width: 0` on the action cell under the table's auto layout; "three of six rows are key providers". **Not judged from the pack:** tab order, focus rings, a screen reader; a row with stored credentials; the unsaved state; Hooks, Project and MCP Servers; the other two themes.

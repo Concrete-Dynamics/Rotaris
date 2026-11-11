@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { PROVIDER_STATE_LABELS, type ProviderRow, type ProviderStateName } from '@rotaris/contracts';
 import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInput, ConfirmDialog, EmptyState, Table as DesignTable, TableCard, Tooltip as DesignTooltip } from '../design-system/index.js';
 
@@ -22,7 +22,7 @@ import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInpu
  *
  * PD-CONFIG-009: the card draws ONE filled control, "Add endpoint" in its head, in every state of the list. A row's
  * actions keep REQ-CONFIG-371's order and are drawn as a hairline, bare text or a link; a row's settings draw Save
- * first and as a hairline; the empty state's own "Add endpoint" is the hairline beside the head's filled one.
+ * first and as a hairline; the empty state names the head's control and draws none of its own.
  */
 
 /** REQ-CONFIG-369's colour pairs: [indicator step, word step], total over REQ-NOTIFY-200's states. */
@@ -37,18 +37,36 @@ const STATE_TONES: Readonly<Record<ProviderStateName | 'idle', { dot: string; wo
   idle: { dot: 'var(--rt-text-tertiary)', word: 'var(--rt-text-tertiary)' },
 });
 
-/** What "Authenticate" answers for a provider that signs in with a stored key (REQ-PROVIDER-050 states it for DeepSeek; every `api-key` provider is treated so) — said in the row's settings, beside the key field it names. */
-export const KEY_PROVIDER_AUTH_SENTENCE = 'This provider signs in with an API key. Enter the key in the field above and save it.';
+/**
+ * What a press of Authenticate answers on a provider that signs in with a stored key, stated in the row's settings
+ * under the key field. With a key stored it is REQ-PROVIDER-141's: "a replacement key must be entered and saved".
+ * With none stored it says the provider signs in with a key (REQ-PROVIDER-050 states that answer for DeepSeek; every
+ * `api-key` provider is treated so).
+ */
+export const KEY_PROVIDER_REPLACE_SENTENCE = 'Enter a replacement key in the field above and save it.';
+export const KEY_PROVIDER_FIRST_SENTENCE = 'This provider signs in with an API key. Enter the key in the field above and save it.';
 
 /**
- * What a press of a row's Authenticate does. A provider that signs in with a stored key has no flow to start
- * (REQ-PROVIDER-050, of DeepSeek), so the press opens the row's settings and states the sentence there; every other provider's
- * press starts its flow (REQ-PROVIDER-142). Until 2026-11-11 the key provider's press set the sentence and left the
- * settings closed, where the sentence is drawn: three of the six built-in rows answered their first control with
- * nothing on screen.
+ * What a press of a row's Authenticate does. A provider that signs in with a stored key has no flow to start: the
+ * press opens the row's settings, moves focus to the key field and states the sentence there (REQ-PROVIDER-141);
+ * every other provider's press starts its flow (REQ-PROVIDER-142). Until 2026-11-11 the key provider's press set
+ * the sentence and left the settings closed, where the sentence is drawn: three of the six built-in rows answered
+ * their first control with nothing on screen.
  */
-export function authenticatePress(row: Pick<ProviderRow, 'method'>): { readonly kind: 'settings'; readonly message: string } | { readonly kind: 'flow' } {
-  return row.method === 'api-key' ? { kind: 'settings', message: KEY_PROVIDER_AUTH_SENTENCE } : { kind: 'flow' };
+export function authenticatePress(row: Pick<ProviderRow, 'method' | 'authenticated'>): { readonly kind: 'key-field'; readonly message: string } | { readonly kind: 'flow' } {
+  if (row.method !== 'api-key') return { kind: 'flow' };
+  return { kind: 'key-field', message: row.authenticated ? KEY_PROVIDER_REPLACE_SENTENCE : KEY_PROVIDER_FIRST_SENTENCE };
+}
+
+/**
+ * REQ-CONFIG-372: the action's TEXT follows stored credentials, its ACCESSIBLE NAME whether the provider is connected
+ * now. A row nobody has checked yet (`health` null) is not known to be connected, so it is named "Authenticate":
+ * until 2026-11-11 a null health fell to "Re-authenticate", and every row of a fresh list showed one word and was
+ * named the other (UIR-405 of that day's second critique).
+ */
+export function authenticateWords(row: Pick<ProviderRow, 'authenticated' | 'health'>): { readonly text: 'Authenticate' | 'Re-authenticate'; readonly name: 'Authenticate' | 'Re-authenticate' } {
+  const connected = row.health !== null && !['unauthenticated', 'unknown'].includes(row.health.state);
+  return { text: row.authenticated ? 'Re-authenticate' : 'Authenticate', name: connected ? 'Re-authenticate' : 'Authenticate' };
 }
 
 /** REQ-CONFIG-368: the status word, underscores replaced by spaces; an unrecognized value falls back to idle (REQ-CONFIG-369). */
@@ -92,9 +110,13 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
   const { name: stateName, label: word } = stateWord(row);
   const tone = STATE_TONES[stateName] ?? STATE_TONES.idle;
   const canKey = row.method === 'api-key';
-  // REQ-CONFIG-372: the action's text follows stored credentials, its accessible name the live connection.
-  const authAction = row.authenticated ? 'Re-authenticate' : 'Authenticate';
-  const authName = row.health && ['unauthenticated', 'unknown'].includes(row.health.state) ? 'Authenticate' : 'Re-authenticate';
+  const { text: authAction, name: authName } = authenticateWords(row);
+  // REQ-PROVIDER-141: a key provider's press moves focus to the key field. The field exists only once the settings are
+  // open, so the press asks (`keyFocus`) and the effect answers after the field is in the tree.
+  const keyField = useRef<HTMLInputElement>(null);
+  const [keyFocus, setKeyFocus] = useState(0);
+  useEffect(() => { if (keyFocus > 0) keyField.current?.focus(); }, [keyFocus]);
+  const messageId = useId();
   return (
     <>
       <tr data-provider={row.id} data-authenticated={row.authenticated ? 'yes' : 'no'} data-health={stateName}>
@@ -103,7 +125,7 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
             <DesignTooltip content={row.health?.detail || word} placement="top">
               <span className="provider-row__dot" data-state={stateName} style={{ background: tone.dot }} />
             </DesignTooltip>
-            <span className="provider-row__name">{row.displayName}</span>
+            <span className="provider-row__name" title={row.displayName}>{row.displayName}</span>
             <span className="mono text-tertiary settings__origin">{row.id}</span>
             <span className="provider-row__word" style={{ color: tone.word }}>{word}</span>
           </div>
@@ -122,7 +144,7 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
               className="btn btn-secondary btn-compact"
               aria-label={`${authName} ${row.displayName}`}
               disabled={busy !== null}
-              onClick={() => { const press = authenticatePress(row); if (press.kind === 'settings') { setOpen(true); setMessage({ ok: true, text: press.message }); } else props.onReauthenticate(row.id); }}
+              onClick={() => { const press = authenticatePress(row); if (press.kind === 'key-field') { setOpen(true); setMessage({ ok: true, text: press.message }); setKeyFocus((n) => n + 1); } else props.onReauthenticate(row.id); }}
             >
               {authAction}
             </DesignButton>
@@ -148,7 +170,7 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
               <div className="provider-settings__fields">
                 <label className="provider-dialog__field">
                   <span className="text-secondary">API key{canKey ? ' (leave empty to keep the current key)' : ''}</span>
-                  <DesignInput className="input mono" type="password" autoComplete="off" value={apiKey} disabled={!canKey || busy !== null} onChange={(e) => setApiKey(e.currentTarget.value)} aria-label={`API key for ${row.displayName}`} title={canKey ? undefined : `${row.displayName} does not sign in with a key`} />
+                  <DesignInput ref={keyField} className="input mono" type="password" autoComplete="off" value={apiKey} disabled={!canKey || busy !== null} onChange={(e) => setApiKey(e.currentTarget.value)} aria-label={`API key for ${row.displayName}`} aria-describedby={message ? messageId : undefined} title={canKey ? undefined : `${row.displayName} does not sign in with a key`} />
                 </label>
                 <label className="provider-dialog__field">
                   <span className="text-secondary">Base URL{row.userDefined ? '' : ' (fixed for this provider)'}</span>
@@ -171,7 +193,7 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
                 <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={busy !== null} onClick={() => { void act('check', async () => { await props.onCheck(row.id); return { ok: true, message: 'Checked.' }; }); }}>{busy === 'check' ? 'Checking…' : 'Check health'}</DesignButton>
                 {row.userDefined && <DesignButton type="button" className="btn btn-danger btn-compact" disabled={busy !== null} onClick={() => setConfirmDelete(true)}>Delete</DesignButton>}
               </div>
-              {message && <p className={message.ok ? 'text-secondary' : 'composer__error'} role={message.ok ? 'status' : 'alert'} data-provider-message>{message.text}</p>}
+              {message && <p id={messageId} className={message.ok ? 'text-secondary' : 'composer__error'} role={message.ok ? 'status' : 'alert'} data-provider-message>{message.text}</p>}
             </div>
           </td>
         </tr>
@@ -203,6 +225,10 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
   );
 }
 
+export const READING_PROVIDERS = 'Reading providers…';
+/** REQ-CONFIG-388's two statements, and REQ-NOTIFY-006's instruction: the control that puts a provider here, by its name. */
+export const NO_PROVIDERS_HINT = 'No providers were discovered. A provider or model endpoint must be configured before starting a run: use Add endpoint above.';
+
 export function ProvidersCard(props: ProvidersCardProps) {
   const [refreshing, setRefreshing] = useState<string | null>(null);
   return (
@@ -221,12 +247,17 @@ export function ProvidersCard(props: ProvidersCardProps) {
       {props.error && <p className="composer__error" role="alert">{props.error}</p>}
       {refreshing && refreshing !== '…' && <p className="text-secondary" role="status">{refreshing}</p>}
       {props.rows.length === 0 ? (
-        <EmptyState
-          icon="ph-plugs-connected"
-          title={props.loading ? 'Reading providers…' : 'No providers yet'}
-          hint="No providers were discovered. A provider or model endpoint must be configured before starting a run."
-          action={<DesignButton type="button" className="btn btn-secondary btn-compact" onClick={props.onAdd}>Add endpoint</DesignButton>}
-        />
+        // A read in flight is not an empty list: it stood under "Reading providers…" with the sentence "No providers
+        // were discovered." beneath it. REQ-CONFIG-388's state is drawn once the read has answered, and names the head's
+        // control rather than drawing a second "Add endpoint" 60 px under the first (PD-CONFIG-009; REQ-NOTIFY-006).
+        props.loading ? <p className="text-secondary providers-card__reading" role="status" data-providers-reading>{READING_PROVIDERS}</p> : (
+          <EmptyState
+            icon="ph-plugs-connected"
+            title="No providers yet"
+            hint={NO_PROVIDERS_HINT}
+            data-providers-empty
+          />
+        )
       ) : (
         <DesignTable className="table providers-card__table" aria-label="Providers">
           <thead>

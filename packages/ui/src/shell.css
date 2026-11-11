@@ -1381,6 +1381,21 @@
    detail and its identifier wrap. */
 .providers-card__table td.provider-row__action-cell { width: 0; white-space: nowrap; }
 .provider-row__actions > .btn { flex: none; white-space: nowrap; }
+/* UIR-407 (the second critique of 2026-11-11): with the action cell rigid, the first cell is what gives way, and a
+   provider's name is one unbreakable line of up to 1,024 characters (a user-defined endpoint's label). The cell takes
+   the width the action cell leaves and never widens the table; in its status line the identifier gives way first, as
+   it did, and then the name is cut with an ellipsis, its whole text in its tooltip. */
+.providers-card__table td:first-child { width: 100%; max-width: 0; }
+.provider-row__status > .provider-row__name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.provider-row__status > .settings__origin { flex: 0 999 auto; }
+/* The word keeps the line's own gap before it and drops the second 8 px its padding added: with one row reading
+   "Re-authenticate" the action cell is 17 px wider, and that padding was what cut "Rotaris Cloud (recommended)" at 1000x680. */
+.provider-row__status > .provider-row__word { flex: none; padding-left: 0; }
+/* REQ-CONFIG-329's "right-aligned action": the adopted TableCard stands a spacer between the kicker and the actions
+   (`docs/design/system/components/patterns/TableCard.jsx`), which the product's copy had dropped, so "Add endpoint"
+   stood beside the kicker, 740 px short of the card's edge at 1400x900 (UIR-403). */
+.table-card-head > .card-kicker { margin-right: auto; }
+.providers-card__reading { margin: 0; padding: var(--rt-space-3) var(--rt-space-4); }
 /* The expanded per-row settings: a form region, not a nested card. */
 .provider-settings > td { padding-top: 0; }
 .provider-settings__panel { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-3, 12px); margin: var(--rt-space-2, 8px) 0; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); }
@@ -2646,6 +2661,8 @@ strong { font-weight: var(--rt-weight-medium); }
    it at its hyphen ("rotaris-" / "traceability.json"); only a name longer than the hint's own measure breaks, and then
    anywhere, inside the hint. */
 .req-empty .empty-state-hint .mono { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+/* UIR-412: a control's name or its verb inside a sentence stays on one line ("Re-" / "evaluate" broke at the hyphen). */
+.req-whole { white-space: nowrap; }
 .req-empty__errors { margin: var(--rt-space-2) 0 0; padding: 0; list-style: none; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); text-align: left; }
 /* REQ-TRACE-238: an open column is at least 276 and at most 340 wide, spare width spent up to the cap; REQ-TRACE-310: its margin is 10 on every side. */
 .req-column { flex: 1 0 276px; min-width: 276px; max-width: 340px; display: flex; flex-direction: column; min-height: 0; padding: 10px; border-radius: var(--rt-radius-md); }
@@ -2748,6 +2765,9 @@ strong { font-weight: var(--rt-weight-medium); }
 .req-detail__run { display: flex; align-items: center; gap: var(--rt-space-2); flex-wrap: wrap; padding: 6px 9px; background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); }
 .req-detail__history li.is-current { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
 .req-foot { flex: none; margin: 0; padding: var(--rt-space-1) var(--rt-space-5); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+/* The foot is a sentence with a control's name inside it, and it also carries `.card-meta`, which is a flex line: as
+   flex items the sentence's parts stood as three columns at 1000x680. A block sets them as one text. */
+.req-foot.card-meta { display: block; }
 /* The evidence view and the reason dialog reuse the shell's dialog; only their bodies are sized here. */
 .req-evidence-pane { width: min(720px, 90vw); max-height: 85vh; display: flex; flex-direction: column; }
 .req-evidence-pane__body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: var(--rt-space-3); font-size: var(--rt-text-xs); }

@@ -39,9 +39,11 @@ describe("the launch dialog's isolation lock is main's answer (PD-GIT-001, REQ-G
 });
 
 describe('the sentence under the dialog\'s title (REQ-SHELL-125, REQ-ORCH-152; UIR-311 of the 2026-11-11 critique)', () => {
-  it('counts nothing: it said "Two optional choices" over three sections', () => {
+  it('counts nothing and calls nothing optional: it said "Two optional choices" over three sections, one of them locked while a run is active', () => {
     const html = dialog({ sessionId: 's1', isolationRequired: false });
     expect(html).toContain(START_SESSION_LEDE);
+    expect(dialog({ sessionId: 's1', isolationRequired: true })).toContain(START_SESSION_LEDE);
+    expect(START_SESSION_LEDE).not.toMatch(/optional/i);
     expect(START_SESSION_LEDE).not.toMatch(/\b(two|three|four|\d+)\b/i);
     expect([...html.matchAll(/class="card-kicker"/g)]).toHaveLength(3);
   });

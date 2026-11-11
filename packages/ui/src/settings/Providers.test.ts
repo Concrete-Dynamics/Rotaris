@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ProviderRow } from '@rotaris/contracts';
-import { authenticatePress, KEY_PROVIDER_AUTH_SENTENCE, ProvidersCard, type ProvidersCardProps } from './Providers.js';
+import { authenticatePress, authenticateWords, KEY_PROVIDER_FIRST_SENTENCE, KEY_PROVIDER_REPLACE_SENTENCE, NO_PROVIDERS_HINT, ProvidersCard, READING_PROVIDERS, type ProvidersCardProps } from './Providers.js';
 
 /**
  * PD-CONFIG-009 and the 2026-11-11 critique's UIR-307/308/309: the providers card draws one filled control, its rows'
@@ -40,10 +40,21 @@ describe('the providers card draws one filled control (PD-CONFIG-009, over REQ-C
     expect(actions.filter((a) => a.includes('>Re-authenticate<'))).toHaveLength(1);
   });
 
-  it('fills the head\'s "Add endpoint" alone when no provider is listed: the empty state\'s own is the hairline', () => {
+  it('draws one "Add endpoint" when no provider is listed, the head\'s, and names it in the state\'s sentence (REQ-CONFIG-388, REQ-NOTIFY-006)', () => {
     const html = card([]);
     expect(filled(html)).toEqual(['Add endpoint']);
-    expect([...html.matchAll(/>Add endpoint</g)]).toHaveLength(2);
+    expect([...html.matchAll(/>Add endpoint</g)]).toHaveLength(1);
+    expect(html).toContain('data-providers-empty');
+    expect(html).toContain(NO_PROVIDERS_HINT);
+    expect(NO_PROVIDERS_HINT).toMatch(/Add endpoint above\.$/);
+  });
+
+  it('states a read in flight as a read, never as an empty list', () => {
+    const html = card([], { loading: true });
+    expect(html).toContain(`data-providers-reading="true">${READING_PROVIDERS}<`);
+    expect(html).not.toContain('data-providers-empty');
+    expect(html).not.toContain('No providers were discovered');
+    expect(filled(html)).toEqual(['Add endpoint']);
   });
 });
 
@@ -55,14 +66,42 @@ describe('a provider row\'s action cell (UIR-308, UIR-309)', () => {
   });
 });
 
-describe('what Authenticate does (REQ-PROVIDER-050, REQ-PROVIDER-142)', () => {
-  it('opens the settings and states the key sentence for a provider that signs in with a stored key', () => {
-    expect(authenticatePress({ method: 'api-key' })).toEqual({ kind: 'settings', message: KEY_PROVIDER_AUTH_SENTENCE });
+describe('what Authenticate does (REQ-PROVIDER-141, REQ-PROVIDER-050, REQ-PROVIDER-142)', () => {
+  it('sends a key provider with no stored key to its key field, saying the provider signs in with a key', () => {
+    expect(authenticatePress({ method: 'api-key', authenticated: false })).toEqual({ kind: 'key-field', message: KEY_PROVIDER_FIRST_SENTENCE });
+  });
+
+  it('sends a key provider with a stored key to its key field, saying a replacement key must be entered and saved (REQ-PROVIDER-141)', () => {
+    expect(authenticatePress({ method: 'api-key', authenticated: true })).toEqual({ kind: 'key-field', message: KEY_PROVIDER_REPLACE_SENTENCE });
+    expect(KEY_PROVIDER_REPLACE_SENTENCE).toMatch(/replacement key/);
   });
 
   it('starts the flow for every other provider, and for one whose method is unknown', () => {
-    expect(authenticatePress({ method: 'browser-pkce' })).toEqual({ kind: 'flow' });
-    expect(authenticatePress({ method: 'device-code' })).toEqual({ kind: 'flow' });
-    expect(authenticatePress({ method: null })).toEqual({ kind: 'flow' });
+    expect(authenticatePress({ method: 'browser-pkce', authenticated: false })).toEqual({ kind: 'flow' });
+    expect(authenticatePress({ method: 'device-code', authenticated: true })).toEqual({ kind: 'flow' });
+    expect(authenticatePress({ method: null, authenticated: false })).toEqual({ kind: 'flow' });
+  });
+});
+
+describe('the words on Authenticate (REQ-CONFIG-372)', () => {
+  const health = (state: NonNullable<ProviderRow['health']>['state']): ProviderRow['health'] => ({ state, detail: '' } as ProviderRow['health']);
+
+  it('takes its text from stored credentials', () => {
+    expect(authenticateWords({ authenticated: false, health: null }).text).toBe('Authenticate');
+    expect(authenticateWords({ authenticated: true, health: null }).text).toBe('Re-authenticate');
+  });
+
+  it('names a row nobody has checked "Authenticate": an unknown connection is not a connection — it was named "Re-authenticate"', () => {
+    expect(authenticateWords({ authenticated: false, health: null }).name).toBe('Authenticate');
+    expect(authenticateWords({ authenticated: true, health: null }).name).toBe('Authenticate');
+    expect(card(SIX)).toContain('aria-label="Authenticate DeepSeek"');
+    expect(card(SIX)).not.toContain('aria-label="Re-authenticate');
+  });
+
+  it('names a connected row "Re-authenticate" and an unauthenticated or unknown one "Authenticate"', () => {
+    expect(authenticateWords({ authenticated: true, health: health('healthy') }).name).toBe('Re-authenticate');
+    expect(authenticateWords({ authenticated: true, health: health('warning') }).name).toBe('Re-authenticate');
+    expect(authenticateWords({ authenticated: true, health: health('unauthenticated') })).toEqual({ text: 'Re-authenticate', name: 'Authenticate' });
+    expect(authenticateWords({ authenticated: false, health: health('unknown') }).name).toBe('Authenticate');
   });
 });

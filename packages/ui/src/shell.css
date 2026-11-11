@@ -673,8 +673,9 @@
 
 /* ── Settings: categories as a vertical navigation list (REQ-CONFIG-268, REQ-SHELL-153), the Project section ── */
 .settings { display: grid; grid-template-columns: 200px 1fr; gap: var(--rt-space-5, 24px); height: 100%; min-height: 0; }
-.nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.nav-list__item { display: block; width: 100%; text-align: left; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: 0; border-left: 3px solid transparent; border-radius: var(--rt-radius-sm, 4px); background: transparent; color: var(--rt-text-secondary); font: inherit; font-size: var(--rt-text-sm, 13px); cursor: pointer; }
+/* The selected entry's rule is named once, for the entry and for a group heading that stands on the entries' text axis (UIR-306). */
+.nav-list { --nav-list-rule: 3px; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.nav-list__item { display: block; width: 100%; text-align: left; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: 0; border-left: var(--nav-list-rule) solid transparent; border-radius: var(--rt-radius-sm, 4px); background: transparent; color: var(--rt-text-secondary); font: inherit; font-size: var(--rt-text-sm, 13px); cursor: pointer; }
 .nav-list__item:hover { background: var(--rt-hover); color: var(--rt-text); }
 .nav-list__item.is-selected { border-left-color: var(--rt-accent-300); color: var(--rt-text); background: var(--rt-accent-tint-10); }
 .nav-list__item:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
@@ -685,7 +686,6 @@
 .settings__categories { min-height: 0; overflow-y: auto; }
 .nav-list--grouped { gap: var(--rt-space-4); }
 .nav-list__group { display: flex; flex-direction: column; gap: var(--rt-space-1); }
-.nav-list--grouped { --nav-list-rule: 3px; }
 .nav-list__heading { padding-inline-start: calc(var(--nav-list-rule) + var(--rt-space-3)); }
 .settings__body { min-width: 0; overflow: auto; }
 .settings__section h1 { margin: 0 0 var(--rt-space-3, 12px); }
@@ -1883,7 +1883,11 @@
    card's keyline under the kicker (the Overview audit of 2026-11-02, item 13, as the tree card's first row did); the agents
    under it stand one step in, which is the hierarchy: the run, then what it delegated. */
 .persona-window .card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
-.mission__run-row { --run-row-rule: 3px; --run-row-pad: var(--rt-space-2); display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--rt-space-2, 8px); padding: 6px var(--run-row-pad); margin-inline-start: calc(-1 * (var(--run-row-rule) + var(--run-row-pad))); border-left: var(--run-row-rule) solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text); }
+/* The run row takes the tree row's own rule and inset (`--agent-row-rule`, `--agent-row-pad`, named on the card so both rows read
+   them), so the two kinds of row end on one right edge (UIR-305 of the critique of 2026-11-11: 8 px against 6 px had them end at
+   x 1372, 1365 and 1363) and the selection rule is one figure here, not two (UIR-306). */
+.mission__graph { --agent-row-rule: 3px; --agent-row-pad: 6px; }
+.mission__run-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--rt-space-2, 8px); padding: 6px var(--agent-row-pad); margin-inline-start: calc(-1 * (var(--agent-row-rule) + var(--agent-row-pad))); border-left: var(--agent-row-rule) solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text); }
 .mission__run-row:hover { background: var(--rt-hover); }
 .mission__run-row.is-selected { border-left-color: var(--rt-accent-300); background: var(--rt-accent-tint-10); }
 .mission__run-row:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }

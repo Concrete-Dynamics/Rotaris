@@ -173,7 +173,9 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
   // The last view, written as `ROTARIS_CAPTURE_VIEW` writes one: its identifier, or its place in the rail (PD-SHELL-015).
   const endViewWanted = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW'] : undefined;
   const endViewPlace = captureViewPosition(endViewWanted);
-  if (endViewPlace === null) host.log(`capture: ROTARIS_CAPTURE_END_VIEW=${endViewWanted ?? ''} names no primary view`);
+  // Behind the flag on its own line: the sentence names the variable, and a packaged bundle may carry no trace of a scriptable
+  // seam (`pnpm package`'s seam check refused the build that logged it unguarded, 2026-11-11).
+  if (__ROTARIS_SEAMS__ && endViewPlace === null) host.log(`capture: ROTARIS_CAPTURE_END_VIEW=${endViewWanted ?? ''} names no primary view`);
   const endView = endViewPlace ?? 0;
   const endViewUntil = parseSteps(__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_END_VIEW_UNTIL'] : undefined)[0] ?? null;
   const probes = parseSelectors(__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROBE'] : undefined);

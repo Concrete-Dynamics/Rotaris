@@ -35,6 +35,9 @@ export interface AgentTableProps {
 export const AGENT_TABLE_COLUMNS = ['State', 'Agent', 'Persona', 'Activity', 'Tool calls', 'Elapsed', 'Context (used/limit)', 'Compressions', 'Actions'] as const;
 const COLUMNS = AGENT_TABLE_COLUMNS;
 
+/** A token figure, grouped as the Overview's other figures are (`en-US`, as `formatTokens` and the Tokens card write theirs) and never by the host's locale (UIR-301 of the critique of 2026-11-11: `0/265.000` beside the Tokens card's `1,024`). */
+const figure = (n: number): string => n.toLocaleString('en-US');
+
 const Row = memo(function Row({ a, selected, elapsed, onSelect, onOpen, onPopOut }: { a: AgentRecord; selected: boolean; elapsed: string; onSelect: (id: string) => void; onOpen: (a: AgentRecord) => void; onPopOut: (a: AgentRecord) => void }) {
   const percent = contextPercent(a.contextUsed, a.contextLimit);
   return (
@@ -45,7 +48,7 @@ const Row = memo(function Row({ a, selected, elapsed, onSelect, onOpen, onPopOut
       <td role="cell" className="agent-table__activity" title={a.delegationTask || a.activity}>{a.activity || '—'}</td>
       <td role="cell" className="agent-table__calls mono" data-label="tool calls">{a.toolCalls}</td>
       <td role="cell" className="agent-table__elapsed mono" data-testid="agent-elapsed">{elapsed}</td>
-      <td role="cell" className="agent-table__context mono" data-label="context" title={`${a.contextUsed.toLocaleString()} of ${a.contextLimit.toLocaleString()} tokens`}>{a.contextUsed.toLocaleString()}/{a.contextLimit.toLocaleString()} <span className="text-secondary">({percent}%)</span></td>
+      <td role="cell" className="agent-table__context mono" data-label="context" title={`${figure(a.contextUsed)} of ${figure(a.contextLimit)} tokens`}>{figure(a.contextUsed)}/{figure(a.contextLimit)} <span className="text-secondary">({percent}%)</span></td>
       <td role="cell" className="agent-table__compressions mono" data-label="compressions" title={countNoun(a.compressions, 'compression')}>{a.compressions}</td>
       <td role="cell" className="agent-table__actions">
         <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={(e) => { e.stopPropagation(); onOpen(a); }} title="Open this agent in the inspector, or in its persona window when the agent pop-out preference is on.">Open</DesignButton>

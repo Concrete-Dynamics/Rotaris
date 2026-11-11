@@ -43,7 +43,7 @@ Mission is not a primary view. Its identifier `mission` is retired and never rea
 |---|---|---|---|
 | Header | — | title, session label, List sessions, New session (REQ-MONITOR-164) | unchanged |
 | Metric grid | left | Tokens, Tool calls, Repository, Agents (REQ-MONITOR-166 to -169) | unchanged |
-| **Agent activity** | left | one row per agent: state, agent, persona, activity, tool calls, elapsed, context, compressions, Open, Pop out (REQ-MONITOR-274's table, in REQ-MONITOR-116's place) | Mission's right-hand card |
+| **Agent activity** | left | one row per agent: state, agent, persona, activity, tool calls, elapsed, context, compressions, Open, Pop out (REQ-MONITOR-274's table, in REQ-MONITOR-116's place); the refresh figure Mission drew in its head is carried as attributes and not drawn | Mission's right-hand card |
 | Sessions | left | the run switcher (REQ-MONITOR-171) | unchanged, one card lower |
 | **Delegation graph** | right, first | the run row, the tree, Pause, Cancel selection, Open, Pause's explanation, the strategy as text with "Open Runtime settings" (REQ-MONITOR-274, -276) | Mission's left-hand card; a read-only tree with "Open Mission" stood third in this column |
 | Cloud credit, Subscription limits, Improvement proposals | right | REQ-MONITOR-173's other tiles, in its order | unchanged, one card lower |
@@ -151,5 +151,7 @@ No image is tracked in this repository; the captures of this round are kept with
 | Overview at 1000×680: Pause and Cancel selection | both end at y = 393 of 680 |
 | Settings at 1000×680, no notice above the view | list 563 px in a 570 px column; the last category ends at y = 627, the status strip begins at 654 |
 | Settings groups | Agents 3, Application 2, Extensions 6, Project and about 2 |
+
+An independent critique of the built pack (`66663f087f89/iteration-1`, twelve findings, four of them repaired on the two cards) is recorded in [the cards' brief](briefs/overview/05-brief-2026-11-11.md).
 
 What was not verified is in the pull request's report: among it, no screen reader was run over the grouped list or the three-line rows, and `nocturne` and `high-contrast` were read only through `pnpm theme-proof`.

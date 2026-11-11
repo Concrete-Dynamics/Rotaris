@@ -174,7 +174,7 @@ const s1 = scenario('painted');
     ROTARIS_CAPTURE_EVAL_AT: `${CARDS}@6000`,
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'mission.png')}@7000`,
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'overview', ROTARIS_CAPTURE_END_VIEW_MS: '1500',
-    ROTARIS_CAPTURE_PROBE: '[data-testid="mission-graph"];;[data-testid="mission-table"];;.agent-table__row;;[data-testid="mission-refresh"];;.app-shell',
+    ROTARIS_CAPTURE_PROBE: '[data-testid="mission-graph"];;[data-testid="mission-table"];;.agent-table__row;;.app-shell', // the refresh figure is the table card's attributes; its drawn line went with UIR-302 (2026-11-11)
   });
   const db = open(s1); const row = session(db); const kids = children(db, row.session_id); db.close();
   expect(row.execution_status === 'completed', `the run ended ${row.execution_status} (${row.stop_reason})`);

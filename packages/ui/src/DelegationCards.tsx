@@ -167,7 +167,9 @@ export function AgentActivityCard({ session, selectedAgentId, onSelect, nowIso, 
   const agents = session?.agents ?? [];
   return (
     <DesignCard className="card ov-card mission__table" role="region" aria-label="Agent activity" data-testid="mission-table" data-refresh-ms={refresh ? refresh.ms.toFixed(1) : ''} data-refresh-agents={refresh ? String(refresh.agents) : ''}>
-      <div className="ov-card__head"><span className="card-kicker">Agent activity</span>{refresh && <span className="card-meta mono" data-testid="mission-refresh">last refresh {refresh.ms.toFixed(1)} ms · {refresh.agents} agents</span>}</div>
+      {/* The refresh figure is verification data: the card carries it as attributes for the proof and draws none of it (UIR-302 of the
+          critique of 2026-11-11: "last refresh 30.9 ms · 3 agents" was a third reading of the agent count, and no requirement asks for it). */}
+      <div className="ov-card__head"><span className="card-kicker">Agent activity</span></div>
       <AgentTable agents={agents} selected={selectedAgentId} nowIso={nowIso} onSelect={(id) => onSelect(id, 'click')} onOpen={onOpen} onPopOut={onPopOut} />
     </DesignCard>
   );

@@ -130,7 +130,8 @@ describe('the populated cards (REQ-MONITOR-166..169; audit items 4, 5, 6, 13, 16
     expect(css).not.toMatch(/^\.agent-row__dot/m);
     expect(rule('.mission__graph .agent-row')).toContain('column-gap: 0');
     expect(rule('.mission__graph .agent-row__prefix:empty + .status-dot')).toContain('margin-inline-start: 0');
-    expect(rule('.mission__run-row')).toContain('margin-inline-start: calc(-1 * (var(--run-row-rule) + var(--run-row-pad)))');
+    expect(rule('.mission__run-row')).toContain('margin-inline-start: calc(-1 * (var(--agent-row-rule) + var(--agent-row-pad)))');
+    expect(rule('.mission__graph')).toContain('--agent-row-rule: 3px; --agent-row-pad: 6px;');
   });
   it('publishes one card-to-card gap on both columns, --rt-space-4 — item 16', () => {
     const contract = 'data-ui-contract="[{&quot;kind&quot;:&quot;spacing-token&quot;,&quot;property&quot;:&quot;gap&quot;,&quot;token&quot;:&quot;--rt-space-4&quot;}]"';
@@ -283,6 +284,13 @@ describe('PD-MONITOR-009 — the Overview is the one monitoring view', () => {
     expect(html).not.toMatch(/<select[^>]*mission/);
     expect(html).not.toContain('mission-depth');
     expect(html).not.toContain('Stored as');
+  });
+  it('the table card draws no verification figure and no second agent count, and groups its figures as the Tokens card does (UIR-301, UIR-302)', () => {
+    const refreshed = renderToStaticMarkup(createElement(OverviewView, { ...baseProps(), session: run, sessions: [row()], delegation: delegation({ session: run, refresh: { ms: 30.9, agents: 1 } }) }));
+    expect(refreshed).toContain('data-testid="mission-table" data-refresh-ms="30.9" data-refresh-agents="1"');
+    expect(refreshed).not.toContain('last refresh');
+    expect(refreshed).not.toContain('mission-refresh');
+    expect(refreshed).toMatch(/data-label="context" title="1,000 of [\d,]+ tokens">1,000\//);
   });
   it('with no session focused the two cards say so, and Pause carries its reason', () => {
     const idle = render({ sessions: [row()] });

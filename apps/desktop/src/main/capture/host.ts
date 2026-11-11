@@ -331,8 +331,13 @@ export function onStep(host: CaptureHost, step: CaptureStep, body: () => void | 
 }
 
 /**
- * A capture variable's view (`ROTARIS_CAPTURE_VIEW`, a step of `ROTARIS_CAPTURE_VIEWS`, `ROTARIS_CAPTURE_END_VIEW`) as a place in
- * the rail: 0 when unset, the 1-based place for a view identifier or for a digit inside the rail, and null for anything else (an identifier that names no primary view, a place past the last).
+ * A view named by a capture variable (the one that opens a view, a step of the one that opens several, the one that names
+ * the last) as a place in the rail: 0 when unset, the 1-based place for a view identifier or for a digit inside the rail,
+ * and null for anything else (an identifier that names no primary view, a place past the last).
+ *
+ * The variables are not named here on purpose. This module is in the packaged bundle, the bundler keeps a doc comment, and
+ * `pnpm package`'s seam check reads the bundle for the names of the scriptable seams: a comment that spelt one out was
+ * refused as a seam on 2026-11-11.
  */
 export function captureViewPosition(value: string | undefined): number | null {
   if (value === undefined || value === '' || value === '0') return 0;

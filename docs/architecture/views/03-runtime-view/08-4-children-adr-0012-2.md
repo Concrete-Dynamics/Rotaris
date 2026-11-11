@@ -186,7 +186,7 @@ REQ-MONITOR-038), `delegationSessionId` (null: every child runs in the run's ses
 PD-CONFIG-003 revision 3 (OQ-234, 2026-10-07), **`timedOut`**: for a child presented `failed` whose stored report carries
 REQ-ORCH-088's `timeout` error, the limit it names in seconds and whether the report carries PD-ORCH-004's cut-off statement
 (`timedOutOf`, the parser beside the one formatter `childTimedOutMessage` that the settle writes the error through), else
-null; the tree and Mission-table rows draw a `tag-fail` "timed out" after the state, and the inspector (under its meta line)
+null; the tree and agent-table rows draw a `tag-fail` "timed out" after the state, and the inspector (under its meta line)
 and the persona window's instance tab (under its state) the line `timeoutLine` words once, naming Settings › Runtime ›
 Per-agent timeout by the labels Settings renders. The projection
 owner publishes the record after a commit carrying `child.spawn`, `child.transition`, `tool.start` or `tool.finish`, not

@@ -36,6 +36,9 @@
  *
  * Evidence under `.proof/skills-proof/`: one PNG and one log per launch, plus `results.json`.
  * `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`settings`), not by its digit.
+ * Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -113,7 +116,7 @@ async function launch(name, workspace, extra, timeoutMs = 120_000) {
 
 const rows = (probes, selector) => probes[selector] ?? [];
 /** One Settings category opened by its rail label, after the view switch settles. */
-const openSkills = (extra = {}) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_VIEW_MS: '900', ROTARIS_CAPTURE_SETTINGS: 'Skills', ...extra });
+const openSkills = (extra = {}) => ({ ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_VIEW_MS: '900', ROTARIS_CAPTURE_SETTINGS: 'Skills', ...extra });
 
 // ── The fixture tree ────────────────────────────────────────────────────────────────────────────────
 const scratch = {
@@ -184,7 +187,7 @@ if (byName['ws-skill'].data['data-load'] !== 'name-only') fail('the zero-migrati
 // ── 1b. commands ────────────────────────────────────────────────────────────────────────────────────
 // REQ-CHAT-034 / REQ-SHELL-056: the commands, with the collision suffixed and the auto-only skill absent.
 // A SEPARATE launch, on the Workspace view: the registrar mounts with the transcript toolbar, and Settings
-// replaces Workspace among REQ-SHELL-023's seven views, so a launch sitting in Settings has no composer at all.
+// replaces Workspace among the primary views (six since PD-SHELL-015), so a launch sitting in Settings has no composer at all.
 // A prompt is submitted first: the registrar mounts with the transcript toolbar, which the Workspace view
 // draws once there is a transcript to put it above (measured — with no session the probe found no element).
 const commandsLaunch = await launch('commands', workspace, { ROTARIS_CAPTURE_PROMPT: 'Say hello and stop.', ROTARIS_CAPTURE_AFTER_MS: '9000' }, 180_000);

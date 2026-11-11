@@ -16,7 +16,7 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   2. automatic      — the reported prompt count crosses the threshold; compression runs BEFORE the next call.
  *   3. compressor-down— the compressing pass fails; the ORIGINAL rejection is what surfaces and the run fails.
  *   4. twice-only     — a rejection that survives two condensations fails the step (at most twice for one call).
- *   5. child-count    — a delegated child crosses the threshold and compresses once: the Mission view's agent table draws
+ *   5. child-count    — a delegated child crosses the threshold and compresses once: the Overview's agent table (PD-MONITOR-009) draws
  *                       that child's compression count, 1, in its Compressions column (REQ-MONITOR-281/086).
  *   6. root-and-child — the root and its child each cross the threshold and compress once: the inspector's ring caption
  *                       and the run-level agent's persona window draw the run-wide count, 2, the root's own included
@@ -30,6 +30,9 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *                       moves it to beta (a 60,000-token trigger) BEFORE its compression check, so no pass runs
  *                       (REQ-MONITOR-194 with REQ-MONITOR-080; the repair round of 2026-10-03 — before, the pass ran at
  *                       alpha's trigger, then the root moved).
+ *
+ * PD-SHELL-015, PD-MONITOR-009 (2026-11-11): launch 5 names its view by identifier and reads the agent table on the
+ * Overview, where the Mission view (Ctrl+3, no view now) drew it.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -212,14 +215,14 @@ const s4 = scenario('twice-only', ['  threshold_percentage: 60', '  preserve_rec
   results.twiceOnly = { status: row.execution_status, compressorCalls, png: r.png, elapsedMs: r.elapsedMs };
 }
 
-// 5. A child's compression count in the Mission table (REQ-MONITOR-281/086;
+// 5. A child's compression count in the agent table, a card of the Overview since PD-MONITOR-009 (the Mission view's until 2026-11-11; REQ-MONITOR-281/086;
 // docs/archive/defects/the-mission-table-says-the-record-carries-no-compression-count.md): the table's cell read `not recorded`
 // whatever the record held. The child crosses the threshold once; its row reads 1 under the column that names the unit.
 const s5 = scenario('child-count', ['  threshold_percentage: 60', '  preserve_recent_turns: 1'], { delegates: true });
 {
   const r = await launch('child-count', s5, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'glob,glob,glob,tokens:900,answer', ROTARIS_CAPTURE_PROMPT: 'a child fills its context',
-    ROTARIS_CAPTURE_VIEWS: '3@1500', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '1500',
+    ROTARIS_CAPTURE_VIEWS: 'overview@1500', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '1500',
     ROTARIS_CAPTURE_PROBE: '.agent-table thead th;;.agent-table__row;;.agent-table__compressions',
   });
   const db = open(s5);

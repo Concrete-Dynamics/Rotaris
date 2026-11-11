@@ -5,7 +5,7 @@
  * Scripted client, scratch stores, six launches over four scratch profiles so that no launch's rows can be
  * mistaken for another's:
  *
- *   1. shell    — Ctrl+6 shows the Library: the title, the one search field with its stated placeholder and
+ *   1. shell    — the Library's chord (Ctrl+5 since PD-SHELL-015) shows the Library: the title, the one search field with its stated placeholder and
  *                 accessible name, the three tabs in order, and the two stated empty labels.
  *   2. stash    — a prompt typed into the composer and stashed with the composer's own Stash control; the row is
  *                 in the store; the application is quit and RELAUNCHED, and the entry is still in the stash
@@ -22,6 +22,9 @@
  *   6. notice   — a notice carrying `open-library` opens the Library with the named tab active (REQ-SHELL-115).
  *
  * Evidence under `.proof/library-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`workspace`, `library`), not by its
+ * digit. The Library is the fifth view (Ctrl+5); Mission is no view.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -139,12 +142,12 @@ const results = {};
 // ── 1. The Library, shown by its own shortcut (REQ-LIBRARY-102/103) ────────────────────────────────
 const shellProfile = profile('shell');
 const shown = await launch('shell', shellProfile.workspace, shellProfile.local, shellProfile.preferences, {
-  ROTARIS_CAPTURE_VIEWS: '6@900',
+  ROTARIS_CAPTURE_VIEWS: 'library@900',
   // The final probe carries only `data-*` and `aria-value*`; the field's and the splitter's stated NAMES need every attribute.
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="library-divider"]@2600;;[data-testid="library-search"]@2600',
   ROTARIS_CAPTURE_AFTER_MS: '3200',
 });
-if (first(shown.probes, '.app-shell')?.data?.['data-view'] !== 'library') throw new Error(`Ctrl+6 did not show the Library (view ${first(shown.probes, '.app-shell')?.data?.['data-view'] ?? 'none'})`);
+if (first(shown.probes, '.app-shell')?.data?.['data-view'] !== 'library') throw new Error(`the Library's chord (Ctrl+5, PD-SHELL-015) did not show the Library (view ${first(shown.probes, '.app-shell')?.data?.['data-view'] ?? 'none'})`);
 if (texts(shown.probes, '.library__title')[0] !== 'Library') throw new Error(`the page title read "${texts(shown.probes, '.library__title')[0] ?? ''}"`);
 const searchAttrs = shown.inspects['[data-testid="library-search"]@2600']?.matches?.[0]?.attrs ?? null;
 if (searchAttrs === null) throw new Error('the Library has no search field');
@@ -164,7 +167,7 @@ results.shell = { view: 'library', title: 'Library', tabs: tabNames, labels: tab
 
 // ── 2. Stashed from the composer, then measured across a real restart (REQ-CHAT-042, REQ-LIBRARY-138) ──
 const stashed = await launch('stash', shellProfile.workspace, shellProfile.local, shellProfile.preferences, {
-  ROTARIS_CAPTURE_VIEWS: '2@700',
+  ROTARIS_CAPTURE_VIEWS: 'workspace@700',
   // The composer clicked (which focuses it), typed into WITHOUT submitting, then the Stash control clicked.
   ROTARIS_CAPTURE_CLICKS: '.composer__input@1000;;[data-testid="composer-stash"]@1900',
   ROTARIS_CAPTURE_TYPE: 'Draft a migration plan>>no-enter@1400',
@@ -187,7 +190,7 @@ if (toolbar.attrs['aria-label'] !== 'Manage prompt stash' || toolbar.attrs['titl
 
 // The relaunch: a second process against the same profile — the entry is loaded from the store, not remembered.
 const relaunched = await launch('relaunch', shellProfile.workspace, shellProfile.local, shellProfile.preferences, {
-  ROTARIS_CAPTURE_VIEWS: '6@900',
+  ROTARIS_CAPTURE_VIEWS: 'library@900',
   ROTARIS_CAPTURE_AFTER_MS: '3200',
 });
 const survivingRows = texts(relaunched.probes, '[data-testid="library-stash-row"]');
@@ -199,7 +202,7 @@ const useProfile = profile('use');
 const used = await launch('use', useProfile.workspace, useProfile.local, useProfile.preferences, {
   // Seeded through the real `prompts.push` command; newest first afterwards: alpha two(0), beta(1), alpha one(2).
   ROTARIS_CAPTURE_PROMPTS: 'stash>>alpha one@600;;stash>>beta@700;;stash>>alpha two@800',
-  ROTARIS_CAPTURE_VIEWS: '6@1300;;6@3000',
+  ROTARIS_CAPTURE_VIEWS: 'library@1300;;library@3000',
   ROTARIS_CAPTURE_CLICKS: [
     '[data-testid="library-stash-row"]>>alpha one@1800',
     '[data-testid="stash-use"]@2100',
@@ -298,7 +301,7 @@ results.use = { switchedTo: 'workspace', focused: 'composer', filteredRows: filt
 // ── 4. A burst of writes settles, and the typed search text is untouched (REQ-LIBRARY-105) ─────────
 const burstProfile = profile('burst');
 const burst = await launch('burst', burstProfile.workspace, burstProfile.local, burstProfile.preferences, {
-  ROTARIS_CAPTURE_VIEWS: '6@700',
+  ROTARIS_CAPTURE_VIEWS: 'library@700',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="library-search"]@1100',
   ROTARIS_CAPTURE_TYPE_AT: 'burst@1300',
   // Twenty writes back to back through the real command, each bumping the revision and re-reading the lists.
@@ -318,7 +321,7 @@ results.burst = { writes: 20, searchTextAfter: burstSearch, newestOnScreen: burs
 const capProfile = profile('cap');
 const capped = await launch('cap', capProfile.workspace, capProfile.local, capProfile.preferences, {
   ROTARIS_CAPTURE_PROMPTS: 'history>>{201}entry @700',
-  ROTARIS_CAPTURE_VIEWS: '6@4000',
+  ROTARIS_CAPTURE_VIEWS: 'library@4000',
   ROTARIS_CAPTURE_AFTER_MS: '6000',
 }, 240_000);
 const capStored = storedPrompts(capProfile.local);

@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, type AgentRecord, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
 import { clampRight, costLabelParts, OVERVIEW_DIVIDER_WIDTH, OVERVIEW_EMPTY_HINT, OVERVIEW_LOADING_LABEL, OVERVIEW_NO_PROVIDER_HINT, OVERVIEW_NO_TOKEN_HISTORY, OVERVIEW_OPEN_SETTINGS, OVERVIEW_NO_SESSION_CAPTION, OVERVIEW_PROPOSALS_HINT, OVERVIEW_SESSIONS_FAILED, OverviewView, type OverviewProps } from './OverviewView.js';
+import { NEXT_RUN_STRATEGY_PREFIX, OPEN_RUNTIME_SETTINGS, type DelegationProps } from './DelegationCards.js';
+import { AGENT_TABLE_COLUMNS } from './AgentTable.js';
 
 /**
  * The Overview audit of 2026-11-02 (`docs/design/briefs/overview.md`), executed 2026-11-03: each case pins one item's or one
@@ -24,10 +26,17 @@ const agent = (over: Partial<AgentRecord> = {}): AgentRecord => ({
 const row = (over: Partial<SessionListItemPayload> = {}): SessionListItemPayload => ({ sessionId: 's1', label: 'Exercise the overview.', status: 'completed', branch: 'main', relativeTime: 'now', detail: 'C:\\ws', awaitingInput: false, stale: false, tokens: 336, durationLabel: '0:57', busy: false, requirementId: null, worktree: null, checkpointCount: 0, unreadable: null, ...over });
 const repository: RepositoryState = { gitAvailable: true, isRepository: true, branch: 'main', base: null, ahead: 0, behind: 0, touched: 1, uncommitted: 0, failed: [], readMs: 12 };
 const ok = async () => ({ ok: true as const });
-const render = (over: Partial<OverviewProps> = {}) => renderToStaticMarkup(createElement(OverviewView, {
+const delegation = (over: Partial<DelegationProps> = {}): DelegationProps => ({
+  session: null, runLevel: null, resting: false, recovery: false, selectedAgentId: null, onSelect: () => undefined, nowIso: null, strategy: 'orchestrator', onOpenRuntimeSettings: () => undefined,
+  onPause: ok, onCancelAgent: ok, onCancelRun: ok, onOpen: () => undefined, onPopOut: () => undefined, refresh: null, ...over,
+});
+const baseProps = (): Omit<OverviewProps, 'delegation'> => ({
   session: null, sessions: [], sessionsState: 'idle', sessionsError: null, repository, caps: { depth: 3, fanOut: 4 }, layout: undefined, onLayout: () => undefined, nowIso: '2026-11-03T10:01:00.000Z',
   onListSessions: () => undefined, onNewSession: ok, onRefresh: () => undefined, onOpenSession: () => undefined, onContinueSession: () => undefined, onGoTo: () => undefined, providerAuthenticated: true, onOpenSettings: () => undefined,
   improvements: [], onOpenProposal: () => undefined, onReviewProposal: ok, reducedMotion: false,
+});
+const render = (over: Partial<OverviewProps> = {}) => renderToStaticMarkup(createElement(OverviewView, {
+  ...baseProps(), delegation: delegation({ session: over.session ?? null }),
   ...over,
 }));
 const count = (html: string, needle: string) => html.split(needle).length - 1;
@@ -113,13 +122,16 @@ describe('the populated cards (REQ-MONITOR-166..169; audit items 4, 5, 6, 13, 16
     expect(html).not.toContain('↓');
     expect(rule('.ov-kpi__marker')).toContain('font-size: var(--rt-icon-size)');
   });
-  it('draws the tree row\'s dot with the design StatusDot in the done state, and publishes the kicker keyline — items 4 and 13', () => {
-    expect(html).toContain('<span class="card-kicker" data-ui="overview-agents-kicker" data-ui-contract="[]">Agents</span>');
-    expect(html).toMatch(/<span class="status-dot" data-state="done" aria-hidden="true" data-ui-component="StatusDot" data-ui="overview-agents-first-dot" data-ui-contract="\[\{&quot;kind&quot;:&quot;align-x&quot;,&quot;target&quot;:&quot;overview-agents-kicker&quot;,&quot;edge&quot;:&quot;left&quot;,&quot;tolerance&quot;:1\}\]"><\/span>/);
+  it('draws the tree row\'s dot with the design StatusDot in the done state, and publishes the kicker keyline on the graph card\'s first dot, the run row\'s — items 4 and 13, PD-MONITOR-009', () => {
+    expect(html).toContain('<span class="card-kicker" data-ui="overview-agents-kicker" data-ui-contract="[]">Delegation graph</span>');
+    expect(html).toMatch(/data-testid="mission-run-row"[^>]*><span class="status-dot" data-state="[a-z]+" aria-hidden="true" data-ui-component="StatusDot" data-ui="overview-agents-first-dot" data-ui-contract="\[\{&quot;kind&quot;:&quot;align-x&quot;,&quot;target&quot;:&quot;overview-agents-kicker&quot;,&quot;edge&quot;:&quot;left&quot;,&quot;tolerance&quot;:1\}\]">/);
+    expect(html).toContain('<span class="status-dot" data-state="done" aria-hidden="true" data-ui-component="StatusDot">');
     expect(html).not.toContain('agent-row__dot');
     expect(css).not.toMatch(/^\.agent-row__dot/m);
-    expect(rule('.ov-card--tree .agent-row')).toContain('column-gap: 0');
-    expect(rule('.ov-card--tree .agent-row__prefix:empty + .status-dot')).toContain('margin-inline-start: 0');
+    expect(rule('.mission__graph .agent-row')).toContain('column-gap: 0');
+    expect(rule('.mission__graph .agent-row__prefix:empty + .status-dot')).toContain('margin-inline-start: 0');
+    expect(rule('.mission__run-row')).toContain('margin-inline-start: calc(-1 * (var(--agent-row-rule) + var(--agent-row-pad)))');
+    expect(rule('.mission__graph')).toContain('--agent-row-rule: 3px; --agent-row-pad: 6px;');
   });
   it('publishes one card-to-card gap on both columns, --rt-space-4 — item 16', () => {
     const contract = 'data-ui-contract="[{&quot;kind&quot;:&quot;spacing-token&quot;,&quot;property&quot;:&quot;gap&quot;,&quot;token&quot;:&quot;--rt-space-4&quot;}]"';
@@ -226,5 +238,64 @@ describe('the view title (UIR-003; audit item 8)', () => {
   });
   it('leaves the adopted sheet as the one definition of the status pulse (the archived agent-row note)', () => {
     expect(css).not.toContain('@keyframes rt-pulse');
+  });
+});
+
+describe('PD-MONITOR-009 — the Overview is the one monitoring view', () => {
+  const run = session({ agents: [agent()] });
+  const html = render({ session: run, sessions: [row()] });
+  const order = (...needles: string[]) => needles.map((needle) => html.indexOf(needle));
+  it('clause 2: the delegation graph card leads the right column, above the credit tile, and carries no link to another view', () => {
+    const [aside, graph, credit, limits, proposals] = order('class="overview__right"', 'data-testid="mission-graph"', 'aria-label="Cloud credit"', 'aria-label="Subscription limits"', 'aria-label="Improvement proposals"');
+    expect(aside).toBeGreaterThan(-1);
+    expect([aside, graph, credit, limits, proposals]).toEqual([aside, graph, credit, limits, proposals].slice().sort((a, b) => a! - b!));
+    expect(html).not.toContain('Open Mission');
+  });
+  it('clause 2: the card holds the run row, the tree, Pause with its explanation and "Cancel selection"', () => {
+    for (const testId of ['mission-run-row', 'mission-pause', 'mission-pause-reason', 'mission-cancel']) expect(html).toContain(`data-testid="${testId}"`);
+    expect(html).toMatch(/data-testid="mission-graph"[\s\S]*class="agent-tree/);
+    expect(html).toMatch(/<button[^>]*btn-danger[^>]*data-testid="mission-cancel"/);
+  });
+  it('clause 3: the agent activity table stands in the left column, under the metric cards and above the sessions card', () => {
+    const [left, metrics, table, sessions, divider] = order('class="overview__left"', 'class="overview__metrics"', 'data-testid="mission-table"', 'aria-label="Sessions"', 'data-testid="overview-divider"');
+    expect([left, metrics, table, sessions, divider]).toEqual([left, metrics, table, sessions, divider].slice().sort((a, b) => a! - b!));
+    expect(left).toBeGreaterThan(-1);
+  });
+  it('clause 3: a row keeps every value where it takes more lines — table roles in the markup, and the three figures named by their columns', () => {
+    expect(html).toMatch(/<table class="table agent-table"[^>]*role="table"/);
+    expect(html.match(/role="columnheader"/g)).toHaveLength(AGENT_TABLE_COLUMNS.length);
+    expect(html).toMatch(/<tr role="row" class="agent-table__row"/);
+    for (const label of ['tool calls', 'context', 'compressions']) expect(html).toContain(`data-label="${label}"`);
+    expect(css).toContain('.mission__table { container-type: inline-size; }');
+    const compact = css.slice(css.indexOf('@container (max-width: 40rem) {'));
+    expect(compact).toContain("grid-template-areas: 'state name elapsed actions' 'persona activity activity activity' 'calls context context compressions'");
+    // No value is dropped in that form: nothing inside the rule hides a cell.
+    expect(compact.slice(0, compact.indexOf('\n}\n'))).not.toMatch(/agent-table__(state|name|persona|activity|calls|elapsed|context|compressions|actions)[^{]*\{[^}]*display: none/);
+  });
+  it('clause 4: the graph and the table mark the one shared selection', () => {
+    const selected = renderToStaticMarkup(createElement(OverviewView, { ...baseProps(), session: run, sessions: [row()], delegation: delegation({ session: run, selectedAgentId: 'bg_00000001' }) }));
+    expect(selected).toMatch(/class="agent-table__row is-selected" data-agent-id="bg_00000001"/);
+    expect(selected).toMatch(/data-testid="mission-graph" data-selected="bg_00000001"/);
+    expect(selected).toMatch(/class="agent-row[^"]* is-selected"/);
+  });
+  it('clause 6: the strategy is read on the card and edited nowhere on it — no selector, no depth control, one control to Runtime', () => {
+    expect(html).toContain(`${NEXT_RUN_STRATEGY_PREFIX} <span class="mono" data-testid="mission-strategy">orchestrator</span>`);
+    expect(html).toContain(`data-testid="mission-open-runtime">${OPEN_RUNTIME_SETTINGS}</button>`);
+    expect(html).not.toMatch(/<select[^>]*mission/);
+    expect(html).not.toContain('mission-depth');
+    expect(html).not.toContain('Stored as');
+  });
+  it('the table card draws no verification figure and no second agent count, and groups its figures as the Tokens card does (UIR-301, UIR-302)', () => {
+    const refreshed = renderToStaticMarkup(createElement(OverviewView, { ...baseProps(), session: run, sessions: [row()], delegation: delegation({ session: run, refresh: { ms: 30.9, agents: 1 } }) }));
+    expect(refreshed).toContain('data-testid="mission-table" data-refresh-ms="30.9" data-refresh-agents="1"');
+    expect(refreshed).not.toContain('last refresh');
+    expect(refreshed).not.toContain('mission-refresh');
+    expect(refreshed).toMatch(/data-label="context" title="1,000 of [\d,]+ tokens">1,000\//);
+  });
+  it('with no session focused the two cards say so, and Pause carries its reason', () => {
+    const idle = render({ sessions: [row()] });
+    expect(idle).toContain('data-testid="agent-table-empty"');
+    expect(idle).toMatch(/data-testid="mission-run-row"[\s\S]*?no session/);
+    expect(idle).toMatch(/data-testid="mission-pause"[^>]*|data-enabled="0"/);
   });
 });

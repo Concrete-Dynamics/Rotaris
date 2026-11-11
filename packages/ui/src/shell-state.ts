@@ -52,7 +52,7 @@ export interface ShellState {
   readonly launchOptions: LaunchChoices | null;
   setLaunchOptions: (options: LaunchChoices | null) => void;
   takeLaunchOptions: () => LaunchChoices | null;
-  /** REQ-MONITOR-042 (Part R): ONE selected agent for every surface — the Workspace sidebar tree, the Overview card, Mission, the inspector; `run` names the run-level selection (REQ-MONITOR-274), null nothing. */
+  /** REQ-MONITOR-042 (Part R): ONE selected agent for every surface — the Workspace sidebar tree, the Overview's delegation graph and agent table (PD-MONITOR-009), the inspector; `run` names the run-level selection (REQ-MONITOR-274), null nothing. */
   readonly selectedAgentId: string | null;
   selectAgent: (id: string | null) => void;
   /** REQ-SHELL-051 / REQ-SHELL-054 (Part W): the two application-modal dialogs; at most one is open, the other closes first. */
@@ -86,7 +86,7 @@ export interface ShellState {
   /**
    * REQ-CHAT-034 (ADR-0063): a counter the Settings Skills tab bumps after a rescan or a hand-loaded skill, so
    * the composer's catalogue lists **exactly** the rescanned set. It lives in this store because the two
-   * surfaces are siblings in the view map — Settings replaces Workspace among REQ-SHELL-023's seven views —
+   * surfaces are siblings in the view map — Settings replaces Workspace among the primary views (six since PD-SHELL-015) —
    * and a counter is the smallest thing that can cross between them without one owning the other's data.
    *
    * It carries no payload by design: the composer re-reads the catalog itself, so a rescan and a hand-loaded

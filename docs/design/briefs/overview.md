@@ -13,5 +13,7 @@ Split on 2026-11-05 under [the document budget](../../README.md#the-document-bud
 | [1](overview/01-audit-2026-11-02.md) | The audit of 2026-11-02: items 1 to 17, the predicted rows P1 to P4, taste, what was left, and the open-question candidates with their rulings |
 | [2](overview/02-execution-2026-11-03.md) | The execution of 2026-11-03: items 1, 3–6, 8–10, 12–16 and P1–P4, pack `7ad30102af5b/iteration-2`, the critique |
 | [3](overview/03-execution-2026-11-05.md) | The execution of 2026-11-05: items 2 and 11 after OQ-537, OQ-539 and OQ-540, pack `a10ad853566d/iteration-3`, the critique |
+| [4](overview/04-audit-2026-11-10.md) | The audit of 2026-11-10 ([R-097](../../product/requests.md#r-097)): one item, the page frame the titled primary views share |
+| [5](overview/05-brief-2026-11-11.md) | The brief of 2026-11-11 for the two delegation cards ([R-098](../../product/requests.md#r-098), [`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009)): the graph with its run controls and the agent activity table, the Mission view's until [`PD-SHELL-015`](../../product/directives/pd-shell-015.md#pd-shell-015) |
 
 **Where each item stands.** Items 1, 3, 8, 12, 14 `verified-resolved` (iteration 2); 2 and 11 `verified-resolved` (iteration 3); 4, 5, 6, 9, 10, 13, 15, 16 and P1–P4 `implemented` (iteration 2, drive captures); 7 proposed, waits on `build-ui`; 17 waits on its harness note (`UNREACHED` 0 in iterations 2 and 3).

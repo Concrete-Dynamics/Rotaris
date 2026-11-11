@@ -12,7 +12,7 @@
  * fixture itself) and over a generated 1,500-requirement store, driven through the capture harness — real clicks,
  * real chords, a `<select>` chosen, DOM drag events with a `DataTransfer` — and read back through probes:
  *
- *   board     — Ctrl+4 at 1264 px shows the board; putting it on screen costs the interface thread < 100 ms
+ *   board     — the view's chord (Ctrl+3 since PD-SHELL-015) at 1264 px shows the board; putting it on screen costs the interface thread < 100 ms
  *               (REQ-TRACE-239: the view's own measure from the projection's arrival to the laid-out DOM, and the
  *               longest long task the renderer observed meanwhile); every requirement is in exactly one column and
  *               the counts sum to the total (REQ-TRACE-235); the one primary control is 32 high and the rest 24, and
@@ -93,6 +93,9 @@
  *
  * Evidence under `.proof/requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`requirements`), not by its digit.
+ * Requirements is the third view (Ctrl+3); Mission is no view.
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -337,11 +340,11 @@ const boardProfile = profile('board');
 const board = await launch('board', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_EVAL_AT: [`${ARM_LONGTASKS}@900`, `${READ_LONGTASKS}@4600`].join(';;'),
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_INSPECT_AT: '.req-header .btn, .req-header .select, .req-header input@4400;;[data-testid="req-columns"]@4400',
   ROTARIS_CAPTURE_AFTER_MS: '5200',
 });
-expect(first(board.probes, '.app-shell')?.data?.['data-view'] === 'requirements', `Ctrl+4 did not show the Requirements view (view ${first(board.probes, '.app-shell')?.data?.['data-view'] ?? 'none'})`);
+expect(first(board.probes, '.app-shell')?.data?.['data-view'] === 'requirements', `the Requirements view's chord (Ctrl+3, PD-SHELL-015) did not show it (view ${first(board.probes, '.app-shell')?.data?.['data-view'] ?? 'none'})`);
 const boardState = boardData(board.probes);
 expect(boardState !== null && boardState['data-ready'] === 'true', 'the board never reported itself ready');
 const paintMs = Number(boardState['data-paint-ms']);
@@ -381,7 +384,7 @@ stage2.board = { view: 'requirements', paintMs, longestTaskMs: longTasks.longest
 const PANE_AT_MINIMUM = `(() => { const host = document.querySelector('[data-testid="req-pane-host"]'); const body = document.querySelector('.req-body'); const cols = document.querySelector('[data-testid="req-columns"]'); if (host === null) return null; const r = host.getBoundingClientRect(); const pane = host.querySelector('[data-testid="req-pane-queue"]'); const p = pane === null ? null : pane.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), sharesStackWithBoard: body !== null && host.parentElement === body && cols !== null && cols.parentElement === body, clipsHorizontally: host.scrollWidth > host.clientWidth + 1, pane: p === null ? null : { w: Math.round(p.width), h: Math.round(p.height) }, paneClipsHorizontally: pane === null ? null : pane.scrollWidth > pane.clientWidth + 1, close: document.querySelector('[data-testid="req-pane-close"]') !== null, viewport: { width: window.innerWidth, height: window.innerHeight } }; })()`;
 const minimum = await launch('minimum', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1000x680@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="req-column"]@4200;;.req-header .btn, .req-header .select, .req-header input@4200',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="req-queue-open"]@4600',
   ROTARIS_CAPTURE_EVAL_AT: `(() => { const el = document.querySelector('[data-testid="req-columns"]'); return el ? { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, range: el.scrollWidth - el.clientWidth } : null; })()@4300;;${PANE_AT_MINIMUM}@5200`,
@@ -435,7 +438,7 @@ const RAIL_AND_HEADING = `(() => { const rail = document.querySelector('[data-te
 const RAIL_LABELS = ['Backlog', 'Ready', 'Running', 'Review', 'Needs Update', 'Done', 'Blocked'];
 const RAIL_LABEL_FIT = `(() => { const rail = document.querySelector('[data-testid="req-rail"]'); const real = rail === null ? null : rail.querySelector('.req-rail__heading'); if (real === null) return null; const tops = (rects) => new Set([...rects].filter((q) => q.width > 0 && q.height > 0).map((q) => Math.round(q.top))).size; const measure = (el) => { const text = el.firstChild; const broken = []; let i = 0; for (const word of el.textContent.split(' ')) { const r = document.createRange(); r.setStart(text, i); r.setEnd(text, i + word.length); if (tops(r.getClientRects()) > 1) broken.push(word); i += word.length + 1; } const all = document.createRange(); all.selectNodeContents(el); const widths = [...all.getClientRects()].map((q) => q.width); return { lines: tops(all.getClientRects()), broken, widest: Math.round(Math.max(0, ...widths) * 10) / 10 }; }; const s = getComputedStyle(real); const rs = getComputedStyle(rail); const out = { railWidth: Math.round(rail.getBoundingClientRect().width * 10) / 10, contentWidth: Math.round((rail.clientWidth - parseFloat(rs.paddingLeft) - parseFloat(rs.paddingRight)) * 10) / 10, transform: s.textTransform, tracking: s.letterSpacing, own: { label: real.textContent, ...measure(real) }, labels: [] }; for (const label of ${JSON.stringify(RAIL_LABELS)}) { const copy = real.cloneNode(false); copy.textContent = label; rail.insertBefore(copy, real); out.labels.push({ label, ...measure(copy) }); copy.remove(); } return out; })()`;
 const folded = await launch('fold', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_EVAL_AT: `${SCROLL_TO_DONE}@3200;;${RAIL_AND_HEADING}@4600;;${RAIL_LABEL_FIT}@4700`,
   ROTARIS_CAPTURE_CLICKS: '[data-testid="req-column"][data-column="done"] [data-testid="req-heading"]@3600',
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="req-rail"]@4400',
@@ -472,11 +475,11 @@ for (const fit of railLabels.labels) {
   // scroll and client widths are always equal and could never fail; the widest line box against the box it sits in can.
   expect(fit.widest > 0 && fit.widest <= railLabels.contentWidth + 0.5, `REQ-TRACE-310: "${fit.label}" is ${fit.widest} px wide in a rail whose content box is ${railLabels.contentWidth} px (${JSON.stringify(fit)})`);
 }
-const relaunched = await launch('fold-relaunch', boardProfile.workspace, boardProfile.local, boardProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
+const relaunched = await launch('fold-relaunch', boardProfile.workspace, boardProfile.local, boardProfile.preferences, { ROTARIS_CAPTURE_VIEWS: 'requirements@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
 const relaunchRails = (relaunched.probes['[data-testid="req-rail"]'] ?? []).map((r) => r.data['data-column']);
 expect(relaunchRails.join(',') === 'done', `REQ-TRACE-321: after the relaunch the folded columns are ${JSON.stringify(relaunchRails)}, not the Done column alone`);
 const otherProfile = profile('other', boardProfile.preferences);
-const other = await launch('fold-other-workspace', otherProfile.workspace, otherProfile.local, otherProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
+const other = await launch('fold-other-workspace', otherProfile.workspace, otherProfile.local, otherProfile.preferences, { ROTARIS_CAPTURE_VIEWS: 'requirements@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
 const otherRails = (other.probes['[data-testid="req-rail"]'] ?? []).map((r) => r.data['data-column']);
 expect(otherRails.length === 0, `REQ-TRACE-312: a fold made in one workspace reached another (${JSON.stringify(otherRails)})`);
 stage2.fold = { folded: 'done', offscreenBeforeScroll: doneColumn.offscreen, focusAfterFold: railInspect.active?.testId, railName: railInspect.matches[0].attrs['aria-label'], afterRelaunch: relaunchRails, otherWorkspace: otherRails, railShape, railLabels };
@@ -484,7 +487,7 @@ stage2.fold = { folded: 'done', offscreenBeforeScroll: doneColumn.offscreen, foc
 // ── filter: an epic filter survives the axis switch (REQ-TRACE-299) ───────────────────────────────
 const filterProfile = profile('filter');
 const filtered = await launch('filter', filterProfile.workspace, filterProfile.local, filterProfile.preferences, {
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="req-filter-toggle"]@3400',
   ROTARIS_CAPTURE_SELECT: '[data-testid="req-filter-epic"]>>REQ-100@3900;;[data-testid="req-axis"]>>epic@4700',
   ROTARIS_CAPTURE_PROBE_AT: '[data-testid="req-filter-summary"]@4400;;[data-testid="req-column"]@4400;;[data-testid="req-total"]@4400',
@@ -504,7 +507,7 @@ stage2.filter = { summaryBefore, cardsBefore: 7, summaryAfter, columnsAfter: aft
 // ── chord: Ctrl+M focuses the move control, which names the first reachable target with the consequence ──
 const chordProfile = profile('chord');
 const chord = await launch('chord', chordProfile.workspace, chordProfile.local, chordProfile.preferences, {
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: '[data-req-card="REQ-101"]@3400',
   ROTARIS_CAPTURE_CHORDS: 'Ctrl+M@4600',
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="req-move-control"]@5200',
@@ -532,7 +535,7 @@ const dropProfile = profile('drop');
 const deprecatedPath = join(dropProfile.workspace, 'docs', 'requirements', 'REQ-100-fixture-epic', 'REQ-104-draft.md');
 writeFileSync(deprecatedPath, readFileSync(deprecatedPath, 'utf8').replace('status: draft', 'status: deprecated'));
 const drop = await launch('drop', dropProfile.workspace, dropProfile.local, dropProfile.preferences, {
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_EVAL_AT: `${DROP}@3600`,
   ROTARIS_CAPTURE_AFTER_MS: '5400',
 });
@@ -555,7 +558,7 @@ const SCROLL_COLUMNS = `(() => { const el = document.querySelector('[data-testid
 const scale = await launch('scale', scaleProfile.workspace, scaleProfile.local, scaleProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_EVAL_AT: [`${ARM_LONGTASKS}@900`, `${READ_LONGTASKS}@9000`, `${SCROLL}@9200`, `${ARM_LONGTASKS}@11000`, `${READ_LONGTASKS}@14500`, `${SCROLL_COLUMNS}@14600`, `${ARM_LONGTASKS}@16000`, `${READ_LONGTASKS}@19000`].join(';;'),
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_PROBE_AT: '[data-testid="req-column"]@9000;;[data-testid="requirements"]@9000;;[data-testid="req-column"]@14400',
   ROTARIS_CAPTURE_SELECT: '[data-testid="req-axis"]>>epic@11200',
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="req-column"]@14400',
@@ -652,7 +655,7 @@ const HISTORY_AT = `(() => { const p = document.querySelector('[data-testid="req
 const e2e = profile('end-to-end');
 const release = await launch('end-to-end', e2e.workspace, e2e.local, e2e.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     `${CARD_101}@3000`,
     '[data-testid="req-move-control"]@4400',
@@ -774,7 +777,7 @@ expect(edited !== before.trimEnd(), `the proof could not edit ${docName}: neithe
 writeFileSync(docPath, `${edited}\n\nEdited on disk by requirements-proof after the delivery was accepted, so the text no longer matches the accepted snapshot.\n`);
 const noticed = await launch('end-to-end-edited', e2e.workspace, e2e.local, e2e.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   // `needs-update` is the fifth column and lies outside the viewport at 1264 px, so the card is revealed first.
   ROTARIS_CAPTURE_EVAL_AT: [`${REVEAL_101}@6000`, `${BOARD_AT}@7000`].join(';;'),
   ROTARIS_CAPTURE_AFTER_MS: '8000',
@@ -814,7 +817,7 @@ const rr = profile('review-rerun');
 // 2026-10-02 this stage took both in one launch and relied on the disclosure being due again).
 const rerunReviewed = await launch('review-rerun', rr.workspace, rr.local, rr.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     `${CARD_101}@3000`,
     '[data-testid="req-move-control"]@4400',
@@ -827,7 +830,7 @@ const rerunReviewed = await launch('review-rerun', rr.workspace, rr.local, rr.pr
 expect(rerunReviewed.evals['29000']?.column === 'review', `REQ-TRACE-499: the release never arrived at review before the re-run (${JSON.stringify(rerunReviewed.evals['29000']?.column)})`);
 const rerun = await launch('review-rerun-relaunch', rr.workspace, rr.local, rr.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     `${CARD_101}@3000`,
     '[data-testid="req-detail-review"]@5000',
@@ -885,7 +888,7 @@ const DRAG_TO_BLOCKED = `(async () => { const board = window.__rotarisBoard; if 
 const br = profile('blocker-resume');
 const held = await launch('blocker-resume', br.workspace, br.local, br.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     '[data-testid="req-queue-open"]@3000',
     '[aria-label="Stop the queue"]@4000',
@@ -908,7 +911,7 @@ const held = await launch('blocker-resume', br.workspace, br.local, br.preferenc
 // not persisted (REQ-TRACE-480), so the relaunch stops the queue again before the resume, to read the card in `ready`.
 const resumed = await launch('blocker-resume-relaunch', br.workspace, br.local, br.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     '[data-testid="req-queue-open"]@2600',
     '[aria-label="Stop the queue"]@3400',
@@ -984,7 +987,7 @@ const QUEUE_AT = `(() => { const p = document.querySelector('[data-testid="req-p
 const restartProfile = profile('ready-restart');
 const resting = await launch('ready-restart', restartProfile.workspace, restartProfile.local, restartProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     '[data-testid="req-queue-open"]@3000',
     '[aria-label="Stop the queue"]@4000',
@@ -1005,7 +1008,7 @@ expect(restingTrees.length === 1 && String(restingTrees[0].path).endsWith('-u1')
 expect(restingRows.query("select * from delivery_runs where req_id = 'REQ-101'").length === 0, 'REQ-TRACE-479: a run began with the queue stopped');
 const relaunchedQueue = await launch('ready-restart-relaunch', restartProfile.workspace, restartProfile.local, restartProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     '[data-testid="req-queue-open"]@3000',
     '[aria-label="Show the disclosure and start REQ-101"]@4600',
@@ -1045,7 +1048,7 @@ const autoProfile = profile('ready-restart-automatic');
 writeFileSync(join(autoProfile.workspace, '.rotaris', 'agents.yaml'), `${readFileSync(join(autoProfile.workspace, '.rotaris', 'agents.yaml'), 'utf8')}requirements:\n  scheduling:\n    mode: automatic\n`);
 const autoResting = await launch('ready-restart-automatic', autoProfile.workspace, autoProfile.local, autoProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     '[data-testid="req-queue-open"]@3000',
     '[aria-label="Stop the queue"]@4000',
@@ -1066,7 +1069,7 @@ expect(autoRestingTrees.length === 1 && existsSync(autoRestingTrees[0].path), `R
 expect(autoRestingRows.query("select * from delivery_runs where req_id = 'REQ-101'").length === 0, 'REQ-TRACE-479: a run began with the queue stopped');
 const autoRelaunch = await launch('ready-restart-automatic-relaunch', autoProfile.workspace, autoProfile.local, autoProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_EVAL_AT: [`${CARD_AT('REQ-101')}@9000`, `${CARD_AT('REQ-101')}@15000`].join(';;'),
   ROTARIS_CAPTURE_AFTER_MS: '16000',
 }, 180_000);
@@ -1091,7 +1094,7 @@ const CARD_103 = '[data-req-card="REQ-103"]';
 const twoProfile = profile('disclosure-launch');
 const twoCards = await launch('disclosure-launch', twoProfile.workspace, twoProfile.local, twoProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     `${CARD_101}@3000`,
     '[data-testid="req-move-control"]@4200',
@@ -1115,7 +1118,7 @@ const secondRuns = twoRows.query("select * from delivery_runs where req_id = 'RE
 expect(secondRuns.length === 1 && secondRuns[0].permissions === 'permissive', `REQ-TRACE-472: the second card's run carries ${JSON.stringify(secondRuns.map((r) => r.permissions))}, not the permissive grant the first acceptance disclosed`);
 const nextLaunch = await launch('disclosure-launch-relaunch', twoProfile.workspace, twoProfile.local, twoProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     `${CARD_103}@3000`,
     '[data-testid="req-move-control"]@4200',
@@ -1145,7 +1148,7 @@ const DRAG_ON_EPIC_AXIS = `(async () => { const card = document.querySelector('[
 const paneProfile = profile('panes');
 const panes = await launch('panes', paneProfile.workspace, paneProfile.local, paneProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
   ROTARIS_CAPTURE_CLICKS: [
     '[data-testid="req-queue-open"]@3000',
     '[data-testid="req-pane-close"]@4200',

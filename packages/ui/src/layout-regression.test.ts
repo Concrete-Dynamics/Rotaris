@@ -57,10 +57,22 @@ describe('minimum-window layout regressions', () => {
     // The table's minimum is the four fixed columns' 46ch, the State column's floor and the Branch column's (63ch until
     // 2026-10-04: State a fixed 10ch, the next case says why it is not, and Branch 7ch, which cut its heading under Session
     // at 1000x680; then `55ch + State`, Branch a fixed 9ch, which its base row's two tags took whole — the Branch case below).
-    expect(rule('.git__worktree-table')).toContain('min-width: calc(46ch + max(10ch, var(--git-state-fit, 10ch)) + max(9ch, var(--git-branch-fit, 9ch)))');
-    expect(rule('.git__col-files')).toContain('width: 12ch');
+    // 2026-11-10 (R-097): the 46ch read 34ch plus the Files column, which is a floor now and no longer a fixed width — the
+    // next case but one says why. The sum at the floors is the 46ch it was, so the minimum-window figure above still holds.
+    expect(rule('.git__worktree-table')).toContain('min-width: calc(34ch + max(12ch, var(--git-files-fit, 12ch)) + max(10ch, var(--git-state-fit, 10ch)) + max(9ch, var(--git-branch-fit, 9ch)))');
     expect(rule('.git__col-actions')).toContain('width: 9ch');
     expect(rule('.git-card--table')).toContain('overflow-x: auto');
+  });
+
+  it('sizes the Files column to its widest figure over a 12ch floor, drawn whole on one line (REQ-GIT-077, REQ-GIT-079)', () => {
+    // A fixed 12ch held `+0 -0 / 0` and not a real worktree's `+5300 -431 / 102`, which measured 115 px of text in the
+    // 92 px cell at 1440x900 and ran 24 px under the row's delete button (docs/design/briefs/git.md, audit item 1). The
+    // measured width arrives as `--git-files-fit` (GitView's `filesColumnFit`); the figure never wraps, so it measures its
+    // own text — the State column's rule, for the same fault.
+    expect(rule('.git__col-files')).toContain('width: max(12ch, var(--git-files-fit, 12ch))');
+    expect(rule('.git__col-files')).not.toMatch(/width:\s*12ch\s*(;|$)/u);
+    expect(rule('.git__files-figure')).toContain('display: inline-block');
+    expect(rule('.git__files-figure')).toContain('white-space: nowrap');
   });
 
   it('sizes the State column to its widest phrase over a 10ch floor, drawn whole on one line (REQ-GIT-109)', () => {
@@ -193,5 +205,119 @@ describe('minimum-window layout regressions', () => {
     expect(persona).toContain('max-width: 24ch');
     expect(persona).toContain('overflow: hidden');
     expect(persona).toContain('text-overflow: ellipsis');
+  });
+
+  it('holds a Settings category to one axis: a label column, and a caption on a line of its own under its control (R-097; REQ-CONFIG-268, REQ-CONFIG-320)', () => {
+    // docs/design/briefs/settings.md, audit items 1 and 2: a row was one wrapping line, so Runtime's 19 rows put their first
+    // control at 16 different x and a caption ran 1042 px. The label takes a column built from the token; the caption takes
+    // the whole line (a 100% basis is what breaks the line at every pane width) and is padded to the field edge and the
+    // measure, so its text stands under the control it describes.
+    const rows = ':is(.settings__section, .settings__card, .settings__actions) > .settings__action';
+    expect(rule('.settings__body')).toContain('--settings-label-column: calc(2 * var(--rt-label-column))');
+    expect(rule(`${rows} > :is(label, span):first-child:not(.settings__hint)`)).toContain('flex: 0 0 var(--settings-label-column)');
+    const caption = rule(`${rows} > .settings__hint`);
+    expect(caption).toContain('flex: 0 0 100%');
+    expect(caption).toContain('padding-left: calc(var(--settings-label-column) + var(--rt-space-3))');
+    // The measure is the token itself: OQ-535 ruled that it keeps its 340 px, and the caption was first built at twice it.
+    expect(caption).toContain('var(--rt-prose-measure)');
+    expect(caption).not.toContain('2 * var(--rt-prose-measure)');
+  });
+
+  it('keeps a file, a key or a path named in the board\'s empty state on one line unless it is longer than the hint (UIR-310)', () => {
+    const name = rule('.req-empty .empty-state-hint .mono');
+    expect(name).toContain('display: inline-block');
+    expect(name).toContain('max-width: 100%');
+    expect(name).toContain('overflow-wrap: anywhere');
+  });
+
+  it('keeps a provider row\'s action cell a table cell that takes its row of controls whole (UIR-308, UIR-309; REQ-CONFIG-367)', () => {
+    // docs/design/briefs/settings.md, "Critique 2026-11-11": the cell carried `.settings__action`, a wrapping flex line, so
+    // it was no table cell: its rule stood 17 px above the first cell's at 1400x900, and at 1000x680 its 252 px squeezed
+    // "Sign out" onto two lines (60x36 px beside 24 px neighbours). Neither rule may come back as a flex or a grid box.
+    const cell = rule('.providers-card__table td.provider-row__action-cell');
+    expect(cell).toContain('width: 0');
+    expect(cell).toContain('white-space: nowrap');
+    expect(cell).not.toMatch(/display:/);
+    const control = rule('.provider-row__actions > .btn');
+    expect(control).toContain('flex: none');
+    expect(control).toContain('white-space: nowrap');
+  });
+
+  it('lets a provider row\'s first cell give way: it never widens the table, the identifier yields first and then the name is cut (UIR-407)', () => {
+    const first = rule('.providers-card__table td:first-child');
+    expect(first).toContain('width: 100%');
+    expect(first).toContain('max-width: 0');
+    const name = rule('.provider-row__status > .provider-row__name');
+    expect(name).toContain('flex: 0 1 auto');
+    expect(name).toContain('min-width: 0');
+    expect(name).toContain('text-overflow: ellipsis');
+    // A ratio, not an order: at 999 the name lost 0.1 px of 180 and drew its ellipsis (UIR-501).
+    expect(rule('.provider-row__status > .settings__origin')).toContain('flex: 0 1000000 auto');
+    expect(rule('.provider-row__status > .provider-row__word')).toContain('flex: none');
+    expect(rule('.provider-row__status > .provider-row__word')).toContain('padding-left: 0');
+  });
+
+  it('stands a table card\'s actions at the end of its head, as the adopted TableCard does (REQ-CONFIG-329, UIR-403)', () => {
+    expect(rule('.table-card-head > .card-kicker')).toContain('margin-right: auto');
+  });
+
+  it('keeps a control\'s name whole inside a sentence of the board, and sets the foot as one text (UIR-412)', () => {
+    expect(rule('.req-whole')).toContain('white-space: nowrap');
+    // `.card-meta` is a flex line; the foot's sentence holds a span, and as flex items its parts stood in three columns.
+    expect(rule('.req-foot.card-meta')).toContain('display: block');
+  });
+
+  it('bounds the Requirements board body\'s empty state inside the body at the minimum window (R-097; REQ-SHELL-022)', () => {
+    // docs/design/briefs/requirements-board.md, audit item 1: `.empty-state` is `align-self: center`, and in a 133 px body
+    // its 224 px overflowed both ways — 45 px over the adoption strip, 45 px over the foot, two controls covered
+    // (`ui-audit` STACKING x2). Auto margins centre while there is room and collapse to the start when there is none.
+    expect(rule('.req-body:has(> .req-empty)')).toContain('overflow-y: auto');
+    expect(rule('.req-body:has(> .req-empty)')).toContain('padding-block: var(--rt-space-4)');
+    expect(rule('.req-body > .req-empty')).toContain('align-self: flex-start');
+    expect(rule('.req-body > .req-empty')).toContain('margin: auto');
+  });
+
+  it('keeps the run header\'s end group whole: it never shrinks and no label in it breaks (R-097; REQ-CHAT-078, REQ-LIBRARY-125)', () => {
+    // docs/design/briefs/transcript-rows.md, audit item 1: with the improvement indicator shown at 1440x900 "Compress
+    // context" broke onto two lines and the model selector stood above the reasoning selector.
+    expect(rule('.run-header')).toContain('flex-wrap: wrap');
+    expect(rule('.run-header__end')).toContain('flex: none');
+    expect(rule('.run-header__end')).toContain('margin-left: auto');
+    expect(rule('.run-header .run-controls')).toContain('flex-wrap: nowrap');
+    expect(rule('.run-header__compress')).toContain('white-space: nowrap');
+  });
+
+  it('stands a prompt card\'s actions at the card\'s foot whether its list is empty or not, and draws the tabs in the adopted face (R-097; REQ-LIBRARY-103)', () => {
+    // docs/design/briefs/library.md, audit items 1 and 2: the actions take the free space above them, and the empty state
+    // keeps the size of its sentence — stretching it to the list's region was UIR-007's and UIR-016's fault, built again
+    // and read back by the 2026-11-10 critique (its finding 5). A `button.tab` inherits the face and keeps the adopted size and weight.
+    expect(rule('.library-card > .library-card__actions')).toContain('margin-top: auto');
+    expect(rule('.library__empty')).toContain('flex: 0 0 auto');
+    expect(rule('.library-card > .library__empty')).toBe('');
+    expect(rule('.tabs .tab')).toContain('font-family: inherit');
+    expect(rule('.tabs .tab')).not.toContain('font: inherit');
+  });
+
+  it('gives every titled primary view one inset (R-097; REQ-SHELL-023)', () => {
+    // docs/design/briefs/overview/04-audit-2026-11-10.md, item 1: the page title moved by up to 4 px sideways and 16 px
+    // vertically between views. One block inset, one inline inset; the Requirements board carries the inline one per band.
+    const inset = 'padding: var(--rt-space-4) var(--rt-space-5)';
+    // PD-SHELL-015: Mission is not a view, so it has no page frame; its two cards are the Overview's (PD-MONITOR-009).
+    expect(rule('.mission')).toBe('');
+    expect(rule('.library')).toContain(inset);
+    expect(rule('.overview')).toMatch(/padding: var\(--rt-space-4(, 16px)?\) var\(--rt-space-5(, 20px)?\)/u);
+    expect(rule('.git')).toMatch(/padding: var\(--rt-space-4(, 16px)?\) var\(--rt-space-5(, 20px)?\)/u);
+    expect(rule('.req')).toContain('padding-top: var(--rt-space-4)');
+    expect(rule('.req-header')).toContain('padding: 0 var(--rt-space-5) var(--rt-space-2)');
+  });
+
+  it('holds emphasis to the medium weight and centres the session browser\'s empty sentence (R-097, findings 3 and 11 of the 2026-11-10 critique)', () => {
+    // §1.4: "Nothing in the system goes above 500". A bare `strong` took the browser's `bolder`; the empty sentence's one
+    // spanning cell is also `td:last-child`, whose rule right-aligned it 545 px from the table's first heading.
+    expect(css).toMatch(/^strong \{ font-weight: var\(--rt-weight-medium\); \}$/mu);
+    const empty = rule('.session-browser__table td.session-browser__empty');
+    expect(empty).toContain('text-align: center');
+    expect(empty).toContain('width: auto');
+    expect(empty).toContain('white-space: normal');
   });
 });

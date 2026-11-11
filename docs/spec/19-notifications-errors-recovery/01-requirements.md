@@ -31,6 +31,9 @@ Part 1 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
 **REQ-NOTIFY-002** — The prerequisites of a workflow — provider, model, workspace, branch, path, session — are checked before it begins expensive work, and each unmet prerequisite is named. No workflow begins work that cannot succeed, and none ends without either a result or a stated failure.
 
 **REQ-NOTIFY-010** — Each primary view — dashboard, git, library, mission, requirements, settings, workspace — carries onboarding for its empty condition, a primary action appropriate to what it holds, progress presentation for its long operations, and disabled-reason text on the controls it disables.
+  > **Narrowed by [`PD-SHELL-015`](../../product/directives/pd-shell-015.md#pd-shell-015), 2026-11-11.** The primary
+  > views are that directive's six, and Mission is not among them; what it showed, its empty statement included, stands
+  > on the Overview (PD-MONITOR-009). Every obligation above still governs for each of the six.
 
 ### A3. Regions, controls and confirmations
 

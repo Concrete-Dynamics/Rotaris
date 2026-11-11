@@ -2,7 +2,7 @@
 
 Part 10 of 22 of [the codebase record](../codebase.md), which indexes every part.
 
-**What `pnpm library-proof` does.** It launches the app six times over four scratch profiles: Ctrl+6 shows the view
+**What `pnpm library-proof` does.** It launches the app six times over four scratch profiles: Ctrl+6 (Ctrl+5 since PD-SHELL-015 of 2026-11-11) shows the view
 with its title, its one field and the three tabs in order; a prompt stashed from the composer is in the store and is
 still in the stash after the application is quit and **relaunched**; "Use" copies into the composer, switches view and
 focuses it while the entry stays stashed, and "Use and remove" under a filter removes the row chosen and not the row

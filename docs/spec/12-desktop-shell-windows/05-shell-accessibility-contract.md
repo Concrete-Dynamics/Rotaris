@@ -5,6 +5,9 @@ Part 5 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
 ### Shell accessibility contract
 
 - **REQ-SHELL-144**: Two contrast thresholds apply: 4.5:1 for normal text, and 3:1 for large text — 18 px or larger, or 14 px or larger when bold — and for non-text boundaries such as borders, focus rings and icons. Measured over all seven primary views and every tab page inside them: no interactive control announces an empty accessible name, and every rendered label meets its threshold against the background actually painted behind it once all styling has been applied.
+  > **Narrowed by [`PD-SHELL-015`](../../product/directives/pd-shell-015.md#pd-shell-015), 2026-11-11.** "All seven
+  > primary views" are that directive's six. Both thresholds and the sweep still govern over them and every tab page
+  > inside them.
 - **REQ-SHELL-145**: Theme tokens carry these guarantees, each measured against every background the token is actually painted on: every state text colour (running, waiting, done, info, fail), the primary, secondary and tertiary text colours, and the readable accent shade clear 4.5:1 on every text background; strong borders and the focus colour clear 3:1 on every boundary background; a primary button's label stays at or above 4.5:1 in its rest, hover and pressed states; disabled text is dimmer than enabled text — below half the enabled contrast ratio — while still clearing 3:1; every persona base colour and every shade given to a concurrently running instance clears 4.5:1, and no two concurrently running instances are given the same shade.
 - **REQ-SHELL-146**: Auxiliary windows meet the same contract independently of the main sweep: the terminal window has all controls named and no contrast violations both while a command runs and after it exits, and its empty state is announced and explained.
   > **Extended by [`PD-SHELL-012`](../../product/directives/pd-shell-012.md#pd-shell-012), 2026-11-03.** The

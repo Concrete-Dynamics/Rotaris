@@ -89,7 +89,7 @@ instead — an appointment moved to 300 ms reproduces the original error text ve
 screen 1.7 s into the run`, and the deadline form passes on the same machine in the same minute. An absence still
 cannot be waited FOR, so the one probe that reads the header GONE stays an appointment and was moved out to 9 s.
 
-**What `pnpm mission-proof` does.** It builds Electron and launches the app eleven times for nine items: the Mission view
+**What `pnpm mission-proof` does.** It builds Electron and launches the app eleven times for nine items: the Mission view (since 2026-11-11 the Overview's delegation graph and agent table, PD-MONITOR-009)
 painted with the run row, the tree and the table, elapsed advancing between two probes; two children waiting behind a
 model slot cap of one showing their elapsed time in the table and the tree, advancing (since 2026-09-29, OQ-124); the three trees' parity and a
 23-agent republish timed against the 250 ms budget; a pause refused with a child selected and honoured with the run
@@ -182,7 +182,7 @@ request rejects when the child exits, errors or is killed by the guard, with the
 so a branch that dies fails the launch in seconds instead of hanging it (`line-rpc-client.test.ts`, 12 cases). It launches the token first and the sandbox switch after it, the
 product's order, which `lib/launch-sites.test.ts` holds for every token launch; its workspace file records
 `code-intelligence-setup` as skipped so ADR-0064's background task does not collide with section 5; off Windows it builds
-with `pnpm` and records the no-window check not measured; its setup launches open Settings with the Ctrl+7 chord rather than
+with `pnpm` and records the no-window check not measured; its setup launches open Settings with the Ctrl+7 chord (the view's identifier since PD-SHELL-015 of 2026-11-11, which made Settings the sixth view) rather than
 the shared category seam, and press the category, Start and Cancel only once the open's notice has drawn and the
 control is there (2026-09-28, R-062; repaired again 2026-09-29 after the fix round's verifier found `setup-cancel` red
 three times in seven runs: four `--steps=5` runs and then three whole runs in a row green as root on Linux). On Windows it

@@ -25,7 +25,7 @@ shell        ui / ui-core        engine · agent-tools · model · mcp        wo
 platform   ◄──────┼──────────────── (never from ui / ui-core)   Node adapters, no Electron
    │              │
    ▼              ▼
-contracts  ◄─── the five channels, commands, control ops, the seven views, process protocols
+contracts  ◄─── the five channels, commands, control ops, the primary views (six since PD-SHELL-015), process protocols
    │
    ▼
 kernel     pure: Result, ids, time, the clock ports, generated requirement symbols

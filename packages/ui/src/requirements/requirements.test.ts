@@ -10,6 +10,7 @@ import { cardDescription } from './Card.js';
 import { DETAIL_SECTIONS, SECTION_EMPTY } from './DetailPanel.js';
 import {
   ALERT_GLYPH, CLOSED_DROPDOWN_WIDTH, COLUMN_GAP, COLUMN_MAX, COLUMN_MIN, COLUMN_OVERSCAN_PX, CONFIRM_ACTIONS, OPEN_DROPDOWN_WIDTH, OTHER_CONTROL_HEIGHT, OVERSCAN_CARDS, PRIMARY_CONTROL_HEIGHT, PRIVATE_TRANSFER_TYPE, RAIL_CHARS, RAIL_MARGIN, RELEASED_POOL_CAP, SEARCH_DEBOUNCE_MS,
+  ANALYSIS_OFF_SENTENCE, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_ELSEWHERE, EMPTY_STORE_SENTENCE, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, UNREAD_SOURCE_HOW, UNREAD_SOURCE_SENTENCE, emptyStoreHow, phraseText, type Phrase,
   alertSeverity, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, dropTargetOptions, epicSummary, epicSummaryLine, headingAccessibleName, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveRefusedSentence, moveReachableSentence, moveStartsRun, nothingSelectedSentence, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, railAccessibleName, realisedBand, rejectedDocumentsSentence, visibleColumnBand,
 } from './model.js';
 
@@ -449,6 +450,86 @@ describe('a blocker answer held behind the launch disclosure (REQ-TRACE-453/454/
 });
 
 /**
+ * UIR-310 and UIR-312 of the 2026-11-11 critique, and UIR-401, UIR-408, UIR-410, UIR-412 and UIR-413 of the second
+ * critique that day. The empty states' sentences are drawn as written, so a name set in Markdown backticks reached
+ * the screen with its backticks (six of them, around three names in the body face); the store that holds nothing
+ * printed the instruction for configuring a source under a sentence saying one exists; and the foot named the
+ * build's own parts to a reader who has never met them.
+ */
+describe('the empty states\' and the foot\'s sentences (REQ-TRACE-231, REQ-TRACE-507, REQ-NOTIFY-006)', () => {
+  const sentences: readonly (string | readonly Phrase[])[] = [
+    EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_SOURCE_HOW, EMPTY_STORE_SENTENCE, EMPTY_STORE_ELSEWHERE, UNPARSED_STORE_SENTENCE, UNPARSED_STORE_HOW, UNREAD_SOURCE_SENTENCE, UNREAD_SOURCE_HOW,
+    SUBSCRIPTION_SENTENCE, ANALYSIS_OFF_SENTENCE, emptyStoreHow('docs/requirements', true), emptyStoreHow('docs/requirements', false),
+  ];
+  const text = (s: string | readonly Phrase[]) => (typeof s === 'string' ? s : phraseText(s));
+  const names = (s: readonly Phrase[]) => s.flatMap((p) => (typeof p !== 'string' && 'mono' in p ? [p.mono] : []));
+  const wholes = (s: readonly Phrase[]) => s.flatMap((p) => (typeof p !== 'string' && 'whole' in p ? [p.whole] : []));
+
+  it('carries no Markdown backtick in any sentence the view draws as written', () => {
+    for (const s of sentences) expect(text(s)).not.toContain('`');
+  });
+
+  it('names the file, the key and the default directory as parts of their own, which the view draws in the mono face', () => {
+    expect(names(EMPTY_SOURCE_HOW)).toEqual(['rotaris-traceability.json', 'layout.requirements_dir', 'docs/requirements']);
+    expect(names(EMPTY_STORE_ELSEWHERE)).toEqual(['layout.requirements_dir', 'rotaris-traceability.json']);
+    expect(names(emptyStoreHow('specs/reqs', true))).toEqual(['specs/reqs']);
+    expect(names(ANALYSIS_OFF_SENTENCE)).toEqual(['requirements.change.analyze_changes']);
+  });
+
+  it('keeps a control\'s name and its verb whole wherever a sentence names them, so neither breaks at its hyphen (UIR-412)', () => {
+    for (const s of sentences) if (typeof s !== 'string') expect(s.filter((p) => typeof p === 'string').join('')).not.toMatch(/re-evaluate/i);
+    expect(wholes(SUBSCRIPTION_SENTENCE)).toEqual(['Re-evaluate']);
+    expect(wholes(emptyStoreHow('specs/reqs', true))).toEqual(['New requirement', 're-evaluate']);
+    expect(wholes(EMPTY_SOURCE_HOW)).toEqual(['re-evaluate']);
+  });
+
+  it('says what a source is and how one is configured where there is none (REQ-TRACE-231)', () => {
+    expect(EMPTY_SOURCE_WHAT).toMatch(/^A requirement source is /);
+    expect(phraseText(EMPTY_SOURCE_HOW)).toMatch(/^Configure one by placing a rotaris-traceability\.json at the repository root/);
+  });
+
+  it('tells a store that holds nothing its next act, and never how to configure a source it has', () => {
+    for (const canCreate of [true, false]) {
+      const how = phraseText(emptyStoreHow('specs/reqs', canCreate));
+      expect(how).not.toMatch(/Configure one/);
+      expect(how).toContain('specs/reqs');
+      expect(how).toMatch(/then re-evaluate\.$/);
+    }
+    expect(phraseText(EMPTY_STORE_ELSEWHERE)).not.toMatch(/Configure one/);
+  });
+
+  it('names the board\'s own control only where the store offers creation, in a sentence of its own (REQ-TRACE-444, UIR-413)', () => {
+    expect(phraseText(emptyStoreHow('specs/reqs', true))).toMatch(/^Use New requirement above to add the first one\. Or write it into specs\/reqs /);
+    expect(phraseText(emptyStoreHow('specs/reqs', false))).toMatch(/^Write the first one into specs\/reqs /);
+    expect(phraseText(emptyStoreHow('specs/reqs', false))).not.toContain('New requirement');
+  });
+
+  it('claims no more than holds for a default directory nobody configured', () => {
+    expect(EMPTY_STORE_SENTENCE).not.toMatch(/configured/);
+  });
+
+  it('tells a source that could not be read to correct what the report names, and never to configure one (UIR-408)', () => {
+    expect(UNREAD_SOURCE_SENTENCE).toBe('The requirement source could not be read.');
+    expect(phraseText(UNREAD_SOURCE_HOW)).not.toMatch(/Configure|placing/);
+    expect(phraseText(UNREAD_SOURCE_HOW)).toMatch(/then re-evaluate\.$/);
+  });
+
+  it('states the foot in the reader\'s terms, claims no watcher, and keeps Re-evaluate as the route to a current board (REQ-TRACE-507, UIR-401)', () => {
+    const foot = phraseText(SUBSCRIPTION_SENTENCE);
+    expect(foot).not.toMatch(/channel|engine|watcher|subscription/i);
+    // The falsified sentence, kept out: nothing watches the repository (`apps/desktop/src/main/requirements.ts` broadcasts
+    // only from a reply that carries `changed`), so the board does not refresh "as the repository changes".
+    expect(foot).not.toMatch(/as the repository changes|refreshes itself/);
+    // The second falsified sentence, kept out too: a session's writes and the Git view's are made "through Rotaris" and
+    // do not reach the board (`apps/desktop/src/workspace-service/delivery.ts` reads the store again only for the board's
+    // own commands and on a refresh).
+    expect(foot).not.toMatch(/through Rotaris/);
+    expect(foot).toMatch(/^The board updates itself for what is done on it and for the runs it starts\. /);
+    expect(foot).toMatch(/Any other change shows after Re-evaluate, which is always the way to a current board\.$/);
+  });
+});
+
+/**
  * Defect 81, found by the first LIVE drive of this board (2026-09-11): a configured store whose every document the
  * engine rejected (REQ-TRACE-022/026) yields no cards, and the body state was decided from the card count alone —
  * so a store that would not parse printed "holds no requirement documents yet" and named nothing, while the
@@ -462,6 +543,8 @@ describe('the stated body states (REQ-TRACE-515, over REQ-TRACE-231/380)', () =>
   it('tells a store that will not parse from a store nobody has written to', () => {
     const empty = projection([]);
     expect(bodyStateOf({ ...empty, source: { kind: 'none' } })).toBe('source');
+    // UIR-408: no store AND a report is a source that could not be read, not a workspace without one.
+    expect(bodyStateOf({ ...empty, source: { kind: 'none' }, parseErrors: [{ path: '/ws', message: 'The layout configuration at /ws/rotaris-traceability.json could not be read: Unexpected end of JSON input' }] })).toBe('unread');
     expect(bodyStateOf({ ...empty, source: dir, parseErrors: rejected })).toBe('unparsed');
     expect(bodyStateOf({ ...empty, source: dir })).toBe('store');
   });

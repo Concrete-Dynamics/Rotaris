@@ -25,3 +25,5 @@ counts, or reads the run's total, to see the whole.
 > **Narrows:** REQ-MONITOR-101
 
 *Raised by the owner, 2026-10-06; logged as [R-071](../requests.md#r-071), the ruling of OQ-159.*
+
+*Cross-reference, 2026-11-11 (no clause above changes).* "The Mission view" above is the Overview's delegation graph card and agent table card since [`PD-MONITOR-009`](pd-monitor-009.md#pd-monitor-009) clause 7; Mission is not a primary view ([`PD-SHELL-015`](pd-shell-015.md#pd-shell-015)).

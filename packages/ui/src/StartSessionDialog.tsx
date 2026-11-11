@@ -52,6 +52,12 @@ export interface StartSessionDialogProps {
   readonly onCancel: () => void;
 }
 
+/**
+ * The dialog's one sentence under its title (REQ-SHELL-125, REQ-ORCH-152). It never says how many sections follow,
+ * and it does not call them optional: while another run is active the worktree is required (PD-GIT-001), and what
+ * holds of every section then is that it can be left as it stands.
+ */
+export const START_SESSION_LEDE = 'Choices for the session the next message starts; each can be left as it stands. The workspace is the one this window has open.';
 export const ISOLATION_HINT = 'Choose an isolated Git worktree when this task may run beside other sessions.';
 /** REQ-GIT-119's hint, from its one home in `@rotaris/contracts`, which main's forced-placement notice says too (PD-GIT-001). */
 export { ISOLATION_REQUIRED_HINT };
@@ -148,7 +154,10 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, d
           reachable without scrolling the sandbox disclosure and advisory past it. */}
       <form className="dialog start-session" role="dialog" aria-modal="true" aria-labelledby={titleId} data-testid="start-session-dialog" onSubmit={(event) => { event.preventDefault(); accept(); }} {...layoutContractAttributes(START_SESSION_LAYOUT.dialog)}>
         <h2 id={titleId} className="dialog-title">Start session</h2>
-        <p className="dialog-body">Two optional choices for the session the next message starts. The workspace is the one this window has open.</p>
+        {/* UIR-311: no count. REQ-SHELL-125's dialog "collects two optional choices" and REQ-ORCH-152 offers the run-start
+            mode here as a third, so a sentence that counted said "Two" over three sections; one that does not count stays
+            true when a section comes or goes. */}
+        <p className="dialog-body" data-testid="start-session-lede">{START_SESSION_LEDE}</p>
         <div className="start-session__scroll" data-testid="start-session-scroll">
         {/* UIR-004: a card with the system's section kicker, where the browser default fieldset drew a
             hairline rectangle notched by a sentence-case legend — an idiom used nowhere else here. */}

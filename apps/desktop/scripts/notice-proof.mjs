@@ -75,6 +75,10 @@ import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/rendere
  *     "Open Models settings" action — arrives with the focus, replacing the first in the one slot.
  *
  * Every assertion reads the application's own log, its store, or the rendered DOM.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`requirements`), not by its digit.
+ * Requirements is the third view (Ctrl+3); Mission is no view. PD-CONFIG-008: a Settings category is still found by its name
+ * among `.nav-list__item`, under its group heading.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -463,7 +467,7 @@ if (want('4')) {
     ].join(';;'),
     ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="acknowledgement"]@2900;;[data-testid="acknowledgement"]@3900;;[data-testid="acknowledgements"]@3900;;[data-testid="acknowledgement-title"]@3900;;[data-testid="acknowledgement"]@5200',
     // REQ-NOTIFY-021: a view change clears every visible acknowledgement.
-    ROTARIS_CAPTURE_VIEWS: '4@4200',
+    ROTARIS_CAPTURE_VIEWS: 'requirements@4200',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="acknowledgement"]@4600',
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'stack.png')}@3950`,
     ROTARIS_CAPTURE_AFTER_MS: '5600',

@@ -216,7 +216,7 @@ Its per-evaluation callback reaches the host (REQ-ORCH-089, REQ-MONITOR-119/120/
 `IterationChildren.stallEvaluated` keeps the silence of a stalled evaluation, else null, beside the agent's tool activity
 (`AgentActivity.stalled`), and `ProjectionOwner.refreshRecord` republishes the record whenever the figure changes — at every
 evaluation of a stall, and once at its recovery. The figure is `AgentRecord.stalledSeconds`, which the agent trees, the
-Mission table and the persona window draw as a `tag-wait` badge (`stalled Ns`) and the inspector's meta line ends with. The
+agent activity table and the persona window draw as a `tag-wait` badge (`stalled Ns`) and the inspector's meta line ends with. The
 same evaluation serves REQ-MONITOR-135: an agent waiting between its turns on its own children with a steer pending
 (`ChildrenDeps.steeringPending`, a read that takes nothing) is woken (`wakeForSteering`), and the step `runWithChildren` then
 starts for it injects the steer; every delivered steer restarts the watch's silence (`refreshing`). **The root is watched

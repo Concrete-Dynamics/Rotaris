@@ -21,14 +21,18 @@ import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/rendere
  *     `os-input.ps1` (Win32 cursor and keyboard queue, `IsWindowEnabled`), and X11 has no per-window enabled state
  *     to report. On any other platform that half is stated not applicable in `results.json` and the application's
  *     own reading is still asserted (`docs/archive/defects/palette-proof-reads-the-win32-host-input-on-every-platform.md`).
- *  4. The shortcut table still carries the window: Ctrl+3, Ctrl+, and Ctrl+L, and Ctrl+Return declining while the send
- *     control is disabled (REQ-SHELL-049/050).
+ *  4. The shortcut table still carries the window: Ctrl+3 (the third view: Requirements since PD-SHELL-015), Ctrl+, and
+ *     Ctrl+L, and Ctrl+Return declining while the send control is disabled (REQ-SHELL-049/050).
  *  5. The palette is reachable at the minimum window size (REQ-SHELL-022's 1000×680).
  *  6. Ctrl+F from another view, and the palette's "Toggle reasoning bodies" (N71, 2026-10-13).
  *  7. A persona window already open follows that toggle run in the main window (channel 14, 2026-10-14).
  *
  * Every assertion reads the built application's own log or its store; nothing is asserted from this script's model of
  * what should have happened.
+ *
+ * PD-SHELL-015, PD-MONITOR-009 (2026-11-11): views are named by identifier; Mission is no view, so the registry lists 20
+ * commands and the help 14 rows, Ctrl+3 opens Requirements, and the agent table a persona is popped out from stands on
+ * the Overview.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -160,8 +164,11 @@ if (wanted('palette')) {
   // `improvements.retrospective` (PD-LIBRARY-002) takes it to 19. The count is asserted rather than derived on
   // purpose: a command that appears without anyone deciding to add it is what this line is here to catch.
   // N71 (2026-10-13) returned two entries from `OMITTED_COMMANDS` — "Search transcript" (Ctrl+F, REQ-SHELL-049) and
-  // "Toggle reasoning bodies" (REQ-CHAT-167) — taking it to 21.
-  expect(all.length === 21, `an empty query listed ${all.length} commands, not the registry's 21 (REQ-SHELL-052)`);
+  // "Toggle reasoning bodies" (REQ-CHAT-167) — taking it to 21. PD-SHELL-015 (2026-11-11) retired the Mission view and
+  // with it "Open Mission", the seventh view entry: 20.
+  expect(all.length === 20, `an empty query listed ${all.length} commands, not the registry's 20 (REQ-SHELL-052, PD-SHELL-015)`);
+  const openViews = all.map((m) => m.attrs['data-command']).filter((id) => typeof id === 'string' && id.startsWith('view.'));
+  expect(JSON.stringify(openViews) === JSON.stringify(['view.overview', 'view.workspace', 'view.requirements', 'view.git', 'view.library', 'view.settings']), `the palette's view entries: ${JSON.stringify(openViews)} — six, in the rail's order, and none for Mission (PD-SHELL-015)`);
   expect(all[0].attrs['aria-selected'] === 'true' && all.slice(1).every((m) => m.attrs['aria-selected'] === 'false'), 'the first row was not the auto-selected one (REQ-SHELL-052)');
   const filtered = inspectAt(r.log, 4800, '.cmdk-item')?.matches ?? [];
   const filteredIds = filtered.map((m) => m.attrs['data-command']);
@@ -208,7 +215,9 @@ if (wanted('help')) {
   // and `terminal.open` on Ctrl+Shift+T (AL'). The third command it added, `run.compress` (AO), carries no chord and
   // so adds no row. The count of rows beyond the registry's own is unchanged at seven, which is why the delta is two.
   // N71 (2026-10-13): fifteen, with Ctrl+F's "Search transcript" (REQ-SHELL-049); "Toggle reasoning bodies" carries no chord.
-  expect(rows.length === 15, `the help lists ${rows.length} rows; the registry has 15 shortcut-bearing rows (REQ-SHELL-054)`);
+  // PD-SHELL-015 (2026-11-11): fourteen — six view chords, Ctrl+1 to Ctrl+6, and Ctrl+7 bound to nothing.
+  expect(rows.length === 14, `the help lists ${rows.length} rows; the registry has 14 shortcut-bearing rows (REQ-SHELL-054, PD-SHELL-015)`);
+  expect(['Ctrl+1', 'Ctrl+2', 'Ctrl+3', 'Ctrl+4', 'Ctrl+5', 'Ctrl+6'].every((c) => chords.includes(c)) && !chords.includes('Ctrl+7'), `the help's view chords: ${JSON.stringify(chords)} — Ctrl+1 to Ctrl+6, and no Ctrl+7 (PD-SHELL-015 clause 3)`);
   expect(chords.includes('Ctrl+F') && rows.some((m) => /Search transcript/.test(m.text ?? '')), `keyboard help does not list Ctrl+F "Search transcript": ${JSON.stringify(chords)} (REQ-SHELL-054, N71)`);
   expect(!chords.some((c) => /escape/i.test(c ?? '')), `an Escape row is present: ${JSON.stringify(chords)} (REQ-SHELL-048/054)`);
   expect(!rows.some((m) => /close current overlay/i.test(m.text ?? '')), 'the Escape entry is offered as a command (REQ-SHELL-048)');
@@ -230,7 +239,8 @@ if (wanted('modality')) {
   const r = await launch('modality', s3, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:34000,answer',
     ROTARIS_CAPTURE_PROMPT: 'pop out an agent for the modality reading',
-    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    // PD-MONITOR-009: the agent table stands on the Overview (the prompt seam left it for the Workspace; this returns).
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
     // The row is selected first and popped out after, the way Part R's proof does it — the control belongs to a selected row.
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;.agent-table__row .btn>>Pop out@7500',
     // Before the palette: the persona window takes input. Then the palette opens, the same click and keystrokes are
@@ -310,7 +320,8 @@ if (wanted('shortcuts')) {
     ROTARIS_CAPTURE_AFTER_MS: '7200',
   });
   const view = (at) => inspectAt(r.log, at, '.app-shell')?.matches[0]?.attrs['data-view'];
-  expect(view(3400) === 'mission', `Ctrl+3 landed on ${view(3400)}, not the third view (REQ-SHELL-049)`);
+  // PD-SHELL-015 (2026-11-11): the third view is Requirements; Mission, which Ctrl+3 opened until then, is no view.
+  expect(view(3400) === 'requirements', `Ctrl+3 landed on ${view(3400)}, not the third view (REQ-SHELL-049, PD-SHELL-015)`);
   expect(view(4400) === 'settings', `Ctrl+, landed on ${view(4400)} (REQ-SHELL-049)`);
   expect(view(5400) === 'workspace', `Ctrl+L did not switch to Workspace: ${view(5400)} (REQ-SHELL-049)`);
   const composer = inspectAt(r.log, 5400, '.composer__input');
@@ -341,8 +352,9 @@ if (wanted('minimum')) {
   const box = dialog.matches[0].rect;
   expect(box.x >= 0 && box.y >= 0 && box.x + box.width <= 1000 && box.y + box.height <= 680, `the palette lies outside a 1000×680 content area: ${JSON.stringify(box)} (REQ-SHELL-022)`);
   const rows = inspectAt(r.log, 4000, '.cmdk-item')?.matches ?? [];
-  // The same list as the empty-query assertion above, at the minimum window size: 19 since Part AT, 21 since N71.
-  expect(rows.length === 21, `only ${rows.length} rows at the minimum size`);
+  // The same list as the empty-query assertion above, at the minimum window size: 19 since Part AT, 21 since N71, 20
+  // since PD-SHELL-015 retired "Open Mission" (2026-11-11).
+  expect(rows.length === 20, `${rows.length} rows at the minimum size, not the registry's 20 (PD-SHELL-015)`);
   results.minimum = { rect: { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) }, rows: rows.length, png: join(output, 'palette-minimum.png'), elapsedMs: r.elapsedMs };
   expect(unexpectedRendererErrors(r.errors).length === 0, `renderer errors: ${unexpectedRendererErrors(r.errors).join(' | ')}`);
 }
@@ -350,7 +362,8 @@ if (wanted('minimum')) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 6. N71 (2026-10-13): Ctrl+F from another view, and the reasoning toggle from the palette.
 //    REQ-SHELL-049: Ctrl+F switches to Workspace and opens the transcript search panel, with the caret in its field —
-//    pressed here on Mission, where the pane is not mounted and its old private listener could not hear it.
+//    pressed here on Requirements (Ctrl+3; Mission until PD-SHELL-015, 2026-11-11), where the pane is not mounted and its
+//    old private listener could not hear it.
 //    REQ-CHAT-167: the palette's "Toggle reasoning bodies" writes `display/showReasoning` to the preference store and
 //    reports the new state. One activation is driven here (off to on); the way back (on to off, "Reasoning bodies
 //    hidden") is pinned by `packages/ui/src/commands/search-and-reasoning.test.ts`, not by this stage.
@@ -370,8 +383,8 @@ if (wanted('search-and-reasoning')) {
     ROTARIS_CAPTURE_AFTER_MS: '7800',
   });
   const view = (at) => inspectAt(r.log, at, '.app-shell')?.matches[0]?.attrs['data-view'];
-  expect(view(3400) === 'mission', `Ctrl+3 landed on ${view(3400)} — the Ctrl+F leg must start away from Workspace`);
-  expect(view(4400) === 'workspace', `Ctrl+F on Mission did not switch to Workspace: ${view(4400)} (REQ-SHELL-049)`);
+  expect(view(3400) === 'requirements', `Ctrl+3 landed on ${view(3400)} — the Ctrl+F leg must start away from Workspace (PD-SHELL-015: the third view is Requirements)`);
+  expect(view(4400) === 'workspace', `Ctrl+F on Requirements did not switch to Workspace: ${view(4400)} (REQ-SHELL-049)`);
   const field = inspectAt(r.log, 4400, '[data-testid="transcript-search-input"]');
   expect(field && field.matches.length === 1, `Ctrl+F did not open the search panel: ${JSON.stringify(field)} (REQ-SHELL-049, REQ-CHAT-074)`);
   expect(field.matches[0].attrs['placeholder'] === 'Search transcript…', `the search field reads ${JSON.stringify(field.matches[0].attrs['placeholder'])} (REQ-CHAT-074)`);
@@ -397,7 +410,7 @@ if (wanted('search-and-reasoning')) {
 // 7. 2026-10-14 (fin43): a persona window already open follows "Toggle reasoning bodies" run in the main window.
 //    REQ-CHAT-167: the preference "is global to the transcript — changing it changes every reasoning row at once", and
 //    toggling "MUST take effect immediately on the rows already on screen". The delegated child thinks before it answers,
-//    so its persona window holds a reasoning row; that window is popped out from Mission's agent table, then the main window's palette turns reasoning
+//    so its persona window holds a reasoning row; that window is popped out from the Overview's agent table (PD-MONITOR-009; Mission's until 2026-11-11), then the main window's palette turns reasoning
 //    bodies on, and the persona window's reasoning row is read before and after. Until channel 14 (`display:changed`) the
 //    persona window kept the value it booted with
 //    (docs/archive/defects/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md).
@@ -408,7 +421,7 @@ if (wanted('persona-follows-display')) {
   const r = await launch('persona-follows-display', s7, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,wait:20000,answer', ROTARIS_CHILD_SCRIPT: 'think',
     ROTARIS_CAPTURE_PROMPT: 'delegate one agent that thinks before answering, for the persona window reading',
-    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_VIEWS: 'overview@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;.agent-table__row .btn>>Pop out@7500',
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: `${HEADER}@9600;;${HEADER}@13400`,
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+K@10400;;Return@11600',

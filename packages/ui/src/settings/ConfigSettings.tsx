@@ -343,6 +343,10 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
       <div className="settings__action">
         <label htmlFor="max-depth">Depth cap</label>
         <ClampedNumberField id="max-depth" range={DEPTH_CAP_RANGE} shown={clampForDisplay(rt.max_depth, DEPTH_CAP_RANGE.min, DEPTH_CAP_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_depth', value })} />
+      </div>
+      {/* R-097 (the Settings brief's §8): one field to a row, so each control stands on the category's one axis; the order
+          REQ-CONFIG-320 fixes is the DOM order it was. */}
+      <div className="settings__action">
         <label htmlFor="max-active">Fan-out limit</label>
         <ClampedNumberField id="max-active" range={FAN_OUT_RANGE} shown={clampForDisplay(rt.max_active_children, FAN_OUT_RANGE.min, FAN_OUT_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_active_children', value })} />
       </div>
@@ -383,6 +387,8 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
         <div className="settings__action">
           <label htmlFor="threshold">Compression threshold</label>
           <ClampedNumberField id="threshold" range={COMPRESSION_THRESHOLD_RANGE} shown={clampForDisplay(pending.compressorThresholdPercentage, COMPRESSION_THRESHOLD_RANGE.min, COMPRESSION_THRESHOLD_RANGE.max)} onCommit={(value) => onChange({ kind: 'compressorThreshold', value })} /><span className="text-secondary">%</span>
+        </div>
+        <div className="settings__action">
           <label htmlFor="iterations">Iteration cap</label>
           <ClampedNumberField id="iterations" range={ITERATION_CAP_RANGE} shown={clampForDisplay(rt.max_iterations, ITERATION_CAP_RANGE.min, ITERATION_CAP_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_iterations', value })} /><span className="text-secondary">iterations</span>
         </div>

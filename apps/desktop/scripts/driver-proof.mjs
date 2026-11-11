@@ -14,7 +14,7 @@
  * the launch secret is refused without taking the window down with it.
  *
  * Since 2026-09-29 it is evidence of three repairs as well. A shot taken right after a navigation shows the view the
- * navigation opened: each of the seven views is shot straight after its click, and every shot must differ from the one
+ * navigation opened: each of the primary views (six since PD-SHELL-015; seven then) is shot straight after its click, and every shot must differ from the one
  * before it, and the second launch's first navigation to the Workspace — the heaviest first paint, where the frame
  * before it was returned in a fifth of launches or more — is shot the same way
  * (`docs/archive/defects/the-drivers-shot-can-return-a-stale-frame.md`). And the driver's `quit` is the application's quit: a SECOND launch
@@ -45,6 +45,9 @@
  *
  * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `shots/`, `run-app.log`, `cut-app.log`, `results.json`.
  * `--skip-build` skips the build.
+ *
+ * PD-SHELL-015, PD-MONITOR-009 (2026-11-11): the rail carries six views and Mission is none; the agent table a persona is
+ * popped out from stands on the Overview, reached by Ctrl+1 where 13b and 13c pressed Ctrl+3.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -86,9 +89,10 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
 const COMPOSER_FOCUSED = "document.activeElement?.classList.contains('composer__input') === true";
 
 /**
- * Open `persona`'s window with the Mission table's own Pop out (REQ-SHELL-072), on the row that agent has, as a click
- * known to have landed. Until 2026-10-06, 13b and 13c clicked the first `.agent-table__row .btn` reading Pop out straight
- * after Ctrl+3, and nothing checked the press: in the acceptance run of that day the provider notice filled the notice
+ * Open `persona`'s window with the agent table's own Pop out (REQ-SHELL-072), on the row that agent has, as a click
+ * known to have landed. PD-MONITOR-009 (2026-11-11): the table is a card of the Overview (Ctrl+1), where it was the
+ * Mission view's (Ctrl+3 then). Until 2026-10-06, 13b and 13c clicked the first `.agent-table__row .btn` reading Pop out straight
+ * after that chord, and nothing checked the press: in the acceptance run of that day the provider notice filled the notice
  * slot between the driver's measurement and its press, the table moved 75 px down under it, no `window.openPersona`
  * reached main, and 13c waited 15 s for a window nobody had asked for
  * (`docs/archive/defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md`). Now the row is found by its persona
@@ -100,7 +104,7 @@ async function popOutPersona(d, persona) {
   const rowId = await until(
     () => d.eval(`[...document.querySelectorAll('.agent-table__row[data-agent-id]')].find((row) => (row.querySelector('.agent-table__persona')?.textContent ?? '').trim() === ${JSON.stringify(persona)})?.getAttribute('data-agent-id') ?? null`),
     (id) => typeof id === 'string' && id !== '',
-    { timeoutMs: 15_000, what: `the ${persona} row in the Mission table` },
+    { timeoutMs: 15_000, what: `the ${persona} row in the Overview's agent table` },
   );
   const pressed = await clickLanded(d, `.agent-table__row[data-agent-id=${JSON.stringify(rowId)}] .btn`, { text: 'Pop out', timeoutMs: 15_000 });
   const listed = await until(() => d.windows(), (w) => w.auxiliary.some((a) => a.selector === `persona:${persona}`),
@@ -144,9 +148,10 @@ try {
   const waited = Date.now() - before;
   check('a wait that cannot succeed ends at its deadline', refused !== null && /no-such-element-anywhere/.test(refused.message) && waited < 4_000, `${refused === null ? 'it resolved' : refused.message} (after ${waited} ms)`);
 
-  // 3. Seven views, by REQ-SHELL-023. The inspect op reads the document the user is looking at.
+  // 3. Six views, by PD-SHELL-015 over REQ-SHELL-023 (seven until 2026-11-11: Mission is no view). The inspect op reads the document the user is looking at.
   const rail = await d.inspect('.nav-item');
-  check('the rail carries the seven primary views', rail.matches.length === 7, `${rail.matches.length} items: ${rail.matches.map((m) => m.text).join(', ')}`);
+  const railNames = rail.matches.map((m) => (m.text ?? '').trim());
+  check('the rail carries the six primary views (PD-SHELL-015)', rail.matches.length === 6 && !railNames.some((name) => /mission/i.test(name)), `${rail.matches.length} items: ${railNames.join(', ')}`);
 
   // 4. A click, located by the name on screen, changes the view (REQ-SHELL-049's views reached by pointer).
   const clicked = await d.click('.nav-item', { text: 'Git' });
@@ -171,7 +176,7 @@ try {
 
   // 7. The probe shape the existing proofs read, from the same document.
   const probed = await d.probe('.nav-item');
-  check('probe returns the proofs’ own shape', Array.isArray(probed) && probed.length === 7 && typeof probed[0].text === 'string', `${probed.length} rows, first "${probed[0]?.text}"`);
+  check('probe returns the proofs’ own shape', Array.isArray(probed) && probed.length === 6 && typeof probed[0].text === 'string', `${probed.length} rows, first "${probed[0]?.text}"`);
 
   // 8. REQ-SHELL-022's minimum window size, set and read back.
   const sized = await d.resize(1000, 680);
@@ -329,7 +334,7 @@ try {
  * on the clock port (`wait:120000`), aborted by a stop, so the run is `running` for as long as the proof needs. Under
  * `permission_mode: ask` the child's `write_file` raises REQ-TOOLS-063's dialog, which is found by `windows`, probed,
  * photographed and answered with its own Approve once button through `window: 'approval'`; the child's persona window
- * (REQ-SHELL-072) is opened with the Mission view's Pop out and probed through `useWindow('persona:coding-agent')`
+ * (REQ-SHELL-072) is opened with the Pop out of the Overview's agent table (PD-MONITOR-009) and probed through `useWindow('persona:coding-agent')`
  * (`docs/archive/defects/the-driver-cannot-address-persona-or-approval-windows.md`). Then the quit is sent while the root
  * still waits; the store is read once the process is gone. PD-ORCH-005 clause 3: an application quit leaves the run at
  * rest — the stop reason is the quit's (`application_shutdown`), and the session is not left `running`, which is what a
@@ -393,8 +398,9 @@ try {
   check('the approval dialog is built with the secure web preferences (R-091)', approvalLoose.length === 0, approvalLoose.length === 0 ? 'every key as asked' : `differs: ${approvalLoose.join(', ')}${approvalPrefs?.error ? ` (${approvalPrefs.error})` : ''}`);
   check('the approval dialog is listed, probed and answered in its own window (REQ-TOOLS-063)', dialogListed !== null && dialogListed.role === 'approval' && answered.some((h) => /write_file/.test(h)) && existsSync(notes), `listed ${JSON.stringify(dialogListed)}; answered ${JSON.stringify(answered)}; NOTES.md ${existsSync(notes) ? 'written' : 'absent'}`);
 
-  // 13b. The child's persona window, opened by the Mission view's own Pop out, addressed and probed as a window.
-  await r.chord('Ctrl+3');
+  // 13b. The child's persona window, opened by the agent table's own Pop out, addressed and probed as a window.
+  // PD-MONITOR-009 / PD-SHELL-015: the table stands on the Overview, Ctrl+1 (it was the Mission view's, Ctrl+3).
+  await r.chord('Ctrl+1');
   // The table lists the delegated agents; `alpha`, of the coding-agent persona, is the one.
   const popped = await popOutPersona(r, 'coding-agent').catch((cause) => ({ error: cause instanceof Error ? cause.message : String(cause) }));
   const personaListed = popped.window ?? null;
@@ -463,7 +469,8 @@ try {
   await until(() => f.eval(COMPOSER_FOCUSED), (v) => v === true, { timeoutMs: 10_000, what: 'the composer holding focus' });
   await f.type('delegate one child and hold the run', { enter: true });
   await f.waitFor('[data-testid="run-header"][data-state="running"]', { timeoutMs: 30_000 });
-  await f.chord('Ctrl+3');
+  // PD-MONITOR-009 / PD-SHELL-015: the agent table stands on the Overview, Ctrl+1 (it was the Mission view's, Ctrl+3).
+  await f.chord('Ctrl+1');
   const popped = await popOutPersona(f, 'coding-agent');
   check("13c: the child's Pop out, pressed on its settled row, landed and opened its persona window (REQ-SHELL-072)",
     popped.pressed.landed === true && popped.window?.role === 'persona',

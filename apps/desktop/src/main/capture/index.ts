@@ -30,7 +30,7 @@ export async function runCapture(host: CaptureHost): Promise<boolean> {
   onConsoleWarning(host.win.webContents, ({ message, sourceId, lineNumber }) => host.log(`capture: renderer console: ${message} (${sourceId}:${lineNumber})`));
 
   // The READ is behind the flag, not just the branch. `__ROTARIS_SEAMS__` is false in a packaged build, so this
-  // is a constant `undefined` there and rollup removes the whole pass — seven views, every Settings category, a
+  // is a constant `undefined` there and rollup removes the whole pass — every primary view, every Settings category, a
   // tab through every focusable control, the theme switch — and the variable's name with it. The first attempt
   // guarded only the `if`, which left `ROTARIS_THEME_PROOF_DIR` in the shipped bundle and failed the seam check.
   const proofDir = __ROTARIS_SEAMS__ ? process.env['ROTARIS_THEME_PROOF_DIR'] : undefined;

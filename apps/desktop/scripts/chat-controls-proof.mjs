@@ -31,6 +31,10 @@
  *                       the empty state shows (REQ-CHAT-084's atomic clear held across a restart; REQ-CHAT-073).
  *
  * Evidence under `.proof/chat-controls-proof/`: one `.log` and `.png` per launch, `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`workspace`), not by its digit, the
+ * form that does not move when the rail does (Mission is no view; Settings is the sixth). No chord this script
+ * presses moved.
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -268,7 +272,7 @@ const T3 = {
 const controls = scenario('controls');
 {
   const r = await launch('controls', controls, {
-    ROTARIS_SCRIPT: 'glob,wait:6000,answer', ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000',
+    ROTARIS_SCRIPT: 'glob,wait:6000,answer', ROTARIS_CAPTURE_VIEW: 'workspace', ROTARIS_CAPTURE_VIEW_MS: '1000',
     ROTARIS_CAPTURE_CHORDS: `Ctrl+K@${T3.palette}`,
     ROTARIS_CAPTURE_TYPE_AT: `compress@${T3.paletteType}`,
     ROTARIS_CAPTURE_KEYS: `Return@${T3.paletteEnter};;Return@${T3.slashEnter};;Escape@${T3.escape};;Return@${T3.greetEnter}`,
@@ -371,7 +375,7 @@ const controls = scenario('controls');
 // ═══ 4. restart — the same store, the session resumed: the snapshot is empty ═════════════════════════════════════════
 {
   const r = await launch('restart', controls, {
-    ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000', ROTARIS_CAPTURE_RESUME: 'latest',
+    ROTARIS_CAPTURE_VIEW: 'workspace', ROTARIS_CAPTURE_VIEW_MS: '1000', ROTARIS_CAPTURE_RESUME: 'latest',
     ROTARIS_CAPTURE_EVAL_AT: `${readRows}@5200;;${readRunState}@5250`,
     ROTARIS_CAPTURE_AFTER_MS: '6000',
   });

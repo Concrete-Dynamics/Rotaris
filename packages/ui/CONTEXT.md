@@ -1,6 +1,6 @@
 # Shell
 
-The one main window and everything drawn in it: the seven views, the conversation surface, and how
+The one main window and everything drawn in it: the six views, the conversation surface, and how
 the product tells a user what happened. This context renders other contexts' vocabularies and owns
 almost none of them — where a status reaches the screen, the **normalisation** is this context's and
 the underlying value is its own domain's.
@@ -9,7 +9,8 @@ Terms are derived from `docs/spec/12-desktop-shell-windows.md`,
 `docs/spec/03-conversation-composer-transcript.md` and
 `docs/spec/19-notifications-errors-recovery.md`.
 
-> Which views exist, what they are called, their order and their tabs come from `docs/spec/`.
+> Which views exist, what they are called, their order and their tabs come from `docs/spec/`, read with
+> the product directives that govern over it (`docs/product/directives.md`).
 > `docs/design/` is adopted for the design language and **not** for information architecture
 > (`docs/design/README.md` §2). No term here may be used to introduce a surface the specification
 > does not state.
@@ -19,9 +20,16 @@ Terms are derived from `docs/spec/12-desktop-shell-windows.md`,
 ### The window
 
 **Primary view**:
-One of exactly seven, in this fixed order: Overview, Workspace, Mission, Requirements, Git, Library,
-Settings. Exactly one is visible at a time. — `REQ-SHELL-023`
+One of exactly six, in this fixed order: Overview, Workspace, Requirements, Git, Library, Settings.
+Exactly one is visible at a time. — `REQ-SHELL-023` as `PD-SHELL-015` narrows it
 _Avoid_: page, screen, tab (a **tab** is inside a view), route
+
+**Mission**:
+Not a view. It was the third primary view until `PD-SHELL-015`, which retired its identifier `mission`
+for good. What it held stands on the Overview: the graph `REQ-MONITOR-213` calls the mission graph is the
+Overview's delegation graph card, with the run's pause and cancel under it, and the agent activity table
+is a card of the same view. — `PD-SHELL-015`, `PD-MONITOR-009`, `REQ-MONITOR-213`, `REQ-MONITOR-274`
+_Avoid_: Mission view, Mission table (for anything drawn now; say the Overview's graph card or agent table)
 
 **Navigation rail**:
 The left-hand strip the primary views are selected from. — `REQ-SHELL` navigation rail

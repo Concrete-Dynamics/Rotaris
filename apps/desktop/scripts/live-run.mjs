@@ -219,6 +219,10 @@
  * sandbox still goes away at the end unless `--keep` is given; the record of what happened in it no longer does.
  *
  * The run is unattended and its window is hidden; `--gui` shows it, for watching rather than using.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`overview`, `requirements`,
+ * `library`, `settings`), not by its digit. Requirements is the third view (Ctrl+3), the Library the fifth (Ctrl+5)
+ * and Settings the sixth (Ctrl+6; the seventh until then); Mission is no view.
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -1603,7 +1607,7 @@ console.log(`sandbox: ${sandbox}`);
 
 // ── 1. Sign in through the product's own dialog ──────────────────────────────────────────────────────────────
 const signIn = await launch('sign-in', {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_CLICKS: '[data-action="add-endpoint"]@2200',
   ROTARIS_CAPTURE_PROVIDER_FILL: `${endpoint.label}>>${appBaseUrl}>>${key}`,
   ROTARIS_CAPTURE_PROVIDER_EMPTY_OK: '1',
@@ -1739,7 +1743,7 @@ if (wanted.includes('ask')) {
     if (read) preserveRun('ask', read.session.session_id);
 
     /*
-     * N58's second half: PD-LIBRARY-002's retrospective pressed in the Library as a person presses it — Ctrl+6, the Proposals
+     * N58's second half: PD-LIBRARY-002's retrospective pressed in the Library as a person presses it — its chord (Ctrl+5 since PD-SHELL-015), the Proposals
      * tab, the gesture — and let finish (the indicator naming the retrospective, then gone, inside `retrospective_timeout`'s
      * 120 s default, which no control exposes). Its artifact must be the retrospective's, read over the sessions this workspace
      * holds, and the run host must have handed it the workspace root's instruction files and no other base's (revision 2,
@@ -1749,7 +1753,7 @@ if (wanted.includes('ask')) {
     if (read !== null) {
       const RETRO_WAIT_MS = 120_000 + 60_000;
       const retroLog = await launch('ask-retrospective', {
-        ROTARIS_CAPTURE_VIEW: '6',
+        ROTARIS_CAPTURE_VIEW: 'library',
         ROTARIS_CAPTURE_CLICKS: '[data-testid="library-tab"][data-tab="proposals"]@~10000;;[data-testid="library-retrospective"]:not([aria-disabled="true"])@~20000',
         ROTARIS_CAPTURE_WAIT: settledWait('retrospective'), ROTARIS_CAPTURE_WAIT_MS: String(RETRO_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
         ROTARIS_CAPTURE_PROBE: '[data-testid="notice"]',
@@ -1791,7 +1795,7 @@ if (wanted.includes('ask')) {
       let refusedLog = '';
       try {
         refusedLog = await launch('ask-retrospective-unauth', {
-          ROTARIS_CAPTURE_VIEW: '6',
+          ROTARIS_CAPTURE_VIEW: 'library',
           // L6 (fin46): the press is held behind the open's provider banner, so the refusal is the notice left standing.
           ROTARIS_CAPTURE_CLICKS: refusalClicks(),
           ROTARIS_CAPTURE_WAIT: refusalWait(), ROTARIS_CAPTURE_WAIT_MS: '60000', ROTARIS_CAPTURE_AFTER_MS: '2500',
@@ -2115,7 +2119,7 @@ if (wanted.includes('requirements')) {
   ];
   const log = await launch('requirements', {
     ROTARIS_CAPTURE_RESIZE: '1264x800@300',
-    ROTARIS_CAPTURE_VIEWS: '4@1200',
+    ROTARIS_CAPTURE_VIEWS: 'requirements@1200',
     ROTARIS_CAPTURE_CLICKS: [...clicks, `${OPEN_CONTROL}@~${deadline}`].join(';;'),
     ROTARIS_CAPTURE_DOUBLE_CLICKS: doubleClicks.join(';;'),
     ROTARIS_CAPTURE_EVAL_AT: watches.join(';;'),
@@ -2231,7 +2235,7 @@ if (wanted.includes('requirements')) {
 // ── 5. The shell over what the runs left ─────────────────────────────────────────────────────────────────────
 if (wanted.includes('shell')) {
   const PROBES = ['[data-testid="overview-sessions"] .ov-session', '[data-testid="overview-repo-branch"]', '[data-testid="overview-tool-chips"] .tag', '.app-shell'];
-  const log = await launch('shell', { ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ROTARIS_CAPTURE_AFTER_MS: '2500' });
+  const log = await launch('shell', { ROTARIS_CAPTURE_END_VIEW: 'overview', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ROTARIS_CAPTURE_AFTER_MS: '2500' });
   const probe = (selector) => {
     const line = new RegExp(`capture: probe ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])\\s*$`, 'm').exec(log);
     return line === null ? null : JSON.parse(line[1]);
@@ -3177,7 +3181,7 @@ if (wanted.includes('delegation')) {
     const editLog = await launch('delegation-edit', {
       ROTARIS_CAPTURE_RESUME: sid,
       ROTARIS_CAPTURE_RESIZE: '1360x980@500',
-      ROTARIS_CAPTURE_VIEWS: '6@4000',
+      ROTARIS_CAPTURE_VIEWS: 'library@4000',
       ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@4600`, `tr[data-artifact-id="${latest.id}"]@5400`, '[data-testid="library-artifacts-inspect"]@6200', '[data-testid="artifact-tab-markdown"]@7400', 'textarea[data-testid="artifact-editor"]@8000', '[data-testid="artifact-save"]@10200'].join(';;'),
       // Since PD-LIBRARY-003 revision 2 the editor holds only the text below the read-only block, so the click cannot land in
       // the frontmatter; the Ctrl+End chord, which moved the caret past it before, is now redundant and harmless.

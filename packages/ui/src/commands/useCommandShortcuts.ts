@@ -3,7 +3,7 @@ import { OVERLAY_ORDER, useShellState, type OverlayCloser, type OverlayKind } fr
 import { commandForEvent, detectPlatform, type CommandContext, type KeyboardPlatform } from './registry.js';
 
 /**
- * REQ-SHELL-048/049/055/165 — the ONE window-level keydown handler (Part W). It replaces the Ctrl+1..7 effect that
+ * REQ-SHELL-048/049/055/165 — the ONE window-level keydown handler (Part W). It replaces the Ctrl+1..7 effect (Ctrl+1..6 since PD-SHELL-015) that
  * lived in `AppShell` and the Ctrl+L effect that lived in the renderer root; no other window listener binds a chord of
  * REQ-SHELL-049. It does three things and nothing else:
  *

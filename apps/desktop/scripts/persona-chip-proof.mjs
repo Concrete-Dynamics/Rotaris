@@ -18,6 +18,10 @@
  * still prints `orchestrator` there has been shown to ignore the configuration rather than to agree with it.
  *
  * Evidence under `.proof/persona-chip-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`workspace`), not by its digit, the
+ * form that does not move when the rail does (Mission is no view; Settings is the sixth). No chord this script
+ * presses moved.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -207,7 +211,7 @@ const a = await launch('rest-and-run', workspaceA, local, preferences, {
   // script (`scripted-client.ts` picks the key from the system prompt). `ROTARIS_SCRIPT` would be ignored here and the
   // run would end on the default `answer` before the mid-run reading.
   ROTARIS_CHILD_SCRIPT: 'wait:30000,answer',
-  ROTARIS_CAPTURE_VIEWS: '2@1500',
+  ROTARIS_CAPTURE_VIEWS: 'workspace@1500',
   ROTARIS_CAPTURE_PROMPT: 'Exercise the composer chips.',
   ROTARIS_CAPTURE_PROMPT_MS: '9500',
   // `from~to` is a deadline, not an appointment: pause until `from`, then poll for the element until `to`.
@@ -259,7 +263,7 @@ results.workspaceA = { configured: 'architect', atRest, duringRun, agreedChips: 
  */
 const b = await launch('second-default', workspaceB, local, preferences, {
   ROTARIS_CHILD_SCRIPT: 'wait:12000,answer',
-  ROTARIS_CAPTURE_VIEWS: '2@1500',
+  ROTARIS_CAPTURE_VIEWS: 'workspace@1500',
   ROTARIS_CAPTURE_INSPECT_AT: [`${RUN_STATE}@3500~7000`, `${PERSONA}@3500~7000`].join(';;'),
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1200',
 });
@@ -281,7 +285,7 @@ results.workspaceB = { configured: 'coding-agent', atRest: bRest };
  */
 const before = readFileSync(join(workspaceA, '.rotaris', 'agents.yaml'), 'utf8');
 const w = await launch('write-limb', workspaceA, local, preferences, {
-  ROTARIS_CAPTURE_VIEWS: '2@1500',
+  ROTARIS_CAPTURE_VIEWS: 'workspace@1500',
   // The `SearchableSelect` is driven as a person drives it: the trigger is clicked, the wanted option clicked.
   ROTARIS_CAPTURE_SELECT: `${MODEL}>>scripted@4000~9000`,
   ROTARIS_CAPTURE_INSPECT_AT: `${RUN_STATE}@3500~7000`,

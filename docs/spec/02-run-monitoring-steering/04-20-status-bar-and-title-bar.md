@@ -105,3 +105,7 @@ Part 4 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
   > surface shows a `paused` agent as `paused`, the one state REQ-MONITOR-211's reconciliation leaves as it is.
   > Every settled agent is shown as stated.
   > Revision 6 (2026-10-06), clause 23: so is an agent a crash left before the crash is recorded, shown `paused`.
+  >
+  > **Narrowed by [`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009), 2026-11-11.** "Mission
+  > graph" among the surfaces above is the Overview's delegation graph card. Its case is that name alone and is disjoint
+  > from PD-ORCH-005's.

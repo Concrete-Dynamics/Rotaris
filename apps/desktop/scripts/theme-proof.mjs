@@ -14,6 +14,10 @@
  * surface 7 (`view-1`, every cell). Before the bound, a surface whose own text was all skipped or gone passed on the
  * shell's texts around it (`docs/archive/defects/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`);
  * `--counterfactual=offscreen` pushes the Workspace view's text off the screen and must exit non-zero.
+ *
+ * PD-SHELL-015 (2026-11-11): six primary views are captured, `view-1` to `view-6` by their place in the rail (Overview,
+ * Workspace, Requirements, Git, Library, Settings); Mission, `view-3` until then, is no view and `view-7` is no capture.
+ * PD-CONFIG-008: the Settings categories are read from the drawn items, so the four group headings change no index.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -28,7 +32,8 @@ const require = createRequire(import.meta.url);
 const { decodePng, textContrast, focusContrast } = require('./pixels.cjs');
 const THEMES = ['rotaris-dim', 'nocturne', 'high-contrast'];
 const SCALES = [1, 1.25, 1.5, 1.75, 2];
-const ROOTS = ['.overview', '.workspace', '.mission', '.req', '.git', '.library', '.settings'];
+/** The primary views' roots in the rail's order (PD-SHELL-015: six, Ctrl+1 to Ctrl+6). */
+const ROOTS = ['.overview', '.workspace', '.req', '.git', '.library', '.settings'];
 const arg = (name) => process.argv.find((value) => value.startsWith(`${name}=`))?.slice(name.length + 1);
 const selectedThemes = arg('--theme') ? [arg('--theme')] : THEMES;
 const selectedScales = arg('--scale') ? [Number(arg('--scale'))] : SCALES;
@@ -166,7 +171,7 @@ for (const theme of selectedThemes) {
         previous = digest;
         writeFileSync(join(runDir, `${name}.json`), `${JSON.stringify({ ...metadata, capture: { digest, stale } }, null, 2)}\n`);
       };
-      for (let view = 1; view <= 7; view += 1) {
+      for (let view = 1; view <= ROOTS.length; view += 1) {
         await d.chord(`Ctrl+${view}`);
         await d.waitFor(ROOTS[view - 1], { timeoutMs: 15_000 });
         await take(`view-${view}`);
@@ -211,10 +216,10 @@ for (const theme of selectedThemes) {
     }
 
     const captures = [];
-    for (let view = 1; view <= 7; view += 1) captures.push(`view-${view}`);
+    for (let view = 1; view <= ROOTS.length; view += 1) captures.push(`view-${view}`);
     for (let category = 1; existsSync(join(runDir, `settings-${String(category).padStart(2, '0')}.png`)); category += 1) captures.push(`settings-${String(category).padStart(2, '0')}`);
     const contrast = [];
-    let complete = captures.length >= 7;
+    let complete = captures.length >= ROOTS.length;
     let railFit = true;
     let iconScale = true;
     const skippedText = [];

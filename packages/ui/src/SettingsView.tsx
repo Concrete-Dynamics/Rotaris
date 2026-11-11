@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { isBusy, type PlaybookCatalogue, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
 import { HooksSettings, type HooksSettingsProps } from './HooksSettings.js';
 import { ModelsSettings, PersonasSettings, RuntimeSettings, SaveBar, type ConfigSettingsProps } from './settings/ConfigSettings.js';
@@ -10,11 +10,19 @@ import { SkillsSettings, type SkillsSettingsProps } from './settings/SkillsSetti
 import { ProjectInitSettings, TraceabilitySettings, type ProjectInitSettingsProps, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2, Part AS
 import { useShellState } from './shell-state.js';
 import { RUNTIME_CATEGORY_LABEL } from './settings/config-state.js';
-import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';
+import { Button as DesignButton, SectionLabel as DesignSectionLabel, Select as DesignSelect, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
+
+/**
+ * R-097 (docs/design/briefs/settings.md, §8): the category body gives way on one axis only. Its rows stand on a label
+ * column and its captions take a whole line each, so the body scrolls down and never sideways, at 1400x900 and at the
+ * minimum window alike; `pnpm ui-audit` reads the relation from the built view.
+ */
+const SETTINGS_BODY_LAYOUT: UiLayoutContract = { id: 'settings-body', relations: [{ kind: 'containment', target: 'shell-primary-view' }, { kind: 'viewport-scroll', axis: 'x', expected: false }] };
 
 /**
  * The Settings view: the thirteen categories in REQ-CONFIG-268's order with
- * REQ-CONFIG-269's identifiers, as a vertical navigation list (REQ-SHELL-153:
+ * REQ-CONFIG-269's identifiers, under PD-CONFIG-008's four headings, as a
+ * vertical navigation list (REQ-SHELL-153:
  * the selected entry marked by a rule down its left edge and described so in
  * words), and the Project category hosting REQ-SESSION-201's two actions —
  * back up the session store, restore one. Structure from docs/spec; language
@@ -37,22 +45,49 @@ import { Button as DesignButton, Select as DesignSelect } from './design-system/
  * files the loader might reject, which that requirement forbids in as many
  * words.
  */
-export const SETTINGS_CATEGORIES = [
-  { id: 'models', label: 'Models' },
-  { id: 'personas', label: 'Personas' },
-  { id: 'runtime', label: RUNTIME_CATEGORY_LABEL },
-  { id: 'interface', label: 'Interface' },
-  { id: 'display', label: 'Display' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'instructions', label: 'Instructions' },
-  { id: 'hooks', label: 'Hooks' },
-  { id: 'mcp', label: 'MCP Servers' },
-  { id: 'plugins', label: 'Plugins' },
-  { id: 'tools', label: 'Tools' },
-  { id: 'project', label: 'Project' },
-  { id: 'about', label: 'About' },
+/**
+ * PD-CONFIG-008 (extending REQ-CONFIG-268): the thirteen categories stand under four headings, in REQ-CONFIG-268's own
+ * order, which no heading moves. Every category keeps that requirement's label and REQ-CONFIG-269's identifier. A group's
+ * heading is text: no control, no focus, and its group is named by it for assistive technology.
+ */
+export const SETTINGS_CATEGORY_GROUPS = [
+  { id: 'agents', label: 'Agents', categories: [
+    { id: 'models', label: 'Models' },
+    { id: 'personas', label: 'Personas' },
+    { id: 'runtime', label: RUNTIME_CATEGORY_LABEL },
+  ] },
+  { id: 'application', label: 'Application', categories: [
+    { id: 'interface', label: 'Interface' },
+    { id: 'display', label: 'Display' },
+  ] },
+  { id: 'extensions', label: 'Extensions', categories: [
+    { id: 'skills', label: 'Skills' },
+    { id: 'instructions', label: 'Instructions' },
+    { id: 'hooks', label: 'Hooks' },
+    { id: 'mcp', label: 'MCP Servers' },
+    { id: 'plugins', label: 'Plugins' },
+    { id: 'tools', label: 'Tools' },
+  ] },
+  { id: 'project', label: 'Project and about', categories: [
+    { id: 'project', label: 'Project' },
+    { id: 'about', label: 'About' },
+  ] },
 ] as const;
-export type SettingsCategoryId = (typeof SETTINGS_CATEGORIES)[number]['id'];
+export type SettingsCategoryId = (typeof SETTINGS_CATEGORY_GROUPS)[number]['categories'][number]['id'];
+/** The thirteen categories in REQ-CONFIG-268's order, the groups flattened. */
+export const SETTINGS_CATEGORIES: readonly { readonly id: SettingsCategoryId; readonly label: string }[] = SETTINGS_CATEGORY_GROUPS.flatMap((group) => [...group.categories]);
+
+/**
+ * REQ-SHELL-153 on the category list: Arrow Up, Arrow Down, Home and End move focus and leave the selection alone, stopping
+ * at either end. The entry focus moves to, by its place among the categories — a heading is no entry, so the move passes
+ * from the last category of one group to the first of the next as though none stood between them (PD-CONFIG-008). `null`:
+ * the key is not one of the four, or focus is already at that end.
+ */
+export function categoryFocusMove(key: string, current: number, count: number): number | null {
+  const target = key === 'ArrowDown' ? current + 1 : key === 'ArrowUp' ? current - 1 : key === 'Home' ? 0 : key === 'End' ? count - 1 : null;
+  if (target === null || target < 0 || target >= count || target === current) return null;
+  return target;
+}
 
 export interface SettingsViewProps {
   readonly session: SessionRecord | null;
@@ -132,30 +167,46 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
     if (result && !result.ok) setMessage(result.reason);
   };
 
+  // REQ-SHELL-153: the four keys move focus among the entries the list holds; selecting stays Space or Enter, the button's own.
+  const moveCategoryFocus = (event: KeyboardEvent<HTMLUListElement>) => {
+    const entries = [...event.currentTarget.querySelectorAll<HTMLElement>('.nav-list__item')];
+    const target = categoryFocusMove(event.key, entries.indexOf(event.target as HTMLElement), entries.length);
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) event.preventDefault();
+    if (target !== null) entries[target]?.focus();
+  };
+
   return (
     <div className="settings">
       <nav className="settings__categories" aria-label="Settings categories">
-        <ul className="nav-list" role="listbox" aria-label="Categories">
-          {SETTINGS_CATEGORIES.map((c) => {
-            const selected = c.id === category;
-            return (
-              <li key={c.id}>
-                <DesignButton
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  aria-description={selected ? 'Selected, marked with a rule down its left edge.' : 'Not selected.'}
-                  className={`nav-list__item${selected ? ' is-selected' : ''}`}
-                  onClick={() => setCategory(c.id)}
-                >
-                  {c.label}
-                </DesignButton>
-              </li>
-            );
-          })}
+        {/* PD-CONFIG-008: a listbox of four groups, each named by its heading; the heading is not an option and takes no focus. */}
+        <ul className="nav-list nav-list--grouped" role="listbox" aria-label="Categories" onKeyDown={moveCategoryFocus}>
+          {SETTINGS_CATEGORY_GROUPS.map((group) => (
+            <li key={group.id} className="nav-list__group" role="group" aria-labelledby={`settings-group-${group.id}`} data-testid={`settings-group-${group.id}`}>
+              <DesignSectionLabel id={`settings-group-${group.id}`} className="nav-list__heading">{group.label}</DesignSectionLabel>
+              <ul className="nav-list" role="presentation">
+                {group.categories.map((c) => {
+                  const selected = c.id === category;
+                  return (
+                    <li key={c.id} role="presentation">
+                      <DesignButton
+                        type="button"
+                        role="option"
+                        aria-selected={selected}
+                        aria-description={selected ? 'Selected, marked with a rule down its left edge.' : 'Not selected.'}
+                        className={`nav-list__item${selected ? ' is-selected' : ''}`}
+                        onClick={() => setCategory(c.id)}
+                      >
+                        {c.label}
+                      </DesignButton>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          ))}
         </ul>
       </nav>
-      <section className="settings__body" aria-label={SETTINGS_CATEGORIES.find((c) => c.id === category)!.label}>
+      <section className="settings__body" aria-label={SETTINGS_CATEGORIES.find((c) => c.id === category)!.label} {...layoutContractAttributes(SETTINGS_BODY_LAYOUT)}>
         {/* REQ-CONFIG-270: one bar, above every category's content, acting on the whole set of pending changes. */}
         {config && <SaveBar dirty={config.dirty} serviceAvailable={config.serviceAvailable} onSave={config.onSave} onDiscard={config.onDiscard} />}
         {category === 'interface' ? (

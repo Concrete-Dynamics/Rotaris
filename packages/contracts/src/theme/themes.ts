@@ -52,10 +52,14 @@ const radius = { '--rt-radius-sm': '5px', '--rt-radius-md': '8px', '--rt-radius-
 // is what stops a view from reaching for a third: the 2026-09-12 review measured TEN distinct
 // interactive heights, with one `Select` drawn at three of them.
 const size = { '--rt-rail-width': '68px', '--rt-nav-item-width': '54px', '--rt-status-dot-size': '6px', '--rt-focus-ring-width': '2px', '--rt-hairline-width': '1px', '--rt-notice-rule-width': '3px', '--rt-title-bar-height': '44px', '--rt-status-bar-height': '26px', '--rt-icon-size': '17px', '--rt-rail-label-size': '9px', '--rt-control-height': '32px', '--rt-control-height-compact': '24px', '--rt-prose-measure': '340px', '--rt-label-column': '120px', '--rt-field-min': '140px', '--rt-tick-width': '2px' } as const satisfies ThemeTokenGroup;
-// `--rt-label-column` and `--rt-field-min` give a settings form ONE axis: a label column wide enough
-// for the longest label in the product's forms, and a field that never shrinks below a readable width
-// (UIR-010 — two selects in one card whose left edges differed by exactly the length of their labels,
-// and one that stretched to 729.2 px to hold the word "single").
+// `--rt-label-column` and `--rt-field-min` give a settings form ONE axis: a label column, and a field
+// that never shrinks below a readable width (UIR-010 — two selects in one card whose left edges differed
+// by exactly the length of their labels, and one that stretched to 729.2 px to hold the word "single").
+// The column is the adopted width, not the longest label's: until 2026-11-11 this comment said it was
+// "wide enough for the longest label in the product's forms", which the Settings labels falsified (224 px
+// against 120). OQ-546, ruled 2026-11-11 under R-098: the token keeps its value and a form takes the
+// multiple its labels need — Settings takes two; the Mission view's card, the token's first user, went
+// with PD-MONITOR-009.
 // `--rt-prose-measure` is the ONE width the adopted sheet states for a block of secondary text —
 // `system/components.css`'s `.empty-state-hint { max-width: 340px }`. Named so that prose which is
 // not an empty-state hint can be bounded by the material's own figure instead of a fresh one: the

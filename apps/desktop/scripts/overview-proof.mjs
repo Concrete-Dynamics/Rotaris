@@ -19,6 +19,10 @@
  *                  two steps wait for their conditions (the resume's open, the sessions card's first row), bounded.
  *
  * Evidence under `.proof/overview-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`overview`), not by its digit, the
+ * form that does not move when the rail does (Mission is no view; Settings is the sixth). No chord this script
+ * presses moved.
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -157,7 +161,7 @@ const run = await launch('run', workspace, local, preferences, {
   ROTARIS_CHILD_SCRIPT: 'glob,answer',
   ROTARIS_CAPTURE_PROMPT: 'Exercise the overview.',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS + 60_000), ROTARIS_CAPTURE_AFTER_MS: '1500',
-  ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
+  ROTARIS_CAPTURE_END_VIEW: 'overview', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
   // the divider dragged in by keyboard is not scriptable; the split is written through the preference command instead
 }, RUN_WAIT_MS + 120_000);
 const db = new Database(oneDatabase(local), { readonly: true });
@@ -218,7 +222,7 @@ const RESUMED = `document.querySelector('.app-shell')?.dataset.view === 'workspa
 const again = await launch('relaunch', workspace, local, preferences, {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_WAIT: `js:${RESUMED}`, ROTARIS_CAPTURE_WAIT_MS: '20000', ROTARIS_CAPTURE_AFTER_MS: '500',
-  ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_UNTIL: '[data-testid="overview-sessions"] .ov-session@~20000',
+  ROTARIS_CAPTURE_END_VIEW: 'overview', ROTARIS_CAPTURE_END_VIEW_UNTIL: '[data-testid="overview-sessions"] .ov-session@~20000',
 });
 if (!/capture: wait for js:.* satisfied after \d+ ms/.test(again.log)) throw new Error(`the relaunch never saw the stored session opened from the browser:\n${again.log.split('\n').filter((l) => /capture: (wait|no |opened)/.test(l)).join('\n')}`);
 const sessionRowWait = /capture: \[data-testid="overview-sessions"\] \.ov-session (matched with (-?\d+) ms to spare|never matched within \d+ ms)/.exec(again.log);

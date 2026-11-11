@@ -20,6 +20,9 @@ import { ensureBundle, withSetupFailure } from './lib/code-intelligence-bundle.m
  * through `ROTARIS_INIT_TEST_TASK`, which registers an ordinary task through the ordinary registry —
  * REQ-WORKSPACE-080 admits exactly that, and REQ-WORKSPACE-104 is why the shipped set cannot reach
  * them (with the default task set a fresh workspace prompts for nothing and gates nothing).
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`workspace`, `settings`), not by
+ * its digit. Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view.
  */
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -137,7 +140,7 @@ const results = {};
  * --------------------------------------------------------------------------------------------- */
 const s1 = scenario('background', WORKSPACE);
 const log1 = await launch('background', s1, {
-  ROTARIS_CAPTURE_VIEW: '2',
+  ROTARIS_CAPTURE_VIEW: 'workspace',
   ROTARIS_CAPTURE_EVAL_AT: [
     'JSON.stringify({probe:"gate",dialog:!!document.querySelector(\'[data-testid="project-setup-dialog"]\'),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null})>>[data-testid="composer-send"]@~10000',
   ].join(';;'),
@@ -177,7 +180,7 @@ results.nothingApplicable = { workspaceFile: ws2 };
 const s3 = scenario('consent', WORKSPACE);
 const log3 = await launch('consent', s3, {
   ROTARIS_INIT_TEST_TASK: 'consent',
-  ROTARIS_CAPTURE_VIEW: '2',
+  ROTARIS_CAPTURE_VIEW: 'workspace',
   ROTARIS_CAPTURE_EVAL_AT: [
     // `visible` is not decoration: the dialog was in the DOM and off screen, and every DOM assertion
     // beside it passed on that. A box that exists and cannot be seen is UIR-014's class.
@@ -221,7 +224,7 @@ if (!/initialization: running code-intelligence-setup[^\n]*\(background\)/.test(
 if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws3)) throw new Error(withSetupFailure(`the background task beside the consent prompt was not recorded completed (REQ-WORKSPACE-088):\n${ws3}`, log3));
 const log3b = await launch('consent-reopen', s3, {
   ROTARIS_INIT_TEST_TASK: 'consent',
-  ROTARIS_CAPTURE_VIEW: '2',
+  ROTARIS_CAPTURE_VIEW: 'workspace',
   ROTARIS_CAPTURE_EVAL_AT: 'JSON.stringify({probe:"reopen",dialog:!!document.querySelector(\'[data-testid="project-setup-dialog"]\'),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null,section:document.querySelector(\'[data-testid="project-section-hint"]\')?.textContent??null})>>[data-testid="project-section"]@~12000',
   ROTARIS_CAPTURE_AFTER_MS: '15000',
 }, 120_000);
@@ -262,7 +265,7 @@ results.failure = { workspaceFile: ws4, banner: log4.split('\n')[bannerLine], ac
  * --------------------------------------------------------------------------------------------- */
 const s5 = scenario('settings-card', WORKSPACE, { code: false });
 const log5 = await launch('settings-card', s5, {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Project',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Project',
   ROTARIS_CAPTURE_EVAL_AT: 'JSON.stringify({probe:"card",state:document.querySelector(\'[data-project-init]\')?.getAttribute(\'data-init-state\')??null,headline:document.querySelector(\'[data-init-headline]\')?.textContent??null,lines:[...document.querySelectorAll(\'[data-init-detail]\')].map(n=>n.textContent),reason:document.querySelector(\'[data-init-reason]\')?.textContent??null})>>[data-init-state="completed"]@~40000',
   ROTARIS_CAPTURE_AFTER_MS: '45000',
 }, 180_000);

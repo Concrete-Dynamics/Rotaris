@@ -273,3 +273,5 @@ typing changes nothing, and the stored value survives all of them. Revisions 1 t
 > [`live-552d346-default-autopsy.md`](../../architecture/live-runs/live-552d346-default-autopsy.md),
 > [`live-0bc3eee-default-autopsy.md`](../../architecture/live-runs/live-0bc3eee-default-autopsy.md).
 > The rows are in [`../architecture/first-executions.md`](../../architecture/first-executions.md).
+
+*Cross-reference, 2026-11-11 (no clause above changes).* The "Mission-table row" above is a row of the Overview's agent table card since [`PD-MONITOR-009`](pd-monitor-009.md#pd-monitor-009) clause 7; Mission is not a primary view ([`PD-SHELL-015`](pd-shell-015.md#pd-shell-015)).

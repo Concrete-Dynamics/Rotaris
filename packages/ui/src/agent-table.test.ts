@@ -16,16 +16,20 @@ const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   grantedTools: ['read_file'], grantRecorded: true, calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, timedOut: null, ...over,
 });
 const table = (agents: AgentRecord[]) => renderToStaticMarkup(createElement(AgentTable, { agents, selected: null, nowIso: '2026-09-05T10:00:05.000Z', onSelect: () => undefined, onOpen: () => undefined, onPopOut: () => undefined }));
-const cells = (html: string, cls: string) => [...html.matchAll(new RegExp(`<td class="agent-table__${cls}[^"]*"[^>]*>([^<]*)</td>`, 'g'))].map((m) => m[1]);
-const headers = (html: string) => [...html.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]);
+// PD-MONITOR-009 clause 3: every row, cell and header carries its role in the markup, since a narrow card draws the rows as a grid.
+const cells = (html: string, cls: string) => [...html.matchAll(new RegExp(`<td role="cell" class="agent-table__${cls}[^"]*"[^>]*>([^<]*)</td>`, 'g'))].map((m) => m[1]);
+const headers = (html: string) => [...html.matchAll(/<th role="columnheader">([^<]*)<\/th>/g)].map((m) => m[1]);
 
-describe('REQ-MONITOR-281: the Mission table conveys each agent\'s compression count, labelled with its unit', () => {
+describe('REQ-MONITOR-281: the agent activity table conveys each agent\'s compression count, labelled with its unit', () => {
   it('draws the record\'s count per agent, in its own column whose header names the unit, never "not recorded"', () => {
     const html = table([agent({ compressions: 2 }), agent({ id: 'bg_00000002', name: 'other', parentId: 'root:1', compressions: 0 }), agent({ id: 'bg_00000003', name: 'once', parentId: 'root:1', compressions: 1 })]);
     expect(cells(html, 'compressions')).toEqual(['2', '0', '1']);
     // Separately identifiable from the tool-call count (REQ-MONITOR-281): each figure in its own column, each column named.
     expect(cells(html, 'calls')).toEqual(['3', '3', '3']);
     expect(headers(html)).toEqual(expect.arrayContaining(['Tool calls', 'Compressions']));
+    // …and where a narrow card draws a row on three lines, out of sight of the header row, each figure still carries its column's words.
+    expect(html).toContain('class="agent-table__compressions mono" data-label="compressions"');
+    expect(html).toContain('class="agent-table__calls mono" data-label="tool calls"');
     expect(html).not.toContain('not recorded');
     expect(html).not.toContain('carries no compression count');
   });
@@ -36,6 +40,6 @@ describe('REQ-MONITOR-274: the persona cell carries the whole name as its title'
   // so the full name stays readable on hover.
   it('titles the persona cell with the persona', () => {
     const html = table([agent({ persona: 'a-very-long-configured-persona-name' })]);
-    expect(html).toContain('<td class="agent-table__persona" title="a-very-long-configured-persona-name">a-very-long-configured-persona-name</td>');
+    expect(html).toContain('<td role="cell" class="agent-table__persona" title="a-very-long-configured-persona-name">a-very-long-configured-persona-name</td>');
   });
 });

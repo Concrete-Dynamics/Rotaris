@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock, millis } from '@rotaris/kernel';
-import { CHANNEL, CONTRACT_SCHEMA_VERSION, PRIMARY_VIEWS, STARTUP_VIEW } from '@rotaris/contracts';
+import { CHANNEL, CONTRACT_SCHEMA_VERSION, isViewId, PRIMARY_VIEWS, RETIRED_VIEW_IDS, STARTUP_VIEW, viewPosition } from '@rotaris/contracts';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from './index.js';
 
-describe('shell — the seven views (REQ-SHELL-023, -026, -027)', () => {
-  it('are exactly seven, in the fixed order, with the fixed labels, and Overview is the startup view', () => {
-    expect(PRIMARY_VIEWS.map((v) => v.label)).toEqual(['Overview', 'Workspace', 'Mission', 'Requirements', 'Git', 'Library', 'Settings']);
-    expect(PRIMARY_VIEWS[3].id).toBe('requirements');
+describe('shell — the six views (PD-SHELL-015 over REQ-SHELL-023 and -027; REQ-SHELL-026)', () => {
+  it('are exactly six, in the order they had, with their labels, and Overview is the startup view', () => {
+    expect(PRIMARY_VIEWS.map((v) => v.label)).toEqual(['Overview', 'Workspace', 'Requirements', 'Git', 'Library', 'Settings']);
+    expect(PRIMARY_VIEWS[2].id).toBe('requirements');
     expect(STARTUP_VIEW).toBe('overview');
+  });
+
+  it('PD-SHELL-015 clause 2: Mission is no primary view, and its identifier is retired, never reassigned', () => {
+    expect(isViewId('mission')).toBe(false);
+    expect(RETIRED_VIEW_IDS).toEqual(['mission']);
+    for (const retired of RETIRED_VIEW_IDS) expect(PRIMARY_VIEWS.some((v) => (v.id as string) === retired)).toBe(false);
+    expect(PRIMARY_VIEWS.map((v) => viewPosition(v.id))).toEqual([1, 2, 3, 4, 5, 6]);
   });
 });
 

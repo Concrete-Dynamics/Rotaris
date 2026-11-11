@@ -84,6 +84,7 @@ vocabulary, the first uses it without holding a copy.
 ## Where the structure comes from
 
 Which views exist, what they are called and what is on them come from `docs/spec/`
-(`REQ-SHELL-023` fixes the seven primary views). `docs/design/` is adopted for the design language
-and **not** for information architecture — see `docs/design/README.md` §2. No glossary here may be
-used to introduce a screen, a tab or a field the specification does not state.
+(`REQ-SHELL-023`, as `PD-SHELL-015` narrows it, fixes the six primary views). `docs/design/` is
+adopted for the design language and **not** for information architecture — see
+`docs/design/README.md` §2. No glossary here may be used to introduce a screen, a tab or a field the
+specification does not state.

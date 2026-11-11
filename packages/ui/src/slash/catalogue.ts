@@ -203,7 +203,7 @@ export function builtInCommands(options: CatalogueOptions): readonly SlashComman
  * outside `[a-z0-9:_.-]` collapsed to one `-` (`slashName`, the registry's own normal form), the description the label
  * with ` (<shortcut>)` appended where a shortcut exists (`slashDescription`). A mirror whose name REQ-CHAT-029..031 or
  * REQ-CHAT-159 already defines does NOT displace the built-in (the built-in's description, behaviour and gating are what
- * the user gets); two palette rows with one label ("Open Settings" under Ctrl+7 and under Ctrl+,) yield one name, and
+ * the user gets); two palette rows with one label ("Open Settings" under Ctrl+6, Ctrl+7 until PD-SHELL-015, and under Ctrl+,) yield one name, and
  * REQ-CHAT-022's replacement rule keeps the later one — its description says which chord it carries.
  */
 export function mirrorPalette(registry: SlashRegistry, options: CatalogueOptions): void {

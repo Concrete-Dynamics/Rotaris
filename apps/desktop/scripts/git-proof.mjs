@@ -50,6 +50,9 @@
  *                  is created (REQ-GIT-073, REQ-CONFIG-068, REQ-GIT-005; `results.configuredSubpath`).
  *
  * Evidence under `.proof/git-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`git`), not by its digit. Git is the
+ * fourth view (Ctrl+4); Mission is no view.
  */
 // @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -122,7 +125,7 @@ const STRIP_BRANCH_WORKTREE_TITLE = '[data-testid="strip-branch"][title^="Branch
 // The sentence the worktree branch carried until the acceptance repair (F8), for tooltip and description alike.
 const STRIP_BRANCH_OLD_WORKTREE_SENTENCE = '[data-testid="strip-branch"][title^="Branch this session\'s worktree is on"]';
 const PROBES = [
-  '[data-testid="git-branch"]', '[data-testid="git-sync"]', '[data-testid="git-worktrees"] tr.git__row', '[data-testid="git-tag-base"]', '[data-testid="git-tag-active"]',
+  '.git__title', '[data-testid="git-branch"]', '[data-testid="git-sync"]', '[data-testid="git-worktrees"] tr.git__row', '[data-testid="git-tag-base"]', '[data-testid="git-tag-active"]',
   '[data-testid="git-worktrees-empty"]', '[data-testid="git-history"] tr.git__commit', '[data-testid="git-history-empty"]', '[data-testid="git-checkpoints-empty"]', '[data-testid="git-checkpoint-row"]',
   '[data-testid="git-checkpoint-session"]', '[data-testid="git-divider"]', '[data-testid="acknowledgement-title"]', '[data-testid="strip-branch"]', '.notice__headline', '.app-shell',
   '[data-testid="git-new-worktree"]', '[data-testid="git-merge"]', '[data-testid="worktree-dialog"]', '[data-testid="start-session-dialog"]', '[data-testid="git-confirm-force"]', '[data-testid="git-failure"]',
@@ -205,14 +208,16 @@ const results = {};
 
 // 1. Painted, with the divider dragged in by keyboard: click it, then Left three times (16 px each: 480 → 528).
 const painted = await launch('painted', workspace, local, preferences, {
-  ROTARIS_CAPTURE_VIEW: '5',
+  ROTARIS_CAPTURE_VIEW: 'git',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-divider"]@3200',
   ROTARIS_CAPTURE_KEYS: 'Left@3600;;Left@3800;;Left@4000',
-  ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '4600',
+  ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '4600',
 });
 {
   const p = painted.probes;
   if (first(p, '.app-shell')?.data?.['data-view'] !== 'git') throw new Error(`the capture was not on the Git view (${first(p, '.app-shell')?.data?.['data-view'] ?? 'none'})`);
+  // PD-GIT-002 (2026-11-11, narrowing REQ-GIT-075): the view is titled "Git", its navigation entry's label, not "Git workspace".
+  if (text(p, '.git__title')[0] !== 'Git') throw new Error(`the Git view's title reads "${text(p, '.git__title')[0]}", not "Git" (PD-GIT-002)`);
   if (text(p, '[data-testid="git-branch"]')[0] !== 'main') throw new Error(`the header branch reads "${text(p, '[data-testid="git-branch"]')[0]}"`);
   if (text(p, '[data-testid="git-sync"]')[0] !== 'ahead 1  behind 0') throw new Error(`the sync label reads "${text(p, '[data-testid="git-sync"]')[0]}"`);
   const r = rows(p);
@@ -247,10 +252,10 @@ const painted = await launch('painted', workspace, local, preferences, {
 // 2. Create a worktree through the dialog: the branch typed into the focused Branch field, the directory derived, Create.
 const derived = join(root, 'feature-proof');
 const created = await launch('create', workspace, local, preferences, {
-  ROTARIS_CAPTURE_VIEW: '5',
+  ROTARIS_CAPTURE_VIEW: 'git',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="git-new-worktree"]@2800;;[data-testid="worktree-create"]@4600',
   ROTARIS_CAPTURE_TYPE: 'feature/proof>>no-enter@3500',
-  ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '7500',
+  ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '7500',
 });
 {
   const p = created.probes;
@@ -271,7 +276,7 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes.>>composer@4400',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
-  ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
+  ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
   // The bound row's cells, measured once the Git view paints it at the opening size (1440x900).
   ROTARIS_CAPTURE_EVAL_AT: `${WORKTREE_CELLS}>>${BOUND_ROW}@~170000`,
 }, 180_000);
@@ -335,7 +340,7 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   // (a PNG kept of it), and the window put back before the end probes read the strip at the opening size.
   const minimumPng = join(output, 'worktree-ahead-minimum.png');
   const ahead = await launch('worktree-ahead', workspace, local, preferences, {
-    ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '7000', ROTARIS_CAPTURE_AFTER_MS: '3000',
+    ROTARIS_CAPTURE_RESUME: sid, ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '7000', ROTARIS_CAPTURE_AFTER_MS: '3000',
     ROTARIS_CAPTURE_EVAL_AT: `${WORKTREE_CELLS}>>${BOUND_ROW}@~6000;;${WORKTREE_CELLS}@7800`,
     ROTARIS_CAPTURE_RESIZE: '1000x680@6500;;1440x900@8800',
     ROTARIS_CAPTURE_SHOT: `${minimumPng}@8200`,
@@ -387,7 +392,7 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   setStatus('paused_message_limit');
   let presented;
   try {
-    presented = await launch('presented', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' }, 120_000, [stateCell]);
+    presented = await launch('presented', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' }, 120_000, [stateCell]);
   } finally {
     setStatus('completed');
   }
@@ -400,9 +405,9 @@ const isolated = await launch('isolated', workspace, local, preferences, {
 // 4. Delete the manual worktree through the two-step confirmation: a file dropped in first so Git refuses without --force.
 writeFileSync(join(derived, 'DROPPED.txt'), 'uncommitted work\n');
 const deleted = await launch('delete', workspace, local, preferences, {
-  ROTARIS_CAPTURE_VIEW: '5',
+  ROTARIS_CAPTURE_VIEW: 'git',
   ROTARIS_CAPTURE_CLICKS: 'button[aria-label="Delete worktree feature/proof"]@2800;;[data-testid="git-confirm-delete"] .btn-danger@3600;;[data-testid="git-confirm-force"] .btn-danger@5200',
-  ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '7500',
+  ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '7500',
 });
 {
   const p = deleted.probes;
@@ -417,7 +422,7 @@ const deleted = await launch('delete', workspace, local, preferences, {
 }
 
 // 5. Relaunch: the split dragged in (1) is restored from panels/git/state.
-const relaunch = await launch('relaunch', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
+const relaunch = await launch('relaunch', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
 {
   const divider = first(relaunch.probes, '[data-testid="git-divider"]');
   if (divider?.data?.['aria-valuenow'] !== '528') throw new Error(`the stored split was not restored: aria-valuenow=${divider?.data?.['aria-valuenow'] ?? 'absent'}`);
@@ -435,7 +440,7 @@ const relaunch = await launch('relaunch', workspace, local, preferences, { ROTAR
   const gitState = before['panels/git/state'];
   const old = Object.fromEntries(Object.entries(before).filter(([key]) => !key.startsWith('panels/')));
   writeFileSync(file, `${JSON.stringify({ ...old, 'panels/overview': { version: 2, panes: 2, sizes: [111, 222] }, 'panels/git': { version: 1, panes: 2, sizes: gitState } }, null, 2)}\n`);
-  const carried = await launch('carried-layout', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
+  const carried = await launch('carried-layout', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
   const divider = first(carried.probes, '[data-testid="git-divider"]');
   if (divider?.data?.['aria-valuenow'] !== '528') throw new Error(`the version-1 git layout was not carried over beside an overview layout at version 2: aria-valuenow=${divider?.data?.['aria-valuenow'] ?? 'absent'}`);
   const after = JSON.parse(readFileSync(file, 'utf8'));
@@ -447,7 +452,7 @@ const relaunch = await launch('relaunch', workspace, local, preferences, { ROTAR
 
 // 6. PATH without Git: the header's empty version, the notice raised in main, no dialog.
 const noGitPath = process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent';
-const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500', PATH: noGitPath, Path: noGitPath });
+const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500', PATH: noGitPath, Path: noGitPath });
 {
   const p = noGit.probes;
   if (text(p, '[data-testid="git-branch"]')[0] !== 'not a git repository') throw new Error(`with no git the header reads "${text(p, '[data-testid="git-branch"]')[0]}"`);
@@ -473,7 +478,7 @@ const plainRoot = mkdtempSync(join(tmpdir(), 'rotaris-git-proof-plain-'));
 const plain = join(plainRoot, 'a-plain-folder-deep-enough-that-the-status-strip-must-shorten-its-path-beside-the-branch-item', '349f6b0e-6880-59f4-942d-818d53f7b76a', 'plain');
 mkdirSync(join(plain, '.rotaris'), { recursive: true });
 writeFileSync(join(plain, '.rotaris', 'agents.yaml'), readFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'utf8'));
-const notRepo = await launch('not-a-repository', plain, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
+const notRepo = await launch('not-a-repository', plain, local, preferences, { ROTARIS_CAPTURE_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' });
 {
   const p = notRepo.probes;
   if (text(p, '[data-testid="git-branch"]')[0] !== 'not a git repository') throw new Error(`for a plain folder the header reads "${text(p, '[data-testid="git-branch"]')[0]}"`);
@@ -498,7 +503,7 @@ const unborn = join(unbornRoot, 'unborn');
 mkdirSync(join(unborn, '.rotaris'), { recursive: true });
 writeFileSync(join(unborn, '.rotaris', 'agents.yaml'), readFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'utf8'));
 git(unborn, 'init', '-q', '-b', 'main');
-const unbornRun = await launch('unborn-branch', unborn, local, preferences, { ROTARIS_CAPTURE_VIEW: '5', ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' }, 120_000, [STRIP_BRANCH_EMPTY, STRIP_BRANCH_TITLED, STRIP_BRANCH_DESCRIBED]);
+const unbornRun = await launch('unborn-branch', unborn, local, preferences, { ROTARIS_CAPTURE_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '3500' }, 120_000, [STRIP_BRANCH_EMPTY, STRIP_BRANCH_TITLED, STRIP_BRANCH_DESCRIBED]);
 {
   const p = unbornRun.probes;
   if (!/git view: \d+ reads in \d+ ms/.test(unbornRun.log)) throw new Error('the unborn repository was never read');

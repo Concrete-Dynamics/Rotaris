@@ -507,7 +507,7 @@ export const PROOFS = [
   {
     id: 'mission-proof',
     area: 'Surfaces',
-    summary: 'the Mission view, the per-agent inspector, the persona windows, and the tags and clocks they draw',
+    summary: 'the Overview\'s delegation graph and agent table (the Mission view\'s until PD-SHELL-015), the per-agent inspector, the persona windows, and the tags and clocks they draw',
     neighbours: ['part-h-proof', 'continuation-proof', 'resilience-proof', 'compression-proof', 'plan-gate-proof', 'todo-proof', 'delegation-proof', 'update-depth-proof', 'palette-proof', 'driver-proof'],
     requires: [],
     platforms: ALL_HOSTS,
@@ -648,7 +648,7 @@ export const PROOFS = [
     requires: [],
     platforms: ALL_HOSTS,
     platformNotes: [],
-    flags: ['--sizes=<w×h,…>', '--views=<n,…>', '--theme=<name>', '--output=<dir>', '--discard-critique', '--no-overlays', '--skip-build'],
+    flags: ['--sizes=<w×h,…>', '--views=<n|id,…>', '--theme=<name>', '--output=<dir>', '--discard-critique', '--no-overlays', '--skip-build'],
   },
   {
     id: 'ui-review',

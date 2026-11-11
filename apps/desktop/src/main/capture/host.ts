@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron';
 import type { Clocks } from '@rotaris/kernel';
 import { millis } from '@rotaris/kernel';
 import type { CommandOutcome, ProcessReply, RunHostRequest } from '@rotaris/contracts';
+import { isViewId, PRIMARY_VIEWS, viewPosition } from '@rotaris/contracts';
 import type { ProcessLink } from '@rotaris/shell';
 import type { PersonaWindows } from '../windows.js';
 import type { NoticeStore } from '../notices.js';
@@ -327,4 +328,20 @@ export function onStep(host: CaptureHost, step: CaptureStep, body: () => void | 
     await settleAt(host, step);
     await body();
   })();
+}
+
+/**
+ * A view named by a capture variable (the one that opens a view, a step of the one that opens several, the one that names
+ * the last) as a place in the rail: 0 when unset, the 1-based place for a view identifier or for a digit inside the rail,
+ * and null for anything else (an identifier that names no primary view, a place past the last).
+ *
+ * The variables are not named here on purpose. This module is in the packaged bundle, the bundler keeps a doc comment, and
+ * `pnpm package`'s seam check reads the bundle for the names of the scriptable seams: a comment that spelt one out was
+ * refused as a seam on 2026-11-11.
+ */
+export function captureViewPosition(value: string | undefined): number | null {
+  if (value === undefined || value === '' || value === '0') return 0;
+  if (isViewId(value)) return viewPosition(value);
+  const place = Number(value);
+  return Number.isInteger(place) && place >= 1 && place <= PRIMARY_VIEWS.length ? place : null;
 }

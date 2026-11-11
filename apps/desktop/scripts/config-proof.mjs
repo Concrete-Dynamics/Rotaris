@@ -11,6 +11,11 @@ import { clickLanded, startApp, stopApp, stopOverrunMessage, until } from './lib
  * both scopes drive the run; Settings → Runtime and → Models edit them with Save/Discard; the composer's
  * permission-mode control writes its one key; a fatal file refuses the run naming file, scope and path, and
  * correcting that key alone is enough. Every assertion reads the files or the store; the PNGs are read back.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`workspace`, `settings`), not by
+ * its digit. Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view. The driven launch opens
+ * Settings by Ctrl+6. PD-CONFIG-008: a category is still found by its name among `.nav-list__item`, under its group
+ * heading.
  */
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -137,7 +142,7 @@ const results = {};
 // 1. Settings → Runtime: the outside-workspace toggle with its confirmation, then Save; bytes outside the written key unchanged.
 const s1 = scenario('runtime-save');
 const log1 = await launch('runtime-save', s1, {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
   ROTARIS_CAPTURE_CLICKS: `${RUNTIME_CATEGORY};;.toggle[aria-labelledby="outside-label"]@~7000;;.dialog-actions .btn-warning>>Yes@~8000;;.save-bar .btn-primary>>Save@~9000`,
   ROTARIS_CAPTURE_AFTER_MS: '10500',
 });
@@ -156,7 +161,7 @@ const s2 = scenario('models-save');
 // The selectors are therefore written WITHOUT a tag qualifier: `select[aria-label=…]` matched nothing once
 // the slot control changed, and the step logged `no such control` while the launch carried on.
 const models2Log = await launch('models-save', s2, {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_SELECT: '[aria-label="Model for large_model"]>>other@1800;;[aria-label="Reasoning strength for large_model"]>>high@2400',
   ROTARIS_CAPTURE_CLICKS: '.save-bar .btn-primary>>Save@3000',
   ROTARIS_CAPTURE_AFTER_MS: '4200',
@@ -200,7 +205,8 @@ const readBar = () => d3.eval(`(() => {
 let discard3;
 let stopped3;
 try {
-  await d3.chord('Ctrl+7');
+  // PD-SHELL-015 (2026-11-11): Settings is the sixth view, Ctrl+6 (Ctrl+7 until then, bound to nothing now).
+  await d3.chord('Ctrl+6');
   const category = await clickLanded(d3, '.settings__categories .nav-list__item', { text: 'Runtime', timeoutMs: 15_000 });
   const before = await until(readBar, (b) => b?.keepGoing === 'true' || b?.keepGoing === 'false', { timeoutMs: 15_000, what: 'the Keep going toggle on Runtime' });
   if (before.status !== 'All changes saved') throw new Error(`the Runtime category opened with the save status ${JSON.stringify(before.status)}, not settled`);
@@ -234,7 +240,7 @@ results.discard = { verdict: 'the file is byte-identical; the save status reads 
 
 // 4. The composer's permission-mode control writes its one key through the per-field path, with no run active (REQ-CONFIG-288).
 const s4 = scenario('composer-mode');
-const log4 = await launch('composer-mode', s4, { ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_MODE: 'autonomous', ROTARIS_CAPTURE_MODE_MS: '1500', ROTARIS_CAPTURE_AFTER_MS: '3200' });
+const log4 = await launch('composer-mode', s4, { ROTARIS_CAPTURE_VIEW: 'workspace', ROTARIS_CAPTURE_MODE: 'autonomous', ROTARIS_CAPTURE_MODE_MS: '1500', ROTARIS_CAPTURE_AFTER_MS: '3200' });
 const ws4 = readFileSync(s4.workspaceFile, 'utf8');
 if (!ws4.includes('  permission_mode: autonomous\n')) throw new Error(`the composer's control did not write its key:\n${ws4}`);
 if (!ws4.includes('  # the workspace states two keys and inherits the rest\n') || !ws4.includes('  max_depth: 2\n')) throw new Error('the per-field write disturbed another key');

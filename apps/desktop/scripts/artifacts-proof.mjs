@@ -59,6 +59,9 @@
  *                  its frontmatter (`superseded_by`) and keeps the person's text after it.
  *
  * Evidence under `.proof/artifacts-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`library`), not by its digit. The
+ * Library is the fifth view (Ctrl+5); Mission is no view.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -291,7 +294,7 @@ const results = {};
     // artifact: REQ-LIBRARY-097's `PRIOR SIBLING ARTIFACT INDEX` reaches them and its diagnostic is recorded.
     ROTARIS_SCRIPT: 'artifact:artifact_write,plan:2,delegate:coding-agent:one,delegate:tester:two,wait:4000,done,answer', ROTARIS_CHILD_SCRIPT: 'answer',
     ROTARIS_INTENT_SCRIPT: 'moderate_feature',
-    ROTARIS_CAPTURE_VIEWS: '6@16000',
+    ROTARIS_CAPTURE_VIEWS: 'library@16000',
     // Live-run finding K1 (REQ-MONITOR-052/060/061, REQ-LIBRARY-102/131): WHILE THE RUN IS STILL ACTIVE (it ends after
     // the 11 s click — the root's `wait:4000` and the children run past it), the Workspace inspector follows the run-level
     // agent: its chips are the LIVE ROOT PORT'S resolution (the coordinator's `background_output` and `wait_for_tasks`,
@@ -376,7 +379,7 @@ const results = {};
     ROTARIS_CAPTURE_PROMPT: 'publish with a bad tag', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: 'artifact:artifact_write:bad,answer',
     ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ bad: { slug: 'refused', title: 'Refused', body: 'nothing should survive this', tags: ['research', 'Nonsense'] } }),
-    ROTARIS_CAPTURE_VIEWS: '6@11000', ROTARIS_CAPTURE_CLICKS: `${ARTIFACTS_TAB}@11400`, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
+    ROTARIS_CAPTURE_VIEWS: 'library@11000', ROTARIS_CAPTURE_CLICKS: `${ARTIFACTS_TAB}@11400`, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '13000',
   });
   const db = new Database(oneDatabase(), { readonly: true });
@@ -434,7 +437,7 @@ let edited = null;
     // proof drives real clicks at real coordinates, so an overlap would be measuring the window's size instead of the
     // requirement.
     ROTARIS_CAPTURE_RESIZE: '1360x980@500',
-    ROTARIS_CAPTURE_VIEWS: '6@11000',
+    ROTARIS_CAPTURE_VIEWS: 'library@11000',
     ROTARIS_CAPTURE_CLICKS: [
       `${ARTIFACTS_TAB}@11400`,                            // the Library opens on Prompts; take the tab this proof is about
       `${PROBE_ROWS}@12000`,                               // select the row
@@ -552,7 +555,7 @@ let edited = null;
   const r = await launch('missing-body', {
     ROTARIS_CAPTURE_RESUME: edited.sessionId,
     ROTARIS_CAPTURE_RESIZE: '1360x980@300',
-    ROTARIS_CAPTURE_VIEWS: '6@4000',
+    ROTARIS_CAPTURE_VIEWS: 'library@4000',
     ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@4400`, `${PROBE_ROWS}@5000`, '[data-testid="library-artifacts-inspect"]@6000'].join(';;'),
     // Live-run finding K1 (REQ-MONITOR-049/052/060): the reopened session AT REST, in a freshly opened process, before the
     // view switch — no run is live, so the orchestrator's DECLARED tools stand in, marked from its history as the tool-call
@@ -607,7 +610,7 @@ let edited = null;
     // canonical instance name, and the scripted task IS that name) — so `commands` is a stable ref.
     ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ commands: { id_or_slug: 'commands', sections: ['commands'] } }),
     ROTARIS_INTENT_SCRIPT: 'moderate_feature',
-    ROTARIS_CAPTURE_VIEWS: '6@24000',
+    ROTARIS_CAPTURE_VIEWS: 'library@24000',
     ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@24400`, `${PROBE_ROWS}@24800`, '[data-testid="library-artifacts-inspect"]@25200'].join(';;'),
     ROTARIS_CAPTURE_PROBE_AT: [
       '[data-testid="artifact-inspector"]@25800',
@@ -742,7 +745,7 @@ let travel = null;
     ROTARIS_SCRIPT: 'artifact:artifact_write:travel,answer',
     ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify(TRAVEL),
     ROTARIS_CAPTURE_RESIZE: '1360x980@500',
-    ROTARIS_CAPTURE_VIEWS: '6@11000',
+    ROTARIS_CAPTURE_VIEWS: 'library@11000',
     // PD-LIBRARY-003 revision 2 (f), OQ-272: a press on the read-only frontmatter and characters typed there change nothing;
     // then a press at the editor's centre, which is below the block now (until fin43 it lay inside the frontmatter, and the
     // proof took the caret to the end with Ctrl+End first), and the person's text.

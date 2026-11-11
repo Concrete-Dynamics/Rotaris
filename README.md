@@ -34,8 +34,8 @@ One application, five composition roots in `apps/desktop/src/`. They are the onl
 | `run-host/` | One live session: runs, turns, tools, hooks, MCP servers, the skill catalogue, checkpoints, terminal streams |
 | `workspace-service/` | Workspace identity, the store's open and migration, backup and restore, configuration, traceability, saved prompts |
 
-The window shows exactly seven primary views, in this order: **Overview, Workspace, Mission, Requirements, Git,
-Library, Settings** (`REQ-SHELL-023`).
+The window shows exactly six primary views, in this order: **Overview, Workspace, Requirements, Git, Library,
+Settings** (`REQ-SHELL-023` as `PD-SHELL-015` narrows it; `docs/design/information-architecture.md` is the map).
 
 ## Why
 
@@ -100,8 +100,8 @@ The specification in [`docs/spec/`](docs/spec/README.md) states the behaviour, o
 - **Runs** ([01](docs/spec/01-run-orchestration.md)). One task, classified for intent and carried by a coordinator
   that delegates to child agents, works one todo item per iteration, verifies what changed, and ends with a stop
   reason and a terminal status.
-- **Monitoring and steering** ([02](docs/spec/02-run-monitoring-steering.md)). The Mission view shows the delegation
-  tree and what each agent is doing. While a run is live you can steer an agent, queue follow-up prompts, edit the
+- **Monitoring and steering** ([02](docs/spec/02-run-monitoring-steering.md)). The Overview shows the delegation
+  tree and what each agent is doing, beside the session's figures (`PD-MONITOR-009`). While a run is live you can steer an agent, queue follow-up prompts, edit the
   todo list, switch the model, reasoning level or permission mode, force a context compression, pause or cancel.
 - **Conversation and transcript** ([03](docs/spec/03-conversation-composer-transcript.md)). A composer that adapts to
   the run's state, slash commands, image attachments, and a live transcript of messages, reasoning, grouped tool
@@ -135,7 +135,7 @@ The specification in [`docs/spec/`](docs/spec/README.md) states the behaviour, o
   configuration or in `mcp.json` files, beside a bundled code-intelligence server.
 - **Settings and the desktop shell** ([15](docs/spec/15-settings-configuration.md),
   [12](docs/spec/12-desktop-shell-windows.md), [19](docs/spec/19-notifications-errors-recovery.md)). Layered YAML
-  configuration, edited from Settings; the seven primary views, a command palette, agent and terminal windows, three
+  configuration, edited from Settings; the six primary views, a command palette, agent and terminal windows, three
   built-in themes, and notices that say what failed and how to recover.
 - **Updates** ([11](docs/spec/11-startup-distribution-updates.md)). An installed build checks this repository's latest
   GitHub release (`apps/desktop/src/main/updater/feed.ts`), verifies the signed checksum manifest before it parses it

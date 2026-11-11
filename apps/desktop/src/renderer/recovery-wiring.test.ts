@@ -21,12 +21,13 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
 
   /*
    * The repair of `docs/archive/defects/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`: the
-   * Mission view reads a run as active only when it is busy and not in recovery, so the root must hand it the same fact.
+   * delegation graph card (the Mission view's, on the Overview since PD-MONITOR-009) reads a run as active only when it is
+   * busy and not in recovery, so the root must hand it the same fact.
    * `recovery` is required, so dropping it fails typecheck; handing it `false` would offer Pause beside a root drawn
    * `paused` and fails here (`cancel-paused.test.ts` pins the view itself).
    */
-  it('main.tsx hands the Mission view the same recovery fact', () => {
-    expect(source('main.tsx')).toContain('recovery={needsRecovery}');
+  it('main.tsx hands the Overview\'s delegation cards the same recovery fact', () => {
+    expect(source('main.tsx')).toContain('recovery: needsRecovery');
   });
 
   /*
@@ -36,7 +37,7 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
    * is `runLevel`. Handing either a constant fails here.
    */
   it('main.tsx and windows.tsx hand the views what restingView answered', () => {
-    expect(source('main.tsx')).toContain('runLevel={runLevel} resting={resting} recovery={needsRecovery}');
+    expect(source('main.tsx')).toContain('session, runLevel, resting, recovery: needsRecovery,');
     expect(source('windows.tsx')).toContain('runLevel={runLevel}');
   });
 

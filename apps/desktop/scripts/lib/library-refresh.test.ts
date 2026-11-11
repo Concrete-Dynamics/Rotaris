@@ -20,7 +20,8 @@ const before = BEFORE_PUBLISH as string;
 describe("artifacts-proof's publish schedule (REQ-LIBRARY-136)", () => {
   it('opens the Library, and leaves it by nothing but the prompt seam\'s own Ctrl+2 until it returns', () => {
     // The defect: a separate Ctrl+2 at 2000 ms, 400 ms after the reading, which a 1.5 s stall put ahead of it.
-    expect(views.map((v) => v.selector)).toEqual(['6', '6']);
+    // PD-SHELL-015 (2026-11-11): the view is named by its identifier, which does not move when the rail does (it read '6', the Library's place until then).
+    expect(views.map((v) => v.selector)).toEqual(['library', 'library']);
     expect(views[0]!.until).toBe(false);
     expect(views[1]!.at).toBeGreaterThan(prompt);
   });

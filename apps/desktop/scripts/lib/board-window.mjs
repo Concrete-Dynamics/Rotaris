@@ -6,7 +6,7 @@
  *
  * REQ-TRACE-239 bounds the interface thread "putting a board on screen once the engine has answered". A long task that
  * ENDED before the engine's answer (`paintFrom`, the instant the board's own paint figure began) is not that work: the
- * Requirements view's first mount, which runs when Ctrl+4 shows it and before the board is even asked for, is one. Traced
+ * Requirements view's first mount, which runs when its chord (Ctrl+4 then; Ctrl+3 since PD-SHELL-015) shows it and before the board is even asked for, is one. Traced
  * on 2026-10-07 (finacc3, load 12 to 13 on four CPUs): a 423 ms mount task, 210 ms of it V8's lazy compilation of the
  * view's code, beside a board paint of 32 ms, and the proof read the 423 as the board's. Those tasks are reported apart
  * (`beforeArrival`) and never counted; every task that ended after the answer is counted, whatever it was, as before

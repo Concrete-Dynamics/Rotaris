@@ -48,6 +48,10 @@
  * `--skip-build` skips the build. `--only=<stages>` runs the named stages alone (comma-separated, of `invariance`,
  * `behaviour`, `geometry`, `capacity`, `interleave`, `append`) after the `empty` launch, which always runs because it creates the store
  * the others are planted in; the verdict names them, since a partial run is evidence for those stages and no others.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`workspace`), not by its digit, the
+ * form that does not move when the rail does (Mission is no view; Settings is the sixth). No chord this script
+ * presses moved.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -184,7 +188,7 @@ results.resizeObserverLoops = resizeObserverLoops;
 const EMPTY_TITLE = 'No transcript yet';
 const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activity and results here.';
 const empty = await launch('empty', {
-  ROTARIS_CAPTURE_VIEWS: '2@900',
+  ROTARIS_CAPTURE_VIEWS: 'workspace@900',
   ROTARIS_CAPTURE_EVAL_AT: 'window.__rotarisCounts()@2200;;window.__rotarisReplica()@2400',
   ROTARIS_CAPTURE_AFTER_MS: '3200',
 });
@@ -320,7 +324,7 @@ plantNotices('SNOTICE');
 const COUNTS = 'window.__rotarisCounts()';
 if (wanted('invariance')) {
 const invariance = await launch('invariance', {
-  ROTARIS_CAPTURE_VIEWS: '2@900',
+  ROTARIS_CAPTURE_VIEWS: 'workspace@900',
   ROTARIS_CAPTURE_OPEN_AT: 'S1@3000;;S601@8000;;S1200@13000',
   ROTARIS_CAPTURE_RESIZE: '1000x680@21000;;1440x900@22500;;1180x760@24000;;1000x680@25500;;1440x900@27000',
   ROTARIS_CAPTURE_EVAL_AT: [

@@ -2,7 +2,7 @@
  * `pnpm ui-audit` — sweep every primary view at every size and REPORT what the browser actually built.
  *
  * This is the generalisation of the four measurements that found defects 82 to 85 in one screen. Those were
- * found by measuring one grid by hand; there are seven primary views, a dozen overlays and three sizes that
+ * found by measuring one grid by hand; there are six primary views (seven until PD-SHELL-015), a dozen overlays and three sizes that
  * matter, and hand-measuring that product is how a defect survives in a screen everybody has looked at.
  *
  * It REPORTS; it does not assert. `pnpm layout-proof` is where a finding becomes a standing assertion — the
@@ -25,6 +25,12 @@
  * expression and what the renderer threw, and the audit moves on, so one exception never costs the pack.
  *
  *   node apps/desktop/scripts/ui-audit.mjs [--skip-build] [--sizes=1400x900,1000x680] [--views=1,2,3]
+ *
+ * PD-SHELL-015 (2026-11-11): six views, numbered by their place in the rail — 1 Overview, 2 Workspace, 3 Requirements,
+ * 4 Git, 5 Library, 6 Settings (Mission, 3 until then, is no view; 4 to 7 each moved down one). `--views=` also takes a
+ * view's identifier (`--views=overview,settings`), the form that does not move when the rail does. PD-MONITOR-009: what
+ * the Mission view drew stands on the Overview as two cards, which this audit's scratch profile does not draw: it holds no
+ * session, so the Overview swept here is its empty state (`pnpm mission-proof` reads the cards, at both table forms).
  *
  * Evidence under `.ui-audit/`: a PNG per view per size, and `report.json`.
  */
@@ -92,15 +98,17 @@ writeFileSync(join(workspace, '.gitignore'), '.rotaris/\n.serena/\n');
 git('add', 'README.md', '.gitignore');
 git('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
 
-/** REQ-SHELL-023's seven, in the specification's order, with the root each one renders. */
+/**
+ * The six primary views in the rail's order (PD-SHELL-015 over REQ-SHELL-023), with the root each one renders. `n` is the
+ * view's place in the rail, which is also the digit of its Ctrl+<digit> chord and the number `--views=` takes.
+ */
 const VIEWS = [
-  { n: 1, name: 'Overview', root: '.overview' },
-  { n: 2, name: 'Workspace', root: '.workspace' },
-  { n: 3, name: 'Mission', root: '.mission' },
-  { n: 4, name: 'Requirements', root: '.req' },
-  { n: 5, name: 'Git', root: '.git' },
-  { n: 6, name: 'Library', root: '.library' },
-  { n: 7, name: 'Settings', root: '.settings' },
+  { n: 1, id: 'overview', name: 'Overview', root: '.overview' },
+  { n: 2, id: 'workspace', name: 'Workspace', root: '.workspace' },
+  { n: 3, id: 'requirements', name: 'Requirements', root: '.req' },
+  { n: 4, id: 'git', name: 'Git', root: '.git' },
+  { n: 5, id: 'library', name: 'Library', root: '.library' },
+  { n: 6, id: 'settings', name: 'Settings', root: '.settings' },
 ];
 
 const SIZES = String(flag('sizes', '1400x900,1000x680')).split(',').map((s) => {
@@ -108,7 +116,11 @@ const SIZES = String(flag('sizes', '1400x900,1000x680')).split(',').map((s) => {
   return { w, h, label: s };
 });
 const wanted = flag('views', null);
-const views = wanted === null ? VIEWS : VIEWS.filter((v) => String(wanted).split(',').includes(String(v.n)));
+const wantedViews = wanted === null ? null : String(wanted).split(',').map((v) => v.trim()).filter((v) => v !== '');
+// A number past the rail or an identifier that names no view (`7`, `mission`) is refused, not swept as nothing.
+const unknownViews = (wantedViews ?? []).filter((w) => !VIEWS.some((v) => String(v.n) === w || v.id === w));
+if (unknownViews.length > 0) throw new Error(`--views names no primary view: ${unknownViews.join(', ')}; PD-SHELL-015's six are ${VIEWS.map((v) => `${v.n} ${v.id}`).join(', ')}`);
+const views = wantedViews === null ? VIEWS : VIEWS.filter((v) => wantedViews.includes(String(v.n)) || wantedViews.includes(v.id));
 /** REQ-SHELL-128's three; absent, the audit reads whatever the preference store already holds. */
 const THEMES = ['rotaris-dim', 'nocturne', 'high-contrast'];
 const theme = flag('theme', null);

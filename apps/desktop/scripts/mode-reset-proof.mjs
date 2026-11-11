@@ -26,6 +26,9 @@
  * never runs for a close, and with two windows it could not see the other's screen anyway (REQ-SHELL-020).
  *
  * Evidence under `.proof/mode-reset-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ *
+ * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`workspace`, `settings`), not by
+ * its digit. Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -241,8 +244,8 @@ const summarise = (reading, inspectAt) => ({
 // ── 1. Settings opened once and left; the chip armed `autonomous`; a run started ──
 writeConfig('ask');
 const settingsFirst = await launch('settings-first', workspace, local, preferences, {
-  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
-  ROTARIS_CAPTURE_VIEWS: '2@3000',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+  ROTARIS_CAPTURE_VIEWS: 'workspace@3000',
   ...armAndRun(4200),
 });
 const firstSummary = summarise(settingsFirst, 12_000);
@@ -268,7 +271,7 @@ expect(firstSummary.resolvedModes[firstSummary.resolvedModes.length - 1] === 'au
 // ── 2. No Settings visit at all: the same arm and run, with nothing having published a live state ──
 writeConfig('ask');
 const plain = await launch('plain', workspace, local, preferences, {
-  ROTARIS_CAPTURE_VIEWS: '2@2000',
+  ROTARIS_CAPTURE_VIEWS: 'workspace@2000',
   ...armAndRun(3200),
 });
 const plainSummary = summarise(plain, 11_000);

@@ -19,6 +19,8 @@ Part 3 of 8 of [domain 06](../06-git-worktrees-checkpoints.md), which indexes ev
 ### Desktop Git View — Structure
 
 - **REQ-GIT-075** — The desktop app SHALL provide a dedicated Git view titled "Git workspace", reachable from a navigation entry labeled "Git". Its header row shows: the current branch (or the literal text `not a git repository`), a monospace sync label reading `ahead <n>  behind <m>` (monospace because the counters change independently), a "Refresh" button, a "New worktree" primary button, and a "Merge selected" button.
+  > **Narrowed by [`PD-GIT-002`](../../product/directives/pd-git-002.md#pd-git-002), 2026-11-11.** The view is titled
+  > "Git", its navigation entry's label. The header row above still governs in full.
 
 - **REQ-GIT-076** — The view body SHALL be two user-resizable columns whose split position persists across sessions as REQ-SHELL-069 specifies for every pane layout (REQ-GIT-153), each with a minimum width of 280 px: a "Worktrees" card and a "Commit history" card; below them a "Session checkpoints" card and an "Agent commit policy" card whose text states that agents may create local commits only via a `git_commit` tool — no push, pull, rebase, or amend — and that the user reviews and pushes.
 

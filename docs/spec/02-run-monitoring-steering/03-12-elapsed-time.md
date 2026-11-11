@@ -87,6 +87,10 @@ Part 3 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
   > **Narrowed by [`PD-ORCH-005`](../../product/directives/pd-orch-005.md#pd-orch-005) revision 4, 2026-09-28.** Clause 15: the
   > cancelling of a run this requirement names is the explicit cancel (REQ-MONITOR-126), which still leaves
   > identical state from every surface. A stop, from any surface, leaves its agents `paused` (clause 3).
+  >
+  > **Narrowed by [`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009), 2026-11-11.** "The
+  > mission view" among the surfaces above is the Overview's delegation graph card. Its case is that name alone and is
+  > disjoint from PD-ORCH-005's above.
 
 **REQ-MONITOR-131** — Application shutdown produces these effects, in this order, each of which an observer can check: every periodic activity the application still performs stops; the run is cancelled, with anything blocked on a human answer released first (REQ-MONITOR-012); queued follow-up jobs are cleared; and the process does not exit until the run has reported its terminal result and finished writing session state. A restart that is not a shutdown waits at most 5 seconds for the previous run to finish before proceeding. Shutdown carries a force-exit backstop of 30 seconds from the quit request, the same allowance as the cancellation grace of REQ-MONITOR-129 and composing with it exactly: the graceful stop is requested first, the 30-second grace force-cancels a run that has not honored it, and at the same instant the process force-exits if teardown has still not completed. A second quit request made while that allowance is running force-exits immediately (REQ-MONITOR-283). A force exit is the only case in which the ordered effects above may be left incomplete, and it must be reported as such on the next start. A launch of the application that arrives while that allowance is running is refused until the process has ended and is honoured afterwards, on the terms REQ-SHELL-169 fixes; this requirement holds no copy of them.
 
@@ -209,6 +213,11 @@ Part 3 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
   > artifact that holds them rather than by a second card or a second vocabulary. The card's own
   > contract above is unchanged. The card's header also carries the retrospective's start gesture beside its
   > library link (ADR-0065 decision 7); sentence added 2026-10-07 ([OQ-222](../../architecture/open-questions.md)).
+  >
+  > **Narrowed by [`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009), 2026-11-11.** The right
+  > column's first card is the delegation graph with its run row, Pause and Cancel selection; it takes the place of the
+  > agent-tree card and carries no link to another view. The cloud-credit tile, the subscription-limits card and the
+  > improvement-proposals card follow it in the order above. The proposals card is as PD-LIBRARY-002 extends it.
 
 **REQ-MONITOR-174** — The overview refreshes in response to state-change notifications (agents, sessions, status, repository, proposals, settings) and performs no work while hidden; the session runtime and status in its header follow status changes.
 

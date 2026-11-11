@@ -195,7 +195,17 @@
 .status-dot:where([data-state='warn']) { background: var(--rt-warn); }
 .status-dot:where([data-state='idle']) { background: var(--rt-info-500); }
 .run-header__timing { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); min-width: 48px; }
-.run-header .run-controls { margin-left: auto; }
+/* R-097 (docs/design/briefs/transcript-rows.md, §8 and audit item 1): a line with two ends. Both `.run-controls` groups took
+   `margin-left: auto`, which split the free space between them and stood "Compress context" alone in the middle; and
+   every item could shrink, so when the improvement indicator appeared at 1440x900 the compress label broke onto two
+   lines and the model selector stood above the reasoning selector. The two groups are ONE end group now
+   (`.run-header__end`): it never shrinks, no label in it breaks, and when the line cannot hold both ends it moves to a
+   second line whole, still at the end. The indicator keeps L10's rule (above): its label whole, in words. */
+.run-header { flex-wrap: wrap; row-gap: var(--rt-space-1); }
+.run-header__state, .run-header__timing { flex: none; }
+.run-header__end { display: flex; align-items: center; gap: var(--rt-space-3); flex: none; margin-left: auto; }
+.run-header .run-controls { flex-wrap: nowrap; }
+.run-header__compress { white-space: nowrap; }
 /* REQ-CHAT-010: the divider is a real control — a pointer target with a keyboard tab stop, not a decorative rule. */
 .composer__divider { height: 8px; cursor: row-resize; background: var(--rt-chrome); border-top: var(--rt-hairline-width) solid var(--rt-border); }
 .composer__divider:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
@@ -663,17 +673,73 @@
 
 /* ── Settings: categories as a vertical navigation list (REQ-CONFIG-268, REQ-SHELL-153), the Project section ── */
 .settings { display: grid; grid-template-columns: 200px 1fr; gap: var(--rt-space-5, 24px); height: 100%; min-height: 0; }
-.nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.nav-list__item { display: block; width: 100%; text-align: left; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: 0; border-left: 3px solid transparent; border-radius: var(--rt-radius-sm, 4px); background: transparent; color: var(--rt-text-secondary); font: inherit; font-size: var(--rt-text-sm, 13px); cursor: pointer; }
+/* The selected entry's rule is named once, for the entry and for a group heading that stands on the entries' text axis (UIR-306). */
+.nav-list { --nav-list-rule: 3px; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.nav-list__item { display: block; width: 100%; text-align: left; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: 0; border-left: var(--nav-list-rule) solid transparent; border-radius: var(--rt-radius-sm, 4px); background: transparent; color: var(--rt-text-secondary); font: inherit; font-size: var(--rt-text-sm, 13px); cursor: pointer; }
 .nav-list__item:hover { background: var(--rt-hover); color: var(--rt-text); }
 .nav-list__item.is-selected { border-left-color: var(--rt-accent-300); color: var(--rt-text); background: var(--rt-accent-tint-10); }
 .nav-list__item:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+/* PD-CONFIG-008: the categories stand in four headed groups. A group is set off from the one above by `--rt-space-4`, wider
+   than the list's own rhythm, and its heading is the adopted kicker on the items' text axis (the item's rule plus its inset). */
+/* The list is taller by its four headings: where the window is at its minimum height and a notice stands above the view, it
+   scrolls on its own axis and the category body keeps its place. */
+.settings__categories { min-height: 0; overflow-y: auto; }
+.nav-list--grouped { gap: var(--rt-space-4); }
+.nav-list__group { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.nav-list__heading { padding-inline-start: calc(var(--nav-list-rule) + var(--rt-space-3)); }
 .settings__body { min-width: 0; overflow: auto; }
 .settings__section h1 { margin: 0 0 var(--rt-space-3, 12px); }
-.settings__heading { margin: var(--rt-space-4, 16px) 0 var(--rt-space-2, 8px); font-size: var(--rt-text-sm, 13px); font-weight: var(--rt-weight-medium, 500); color: var(--rt-text); }
+.settings__heading { margin: var(--rt-space-6) 0 var(--rt-space-2); font-size: var(--rt-text-sm, 13px); font-weight: var(--rt-weight-medium, 500); color: var(--rt-text); }
 .settings__actions { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); margin-top: var(--rt-space-3, 12px); }
 .settings__action { display: flex; align-items: center; gap: var(--rt-space-3, 12px); flex-wrap: wrap; }
 .settings__hint { font-size: var(--rt-text-xs, 12px); }
+/* R-097, the Settings brief's §8 (docs/design/briefs/settings.md; audit items 1 to 3) — ONE axis per category body.
+   A row was one wrapping flex line, so each control began where ITS label ended: Runtime's 19 rows put their first control
+   at 16 different x, and a caption ran the pane's width (1042 px against `--rt-prose-measure`'s 340) — UIR-010's and
+   UIR-011's findings, on the surface the `--rt-label-column` token was named for ("a settings form ONE axis").
+   The row stays the wrapping line it was, and its DOM order with it, so nothing a reader or a proof walks moves:
+   · the leading label takes a fixed column, so every control, value and switch starts on one edge. The column is twice
+     the token: 11 of the 37 Settings labels are wider than its 120 px at their own type, the longest 224 (OQ-546);
+   · a caption takes a line of its own and stands UNDER the control it describes (UIR-024's rule, already Mission's),
+     bounded to the prose measure. It is padded, not margined: a basis of 100% is what breaks the line at every
+     pane width, and the padding is what keeps the text between the field edge and the measure. (First built at twice
+     the measure, 673 px and up to 125 characters a line at 1400x900; OQ-535 ruled that the measure keeps its 340 px,
+     and finding 7 of the 2026-11-10 critique of the built pack (`9401038db662`) held the caption to it);
+   · a row that opens with a button has no label to align, so it keeps the label edge — an edge the body already has —
+     and its caption stands under the button.
+   Inside a `Card` the column gives back the card's own inset and hairline, so a card's controls stand on the edge the
+   rows outside it stand on. The guided web-search card keeps its own reviewed arrangement (its rows sit in wrappers
+   this selector does not reach). */
+.settings__body { --settings-label-column: calc(2 * var(--rt-label-column)); }
+.settings__body .settings__card { --settings-label-column: calc(2 * var(--rt-label-column) - var(--rt-space-5) - var(--rt-hairline-width)); }
+.settings__section > .settings__action { margin-top: var(--rt-space-3); }
+:is(.settings__section, .settings__card, .settings__actions) > .settings__action { gap: var(--rt-space-1) var(--rt-space-3); }
+:is(.settings__section, .settings__card, .settings__actions) > .settings__action > :is(label, span):first-child:not(.settings__hint) { flex: 0 0 var(--settings-label-column); min-width: 0; overflow-wrap: anywhere; }
+:is(.settings__section, .settings__card, .settings__actions) > .settings__action > .settings__hint { flex: 0 0 100%; box-sizing: border-box; padding-left: calc(var(--settings-label-column) + var(--rt-space-3)); padding-right: max(0%, calc(100% - var(--settings-label-column) - var(--rt-space-3) - var(--rt-prose-measure))); }
+/* A fact row (About's "Version", "Build", …) is a label and a value, and every one of its labels fits the token itself
+   (the longest, "Security contact", is 114 px): it takes the column as named, so a value stands by its label. */
+:is(.settings__section, .settings__card, .settings__actions) > .settings__action:has(> .about__value) > :is(label, span):first-child { flex-basis: var(--rt-label-column); }
+/* A list row (the security policy's "Writable roots", "Allowed hosts", "Denied hosts") enters one value at a time: its
+   field is the adopted `.input`, which is `width: 100%` and so took a line of its own under the label, off the axis. On
+   the axis it grows from the field floor to one measure, with its Add beside it; the entries already added stand under
+   the field, on the field's edge, as the caption does. */
+:is(.settings__section, .settings__card, .settings__actions) > .settings__action > .settings__entry { flex: 1 1 var(--rt-field-min); width: auto; min-width: var(--rt-field-min); max-width: var(--rt-prose-measure); }
+:is(.settings__section, .settings__card, .settings__actions) > .settings__action > .settings__chips { flex: 1 1 100%; margin-block: 0; margin-left: calc(var(--settings-label-column) + var(--rt-space-3)); }
+/* A category's own prose — a group's introduction, a card's statement, About's paragraphs, the one sentence of a
+   category with nothing to show (Plugins) — is bounded too (rubric C7): Display's two introductions and the MCP Servers
+   card's statement ran the pane's width, about 150 characters a line. Text at the caption's size holds the prose
+   measure itself. Text at the body's size takes TWO measures: the one measure the material names is the caption's,
+   and held to it Project's two statements stood at 35 to 49 characters a line (counted from a capture,
+   2026-11-10), most lines under the 45 guide 07 gives as the floor. Which measure body prose takes is OQ-547's to rule. Code and
+   paths (`.mono`, `pre`) opt out, as the measure's rule says. */
+.settings__section p:not(.mono), .settings__body .view__empty p { max-width: calc(2 * var(--rt-prose-measure)); }
+.settings__section p.settings__hint, .settings__section .about__caption { max-width: var(--rt-prose-measure); }
+/* A group's heading is the section kicker (OQ-500's ruling: "group headers the kicker"), the declaration the adopted
+   `.card-kicker` carries and the category's own cards already head themselves with. It was 12 px at weight 500 in the
+   primary ink, smaller than the 14 px labels and introductions it headed and told from them by nothing else (the
+   2026-11-10 critique's finding 14). The guided web-search card's step titles are not group headings and keep their rule. */
+.settings__section .settings__heading:not([data-mcp-websearch-setup] *) { font-size: var(--rt-text-2xs); font-weight: var(--rt-weight-medium); letter-spacing: var(--rt-tracking-label); text-transform: uppercase; color: var(--rt-text-tertiary); }
+:is(.settings__section, .settings__card, .settings__actions) > .settings__action:has(> .btn:first-child) > .settings__hint { padding-left: 0; padding-right: max(0%, calc(100% - var(--rt-prose-measure))); }
 .settings__dictation-field { display: flex; flex-direction: column; gap: var(--rt-space-1); margin-top: var(--rt-space-2); }
 .settings__select { width: max-content; max-width: 100%; }
 /* C3 (UI review of PR #76, 2026-11-09): a field is sized from the token, never from the pane. The guided card's key
@@ -887,7 +953,7 @@
 .btn-secondary, .input, .select, .seg { border-color: var(--rt-boundary-strong); }
 .input:hover { border-color: var(--rt-boundary-strong); }
 .agent-tree--empty { font-size: var(--rt-text-xs, 12px); }
-/* The row's rule and its inset are named once, so the Overview's tree card can pull them out (`.ov-card--tree .agent-row`, below). */
+/* The row's rule and its inset are named once, so the Overview's graph card can pull them out (`.mission__graph .agent-row`, below). */
 .agent-row { --agent-row-rule: 3px; --agent-row-pad: 6px; display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: var(--agent-row-pad); padding: 4px var(--agent-row-pad); border-left: var(--agent-row-rule) solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .agent-row:hover { background: var(--rt-hover); }
 .agent-row.is-selected { border-left-color: var(--rt-accent-300); background: var(--rt-accent-tint-10); }
@@ -1223,6 +1289,11 @@
 .session-browser__stale { color: var(--rt-warn); border-color: var(--rt-warn); }
 .session-browser__error { margin: 0; color: var(--rt-danger-300); font-size: var(--rt-text-xs); }
 .session-browser__empty, .session-browser__loading { padding: var(--rt-space-5); text-align: center; color: var(--rt-text-tertiary); }
+/* R-097, finding 11 of the 2026-11-10 critique: the empty sentence is one cell spanning the six columns, so it is also the
+   row's LAST cell, and `.session-browser__table td:last-child` above — the Open column's rule, at a higher specificity —
+   set it right-aligned, on one line and at 1% of the table: the sentence began 545 px right of the "Session" heading
+   (ink x 864 to 1129 in a table from 261 to 1139, at 1400x900). The cell says what `.session-browser__empty` meant. */
+.session-browser__table td.session-browser__empty { width: auto; white-space: normal; text-align: center; }
 .session-browser__loading { margin: 0; }
 /* Part U (REQ-SESSION-182/191/041/200): the browser's actions — tokens by name, every state as text. */
 .session-browser__toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--rt-space-4); flex-wrap: wrap; }
@@ -1303,6 +1374,32 @@
 .provider-row__word { font-size: var(--rt-text-xs, 12px); margin-left: auto; padding-left: var(--rt-space-2, 8px); white-space: nowrap; }
 .provider-row__detail { margin-top: var(--rt-space-1, 4px); font-size: var(--rt-text-xs, 12px); max-width: 46ch; overflow-wrap: anywhere; }
 .provider-row__actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); justify-content: flex-end; }
+/* UIR-308, UIR-309 (the 2026-11-11 critique): the action cell is a table cell that takes exactly its row of controls,
+   and no label in it breaks. It was `.settings__action`, a wrapping flex line standing in the cell's place: the box
+   ended with its own buttons, so the rule under it stood 17 px above the rule under the first cell, and at 1000×680
+   it squeezed "Sign out" onto two lines (60×36 px beside 24 px neighbours). The first cell gives way instead: its
+   detail and its identifier wrap. */
+.providers-card__table td.provider-row__action-cell { width: 0; white-space: nowrap; }
+.provider-row__actions > .btn { flex: none; white-space: nowrap; }
+/* UIR-407 (the second critique of 2026-11-11): with the action cell rigid, the first cell is what gives way, and a
+   provider's name is one unbreakable line of up to 1,024 characters (a user-defined endpoint's label). The cell takes
+   the width the action cell leaves and never widens the table; in its status line the identifier gives way first, as
+   it did, and then the name is cut with an ellipsis, its whole text in its tooltip. */
+.providers-card__table td:first-child { width: 100%; max-width: 0; }
+.provider-row__status > .provider-row__name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The factor is a ratio, not an order: at 999 the name still took its share of every shortfall, 0.1 px of 180, which is
+   enough to draw the ellipsis on "Rotaris Cloud (recommended)" (UIR-501). At a million its share is under the layout's
+   own unit, so the identifier gives all it has before the name gives anything. */
+.provider-row__status > .settings__origin { flex: 0 1000000 auto; }
+/* The word keeps the line's own gap before it and drops the second 8 px its padding added: with one row reading
+   "Re-authenticate" the action cell is 17 px wider, and that padding was what cut "Rotaris Cloud (recommended)" at 1000x680. */
+.provider-row__status > .provider-row__word { flex: none; padding-left: 0; }
+/* REQ-CONFIG-329's "right-aligned action": the adopted TableCard stands a spacer between the kicker and the actions
+   (`docs/design/system/components/patterns/TableCard.jsx`), which the product's copy had dropped, so "Add endpoint"
+   stood beside the kicker, 740 px short of the card's edge at 1400x900 (UIR-403). */
+.table-card-head > .card-kicker { margin-right: auto; }
+/* Centred, as the empty state that may follow it is: a line with no left edge of its own cannot miss the card's keyline. */
+.providers-card__reading { margin: 0; padding: var(--rt-space-6) var(--rt-space-4); text-align: center; }
 /* The expanded per-row settings: a form region, not a nested card. */
 .provider-settings > td { padding-top: 0; }
 .provider-settings__panel { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-3, 12px); margin: var(--rt-space-2, 8px) 0; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); }
@@ -1398,13 +1495,14 @@
 .ov-dot--info { background: var(--rt-info-300); }
 .ov-dot--fail { background: var(--rt-danger-300); }
 .ov-dot--idle { background: var(--rt-text-tertiary); }
-.ov-card--tree .agent-tree--empty { color: var(--rt-text-tertiary); font-size: var(--rt-text-xs, 12px); }
-/* Audit item 13: inside the tree card the row's rule and padding are pulled out past the card's content edge, and the gap after a
-   depth-0 row's empty prefix track is dropped, so the first dot shares the kicker's x (`align-x`, `overview-agents-first-dot` on
-   `overview-agents-kicker`); the selection tint keeps its room in the card's padding. The tree in Workspace and Mission is unchanged. */
-.ov-card--tree .agent-row { margin-inline-start: calc(-1 * (var(--agent-row-rule) + var(--agent-row-pad))); column-gap: 0; }
-.ov-card--tree .agent-row > * + * { margin-inline-start: var(--agent-row-pad); }
-.ov-card--tree .agent-row__prefix:empty + .status-dot { margin-inline-start: 0; }
+.mission__graph .agent-tree--empty { color: var(--rt-text-tertiary); font-size: var(--rt-text-xs, 12px); }
+/* Audit item 13, kept by PD-MONITOR-009's graph card: the card's first dot shares the kicker's x (`align-x`, `overview-agents-first-dot`
+   on `overview-agents-kicker`). The first dot is the run row's now (`.mission__run-row`, which pulls its own rule and inset out);
+   the tree's rows pull theirs out the same way and then stand one step in under the run, the selection tint keeping its room. */
+.mission__graph .agent-tree { padding-inline-start: var(--rt-space-3); }
+.mission__graph .agent-row { margin-inline-start: calc(-1 * (var(--agent-row-rule) + var(--agent-row-pad))); column-gap: 0; }
+.mission__graph .agent-row > * + * { margin-inline-start: var(--agent-row-pad); }
+.mission__graph .agent-row__prefix:empty + .status-dot { margin-inline-start: 0; }
 /* Audit item 10: a card's own empty case — the title in the empty-state tier over the hint as card body, within the prose measure. */
 .ov-card__empty { display: flex; flex-direction: column; gap: var(--rt-space-1); }
 .ov-card__empty-hint { max-width: var(--rt-prose-measure); }
@@ -1476,7 +1574,14 @@
    Branch keeps the ~45px remainder it elides into. */
 .git__col-session { width: 9ch; }
 .git__col-count { width: 8ch; }
-.git__col-files { width: 12ch; }
+/* FALSIFIED IN PART, 2026-11-10 (R-097), kept above its replacement: "Files 73→12" held for `+0 -0 / 0` only. The figure's
+   form is fixed (REQ-GIT-077) and its length is the repository's: `+5300 -431 / 102` measured 115 px of text in the 92 px
+   cell at 1440x900 and ran 24 px under the row's delete button, three more rows 16 px (`docs/design/briefs/git.md`, audit
+   item 1). The State column met the same fault on 2026-10-04 and the answer is the same: `12ch` stays the FLOOR, the column
+   is as wide as the widest figure the table shows — measured by GitView (`filesColumnFit`) into `--git-files-fit`, the text
+   plus the cell's padding — and the table's own minimum grows by what the column took beyond its floor. */
+.git__col-files { width: max(12ch, var(--git-files-fit, 12ch)); }
+.git__files-figure { display: inline-block; white-space: nowrap; }
 .git__col-actions { width: 9ch; }
 /* FALSIFIED IN PART, 2026-10-04, kept above its replacement: "State 59→10" held for `idle · ready` only. A row bound to a
    session draws its execution status there (REQ-GIT-109), and `completed · ready` measured 101.6px of text in a 76.3px
@@ -1500,7 +1605,8 @@
    column budget moves: Branch keeps the larger of the heading's 9ch and the widest row's line at that floor, measured by
    GitView (`branchLineFloor`, `branchColumnFit`) into `--git-branch-fit`, the line plus the cell's padding. The table's
    minimum is the four fixed columns' 46ch plus the State and Branch floors, and the card scrolls as it already does. */
-.git__worktree-table { min-width: calc(46ch + max(10ch, var(--git-state-fit, 10ch)) + max(9ch, var(--git-branch-fit, 9ch))); }
+/* 2026-11-10 (R-097): the four fixed columns' 46ch read 34ch plus the Files column, which is no longer fixed (above). */
+.git__worktree-table { min-width: calc(34ch + max(12ch, var(--git-files-fit, 12ch)) + max(10ch, var(--git-state-fit, 10ch)) + max(9ch, var(--git-branch-fit, 9ch))); }
 .git__col-state { width: max(10ch, var(--git-state-fit, 10ch)); }
 .git__state-phrase { display: inline-block; white-space: nowrap; }
 /* The Branch cell is `display: flex` (below), so it is NOT a table cell: the browser wraps it in an anonymous one, and
@@ -1793,35 +1899,32 @@
 .workspace--narrow > .agents--drawer { left: 0; }
 .workspace--narrow > .inspector--drawer { right: 0; }
 .workspace__drawer-bar .is-active { color: var(--rt-accent-200); }
-.mission { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: auto; }
-.mission__header { padding-inline: var(--rt-space-5, 20px); }
-.mission__subtitle { color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 12px); }
-.mission__body { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); grid-template-areas: 'graph table' 'settings table'; gap: var(--rt-space-4, 16px); padding: 0 var(--rt-space-5, 20px) var(--rt-space-5, 20px); align-content: start; }
-.mission__graph { grid-area: graph; }
-.mission__settings { grid-area: settings; }
-.mission__table { grid-area: table; min-width: 0; overflow: auto; }
-.mission .card, .persona-window .card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
-.mission__run-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--rt-space-2, 8px); padding: 6px 8px; border-left: 3px solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text); }
+/* R-097, the page frame (docs/design/briefs/overview/04-audit-2026-11-10.md, item 1): every titled primary view's root takes
+   ONE inset — `--rt-space-4` on the block axis, `--rt-space-5` on the inline — and its page header the control height, as
+   the Overview and Git already did (`.overview`, above, is the rule the others cite). The Mission view, which set no inset
+   of its own until that repair, is not a view since PD-SHELL-015. */
+/* PD-MONITOR-009: the Overview's two delegation cards. They were the Mission view's until PD-SHELL-015; `mission` stays their
+   prefix (REQ-MONITOR-213's "mission graph"). Both are `.ov-card`s, which gives them the Overview's card rhythm.
+   The run row carries the tree's selection rule and inset, and is pulled out by exactly those, so its dot stands on the
+   card's keyline under the kicker (the Overview audit of 2026-11-02, item 13, as the tree card's first row did); the agents
+   under it stand one step in, which is the hierarchy: the run, then what it delegated. */
+.persona-window .card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+/* The run row takes the tree row's own rule and inset (`--agent-row-rule`, `--agent-row-pad`, named on the card so both rows read
+   them), so the two kinds of row end on one right edge (UIR-305 of the critique of 2026-11-11: 8 px against 6 px had them end at
+   x 1372, 1365 and 1363) and the selection rule is one figure here, not two (UIR-306). */
+.mission__graph { --agent-row-rule: 3px; --agent-row-pad: 6px; }
+.mission__run-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--rt-space-2, 8px); padding: 6px var(--agent-row-pad); margin-inline-start: calc(-1 * (var(--agent-row-rule) + var(--agent-row-pad))); border-left: var(--agent-row-rule) solid transparent; border-radius: var(--rt-radius-sm, 4px); cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text); }
 .mission__run-row:hover { background: var(--rt-hover); }
 .mission__run-row.is-selected { border-left-color: var(--rt-accent-300); background: var(--rt-accent-tint-10); }
-.mission__run-row + .agent-tree { padding-left: var(--rt-space-3, 12px); }
+.mission__run-row:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .mission__actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; padding-top: var(--rt-space-2, 8px); border-top: 1px solid var(--rt-divider); }
 .mission__actions .btn[aria-disabled='true'] { color: var(--rt-text-disabled); border-color: var(--rt-border); cursor: not-allowed; }
 .mission__reason { font-size: var(--rt-text-2xs, 10px); flex-basis: 100%; }
-/* UIR-010: a fixed label column, and a field bounded to its own content.
-   `auto 1fr` placed each field by the length of ITS label, so the two selects' left edges differed by
-   51.04 px — exactly the difference between "Strategy" and "Maximum depth" — and the card carried two
-   competing vertical axes with only its right edge holding them together. The field also stretched to
-   729.2 px at the minimum width to hold the word "single", against the rule that a dropdown sizes
-   itself to its selected entry. */
-.mission__setting { display: grid; grid-template-columns: var(--rt-label-column) minmax(0, max-content); align-items: center; gap: var(--rt-space-2, 8px); }
-.mission__setting > label { min-width: 0; }
-.mission__setting .select, .mission__setting .input { width: max-content; max-width: 100%; min-width: var(--rt-field-min); }
-/* UIR-024 — the caption hangs under the control it describes, not under the label of it.
-   Spanning both columns gave the form THREE left edges where the label column was introduced to give
-   it two: label ink at x 145, field at x 272.98, and a caption starting at 145 that belongs to the
-   field — so "Stored as rotaris.delegation_strategy." read as a property of the label above it. */
-.mission__setting .settings__hint { grid-column: 2; font-size: var(--rt-text-2xs, 10px); }
+/* Clause 6: the strategy the next run takes, read here; its editor is one press away and is not this card. */
+.mission__next-run { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2); flex-wrap: wrap; }
+/* Clause 3: the table card is its table's query container, so a row gives way by the width the CARD has — the window's
+   width says nothing about it once the column divider has been moved. */
+.mission__table { container-type: inline-size; }
 .agent-table { font-size: var(--rt-text-xs, 12px); }
 .agent-table__row { cursor: pointer; }
 .agent-table__row:hover { background: var(--rt-hover); }
@@ -1839,7 +1942,36 @@
 .agent-table__context { white-space: nowrap; }
 .agent-table__actions { white-space: nowrap; }
 .agent-table__empty { padding: var(--rt-space-4, 16px); }
-@media (max-width: 1179px) { .mission__body { grid-template-columns: 1fr; grid-template-areas: 'graph' 'settings' 'table'; } }
+/* PD-MONITOR-009 clause 3 — the table in a card too narrow for one line a row. On the Mission view the window gave the table
+   its whole width below 1180 px; the Overview keeps its two columns there (REQ-MONITOR-165), which leaves the card about
+   470 px at REQ-SHELL-022's minimum, where nine columns cannot stand and the two controls of a row would be reached only by
+   scrolling sideways. So below 40rem of card a row takes three lines and keeps every value: state, agent, elapsed and the
+   two controls; persona and activity; the three figures, each named by its column's words (`data-label`, since the header
+   row is out of sight — it keeps its place in the accessibility tree, the roles being written in the markup). The
+   threshold is in rem, not px, because what it measures is nine columns of text. */
+@container (max-width: 40rem) {
+  .mission__table .agent-table, .mission__table .agent-table tbody { display: block; }
+  .mission__table .agent-table thead { display: block; height: 0; overflow: hidden; }
+  /* The row keeps the inline inset the one-line form's cells gave it, so its text clears the selection rule down its left edge. */
+  .mission__table .agent-table__row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: 'state name elapsed actions' 'persona activity activity activity' 'calls context context compressions'; align-items: baseline; row-gap: var(--rt-space-1); padding-inline: var(--rt-space-2); }
+  /* A cell is a box of the row's grid: its own inset goes, the step to the next cell on its line stays, and the adopted
+     table's rule under a row is kept by the cells of the row's last line alone, which stand edge to edge to draw it whole. */
+  .mission__table .agent-table__row > td { display: block; min-width: 0; padding: 0 var(--rt-space-3) 0 0; }
+  .mission__table .agent-table__row > td:not([data-label]) { border-bottom: 0; }
+  .mission__table .agent-table__row > .agent-table__state, .mission__table .agent-table__row > .agent-table__name, .mission__table .agent-table__row > .agent-table__elapsed, .mission__table .agent-table__row > .agent-table__actions { padding-top: var(--rt-space-2); }
+  .mission__table .agent-table__row > td[data-label] { padding-bottom: var(--rt-space-2); }
+  .mission__table .agent-table__row > .agent-table__actions, .mission__table .agent-table__row > .agent-table__activity, .mission__table .agent-table__row > .agent-table__compressions { padding-inline-end: 0; }
+  .mission__table .agent-table__state { grid-area: state; }
+  .mission__table .agent-table__row > .agent-table__name { grid-area: name; display: flex; flex-direction: row; align-items: baseline; gap: var(--rt-space-2); }
+  .mission__table .agent-table__elapsed { grid-area: elapsed; }
+  .mission__table .agent-table__actions { grid-area: actions; }
+  .mission__table .agent-table__persona { grid-area: persona; max-width: none; color: var(--rt-text-secondary); }
+  .mission__table .agent-table__activity { grid-area: activity; max-width: none; }
+  .mission__table .agent-table__calls { grid-area: calls; }
+  .mission__table .agent-table__context { grid-area: context; }
+  .mission__table .agent-table__compressions { grid-area: compressions; text-align: end; }
+  .mission__table .agent-table__row > td[data-label]::before { content: attr(data-label) ' '; font-family: var(--rt-font-body); color: var(--rt-text-tertiary); }
+}
 .persona-window { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4, 16px); height: 100vh; overflow: auto; box-sizing: border-box; }
 .persona-window__header { align-items: baseline; gap: var(--rt-space-3, 12px); }
 .persona-window__title { margin: 0; font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-size: var(--rt-text-xl, 20px); }
@@ -1860,19 +1992,34 @@
 /* ── The Library view (Part X; REQ-LIBRARY-102..107, REQ-LIBRARY-141) ──────────────────────────────
    Structure from docs/spec, craft from docs/design/system: page header, Tabs, Card (accented for the
    stash), Empty state. Every value a token; nothing here names a colour or a size the design does not. */
-.library { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4, 16px); height: 100%; overflow: hidden; box-sizing: border-box; }
+/* R-097, the page frame: the inline inset is `--rt-space-5`, the titled views' one (see `.overview`). */
+.library { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4) var(--rt-space-5); height: 100%; overflow: hidden; box-sizing: border-box; }
 
 .library__spacer { flex: 1; }
 .library__search { min-width: 320px; }
 .library__search .input { width: 100%; box-sizing: border-box; }
 .library__tabs { flex-wrap: wrap; }
 .library__tabs .tab { background: none; border-top: 0; border-left: 0; border-right: 0; }
+/* R-097 (docs/design/briefs/library.md, audit item 2): the design `Tabs` draws each tab as a `button`, and a button does not
+   inherit its face — the Library's three tabs were drawn in the browser's Arial, the only controls of the view outside the
+   adopted faces. The face alone is inherited, as `.seg-opt` does (UIR-005): `font: inherit` would discard the adopted
+   `.tab`'s size and weight. */
+.tabs .tab { font-family: inherit; }
 .library__body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* UIR-007: sized to its message, like every other empty state — `flex: 1` stretched a one-sentence
    panel to 495 px, 55 % of the view, in a column 151 px wide. */
 /* A list column's empty state sits where its first row would, not centred in the column: centring left
    248 px of bare card above it and 214 px below (UIR-016). */
 .library__empty { flex: 0 0 auto; align-self: stretch; max-width: none; }
+/* R-097 (docs/design/briefs/library.md, audit item 1): a prompt card's actions stand at the card's FOOT in every state of
+   the list above them. With no prompts they hung under the empty state, 135 px from the card's top and 406 px above its
+   foot, and dropped to the foot when the first prompt arrived. The actions take the free space above them
+   (`margin-top: auto`); the empty state keeps the size of its sentence.
+   FALSIFIED, 2026-11-10, kept beside its replacement: this change first gave the empty state the list's `flex: 1`, so
+   that it filled the region the list fills. That is the fault UIR-007 and UIR-016 recorded and `.library__empty`'s
+   `flex: 0 0 auto` repaired — a one-sentence panel stretched to 473 px, 56 % of the view at 1400x900 — and the
+   independent critique of the built pack (`9401038db662`, 2026-11-10) read it back as its finding 5. */
+.library-card > .library-card__actions { margin-top: auto; }
 .library__placeholder { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
 
 .library-prompts { display: grid; align-items: stretch; gap: 0; flex: 1; min-height: 0; }
@@ -2000,6 +2147,10 @@
 .md__h2 { font-size: var(--rt-text-md, 14px); }
 .md__h3, .md__h4, .md__h5, .md__h6 { font-size: var(--rt-text-sm, 13px); }
 .md__strong { font-weight: var(--rt-weight-display); }
+/* R-097, finding 3 of the 2026-11-10 critique: emphasis is the medium weight everywhere, as it is in Markdown above. A bare
+   `strong` took the browser's `bolder` — 700, where "nothing in the system goes above 500" (§1.4) — on the task plan's
+   "No task plan", Project's "Initialization failed" and six more lines of the shell. */
+strong { font-weight: var(--rt-weight-medium); }
 .md__em { font-style: italic; }
 .md__strike { text-decoration: line-through; }
 .md__code { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs, 12px); background: var(--rt-surface-2); border-radius: var(--rt-radius-sm, 4px); padding: 0 3px; }
@@ -2423,9 +2574,32 @@
  * primary control 32 high, every other 24), REQ-TRACE-490 (the drop-down bounds are set by the view, 240 / 150).
  * Colour never carries a fact alone: every state that paints also prints a word or a glyph (REQ-TRACE-241/247/398).
  */
-.req { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; }
-.req-header { flex: none; display: flex; flex-direction: column; gap: var(--rt-space-2); padding: 0 var(--rt-space-4) var(--rt-space-2); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
-.req-header__row { display: flex; align-items: center; gap: var(--rt-space-3); min-height: 48px; flex-wrap: wrap; }
+/* R-097, the page frame (see `.overview`): the board's rules run edge to edge, so the inset is carried by each band — the
+   block one by the root, the inline one (`--rt-space-5`) by the header, the two strips, the columns and the foot. The
+   title row is the control height; with the root's inset above it the band is the mockup's 48 px, as it was. */
+.req { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; padding-top: var(--rt-space-4); }
+.req-header { flex: none; display: flex; flex-direction: column; gap: var(--rt-space-2); padding: 0 var(--rt-space-5) var(--rt-space-2); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.req-header__row { display: flex; align-items: center; gap: var(--rt-space-3); min-height: var(--rt-control-height); flex-wrap: wrap; }
+/* R-097 (docs/design/briefs/requirements-board.md, §8 and audit item 2): the analysis statement stands BESIDE the rows that
+   steer the board, not under them. Held to the prose measure (UIR-011) under the controls it was five lines, 89 px of a
+   248 px header, and the frame took two thirds of the view at the minimum window. `.req-header__steer` is one wrapping
+   line of two items: the rows ask for two measures and the statement for one, so the statement stands beside the rows
+   wherever the header holds three measures and a gap, and returns under them where it does not — no breakpoint is
+   written, the tokens decide. Its lines hold ONE measure in both places (OQ-535: the measure keeps its 340 px): beside
+   the rows it is one measure wide, the rows taking the line's free space; alone under them it is set in two columns
+   of one measure each, so five lines become three at the size where the board has least. The DOM order, and so what a
+   reader and the Tab key meet, is unchanged: the statement holds no control.
+   The controls row is two DECIDED lines — what the board shows (group, sort, the blocked column), then what is done
+   to it (filters, queue, new requirement, the filter's own sentence) — where it broke after a different control at
+   each width (the 2026-11-10 critique's finding 12). `.req-header__break` is the line's end: a layout box with no content. */
+.req-header__steer { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--rt-space-2) var(--rt-space-5); min-width: 0; }
+.req-header__rows { flex: 9999 1 calc(2 * var(--rt-prose-measure)); min-width: 0; display: flex; flex-direction: column; gap: var(--rt-space-2); }
+/* `display: block`: the statement also carries `.card-meta`, which is a flex line, and a flex container sets no columns. */
+.req-header__steer > .req-header__analysis { display: block; flex: 1 1 var(--rt-prose-measure); max-width: calc(2 * var(--rt-prose-measure) + var(--rt-space-5)); column-width: var(--rt-prose-measure); column-gap: var(--rt-space-5); }
+/* The break is a line of its own, of no height, so the row's gap falls on both sides of it: `--rt-space-1` twice is the
+   `--rt-space-2` the header's rows stand apart by. */
+.req-header__controls { row-gap: var(--rt-space-1); }
+.req-header__break { flex: 0 0 100%; height: 0; }
 .req-header__controls, .req-header__filters, .req-header__move { min-height: 0; }
 .req-header__count { font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
 .req-header__spacer { flex: 1 1 auto; }
@@ -2457,7 +2631,7 @@
 .req-move__glyph { flex: none; font-family: var(--rt-font-mono); }
 .req-move__sentence { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The blocked summary (REQ-TRACE-240/241): above the columns, a rule and a glyph, never a filled ground. */
-.req-blocked { flex: none; padding: var(--rt-space-2) var(--rt-space-4); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.req-blocked { flex: none; padding: var(--rt-space-2) var(--rt-space-5); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 .req-blocked__heading { margin: 0 0 var(--rt-space-1); display: flex; align-items: center; gap: var(--rt-space-2); font-family: var(--rt-font-body); font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); color: var(--rt-wait); }
 .req-blocked__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-1); }
 .req-blocked__row { display: flex; align-items: center; gap: var(--rt-space-2); font-size: var(--rt-text-xs); min-width: 0; }
@@ -2465,7 +2639,7 @@
 .req-blocked__reason { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rt-text-secondary); }
 .req-blocked__row .btn { flex: none; }
 /* Domain 22 (PD-TRACE-001): the adoption strip beneath the header, drawn as the blocked strip is; every control secondary (REQ-ADOPT-001). */
-.req-adoption { position: relative; flex: none; padding: var(--rt-space-2) var(--rt-space-4); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.req-adoption { position: relative; flex: none; padding: var(--rt-space-2) var(--rt-space-5); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); display: flex; flex-direction: column; gap: var(--rt-space-1); }
 .req-adoption__row { display: flex; align-items: center; gap: var(--rt-space-2); min-width: 0; font-size: var(--rt-text-xs); }
 .req-adoption__state { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rt-text-secondary); }
 .req-adoption__row .btn, .req-adoption__check { flex: none; }
@@ -2474,9 +2648,25 @@
 /* The live region a screen reader hears uses the adopted `visually-hidden`; the visible words are the state line's. */
 /* The body: the columns area scrolls horizontally (REQ-TRACE-237); the detail is an aside beside it, never over it. */
 .req-body { flex: 1 1 auto; min-height: 0; display: flex; }
-.req-columns { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; padding: var(--rt-space-3) var(--rt-space-4); display: flex; gap: var(--rt-space-3); align-items: stretch; }
-.req-columns > .req-status { align-self: flex-start; position: sticky; left: var(--rt-space-4); }
+.req-columns { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; padding: var(--rt-space-3) var(--rt-space-5); display: flex; gap: var(--rt-space-3); align-items: stretch; }
+.req-columns > .req-status { align-self: flex-start; position: sticky; left: var(--rt-space-5); }
 .req-empty { margin: var(--rt-space-6) auto; max-width: 560px; }
+/* R-097 (docs/design/briefs/requirements-board.md, audit items 1 and 3): the board body BOUNDS what stands in it. An
+   empty state is `align-self: center` (`.empty-state`), and in a body shorter than itself — 133 px for its 224 at
+   1000x680 with a notice open — a centred box overflows both ways: it painted 45 px over the adoption strip and 45 px
+   over the foot, and `ui-audit` read "Details" and "Run adoption" as covered (STACKING x2). Auto margins centre it while
+   there is room and collapse to the start when there is none, and the body scrolls what is left; the body's own block
+   inset keeps the state `--rt-space-4` off the strip above it and the foot below it in both cases. The reading line
+   takes the inset the columns take, where it stood flush in the body's corner. */
+.req-body:has(> .req-empty) { overflow-y: auto; padding-block: var(--rt-space-4); }
+.req-body > .req-empty { align-self: flex-start; margin: auto; }
+.req-body > .req-status { margin: var(--rt-space-3) var(--rt-space-5); }
+/* UIR-310: a file, a key or a path named in a hint is one word. It goes to the next line whole, where the line broke
+   it at its hyphen ("rotaris-" / "traceability.json"); only a name longer than the hint's own measure breaks, and then
+   anywhere, inside the hint. */
+.req-empty .empty-state-hint .mono { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+/* UIR-412: a control's name or its verb inside a sentence stays on one line ("Re-" / "evaluate" broke at the hyphen). */
+.req-whole { white-space: nowrap; }
 .req-empty__errors { margin: var(--rt-space-2) 0 0; padding: 0; list-style: none; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); text-align: left; }
 /* REQ-TRACE-238: an open column is at least 276 and at most 340 wide, spare width spent up to the cap; REQ-TRACE-310: its margin is 10 on every side. */
 .req-column { flex: 1 0 276px; min-width: 276px; max-width: 340px; display: flex; flex-direction: column; min-height: 0; padding: 10px; border-radius: var(--rt-radius-md); }
@@ -2578,7 +2768,10 @@
 .req-detail__runs, .req-detail__sites, .req-detail__findings, .req-detail__history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .req-detail__run { display: flex; align-items: center; gap: var(--rt-space-2); flex-wrap: wrap; padding: 6px 9px; background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); }
 .req-detail__history li.is-current { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
-.req-foot { flex: none; margin: 0; padding: var(--rt-space-1) var(--rt-space-4); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+.req-foot { flex: none; margin: 0; padding: var(--rt-space-1) var(--rt-space-5); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+/* The foot is a sentence with a control's name inside it, and it also carries `.card-meta`, which is a flex line: as
+   flex items the sentence's parts stood as three columns at 1000x680. A block sets them as one text. */
+.req-foot.card-meta { display: block; }
 /* The evidence view and the reason dialog reuse the shell's dialog; only their bodies are sized here. */
 .req-evidence-pane { width: min(720px, 90vw); max-height: 85vh; display: flex; flex-direction: column; }
 .req-evidence-pane__body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: var(--rt-space-3); font-size: var(--rt-text-xs); }

@@ -13,3 +13,10 @@ Rules:
 | Surface | Brief | Last audit |
 |---|---|---|
 | Overview | [`overview.md`](overview.md), an index of [`overview/`](overview/) | 2026-11-02; its executable items implemented 2026-11-03 (items 1, 3–6, 8–10, 12–16, P1–P4) and 2026-11-05 (items 2 and 11, after OQ-537, OQ-539, OQ-540) |
+| Transcript rows, run header | [`transcript-rows.md`](transcript-rows.md) — an audit of the run header alone, with the brief's §1, §8, §10 and §11 | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+| Git | [`git.md`](git.md) — an audit, with the brief's §1, §8, §10 and §11 | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+| Library | [`library.md`](library.md) — an audit of the Prompts tab, with the brief's §1, §4, §8, §10 and §11 | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+| Settings | [`settings.md`](settings.md) — the brief for how a category arranges its rows, and its audit | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+| Requirements board | [`requirements-board.md`](requirements-board.md) — the brief for the view's frame (header, empty states, foot), and its audit | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+
+*2026-11-11 ([R-098](../../product/requests.md#r-098)): the Overview's brief gained [part 5](overview/05-brief-2026-11-11.md), for the delegation graph and the agent activity table that stand on it since [`PD-MONITOR-009`](../../product/directives/pd-monitor-009.md#pd-monitor-009); the Settings brief's category list stands under four headings since [`PD-CONFIG-008`](../../product/directives/pd-config-008.md#pd-config-008). Which views exist and what each holds is stated once, in [the information-architecture map](../information-architecture.md). Built the same day on `feat/r-097-ui-ux-overhaul`, not landed.*

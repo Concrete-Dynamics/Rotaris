@@ -6,23 +6,23 @@ Four rules shape every section. **Fixed before free** (02 §4 step 2): list each
 
 ## Which slug, and how it is captured
 
-The slug is the surface's row in `docs/design/README.md` §7. `--views=` takes `ui-audit`'s numbers, `REQ-SHELL-023`'s order: 1 Overview, 2 Workspace, 3 Mission, 4 Requirements, 5 Git, 6 Library, 7 Settings.
+The slug is the surface's row in `docs/design/README.md` §7. `--views=` takes `ui-audit`'s numbers, the rail's order under `PD-SHELL-015`: 1 Overview, 2 Workspace, 3 Requirements, 4 Git, 5 Library, 6 Settings; or a view's identifier (`--views=overview,settings`), which does not move when the rail does. *(Until 2026-11-11 this read seven, with 3 Mission; Mission is not a view, and what it drew is the Overview's.)*
 
 | Slug | §7 row | `--views=` | Not in the `ui-review` pack — reach it with `pnpm app:drive` |
 |---|---|---|---|
 | `title-bar-and-rail` | Title bar, nav rail | all (omit `--views=`) | — |
-| `overview` | Overview | 1 | — |
+| `overview` | Overview | 1 | the delegation graph and the agent table during a run: drive a scripted run with delegated agents, `waitFor` `.agent-table__row` |
 | `transcript-rows` | Transcript rows, run header | 2 | each row category: drive a scripted run, `waitFor` the row |
 | `composer` | Queue, composer, slash catalogue | 2 | the slash popup is a captured overlay; queue states by `type --enter` |
 | `agent-list` | Agent list, context rings, inspector | 2 | a delegation tree; persona windows by `windows`, `useWindow persona:<persona>` |
 | `approval-card` | Approval card | 2 | `--window=approval` on an open approval |
 | `question-stepper` | Structured questions | 2 | a run that raises a structured question |
-| `git` | Git worktrees, commits, diffs | 5 | — |
-| `library` | Library tabs and cards | 6 | — |
-| `settings` | Settings panes and save bar | 7 | — |
+| `git` | Git worktrees, commits, diffs | 4 | — |
+| `library` | Library tabs and cards | 5 | — |
+| `settings` | Settings panes and save bar | 6 | — |
 | `provider-auth` | Provider auth | — | `start --fresh`, the provider sign-in dialog |
 | `terminal-window` | Terminal window and transcript preview | 2 (the preview) | `useWindow terminal` |
-| `requirements-board` | Requirements board, review, new requirement | 4 | the review modal and the new requirement dialog by their commands |
+| `requirements-board` | Requirements board, review, new requirement | 3 | the review modal and the new requirement dialog by their commands |
 | `first-launch` | First launch | 1 | `start --fresh` |
 
 A surface with no §7 row takes its slug from the decision that creates it: where an owner-authorized round may change the information architecture, a new surface's row is added to `docs/design/README.md` §7 as part of the directive that supersedes the structure it departs from (R-098), and the brief cites that directive in its §1. Without such a round a surface with no §7 row still has no slug: that is an open question, not a new row.

@@ -25,7 +25,7 @@ The slug is the surface's row in `docs/design/README.md` §7. `--views=` takes `
 | `requirements-board` | Requirements board, review, new requirement | 4 | the review modal and the new requirement dialog by their commands |
 | `first-launch` | First launch | 1 | `start --fresh` |
 
-A surface with no §7 row (the Mission view, undrawn per §3.2) has no slug: that is an open question, not a new row.
+A surface with no §7 row takes its slug from the decision that creates it: where an owner-authorized round may change the information architecture, a new surface's row is added to `docs/design/README.md` §7 as part of the directive that supersedes the structure it departs from (R-098), and the brief cites that directive in its §1. Without such a round a surface with no §7 row still has no slug: that is an open question, not a new row.
 
 ## The template
 

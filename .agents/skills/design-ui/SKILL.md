@@ -31,7 +31,7 @@ Add no screen, tab, order or label. Write a gap as an open-question candidate, r
 
 Method, slug table and shape: [references/design-brief.md](references/design-brief.md); each step fills its section from the guide sections named there. In and out below are the brief's own sections.
 
-1. **Fix the surface.** In: its §7 row and slug (no §7 row: stop, raise the question); the requirement and directive ids; `docs/architecture/views/04-seams/08-8-a-drawn-surface.md`; the record's findings on it (`docs/architecture/codebase/17-all-twelve-critic-findings-repaired-and.md`, `docs/defects/`), so a brief never re-proposes what a round already measured and reverted. Out: the header and §1.
+1. **Fix the surface.** In: its §7 row and slug (no §7 row: stop and raise the question, unless an owner-authorized round may change the information architecture, in which case the row is added by the directive that supersedes the structure — R-098); the requirement and directive ids; `docs/architecture/views/04-seams/08-8-a-drawn-surface.md`; the record's findings on it (`docs/architecture/codebase/17-all-twelve-critic-findings-repaired-and.md`, `docs/defects/`), so a brief never re-proposes what a round already measured and reverted. Out: the header and §1.
 2. **Map the journeys.** In: §1. Out: §2.
 3. **Model the content.** In: §1–§2. Out: §3.
 4. **Draw the states matrix.** In: §3's regions. Out: §4, every cell filled or `n/a` with its reason.

@@ -57,6 +57,7 @@ import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands } from './commands/session.js';
 import { dictationCommands } from './commands/dictation.js';
+import type { DictationCredentialDeps } from './dictation/credential.js';
 import { installPermissionHandlers, type ApplicationPages, type PermissionSession } from './permissions.js';
 import { installWebContentsGuard } from './web-contents-guard.js'; // R-091, OQ-466
 import { rendererLossNotice } from './renderer-loss-notice.js'; // R-091, hardening §3.2 row 5
@@ -358,7 +359,10 @@ async function main(): Promise<void> {
   // ADR-0029/0030: the credential store and the provider service live HERE, in main; the run host is leased bearers.
   const lockDeps = { pid: process.pid, startedAt: toIsoUtc(clocks.wall.instant()), timers: clocks.timers, monotonic: clocks.monotonic };
   const random = () => Math.random().toString(36).slice(2, 10);
-  const credentials = new CredentialStore({ dir: layout.tokens, protector: createProtector({ scratchDir: dirs.data }), lock: lockDeps, random, warn: (m) => log(`credential store: ${m}`, 'warn'), info: (m) => log(`credential store: ${m}`) });
+  // REQ-PROVIDER-016's one protection path, shared by the credential store and PD-CONFIG-010's dictation credential.
+  const protector = createProtector({ scratchDir: dirs.data });
+  const credentials = new CredentialStore({ dir: layout.tokens, protector, lock: lockDeps, random, warn: (m) => log(`credential store: ${m}`, 'warn'), info: (m) => log(`credential store: ${m}`) });
+  const dictationCredential: DictationCredentialDeps = { dir: layout.dictation, protector, warn: (m) => log(`dictation credential: ${m}`, 'warn') };
   const projectSettings = new ProjectSettingsStore({ path: join(dirs.config, PROJECT_SETTINGS_FILE), lock: lockDeps, timers: clocks.timers, warn: (m) => log(`project settings: ${m}`, 'warn') });
   const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
 
@@ -2011,7 +2015,7 @@ async function main(): Promise<void> {
     pauseWindows, pausePayloads, presentPause, reviewPayloads, authRecovery, authRecoveryPayloads, runFailures,
     measurePersonaPaint, terminalWindowCommand, surface,
     notices, raiseNotice, raiseNoticeKeyed, recoveryFor, configFatal, raiseTransient: (w, kind, title) => raiseTransient(w, kind, title), announceRepairs, updater,
-    providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange,
+    providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange, dictationCredential,
     preferences, diagnostics, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey, userDirs: dirs,
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),

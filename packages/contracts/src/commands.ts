@@ -330,6 +330,16 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * opus fit well inside the bound, so one oversized request cannot hold the one channel every kind shares.
    */
   z.object({ kind: z.literal('dictation.transcribe'), audioBase64: z.string().min(1).max(DICTATION_AUDIO_MAX_BASE64), mimeType: z.string().min(1).max(100) }),
+  /**
+   * PD-CONFIG-010: the dictation endpoint's bearer, as the Settings field holds it. `dictation.credential` answers the masked
+   * state alone — `{ masked }`, null when nothing is stored — and never the value. `dictation.setCredential` carries the value
+   * INWARD, the sanctioned pattern of `provider.signIn`/`mcp.setSecret` (ADR-0030 c.2; `CommandRequestSchema` is not one of
+   * `CHANNEL_SCHEMAS`), and `dictation.clearCredential` removes it. The value takes the API-key bound the provider commands use;
+   * an empty value is refused by the store with a notice, so no `.min(1)` here.
+   */
+  z.object({ kind: z.literal('dictation.credential') }),
+  z.object({ kind: z.literal('dictation.setCredential'), value: z.string().max(PATH_MAX) }),
+  z.object({ kind: z.literal('dictation.clearCredential') }),
   /** ADR-0030 / REQ-PROVIDER-140..143/147: the provider list and its actions, answered by main itself (the store lives there). No reply carries a credential. */
   z.object({ kind: z.literal('providers.list') }),
   z.object({ kind: z.literal('providers.health'), id: z.string().max(NAME_MAX).min(1) }),

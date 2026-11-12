@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
-import { dictationSaveProblem, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
+import { dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
 import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
 // ADR-0063 — portable skills: the catalog reader (`askUntilDiscovered`, `bindSkillsReader`, `readWhileMounted`, in the `@rotaris/ui` import above), the Settings tab's props and the composer's commands.
@@ -844,6 +844,8 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
   const providers = useProviders();
   const mcp = useMcp();
   const providersCard = <ProvidersCard {...providers} />;
+  const dictationCredentialProps = useDictationCredential();
+  const dictationCredential = <DictationCredentialField {...dictationCredentialProps} />;
   // REQ-CONFIG-403 (Part AG): the two transcript preferences the Display category owns, from their one home.
   const display = useStore(displayPrefs, (s) => s);
   /**
@@ -1041,7 +1043,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       onTheme={onTheme}
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
-      config={{ ...config, providersCard, confinement: confinement.verdict, onRecheckConfinement: confinement.onRecheck, planReleased: session?.planReleased === true }}
+      config={{ ...config, providersCard, dictationCredential, confinement: confinement.verdict, onRecheckConfinement: confinement.onRecheck, planReleased: session?.planReleased === true }}
       mcp={{ ...mcp, ...(config.snapshot && !config.snapshot.loadOk ? { fatal: config.snapshot } : {}) }}
       display={{
         autoCollapseTools: display.autoCollapseTools,
@@ -1715,6 +1717,35 @@ function useProviders(): ProvidersCardProps {
   };
 }
 
+/**
+ * PD-CONFIG-010: the dictation endpoint's stored bearer, as the Settings field holds it. The read answers the masked value
+ * alone and the two writes answer it again, so the field never receives the credential it stored. The write is immediate and
+ * outside Save (REQ-CONFIG-417's destination 4), which the field's hint says in words.
+ */
+function useDictationCredential(): DictationCredentialFieldProps {
+  const [masked, setMasked] = useState<string | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const read = useCallback(async () => {
+    const r = await bridge.command({ kind: 'dictation.credential' });
+    if (r.ok) setMasked((r.value as { masked: string | null }).masked);
+  }, []);
+  useEffect(() => { queueMicrotask(() => { void read(); }); }, [read]);
+  const act = async (req: Parameters<typeof bridge.command>[0], done: string) => {
+    setBusy(true);
+    setMessage(null);
+    const r = await bridge.command(req);
+    setBusy(false);
+    if (!r.ok) { setMessage(r.detail ?? r.headline); return; }
+    setMasked((r.value as { masked: string | null }).masked);
+    setMessage(done);
+  };
+  return {
+    masked, busy, message,
+    onStore: (value) => { void act({ kind: 'dictation.setCredential', value }, 'The credential was stored.'); },
+    onClear: () => { void act({ kind: 'dictation.clearCredential' }, 'The stored credential was removed.'); },
+  };
+}
 
 async function boot(): Promise<void> {
   const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply, workspaceLayoutReply] = await Promise.all([

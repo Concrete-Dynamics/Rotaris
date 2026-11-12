@@ -467,7 +467,7 @@ export const PROOFS = [
   {
     id: 'dictation-proof',
     area: 'Surfaces',
-    summary: "the composer's microphone: refusals, the renderer's grants, a transcript at the caret, never a submission",
+    summary: "the composer's microphone: refusals, the renderer's grants, a transcript at the caret, never a submission; and the endpoint's credential field (PD-CONFIG-010)",
     neighbours: ['composer-proof'],
     requires: [],
     platforms: ALL_HOSTS,

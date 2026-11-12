@@ -107,9 +107,14 @@ with none, raised "Project <name> is not open in any window." in the asking wind
 (PD-WORKSPACE-005 revision 3: sent by a main window's renderer right after it registers for channel 15; marks the window
 listening and answers `{owed}`, whether an open was held for it, once),
 `playbooks.catalogue`, `config.read/save/setField/liveState`, `providers.list/health/open/save/validate/signOut/
-delete/refresh`, `provider.payload/signIn`. Main relays a session or hook command to the run host, a workspace or
-config command to the workspace service, and answers preference, theme and **provider** commands itself (the
-credential store lives in main). `provider.signIn` is the one command carrying a pasted key inward; no outcome
+delete/refresh`, `provider.payload/signIn`, **`dictation.transcribe` and, since 2026-11-12, `dictation.credential` /
+`dictation.setCredential {value}` / `dictation.clearCredential`** ([`PD-CONFIG-010`](../../../product/directives/pd-config-010.md#pd-config-010):
+the endpoint's bearer is stored in main's own protected file under the per-user data directory, written by the set and removed
+by the clear, and every answer carries the masked form alone — `{masked}`, null when nothing is stored — never the value).
+Main relays a session or hook command to the run host, a workspace or
+config command to the workspace service, and answers preference, theme, **provider** and **dictation** commands itself (the
+credential store and the dictation credential live in main). `provider.signIn` and `dictation.setCredential` are the two
+commands carrying a pasted secret inward; no outcome
 carries one back — the list shows the display mask. A sign-in that succeeds asks the workspace service
 `config.bootstrap` (the starter `agents.yaml` if absent, then the load again; since 2026-10-03 the open has already
 written it, so the answer is normally `exists`) and broadcasts `config:changed` (to each main

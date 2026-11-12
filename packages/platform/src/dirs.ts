@@ -117,6 +117,11 @@ export function dataLayout(dirs: UserDirs, platform: NodeJS.Platform = process.p
     // which no requirement names — corrected when ADR-0029 was first executed (Part K, 2026-09-05).
     tokens: join(dirs.data, 'tokens'),
     /**
+     * PD-CONFIG-010: the dictation endpoint's bearer, in its own directory beside the credential store and never within it —
+     * REQ-PROVIDER-063's shape for a bearer token that is not a provider credential, and for the reason it states there.
+     */
+    dictation: join(dirs.data, 'dictation'),
+    /**
      * Chromium's own profile — `Local State`, `Preferences`, the caches, local and session storage, `Crashpad` — which
      * every launch writes. REQ-STARTUP-145 decides conformance by the directories the product actually writes to, and
      * Electron's default (`$XDG_CONFIG_HOME/<name>` taken as it stands, `%APPDATA%\<name>` on Windows, the roaming profile)

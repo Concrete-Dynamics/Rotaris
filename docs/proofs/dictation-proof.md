@@ -7,3 +7,9 @@ The composer's microphone in the built application (OQ-455 to OQ-459), through C
 the refusal while the backend is off; what the permission handlers grant and refuse, the clipboard write included; a dictation landing
 at the caret without a run starting; and the refusal of a local model absent from the machine. It does not run a model: the two real
 clients are `apps/desktop/src/main/dictation/dictation.test.ts`'s.
+
+Since 2026-11-12 it also measures the endpoint's credential field ([`PD-CONFIG-010`](../product/directives/pd-config-010.md#pd-config-010)),
+in Settings › Models › Dictation: the field is a password field; storing empties it and reports REQ-TOOLS-171's mask alone; the stored
+value is never rendered; and removal is offered and returns the field to its empty state. The store behind it — the protected file, the
+protection ordering and the three commands — is `apps/desktop/src/main/dictation/credential.test.ts`'s and
+`apps/desktop/src/main/commands/dictation.test.ts`'s.

@@ -15,7 +15,14 @@ describe('OQ-457 — the dictation: section', () => {
 
   it('reads both ways of naming a model', () => {
     expect(read({ backend: 'local', local_model: 'large-v3-turbo', language: 'de' }).section).toMatchObject({ backend: 'local', local_model: 'large-v3-turbo', language: 'de' });
-    expect(read({ backend: 'endpoint', base_url: 'http://127.0.0.1:8000/v1', model: 'whisper-1', provider: 'openai' }).section).toEqual({ ...DICTATION_CONFIG_DEFAULT, backend: 'endpoint', base_url: 'http://127.0.0.1:8000/v1', model: 'whisper-1', provider: 'openai' });
+    expect(read({ backend: 'endpoint', base_url: 'http://127.0.0.1:8000/v1', model: 'whisper-1' }).section).toEqual({ ...DICTATION_CONFIG_DEFAULT, backend: 'endpoint', base_url: 'http://127.0.0.1:8000/v1', model: 'whisper-1' });
+  });
+
+  it('PD-CONFIG-010: holds no credential, and a file that still names a provider is warned about and contributes nothing', () => {
+    const { section, warnings } = read({ backend: 'endpoint', base_url: 'http://h/v1', model: 'm', provider: 'openai' });
+    expect(warnings).toEqual(['dictation.provider']);
+    expect(section).toEqual({ ...DICTATION_CONFIG_DEFAULT, backend: 'endpoint', base_url: 'http://h/v1', model: 'm' });
+    expect(Object.keys(section)).not.toContain('provider');
   });
 
   it('refuses a backend outside the vocabulary', () => {

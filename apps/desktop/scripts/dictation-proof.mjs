@@ -1,15 +1,18 @@
 // @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
- * The dictation proof (OQ-455..459): the composer's microphone in the built application, against a scratch profile.
+ * The dictation proof (OQ-455..459, PD-CONFIG-010): the composer's microphone in the built application, and the endpoint's
+ * credential field, against a scratch profile.
  *
  * Chromium's fake device stands in for a microphone, so `getUserMedia`, the permission handlers, `MediaRecorder`, the command and
  * main's choice of client are the product's own; `ROTARIS_DICTATION_SCRIPT` stands in for the transcriber, so no model is needed
  * and the text is known. Whether whisper itself transcribes is `dictation.test.ts`'s port and a demo's, not this proof's.
  *
- *   off        the default: the control refuses, naming the setting, in its tooltip and its accessible description
- *   grants     a secure page on `file:`; audio granted; video and notifications refused; the clipboard write the copy buttons use kept
- *   dictate    idle → recording → idle: text at the caret between what was typed, the composer focused, no run started, the draft kept
- *   missing    a local model absent from this machine: the specific refusal, the composer's text untouched, nothing started
+ *   off         the default: the control refuses, naming the setting, in its tooltip and its accessible description
+ *   grants      a secure page on `file:`; audio granted; video and notifications refused; the clipboard write the copy buttons use kept
+ *   dictate     idle → recording → idle: text at the caret between what was typed, the composer focused, no run started, the draft kept
+ *   missing     a local model absent from this machine: the specific refusal, the composer's text untouched, nothing started
+ *   credential  Settings › Models › Dictation: the field is a password field, storing empties it and reports the mask alone,
+ *               the stored value is never rendered, and removal is offered (PD-CONFIG-010)
  *
  * Evidence under `.proof/dictation-proof/`. `--skip-build` skips the build.
  */
@@ -63,6 +66,33 @@ async function scenario(name, { dictation, extra = {}, electronArgs = FAKE_DEVIC
     await driver.waitFor('[data-testid=composer-dictate]', { timeout: 15_000 });
     const read = () => driver.eval(READ);
     results[name] = await body(driver, read);
+    await driver.screenshot(join(output, `${name}.png`));
+  } finally {
+    await stopApp(started);
+    rmSync(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+}
+
+/** PD-CONFIG-010: the Dictation section's credential field, as the built page draws it. */
+const CREDENTIAL = `(() => {
+  const input = document.querySelector('#dictation-credential');
+  const hint = document.getElementById('dictation-credential-hint');
+  const field = input && input.closest('.settings__dictation-field');
+  return { type: input && input.type, value: input && input.value, disabled: input && input.disabled, hint: hint && hint.textContent,
+    buttons: field ? [...field.querySelectorAll('button')].map((b) => b.textContent) : [], error: field ? (field.querySelector('.composer__error')?.textContent ?? null) : null };
+})()`;
+
+/** The same launch, opened on Settings (the sixth view, Ctrl+6) instead of the Workspace. */
+async function settingsScenario(name, { dictation }, body) {
+  const workspace = scratchWorkspace(name, dictation);
+  const root = join(output, name);
+  const started = await startApp({ root, workspace });
+  const { driver } = started;
+  try {
+    await until(() => driver.eval(`[...document.querySelectorAll('.nav-item')].length`), (n) => n > 0, { what: 'the shell', timeoutMs: 30_000 });
+    await driver.chord('Ctrl+6');
+    await driver.waitFor('#dictation-credential', { timeout: 15_000 });
+    results[name] = await body(driver);
     await driver.screenshot(join(output, `${name}.png`));
   } finally {
     await stopApp(started);
@@ -125,6 +155,26 @@ await scenario('missing', { dictation: ['dictation:', '  backend: local', '  loc
   expect(s.error.includes('proof-absent-model') && s.error.includes('downloads nothing'), `the refusal should be specific: ${s.error}`);
   expect(s.text === 'kept', `the composer's text should be untouched: ${s.text}`);
   return s;
+});
+
+await settingsScenario('credential', { dictation: ['dictation:', '  backend: endpoint', '  base_url: http://127.0.0.1:9/v1', '  model: proof-model'] }, async (driver) => {
+  const read = () => driver.eval(CREDENTIAL);
+  const before = await read();
+  expect(before.type === 'password', `the field should be a password field: ${JSON.stringify(before)}`);
+  expect(before.hint.includes('Sent as the bearer'), `the empty state should say what the value is: ${before.hint}`);
+  expect(before.buttons.includes('Store the credential'), `storing should be offered: ${JSON.stringify(before.buttons)}`);
+  await driver.click('#dictation-credential');
+  await driver.type('sk-proof-1234');
+  await driver.click('.settings__dictation-field button', { text: 'Store the credential' });
+  const stored = await until(read, (s) => s.hint.includes('Stored, value'), { what: 'the stored state', timeoutMs: 10_000 });
+  expect(stored.value === '', `the field should be empty once stored: ${JSON.stringify(stored)}`);
+  expect(stored.hint.includes('***'), `the stored value should be reported masked: ${stored.hint}`);
+  expect(!stored.hint.includes('sk-proof-1234'), `the stored value must never be rendered: ${stored.hint}`);
+  expect(stored.buttons.includes('Delete the stored credential'), `removal should be offered: ${JSON.stringify(stored.buttons)}`);
+  await driver.click('.settings__dictation-field button', { text: 'Delete the stored credential' });
+  const cleared = await until(read, (s) => s.hint.includes('Sent as the bearer'), { what: 'the cleared state', timeoutMs: 10_000 });
+  expect(cleared.buttons.includes('Store the credential'), `storing should be offered again: ${JSON.stringify(cleared.buttons)}`);
+  return { before, stored, cleared };
 });
 
 results.passed = true;

@@ -36,6 +36,11 @@ export interface ConfigSettingsProps {
   /** REQ-CONFIG-329: the providers card, owned by the renderer root (main answers its commands). */
   readonly providersCard?: ReactNode;
   /**
+   * PD-CONFIG-010: the dictation endpoint's credential field, owned by the renderer root (main answers its commands). It
+   * stands inside the Dictation section's endpoint block, between the model and the language.
+   */
+  readonly dictationCredential?: ReactNode;
+  /**
    * ADR-0022 / REQ-SANDBOX-116: the availability verdict the runtime section's label shows, and
    * REQ-SANDBOX-129's re-check beside it. `null` means no verdict has arrived yet; the probe runs in
    * the run host, off this thread, so the label says so rather than blocking.
@@ -170,7 +175,7 @@ export function ModelsSettings(props: ConfigSettingsProps) {
         </tbody>
       </DesignTable>
       {props.providersCard ?? <p className="text-secondary">The provider list is not available in this window.</p>}
-      <DictationSettings value={pending.dictation} onChange={onChange} />
+      <DictationSettings value={pending.dictation} onChange={onChange} credential={props.dictationCredential} />
     </div>
   );
 }

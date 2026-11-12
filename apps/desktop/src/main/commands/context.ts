@@ -27,6 +27,7 @@ import type {
 import type { resolveUserDirs, dataLayout, HandOver, PreferenceKey, PreferenceStore } from '@rotaris/platform';
 import type { LiveStateArbiter } from '../live-state.js';
 import type { ProviderService } from '@rotaris/providers';
+import type { DictationCredentialDeps } from '../dictation/credential.js';
 import type { ProcessLink, UpdateRelay } from '@rotaris/shell';
 import type { MainWindows, MainWindowView } from '../main-windows.js';
 import type { PersonaWindows, TerminalWindows } from '../windows.js';
@@ -164,6 +165,11 @@ export interface CommandContext {
 
   // The provider surface and the health it caches between asks.
   readonly providers: ProviderService;
+  /**
+   * PD-CONFIG-010: the dictation endpoint's stored bearer — its own protected file under the per-user data directory, beside
+   * the credential store and never within it. Read at each press and written by the Settings field; no answer carries it.
+   */
+  readonly dictationCredential: DictationCredentialDeps;
   readonly healthCache: Map<string, ProviderHealthPayload>;
   readonly providerPayloads: Map<number, { mode: ProviderDialogPayload['mode']; providerId: string | null }>;
   readonly providerChoices: () => ProviderDialogPayload['choices'];

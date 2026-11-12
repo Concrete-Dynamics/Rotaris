@@ -1,0 +1,28 @@
+[Product directives](../directives.md) › PD-CONFIG-010
+
+<a id="pd-config-010"></a>
+
+### PD-CONFIG-010 — the dictation endpoint's bearer is a stored credential, typed into the field
+
+Settings › Models › Dictation SHALL hold, in place of the `provider` key, a **write-only credential field**: the value typed into it is the bearer the endpoint sends, and once it is stored the field is empty and the stored value is reported under REQ-TOOLS-171's one stored-secret display mask, so the only acts it offers are replacement and removal. The field SHALL never render the stored value, in any state, and no answer to any command SHALL carry it.
+
+The `dictation:` section SHALL lose the `provider` key. The bearer SHALL be stored as an individual protected file under the per-user data directory, in its own `dictation` directory **beside** the credential store and never within it, at REQ-PROVIDER-016's protection, written atomically with the staged file protected before a byte of content is written. It SHALL never be written to `agents.yaml`, to `secrets.yaml`, to the configuration snapshot or to the renderer, and no refusal SHALL carry it.
+
+**Why, and what it costs.** The owner asked for the endpoint to use the bearer token from the field, and for the field to be unreadable and replaceable once written ([R-100](../requests.md#r-100)). The field as built named a *signed-in provider* and resolved that provider's credential in main (OQ-458), which is a different thing from the token a person holds for a self-hosted endpoint: a Whisper server behind a bearer is not a provider in the catalogue, has no sign-in flow, and cannot be named by one. The owner's own case is exactly that — an OpenAI-compatible endpoint on a private address with a token of its own.
+
+The bearer is a credential, so it is stored where credentials are stored and not in a file that travels with the repository. `agents.yaml` is version-controlled by design (REQ-CONFIG-007's ground 3), so a token written there would be committed; `secrets.yaml` is REQ-CONFIG-007's per-tool-server file and a dictation endpoint is not a tool server. REQ-PROVIDER-063 already fixes the shape for a bearer token that is not a provider credential: its own directory under the per-user data directory, beside the credential directory and never within it, at the credential store's protection, and for the reason it states — a bearer token must not sit where a file-synchronising client reaches it.
+
+What it costs:
+
+- **The `provider` key is gone.** A workspace that named a signed-in provider for dictation loses that path: the endpoint's bearer is now the stored credential alone. The capability it carried — send a provider's own credential as the bearer — is not replaced, because the endpoint is not a provider and the two credentials are not interchangeable.
+- **The credential is per user, not per workspace.** The `dictation:` section is workspace configuration and the bearer is not, so two workspaces with different endpoints share one stored token. The provider credential store has the same shape (REQ-PROVIDER-014), and a per-workspace bearer would have to sit in the workspace, which the paragraph above refuses.
+- **A stored token is not readable back.** A person who has lost it must replace it; the field cannot show it, and no command returns it. That is the owner's own requirement for the field, and it is the same discipline REQ-MCP-081 fixes for a stored secret.
+- **The write is outside Save.** The credential is written when it is stored, not when the category is saved, so Discard does not undo it — REQ-CONFIG-417's destination 4, the same one the provider credential operations use.
+
+> **Narrows:** REQ-CONFIG-011
+
+The case narrowed, stated exhaustively: where the dictation endpoint's bearer lives. REQ-CONFIG-011's "they live only in the per-user data directory's credential store" is read as the per-user data directory, in a protected file, and this directive adds the second such directory REQ-PROVIDER-063 already established. Everything else REQ-CONFIG-011 states governs as written: no credential of any kind is written to a configuration file in either scope. REQ-PROVIDER-014, REQ-PROVIDER-016, REQ-PROVIDER-018 and REQ-PROVIDER-019 govern the provider credential store in full and are untouched by this directive; the new file cites REQ-PROVIDER-016's protection rather than restating it.
+
+**What it displaces, and what it does not.** Two readings the build proceeded under are superseded, and neither is a requirement: the `provider` key of [OQ-457](../../architecture/open-questions/68-spikes-and-later-questions-35.md#oq-457)'s key set, and [OQ-458](../../architecture/open-questions/68-spikes-and-later-questions-35.md#oq-458)'s "the bearer is the named provider's own credential, resolved in main through `ProviderService.lease`". Both questions stay open and are not ruled here; each entry now states the reading this directive puts in their place. Nothing else of either entry changes: OQ-457's `backend`, `local_model`, `base_url`, `model` and `language` keys, its bare-name rule and its refusal of a model file that is absent all stand, and OQ-458's "only after the person presses the control, and only to the configured `base_url`" stands with it.
+
+*Raised by the owner, 2026-11-12, in conversation with a screenshot of the built Dictation section; logged as [R-100](../requests.md#r-100). Minted by the agent that built it under the owner's standing delegation [R-098](../requests.md#r-098), which the owner authorised on 2026-11-11. The owner worded the request; the agent worded this directive.*

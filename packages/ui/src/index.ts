@@ -29,6 +29,7 @@ export * from './auth-recovery.js';
 export * from './PlanGate.js';
 export * from './settings/config-state.js';
 export * from './settings/ConfigSettings.js';
+export * from './settings/DictationSettings.js';
 export * from './settings/Providers.js';
 export * from './settings/McpSettings.js';
 export * from './settings/web-search-setup.js';

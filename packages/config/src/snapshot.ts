@@ -98,7 +98,7 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
     // PD-WORKSPACE-002: the per-file policy the Instructions switches edit, and REQ-WORKSPACE-048's
     // master switch beside it, so the screen can tell "this file is off" from "injection is off".
     instructionsPolicy: { overrides: { ...cfg.instructions.overrides } },
-    // OQ-457: never a credential; `provider` is a provider's name, resolved in main (OQ-458).
+    // OQ-457, PD-CONFIG-010: never a credential; the endpoint's bearer is a stored credential of its own, read in main.
     dictation: { ...cfg.dictation },
     injectAgentsMd: cfg.injectAgentsMd,
     // REQ-GIT-073 / REQ-CONFIG-068: main sends it on an isolated start's `worktree.create` (REQ-GIT-005).

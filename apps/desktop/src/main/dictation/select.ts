@@ -7,8 +7,8 @@ import { whisperCliTranscriber } from './whisper-cli.js';
 
 export interface SelectDeps {
   readonly env: NodeJS.ProcessEnv;
-  /** OQ-458: the bearer a signed-in provider holds, or null. Called only for an endpoint that names one. */
-  readonly bearerOf: (providerId: string) => string | null;
+  /** PD-CONFIG-010: the stored bearer, or null. Read at each press, like the configuration, and never carried in the file. */
+  readonly bearer: string | null;
   /** The verification seam's text (`commands/dictation.ts`), which a packaged build cannot be handed. */
   readonly scripted?: string | undefined;
 }
@@ -23,9 +23,7 @@ export function transcriberFor(config: DictationConfigView, deps: SelectDeps): R
       return ok(whisperCliTranscriber(config.local_model, { env: deps.env }));
     case 'endpoint': {
       if (config.base_url === null || config.model === null) return err({ code: 'dictation.endpoint-incomplete', reason: 'Dictation by endpoint needs both a base URL and a model. Set them in Settings › Models.' });
-      const bearer = config.provider === null ? null : deps.bearerOf(config.provider);
-      if (config.provider !== null && bearer === null) return err({ code: 'dictation.not-signed-in', reason: `Sign in to ${config.provider} to use it for dictation, or clear the provider in Settings › Models.` });
-      return ok(endpointTranscriber({ baseUrl: config.base_url, model: config.model, bearer }));
+      return ok(endpointTranscriber({ baseUrl: config.base_url, model: config.model, bearer: deps.bearer }));
     }
   }
 }

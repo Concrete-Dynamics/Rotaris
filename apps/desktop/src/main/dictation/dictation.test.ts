@@ -146,15 +146,30 @@ describe('OQ-457, OQ-458 — the endpoint client', () => {
   });
 });
 
-describe('OQ-457 — the client a configuration names', () => {
-  const deps = { env: {}, bearerOf: () => null };
+describe('OQ-457, PD-CONFIG-010 — the client a configuration names', () => {
+  const deps = { env: {}, bearer: null };
   it('refuses while off, with what to do about it', () => {
     expect(transcriberFor(DICTATION_CONFIG_DEFAULT, deps)).toMatchObject({ ok: false, error: { code: 'dictation.off' } });
   });
-  it('asks for what an endpoint still lacks', () => {
+  it('asks for what an endpoint still lacks, and needs no credential of its own', () => {
     expect(transcriberFor({ ...DICTATION_CONFIG_DEFAULT, backend: 'endpoint', base_url: 'http://h/v1' }, deps)).toMatchObject({ ok: false, error: { code: 'dictation.endpoint-incomplete' } });
-    expect(transcriberFor({ ...DICTATION_CONFIG_DEFAULT, backend: 'endpoint', base_url: 'http://h/v1', model: 'm', provider: 'openai' }, deps)).toMatchObject({ ok: false, error: { code: 'dictation.not-signed-in' } });
     expect(transcriberFor({ ...DICTATION_CONFIG_DEFAULT, backend: 'endpoint', base_url: 'http://h/v1', model: 'm' }, deps).ok).toBe(true);
+  });
+  it('PD-CONFIG-010: hands the endpoint the stored bearer, and none when nothing is stored', async () => {
+    const sent: (string | null)[] = [];
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>((_url, init) => { sent.push((init?.headers as Record<string, string> | undefined)?.['Authorization'] ?? null); return Promise.resolve(new Response(JSON.stringify({ text: 'x' }), { status: 200 })); }));
+    try {
+      const config = { ...DICTATION_CONFIG_DEFAULT, backend: 'endpoint' as const, base_url: 'http://h/v1', model: 'm' };
+      const withBearer = transcriberFor(config, { ...deps, bearer: 'sk-stored' });
+      expect(withBearer.ok).toBe(true);
+      if (withBearer.ok) await withBearer.value.transcribe(request);
+      const without = transcriberFor(config, deps);
+      expect(without.ok).toBe(true);
+      if (without.ok) await without.value.transcribe(request);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(sent).toEqual(['Bearer sk-stored', null]);
   });
   it('answers with the seam\'s text only when handed one', async () => {
     const seam = transcriberFor(DICTATION_CONFIG_DEFAULT, { ...deps, scripted: 'scripted' });

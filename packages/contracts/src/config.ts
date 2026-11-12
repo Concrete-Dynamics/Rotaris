@@ -147,8 +147,9 @@ export type InstructionsConfigView = z.infer<typeof InstructionsConfigViewSchema
 export const INSTRUCTIONS_CONFIG_DEFAULT: InstructionsConfigView = Object.freeze({ overrides: {} });
 
 /**
- * OQ-457: the `dictation:` section as the layered load resolves it. It names a provider and never holds a credential, so it may
- * reach a renderer (OQ-458). `off` is the default: nothing is sent or started until someone chooses a model.
+ * OQ-457, PD-CONFIG-010: the `dictation:` section as the layered load resolves it. It holds no credential of any kind, so it may
+ * reach a renderer (OQ-458): the endpoint's bearer is a stored credential of its own, written and read in main alone. `off` is
+ * the default: nothing is sent or started until someone chooses a model.
  */
 export const DICTATION_BACKEND_NAMES = ['off', 'local', 'endpoint'] as const;
 export const DictationConfigViewSchema = z.object({
@@ -156,11 +157,10 @@ export const DictationConfigViewSchema = z.object({
   local_model: z.string(),
   base_url: z.string().nullable(),
   model: z.string().nullable(),
-  provider: z.string().nullable(),
   language: z.string().nullable(),
 });
 export type DictationConfigView = z.infer<typeof DictationConfigViewSchema>;
-export const DICTATION_CONFIG_DEFAULT: DictationConfigView = Object.freeze({ backend: 'off', local_model: 'small', base_url: null, model: null, provider: null, language: null });
+export const DICTATION_CONFIG_DEFAULT: DictationConfigView = Object.freeze({ backend: 'off', local_model: 'small', base_url: null, model: null, language: null });
 
 /** OQ-457: what is wrong with one value, or null. The loader, the save and the Settings field all read this one rule. */
 export function dictationFieldProblem(key: keyof DictationConfigView, value: string | null): string | null {
@@ -338,13 +338,12 @@ export const DESKTOP_SAVE_RUNTIME_KEYS = [
 ] as const;
 export type DesktopSaveRuntimeKey = (typeof DESKTOP_SAVE_RUNTIME_KEYS)[number];
 
-/** OQ-457: the changed `dictation:` keys, each held to the loader's rule. A null value removes a key. */
+/** OQ-457, PD-CONFIG-010: the changed `dictation:` keys, each held to the loader's rule. A null value removes a key. No key here is a credential. */
 export const DictationSaveSchema = z.object({
   backend: z.enum(DICTATION_BACKEND_NAMES).optional(),
   local_model: z.string().max(NAME_MAX).nullable().optional(),
   base_url: z.string().max(PATH_MAX).nullable().optional(),
   model: z.string().max(NAME_MAX).nullable().optional(),
-  provider: z.string().max(NAME_MAX).nullable().optional(),
   language: z.string().max(NAME_MAX).nullable().optional(),
 }).strict().superRefine((save, ctx) => {
   for (const key of ['local_model', 'base_url', 'language'] as const) {

@@ -281,3 +281,15 @@ diff). The two chronic Windows sites this note holds (the PTY process-death asse
 `fix/gate-flake-softpaused-death`): the PTY suite's death reading is now the `/proc`-aware one
 [the PTY note](the-pty-process-death-assertions-flake-on-a-loaded-host.md) already named, with a case that pins the reading.
 The `EBUSY`, worker-exit and typecheck families stay open.
+
+**Seen again 2026-11-12, on a dictation-settings branch, in the same push/pull_request shape** (the hosted Windows
+runner; recorded from `gh` while landing `feat/dictation-endpoint-credential`). Runs `43250903048` (push) and
+`43250947748` (pull_request) are the **same head** `e9e8ed57`, seconds apart on the same image: the push run's `gate`
+failed at 6m59s and the pull_request run's `gate` passed at 17m55s, while both runs' `package` jobs passed. The red was
+a **sixth site**, in a file the head does not touch:
+
+- `packages/agent-tools/src/terminal/terminal.test.ts:2036` — `AssertionError: reset at 77: expected 'The command exceeded its timeout of 1…' to contain 'were restored'`, in `PD-TOOLS-001, REQ-TOOLS-099/128: at every width from 20 to 240 columns a hard-timeout reset restores PowerShell's directory and environment byte for byte`, at `expect(r.text, \`reset at ${cols}\`).toContain('were restored')` with `cols` = 77. The call's own text says the restore failed: "Restoring the working directory and variables failed; the session is at its defaults." The same case's `setup` step is the site the note's first table already holds (`setup at 77`), so the width loop's 77th column is where this case gives way on this runner.
+
+`Test Files 1 failed | 579 passed | 5 skipped (585)`, `Tests 1 failed | 8295 passed | 136 skipped (8432)`. The failed job
+was re-run with `gh run rerun --failed`; the branch's own gate on the same head was green in three of five local runs,
+the two reds being [the handshake-cancel flake](a-cancel-during-the-first-calls-handshake-can-read-as-cancelled-before-the-command-completed.md).

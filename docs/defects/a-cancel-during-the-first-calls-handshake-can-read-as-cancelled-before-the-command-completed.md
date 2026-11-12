@@ -30,6 +30,13 @@ comma…'"), at loads from about 4.9 down to 1.3 at the run's start. It went red
 and a wording check the branch then fixed. On the Electron branch, two
 consecutive gates of one unchanged tree were red here, so that branch stopped uncommitted under its brief's one-repeat rule.
 
+*2026-11-12 (branch `feat/dictation-endpoint-credential`, a dictation-settings change that touches no `agent-tools`
+file; Linux, Node 24.18.0, Electron 45.2.1):* red in two of five full `pnpm check` runs on this host, each 1 failed and
+8,372 passed, with the same assertion at line 1124. **Both reds stopped a `pnpm worktree:land` at its gate**, so the
+branch could not land; the three green runs were on the same head with the host otherwise idle, and the file passed
+alone on `main` at `e23cf596`. The host was quiet in every run, so "the host quiet" is not the condition that decides
+it here.
+
 ## Specs
 
 `REQ-TOOLS-097` and `REQ-TOOLS-099` with OQ-144's ruling (a cancel that lands before the command is written ends the

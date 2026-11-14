@@ -1,6 +1,6 @@
-# The information architecture — the map of round 2
+# The information architecture — the map
 
-**Status:** decided 2026-11-11; built on `feat/r-097-ui-ux-overhaul`, not landed.
+**Status:** round 2 decided 2026-11-11 and landed with [#84](https://github.com/Concrete-Dynamics/Rotaris/pull/84); **round 3 decided 2026-11-14** ([section 10](#10-round-3--2026-11-14-the-session-is-the-frame)), built on `feat/r-101-experience-redesign`, not landed. Where section 10 and sections 2 to 5 disagree, section 10 governs: it is the later decision and it says what it replaces. Sections 1 to 9 are kept as they were written.
 **How this document was made:** proposed and decided by the model (`claude-fable-5-2`) under [R-098](../product/requests.md#r-098), the owner's standing delegation of 2026-11-11. The owner authorised that the model decides; he worded none of the decisions below. Section 7 is an independent agent's critique of the first draft, quoted in substance, with this document's answers.
 **What it is:** the one document that states which primary views exist, their order, labels and shortcuts, the view shown at startup, what the Overview holds since round 2, and how the Settings categories are grouped. It is a design record, not a requirement: each decision governs through the directive it names ([`docs/product/README.md`](../product/README.md)), and the specification keeps its text.
 
@@ -155,3 +155,91 @@ No image is tracked in this repository; the captures of this round are kept with
 An independent critique of the built pack (`66663f087f89/iteration-1`, twelve findings, four of them repaired on the two cards) is recorded in [the cards' brief](briefs/overview/05-brief-2026-11-11.md).
 
 What was not verified is in the pull request's report: among it, no screen reader was run over the grouped list or the three-line rows, and `nocturne` and `high-contrast` were read only through `pnpm theme-proof`.
+
+## 10. Round 3 — 2026-11-14: the session is the frame
+
+**How this section was made:** proposed and decided by the model (`claude-fable-5-2`) under [R-101](../product/requests.md#r-101), in which the owner asked for the information architecture to be redesigned from first principles with at least three concepts weighed, and under [R-098](../product/requests.md#r-098). The owner worded none of it. The visual language decided with it is [part 08 of the design brief](README/08-8-the-2026-11-14-revision.md).
+
+### 10.1 The baseline, read again
+
+From the built application at `2fb19824` (`pnpm app:drive`, 1440×900 and 1000×680, a scripted run with three delegated agents).
+
+| # | Finding | Evidence |
+|---|---|---|
+| C1 | **A launch opened on a view that could not take a prompt.** With no session the Overview's body was one sentence and a control that left the view; every run is started, read and steered on the Workspace. | the startup capture; `STARTUP_VIEW` |
+| C2 | **A session had no standing place.** It was reached through the title bar's dialog, the Overview's card or the Overview's header, and from the Workspace, Requirements, Git, Library and Settings only through the dialog. Which session a window followed was stated in the Overview's header and nowhere else. | the six view captures |
+| C3 | **The rail spent a column on six icons.** 68 px wide, six 9 px labels, and the column under them empty at every height. | the rail capture |
+| C4 | **The views were six equals, and they are not.** Workspace and Overview show the session in hand; Requirements, Git and Library belong to the repository whichever session is shown; Settings is the application. The rail drew no such difference. | `PRIMARY_VIEWS` |
+
+Section 1's B1, B2, B4, B5 and B7 stand repaired by round 2. B3 and B6, which round 2's critique declined to act on, are C1 and C4.
+
+### 10.2 Three concepts
+
+| | A — session workbench | B — the work's stages | C — one canvas, everything in drawers |
+|---|---|---|---|
+| Primary navigation | a sidebar: the views in three groups, and the sessions | four stages in order: Plan, Run, Review, Ship | none: a command bar, and drawers over one session view |
+| Main working environment | the Workspace, first and shown at startup | Run | the canvas |
+| Agent monitoring | the Workspace's side pane and inspector while working; the Overview for the figures | inside Run | a drawer |
+| Sessions | a list in the sidebar on every view; the browser for everything else | a switcher in Run | a switcher in the command bar |
+| Requirements and Git | project views, grouped | Plan holds requirements; Ship holds Git; Review holds diffs, checkpoints and proposals | drawers |
+| Settings | at the sidebar's foot | behind a gear | a drawer |
+| Context kept while moving | the session list and the followed session never leave the screen | lost at each stage boundary | kept, but every second surface covers the first |
+| Steps to a typed prompt from launch | 0 | 1 | 0 |
+| Steps to a parked session from any view | 1 | 2 | 2 |
+| Build cost | the shell and its state; no view's content moves | every view is cut along a new line; Review does not exist | every view becomes a drawer; the board and Settings do not fit one |
+| Regression risk | low: six identifiers, six views, one order change | high: 67 proof scripts name views that would no longer exist | high, and the minimum window cannot hold a drawer beside the canvas |
+
+**Taken: A.** B reads well on a slide and misdescribes the work: an operator steering agents goes from a run to a requirement to a diff and back many times in a session, and a stage boundary would stand in the middle of each of those. C keeps context best and pays for it everywhere else: the requirements board and the Settings form are full-width surfaces, and a drawer over a live transcript hides the thing being steered. A changes least and repairs C1 to C4 whole.
+
+### 10.3 The map as it now stands
+
+| # | Label | Identifier | Shortcut | Group | Changed in round 3 |
+|---|---|---|---|---|---|
+| 1 | Workspace | `workspace` | Ctrl+1 | (unheaded) | first, and shown at startup; was second |
+| 2 | Overview | `overview` | Ctrl+2 | (unheaded) | second; its regions are sections, its figures one band (`PD-MONITOR-010`) |
+| 3 | Requirements | `requirements` | Ctrl+3 | Project | — |
+| 4 | Git | `git` | Ctrl+4 | Project | — |
+| 5 | Library | `library` | Ctrl+5 | Project | — |
+| 6 | Settings | `settings` | Ctrl+6, Ctrl+, | (foot) | drawn at the sidebar's foot |
+
+The sidebar, top to bottom: New session; Workspace, Overview; **Project**: Requirements, Git, Library; **Sessions**: the workspace's sessions, at most twelve, the followed one marked, "All sessions" opening the browser; Settings; the fold control. Below 1360 px, or folded by the user, it is the rail of round 2 in the new order. Decided by [`PD-SHELL-016`](../product/directives/pd-shell-016.md#pd-shell-016), which narrows REQ-SHELL-023, -026, -027, -029 and -049, supersedes clauses 1, 3 and 5 of `PD-SHELL-015` in part, and rules OQ-548.
+
+### 10.4 Coverage — every capability, and where it is reached
+
+Nothing reachable is removed in round 3. A capability not listed is reached where it was.
+
+| Capability | Entry | Path | Result | Held by |
+|---|---|---|---|---|
+| Start a run | the composer, on the startup view | type, Return | the run starts | REQ-CHAT-001; `pnpm slice-proof` |
+| Start a session with options | New session, in the sidebar on every view; the Overview's header; `/new` | one press | the start-session dialog | REQ-SHELL-125 |
+| Switch to another session | its row in the sidebar; the Overview's sessions section; the browser | one press | that session followed, the Workspace shown | `PD-SHELL-016` clause 3; REQ-MONITOR-171 |
+| Search, repair, export, delete, back up, restore sessions | All sessions; the title bar's Sessions | one press | the session browser | REQ-SHELL-126 |
+| Read a run's agents and steer one | the Workspace's Agents pane and inspector | on screen | select, steer, cancel, pop out | REQ-MONITOR-042, -051 |
+| Read a session's figures; pause; cancel a selection; the agent table | Overview | Ctrl+2 | the band, the graph, the table | `PD-MONITOR-009`, `PD-MONITOR-010` |
+| Approvals, questions, the plan gate, re-authentication | where the run raises them | — | unchanged | REQ-TOOLS-063, REQ-CHAT |
+| Requirements board, adoption, evidence | Requirements | Ctrl+3 | unchanged | REQ-TRACE-230 |
+| Worktrees, history, checkpoints, restore | Git | Ctrl+4 | unchanged | REQ-GIT-075 |
+| Prompts, artifacts, improvement proposals | Library | Ctrl+5 | unchanged | REQ-LIBRARY-103 |
+| Models, providers, personas, runtime, skills, instructions, hooks, MCP, plugins, tools, interface, display, project, about | Settings | Ctrl+6, Ctrl+, | unchanged | `PD-CONFIG-008` |
+| Command palette, keyboard help, transcript search, focus the prompt, terminal | Ctrl+K, F1, Ctrl+F, Ctrl+L, Ctrl+Shift+T | — | unchanged | REQ-SHELL-049 |
+| Choose a workspace | the title bar's chip; the status strip's path | — | unchanged | REQ-SHELL-035 |
+
+### 10.5 What was weighed inside A and not taken
+
+| Alternative | Why not |
+|---|---|
+| Remove the Overview's sessions section now that the sidebar lists sessions | the two differ in purpose: the sidebar switches, the section accounts (branch, tokens, duration, detail, Continue run). `PD-MONITOR-010` clause 3 |
+| Remove "New session" and "List sessions" from the Overview's header | REQ-MONITOR-164 gives the header both, and the folded rail shows the start control as an icon only; the duplication costs two buttons on one view |
+| Fold the Overview into the Workspace as a tab | section 5's reason stands: the Workspace carries three panes, and the figures are what is read when not typing |
+| Move Personas, Skills, Hooks, MCP, Plugins and Tools out of Settings into a seventh view | they are edited through one form with one Save (REQ-CONFIG-270); a second home for half a form is the confusion section 5 already refuses |
+| Remember the fold across launches | it needs a preference key, a contract outside this round's bound ("avoid unrelated backend changes"); owed |
+| Restore the last active view on relaunch | OQ-548 is ruled the other way: a launch shows the Workspace, which serves starting and resuming alike |
+| Rename "Overview" | no evidence the label misleads, and section 5 refused the same for the same reason |
+
+### 10.6 The critique of round 2, answered
+
+Round 2's critique refused "open on the Workspace and put it first" on three grounds (section 7, D1). `PD-SHELL-016` records the answer to each: the returning operator meets the sessions list on the first screen and every other; "New session" starts work from every view; and the first screen serves starting and resuming in one step each, so the missing usage data no longer decides the layout.
+
+### 10.7 Evidence, and what was not verified
+
+The captures of this round are kept with the pull request's report, as section 9 says of round 2's. Measured after building, at 1440×900: the sidebar 232 px, the six views in 10.3's order, Ctrl+1 the Workspace and Ctrl+2 the Overview, the startup view the Workspace; at 1000×680: the sidebar folded to the rail, the Workspace in its drawer form. What was not verified is in the pull request's report.

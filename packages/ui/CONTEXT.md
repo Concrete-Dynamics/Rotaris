@@ -32,7 +32,11 @@ is a card of the same view. — `PD-SHELL-015`, `PD-MONITOR-009`, `REQ-MONITOR-2
 _Avoid_: Mission view, Mission table (for anything drawn now; say the Overview's graph card or agent table)
 
 **Navigation rail**:
-The left-hand strip the primary views are selected from. — `REQ-SHELL` navigation rail
+The left-hand strip the primary views are selected from; since `PD-SHELL-016` the folded form of the navigation sidebar. — `REQ-SHELL` navigation rail, `PD-SHELL-016`
+
+**Navigation sidebar**:
+The column beside the active view that holds the start control, the views under their groups, the workspace's sessions and Settings; folded, it is the navigation rail. — `PD-SHELL-016`
+_Avoid_: side menu, drawer (a drawer is the Workspace's overlay pane)
 
 **Title bar**:
 The frame above the views, carrying brand, workspace and session status. — `REQ-SHELL` title bar

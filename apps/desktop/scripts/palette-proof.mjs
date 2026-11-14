@@ -32,7 +32,8 @@ import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/rendere
  *
  * PD-SHELL-015, PD-MONITOR-009 (2026-11-11): views are named by identifier; Mission is no view, so the registry lists 20
  * commands and the help 14 rows, Ctrl+3 opens Requirements, and the agent table a persona is popped out from stands on
- * the Overview.
+ * the Overview. PD-SHELL-016 (2026-11-14): the views lead with Workspace, so the palette lists `view.workspace` first and
+ * Ctrl+1 opens the Workspace, Ctrl+2 the Overview.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -168,7 +169,7 @@ if (wanted('palette')) {
   // with it "Open Mission", the seventh view entry: 20.
   expect(all.length === 20, `an empty query listed ${all.length} commands, not the registry's 20 (REQ-SHELL-052, PD-SHELL-015)`);
   const openViews = all.map((m) => m.attrs['data-command']).filter((id) => typeof id === 'string' && id.startsWith('view.'));
-  expect(JSON.stringify(openViews) === JSON.stringify(['view.overview', 'view.workspace', 'view.requirements', 'view.git', 'view.library', 'view.settings']), `the palette's view entries: ${JSON.stringify(openViews)} — six, in the rail's order, and none for Mission (PD-SHELL-015)`);
+  expect(JSON.stringify(openViews) === JSON.stringify(['view.workspace', 'view.overview', 'view.requirements', 'view.git', 'view.library', 'view.settings']), `the palette's view entries: ${JSON.stringify(openViews)} — six, in the rail's order, and none for Mission (PD-SHELL-015; Workspace first since PD-SHELL-016)`);
   expect(all[0].attrs['aria-selected'] === 'true' && all.slice(1).every((m) => m.attrs['aria-selected'] === 'false'), 'the first row was not the auto-selected one (REQ-SHELL-052)');
   const filtered = inspectAt(r.log, 4800, '.cmdk-item')?.matches ?? [];
   const filteredIds = filtered.map((m) => m.attrs['data-command']);

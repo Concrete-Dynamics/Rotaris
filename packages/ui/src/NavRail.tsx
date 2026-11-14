@@ -63,6 +63,8 @@ export interface NavRailProps {
   readonly folded?: boolean | undefined;
   /** Receives whether the sidebar is folded at the moment of the press. */
   readonly onToggleFold?: ((foldedNow: boolean) => void) | undefined;
+  /** PD-SHELL-016 clause 8 (revision 2): receives the dock element while the sidebar is open, and null when it folds or unmounts. */
+  readonly dockRef?: ((element: HTMLElement | null) => void) | undefined;
 }
 
 /** How many sessions the sidebar lists before it leaves the rest to the browser; the remainder is counted under the list. */
@@ -107,7 +109,7 @@ function sessionsEmptySentence(state: NavRailSessions['state']): string {
   return 'No sessions yet. A run you start is kept here.';
 }
 
-export function NavRail({ items, active, onSelect, platform = 'windows', groups, sessions, folded = false, onToggleFold }: NavRailProps) {
+export function NavRail({ items, active, onSelect, platform = 'windows', groups, sessions, folded = false, onToggleFold, dockRef }: NavRailProps) {
   const headed = groups ? groups.filter((g) => g.id !== 'system') : [{ id: 'work' as ViewGroup, label: null }];
   const members = (group: ViewGroup) => (groups ? items.filter((it) => it.group === group) : items);
   const foot = groups ? items.filter((it) => it.group === 'system') : [];
@@ -175,6 +177,9 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
                 </section>
               </>
             )}
+            {/* PD-SHELL-016 clause 8 (revision 2): the dock. The Workspace draws the followed session's agents, task plan and project setup here while
+                it is shown and the sidebar is open; empty, it takes no room. It stands under the sessions, whose followed row it belongs to. */}
+            {index === 0 && !folded && dockRef && <div className="nav-rail__dock" ref={dockRef} data-testid="sidebar-dock" />}
           </Fragment>
         ))}
         {foot.length > 0 && (

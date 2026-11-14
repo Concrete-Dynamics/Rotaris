@@ -13,3 +13,5 @@ None contradicted by the product as it stands: the rule is not shipped. It is re
 - `packages/ui/src/shell.css` — the comment where the rule stood.
 - `apps/desktop/src/main/capture/host.ts` — `targetProbe`, which waits two frames before it reads the point a click presses.
 - `apps/desktop/scripts/driver-proof.mjs` — the navigation-and-shot check that shows the condition in 36 s.
+
+**Added later on 2026-11-14 — the evidence is weaker than the paragraph above states.** On builds without the rule, `pnpm driver-proof`'s paint check also read 0 of 7 and 1 of 7, once each, and 7 of 7 on eight other runs of the same two builds, with no pattern found (not the first launch after a build, no stray process). So the single runs of the bisect prove less than they were taken to: a host flake of unknown cause produces the same reading. What still points at the rule is the sequence of whole runs: with it, 25 suites and then 5 suites in a row went red in this way; without it, the same suites read as on `main`. Whether the rule causes the condition or only makes it frequent is not established.

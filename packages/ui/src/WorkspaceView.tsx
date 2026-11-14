@@ -1,5 +1,6 @@
 import { DictationControl, type DictationHost } from './DictationControl.js';
 import { insertTranscript } from './dictation.js';
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, PROJECT_SETUP_SEND_REASON, PROJECT_SETUP_SUBMIT_DETAIL, PROJECT_SETUP_SUBMIT_HEADLINE, type InitializationStateView, type Notice, type PermissionPreset, type PlanDecision, type QuestionAnswers, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { projectSidebarSection } from './settings/project-init.js'; // Part AS
@@ -1214,6 +1215,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const mode = ((session?.permissionMode ?? configuredMode) ?? null) as PermissionPreset | null;
   // REQ-MONITOR-042 (Part R): the selection is the shell's, shared by every surface; `run` is the run-level selection.
   const selectedAgent = useShellState((st) => st.selectedAgentId);
+  // PD-SHELL-016 clause 8 (revision 2): while the sidebar is open it offers a dock, and the delegation pane is drawn there instead of in this view's left column.
+  const dock = useShellState((st) => st.sidebarDock);
+  const docked = dock !== null;
   const selectAgentShared = useShellState((st) => st.selectAgent);
   const select = (id: string | null, source?: 'click' | 'key') => { selectAgentShared(id); onSelectAgent?.(id, source); };
   /*
@@ -1409,17 +1413,17 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     else if (e.key === 'End') { e.preventDefault(); commitHeight(COMPOSER_MIN_HEIGHT); }
   };
   return (
-    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--with-sidebar${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''} data-plan-gate={planGate ? '1' : ''} data-plan-gate-collapsed={planGate && planCollapsed ? '1' : ''}>
+    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--with-sidebar${narrow ? ' workspace--narrow' : ''}${docked ? ' workspace--docked' : ''}`} data-docked={docked ? '1' : '0'} data-drawer={drawer ?? ''} data-plan-gate={planGate ? '1' : ''} data-plan-gate-collapsed={planGate && planCollapsed ? '1' : ''}>
       {narrow && (
         <div className="workspace__drawer-bar" aria-label="Panels">
-          {agents.length > 0 && <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</DesignButton>}
-          <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'plan' ? ' is-active' : ''}`} aria-pressed={drawer === 'plan'} onClick={() => setDrawer(drawer === 'plan' ? null : 'plan')}>Task plan</DesignButton>
+          {!docked && agents.length > 0 && <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</DesignButton>}
+          {!docked && <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'plan' ? ' is-active' : ''}`} aria-pressed={drawer === 'plan'} onClick={() => setDrawer(drawer === 'plan' ? null : 'plan')}>Task plan</DesignButton>}
           <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'inspector' ? ' is-active' : ''}`} aria-pressed={drawer === 'inspector'} onClick={() => setDrawer(drawer === 'inspector' ? null : 'inspector')}>Inspector</DesignButton>
         </div>
       )}
-      {(!narrow || drawer === 'agents' || drawer === 'plan') && (
-        <aside className={`agents${narrow ? ' agents--drawer' : ''}`} aria-label="Delegation">
-          {(!narrow || drawer === 'agents') && <><div className="agents__header">
+      {(docked || !narrow || drawer === 'agents' || drawer === 'plan') && ((pane: ReactNode) => (dock !== null ? createPortal(pane, dock) : pane))(
+        <aside className={`agents${docked ? ' agents--docked' : narrow ? ' agents--drawer' : ''}`} aria-label="Delegation">
+          {(docked || !narrow || drawer === 'agents') && <><div className="agents__header">
             <span className="agents__title">Agents</span>
             <span className="agents__count mono" data-testid="agents-count">{agents.length} agent{agents.length === 1 ? '' : 's'}</span>
             <div className="agents__spacer" />
@@ -1434,7 +1438,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           </div>
           <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
           </>}
-          {(!narrow || drawer === 'plan') && <TodoPane plan={todoPlan} onEdit={onEditTodo} onError={setError} />}
+          {(docked || !narrow || drawer === 'plan') && <TodoPane plan={todoPlan} onEdit={onEditTodo} onError={setError} />}
           {/*
             * Part AS — REQ-WORKSPACE-113's Project section, one of exactly two places manual re-initialization is
             * exposed (the other is Settings › Project) and both opening the same dialog. It never triggers

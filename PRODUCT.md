@@ -44,7 +44,7 @@ Dark by default, for use beside a terminal and an editor. Keyboard first: every 
 ## Capabilities and Constraints
 
 - Six primary views — Workspace, Overview, Requirements, Git, Library, Settings — in a navigation sidebar that also
-  lists the workspace's sessions from 1600 px and folds to a rail below it (`docs/design/information-architecture.md`, section 10).
+  lists the workspace's sessions from 1440 px, holds the Workspace's agents and task plan there, and folds to a rail below it (`docs/design/information-architecture.md`, section 10).
 - Screens, order, tabs and required strings are the record's: `docs/spec/` and, over it, `docs/product/directives.md`.
   A change to them is a directive, never an edit in place.
 - Three built-in themes, each holding the contrast floors of REQ-SHELL-145 (`pnpm theme-proof`).

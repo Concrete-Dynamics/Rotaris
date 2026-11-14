@@ -143,6 +143,7 @@
 
 /* Open. */
 .nav-rail[data-folded='0'] { width: var(--rt-sidebar-width); }
+.nav-rail[data-folded='0'] .nav-rail__views { overflow-x: hidden; }
 .nav-rail[data-folded='0'] .nav-rail__new { flex: none; margin: var(--rt-space-3) var(--rt-space-2) var(--rt-space-3); justify-content: flex-start; gap: var(--rt-space-3); padding-inline: var(--rt-space-2); }
 .nav-rail__new i { font-size: var(--rt-icon-size); width: var(--rt-icon-size); text-align: center; }
 .nav-rail[data-folded='0'] .nav-rail__views { padding: 0 var(--rt-space-2) var(--rt-space-2); gap: var(--rt-space-4); }
@@ -164,7 +165,7 @@
 .nav-rail__sessions-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2); padding-right: var(--rt-space-2); }
 .nav-rail__sessions-head .nav-rail__heading { padding-bottom: var(--rt-space-1); }
 .nav-rail__all { font-size: var(--rt-text-2xs); min-height: 0; }
-.nav-rail__session-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: var(--rt-hairline-width); scrollbar-width: thin; scrollbar-color: var(--rt-border-strong) transparent; }
+.nav-rail__session-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: var(--rt-hairline-width); }
 .nav-session {
   display: grid; grid-template-columns: var(--rt-icon-size) minmax(0, 1fr); grid-template-areas: 'dot label' '. meta';
   align-items: center; column-gap: var(--rt-space-3); row-gap: 0;
@@ -3149,3 +3150,22 @@ table, .mono { font-variant-numeric: tabular-nums; }
 .settings__body .table th:first-child, .settings__body .table td:first-child { padding-left: 0; }
 /* C-08, again: Git's absences stand under their headings, not centred under the column heads. */
 .git__empty.empty-state { align-items: flex-start; text-align: left; margin: var(--rt-space-2) 0 0; padding: 0; max-width: none; }
+
+/* ── PD-SHELL-016 clause 8 (revision 2): the Workspace's delegation pane docked in the open sidebar ──
+ * The pane is the Workspace's own component drawn into the sidebar's dock, so every class inside it is unchanged.
+ * Docked, it is no column of the Workspace's grid: the grid is the transcript column and the inspector. In the
+ * sidebar the dock takes the height the fixed regions leave and scrolls; the sessions list gives way before it. */
+.workspace--with-sidebar.workspace--docked:not(.workspace--narrow) { grid-template-columns: 1fr auto; grid-template-areas: 'runhead inspector' 'reauth inspector' 'plangate inspector' 'transcript inspector' 'queue inspector' 'divider inspector' 'composer inspector'; }
+.nav-rail__dock { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.nav-rail__dock:empty { display: none; }
+.nav-rail__dock:not(:empty) { border-top: var(--rt-hairline-width) solid var(--rt-border); margin-inline: calc(-1 * var(--rt-space-2)); }
+/* Beside a filled dock the sessions keep their rows up to a third of the column and scroll past that; the dock takes the rest. */
+.nav-rail__views:has(.nav-rail__dock:not(:empty)) .nav-rail__sessions { flex: 0 0 auto; max-height: 33%; }
+.nav-rail__views:has(.nav-rail__dock:not(:empty)) .nav-rail__foot { margin-top: 0; }
+.agents--docked { border-right: 0; overflow: visible; flex: none; padding-inline: var(--rt-space-4); }
+.agents--docked .agents__header { margin-inline: calc(-1 * var(--rt-space-4)); padding-inline: var(--rt-space-4); border-bottom: 0; }
+/* Docked, the pane's head is 228 px wide: the count stays beside the title on one line, and the selected agent's Steer and Cancel take a line of their own under it. */
+.agents--docked .agents__header { height: auto; min-height: var(--rt-space-10); flex-wrap: wrap; row-gap: 0; padding-block: var(--rt-space-1); }
+.agents--docked .agents__count, .agents--docked .agents__cancel { white-space: nowrap; }
+.agents--docked .agents__spacer { flex: 0 0 100%; height: 0; }
+.agents--docked .agents__cancel { padding-inline: var(--rt-space-2); margin-left: calc(-1 * var(--rt-space-2)); }

@@ -15,7 +15,7 @@
 | Interaction | A view button is a radio and its own tab stop (REQ-SHELL-028). A session row is a button that focuses and shows the Workspace. The focus order is the reading order. | REQ-SHELL-028, REQ-SHELL-058 |
 | Copy | "New session", "Sessions", "List sessions", "Project"; "running", "needs you"; "No sessions yet. A run you start is kept here." | REQ-MONITOR-164 (the browser's one name); §1.11 |
 | Accessibility | One radiogroup; headings are not focusable; the followed row carries `aria-current`; the fold control names the act it would perform and states `aria-expanded`. | REQ-SHELL-144; guide [09](../../research/design/09-accessibility-for-a-dense-desktop-tool.md) |
-| Composition | Chrome plane, `--rt-sidebar-width`; folded below 1600 px to the rail. The session region takes the height the fixed regions leave and scrolls. | [part 08](../README/08-8-the-2026-11-14-revision.md), R1; `SIDEBAR_FOLD_BELOW` |
+| Composition | Chrome plane, `--rt-sidebar-width` (260 px); folded below 1440 px to the rail (1600 px until the dock, section 4). The session region takes the height the fixed regions leave and scrolls. | [part 08](../README/08-8-the-2026-11-14-revision.md), R1; `SIDEBAR_FOLD_BELOW` |
 | Components | `Button` for every control; `status-dot`. No new primitive. | `packages/ui/src/design-system/` |
 
 ## 2. Audit 2026-11-14 — an independent critique of the first build
@@ -67,3 +67,15 @@
 **Left open by both audits, in the order the second ranked them:** one statement of a setup failure with one recovery act and no build command (C-12, a defect note); one control and one name for each act on a screen (C-05; the Overview's header is REQ-MONITOR-164's); the Library's columns (C-07); the Requirements board's four explanatory blocks (C-13); sessions named by title in Git's checkpoint picker (C-14); the status strip's terms and the path drawn three times (C-15); the sparkline drawn as a rule in the accent (C-17).
 
 **This was the third and last iteration of the review loop for this surface** (`build-ui`, step 7). The third build was looked at by its builder and by `pnpm ui-audit`, and by no third critic.
+
+## 4. The dock — built 2026-11-14 after the second audit, on the owner's word
+
+The owner, asked whether the round both audits named as owed should be done now ("move the Workspace's agents list into the sidebar?"), answered "Yes, do it". It is [`PD-SHELL-016`](../../product/directives/pd-shell-016.md#pd-shell-016) revision 2, clause 8.
+
+**What was decided.** The pane docks whole — agents, task plan, project setup — because a pane left behind for the plan alone would have kept the column the move exists to remove. It docks by a portal and not by a second component, so there is one pane with one state, and the proofs' selectors hold. It is docked only on the Workspace: the Workspace is the only view mounted with it, the Overview draws the same agents as its graph, and a second tree beside that graph was the duplication round 2 removed.
+
+**Measured in the built application, 1440×900, a scripted run with three agents:** sidebar 260 px; transcript column 880 px (800 px beside the rail and the pane before the dock; 791 px on `main`); composer field 814 px (758 px; 749 px). `pnpm ui-audit`: 0 findings. `pnpm layout-proof`: 28 of 28.
+
+**Seen in the captures and repaired:** the sessions list collapsed to its heading beside a filled dock (it now keeps its rows up to a third of the column); with an agent selected the pane's head wrapped its count and its two controls over each other (Steer and Cancel now take a line of their own).
+
+**Not weighed by a critic.** The loop's three iterations were spent before this was built; the dock was looked at by its builder, by `pnpm ui-audit` and by the proofs.

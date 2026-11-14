@@ -11,7 +11,7 @@ import { sessionDot } from './OverviewView.js';
  * It has two forms and one markup. **Open**, it is a column of the sidebar's width: the start control; Workspace and
  * Overview, the two faces of the session in hand; under them the workspace's sessions; then, at the foot, the project's
  * views and Settings. **Folded**, it is the rail REQ-SHELL-027 described — one button per view, icon above label — with
- * one control between the session views and the project's that stands for the list and opens the browser. The window's width folds it
+ * one control under the start control that stands for the list and opens the browser. The window's width folds it
  * (`AppShell` resolves it, below `SIDEBAR_FOLD_BELOW`) and the fold control overrides the width either way.
  *
  * REQ-SHELL-028: the view buttons are mutually exclusive (`aria-checked` on `role="radio"` inside one
@@ -125,6 +125,14 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
           <span>New session</span>
         </DesignButton>
       )}
+      {sessions && (
+        /* Folded, the list is one control, and it is an act and not a view: it stands with the start control above the
+           views, shaped as that control is, with no label of its own (the title bar's "Sessions" is the one control so
+           named). Its accessible name says what it opens, which session is followed, and the most urgent state of the others. */
+        <DesignButton type="button" className="btn btn-secondary nav-rail__browse" data-testid="sidebar-sessions-button" data-attention={attention} title={browseTitle} aria-label={browseTitle} onClick={sessions.onBrowse}>
+          <i className="ph ph-stack" aria-hidden="true" />
+        </DesignButton>
+      )}
       <div className="nav-rail__views" role="radiogroup" aria-label="Primary views">
         {headed.map((g, index) => (
           <Fragment key={g.id}>
@@ -134,11 +142,6 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
             </div>
             {index === 0 && sessions && (
               <>
-                {/* Folded, the list is one control: it names the followed session to assistive technology, shows the most urgent state of the others, and opens the browser. */}
-                <DesignButton type="button" className="nav-rail__browse" data-testid="sidebar-sessions-button" data-attention={attention} title={browseTitle} aria-label={browseTitle} onClick={sessions.onBrowse}>
-                  <i className="ph ph-stack" aria-hidden="true" />
-                  <span>Sessions</span>
-                </DesignButton>
                 <section className="nav-rail__sessions" aria-label="Sessions" data-testid="sidebar-sessions" data-state={sessions.state}>
                   <header className="nav-rail__sessions-head">
                     <span className="nav-rail__heading">Sessions</span>

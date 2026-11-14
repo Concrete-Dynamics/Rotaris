@@ -53,7 +53,7 @@
  * step, when it ran, what it answered), `results.json`. `--skip-build` skips the build.
  *
  * PD-SHELL-015 (2026-11-11): Settings is the sixth view; the driven launches open it by Ctrl+6 (Ctrl+7 until then, bound
- * to nothing now). PD-CONFIG-008: MCP Servers is still found by its name among `.nav-list__item`.
+ * to nothing now). PD-SHELL-016 (2026-11-14): Workspace is the first view, so the prompt is typed after Ctrl+1 (it was Ctrl+2). PD-CONFIG-008: MCP Servers is still found by its name among `.nav-list__item`.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -270,9 +270,9 @@ async function openMcpSettings(d, step) {
   await step('the MCP Servers category', d.click('.nav-list__item', { text: 'MCP Servers' }));
   await step('the configured servers card', d.waitFor('[data-mcp-servers]'));
 }
-/** The prompt as the packaged prompt seam types it — Ctrl+2, Ctrl+L, the text, Enter — each once its condition holds. */
+/** The prompt as the packaged prompt seam types it — Ctrl+1, Ctrl+L, the text, Enter — each once its condition holds. */
 async function typePrompt(d, step, prompt) {
-  await step('Ctrl+2', d.chord('Ctrl+2'));
+  await step('Ctrl+1', d.chord('Ctrl+1')); // Workspace: first view since PD-SHELL-016 (Ctrl+2 before)
   await step('the composer', d.waitFor('.composer__input'));
   await step('Ctrl+L', d.chord('Ctrl+L'));
   await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));

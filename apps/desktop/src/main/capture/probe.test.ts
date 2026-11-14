@@ -132,7 +132,7 @@ describe('a capture\'s wait counts from the submission of its typed prompt (prob
 
 /**
  * The last view's probes wait for a condition when `_END_VIEW_UNTIL` names one, bounded, rather than for `_END_VIEW_MS`:
- * `overview-proof`'s relaunch read the sessions card 2.5 s after its Ctrl+1 while the card still said "Loading sessions…"
+ * `overview-proof`'s relaunch read the sessions card 2.5 s after its Ctrl+2 (Ctrl+1 until PD-SHELL-016) while the card still said "Loading sessions…"
  * on a loaded host (docs/archive/defects/overview-proofs-relaunch-reads-the-sessions-card-at-a-fixed-offset-while-it-is-still-loading.md).
  */
 describe('the last view\'s probes wait for the selector `_END_VIEW_UNTIL` names (probe.ts, installFinish)', () => {
@@ -246,7 +246,7 @@ describe('the capture seam types a multi-line prompt as a person types it (REQ-C
     expect(promptEvents('a\r\nb')).toEqual(promptEvents('a\nb'));
   });
 
-  it('sends exactly those events after Ctrl+2 and Ctrl+L, at the seam\'s time', () => {
+  it('sends exactly those events after Ctrl+1 and Ctrl+L, at the seam\'s time', () => {
     const clock = new FakeClock();
     const sent: unknown[] = [];
     const stub = { win: { webContents: { sendInputEvent: (e: unknown) => { sent.push(e); } } }, clocks: clock };
@@ -260,7 +260,7 @@ describe('the capture seam types a multi-line prompt as a person types it (REQ-C
       if (before === undefined) delete process.env['ROTARIS_CAPTURE_PROMPT_MS']; else process.env['ROTARIS_CAPTURE_PROMPT_MS'] = before;
     }
     expect(sent.slice(0, 4)).toEqual([
-      { type: 'keyDown', keyCode: '2', modifiers: ['control'] }, { type: 'keyUp', keyCode: '2', modifiers: ['control'] },
+      { type: 'keyDown', keyCode: '1', modifiers: ['control'] }, { type: 'keyUp', keyCode: '1', modifiers: ['control'] },
       { type: 'keyDown', keyCode: 'L', modifiers: ['control'] }, { type: 'keyUp', keyCode: 'L', modifiers: ['control'] },
     ]);
     expect(sent.slice(4)).toEqual(promptEvents('first line\nsecond line'));

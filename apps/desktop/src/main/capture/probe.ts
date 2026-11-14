@@ -77,7 +77,7 @@ export function submitEvents(text: string, per: 'char' | 'key'): TypedEvent[] {
 }
 
 /**
- * The typed prompt. Real input events, not a script: Ctrl+2 opens Workspace (REQ-SHELL-049), Ctrl+L
+ * The typed prompt. Real input events, not a script: Ctrl+1 opens Workspace (REQ-SHELL-049; Ctrl+2 until PD-SHELL-016, 2026-11-14, put Workspace first), Ctrl+L
  * focuses the composer (REQ-CHAT-002), the text is typed with its line breaks as Shift+Enter, Enter submits
  * (REQ-CHAT-001) — `promptEvents`.
  *
@@ -89,8 +89,8 @@ export function installPromptSeam(host: CaptureHost, prompt: string, resuming: b
   let sentAt: number | null = null;
   host.clocks.timers.after(millis(Number((__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROMPT_MS'] : undefined) ?? (resuming ? 2_600 : 800))), () => {
     const wc = host.win.webContents;
-    wc.sendInputEvent({ type: 'keyDown', keyCode: '2', modifiers: ['control'] });
-    wc.sendInputEvent({ type: 'keyUp', keyCode: '2', modifiers: ['control'] });
+    wc.sendInputEvent({ type: 'keyDown', keyCode: '1', modifiers: ['control'] });
+    wc.sendInputEvent({ type: 'keyUp', keyCode: '1', modifiers: ['control'] });
     host.clocks.timers.after(millis(200), () => {
       wc.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] });
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] });

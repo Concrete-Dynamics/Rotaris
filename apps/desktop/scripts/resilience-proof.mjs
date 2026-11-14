@@ -33,6 +33,8 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * is ended (SIGTERM, a grace, SIGKILL) and reported as a failure with its log tail, where `spawnSync`'s timeout had left
  * the override launch alive 649 s after its 180 s
  * (`docs/archive/defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`).
+ * PD-SHELL-016 (2026-11-14): the Workspace is the first view, so the driven launches open it by Ctrl+1 (Ctrl+2 until then) and
+ * leave it for another view by Ctrl+2, the Overview.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -162,7 +164,7 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
     value = await Promise.race([
       (async () => {
         await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
-        await step('Ctrl+2', d.chord('Ctrl+2'));
+        await step('Ctrl+1', d.chord('Ctrl+1'));
         await step('the composer', d.waitFor('.composer__input'));
         await step('Ctrl+L', d.chord('Ctrl+L'));
         await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal: giveUp.signal }));
@@ -389,7 +391,7 @@ await scenarioRun('next-run-choice', async () => {
     // The user's route to a stored session (REQ-SHELL-126, REQ-SESSION-118): the title bar's Sessions, then the row's Open.
     await step('Sessions', d.click('.title-bar__sessions', { timeoutMs: 15_000 }));
     await step('the row\'s Open', d.click('.session-browser tr[data-session-id] button', { timeoutMs: 15_000 }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the resumed transcript', until(() => d.eval(`[...document.querySelectorAll('.composer__input')].length > 0 && document.body.innerText.includes('quota, then the next run on alpha') && !document.querySelector('.session-browser')`), (v) => v === true, { timeoutMs: 60_000, what: 'the resumed session on screen', signal }));
     const chip = 'button[aria-label="Model for the next run"]';
     await step('the chip enabled', until(() => d.eval(`document.querySelector(${JSON.stringify(chip)})?.disabled === false`), (v) => v === true, { timeoutMs: 30_000, what: 'the model chip enabled', signal }));
@@ -538,7 +540,7 @@ await scenarioRun('quota-retry', async () => {
   const waits = () => { const db = open(s4b); try { const row = session(db); return row === undefined ? 0 : issues(db, row.session_id).filter((i) => i.kind === 'model_wait').length; } finally { db.close(); } };
   const r = await drivenLaunch('quota-retry', s4b, { ROTARIS_SCRIPT: 'fail:quota,fail:quota,answer' }, async (d, step, signal) => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
@@ -586,7 +588,7 @@ const s4d = scenario('keep-waiting', []);
 await scenarioRun('keep-waiting', async () => {
   const r = await drivenLaunch('keep-waiting', s4d, { ROTARIS_SCRIPT: 'fail:quota,answer' }, async (d, step, signal) => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
@@ -629,7 +631,7 @@ const s4e = scenario('switch-over-override', []);
 await scenarioRun('switch-over-override', async () => {
   const r = await drivenLaunch('switch-over-override', s4e, { ROTARIS_SCRIPT: 'fail:quota,wait:12000,answer,answer' }, async (d, step, signal) => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
@@ -675,7 +677,7 @@ await scenarioRun('two-waits', async () => {
   const waits = () => { const db = open(s4c); try { const row = session(db); return row === undefined ? 0 : issues(db, row.session_id).filter((i) => i.kind === 'model_wait').length; } finally { db.close(); } };
   const r = await drivenLaunch('two-waits', s4c, { ROTARIS_SCRIPT: 'delegate:coding-agent:side,fail:quota,answer', ROTARIS_CHILD_SCRIPT: 'fail:quota,answer' }, async (d, step, signal) => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
@@ -793,7 +795,7 @@ await scenarioRun('child-timeout-inspector', async () => {
   const read = (d) => d.eval(`(() => { const caption = document.querySelector('.inspector__ring-caption')?.textContent ?? ''; return { name: document.querySelector('[data-testid="inspector-name"]')?.textContent ?? null, model: document.querySelector(${JSON.stringify(model)})?.dataset.value ?? null, limit: /of ([\\d,]+) tokens/.exec(caption)?.[1] ?? null }; })()`);
   const r = await drivenLaunch('child-timeout-inspector', s6c, { ROTARIS_SCRIPT: 'delegate:coding-agent:helper,answer', ROTARIS_CHILD_SCRIPT: 'hang,wait:3000,answer,answer' }, async (d, step, signal) => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
@@ -933,7 +935,7 @@ await scenarioRun('fatal', async () => {
     // The first-launch notice (REQ-WORKSPACE-152 (3)) is raised 800 ms after the workspace opens, into the ONE slot this
     // scenario reads (REQ-NOTIFY-024): it is waited for first, so it cannot replace the failure's notice afterwards.
     await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
@@ -1030,7 +1032,7 @@ await scenarioRun('reauth', async () => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
     await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
     const signedIn = await step('the instance signed in with stale-key', d.command({ kind: 'provider.signIn', providerId: 'openai-compatible', label: 'Proof', baseUrl: catalogBase, apiKey: 'stale-key' }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
@@ -1086,7 +1088,7 @@ await scenarioRun('generic', async () => {
   const r = await drivenLaunch('generic', s10, { ROTARIS_SCRIPT: 'fail' }, async (d, step, signal) => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
     await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
@@ -1094,7 +1096,7 @@ await scenarioRun('generic', async () => {
     const failed = await step('the run failed', settled(s10, signal, 'the run failing'));
     const notice = await step('the generic notice', until(() => d.eval(NOTICE), (n) => n !== null && n.title === 'The run failed', { timeoutMs: 30_000, what: 'the generic failure notice', signal }));
     const windows = await step('no recovery window', recoveryWindows(d));
-    await step('Ctrl+1', d.chord('Ctrl+1'));
+    await step('Ctrl+2', d.chord('Ctrl+2')); // the Overview: away from the Workspace, which Ctrl+1 opens since PD-SHELL-016
     const away = await step('another view', until(() => d.eval(VIEW), (v) => v !== null && v !== 'workspace', { timeoutMs: 10_000, what: 'a view other than the workspace', signal }));
     await step('Back to the workspace', d.click('.notice-slot .notice__action'));
     const back = await step('the workspace view', until(() => d.eval(VIEW), (v) => v === 'workspace', { timeoutMs: 10_000, what: 'the workspace view after the action', signal }));
@@ -1252,7 +1254,7 @@ await scenarioRun('auth-fallback-dialog', async () => {
   const r = await drivenLaunch('auth-fallback-dialog', s13, { ROTARIS_SCRIPT: 'fail:401:only=scripted+scripted-b' }, async (d, step, signal) => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
     await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
@@ -1306,7 +1308,7 @@ await scenarioRun('auth-fallback-revise', async () => {
   const r = await drivenLaunch('auth-fallback-revise', s12, { ROTARIS_SCRIPT: 'fail:401:only=deepseek' }, async (d, step, signal) => {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
     await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));

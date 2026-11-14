@@ -79,7 +79,8 @@
  * Evidence under `.proof/settings-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  *
  * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`settings`), not by its digit.
- * Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view.
+ * Settings is the sixth view (Ctrl+6; the seventh until then); Mission is no view. PD-SHELL-016 (2026-11-14): the
+ * chord that leaves Settings for the Workspace is Ctrl+1 (Ctrl+2 until then).
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
@@ -450,7 +451,7 @@ const live = await launch('live-apply', workspace, local, preferences, {
   ROTARIS_CAPTURE_PROBE_AT: '.tool__preview@13000;;.dialog-title@18000',
   ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_VIEW_MS: '14000', ROTARIS_CAPTURE_SETTINGS: 'Display',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="show-tool-results"]@15500;;.dialog-actions .btn-primary>>Save@18500',
-  ROTARIS_CAPTURE_CHORDS: 'Ctrl+2@17500',
+  ROTARIS_CAPTURE_CHORDS: 'Ctrl+1@17500', // back to the Workspace; Ctrl+2 until PD-SHELL-016 (2026-11-14)
   ROTARIS_CAPTURE_PROBE: [...PROBES, '.tool__preview', '.dialog-title'].join(';;'),
   ROTARIS_CAPTURE_AFTER_MS: '21000',
 }, 180_000);

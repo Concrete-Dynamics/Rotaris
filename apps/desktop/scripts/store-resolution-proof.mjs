@@ -118,7 +118,7 @@ const followNotice = async (d, label) => {
   const launched = await launch('seed', { ROTARIS_CAPTURE_BACKUP_TO: backup });
   const d = launched.driver;
   await d.waitFor('.app-shell', { timeoutMs: 60_000 });
-  await d.chord('Ctrl+2');
+  await d.chord('Ctrl+1'); // Workspace is the first view since PD-SHELL-016 (2026-11-14); it was Ctrl+2
   await d.waitFor('.composer__input', { timeoutMs: 10_000 });
   await d.click('.composer__input');
   await d.type('record one session for the backup', { enter: true });

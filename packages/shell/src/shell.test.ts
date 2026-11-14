@@ -3,11 +3,12 @@ import { FakeClock, millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, isViewId, PRIMARY_VIEWS, RETIRED_VIEW_IDS, STARTUP_VIEW, viewPosition } from '@rotaris/contracts';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from './index.js';
 
-describe('shell — the six views (PD-SHELL-015 over REQ-SHELL-023 and -027; REQ-SHELL-026)', () => {
-  it('are exactly six, in the order they had, with their labels, and Overview is the startup view', () => {
-    expect(PRIMARY_VIEWS.map((v) => v.label)).toEqual(['Overview', 'Workspace', 'Requirements', 'Git', 'Library', 'Settings']);
+describe('shell — the six views (PD-SHELL-015 and PD-SHELL-016 over REQ-SHELL-023, -026 and -027)', () => {
+  it('are exactly six, in PD-SHELL-016\'s order, with their labels and groups, and the Workspace is the startup view', () => {
+    expect(PRIMARY_VIEWS.map((v) => v.label)).toEqual(['Workspace', 'Overview', 'Requirements', 'Git', 'Library', 'Settings']);
+    expect(PRIMARY_VIEWS.map((v) => v.group)).toEqual(['work', 'work', 'project', 'project', 'project', 'system']);
     expect(PRIMARY_VIEWS[2].id).toBe('requirements');
-    expect(STARTUP_VIEW).toBe('overview');
+    expect(STARTUP_VIEW).toBe('workspace');
   });
 
   it('PD-SHELL-015 clause 2: Mission is no primary view, and its identifier is retired, never reassigned', () => {

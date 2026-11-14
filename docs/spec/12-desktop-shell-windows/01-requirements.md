@@ -116,9 +116,13 @@ Part 1 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
   > hosts exactly six primary views, in the order this requirement gave them: Overview, Workspace, Requirements, Git,
   > Library, Settings. Mission is not a primary view, so Requirements is the third entry, after Workspace and before
   > Git. "Exactly one is visible at a time" still governs.
+  > **Narrowed by [`PD-SHELL-016`](../../product/directives/pd-shell-016.md#pd-shell-016), 2026-11-14.** The six views stand in the order Workspace, Overview,
+  > Requirements, Git, Library, Settings: Workspace and Overview change places and nothing else moves.
 - **REQ-SHELL-024**: Vertical layout, top to bottom: title bar; a persistent-notice banner slot; a horizontal region of navigation rail beside the active view; status strip.
 - **REQ-SHELL-025**: View switching semantics: switching to an unknown view identifier is a silent no-op. Leaving the Settings view with unsaved changes triggers the save/discard/cancel dialog (REQ-SHELL-124) and cancelling aborts the navigation. A successful switch updates the rail's selected state and the recorded active view (which other behaviors, such as Escape handling, read).
 - **REQ-SHELL-026**: The view shown at startup is Overview.
+  > **Narrowed by [`PD-SHELL-016`](../../product/directives/pd-shell-016.md#pd-shell-016), 2026-11-14.** The view shown at startup is the Workspace (clause 4,
+  > which rules OQ-548).
 
 ### Navigation rail
 
@@ -126,8 +130,13 @@ Part 1 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
   > **Narrowed by [`PD-SHELL-015`](../../product/directives/pd-shell-015.md#pd-shell-015), 2026-11-11.** The rail shows
   > six buttons and no "Mission" label: "Overview", "Workspace", "Requirements", "Git", "Library", "Settings". Every
   > other sentence above still governs.
+  > **Narrowed by [`PD-SHELL-016`](../../product/directives/pd-shell-016.md#pd-shell-016), 2026-11-14.** The navigation is a sidebar: open, a view's button shows
+  > its icon beside its label, in that directive's order, with the sessions list and the start control; folded, it is
+  > this requirement's rail in that order.
 - **REQ-SHELL-028**: Rail selection is mutually exclusive: whenever a view is showing, exactly one rail button is in the checked state, and checking a button unchecks the one that was checked before. Each button is an individual stop in the window's tab order (REQ-SHELL-032) and shows a pointing-hand cursor under the pointer. Each rail icon is declared at 17×17 logical pixels and drawn under the scaling rule of REQ-SHELL-030. Every button carries the tooltip and the accessible description "Open {Label}". A click checks the button and switches the view, as do Space and Return on the focused button; a checked state that no user gesture produced updates the rail's appearance only — it switches no view and causes no other navigation effect. The rail is not an arrow-navigable group: while a rail button holds focus, Arrow Up, Arrow Down, Arrow Left and Arrow Right SHALL move no rail selection and switch no view. Movement between rail buttons is by Tab and Shift+Tab only (REQ-SHELL-032). This is exactly the difference REQ-SHELL-153 preserves between the rail and the shell's vertical navigation lists, and it is deliberate: the rail's activation both selects and navigates, so arrow keys must not be able to traverse it.
 - **REQ-SHELL-029**: Rail labels render at 9 px, and in every built-in theme each item shows its complete label with no ellipsis and no clipped glyph. The rail is consequently never narrower than its widest label needs: it uses the theme's declared item and rail widths (54 px and 68 px respectively in the default theme, REQ-SHELL-129) whenever those already accommodate the labels, and exceeds them when they do not. The width is re-derived after every theme change, including a change to a theme with a larger type scale.
+  > **Narrowed by [`PD-SHELL-016`](../../product/directives/pd-shell-016.md#pd-shell-016), 2026-11-14.** The 9 px label is the folded form's; the open sidebar
+  > sets a label at `--rt-text-sm`. No label is elided in either form.
 - **REQ-SHELL-030**: An icon declared at L logical pixels is rendered from artwork whose raster resolution is at least ceil(L × device pixel ratio) device pixels in each dimension, so the drawn icon is never an enlargement of a smaller raster. Measured at 100%, 125%, 150%, 175% and 200% OS display scaling, the icon covers L logical pixels — the same physical area of the screen at every one of those factors, within one device pixel. Resting and selected rail icons use two distinct theme inks, and each clears the 3:1 non-text contrast floor of REQ-SHELL-144 against the rail background.
 - **REQ-SHELL-031**: A theme change fully recolors the rail, including baked icon inks and hover/selected treatments; no stale-theme icon color survives a switch.
 - **REQ-SHELL-032**: Every rail button is its own stop in the window's normal tab order, and each announces a non-empty accessible name (the Workspace button, for instance, announces "Open Workspace").

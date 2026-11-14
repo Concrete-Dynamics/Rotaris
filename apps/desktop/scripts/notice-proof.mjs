@@ -749,7 +749,9 @@ if (want('6c')) {
   const d = launched.driver;
   const trail = [];
   const step = async (what, promise) => { const t0 = Date.now(); try { const v = await promise; trail.push({ what, ms: Date.now() - t0 }); return v; } catch (cause) { trail.push({ what, ms: Date.now() - t0, error: String(cause) }); throw cause; } };
-  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
+  // "On screen" is the VIEW's text: since PD-SHELL-016 the sidebar lists every session by its first prompt and the title bar names
+  // the followed one, so the shell's whole text holds a released run's prompt by design (2026-11-14). The same holds for `onScreen` below.
+  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main.view')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
   const noticeIn = async (which) => { await d.useWindow(which); return await d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; const a = n.querySelector('.notice__action'); return { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, action: a?.textContent ?? null, member: a?.getAttribute('data-action') ?? null }; })()`); };
   let value = null;
   let failure = null;
@@ -877,7 +879,7 @@ if (want('6d')) {
   const d = launched.driver;
   const trail = [];
   const step = async (what, promise) => { const t0 = Date.now(); try { const v = await promise; trail.push({ what, ms: Date.now() - t0 }); return v; } catch (cause) { trail.push({ what, ms: Date.now() - t0, error: String(cause) }); throw cause; } };
-  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
+  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main.view')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
   const noticeIn = async (which) => { await d.useWindow(which); return await d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; const a = n.querySelector('.notice__action'); return { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, action: a?.textContent ?? null, member: a?.getAttribute('data-action') ?? null }; })()`); };
   let value = null;
   let failure = null;
@@ -1068,7 +1070,7 @@ if (want('8')) {
   const d = launched.driver;
   const trail = [];
   const step = async (label, pending) => { const at = Date.now() - started; const value = await pending; trail.push({ at, label }); return value; };
-  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
+  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main.view')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
   let failure = null;
   let value = null;
   try {
@@ -1130,7 +1132,7 @@ if (want('9')) {
   const d = launched.driver;
   const trail = [];
   const step = async (label, pending) => { const at = Date.now() - started; const value = await pending; trail.push({ at, label }); return value; };
-  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
+  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main.view')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
   const readNotice = () => d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); return n ? { title: n.querySelector('[data-testid="notice-title"]')?.textContent, message: n.querySelector('[data-testid="notice-message"]')?.textContent ?? null, detail: n.querySelector('[data-testid="notice-detail"]')?.textContent ?? null, severity: n.getAttribute('data-severity'), action: n.querySelector('.notice__action')?.textContent, member: n.querySelector('.notice__action')?.getAttribute('data-action') } : null; })()`);
   const sessionRow = () => { const db = open(s9); try { return db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at').all(); } finally { db.close(); } };
   let failure = null;

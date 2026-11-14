@@ -26,11 +26,13 @@
  *
  *   node apps/desktop/scripts/ui-audit.mjs [--skip-build] [--sizes=1400x900,1000x680] [--views=1,2,3]
  *
- * PD-SHELL-015 (2026-11-11): six views, numbered by their place in the rail — 1 Overview, 2 Workspace, 3 Requirements,
+ * PD-SHELL-015 (2026-11-11): six views, numbered by their place in the rail — 1 Workspace, 2 Overview, 3 Requirements,
  * 4 Git, 5 Library, 6 Settings (Mission, 3 until then, is no view; 4 to 7 each moved down one). `--views=` also takes a
  * view's identifier (`--views=overview,settings`), the form that does not move when the rail does. PD-MONITOR-009: what
  * the Mission view drew stands on the Overview as two cards, which this audit's scratch profile does not draw: it holds no
  * session, so the Overview swept here is its empty state (`pnpm mission-proof` reads the cards, at both table forms).
+ * PD-SHELL-016 (2026-11-14): Workspace and Overview changed places, so `1` is the Workspace and `2` the Overview, and the
+ * overlays' return to the Workspace is Ctrl+1; the output files `1-workspace-*` and `2-overview-*` follow.
  *
  * Evidence under `.ui-audit/`: a PNG per view per size, and `report.json`.
  */
@@ -103,8 +105,8 @@ git('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
  * view's place in the rail, which is also the digit of its Ctrl+<digit> chord and the number `--views=` takes.
  */
 const VIEWS = [
-  { n: 1, id: 'overview', name: 'Overview', root: '.overview' },
-  { n: 2, id: 'workspace', name: 'Workspace', root: '.workspace' },
+  { n: 1, id: 'workspace', name: 'Workspace', root: '.workspace' },
+  { n: 2, id: 'overview', name: 'Overview', root: '.overview' },
   { n: 3, id: 'requirements', name: 'Requirements', root: '.req' },
   { n: 4, id: 'git', name: 'Git', root: '.git' },
   { n: 5, id: 'library', name: 'Library', root: '.library' },
@@ -505,7 +507,7 @@ try {
       await d.resize(size.w, size.h);
       await sleep(600);
       for (const overlay of OVERLAYS) {
-        await d.chord('Ctrl+2');
+        await d.chord('Ctrl+1'); // the Workspace (Ctrl+2 until PD-SHELL-016)
         await d.waitFor('.workspace', { timeoutMs: 15_000 }).catch(() => undefined);
         await d.chord('Escape');
         await sleep(200);

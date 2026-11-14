@@ -18,7 +18,7 @@
  *  - the reading is taken when the Artifacts tab has LOADED its read and drawn either its empty state or a row, in ONE
  *    probe, so "no row" and "the empty state" are one instant's reading rather than two;
  *  - nothing leaves the Library before the reading's deadline: the separate Ctrl+2 is gone, and the leave is the
- *    prompt seam's own Ctrl+2 (`installPromptSeam`), which now comes after that deadline, and the run that publishes
+ *    prompt seam's own Ctrl+1 (`installPromptSeam`; Ctrl+2 until PD-SHELL-016, 2026-11-14 put the Workspace first), which now comes after that deadline, and the run that publishes
  *    starts only from that submit;
  *  - the return (the Library's chord at 14000 ms) is an appointment again, and its tab press waits for the tab the same way.
  * The window a startup stall must exceed to make the launch red grew from about 0.4 s to 4.6 s, and a red that does
@@ -26,7 +26,7 @@
  *
  * PD-SHELL-015 (2026-11-11): the schedule names its view by identifier (`library@ms`), the form the capture seam
  * keeps when the rail moves; the Library is the fifth primary view (Ctrl+5) since Mission is none. The 2026-10-03
- * history above keeps the chords as they were pressed then.
+ * history above keeps the chords as they were pressed then (its Ctrl+2 opened the Workspace, which Ctrl+1 does now).
  *
  * Nothing here is product code. It runs only from the proof and its test.
  */

@@ -91,7 +91,7 @@ Nothing else that was reachable is removed. Section 6 is the reachability check.
 | Alternative | Why not |
 |---|---|
 | Keep seven views and only reorder | leaves B1 and B2: the third tree and the second settings editor are the structure's cost, not its order's |
-| **Open on the Workspace and put it first in the rail** (the first draft's D1) | **refused by the critique, section 7:** OQ-506's ruling rests on the returning operator landing on the Overview's sessions card; "New session" already starts work from the Overview; no usage data says which a launch does more often, start or resume. Raised as [OQ-548](../architecture/open-questions/71-spikes-and-later-questions-38.md#oq-548) |
+| **Open on the Workspace and put it first in the rail** (the first draft's D1) | **refused by the critique, section 7:** OQ-506's ruling rests on the returning operator landing on the Overview's sessions card; "New session" already starts work from the Overview; no usage data says which a launch does more often, start or resume. Raised as [OQ-548](../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-548) |
 | Fold Mission into the Workspace instead | the Workspace already carries three panes and a compact mode below 1180 px; the table and the figures are what is read when not typing |
 | Move only the table to the Overview and leave pause and cancel to the Workspace alone (the critique's alternative 1) | an operator who sees a run burn tokens on the view that shows the cost should be able to stop it there, as on Mission; the price is that steering stands in two views, which it already did |
 | Keep the name "Mission" for the merged view and retire "Overview" | "Overview" says what a summary view is; the session figures are not a mission |
@@ -202,7 +202,7 @@ Section 1's B1, B2, B4, B5 and B7 stand repaired by round 2. B3 and B6, which ro
 | 5 | Library | `library` | Ctrl+5 | Project | — |
 | 6 | Settings | `settings` | Ctrl+6, Ctrl+, | (foot) | drawn at the sidebar's foot |
 
-The sidebar, top to bottom: New session; Workspace, Overview; **Project**: Requirements, Git, Library; **Sessions**: the workspace's sessions, at most twelve, the followed one marked, "All sessions" opening the browser; Settings; the fold control. Below 1360 px, or folded by the user, it is the rail of round 2 in the new order. Decided by [`PD-SHELL-016`](../product/directives/pd-shell-016.md#pd-shell-016), which narrows REQ-SHELL-023, -026, -027, -029 and -049, supersedes clauses 1, 3 and 5 of `PD-SHELL-015` in part, and rules OQ-548.
+The sidebar, top to bottom: New session; Workspace, Overview; **Sessions**: the workspace's sessions, at most twelve, the followed one marked, "List sessions" opening the browser; then at the foot **Project**: Requirements, Git, Library; Settings; the fold control. Below 1600 px, or folded by the user, it is the rail of round 2 in the new order with one Sessions control in the list's place, and the followed session is named in the title bar at every width. The order of the sidebar's regions, the 1600 px figure, the Sessions control and the title bar's session name are the answers to an independent critique of the first build, recorded in [the shell's brief](briefs/shell.md). Decided by [`PD-SHELL-016`](../product/directives/pd-shell-016.md#pd-shell-016), which narrows REQ-SHELL-023, -026, -027, -029 and -049, supersedes clauses 1, 3 and 5 of `PD-SHELL-015` in part, and rules OQ-548.
 
 ### 10.4 Coverage — every capability, and where it is reached
 
@@ -212,7 +212,7 @@ Nothing reachable is removed in round 3. A capability not listed is reached wher
 |---|---|---|---|---|
 | Start a run | the composer, on the startup view | type, Return | the run starts | REQ-CHAT-001; `pnpm slice-proof` |
 | Start a session with options | New session, in the sidebar on every view; the Overview's header; `/new` | one press | the start-session dialog | REQ-SHELL-125 |
-| Switch to another session | its row in the sidebar; the Overview's sessions section; the browser | one press | that session followed, the Workspace shown | `PD-SHELL-016` clause 3; REQ-MONITOR-171 |
+| Switch to another session | its row in the sidebar (from 1600 px, or opened); the rail's Sessions control; the Overview's sessions section; the browser | one or two presses | that session followed, the Workspace shown | `PD-SHELL-016` clause 3; REQ-MONITOR-171 |
 | Search, repair, export, delete, back up, restore sessions | All sessions; the title bar's Sessions | one press | the session browser | REQ-SHELL-126 |
 | Read a run's agents and steer one | the Workspace's Agents pane and inspector | on screen | select, steer, cancel, pop out | REQ-MONITOR-042, -051 |
 | Read a session's figures; pause; cancel a selection; the agent table | Overview | Ctrl+2 | the band, the graph, the table | `PD-MONITOR-009`, `PD-MONITOR-010` |
@@ -242,4 +242,4 @@ Round 2's critique refused "open on the Workspace and put it first" on three gro
 
 ### 10.7 Evidence, and what was not verified
 
-The captures of this round are kept with the pull request's report, as section 9 says of round 2's. Measured after building, at 1440×900: the sidebar 232 px, the six views in 10.3's order, Ctrl+1 the Workspace and Ctrl+2 the Overview, the startup view the Workspace; at 1000×680: the sidebar folded to the rail, the Workspace in its drawer form. What was not verified is in the pull request's report.
+The captures of this round are kept with the pull request's report, as section 9 says of round 2's. Measured after building, at 1680×1000: the sidebar 232 px, the six views in 10.3's order, Ctrl+1 the Workspace and Ctrl+2 the Overview, the startup view the Workspace; at 1440×900 and 1000×680: the rail with its Sessions control, the followed session named in the title bar. What was not verified is in the pull request's report.

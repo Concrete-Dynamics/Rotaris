@@ -1,11 +1,12 @@
 // @ts-nocheck — a typecheck exception (tools/typecheck-exceptions.json, R-091): its types are owed, and the list only shrinks.
 /**
- * The Overview proof (Part M): the startup view painted with what the run and the store give it (REQ-SHELL-026,
+ * The Overview proof (Part M): the Overview (the startup view until PD-SHELL-016) painted with what the run and the store give it (REQ-SHELL-026,
  * REQ-MONITOR-164..171; ADR-0038's first execution behind the repository card). Scripted client, scratch store,
  * three launches against one scratch profile:
  *
- *   1. empty     — a fresh workspace that is a Git repository with one commit and one untracked file: Overview is
- *                  the first view painted; the onboarding empty state, keyed to the provider precondition since no
+ *   1. empty     — a fresh workspace that is a Git repository with one commit and one untracked file: the Overview, opened
+ *                  by the capture's view switch (the window opens on the Workspace),
+ *                  is painted; the onboarding empty state, keyed to the provider precondition since no
  *                  provider is authenticated (OQ-537: REQ-WORKSPACE-152 (3)'s two facts, REQ-WORKSPACE-137's "Open
  *                  Settings"); then, with PATH emptied of git, the repository card's "not available" state and no dialog
  *                  (REQ-GIT-102/103); then, with a stored credential for one provider, today's first-use
@@ -22,7 +23,8 @@
  *
  * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`overview`), not by its digit, the
  * form that does not move when the rail does (Mission is no view; Settings is the sixth). No chord this script
- * presses moved.
+ * presses moved. PD-SHELL-016 (2026-11-14): the window opens on the Workspace, so the three empty-state launches name
+ * `ROTARIS_CAPTURE_VIEW: 'overview'`; no chord this script presses changed digit.
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -110,10 +112,10 @@ git('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
 writeFileSync(join(workspace, 'NOTES.md'), 'untracked\n');
 const results = {};
 
-// 1. The empty Overview, as the startup view (REQ-SHELL-026, REQ-MONITOR-165's onboarding state).
-const empty = await launch('empty', workspace, local, preferences, { ROTARIS_CAPTURE_AFTER_MS: '3500' });
+// 1. The empty Overview, opened from the startup view (the Workspace since PD-SHELL-016; it was the startup view until then) (REQ-SHELL-026, REQ-MONITOR-165's onboarding state).
+const empty = await launch('empty', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: 'overview', ROTARIS_CAPTURE_AFTER_MS: '3500' });
 const emptyView = first(empty.probes, '.app-shell')?.data?.['data-view'];
-if (emptyView !== 'overview') throw new Error(`the first view painted was ${emptyView ?? 'none'}, not overview`);
+if (emptyView !== 'overview') throw new Error(`the view painted after the launch's switch to the Overview was ${emptyView ?? 'none'}, not overview`);
 if (text(empty.probes, '[data-testid="overview-empty"]').length !== 1) throw new Error('the onboarding empty state was not on screen with no session and no stored run');
 if (!/repository .*: git=true repo=true branch=main base=- \+0\/-0 touched=1 uncommitted=0/.test(empty.log)) throw new Error(`the repository was not read as expected:\n${empty.log.split('\n').filter((l) => /repository/.test(l)).join('\n')}`);
 const readMs = Number(/repository .* in (\d+) ms/.exec(empty.log)?.[1] ?? -1);
@@ -130,7 +132,7 @@ if (JSON.stringify(emptyControls) !== JSON.stringify(['Open Settings'])) throw n
 results.empty = { view: emptyView, emptyState: true, precondition: 'provider', hint: emptyHint, controls: emptyControls, repositoryReadMs: readMs };
 
 // 1b. PATH emptied of git: the reads end in a state — no dialog, no throw (REQ-GIT-102/103).
-const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_AFTER_MS: '3500', PATH: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent', Path: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent' });
+const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: 'overview', ROTARIS_CAPTURE_AFTER_MS: '3500', PATH: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent', Path: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent' });
 if (!/repository .*: git=false repo=false/.test(noGit.log)) throw new Error(`with no git on the path the repository read did not end in the empty state:\n${noGit.log.split('\n').filter((l) => /repository/.test(l)).join('\n')}`);
 if (/Error box|dialog/i.test(noGit.log.split('\n').filter((l) => /repository/.test(l)).join('\n'))) throw new Error('a dialog was raised for a missing git');
 results.noGit = { repositoryState: 'git=false', dialog: false };
@@ -143,7 +145,7 @@ results.noGit = { repositoryState: 'git=false', dialog: false };
 const credentialFile = join(tokensDirFor(local), 'openai-compatible--overview-proof.json');
 mkdirSync(tokensDirFor(local), { recursive: true });
 writeFileSync(credentialFile, JSON.stringify({ access_token: 'overview-proof-not-a-key', refresh_token: '', expires_at: 0, account_id: null, extra: { provider_family: 'openai-compatible', api_base: 'http://127.0.0.1:9/v1' } }));
-const withProvider = await launch('empty-provider', workspace, local, preferences, { ROTARIS_CAPTURE_AFTER_MS: '3500' });
+const withProvider = await launch('empty-provider', workspace, local, preferences, { ROTARIS_CAPTURE_VIEW: 'overview', ROTARIS_CAPTURE_AFTER_MS: '3500' });
 rmSync(credentialFile, { force: true });
 if (!/providers: [1-9]\d* authenticated/.test(withProvider.log)) throw new Error(`the snapshot's provider was not read as authenticated:\n${withProvider.log.split('\n').filter((l) => /providers:/.test(l)).join('\n')}`);
 const providerBox = first(withProvider.probes, '[data-testid="overview-empty"]');

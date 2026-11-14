@@ -114,7 +114,7 @@ const measure = async () => JSON.parse(await d.eval(MEASURE));
 try {
   await d.waitFor('.app-shell', { timeoutMs: 30_000 });
   /**
-   * Navigate by CLICKING the rail rather than by sending Ctrl+2 (REQ-SHELL-028: "a click checks the button and
+   * Navigate by CLICKING the rail rather than by sending Ctrl+1 (Ctrl+2 until PD-SHELL-016, 2026-11-14; REQ-SHELL-028: "a click checks the button and
    * switches the view"). The chord used to be sent immediately after `.app-shell` first matched, and the
    * driver's `chord` op sends the key event with no readiness wait of its own — so the keystroke could arrive
    * before the shell had bound its window keydown handler, be silently lost, and leave this proof waiting the

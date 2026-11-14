@@ -305,7 +305,7 @@ results.push({ launch: 'switched', received: sourcesOf(afterSystem), absent: [SW
 // Only this launch's server records are read below: the files start empty here.
 for (const f of [serverLaunches, lspCalls]) writeFileSync(f, '');
 const isolated = await launch('isolated', profile, workspace, {
-  ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="sidebar-new-session"]@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Say hello from the worktree.>>composer@4400',
   // One call to the `lsp` server, so its connection — and REQ-MCP-070's `lsp_init` — is made in the isolated run. Its
   // tools collide with `fs_probe`'s, which sorts first, so they are offered under the `lsp_` prefix.

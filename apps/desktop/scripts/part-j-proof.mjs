@@ -436,7 +436,7 @@ const pairB = scenario('pair-b', []);
     // unchecked and enabled — and B's launch left unchecked runs on B's base tree. Before, main forced it into a worktree for
     // A's run (and B, no Git repository, could not start at all), while the dialog showed it unchecked.
     await d.useWindow(workspaceSuffix(['pair-b', 'workspace']));
-    await d.click('button', { text: 'New session' });
+    await d.click('[data-testid="sidebar-new-session"]'); // the sidebar's: a new window opens on the Workspace since PD-SHELL-016, not on the Overview's button
     await d.waitFor('[data-testid="start-session-dialog"]', { timeoutMs: 10_000 });
     reading.idleDialog = await d.eval("(() => { const box = document.querySelector('input[data-testid=\"start-session-isolation\"]'); const hint = document.querySelector('[data-testid=\"start-session-hint\"]'); return { checked: box?.checked ?? null, disabled: box?.disabled ?? null, hint: hint?.textContent ?? null }; })()");
     if (reading.idleDialog?.checked !== false || reading.idleDialog?.disabled !== false) throw new Error(`B's launch dialog locked isolation for a run in another project (PD-GIT-001): ${JSON.stringify(reading.idleDialog)}`);

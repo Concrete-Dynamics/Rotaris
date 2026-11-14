@@ -385,13 +385,28 @@ describe('ui — the navigation sidebar (PD-SHELL-016)', () => {
     expect(markup).toContain('<span class="nav-session__meta">running</span>');
     expect(markup).toContain('<span class="nav-session__meta">needs you</span>');
     expect(markup).toContain('<span class="nav-session__meta">2 h ago</span>');
-    expect(markup).toContain('3 more in All sessions.');
+    expect(markup).toContain('3 more in List sessions.');
+    // The list stands under the session views and above the project's, in the document as on screen.
+    expect(markup.indexOf('aria-label="Overview"')).toBeLessThan(markup.indexOf('data-testid="sidebar-sessions"'));
+    expect(markup.indexOf('data-testid="sidebar-sessions"')).toBeLessThan(markup.indexOf('aria-label="Requirements"'));
+  });
+
+  it('clause 5: the folded form\'s one sessions control names the followed session and the most urgent state of the others', () => {
+    const quiet = draw({ sessions: sessions([row('a', { label: 'fix the parser' }), row('b')]) });
+    expect(quiet).toContain('data-testid="sidebar-sessions-button" data-attention="none" title="List sessions — following fix the parser"');
+    const running = draw({ sessions: sessions([row('a'), row('b', { busy: true })]) });
+    expect(running).toContain('data-attention="running"');
+    const needs = draw({ sessions: sessions([row('a', { awaitingInput: true }), row('b', { busy: true }), row('c', { awaitingInput: true })]) });
+    expect(needs).toContain('data-attention="needs"');
+    expect(needs).toContain('another session needs you');
+    // The followed session's own state is the view's to show, so it raises nothing here.
+    expect(draw({ sessions: sessions([row('a', { awaitingInput: true })]) })).toContain('data-attention="none"');
   });
 
   it('clause 3: an empty, a pending and a refused read each say which it is', () => {
     expect(draw({ sessions: sessions([]) })).toContain('No sessions yet. A run you start is kept here.');
     expect(draw({ sessions: sessions([], 'loading') })).toContain('Reading sessions…');
-    expect(draw({ sessions: sessions([], 'error') })).toContain('The session list could not be read. All sessions shows why.');
+    expect(draw({ sessions: sessions([], 'error') })).toContain('The session list could not be read. List sessions shows why.');
   });
 
   it('clause 5: states its form, and the fold control names the act it would perform', () => {
@@ -403,6 +418,7 @@ describe('ui — the navigation sidebar (PD-SHELL-016)', () => {
   it('with no sessions handed to it, draws its views alone', () => {
     const markup = draw();
     expect(markup).not.toContain('sidebar-sessions');
+    expect(markup).not.toContain('sidebar-sessions-button');
     expect(markup).not.toContain('sidebar-new-session');
   });
 });

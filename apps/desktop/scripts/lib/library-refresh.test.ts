@@ -18,8 +18,8 @@ const tab = ARTIFACTS_TAB as string;
 const before = BEFORE_PUBLISH as string;
 
 describe("artifacts-proof's publish schedule (REQ-LIBRARY-136)", () => {
-  it('opens the Library, and leaves it by nothing but the prompt seam\'s own Ctrl+2 until it returns', () => {
-    // The defect: a separate Ctrl+2 at 2000 ms, 400 ms after the reading, which a 1.5 s stall put ahead of it.
+  it('opens the Library, and leaves it by nothing but the prompt seam\'s own Ctrl+1 until it returns', () => {
+    // The defect: a separate Ctrl+2 (the Workspace's chord then; Ctrl+1 since PD-SHELL-016) at 2000 ms, 400 ms after the reading, which a 1.5 s stall put ahead of it.
     // PD-SHELL-015 (2026-11-11): the view is named by its identifier, which does not move when the rail does (it read '6', the Library's place until then).
     expect(views.map((v) => v.selector)).toEqual(['library', 'library']);
     expect(views[0]!.until).toBe(false);

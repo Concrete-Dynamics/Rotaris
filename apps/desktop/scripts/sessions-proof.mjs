@@ -524,7 +524,7 @@ const del = await launch('delete', {
 // 9 + 10. isolated — E in a worktree with its ref in the shared repository; then deleted from the browser.
 const isolated = await launch('isolated', {
   ROTARIS_SCRIPT: 'write,answer',
-  ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="sidebar-new-session"]@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes in a worktree.>>composer@4400',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
 }, 180_000);

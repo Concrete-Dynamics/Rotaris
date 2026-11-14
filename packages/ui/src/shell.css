@@ -144,6 +144,7 @@
 .nav-rail[data-folded='0'] .nav-rail__new { flex: none; margin: var(--rt-space-3) var(--rt-space-2) var(--rt-space-3); justify-content: flex-start; gap: var(--rt-space-3); padding-inline: var(--rt-space-2); }
 .nav-rail__new i { font-size: var(--rt-icon-size); width: var(--rt-icon-size); text-align: center; }
 .nav-rail[data-folded='0'] .nav-rail__views { padding: 0 var(--rt-space-2) var(--rt-space-2); gap: var(--rt-space-4); }
+.nav-rail[data-folded='0'] .nav-rail__group[data-group='project'] { padding-top: var(--rt-space-3); border-top: var(--rt-hairline-width) solid var(--rt-border); }
 .nav-rail[data-folded='0'] .nav-rail__group:first-child { padding-top: var(--rt-space-1); }
 .nav-rail[data-folded='0'] .nav-item {
   flex-direction: row; align-items: center; gap: var(--rt-space-3);
@@ -161,23 +162,43 @@
 .nav-rail__all { font-size: var(--rt-text-2xs); min-height: 0; }
 .nav-rail__session-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: var(--rt-hairline-width); scrollbar-width: thin; scrollbar-color: var(--rt-border-strong) transparent; }
 .nav-session {
-  display: grid; grid-template-columns: var(--rt-icon-size) minmax(0, 1fr) auto; align-items: center; gap: var(--rt-space-3);
-  width: 100%; height: var(--rt-control-height); padding: 0 var(--rt-space-2);
+  display: grid; grid-template-columns: var(--rt-icon-size) minmax(0, 1fr); grid-template-areas: 'dot label' '. meta';
+  align-items: center; column-gap: var(--rt-space-3); row-gap: 0;
+  width: 100%; padding: var(--rt-space-1) var(--rt-space-2);
   border: 0; border-radius: var(--rt-radius-sm); background: transparent;
   color: var(--rt-text-secondary); font: inherit; font-size: var(--rt-text-sm); text-align: left; cursor: pointer;
 }
-.nav-session .status-dot { justify-self: center; }
+.nav-session .status-dot { grid-area: dot; justify-self: center; }
 .nav-session:hover { background: var(--rt-hover); color: var(--rt-text); }
-.nav-session[data-current='1'] { color: var(--rt-text); background: var(--rt-hover); }
-.nav-session__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nav-session__meta { font-family: var(--rt-font-mono); font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The followed session is marked by its ink and weight: the selection fill is the active view's alone, so the column never shows two rows selected. */
+.nav-session[data-current='1'] { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
+.nav-session__label { grid-area: label; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-session__meta { grid-area: meta; font-size: var(--rt-text-2xs); font-weight: var(--rt-weight-body); color: var(--rt-text-tertiary); white-space: nowrap; }
 .nav-rail__sessions-empty, .nav-rail__sessions-more { margin: 0; padding: var(--rt-space-1) var(--rt-space-2); font-size: var(--rt-text-xs); line-height: var(--rt-leading-body); color: var(--rt-text-tertiary); }
 .nav-rail__foot { flex: none; }
+.nav-rail__group[data-group='project'] { flex: none; }
+/* The folded form's sessions control: drawn as a rail item, never as a view (it carries no `nav-item` class and no radio role). */
+.nav-rail__browse { display: none; position: relative; border: 0; border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text-secondary); cursor: pointer; font: inherit; white-space: nowrap; }
+.nav-rail__browse:hover { background: var(--rt-hover); color: var(--rt-text); }
+.nav-rail__browse:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.nav-rail__browse i { font-size: var(--rt-icon-size); line-height: var(--rt-icon-size); }
+.nav-rail__browse[data-attention='running']::after, .nav-rail__browse[data-attention='needs']::after {
+  content: ''; position: absolute; top: var(--rt-space-1); right: var(--rt-space-3);
+  width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: var(--rt-radius-pill); background: var(--rt-run);
+}
+.nav-rail__browse[data-attention='needs']::after { background: var(--rt-wait); }
 
 /* Folded: the rail. */
 .nav-rail[data-folded='1'] { width: max-content; min-width: var(--rt-rail-width); }
 .nav-rail[data-folded='1'] .nav-rail__views { padding: var(--rt-space-2) 0; gap: var(--rt-hairline-width); }
+.nav-rail[data-folded='1'] .nav-rail__group[data-group='project'] { margin-top: var(--rt-space-2); padding-top: var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-border); }
 .nav-rail[data-folded='1'] .nav-rail__foot { margin-top: auto; }
+.nav-rail[data-folded='1'] .nav-rail__browse {
+  display: flex; flex-direction: column; align-items: center; gap: var(--rt-space-1); align-self: center;
+  width: max-content; min-width: var(--rt-nav-item-width);
+  padding: var(--rt-space-2) var(--rt-space-1); margin: 0 var(--rt-space-1);
+  font-size: var(--rt-rail-label-size); line-height: 1.1;
+}
 .nav-rail[data-folded='1'] .nav-item {
   flex-direction: column; align-items: center; gap: var(--rt-space-1);
   width: max-content; min-width: var(--rt-nav-item-width);
@@ -3099,3 +3120,20 @@ table, .mono { font-variant-numeric: tabular-nums; }
 .req { padding-top: var(--rt-space-5); }
 .req > .req-header, .req > .req-adoption, .req > .req-foot { padding-inline: 0; }
 .card-accented .card-kicker { color: var(--rt-text); }
+.git-card--table .git-card__head { padding-inline: 0; }
+.git-card--table.card { padding-top: 0; }
+
+/* ── The 2026-11-14 critique, iteration 2 (docs/design/briefs/shell.md) ── */
+/* C-06: a section's heading, its column heads and its cells share one left edge. */
+.table-card .table th:first-child, .table-card .table td:first-child,
+.agent-table th:first-child, .agent-table td:first-child { padding-left: 0; }
+.table-card .table th:last-child, .table-card .table td:last-child { padding-right: 0; }
+/* C-08: inside a section an absence is a sentence under the heading, never a statement larger than it. */
+.card .empty-state { align-items: flex-start; text-align: left; margin-inline: 0; padding: var(--rt-space-1) 0 0; max-width: none; }
+.card .empty-state-title { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-body); color: var(--rt-text-secondary); }
+/* C-11: the view's title is the top of the view's hierarchy, and a session's name is prose, not a measurement. */
+.display { font-size: var(--rt-h4); }
+.overview__session.mono { font-family: var(--rt-font-body); }
+/* C-18: a list's selected item is marked by its tint, as the sidebar's is; no stripe. */
+.nav-list__item.is-selected { border-left-color: transparent; background: var(--rt-accent-tint-14); }
+.git__table th:first-child, .git__table td:first-child { padding-left: 0; }

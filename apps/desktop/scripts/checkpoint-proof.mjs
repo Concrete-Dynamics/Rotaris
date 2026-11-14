@@ -398,7 +398,7 @@ commit('notes removed');
 if (existsSync(join(workspace, 'NOTES.md'))) throw new Error('NOTES.md still in the base tree');
 const isolated = await launch('isolated', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer',
-  ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="sidebar-new-session"]@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes in a worktree.>>composer@4400',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 }, 180_000);
@@ -440,7 +440,7 @@ const iso = latestSession();
 writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), agentsYaml(['checkpoints:', '  enabled: false']));
 const disabled = await launch('disabled', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer',
-  ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="sidebar-new-session"]@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes with checkpoints off.>>composer@4400',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
 }, 180_000);

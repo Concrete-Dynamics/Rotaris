@@ -22,7 +22,7 @@ typography:
     lineHeight: 1.62
   title:
     fontFamily: "Manrope"
-    fontSize: "16px"
+    fontSize: "20px"
     fontWeight: 500
     lineHeight: 1.12
   label:
@@ -101,7 +101,7 @@ figures, with tabular numerals. **Space Grotesk** is the wordmark's alone.
 
 ### Hierarchy
 
-A view's title: 16 px, medium. A section's heading: 12 px, medium, sentence case, primary ink. Body: 14 px; dense
+A view's title: 20 px, medium. A section's heading: 12 px, medium, sentence case, primary ink. Body: 14 px; dense
 interface text 12 px; captions 11 px in the secondary or tertiary ink. A tracked upper-case label (10 px) only where a
 line labels and does not head: table columns, navigation groups.
 
@@ -112,7 +112,7 @@ line labels and does not head: table columns, navigation groups.
 
 ## Layout
 
-A sidebar of 232 px (a 68 px rail below 1600 px or when folded) beside one view. A view is inset once: 20 px above,
+A sidebar of 232 px (below 1600 px or when folded, a rail as wide as its longest label, about 80 px) beside one view. A view is inset once: 20 px above,
 24 px at the sides. Spacing is the 4 px scale. A region is a section — a hairline above, a heading, its content — and
 sections are separated by 20 px. The Workspace fills its region with three panes: agents, transcript and composer,
 inspector.
@@ -144,7 +144,7 @@ A surface fill, a hairline boundary at 3:1, 32 px high; the focus ring is the ac
 
 ### Navigation
 
-The sidebar: New session; Workspace, Overview; Sessions; then at the foot Project — Requirements, Git, Library — and Settings.
+The sidebar: New session; Workspace, Overview; Sessions; Project — Requirements, Git, Library; Settings at the foot.
 A view button is 32 px, icon beside label; the active one carries an accent tint and an accent icon.
 
 ### Empty state

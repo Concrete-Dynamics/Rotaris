@@ -116,7 +116,7 @@ export function WorkspaceChip({ path, home, sessionName, onChoose }: WorkspaceCh
       <i className="ph ph-folder-open" aria-hidden="true" />
       {/* Hidden entirely rather than drawn clipped where even `…` will not fit (rule 2). */}
       {label !== null && <span ref={text} className="title-bar__workspace-path">{label}</span>}
-      <span className="title-bar__workspace-tail">{` · ${session === '' ? '—' : session}`}</span>
+      <span className="title-bar__workspace-tail" data-session={session === '' ? '0' : '1'}>{` · ${session === '' ? '—' : session}`}</span>
     </DesignButton>
   );
 }

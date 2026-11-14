@@ -118,7 +118,9 @@
   background: var(--rt-chrome);
   border-right: var(--rt-hairline-width) solid var(--rt-border);
 }
-.nav-rail__views { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* The views region is what gives way when the window is too short for the column: it scrolls, and the start control and the fold control keep their place (`pnpm ui-audit`, 2026-11-14: at 1000x680 under a notice the rail stood 5 px taller than its region). */
+.nav-rail__views { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.nav-rail { overflow: hidden; }
 .nav-rail__group { display: flex; flex-direction: column; gap: var(--rt-hairline-width); }
 .nav-item {
   display: flex; border: 0; border-radius: var(--rt-radius-sm);
@@ -156,7 +158,9 @@
   font-size: var(--rt-text-2xs); font-weight: var(--rt-weight-medium); letter-spacing: var(--rt-tracking-label);
   text-transform: uppercase; color: var(--rt-text-tertiary);
 }
-.nav-rail__sessions { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
+/* The list takes its rows' height and no more, and gives way first when the column is short; the project's views follow it and the spare height stands above Settings. */
+.nav-rail__sessions { display: flex; flex-direction: column; flex: 0 1 auto; min-height: var(--rt-control-height); }
+.nav-rail[data-folded='0'] .nav-rail__foot { margin-top: auto; }
 .nav-rail__sessions-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2); padding-right: var(--rt-space-2); }
 .nav-rail__sessions-head .nav-rail__heading { padding-bottom: var(--rt-space-1); }
 .nav-rail__all { font-size: var(--rt-text-2xs); min-height: 0; }
@@ -177,13 +181,11 @@
 .nav-rail__sessions-empty, .nav-rail__sessions-more { margin: 0; padding: var(--rt-space-1) var(--rt-space-2); font-size: var(--rt-text-xs); line-height: var(--rt-leading-body); color: var(--rt-text-tertiary); }
 .nav-rail__foot { flex: none; }
 .nav-rail__group[data-group='project'] { flex: none; }
-/* The folded form's sessions control: drawn as a rail item, never as a view (it carries no `nav-item` class and no radio role). */
-.nav-rail__browse { display: none; position: relative; border: 0; border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text-secondary); cursor: pointer; font: inherit; white-space: nowrap; }
-.nav-rail__browse:hover { background: var(--rt-hover); color: var(--rt-text); }
-.nav-rail__browse:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
-.nav-rail__browse i { font-size: var(--rt-icon-size); line-height: var(--rt-icon-size); }
+/* The folded form's sessions control: an act, shaped as the start control is, never as a view. Hidden while the sidebar is open, where the list itself stands. */
+.nav-rail__browse { display: none; position: relative; }
+.nav-rail__browse i { font-size: var(--rt-icon-size); }
 .nav-rail__browse[data-attention='running']::after, .nav-rail__browse[data-attention='needs']::after {
-  content: ''; position: absolute; top: var(--rt-space-1); right: var(--rt-space-3);
+  content: ''; position: absolute; top: calc(-1 * var(--rt-hairline-width)); right: calc(-1 * var(--rt-hairline-width));
   width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: var(--rt-radius-pill); background: var(--rt-run);
 }
 .nav-rail__browse[data-attention='needs']::after { background: var(--rt-wait); }
@@ -191,19 +193,15 @@
 /* Folded: the rail. */
 .nav-rail[data-folded='1'] { width: max-content; min-width: var(--rt-rail-width); }
 .nav-rail[data-folded='1'] .nav-rail__views { padding: var(--rt-space-2) 0; gap: var(--rt-hairline-width); }
-.nav-rail[data-folded='1'] .nav-rail__group[data-group='project'] { margin-top: var(--rt-space-2); padding-top: var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-border); }
+.nav-rail[data-folded='1'] .nav-rail__group[data-group='project'] { margin-top: var(--rt-space-1); padding-top: var(--rt-space-1); border-top: var(--rt-hairline-width) solid var(--rt-border); }
 .nav-rail[data-folded='1'] .nav-rail__foot { margin-top: auto; }
-.nav-rail[data-folded='1'] .nav-rail__browse {
-  display: flex; flex-direction: column; align-items: center; gap: var(--rt-space-1); align-self: center;
-  width: max-content; min-width: var(--rt-nav-item-width);
-  padding: var(--rt-space-2) var(--rt-space-1); margin: 0 var(--rt-space-1);
-  font-size: var(--rt-rail-label-size); line-height: 1.1;
-}
+.nav-rail[data-folded='1'] .nav-rail__browse { display: inline-flex; flex: none; margin: var(--rt-space-2) auto 0; width: var(--rt-control-height); min-width: 0; padding: 0; }
 .nav-rail[data-folded='1'] .nav-item {
   flex-direction: column; align-items: center; gap: var(--rt-space-1);
-  width: max-content; min-width: var(--rt-nav-item-width);
+  /* Every item takes the rail's width, which is its longest label's (REQ-SHELL-029), so the selection is one shape on every view
+     (UIR-023, kept at last: the rail sizes to its content and the items stretch to it, where each sized to its own text). */
+  width: auto; min-width: var(--rt-nav-item-width); align-self: stretch;
   padding: var(--rt-space-2) var(--rt-space-1); margin: 0 var(--rt-space-1);
-  align-self: center;
   font-size: var(--rt-rail-label-size); line-height: 1.1;
 }
 .nav-rail[data-folded='1'] .nav-rail__heading,
@@ -3139,3 +3137,15 @@ table, .mono { font-variant-numeric: tabular-nums; }
 /* C-18: a list's selected item is marked by its tint, as the sidebar's is; no stripe. */
 .nav-list__item.is-selected { border-left-color: transparent; background: var(--rt-accent-tint-14); }
 .git__table th:first-child, .git__table td:first-child { padding-left: 0; }
+/* `pnpm ui-audit`, 2026-11-14: a visually hidden live region inside the Settings body is positioned absolutely, and with
+   no positioned ancestor short of `.body` it stood 5 px below the region at 1000x680 and made the shell's body hold more
+   than it shows. The Settings body is its containing block, so its own scroller holds it. */
+.settings__body { position: relative; }
+
+/* ── The second critique, iteration 3 (docs/design/briefs/shell.md, section 3) ── */
+/* D-03: the followed session's name is the chip's brightest part and is prose; a dash for "none" stays quiet. */
+.title-bar__workspace-tail[data-session='1'] { color: var(--rt-text); font-family: var(--rt-font-body); }
+/* C-06, again: a Settings table stands on its heading's edge, as a section's table does. */
+.settings__body .table th:first-child, .settings__body .table td:first-child { padding-left: 0; }
+/* C-08, again: Git's absences stand under their headings, not centred under the column heads. */
+.git__empty.empty-state { align-items: flex-start; text-align: left; margin: var(--rt-space-2) 0 0; padding: 0; max-width: none; }

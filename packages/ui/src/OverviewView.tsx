@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { Fragment, useCallback, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { PROPOSAL_STATUSES, isBusy, presentationChildState, presentationStatus, STATUS_LABELS, type AgentRecord, type ImprovementArtifactRecord, type ImprovementProposal, type PaneLayout, type ProposalStatus, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
 import { AgentActivityCard, DelegationGraphCard, type DelegationProps } from './DelegationCards.js';
 import { categoryLabel, ProposalDecisionDialog, RetrospectiveGesture, statusLabel } from './library/ProposalsTab.js';
@@ -323,7 +323,10 @@ export function OverviewView(props: OverviewProps) {
                 value={<span data-testid="overview-agent-count">{session ? session.agents.length : '—'}</span>}>
                 {/* REQ-MONITOR-169's caption form, its two clauses each one unit so a wrap falls at the " · " and never orphans a limit (UIR-202). */}
                 <div className="card-meta mono" data-testid="overview-agent-caps"><span><span className="ov-caption__unit">depth {session ? counts.depth : '—'} / {caps?.depth ?? '—'}</span> · <span className="ov-caption__unit">fan-out {session ? counts.running : '—'} / {caps?.fanOut ?? '—'}</span></span></div>
-                <div className={`card-meta${session ? ' mono' : ''}`} data-testid="overview-agent-states">{session ? agentStatesLine(counts) : OVERVIEW_NO_SESSION_CAPTION}</div>
+                <div className={`card-meta${session ? ' mono' : ''}`} data-testid="overview-agent-states">{session
+                  /* Each "state count" pair is one unit, as the caps line above is (UIR-202): a wrap falls at a " · " and never between a state and its count. */
+                  ? <span>{agentStatesLine(counts).split(' · ').map((unit, index) => <Fragment key={unit}>{index > 0 && ' · '}<span className="ov-caption__unit">{unit}</span></Fragment>)}</span>
+                  : OVERVIEW_NO_SESSION_CAPTION}</div>
               </DesignKpiCard>
             </div>
             {/* PD-MONITOR-009 clause 3 (REQ-MONITOR-116's place for the agents of the run): the activity table, under the figures it explains. */}

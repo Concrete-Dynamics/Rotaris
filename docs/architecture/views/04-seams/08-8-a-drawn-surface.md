@@ -60,6 +60,20 @@ keeps every value, which is why `AgentTable.tsx` writes the table roles into its
 `data-label`. A proof names a view to the capture seams by identifier (`ROTARIS_CAPTURE_VIEW`, `_VIEWS`, `_END_VIEW`;
 `captureViewPosition` in `apps/desktop/src/main/capture/host.ts`), so it does not move when the rail does.
 
+**The navigation sidebar, and a change to the views' order** ([`PD-SHELL-016`](../../../product/directives/pd-shell-016.md#pd-shell-016), 2026-11-14). The order is
+`PRIMARY_VIEWS`' own, so moving a view is moving its entry: the digits follow (`registry.ts` generates them) and so does
+`viewPosition`. Each entry carries a `group` (`work`, `project`, `system`) and `VIEW_GROUPS` gives the groups their order
+and heading; `STARTUP_VIEW` is the view `shell-state.ts` starts on. `packages/ui/src/NavRail.tsx` is the one navigation
+component and draws both forms from one markup: `data-folded='0'` is the sidebar (the start control, the session views,
+the sessions list, the project views and Settings at the foot), `data-folded='1'` the rail, with one Sessions control in the list's place. `AppShell` decides which: the user's choice
+(`shell-state.ts`'s `sidebarFolded`, `null` until asked) over the window's width (`SIDEBAR_FOLD_BELOW`, read through
+`matchMedia`). A view button keeps the class `nav-item` and its radio semantics in both forms, which is what the proofs
+press. The sessions the sidebar lists are the `App` root's own `session.list` read in `apps/desktop/src/renderer/main.tsx`
+(`sidebarRows`), refreshed on the followed session's change of identity or busy state and after each act of the session
+browser, and handed to `AppShell` as `sidebarSessions`; a row's press is the root's `openSession`, the Overview card's
+own. **The dock** (`PD-SHELL-016` clause 8): open, `NavRail` renders an empty `.nav-rail__dock` and hands the element to `shell-state.ts`'s `sidebarDock` through `AppShell`'s `dockRef`; `WorkspaceView` reads it and, while it is not null, draws its `<aside class="agents">` there through `createPortal` (class `agents--docked`, the root `workspace--docked` with a grid of two columns). It is the same element tree with the same state and handlers, so a proof's `.agents`, `.agent-row` and `.todo-pane` selectors find it in either place; the Workspace is mounted only while shown, so the dock is empty on every other view. The sidebar draws no session it was not handed and names no workspace. Ownership: the fold is the renderer's, per window and not stored; the listed rows are the run host's, read by the renderer and written by nobody from the sidebar. `packages/ui/src/ui.test.ts`, "the
+navigation sidebar", holds the markup; `packages/shell/src/shell.test.ts` the order, the groups and the startup view.
+
 **A Settings category** ([`PD-CONFIG-008`](../../../product/directives/pd-config-008.md#pd-config-008), 2026-11-11). The
 list is `SETTINGS_CATEGORY_GROUPS` in `packages/ui/src/SettingsView.tsx`: four headings over the thirteen categories, in
 REQ-CONFIG-268's order and with REQ-CONFIG-269's identifiers. A category is written into its group there;

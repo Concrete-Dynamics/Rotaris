@@ -574,6 +574,9 @@ if (wanted('geometry')) {
     // detection (ADR-0002), which is correct and is why the fixture alone cannot produce a live line. The wrap
     // and the long name come from the planted run; the LIVENESS comes from a scripted run appended to it.
     ROTARIS_CAPTURE_RESUME: 'SLIVE',
+    // PD-SHELL-016 clause 8 (2026-11-14): at the default 1440 the pane is docked in the sidebar and the transcript column is 880 px,
+    // where the planted activity line fits one line. Below 1440 the sidebar is the rail and the column is narrower than it ever was, so the line wraps.
+    ROTARIS_CAPTURE_RESIZE: '1360x900@400',
     ROTARIS_SCRIPT: 'think,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
     ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`), `${ATTACH}@${ATTACH_AT}`, `${GROW}@${GROW_AT}`].join(';;'),

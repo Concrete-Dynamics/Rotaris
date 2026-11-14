@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543, OQ-548 – OQ-550; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542, OQ-544 – OQ-547 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543, OQ-549, OQ-550; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542, OQ-544 – OQ-548 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
 
 - OQ-523 — Is a `--rt-viz-2` persona label one stop from `--rt-run` a “state colour” under PD-CHAT-005?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-523)
 - OQ-524 — Is Workspace compact mode measured by the view's own width or by the viewport, when REQ-SHELL-059 and REQ-MONITOR-051 name different ones?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-524)
@@ -42,16 +42,7 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 - OQ-545 — Does the Mission view take a row in `docs/design/README.md` §7, now that it is built from the language alone, so that it can have a brief …; ruled 2026-11-11; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-545)
 - OQ-546 — Does `--rt-label-column` grow to hold the longest label of a Settings form, or does Settings keep a multiple of it?; ruled 2026-11-11; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-546)
 - OQ-547 — Which measure holds prose at the body's size, when the one measure the material names is the caption's 340 px?; ruled 2026-11-11; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-547)
-
-<a id="oq-548"></a>
-
-**OQ-548 — Which view does a relaunch show: Overview, as REQ-SHELL-026 states, or the view that was active when the application was quit, as REQ-TRACE-230 says of the requirements board?** *(REQ-SHELL-026, REQ-TRACE-230, REQ-SHELL-025, REQ-SHELL-006, REQ-CONFIG-271, [OQ-506](../../archive/architecture/open-questions/70-spikes-and-later-questions-37.md#oq-506), [`PD-SHELL-015`](../../product/directives/pd-shell-015.md#pd-shell-015). Raised 2026-11-11 by the critique of the information-architecture map for [R-098](../../product/requests.md#r-098) ([the map](../../design/information-architecture.md), section 7); numbered after OQ-547.)*
-
-**What is open.** REQ-SHELL-026 reads "The view shown at startup is Overview." REQ-TRACE-230 requires the requirements board to be "restored as the active view after a restart". Both cannot hold for a user who quits on the board. No key in REQ-SHELL-006's preference table records the active view (the Settings category has one, `interface/settingsTab`, REQ-CONFIG-271), and the built application opens on Overview at every launch. The map's first draft proposed a third answer, opening on the Workspace, which its critique refused: OQ-506's ruling rests on the returning operator landing on the Overview's sessions card, and no usage data says whether a launch more often starts new work or resumes parked work.
-
-**What the build proceeds under.** REQ-SHELL-026 as built: every launch opens on Overview. PD-SHELL-015 clause 5 states that it does not change this.
-
-**What decides it.** One ruling: REQ-SHELL-026 governs and REQ-TRACE-230's clause is read as met by the rail's ordinary path (it is then narrowed by a directive that says so); or the active view is restored at launch for every view, by a directive that registers its key in REQ-SHELL-006's table, says what a first launch and a stale key show, and re-rules where OQ-506's returning operator reads what waits. Not ruled in this round: the second answer needs a preference key and a first-paint path that were neither built nor measured, and the first would narrow a requirement of the traceability domain on no evidence about how the board is used.
+- OQ-548 — Which view does a relaunch show: Overview, as REQ-SHELL-026 states, or the view that was active when the application was quit, as …; ruled 2026-11-14; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-5.md#oq-548)
 
 <a id="oq-549"></a>
 

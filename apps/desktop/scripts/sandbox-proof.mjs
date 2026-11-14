@@ -232,7 +232,7 @@ const READ_DIALOG = `({
   disabled: document.querySelector('[data-testid="start-session-sandbox"]')?.disabled ?? null
 })`.replace(/\n\s*/g, ' ');
 const log2b = await launch('dialog', s1, {
-  ROTARIS_CAPTURE_CLICKS: '.btn>>New session@~6000',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="sidebar-new-session"]@~6000',
   ROTARIS_CAPTURE_EVAL_AT: `${READ_DIALOG}>>[data-testid="start-session-dialog"]@~9000`,
   ROTARIS_CAPTURE_AFTER_MS: '10000',
 });

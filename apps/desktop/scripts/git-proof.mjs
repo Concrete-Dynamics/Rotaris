@@ -11,7 +11,7 @@
  *                  keyboard (three Left presses) so a layout is written under `panels/git/state`.
  *   2. create    — New worktree → `feature/proof` typed → the derived directory → Create: a second row with
  *                  `ahead 0  behind 0`; the directory exists beside the workspace (REQ-GIT-115).
- *   3. isolated  — Overview → New session → isolation on → accept → the composer's prompt; the scripted run writes
+ *   3. isolated  — the sidebar's New session (the Overview's button until PD-SHELL-016, 2026-11-14) → isolation on → accept → the composer's prompt; the scripted run writes
  *                  NOTES.md IN the session worktree under `.rotaris/worktrees/<sid>` and not in the base, the session row
  *                  carries the binding, the worktree table shows the session id and `completed`, the base stays clean.
  *                  The strip names the worktree's branch (REQ-WORKSPACE-020): no ` ↑{n}` (the branch has no upstream yet),
@@ -273,7 +273,7 @@ const created = await launch('create', workspace, local, preferences, {
 // 3. An isolated session through the launch dialog; the scripted run writes NOTES.md, which must land in the worktree.
 const isolated = await launch('isolated', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'write,answer',
-  ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="sidebar-new-session"]@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes.>>composer@4400',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
   ROTARIS_CAPTURE_END_VIEW: 'git', ROTARIS_CAPTURE_END_VIEW_MS: '3500',
@@ -533,7 +533,7 @@ git(subpathWorkspace, 'add', 'README.md', '.gitignore');
 git(subpathWorkspace, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
 const subpathRun = await launch('configured-subpath', subpathWorkspace, subpathLocal, preferences, {
   ROTARIS_SCRIPT: 'write,answer',
-  ROTARIS_CAPTURE_CLICKS: 'button>>New session@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="sidebar-new-session"]@1800;;[data-testid="start-session-isolation"]@2800;;[data-testid="start-session-accept"]@3400',
   ROTARIS_CAPTURE_TYPE: 'Write the notes.>>composer@4400',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '1500',
 }, 180_000);

@@ -212,7 +212,7 @@ const results = {};
     // The Library is shown FIRST (empty), the run then publishes, the view is left and returned to: the row
     // appears on the next refresh, with no restart and no manual reload (REQ-LIBRARY-136). The schedule waits for
     // the Library's tab and its loaded read instead of reading at appointments a startup stall can close
-    // (`lib/library-refresh.mjs`); the prompt seam's own Ctrl+2 is the leave.
+    // (`lib/library-refresh.mjs`); the prompt seam's own Ctrl+1 (Ctrl+2 until PD-SHELL-016) is the leave.
     ...PUBLISH_SCHEDULE,
     ROTARIS_CAPTURE_PROMPT: 'publish the plan',
     ROTARIS_SCRIPT: 'artifact:artifact_write,artifact:artifact_list,answer',

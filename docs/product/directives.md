@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and twenty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and thirty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -115,6 +115,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-MONITOR-007](directives/pd-monitor-007.md) | helper model calls follow the session's override and stay off a model held out of quota |
 | [PD-MONITOR-008](directives/pd-monitor-008.md) | Workspace compact mode's 1180 px is the view's own width, not the viewport's |
 | [PD-MONITOR-009](directives/pd-monitor-009.md) | the Overview is the one monitoring view: it holds the delegation graph, its run controls and the agent activity table, and the two delegation settings leave monitoring |
+| [PD-MONITOR-010](directives/pd-monitor-010.md) | the Overview's figures stand in one ruled band, and its regions are sections on the ground |
 
 ### NOTIFY
 
@@ -179,6 +180,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-SHELL-013](directives/pd-shell-013.md) | the main window opens clamped to its display's work area, each dimension on its own, and never below its minimum |
 | [PD-SHELL-014](directives/pd-shell-014.md) | a persona window and the terminal window have a floor, and what each shows there |
 | [PD-SHELL-015](directives/pd-shell-015.md) | six primary views: Mission is not one |
+| [PD-SHELL-016](directives/pd-shell-016.md) | the navigation is a sidebar holding the views and the sessions; the window opens on the Workspace |
 
 ### STARTUP
 

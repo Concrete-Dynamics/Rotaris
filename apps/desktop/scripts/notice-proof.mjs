@@ -78,7 +78,8 @@ import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/rendere
  *
  * PD-SHELL-015 (2026-11-11): the capture variables name a view by its identifier (`requirements`), not by its digit.
  * Requirements is the third view (Ctrl+3); Mission is no view. PD-CONFIG-008: a Settings category is still found by its name
- * among `.nav-list__item`, under its group heading.
+ * among `.nav-list__item`, under its group heading. PD-SHELL-016 (2026-11-14): Ctrl+1 opens the Workspace and Ctrl+2 the Overview
+ * (the other way before), and the window opens on the Workspace.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -748,7 +749,9 @@ if (want('6c')) {
   const d = launched.driver;
   const trail = [];
   const step = async (what, promise) => { const t0 = Date.now(); try { const v = await promise; trail.push({ what, ms: Date.now() - t0 }); return v; } catch (cause) { trail.push({ what, ms: Date.now() - t0, error: String(cause) }); throw cause; } };
-  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
+  // "On screen" is the VIEW's text: since PD-SHELL-016 the sidebar lists every session by its first prompt and the title bar names
+  // the followed one, so the shell's whole text holds a released run's prompt by design (2026-11-14). The same holds for `onScreen` below.
+  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main.view')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
   const noticeIn = async (which) => { await d.useWindow(which); return await d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; const a = n.querySelector('.notice__action'); return { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, action: a?.textContent ?? null, member: a?.getAttribute('data-action') ?? null }; })()`); };
   let value = null;
   let failure = null;
@@ -786,14 +789,14 @@ if (want('6c')) {
     await step('Discard the edit', d.click('.save-bar .btn-secondary', { text: 'Discard' }));
     await step('the form clean again', until(() => d.eval(`document.querySelector('.save-bar__status')?.textContent ?? null`), (v) => v === 'All changes saved', { timeoutMs: 10_000, what: 'the save bar clean' }));
     // PD-SHELL-001 revision 3: a run of the holding window, released there, ends while no window shows it.
-    await step('Workspace in the holding window', d.chord('Ctrl+2'));
+    await step('Workspace in the holding window', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
     await step('the prompt', d.type(PROMPT, { enter: true }));
     await step('the run on screen', until(() => onScreenIn('atlas-billing', PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the prompt on screen' }));
     await d.useWindow('atlas-billing');
-    await step('Ctrl+1', d.chord('Ctrl+1'));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
     await step('New session', d.click('button', { text: 'New session' }));
     await step('Start session', d.click('[data-testid="start-session-accept"]'));
     await step('the holding window released it', until(() => onScreenIn('atlas-billing', PROMPT), (v) => v === false, { timeoutMs: 10_000, what: 'the released run off screen' }));
@@ -876,7 +879,7 @@ if (want('6d')) {
   const d = launched.driver;
   const trail = [];
   const step = async (what, promise) => { const t0 = Date.now(); try { const v = await promise; trail.push({ what, ms: Date.now() - t0 }); return v; } catch (cause) { trail.push({ what, ms: Date.now() - t0, error: String(cause) }); throw cause; } };
-  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
+  const onScreenIn = async (which, text) => { await d.useWindow(which); return await d.eval(`document.querySelector('.app-shell main.view')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`); };
   const noticeIn = async (which) => { await d.useWindow(which); return await d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; const a = n.querySelector('.notice__action'); return { title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, action: a?.textContent ?? null, member: a?.getAttribute('data-action') ?? null }; })()`); };
   let value = null;
   let failure = null;
@@ -887,14 +890,14 @@ if (want('6d')) {
     await step('two main windows', until(() => d.windows(), (w) => w.windows.length === 2, { timeoutMs: 30_000, what: 'window B added' }));
     // The run in A, released there by "New session" while its scripted call waits.
     await d.useWindow('reach-alpha');
-    await step('Workspace in A', d.chord('Ctrl+2'));
+    await step('Workspace in A', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
     await step('the prompt', d.type(PROMPT, { enter: true }));
     await step('the run on screen', until(() => onScreenIn('reach-alpha', PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the prompt on screen' }));
     await d.useWindow('reach-alpha');
-    await step('Ctrl+1', d.chord('Ctrl+1'));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
     await step('New session', d.click('button', { text: 'New session' }));
     await step('Start session', d.click('[data-testid="start-session-accept"]'));
     await step('A released it', until(() => onScreenIn('reach-alpha', PROMPT), (v) => v === false, { timeoutMs: 10_000, what: 'the released run off screen' }));
@@ -1067,19 +1070,19 @@ if (want('8')) {
   const d = launched.driver;
   const trail = [];
   const step = async (label, pending) => { const at = Date.now() - started; const value = await pending; trail.push({ at, label }); return value; };
-  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
+  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main.view')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
   let failure = null;
   let value = null;
   try {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
     await step('the prompt', d.type(PROMPT, { enter: true }));
     await step('the run on screen', until(() => onScreen(PROMPT), (v) => v === true, { timeoutMs: 20_000, what: 'the prompt on screen' }));
     // "New session" from the Overview, accepted while the run holds its scripted 6 s wait: the window follows nothing now.
-    await step('Ctrl+1', d.chord('Ctrl+1'));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
     await step('New session', d.click('button', { text: 'New session' }));
     await step('Start session', d.click('[data-testid="start-session-accept"]'));
     const released = await step('the window released it', until(() => onScreen(PROMPT), (v) => v === false, { timeoutMs: 10_000, what: 'the released run off screen' }));
@@ -1129,14 +1132,14 @@ if (want('9')) {
   const d = launched.driver;
   const trail = [];
   const step = async (label, pending) => { const at = Date.now() - started; const value = await pending; trail.push({ at, label }); return value; };
-  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main, .app-shell')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
+  const onScreen = (text) => d.eval(`document.querySelector('.app-shell main.view')?.innerText.includes(${JSON.stringify(text)}) === true && !document.querySelector('[data-testid="notice"]')?.innerText.includes(${JSON.stringify(text)})`);
   const readNotice = () => d.eval(`(() => { const n = document.querySelector('[data-testid="notice"]'); return n ? { title: n.querySelector('[data-testid="notice-title"]')?.textContent, message: n.querySelector('[data-testid="notice-message"]')?.textContent ?? null, detail: n.querySelector('[data-testid="notice-detail"]')?.textContent ?? null, severity: n.getAttribute('data-severity'), action: n.querySelector('.notice__action')?.textContent, member: n.querySelector('.notice__action')?.getAttribute('data-action') } : null; })()`);
   const sessionRow = () => { const db = open(s9); try { return db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY created_at').all(); } finally { db.close(); } };
   let failure = null;
   let value = null;
   try {
     await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
-    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
     await step('the composer', d.waitFor('.composer__input'));
     await step('Ctrl+L', d.chord('Ctrl+L'));
     await step('the caret', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
@@ -1144,7 +1147,7 @@ if (want('9')) {
     await step('the wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
     const rows = await step('the session recorded', until(() => sessionRow(), (r) => r.length === 1, { timeoutMs: 10_000, what: 'the parked session in the store' }));
     const sid = rows[0].session_id;
-    await step('Ctrl+1', d.chord('Ctrl+1'));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
     // Under load the Overview and the start-session dialog can take longer than the click's default to be actionable
     // (a verifier saw it at load 4.58); the bound is the wait for them, not a timing claim.
     await step('New session', d.click('button', { text: 'New session', timeoutMs: 60_000 }));

@@ -14,7 +14,7 @@
       "severity": "high | medium | low",
       "criterion": "C5",
       "surface": "Workspace @ 1400x900",
-      "evidence": ["2-workspace-1400x900.png", "geometry.json#Workspace@1400x900"],
+      "evidence": ["1-workspace-1400x900.png", "geometry.json#Workspace@1400x900"],
       "observation": "What is visibly or measurably present",
       "recommendation": "A bounded direction for the implementation agent"
     }

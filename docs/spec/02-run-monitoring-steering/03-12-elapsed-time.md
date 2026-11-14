@@ -176,6 +176,9 @@ Part 3 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 
 **REQ-MONITOR-165** — The overview body is a user-resizable two-column layout whose split is persisted; the right column defaults to 340 px with a 260 px minimum and 560 px maximum, and the left column has a 320 px minimum. The metric card grid reflows from four columns to two below a 1080 px viewport width. An onboarding empty state is shown when there is nothing to display.
 
+> **Narrowed by [`PD-MONITOR-010`](../../product/directives/pd-monitor-010.md#pd-monitor-010), 2026-11-14.** The four figures stand in one ruled band and every other
+> region is a section on the view's ground; the two columns and the divider stand as written.
+
 **REQ-MONITOR-166** — The cumulative-tokens card shows the total token count with thousands separators and a `tok` suffix, a sparkline of token history, and a sub-line showing a pre-rendered cost label. The token history is sampled by the run, not by the card: the cumulative total is sampled every 10 seconds while the session's status claims a live run, and once more when the run reaches a terminal state, so a sparkline never depends on a view having been open. The most recent 120 samples are retained — 20 minutes of a run at that cadence — the oldest being discarded as newer ones arrive, and they are persisted with the session so the sparkline is the same when the session is reopened (REQ-MONITOR-242). Fewer than two samples renders as an explicit empty sparkline rather than a flat line. The cost label carries its own qualifier distinguishing an unknown price, an incomplete price, and a price derived from configured rates, so that no view has to invent its own description for a run whose price could not be established.
 
 > **Narrowed by [`PD-MONITOR-001`](../../product/directives/pd-monitor-001.md#pd-monitor-001), 2026-09-16.** The card, the
@@ -206,6 +209,9 @@ Part 3 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 **REQ-MONITOR-172** — A session started by a person and not tied to a requirement must show no requirement tag at all; an empty tag would look like a requirement whose identifier could not be loaded.
 
 **REQ-MONITOR-173** — The overview's right column shows, in order: the cloud-credit tile first (the balance determines whether provider quotas are reachable at all); the subscription-limits card; an agent-tree card with a link to the mission view; and an improvement-proposals card with a tag counting proposals pending review, a link into the library, and per-proposal rows carrying a summary link, status tag, category caption, and approve/reject/defer actions excluding the proposal's current status.
+
+> **Narrowed by [`PD-MONITOR-010`](../../product/directives/pd-monitor-010.md#pd-monitor-010), 2026-11-14.** A "tile" is drawn as a section: a rule, its heading, its
+> content, with no fill and no border around it. The order is `PD-MONITOR-009`'s.
 
   > **Extended by [`PD-LIBRARY-002`](../../product/directives/pd-library-002.md#pd-library-002), 2026-09-17.** The
   > card's rows may also carry retrospective proposals — they are improvement proposals in the same

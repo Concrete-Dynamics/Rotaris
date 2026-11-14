@@ -25,7 +25,7 @@ Take the mode from the argument and run its steps in order. Neither mode draws o
 3. `docs/design/README.md` §1 (the language) and §2 (what of the design material is adopted); where an adopted sheet and §1 disagree, §1 wins, because it is the document that adopts; `pnpm mockup` for craft, never for structure.
 4. `docs/research/design/` (index: its `README.md`) — guidance beneath all three; it overrides none (`docs/design/README.md` §6.1).
 
-Add no screen, tab, order or label. Write a gap as an open-question candidate, raised in `docs/architecture/open-questions.md` from the next free number and never ruled here. Classify a change the owner asks for in `docs/product/requests.md` before step 1. Write in `packages/ui/CONTEXT.md`'s words; name a generic pattern by its field name once, say so, then use the glossary's word.
+Add no screen, tab, order or label **unless the round is one the owner authorised to change the information architecture** (R-098 standing; R-101 on 2026-11-14): then the change is decided in `docs/design/information-architecture.md`, minted as a directive naming the requirements it narrows before or in the commit that builds it, and the specification keeps its text. **2026-11-14: the language is §1 as `docs/design/README/08-8-the-2026-11-14-revision.md` revises it — a region on a view's ground is a ruled section, not a card.** Otherwise write a gap as an open-question candidate, raised in `docs/architecture/open-questions.md` from the next free number and never ruled here. Classify a change the owner asks for in `docs/product/requests.md` before step 1. Write in `packages/ui/CONTEXT.md`'s words; name a generic pattern by its field name once, say so, then use the glossary's word.
 
 ## Brief — before drawing
 
@@ -48,7 +48,7 @@ Method, slug table and shape: [references/design-brief.md](references/design-bri
 
 Method and shape: [references/surface-audit.md](references/surface-audit.md).
 
-1. **Locate.** In: the surface. Out: its slug, its view numbers (1 Overview … 7 Settings), its brief file.
+1. **Locate.** In: the surface. Out: its slug, its view numbers (1 Workspace, 2 Overview … 6 Settings, `PD-SHELL-016`'s order), its brief file.
 2. **Capture.** In: the built app. Out: a `pnpm ui-review` pack (the command builds the app itself) and a `pnpm app:drive` PNG per state cell and journey step the pack lacks.
 3. **Take the deterministic lane.** In: the pack's `report.json`. Out: its findings at the severity the rubric's deterministic section gives them, and its not-captured views, overlays and sizes.
 4. **Walk four times** — rubric, journeys, tells, vocabulary. In: the pack. Out: every rubric row marked pass, no or not captured, each no with its number.

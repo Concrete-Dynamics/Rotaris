@@ -1,28 +1,29 @@
 :root{
-/* ── ground — true neutral gray. 21% ground stays clearly gray rather than black,
-   while the 5-point steps between levels keep panels, cards and hover states
-   legibly apart, and bright text (94%) holds ~11:1 against it. ── */
---rt-bg:oklch(21% 0 0);
---rt-surface:oklch(25% 0 0);
---rt-surface-2:oklch(29% 0 0);
---rt-chrome:oklch(23% 0 0);
---rt-hover:oklch(30% 0 0);
+/* ── ground — graphite: a neutral carrying a trace of the accent's side of the wheel
+   (hue 275, chroma under 0.01), revised 2026-11-14 (R-101, README/08). The 21% ground
+   is the lit plane; the chrome (title bar, sidebar, status strip) stands below it at
+   18%, and a raised surface a step above. Bright text (94%) holds ~11:1 on the ground. ── */
+--rt-bg:oklch(21% 0.006 275);
+--rt-surface:oklch(24.5% 0.007 275);
+--rt-surface-2:oklch(28% 0.008 275);
+--rt-chrome:oklch(18% 0.006 275);
+--rt-hover:oklch(29% 0.009 275);
 --rt-overlay:oklch(12% 0 0 / 0.72);
 
 /* ── edges — hairlines whisper. Borders sit close to the surface they bound so a
    dense screen reads as planes and rules, not as a stack of boxed-in panels. ── */
---rt-border:oklch(31% 0 0);
---rt-border-strong:oklch(40% 0 0);
---rt-border-panel:oklch(28% 0 0);
+--rt-border:oklch(30% 0.008 275);
+--rt-border-strong:oklch(40% 0.008 275);
+--rt-border-panel:oklch(26.5% 0.007 275);
 --rt-focus:oklch(83% 0.10 292);
 /* the faintest rule in the system — row separators and internal dividers */
 --rt-divider:color-mix(in oklch, var(--rt-text) 9%, transparent);
 
---rt-text:oklch(94% 0 0);
---rt-text-secondary:oklch(80% 0 0);
---rt-text-tertiary:oklch(68% 0 0);
+--rt-text:oklch(94% 0.004 275);
+--rt-text-secondary:oklch(80% 0.006 275);
+--rt-text-tertiary:oklch(68% 0.008 275);
 /* OQ-56, ruled 2026-09-18: raised from 52%, which missed REQ-SHELL-145's 3:1 floor on every surface but the page ground */
---rt-text-disabled:oklch(58% 0 0);
+--rt-text-disabled:oklch(58% 0.006 275);
 
 /* ── brand accent — the Z axis, violet (OKLCH hue 292): resolute, technical ── */
 --rt-accent-100:oklch(96% 0.030 292);

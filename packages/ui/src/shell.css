@@ -108,37 +108,107 @@
 /* `position: relative`: the window dialog (AppShell's `windowDialog`, REQ-WORKSPACE-106) is placed against this region. */
 .body { position: relative; display: grid; grid-template-columns: auto 1fr; min-height: 0; }
 
+/* ── The navigation sidebar (PD-SHELL-016) ──
+ * One markup, two forms. Open (`data-folded='0'`): a column of `--rt-sidebar-width` on the chrome plane — the start
+ * control, the views with the icon beside the label, the sessions, Settings at the foot. Folded (`data-folded='1'`): the
+ * rail REQ-SHELL-027 described, icon above label, sized to its longest label (REQ-SHELL-029), with nothing else in it.
+ * AppShell folds it below `SIDEBAR_FOLD_BELOW` and the fold control overrides the width either way. */
 .nav-rail {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: var(--rt-space-2, 8px) 0;
+  display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; min-height: 0;
   background: var(--rt-chrome);
   border-right: var(--rt-hairline-width) solid var(--rt-border);
-  /* REQ-SHELL-029: wide enough for "Requirements" at 9 px with no ellipsis; re-derived per theme. */
-  width: max-content;
-  min-width: var(--rt-rail-width);
 }
-/* UIR-023 was attempted, measured, and NOT kept — the finding is fair and the obvious repair is worse.
-   Each item is sized to its own text, so the selection tint changes shape as the user moves between
-   views: the seven measure 54, 58.73, 54, 70.98, 54, 54 and 54 and, being centred, Requirements draws a
-   box 16.98px wider than Overview's starting 8.48px further left. `align-self: stretch` does give all
-   seven one width and one x — measured at 54 and 6 across every view — but the rail then resolves to
-   its `min-width` instead of to its longest label, and the `SHRUNK` sweep reported every item in the
-   pack holding 57px of content in 54px of box: "Requirements" clipped, which is the one thing
-   REQ-SHELL-029 names this rail's width for. A constant tint box is craft; an ellipsis in the primary
-   navigation is a requirement. Whatever fixes this has to widen the rail and equalise the items in the
-   same move, and that is the rail's declared width to change, not a side effect to take. */
+/* The views region is what gives way when the window is too short for the column: it scrolls, and the start control and the fold control keep their place (`pnpm ui-audit`, 2026-11-14: at 1000x680 under a notice the rail stood 5 px taller than its region). */
+.nav-rail__views { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.nav-rail { overflow: hidden; }
+.nav-rail__group { display: flex; flex-direction: column; gap: var(--rt-hairline-width); }
 .nav-item {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  width: max-content; min-width: var(--rt-nav-item-width);
-  padding: 8px 6px; margin: 0 6px;
-  border: 0; border-radius: var(--rt-radius-md, 6px);
+  display: flex; border: 0; border-radius: var(--rt-radius-sm);
   background: transparent; color: var(--rt-text-secondary);
-  cursor: pointer; font: inherit; font-size: var(--rt-rail-label-size); line-height: 1.1; white-space: nowrap;
+  cursor: pointer; font: inherit; white-space: nowrap;
+  transition: background var(--rt-duration-fast) var(--rt-ease-out), color var(--rt-duration-fast) var(--rt-ease-out);
 }
-.nav-item i { font-size: var(--rt-icon-size); line-height: var(--rt-icon-size); width: var(--rt-icon-size); height: var(--rt-icon-size); }
+.nav-item i { font-size: var(--rt-icon-size); line-height: var(--rt-icon-size); width: var(--rt-icon-size); height: var(--rt-icon-size); flex: none; }
 .nav-item:hover { background: var(--rt-hover); color: var(--rt-text); }
-.nav-item.is-active { background: var(--rt-accent-tint-10); color: var(--rt-accent-300); }
-.nav-item:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.nav-item.is-active { background: var(--rt-accent-tint-14); color: var(--rt-text); }
+.nav-item.is-active i { color: var(--rt-accent-300); }
+.nav-item:focus-visible, .nav-session:focus-visible, .nav-rail__fold:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.nav-rail__fold {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  height: var(--rt-control-height); border: 0; border-top: var(--rt-hairline-width) solid var(--rt-border);
+  background: transparent; color: var(--rt-text-tertiary); cursor: pointer;
+}
+.nav-rail__fold:hover { color: var(--rt-text); background: var(--rt-hover); }
+.nav-rail__fold i { font-size: var(--rt-icon-size); }
+
+/* Open. */
+.nav-rail[data-folded='0'] { width: var(--rt-sidebar-width); }
+.nav-rail[data-folded='0'] .nav-rail__views { overflow-x: hidden; }
+.nav-rail[data-folded='0'] .nav-rail__new { flex: none; margin: var(--rt-space-3) var(--rt-space-2) var(--rt-space-3); justify-content: flex-start; gap: var(--rt-space-3); padding-inline: var(--rt-space-2); }
+.nav-rail__new i { font-size: var(--rt-icon-size); width: var(--rt-icon-size); text-align: center; }
+.nav-rail[data-folded='0'] .nav-rail__views { padding: 0 var(--rt-space-2) var(--rt-space-2); gap: var(--rt-space-4); }
+.nav-rail[data-folded='0'] .nav-rail__group[data-group='project'] { padding-top: var(--rt-space-3); border-top: var(--rt-hairline-width) solid var(--rt-border); }
+.nav-rail[data-folded='0'] .nav-rail__group:first-child { padding-top: var(--rt-space-1); }
+.nav-rail[data-folded='0'] .nav-item {
+  flex-direction: row; align-items: center; gap: var(--rt-space-3);
+  width: 100%; height: var(--rt-control-height); padding: 0 var(--rt-space-2);
+  font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); letter-spacing: 0;
+}
+.nav-rail__heading {
+  padding: 0 var(--rt-space-2) var(--rt-space-1);
+  font-size: var(--rt-text-2xs); font-weight: var(--rt-weight-medium); letter-spacing: var(--rt-tracking-label);
+  text-transform: uppercase; color: var(--rt-text-tertiary);
+}
+/* The list takes its rows' height and no more, and gives way first when the column is short; the project's views follow it and the spare height stands above Settings. */
+.nav-rail__sessions { display: flex; flex-direction: column; flex: 0 1 auto; min-height: var(--rt-control-height); }
+.nav-rail[data-folded='0'] .nav-rail__foot { margin-top: auto; }
+.nav-rail__sessions-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2); padding-right: var(--rt-space-2); }
+.nav-rail__sessions-head .nav-rail__heading { padding-bottom: var(--rt-space-1); }
+.nav-rail__all { font-size: var(--rt-text-2xs); min-height: 0; }
+.nav-rail__session-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: var(--rt-hairline-width); }
+.nav-session {
+  display: grid; grid-template-columns: var(--rt-icon-size) minmax(0, 1fr); grid-template-areas: 'dot label' '. meta';
+  align-items: center; column-gap: var(--rt-space-3); row-gap: 0;
+  width: 100%; padding: var(--rt-space-1) var(--rt-space-2);
+  border: 0; border-radius: var(--rt-radius-sm); background: transparent;
+  color: var(--rt-text-secondary); font: inherit; font-size: var(--rt-text-sm); text-align: left; cursor: pointer;
+}
+.nav-session .status-dot { grid-area: dot; justify-self: center; }
+.nav-session:hover { background: var(--rt-hover); color: var(--rt-text); }
+/* The followed session is marked by its ink and weight: the selection fill is the active view's alone, so the column never shows two rows selected. */
+.nav-session[data-current='1'] { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
+.nav-session__label { grid-area: label; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-session__meta { grid-area: meta; font-size: var(--rt-text-2xs); font-weight: var(--rt-weight-body); color: var(--rt-text-tertiary); white-space: nowrap; }
+.nav-rail__sessions-empty, .nav-rail__sessions-more { margin: 0; padding: var(--rt-space-1) var(--rt-space-2); font-size: var(--rt-text-xs); line-height: var(--rt-leading-body); color: var(--rt-text-tertiary); }
+.nav-rail__foot { flex: none; }
+.nav-rail__group[data-group='project'] { flex: none; }
+/* The folded form's sessions control: an act, shaped as the start control is, never as a view. Hidden while the sidebar is open, where the list itself stands. */
+.nav-rail__browse { display: none; position: relative; }
+.nav-rail__browse i { font-size: var(--rt-icon-size); }
+.nav-rail__browse[data-attention='running']::after, .nav-rail__browse[data-attention='needs']::after {
+  content: ''; position: absolute; top: calc(-1 * var(--rt-hairline-width)); right: calc(-1 * var(--rt-hairline-width));
+  width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: var(--rt-radius-pill); background: var(--rt-run);
+}
+.nav-rail__browse[data-attention='needs']::after { background: var(--rt-wait); }
+
+/* Folded: the rail. */
+.nav-rail[data-folded='1'] { width: max-content; min-width: var(--rt-rail-width); }
+.nav-rail[data-folded='1'] .nav-rail__views { padding: var(--rt-space-2) 0; gap: var(--rt-hairline-width); }
+.nav-rail[data-folded='1'] .nav-rail__group[data-group='project'] { margin-top: var(--rt-space-1); padding-top: var(--rt-space-1); border-top: var(--rt-hairline-width) solid var(--rt-border); }
+.nav-rail[data-folded='1'] .nav-rail__foot { margin-top: auto; }
+.nav-rail[data-folded='1'] .nav-rail__browse { display: inline-flex; flex: none; margin: var(--rt-space-2) auto 0; width: var(--rt-control-height); min-width: 0; padding: 0; }
+.nav-rail[data-folded='1'] .nav-item {
+  flex-direction: column; align-items: center; gap: var(--rt-space-1);
+  /* Every item takes the rail's width, which is its longest label's (REQ-SHELL-029), so the selection is one shape on every view
+     (UIR-023, kept at last: the rail sizes to its content and the items stretch to it, where each sized to its own text). */
+  width: auto; min-width: var(--rt-nav-item-width); align-self: stretch;
+  padding: var(--rt-space-2) var(--rt-space-1); margin: 0 var(--rt-space-1);
+  font-size: var(--rt-rail-label-size); line-height: 1.1;
+}
+.nav-rail[data-folded='1'] .nav-rail__heading,
+.nav-rail[data-folded='1'] .nav-rail__sessions { display: none; }
+.nav-rail[data-folded='1'] .nav-rail__new { margin: var(--rt-space-2) auto 0; width: var(--rt-control-height); min-width: 0; padding: 0; }
+.nav-rail[data-folded='1'] .nav-rail__new span { display: none; }
 
 .view { overflow: auto; padding: var(--rt-space-5, 24px); }
 .view__empty h1 { margin: 0 0 var(--rt-space-2, 8px); font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 500; }
@@ -1464,7 +1534,12 @@
 .overview__body { display: grid; grid-template-columns: minmax(320px, 1fr) var(--rt-space-4) 340px; gap: 0; align-items: start; min-height: 0; }
 .overview__left { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); min-width: 320px; }
 .overview__metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--rt-space-3, 12px); }
-@media (max-width: 1079px) { .overview__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1079px) {
+  .overview__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* PD-MONITOR-010 clause 1: two figures wide and two deep — the left of each pair stands on the band's edge, the lower pair under a rule. */
+  .overview .overview__metrics > .card:nth-child(odd) { padding-left: 0; border-left: 0; }
+  .overview .overview__metrics > .card:nth-child(n + 3) { border-top: var(--rt-hairline-width) solid var(--rt-border); }
+}
 .overview__divider { width: var(--rt-space-4); align-self: stretch; cursor: col-resize; border-radius: var(--rt-radius-md); }
 .overview__divider:hover, .overview__divider:focus-visible { background: var(--rt-hover); }
 /* Audit item 16: card above card takes one gap in both columns, `--rt-space-4` (published as a `spacing-token` relation on each
@@ -2961,3 +3036,136 @@ strong { font-weight: var(--rt-weight-medium); }
 .auth-recovery__key { display: flex; gap: var(--rt-space-2); align-items: center; }
 .auth-recovery__key .input { flex: 1; min-width: 0; }
 .auth-recovery__path > .text-secondary { margin: 0; font-size: var(--rt-text-xs); }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+ * The 2026-11-14 revision (R-101) — docs/design/README/08-8-the-2026-11-14-revision.md states each rule's reason.
+ *
+ * Three moves, each product-wide, declared once and after everything they revise so the cascade settles them:
+ *   1. Planes. The chrome (title bar, sidebar, status strip, the Workspace's side panes and dock) is the deepest
+ *      plane and the content ground is the lit one. A region of a page is a RULED SECTION on that ground — a
+ *      hairline above it and its heading — and no longer a filled, bordered, rounded box. A fill now means one
+ *      thing: this floats or this takes input (a dialog, a menu, the composer, a field).
+ *   2. Type roles. A page title and a section heading are set in the body face; the display face is the
+ *      wordmark's. A section heading is a heading — sentence case at `--rt-text-sm`, medium — where it was an
+ *      upper-case tracked label; the tracked label stays for a table's column heads and the sidebar's groups,
+ *      which label and do not head.
+ *   3. Absence. An empty state is a statement and its one next act, set on the ground with no frame and no motif.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* 1 — planes */
+.card { background: transparent; border: 0; border-top: var(--rt-hairline-width) solid var(--rt-border); border-radius: 0; padding: var(--rt-space-3) 0 0; }
+/* A card that floats keeps the surface: the window dialog and anything drawn inside an overlay. */
+.dialog .card, .project-setup .card, [role='dialog'] .card { background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); padding: var(--rt-space-4) var(--rt-space-5); }
+.view { padding: 0; }
+.view > :not(.workspace) { padding: var(--rt-space-5) var(--rt-space-6) var(--rt-space-6); }
+.view__empty { padding: var(--rt-space-6); }
+
+/* 2 — type roles */
+.display { font-family: var(--rt-font-body); font-weight: var(--rt-weight-medium); font-size: var(--rt-h5); letter-spacing: -0.01em; line-height: var(--rt-leading-tight); }
+.card-kicker { font-size: var(--rt-text-sm); letter-spacing: 0; text-transform: none; color: var(--rt-text); }
+.card-title { font-family: var(--rt-font-body); letter-spacing: 0; }
+.title-bar__name { font-weight: var(--rt-weight-medium); letter-spacing: var(--rt-tracking-tight); }
+.kpi-value, .ov-kpi__count .kpi-value { font-family: var(--rt-font-mono); font-variant-numeric: tabular-nums; }
+table, .mono { font-variant-numeric: tabular-nums; }
+
+/* 3 — absence */
+.empty-state { border: 0; background: none; padding: var(--rt-space-6) var(--rt-space-4); gap: var(--rt-space-2); }
+.empty-state.rt-dot-grid-bg { background-image: none; }
+.empty-state-title { color: var(--rt-text); }
+.empty-state-hint { font-size: var(--rt-text-sm); line-height: var(--rt-leading-body); color: var(--rt-text-secondary); text-wrap: pretty; }
+
+/* The Overview's figures (PD-MONITOR-010): one ruled band of four, where four boxes stood. The band's rules are the
+   section rule above and one hairline below; a figure is divided from its neighbour by a hairline, not by a gap. */
+.overview { gap: var(--rt-space-5); }
+.overview__metrics { gap: 0; border-top: var(--rt-hairline-width) solid var(--rt-border); border-bottom: var(--rt-hairline-width) solid var(--rt-border); }
+.overview__metrics > .card { border-top: 0; padding: var(--rt-space-4) var(--rt-space-5); gap: var(--rt-space-2); }
+.overview__metrics > .card:first-child { padding-left: 0; }
+.overview__metrics > .card + .card { border-left: var(--rt-hairline-width) solid var(--rt-border); }
+.overview__metrics .card-kicker { font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+/* The band's two-by-two form below 1080 px is written with the grid's own breakpoint, above. */
+.overview__left, .overview__right { gap: var(--rt-space-5); }
+
+/* Browser surfaces the palette had not reached: the scrollbar's hover. A rule that set `caret-color` and `accent-color`
+   on `:root` stood here for one build and is withdrawn: with it a proof's launch stopped presenting frames after a
+   navigation (`pnpm driver-proof`: paint confirmed 0 of 7, against 7 of 7 without it), and every step that waits two
+   frames ran seconds late (docs/defects/a-root-rule-setting-caret-color-and-accent-color-stops-a-proof-launch-presenting-frames.md). */
+::-webkit-scrollbar-thumb:hover { background: var(--rt-boundary-strong); }
+
+/* A label that labels and does not head keeps the tracked form: the Settings list's groups, a plan's phases. */
+.nav-list__heading.card-kicker { font-size: var(--rt-text-2xs); letter-spacing: var(--rt-tracking-label); text-transform: uppercase; color: var(--rt-text-tertiary); }
+/* The Workspace's side pane heads its three regions alike: Agents, Task plan, Project. */
+.todo-pane__title { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); letter-spacing: 0; text-transform: none; color: var(--rt-text); }
+
+/* A table that stood in a box held its text 14 px inside the box's edge. On the ground its head stands on the section's
+   own left edge and its cells one step in, so a selected or hovered row has a margin to fill. */
+.table-card { overflow: visible; }
+.table-card-head { padding-inline: 0; }
+.table-card-foot { padding-inline: 0; }
+.table-card .table th:first-child, .table-card .table td:first-child { padding-left: var(--rt-space-2); }
+.table-card .table th:last-child, .table-card .table td:last-child { padding-right: var(--rt-space-2); }
+.git__right { padding-left: var(--rt-space-4); }
+
+/* The agent table gives way in its Activity column first: the column takes what the others leave and elides, so the
+   one-line form holds until the card reaches the width PD-MONITOR-009 clause 3 gives the three-line form. */
+.agent-table { width: 100%; }
+.agent-table__activity { width: 100%; max-width: 0; }
+@container (max-width: 40rem) { .mission__table .agent-table__row > .agent-table__activity { width: auto; max-width: none; } }
+
+/* The transcript's toolbar: a control keeps its label on one line, and the scope's explanation is what elides. */
+.transcript__toolbar { min-width: 0; }
+.transcript__toolbar .btn { white-space: nowrap; flex: none; }
+.transcript__toolbar .row__scope { flex: 0 1 auto; min-width: 0; }
+.row__scope-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* One page frame (`.view > :not(.workspace)`, above): a view's own regions stand on its edges and add no second inset. */
+.req { padding-top: var(--rt-space-5); }
+.req > .req-header, .req > .req-adoption, .req > .req-foot { padding-inline: 0; }
+.card-accented .card-kicker { color: var(--rt-text); }
+.git-card--table .git-card__head { padding-inline: 0; }
+.git-card--table.card { padding-top: 0; }
+
+/* ── The 2026-11-14 critique, iteration 2 (docs/design/briefs/shell.md) ── */
+/* C-06: a section's heading, its column heads and its cells share one left edge. */
+.table-card .table th:first-child, .table-card .table td:first-child,
+.agent-table th:first-child, .agent-table td:first-child { padding-left: 0; }
+.table-card .table th:last-child, .table-card .table td:last-child { padding-right: 0; }
+/* C-08: inside a section an absence is a sentence under the heading, never a statement larger than it. */
+.card .empty-state { align-items: flex-start; text-align: left; margin-inline: 0; padding: var(--rt-space-1) 0 0; max-width: none; }
+.card .empty-state-title { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-body); color: var(--rt-text-secondary); }
+/* C-11: the view's title is the top of the view's hierarchy, and a session's name is prose, not a measurement. */
+.display { font-size: var(--rt-h4); }
+.overview__session.mono { font-family: var(--rt-font-body); }
+/* C-18: a list's selected item is marked by its tint, as the sidebar's is; no stripe. */
+.nav-list__item.is-selected { border-left-color: transparent; background: var(--rt-accent-tint-14); }
+.git__table th:first-child, .git__table td:first-child { padding-left: 0; }
+/* `pnpm ui-audit`, 2026-11-14: a visually hidden live region inside the Settings body is positioned absolutely, and with
+   no positioned ancestor short of `.body` it stood 5 px below the region at 1000x680 and made the shell's body hold more
+   than it shows. The Settings body is its containing block, so its own scroller holds it. */
+.settings__body { position: relative; }
+
+/* ── The second critique, iteration 3 (docs/design/briefs/shell.md, section 3) ── */
+/* D-03: the followed session's name is the chip's brightest part and is prose; a dash for "none" stays quiet. */
+.title-bar__workspace-tail[data-session='1'] { color: var(--rt-text); font-family: var(--rt-font-body); }
+/* C-06, again: a Settings table stands on its heading's edge, as a section's table does. */
+.settings__body .table th:first-child, .settings__body .table td:first-child { padding-left: 0; }
+/* C-08, again: Git's absences stand under their headings, not centred under the column heads. */
+.git__empty.empty-state { align-items: flex-start; text-align: left; margin: var(--rt-space-2) 0 0; padding: 0; max-width: none; }
+
+/* ── PD-SHELL-016 clause 8 (revision 2): the Workspace's delegation pane docked in the open sidebar ──
+ * The pane is the Workspace's own component drawn into the sidebar's dock, so every class inside it is unchanged.
+ * Docked, it is no column of the Workspace's grid: the grid is the transcript column and the inspector. In the
+ * sidebar the dock takes the height the fixed regions leave and scrolls; the sessions list gives way before it. */
+.workspace--with-sidebar.workspace--docked:not(.workspace--narrow) { grid-template-columns: 1fr auto; grid-template-areas: 'runhead inspector' 'reauth inspector' 'plangate inspector' 'transcript inspector' 'queue inspector' 'divider inspector' 'composer inspector'; }
+.nav-rail__dock { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.nav-rail__dock:empty { display: none; }
+.nav-rail__dock:not(:empty) { border-top: var(--rt-hairline-width) solid var(--rt-border); margin-inline: calc(-1 * var(--rt-space-2)); }
+/* Beside a filled dock the sessions keep their rows up to a third of the column and scroll past that; the dock takes the rest. */
+.nav-rail__views:has(.nav-rail__dock:not(:empty)) .nav-rail__sessions { flex: 0 0 auto; max-height: 33%; }
+.nav-rail__views:has(.nav-rail__dock:not(:empty)) .nav-rail__foot { margin-top: 0; }
+.agents--docked { border-right: 0; overflow: visible; flex: none; padding-inline: var(--rt-space-4); }
+.agents--docked .agents__header { margin-inline: calc(-1 * var(--rt-space-4)); padding-inline: var(--rt-space-4); border-bottom: 0; }
+/* Docked, the pane's head is 228 px wide: the count stays beside the title on one line, and the selected agent's Steer and Cancel take a line of their own under it. */
+.agents--docked .agents__header { height: auto; min-height: var(--rt-space-10); flex-wrap: wrap; row-gap: 0; padding-block: var(--rt-space-1); }
+.agents--docked .agents__count, .agents--docked .agents__cancel { white-space: nowrap; }
+.agents--docked .agents__spacer { flex: 0 0 100%; height: 0; }
+.agents--docked .agents__cancel { padding-inline: var(--rt-space-2); margin-left: calc(-1 * var(--rt-space-2)); }

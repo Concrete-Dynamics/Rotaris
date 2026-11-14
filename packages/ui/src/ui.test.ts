@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CheckpointListPayload, SessionListItemPayload, GitViewState, GitWorktreeRow } from '@rotaris/contracts';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { useShellState } from './shell-state.js';
+import { NavRail, SIDEBAR_SESSION_LIMIT } from './NavRail.js';
 import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, OVERVIEW_DIVIDER_WIDTH, formatTokens, sessionDot, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, stateColumnFit, filesColumnFit, statePhrase, branchLineFloor, branchColumnFit, tableFit, branchFitKey, stateFitKey, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, waitModelOptions, keepWaitingAction, EXCLUDED_MODEL_HINT, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
-import { resolveTheme, isBusy, presentationStatus, EXECUTION_STATUSES, PRESENTATION_STATUSES } from '@rotaris/contracts';
+import { resolveTheme, isBusy, presentationStatus, EXECUTION_STATUSES, PRESENTATION_STATUSES, PRIMARY_VIEWS, VIEW_GROUPS } from '@rotaris/contracts';
 
 describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
   const wait = { provider: 'openrouter', model: 'gpt-x', exhausted: false, resumeAt: '2026-09-05T10:00:42.000Z', attempt: 1, reason: 'Provider openrouter is rate limiting model gpt-x. Wait 42 s before retrying.', agent: 'orchestrator', rejection: null, excluded: [], modelKey: 'gpt-x' };
@@ -64,9 +67,9 @@ describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
   });
 });
 
-describe('ui — shell state (REQ-SHELL-025, REQ-SHELL-026)', () => {
-  it('starts on Overview, switches to a known view, and treats an unknown identifier as a silent no-op', () => {
-    expect(useShellState.getState().activeView).toBe('overview');
+describe('ui — shell state (REQ-SHELL-025; REQ-SHELL-026 as PD-SHELL-016 narrows it)', () => {
+  it('starts on the Workspace, switches to a known view, and treats an unknown identifier as a silent no-op', () => {
+    expect(useShellState.getState().activeView).toBe('workspace');
     useShellState.getState().switchView('git');
     expect(useShellState.getState().activeView).toBe('git');
     useShellState.getState().switchView('nonsense');
@@ -79,7 +82,7 @@ describe('ui — theme projection and motion', () => {
     const values = new Map<string, string>();
     const root = { style: { setProperty: (name: string, value: string) => values.set(name, value), colorScheme: '' }, dataset: {} } as unknown as HTMLElement;
     applyTheme(resolveTheme('nocturne'), root);
-    expect(values.get('--rt-bg')).toBe('oklch(14% 0 0)');
+    expect(values.get('--rt-bg')).toBe('oklch(14% 0.006 275)');
     expect(root.dataset['theme']).toBe('nocturne');
     expect(root.dataset['dark']).toBe('true');
   });
@@ -350,5 +353,72 @@ describe('ui — the checkpoints card (ADR-0039, REQ-GIT-087/088/089)', () => {
     expect(restoreDisabledReason({ state: 'unavailable', sessionId: 'S', reason: '' }, 1, RESTORE_NO_SESSION, RESTORE_NO_ROW)).toBe("This session's checkpoints cannot be restored.");
     expect(restoreDisabledReason({ state: 'ready', sessionId: 'S', listing: listing([ckpt(1)]) }, null, RESTORE_NO_SESSION, RESTORE_NO_ROW)).toBe(RESTORE_NO_ROW);
     expect(restoreDisabledReason({ state: 'ready', sessionId: 'S', listing: listing([ckpt(1)]) }, 1, RESTORE_NO_SESSION, RESTORE_NO_ROW)).toBeNull();
+  });
+});
+
+describe('ui — the navigation sidebar (PD-SHELL-016)', () => {
+  const items = PRIMARY_VIEWS.map((v) => ({ ...v, shortcut: undefined }));
+  const row = (sessionId: string, over: Partial<SessionListItemPayload> = {}): SessionListItemPayload => ({
+    sessionId, label: `session ${sessionId}`, status: 'completed', branch: 'main', relativeTime: '2 h ago', detail: '', awaitingInput: false, stale: false,
+    tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, unreadable: null, ...over,
+  });
+  const sessions = (rows: readonly SessionListItemPayload[], state: 'idle' | 'loading' | 'error' = 'idle') => ({ rows, state, currentId: rows[0]?.sessionId ?? null, onOpen: () => undefined, onBrowse: () => undefined, onNew: () => undefined });
+  const draw = (props: Partial<Parameters<typeof NavRail>[0]> = {}) => renderToStaticMarkup(createElement(NavRail, { items, groups: VIEW_GROUPS, active: 'workspace', onSelect: () => undefined, ...props }));
+
+  it('clause 2: draws the views in order inside one radiogroup, Project headed, Settings last, each its own tab stop', () => {
+    const markup = draw({ sessions: sessions([]) });
+    const labels = [...markup.matchAll(/role="radio"[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]);
+    expect(labels).toEqual(['Workspace', 'Overview', 'Requirements', 'Git', 'Library', 'Settings']);
+    expect(markup.match(/role="radiogroup"/g)).toHaveLength(1);
+    expect(markup).toContain('>Project</span>');
+    expect(markup.match(/tabindex="0"/g)).toHaveLength(6);
+    expect(markup).toContain('aria-checked="true" aria-label="Workspace"');
+    expect(markup).toContain('title="Open Overview"');
+    expect(markup).toContain('data-testid="sidebar-new-session"');
+  });
+
+  it('clause 3: lists at most twelve sessions, marks the followed one, says what a live one is doing, and counts the rest', () => {
+    const rows = [row('a', { status: 'running', busy: true }), row('b', { awaitingInput: true }), ...Array.from({ length: 13 }, (_, i) => row(`n${i}`))];
+    const markup = draw({ sessions: sessions(rows) });
+    expect(markup.match(/class="nav-session"/g)).toHaveLength(SIDEBAR_SESSION_LIMIT);
+    expect(markup).toContain('data-session="a" data-current="1" aria-current="true"');
+    expect(markup).toContain('<span class="nav-session__meta">running</span>');
+    expect(markup).toContain('<span class="nav-session__meta">needs you</span>');
+    expect(markup).toContain('<span class="nav-session__meta">2 h ago</span>');
+    expect(markup).toContain('3 more in List sessions.');
+    // The list stands under the session views and above the project's, in the document as on screen.
+    expect(markup.indexOf('aria-label="Overview"')).toBeLessThan(markup.indexOf('data-testid="sidebar-sessions"'));
+    expect(markup.indexOf('data-testid="sidebar-sessions"')).toBeLessThan(markup.indexOf('aria-label="Requirements"'));
+  });
+
+  it('clause 5: the folded form\'s one sessions control names the followed session and the most urgent state of the others', () => {
+    const quiet = draw({ sessions: sessions([row('a', { label: 'fix the parser' }), row('b')]) });
+    expect(quiet).toContain('data-testid="sidebar-sessions-button" data-attention="none" title="List sessions — following fix the parser"');
+    const running = draw({ sessions: sessions([row('a'), row('b', { busy: true })]) });
+    expect(running).toContain('data-attention="running"');
+    const needs = draw({ sessions: sessions([row('a', { awaitingInput: true }), row('b', { busy: true }), row('c', { awaitingInput: true })]) });
+    expect(needs).toContain('data-attention="needs"');
+    expect(needs).toContain('another session needs you');
+    // The followed session's own state is the view's to show, so it raises nothing here.
+    expect(draw({ sessions: sessions([row('a', { awaitingInput: true })]) })).toContain('data-attention="none"');
+  });
+
+  it('clause 3: an empty, a pending and a refused read each say which it is', () => {
+    expect(draw({ sessions: sessions([]) })).toContain('No sessions yet. A run you start is kept here.');
+    expect(draw({ sessions: sessions([], 'loading') })).toContain('Reading sessions…');
+    expect(draw({ sessions: sessions([], 'error') })).toContain('The session list could not be read. List sessions shows why.');
+  });
+
+  it('clause 5: states its form, and the fold control names the act it would perform', () => {
+    expect(draw({ folded: false, onToggleFold: () => undefined })).toContain('data-folded="0"');
+    expect(draw({ folded: false, onToggleFold: () => undefined })).toContain('aria-label="Fold the sidebar" aria-expanded="true"');
+    expect(draw({ folded: true, onToggleFold: () => undefined })).toContain('aria-label="Open the sidebar" aria-expanded="false"');
+  });
+
+  it('with no sessions handed to it, draws its views alone', () => {
+    const markup = draw();
+    expect(markup).not.toContain('sidebar-sessions');
+    expect(markup).not.toContain('sidebar-sessions-button');
+    expect(markup).not.toContain('sidebar-new-session');
   });
 });

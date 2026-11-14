@@ -20,6 +20,8 @@ import { replicaRunStartDeclines, unexpectedRendererErrors } from './lib/rendere
  * subtitle gave it; parity is between two trees, not three; item 7's strategy selector and depth control are gone from
  * the monitoring view, and the card's read-only strategy, its "Open Runtime settings" and the Settings fields are
  * measured in their place. "Mission" below names the two cards where it is kept in a file or result name.
+ * PD-SHELL-016 (2026-11-14): the window opens on the Workspace and the Overview is Ctrl+2; every launch here already opened the
+ * Overview by its identifier, so nothing in this script changed but this note and the prompt seam's chord (Ctrl+1).
  *
  *   1. painted     — the Overview opened during a run with three live children: the two cards in their places and the
  *                    retired surfaces absent, the header, the run row, the tree,
@@ -168,7 +170,7 @@ const s1 = scenario('painted');
 {
   const r = await launch('painted', s1, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'delegate to three agents',
-    // The prompt seam leaves the startup view for the Workspace to type; the Overview is opened again by its identifier.
+    // The prompt seam presses the Workspace's chord to type (the startup view since PD-SHELL-016); the Overview is opened by its identifier.
     ROTARIS_CAPTURE_VIEWS: 'overview@3500',
     ROTARIS_CAPTURE_PROBE_AT: `${HEADER}@6000;;[data-testid="mission-run-row"]@6000;;.agent-table__row@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.agent-table__state-text@6000;;.mission__run-row + .agent-tree .agent-row@6000`,
     ROTARIS_CAPTURE_EVAL_AT: `${CARDS}@6000`,
@@ -185,7 +187,7 @@ const s1 = scenario('painted');
   expect(/^session .+ · running · \S+$/.test(subtitle), `the Overview's header: "${subtitle}" (PD-MONITOR-009: "session {label} · {status} · {runtime}")`);
   const cards = evalsOf(r.log).find((e) => e.kind === 'cards');
   expect(cards, 'no reading of the two delegation cards (see painted.log)');
-  expect(cards.view === 'overview' && JSON.stringify(cards.rail) === JSON.stringify(['Overview', 'Workspace', 'Requirements', 'Git', 'Library', 'Settings']), `the view and the rail: ${cards.view}, ${JSON.stringify(cards.rail)} (PD-SHELL-015: six views, Mission none)`);
+  expect(cards.view === 'overview' && JSON.stringify(cards.rail) === JSON.stringify(['Workspace', 'Overview', 'Requirements', 'Git', 'Library', 'Settings']), `the view and the rail: ${cards.view}, ${JSON.stringify(cards.rail)} (PD-SHELL-015: six views, Mission none)`);
   expect(cards.graphFirstInRight && cards.tableInLeft && cards.tableAfterMetrics, `the cards' places: ${JSON.stringify(cards)} (PD-MONITOR-009 clauses 2 and 3: the graph first in the right column, the table in the left under the metric cards)`);
   expect(cards.graphSelected !== null && cards.tableRefresh?.every((present) => present === true), `the cards' attributes: ${JSON.stringify(cards)} (the shared selection on the graph card, the refresh figures on the table card)`);
   expect(cards.strategyTag === 'SPAN' && cards.strategyText === 'orchestrator' && cards.openRuntime === 'Open Runtime settings', `the graph card's last line: ${JSON.stringify(cards)} (PD-MONITOR-009 clause 6)`);
@@ -878,7 +880,9 @@ const s7 = scenario('settings');
   // 7b. Relaunched on the same scratch profile, no session focused and one listed: the graph card reads the strategy the file holds.
   // The card draws a dash until the configuration is read, so the reading is taken once the waited-for text has had its
   // 9 s to arrive; a card that never shows it is read all the same, and fails on what it shows.
+  // PD-SHELL-016 (2026-11-14): the window opens on the Workspace, so the launch names the Overview it reads.
   const r2 = await launch('settings-card', s7, {
+    ROTARIS_CAPTURE_VIEW: 'overview',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-strategy"]>>swarm@~9000',
     ROTARIS_CAPTURE_EVAL_AT: `${card}@9200`,
     ROTARIS_CAPTURE_AFTER_MS: '9600',

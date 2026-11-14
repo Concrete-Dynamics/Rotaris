@@ -261,7 +261,8 @@ describe('ROTARIS_CAPTURE_PERSONA_PROBE_AT reads the first persona window (seams
 
 describe('ROTARIS_CAPTURE_VIEW names a primary view by identifier or by its place in the rail (PD-SHELL-015)', () => {
   it('reads an identifier as that view\'s place, so a proof that names its view does not move when the rail does', () => {
-    expect(['overview', 'workspace', 'requirements', 'git', 'library', 'settings'].map(captureViewPosition)).toEqual([1, 2, 3, 4, 5, 6]);
+    // PD-SHELL-016 clause 1: Workspace leads, so the identifier `overview` is the second place and `workspace` the first.
+    expect(['workspace', 'overview', 'requirements', 'git', 'library', 'settings'].map(captureViewPosition)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it('reads a digit inside the rail as itself, and nothing set as no view', () => {

@@ -29,10 +29,10 @@ function context(): CommandContext & { readonly calls: string[] } {
 const chord = (key: string, mods: Partial<ChordEvent> = {}): ChordEvent => ({ key, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, ...mods });
 
 describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () => {
-  it('carries REQ-SHELL-049\'s table under PD-SHELL-015: six view entries in view order, the five other chords, and the palette-only About entry', () => {
+  it('carries REQ-SHELL-049\'s table under PD-SHELL-015 and PD-SHELL-016: six view entries in view order, the five other chords, and the palette-only About entry', () => {
     const rows = COMMANDS.map((c) => [c.id, c.label, c.shortcut ?? null] as const);
     expect(rows.slice(0, 6)).toEqual(PRIMARY_VIEWS.map((v, i) => [`view.${v.id}`, `Open ${v.label}`, `Ctrl+${i + 1}`]));
-    expect(rows.slice(0, 6).map((row) => row[1])).toEqual(['Open Overview', 'Open Workspace', 'Open Requirements', 'Open Git', 'Open Library', 'Open Settings']);
+    expect(rows.slice(0, 6).map((row) => row[1])).toEqual(['Open Workspace', 'Open Overview', 'Open Requirements', 'Open Git', 'Open Library', 'Open Settings']);
     expect(rows.some((row) => row[1] === 'Open Mission' || row[2] === 'Ctrl+7')).toBe(false);
     expect(rows.slice(6)).toEqual([
       ['palette.open', 'Open command palette', 'Ctrl+K'],
@@ -113,7 +113,7 @@ describe('palette filtering — REQ-SHELL-052/053', () => {
   });
 
   it('keeps the table\'s order, so the first row of a result set is the first entry that matched', () => {
-    expect(filterCommands('open').map((c) => c.id)[0]).toBe('view.overview');
+    expect(filterCommands('open').map((c) => c.id)[0]).toBe('view.workspace');
   });
 
   it('never returns the keywords themselves for display — a row carries only its label and its chord', () => {

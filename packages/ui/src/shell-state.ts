@@ -8,11 +8,17 @@ import { isViewId, LIBRARY_TABS, STARTUP_VIEW, type AnalysisPass, type ViewId } 
  * clear it.
  *
  * REQ-SHELL-025: switching to an unknown view identifier is a silent no-op.
- * REQ-SHELL-026: the startup view is Overview.
+ * REQ-SHELL-026 as PD-SHELL-016 narrows it: the startup view is the Workspace.
  */
 export interface ShellState {
   readonly activeView: ViewId;
   switchView: (id: string) => void;
+  /**
+   * PD-SHELL-016 clause 5: whether the user folded the sidebar to its icon column. `null` is "not asked": the sidebar
+   * then follows the window's width alone. Local to the window and not persisted.
+   */
+  readonly sidebarFolded: boolean | null;
+  toggleSidebar: (foldedNow: boolean) => void;
   /** A category the Settings view should select next (a notice action, REQ-NOTIFY-223); consumed once. */
   readonly settingsCategory: string | null;
   openSettings: (category: string) => void;
@@ -145,6 +151,8 @@ export interface LaunchChoices {
 
 export const useShellState = create<ShellState>((set, get) => ({
   activeView: STARTUP_VIEW,
+  sidebarFolded: null,
+  toggleSidebar(foldedNow) { set({ sidebarFolded: !foldedNow }); },
   improvementAnalysis: { active: false, pass: 'post_run' },
   setImprovementAnalysis(activity) { set({ improvementAnalysis: activity }); },
   switchView(id) {

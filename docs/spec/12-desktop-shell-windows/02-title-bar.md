@@ -48,6 +48,8 @@ Part 2 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
   > open the six views of that directive in view order ("Open Overview", "Open Workspace", "Open Requirements", "Open
   > Git", "Open Library", "Open Settings"), and Ctrl+7 is bound to nothing. Every other row of the table above still
   > governs.
+  > **Narrowed by [`PD-SHELL-016`](../../product/directives/pd-shell-016.md#pd-shell-016), 2026-11-14.** Ctrl+1 opens the Workspace and Ctrl+2 the Overview, the
+  > order that directive gives the views; every other row stands.
 - **REQ-SHELL-050**: Composer key handling: Enter submits when the composer has focus; Shift+Enter adds a line break instead of submitting; Ctrl+Return is the window-wide fallback submit.
 - **REQ-SHELL-051**: The command palette is an application-modal dialog titled "Rotaris commands", 560×420, accessible name "Rotaris command palette", containing a heading "Commands", a filter field (placeholder "Type an action…", accessible name "Filter commands"), and a results list (accessible name "Available commands").
 - **REQ-SHELL-052**: Palette filtering is a case-folded substring match over each command's label, hidden keywords, and identifier; an empty query matches everything; the list refreshes on every keystroke; the first row is auto-selected whenever there are results; Return activates the current row; activation closes the dialog first and then runs the command.

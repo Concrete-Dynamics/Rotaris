@@ -1296,6 +1296,19 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
     setReducedMotion(value);
     return { ok: true as const };
   }, []);
+  // PD-SHELL-016 clause 3: the sidebar's sessions — this workspace's `session.list`, read when the window opens, when the
+  // followed session changes or stops being busy (the Overview's own triggers, REQ-MONITOR-174), and after every act of the
+  // session browser. A refused read says so in the sidebar and leaves the browser to state the reason.
+  const [sidebarRows, setSidebarRows] = useState<readonly SessionListItemPayload[]>([]);
+  const [sidebarState, setSidebarState] = useState<'idle' | 'loading' | 'error'>('loading');
+  const readSidebarSessions = useCallback(async (): Promise<void> => {
+    if (workspace === '(no workspace)') { setSidebarRows([]); setSidebarState('idle'); return; }
+    const result = await bridge.command({ kind: 'session.list' });
+    if (result.ok) { setSidebarRows((result.value as { sessions: SessionListItemPayload[] }).sessions); setSidebarState('idle'); }
+    else setSidebarState('error');
+  }, [workspace]);
+  const sidebarKey = session ? `${session.id}:${isBusy(session.executionStatus) ? 'busy' : session.executionStatus}` : 'none';
+  useEffect(() => { queueMicrotask(() => { void readSidebarSessions(); }); }, [readSidebarSessions, sidebarKey]);
   const loadSessions = useCallback(async (): Promise<readonly SessionListItemPayload[]> => {
     setBrowserOpen(true);
     setBrowserLoading(true);
@@ -1323,7 +1336,7 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
   /** Part U: the browser's actions. Each is a command answered with a value or a reason; the list is read again afterwards. */
   const refreshSessions = useCallback(async (): Promise<void> => {
     const result = await bridge.command({ kind: 'session.list' });
-    if (result.ok) setBrowserSessions((result.value as { sessions: SessionListItemPayload[] }).sessions);
+    if (result.ok) { const rows = (result.value as { sessions: SessionListItemPayload[] }).sessions; setBrowserSessions(rows); setSidebarRows(rows); setSidebarState('idle'); }
   }, []);
   const outcomeOf = <T,>(r: CommandOutcome): { ok: true; value?: T } | { ok: false; reason: string } => (r.ok ? { ok: true, value: r.value as T } : { ok: false, reason: r.detail ?? r.headline });
   const deleteSession = useCallback(async (sessionId: string) => {
@@ -1535,6 +1548,13 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
       onAction={dispatchNoticeAction}
       acknowledgements={acknowledgements}
       onOpenSessions={() => { void loadSessions(); }}
+      sidebarSessions={{
+        rows: sidebarRows, state: sidebarState, currentId: session?.id ?? null,
+        // A row focuses its session and shows the Workspace; a refusal is the browser's to state, so it opens with the list.
+        onOpen: (sessionId) => { void openSession(sessionId).then((r) => { if (r.ok) useShellState.getState().switchView('workspace'); else void loadSessions(); }); },
+        onBrowse: () => { void loadSessions(); },
+        onNew: () => { void openStartDialog(); },
+      }}
       /*
        * Part AS — ADR-0064 / REQ-WORKSPACE-106: a WINDOW-level dialog, drawn by the shell rather than inside a view, so
        * navigating elsewhere does not dismiss a decision the product is waiting on and the rest of the application stays

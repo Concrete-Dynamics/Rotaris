@@ -27,5 +27,8 @@ one now names its part.
 | [05](README/05-5-acceptance-items-the-design-language-must-be.md) | 5. Acceptance items the design language must be measured against |
 | [06](README/06-6-reference.md) | 6. Reference; 6.1 The research corpus and the surface briefs — guidance, never authority |
 | [07](README/07-7-fidelity-consult-before-maintain-after.md) | 7. Fidelity — consult before, maintain after; 7.1 What the first reading of this obligation found — 2026-09-08; 7.2 The repair — 2026-09-09 (Part AI); 7.3 Telling two working agents apart — 2026-09-16 (`PD-CHAT-004` rev. 2, `PD-CHAT-005`); 7.4 A tool row says what it is doing — 2026-10-24 (`REQ-CHAT-175` – `REQ-CHAT-178`) |
+| [08](README/08-8-the-2026-11-14-revision.md) | 8. The 2026-11-14 revision (R-101): what the baseline showed; the eight decisions — planes, graphite, ruled sections, headings, one family, the empty state, one page frame, the browser's surfaces; what was weighed and not taken |
+
+**Since 2026-11-14** part 08 revises §1 where it says so (the planes, the neutrals, the card, the heading, the empty state), and the map below carries a third round: the navigation is a sidebar and the window opens on the Workspace ([R-101](../product/requests.md#r-101)).
 
 **Since 2026-11-11** the product's information architecture, where a directive has decided it instead of the specification, is stated once in [`information-architecture.md`](information-architecture.md): six primary views, what the Overview holds, the Settings headings. It was proposed and decided by a model under the owner's delegation [R-098](../product/requests.md#r-098), and each decision governs through the directive the map names. §2's rule is unchanged: the design *material's* structure is not adopted.

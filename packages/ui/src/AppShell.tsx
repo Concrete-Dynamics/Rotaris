@@ -1,7 +1,7 @@
-import { useEffect, useMemo, type ReactNode } from 'react';
-import { PRIMARY_VIEWS, type Notice, type NoticeAction, type ViewId } from '@rotaris/contracts';
+import { useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { PRIMARY_VIEWS, VIEW_GROUPS, type Notice, type NoticeAction, type ViewId } from '@rotaris/contracts';
 import type { AcknowledgementStore } from '@rotaris/ui-core';
-import { NavRail } from './NavRail.js';
+import { NavRail, type NavRailSessions } from './NavRail.js';
 import { WorkspaceChip } from './WorkspaceChip.js';
 import { StatusStripItem } from './StatusStripItem.js';
 import { useShellState } from './shell-state.js';
@@ -26,9 +26,10 @@ const SHELL_LAYOUT = {
 
 /**
  * REQ-SHELL-024 — vertical layout, top to bottom: title bar; a
- * persistent-notice banner slot; the navigation rail beside the active view;
- * status strip. REQ-SHELL-048/049 (Part W): the ONE shortcut handler is
- * `useCommandShortcuts` over the command registry — Ctrl+1..6 (PD-SHELL-015), Ctrl+K, Ctrl+,,
+ * persistent-notice banner slot; the navigation sidebar beside the active view
+ * (PD-SHELL-016: the views under their groups, the workspace's sessions, Settings
+ * at the foot; folded, it is the rail); status strip. REQ-SHELL-048/049 (Part W): the ONE shortcut handler is
+ * `useCommandShortcuts` over the command registry — Ctrl+1..6 (PD-SHELL-015, in PD-SHELL-016's order), Ctrl+K, Ctrl+,,
  * Ctrl+L, Ctrl+Return, F1 — and the two application-modal dialogs (the
  * palette, the keyboard help) are mounted here, once per main window.
  *
@@ -73,6 +74,8 @@ export interface AppShellProps {
   /** REQ-NOTIFY-013 / REQ-SHELL-112: this window's ONE transient stack. */
   readonly acknowledgements?: AcknowledgementStore | undefined;
   readonly onOpenSessions?: (() => void) | undefined;
+  /** PD-SHELL-016 clause 3: the sidebar's sessions and its start control; absent, the sidebar draws its views alone. */
+  readonly sidebarSessions?: NavRailSessions | undefined;
   /** ADR-0048 (Part W): the application-modal registration with main's window registry (`window.modality`). */
   readonly onModality?: ((active: boolean) => void) | undefined;
   /**
@@ -91,6 +94,23 @@ export interface AppShellProps {
     readonly onToggleMaximize: () => void;
     readonly onClose: () => void;
   } | undefined;
+}
+
+/**
+ * PD-SHELL-016 clause 5: below this window width the sidebar is drawn as the rail unless the user opened it. The figure
+ * is the Workspace's own three-pane threshold (REQ-MONITOR-051's 1180 px) plus the width the open sidebar takes over the
+ * rail, so the Workspace never loses its panes to the sidebar by default.
+ */
+export const SIDEBAR_FOLD_BELOW = 1360;
+const narrowQuery = `(max-width: ${SIDEBAR_FOLD_BELOW - 1}px)`;
+function subscribeNarrow(onChange: () => void): () => void {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => undefined;
+  const media = window.matchMedia(narrowQuery);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+function readNarrow(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(narrowQuery).matches;
 }
 
 /**
@@ -130,9 +150,13 @@ export function useCommandContext(): CommandContext {
   }), [activeView]);
 }
 
-export function AppShell({ version, workspacePath, home, sessionName, onChooseWorkspace, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, onModality, windowControls, windowDialog }: AppShellProps) {
+export function AppShell({ version, workspacePath, home, sessionName, onChooseWorkspace, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, sidebarSessions, onModality, windowControls, windowDialog }: AppShellProps) {
   const activeView = useShellState((s) => s.activeView);
   const switchView = useShellState((s) => s.switchView);
+  const sidebarFolded = useShellState((s) => s.sidebarFolded);
+  const toggleSidebar = useShellState((s) => s.toggleSidebar);
+  const narrow = useSyncExternalStore(subscribeNarrow, readNarrow, () => false);
+  const folded = sidebarFolded ?? narrow;
   const paletteOpen = useShellState((s) => s.paletteOpen);
   const helpOpen = useShellState((s) => s.helpOpen);
   const improvementAnalysis = useShellState((s) => s.improvementAnalysis);
@@ -141,7 +165,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
   const ctx = useCommandContext();
   const platform = useMemo(() => detectPlatform(), []);
   useCommandShortcuts(ctx, platform);
-  // REQ-SHELL-028 + REQ-SHELL-058: the rail's tooltip stays "Open {Label}"; its accessible description adds the chord.
+  // REQ-SHELL-028 + REQ-SHELL-058: a view button's tooltip stays "Open {Label}"; its accessible description adds the chord.
   const railItems = useMemo(() => PRIMARY_VIEWS.map((v) => ({ ...v, shortcut: commandById(`view.${v.id}`)?.shortcut })), []);
 
   // REQ-NOTIFY-021: changing view performs the clear operation, so nothing from the previous view lingers over the new one.
@@ -174,7 +198,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
         {notice && <NoticeBanner notice={notice} onAcknowledge={onAcknowledge} onAction={onAction} />}
       </div>
       <div className="body" {...layoutContractAttributes(SHELL_LAYOUT.body)}>
-        <NavRail items={railItems} active={activeView} onSelect={(id: ViewId) => switchView(id)} platform={platform} />
+        <NavRail items={railItems} groups={VIEW_GROUPS} active={activeView} onSelect={(id: ViewId) => switchView(id)} platform={platform} sessions={sidebarSessions} folded={folded} onToggleFold={toggleSidebar} />
         <main className="view" aria-label={active.label} {...layoutContractAttributes(SHELL_LAYOUT.view)}>
           {body ?? (
             <div className="view__empty">

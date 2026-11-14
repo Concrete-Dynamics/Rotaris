@@ -1443,7 +1443,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
             */}
           {projectSection !== null && !projectSection.hidden && onOpenProjectSetup && (
             <div className="agents__project" data-testid="project-section">
-              <div className="agents__header"><span className="agents__title">Project</span></div>
+              <div className="agents__header"><span className="agents__title">Project setup</span></div>
               <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={projectSection.disabled} title={projectSection.hint} onClick={onOpenProjectSetup} data-action="project-initialize">{projectSection.label}</DesignButton>
               <p className="text-tertiary settings__hint" data-testid="project-section-hint">{projectSection.hint}</p>
             </div>

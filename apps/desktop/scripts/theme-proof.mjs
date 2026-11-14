@@ -15,8 +15,10 @@
  * shell's texts around it (`docs/archive/defects/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`);
  * `--counterfactual=offscreen` pushes the Workspace view's text off the screen and must exit non-zero.
  *
- * PD-SHELL-015 (2026-11-11): six primary views are captured, `view-1` to `view-6` by their place in the rail (Overview,
- * Workspace, Requirements, Git, Library, Settings); Mission, `view-3` until then, is no view and `view-7` is no capture.
+ * PD-SHELL-015 (2026-11-11): six primary views are captured, `view-1` to `view-6` by their place in the rail (Workspace,
+ * Overview, Requirements, Git, Library, Settings); Mission, `view-3` until then, is no view and `view-7` is no capture.
+ * PD-SHELL-016 (2026-11-14): Workspace and Overview change places, so `view-1` is the Workspace and `view-2` the Overview (the
+ * 7-text minimum above was measured on the Overview, then `view-1`), and the Workspace is reached by Ctrl+1.
  * PD-CONFIG-008: the Settings categories are read from the drawn items, so the four group headings change no index.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -32,8 +34,8 @@ const require = createRequire(import.meta.url);
 const { decodePng, textContrast, focusContrast } = require('./pixels.cjs');
 const THEMES = ['rotaris-dim', 'nocturne', 'high-contrast'];
 const SCALES = [1, 1.25, 1.5, 1.75, 2];
-/** The primary views' roots in the rail's order (PD-SHELL-015: six, Ctrl+1 to Ctrl+6). */
-const ROOTS = ['.overview', '.workspace', '.req', '.git', '.library', '.settings'];
+/** The primary views' roots in the rail's order (PD-SHELL-015: six, Ctrl+1 to Ctrl+6; PD-SHELL-016: Workspace first). */
+const ROOTS = ['.workspace', '.overview', '.req', '.git', '.library', '.settings'];
 const arg = (name) => process.argv.find((value) => value.startsWith(`${name}=`))?.slice(name.length + 1);
 const selectedThemes = arg('--theme') ? [arg('--theme')] : THEMES;
 const selectedScales = arg('--scale') ? [Number(arg('--scale'))] : SCALES;
@@ -114,7 +116,7 @@ for (const theme of selectedThemes) {
       if (counterfactual === 'text') await d.eval(`document.documentElement.style.setProperty('--rt-text', 'oklch' + '(45% 0 0)')`);
       if (counterfactual === 'focus') await d.eval(`document.documentElement.style.setProperty('--rt-focus', 'oklch' + '(40% 0 0)')`);
       // The coverage bound's counterfactual: the Workspace view's own text is pushed off the screen, the shell's stays.
-      // The contrast item must turn red on view-2 ("no text inside the surface was measured"); before the bound it passed.
+      // The contrast item must turn red on view-1 ("no text inside the surface was measured"); before the bound it passed.
       // The pane that holds the view is clipped as well: left scrollable, it scrolled the view back into sight to show the
       // focused composer, and the counterfactual measured the Workspace view as before.
       if (counterfactual === 'offscreen') await d.eval(`(() => { const sheet = new CSSStyleSheet(); sheet.replaceSync('.view:has(> .workspace) { overflow: clip !important; } .workspace { position: relative !important; left: 100vw !important; }'); document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]; return true; })()`);
@@ -188,7 +190,7 @@ for (const theme of selectedThemes) {
         // The ring moves on every Tab, so a capture identical to the last one is stale by construction.
         await take(`focus-${String(index + 1).padStart(2, '0')}`, { mustChange: true });
       }
-      await d.chord('Ctrl+2');
+      await d.chord('Ctrl+1'); // the Workspace (Ctrl+2 until PD-SHELL-016)
       await d.waitFor('.composer__input', { timeoutMs: 15_000 });
       await d.eval(`(() => { const input=document.querySelector('.composer__input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(input,'theme proof draft'); input.dispatchEvent(new Event('input',{bubbles:true})); return true; })()`);
       const before = JSON.parse(await d.eval(`JSON.stringify(${METADATA})`));

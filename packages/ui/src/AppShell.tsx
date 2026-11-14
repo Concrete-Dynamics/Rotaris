@@ -98,10 +98,12 @@ export interface AppShellProps {
 
 /**
  * PD-SHELL-016 clause 5: below this window width the sidebar is drawn as the rail unless the user opened it. The figure
- * is the Workspace's own three-pane threshold (REQ-MONITOR-051's 1180 px) plus the width the open sidebar takes over the
- * rail, so the Workspace never loses its panes to the sidebar by default.
+ * is the width at which the open sidebar leaves the Workspace's transcript column what the rail left it at 1440: the
+ * sidebar's 232, the agents pane's 260 and the inspector's 300 from 1600 leave 808 px, against 792 with the rail at 1440.
+ * Below it the rail is the default, so the transcript and the composer never pay for the sidebar unless the user opens
+ * it (the 2026-11-14 critique's C-01: at 1440 an open sidebar cut the composer to 606 px and its chips to icons).
  */
-export const SIDEBAR_FOLD_BELOW = 1360;
+export const SIDEBAR_FOLD_BELOW = 1600;
 const narrowQuery = `(max-width: ${SIDEBAR_FOLD_BELOW - 1}px)`;
 function subscribeNarrow(onChange: () => void): () => void {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => undefined;

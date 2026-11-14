@@ -6,7 +6,7 @@ Four rules shape every section. **Fixed before free** (02 §4 step 2): list each
 
 ## Which slug, and how it is captured
 
-The slug is the surface's row in `docs/design/README.md` §7. `--views=` takes `ui-audit`'s numbers, the rail's order under `PD-SHELL-015`: 1 Overview, 2 Workspace, 3 Requirements, 4 Git, 5 Library, 6 Settings; or a view's identifier (`--views=overview,settings`), which does not move when the rail does. *(Until 2026-11-11 this read seven, with 3 Mission; Mission is not a view, and what it drew is the Overview's.)*
+The slug is the surface's row in `docs/design/README.md` §7. `--views=` takes `ui-audit`'s numbers, the navigation's order under `PD-SHELL-016` (until 2026-11-14 `PD-SHELL-015`'s, with Overview first): 1 Workspace, 2 Overview, 3 Requirements, 4 Git, 5 Library, 6 Settings; or a view's identifier (`--views=overview,settings`), which does not move when the rail does. *(Until 2026-11-11 this read seven, with 3 Mission; Mission is not a view, and what it drew is the Overview's.)*
 
 | Slug | §7 row | `--views=` | Not in the `ui-review` pack — reach it with `pnpm app:drive` |
 |---|---|---|---|

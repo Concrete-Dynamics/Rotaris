@@ -47,7 +47,9 @@
  * `--skip-build` skips the build.
  *
  * PD-SHELL-015, PD-MONITOR-009 (2026-11-11): the rail carries six views and Mission is none; the agent table a persona is
- * popped out from stands on the Overview, reached by Ctrl+1 where 13b and 13c pressed Ctrl+3.
+ * popped out from stands on the Overview, reached by Ctrl+2 where 13b and 13c pressed Ctrl+3.
+ * PD-SHELL-016 (2026-11-14): Workspace and Overview changed places, so the Overview is Ctrl+2 (it was Ctrl+1) and the
+ * Workspace Ctrl+1 (it was Ctrl+2); the window opens on the Workspace.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -90,7 +92,7 @@ const COMPOSER_FOCUSED = "document.activeElement?.classList.contains('composer__
 
 /**
  * Open `persona`'s window with the agent table's own Pop out (REQ-SHELL-072), on the row that agent has, as a click
- * known to have landed. PD-MONITOR-009 (2026-11-11): the table is a card of the Overview (Ctrl+1), where it was the
+ * known to have landed. PD-MONITOR-009 (2026-11-11): the table is a card of the Overview (Ctrl+2; Ctrl+1 until PD-SHELL-016), where it was the
  * Mission view's (Ctrl+3 then). Until 2026-10-06, 13b and 13c clicked the first `.agent-table__row .btn` reading Pop out straight
  * after that chord, and nothing checked the press: in the acceptance run of that day the provider notice filled the notice
  * slot between the driver's measurement and its press, the table moved 75 px down under it, no `window.openPersona`
@@ -158,13 +160,13 @@ try {
   const gitView = await d.waitFor('.app-shell[data-view="git"]', { timeoutMs: 10_000 }).then(() => true).catch(() => false);
   check('a click by name opens that view', gitView, `clicked "${clicked.text}" at ${clicked.x},${clicked.y}; the shell reports data-view="git"`);
 
-  // 5. A chord (REQ-SHELL-049: Ctrl+1 is Overview).
-  await d.chord('Ctrl+1');
+  // 5. A chord (REQ-SHELL-049: Ctrl+2 is Overview since PD-SHELL-016).
+  await d.chord('Ctrl+2');
   const overview = await d.waitFor('.app-shell[data-view="overview"]', { timeoutMs: 10_000 }).then(() => true).catch(() => false);
-  check('a chord reaches the shell', overview, 'Ctrl+1 returned the shell to Overview');
+  check('a chord reaches the shell', overview, 'Ctrl+2 returned the shell to Overview');
 
   // 6. Typing, into the control the product's own chord focuses (REQ-CHAT-002). No Enter: nothing is submitted.
-  await d.chord('Ctrl+2');
+  await d.chord('Ctrl+1'); // the Workspace: first view since PD-SHELL-016
   await d.waitFor('.composer__input', { timeoutMs: 10_000 });
   await d.chord('Ctrl+L');
   // The chord's focus is the product's to give, and it can come frames later (`focusComposer` retries after two); a
@@ -360,6 +362,9 @@ try {
   // shot straight after the click. Before the repair it returned the Overview's bytes in a fifth of launches or more.
   const overviewShot = join(output, 'shots', 'run-0-overview.png');
   const workspaceShot = join(output, 'shots', 'run-1-workspace.png');
+  // PD-SHELL-016 (2026-11-14): the window opens on the Workspace, so the Overview shot is taken after a click to the Overview.
+  await r.click('.nav-item', { text: 'Overview' });
+  await r.waitFor('.app-shell[data-view="overview"]', { timeoutMs: 10_000 });
   await r.screenshot(overviewShot);
   await r.click('.nav-item', { text: 'Workspace' });
   const firstPaint = await r.screenshot(workspaceShot);
@@ -399,8 +404,8 @@ try {
   check('the approval dialog is listed, probed and answered in its own window (REQ-TOOLS-063)', dialogListed !== null && dialogListed.role === 'approval' && answered.some((h) => /write_file/.test(h)) && existsSync(notes), `listed ${JSON.stringify(dialogListed)}; answered ${JSON.stringify(answered)}; NOTES.md ${existsSync(notes) ? 'written' : 'absent'}`);
 
   // 13b. The child's persona window, opened by the agent table's own Pop out, addressed and probed as a window.
-  // PD-MONITOR-009 / PD-SHELL-015: the table stands on the Overview, Ctrl+1 (it was the Mission view's, Ctrl+3).
-  await r.chord('Ctrl+1');
+  // PD-MONITOR-009 / PD-SHELL-015: the table stands on the Overview, Ctrl+2 (Ctrl+1 until PD-SHELL-016; it was the Mission view's, Ctrl+3).
+  await r.chord('Ctrl+2');
   // The table lists the delegated agents; `alpha`, of the coding-agent persona, is the one.
   const popped = await popOutPersona(r, 'coding-agent').catch((cause) => ({ error: cause instanceof Error ? cause.message : String(cause) }));
   const personaListed = popped.window ?? null;
@@ -469,8 +474,8 @@ try {
   await until(() => f.eval(COMPOSER_FOCUSED), (v) => v === true, { timeoutMs: 10_000, what: 'the composer holding focus' });
   await f.type('delegate one child and hold the run', { enter: true });
   await f.waitFor('[data-testid="run-header"][data-state="running"]', { timeoutMs: 30_000 });
-  // PD-MONITOR-009 / PD-SHELL-015: the agent table stands on the Overview, Ctrl+1 (it was the Mission view's, Ctrl+3).
-  await f.chord('Ctrl+1');
+  // PD-MONITOR-009 / PD-SHELL-015: the agent table stands on the Overview, Ctrl+2 (Ctrl+1 until PD-SHELL-016; it was the Mission view's, Ctrl+3).
+  await f.chord('Ctrl+2');
   const popped = await popOutPersona(f, 'coding-agent');
   check("13c: the child's Pop out, pressed on its settled row, landed and opened its persona window (REQ-SHELL-072)",
     popped.pressed.landed === true && popped.window?.role === 'persona',

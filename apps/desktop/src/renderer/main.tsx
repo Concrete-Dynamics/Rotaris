@@ -1528,7 +1528,9 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
       version={version}
       workspacePath={workspace}
       home={home}
-      sessionName={null}
+      // PD-SHELL-016 clause 5: the followed session is named in the title bar at every width (REQ-WORKSPACE-017's session half),
+      // so the folded rail never leaves the operator without it; the label is the session list's own.
+      sessionName={session ? sidebarRows.find((row) => row.sessionId === session.id)?.label ?? null : null}
       onChooseWorkspace={chooseWorkspace}
       statusItems={status}
       views={{

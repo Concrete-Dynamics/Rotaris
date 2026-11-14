@@ -7,7 +7,8 @@ paths:
 
 # Drawing a surface
 
-The design language is **adopted and authoritative**; its information architecture is **not**. Screens,
+The design language is **adopted and authoritative** — §1 as part 08 revises it (2026-11-14: planes, ruled sections,
+headings, the empty state) — and the design *material's* information architecture is **not**. Screens,
 order and tabs come from `docs/spec/` — `REQ-SHELL-023` governs — and `docs/design/mockup/` is read for
 craft only. Where the two disagree, the specification wins. `docs/design/README.md` §2 is the rule.
 

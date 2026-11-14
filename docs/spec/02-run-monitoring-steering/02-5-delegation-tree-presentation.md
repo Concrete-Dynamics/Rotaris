@@ -51,6 +51,10 @@ Part 2 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 
 **REQ-MONITOR-051** — Below a viewport width of 1180 px, choosing an agent opens the inspector as an overlay drawer that is mutually exclusive with the agents/todos drawer. The workspace must remain usable down to 1000×680.
 
+> **Narrowed by [`PD-SHELL-016`](../../product/directives/pd-shell-016.md#pd-shell-016), revision 2, 2026-11-14.** While the navigation
+> sidebar is open on the Workspace it holds the agents and the task plan, and the Workspace then has no agents/todos
+> drawer; the inspector's drawer and the 1000×680 floor stand as written.
+
 > **Narrowed by [`PD-MONITOR-008`](../../product/directives/pd-monitor-008.md#pd-monitor-008), 2026-11-03.** Workspace
 > compact mode's 1180 px is the view's own width, not the viewport's — the case the directive states; every other
 > sentence above still governs.

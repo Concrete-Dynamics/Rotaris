@@ -19,6 +19,13 @@ export interface ShellState {
    */
   readonly sidebarFolded: boolean | null;
   toggleSidebar: (foldedNow: boolean) => void;
+  /**
+   * PD-SHELL-016 clause 8 (revision 2): the open sidebar's dock — the element the Workspace draws its delegation pane into (the agents, the
+   * task plan, the project setup section) in place of its own left column. `null` while the sidebar is folded or not
+   * mounted; the Workspace then keeps the pane itself. The sidebar registers it; nothing else writes it.
+   */
+  readonly sidebarDock: HTMLElement | null;
+  setSidebarDock: (element: HTMLElement | null) => void;
   /** A category the Settings view should select next (a notice action, REQ-NOTIFY-223); consumed once. */
   readonly settingsCategory: string | null;
   openSettings: (category: string) => void;
@@ -153,6 +160,8 @@ export const useShellState = create<ShellState>((set, get) => ({
   activeView: STARTUP_VIEW,
   sidebarFolded: null,
   toggleSidebar(foldedNow) { set({ sidebarFolded: !foldedNow }); },
+  sidebarDock: null,
+  setSidebarDock(element) { if (get().sidebarDock !== element) set({ sidebarDock: element }); },
   improvementAnalysis: { active: false, pass: 'post_run' },
   setImprovementAnalysis(activity) { set({ improvementAnalysis: activity }); },
   switchView(id) {

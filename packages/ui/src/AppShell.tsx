@@ -97,13 +97,13 @@ export interface AppShellProps {
 }
 
 /**
- * PD-SHELL-016 clause 5: below this window width the sidebar is drawn as the rail unless the user opened it. The figure
- * is the width at which the open sidebar leaves the Workspace's transcript column what the rail left it at 1440: the
- * sidebar's 232, the agents pane's 260 and the inspector's 300 from 1600 leave 808 px, against 792 with the rail at 1440.
- * Below it the rail is the default, so the transcript and the composer never pay for the sidebar unless the user opens
- * it (the 2026-11-14 critique's C-01: at 1440 an open sidebar cut the composer to 606 px and its chips to icons).
+ * PD-SHELL-016 clause 5, as revision 2 sets its figure: below this window width the sidebar is drawn as the rail
+ * unless the user opened it. Open, the sidebar holds the Workspace's delegation pane (PD-SHELL-016 clause 8), so it costs the
+ * Workspace no column: at 1440 the transcript column is 1440 less the sidebar's 260 and the inspector's 300, 880 px,
+ * against 800 px beside the rail and the pane. The figure is the product's default window width, so a default window
+ * opens with the sidebar. (It stood at 1600 while the sidebar and the pane were two columns: the 2026-11-14 critique's C-01.)
  */
-export const SIDEBAR_FOLD_BELOW = 1600;
+export const SIDEBAR_FOLD_BELOW = 1440;
 const narrowQuery = `(max-width: ${SIDEBAR_FOLD_BELOW - 1}px)`;
 function subscribeNarrow(onChange: () => void): () => void {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => undefined;
@@ -157,6 +157,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
   const switchView = useShellState((s) => s.switchView);
   const sidebarFolded = useShellState((s) => s.sidebarFolded);
   const toggleSidebar = useShellState((s) => s.toggleSidebar);
+  const setSidebarDock = useShellState((s) => s.setSidebarDock);
   const narrow = useSyncExternalStore(subscribeNarrow, readNarrow, () => false);
   const folded = sidebarFolded ?? narrow;
   const paletteOpen = useShellState((s) => s.paletteOpen);
@@ -200,7 +201,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
         {notice && <NoticeBanner notice={notice} onAcknowledge={onAcknowledge} onAction={onAction} />}
       </div>
       <div className="body" {...layoutContractAttributes(SHELL_LAYOUT.body)}>
-        <NavRail items={railItems} groups={VIEW_GROUPS} active={activeView} onSelect={(id: ViewId) => switchView(id)} platform={platform} sessions={sidebarSessions} folded={folded} onToggleFold={toggleSidebar} />
+        <NavRail items={railItems} groups={VIEW_GROUPS} active={activeView} onSelect={(id: ViewId) => switchView(id)} platform={platform} sessions={sidebarSessions} folded={folded} onToggleFold={toggleSidebar} dockRef={setSidebarDock} />
         <main className="view" aria-label={active.label} {...layoutContractAttributes(SHELL_LAYOUT.view)}>
           {body ?? (
             <div className="view__empty">

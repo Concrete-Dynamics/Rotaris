@@ -31,7 +31,10 @@ export const ELLIPSIS = '…';
  */
 export function collapseHome(path: string, home: string | undefined): string {
   const full = path.trim();
-  const base = (home ?? '').trim().replace(/[\\/]+$/u, '');
+  // Trailing separators are cut by a scan, not by `/[\\/]+$/`: that expression backtracks quadratically on a long run of
+  // separators that does not end the string (CodeQL js/polynomial-redos, alert 119).
+  let base = (home ?? '').trim();
+  while (base.endsWith('/') || base.endsWith('\\')) base = base.slice(0, -1);
   if (full === '' || base === '') return full;
   const sep = base.includes('\\') ? '\\' : '/';
   const same = (a: string, b: string) => (sep === '\\' ? a.toLowerCase() === b.toLowerCase() : a === b);

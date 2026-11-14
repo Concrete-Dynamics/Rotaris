@@ -112,10 +112,10 @@ line labels and does not head: table columns, navigation groups.
 
 ## Layout
 
-A sidebar of 232 px (below 1600 px or when folded, a rail as wide as its longest label, about 80 px) beside one view. A view is inset once: 20 px above,
+A sidebar of 260 px (below 1440 px or when folded, a rail as wide as its longest label, about 80 px) beside one view. A view is inset once: 20 px above,
 24 px at the sides. Spacing is the 4 px scale. A region is a section — a hairline above, a heading, its content — and
-sections are separated by 20 px. The Workspace fills its region with three panes: agents, transcript and composer,
-inspector.
+sections are separated by 20 px. The Workspace fills its region: transcript and composer, and the inspector; its agents and task-plan pane is drawn in
+the open sidebar, and is the Workspace's own left column only while the sidebar is folded.
 
 ## Elevation & Depth
 

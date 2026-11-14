@@ -880,7 +880,9 @@ const s7 = scenario('settings');
   // 7b. Relaunched on the same scratch profile, no session focused and one listed: the graph card reads the strategy the file holds.
   // The card draws a dash until the configuration is read, so the reading is taken once the waited-for text has had its
   // 9 s to arrive; a card that never shows it is read all the same, and fails on what it shows.
+  // PD-SHELL-016 (2026-11-14): the window opens on the Workspace, so the launch names the Overview it reads.
   const r2 = await launch('settings-card', s7, {
+    ROTARIS_CAPTURE_VIEW: 'overview',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-strategy"]>>swarm@~9000',
     ROTARIS_CAPTURE_EVAL_AT: `${card}@9200`,
     ROTARIS_CAPTURE_AFTER_MS: '9600',

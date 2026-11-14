@@ -3086,8 +3086,10 @@ table, .mono { font-variant-numeric: tabular-nums; }
 /* The band's two-by-two form below 1080 px is written with the grid's own breakpoint, above. */
 .overview__left, .overview__right { gap: var(--rt-space-5); }
 
-/* Browser surfaces the palette had not reached: the caret, the selection, the scrollbar's hover. */
-:root { caret-color: var(--rt-accent-300); accent-color: var(--rt-accent-500); }
+/* Browser surfaces the palette had not reached: the scrollbar's hover. A rule that set `caret-color` and `accent-color`
+   on `:root` stood here for one build and is withdrawn: with it a proof's launch stopped presenting frames after a
+   navigation (`pnpm driver-proof`: paint confirmed 0 of 7, against 7 of 7 without it), and every step that waits two
+   frames ran seconds late (docs/defects/a-root-rule-setting-caret-color-and-accent-color-stops-a-proof-launch-presenting-frames.md). */
 ::-webkit-scrollbar-thumb:hover { background: var(--rt-boundary-strong); }
 
 /* A label that labels and does not head keeps the tracked form: the Settings list's groups, a plan's phases. */

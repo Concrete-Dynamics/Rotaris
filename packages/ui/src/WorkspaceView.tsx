@@ -1218,6 +1218,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   // PD-SHELL-016 clause 8 (revision 2): while the sidebar is open it offers a dock, and the delegation pane is drawn there instead of in this view's left column.
   const dock = useShellState((st) => st.sidebarDock);
   const docked = dock !== null;
+  // Docked, the pane stands under the followed session's row as its contents, so a part with nothing in it is not drawn: an
+  // empty "Agents" and an empty "Task plan" under a session that has neither describe nothing (the 2026-11-16 critique, E-11).
   const selectAgentShared = useShellState((st) => st.selectAgent);
   const select = (id: string | null, source?: 'click' | 'key') => { selectAgentShared(id); onSelectAgent?.(id, source); };
   /*
@@ -1423,7 +1425,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
       )}
       {(docked || !narrow || drawer === 'agents' || drawer === 'plan') && ((pane: ReactNode) => (dock !== null ? createPortal(pane, dock) : pane))(
         <aside className={`agents${docked ? ' agents--docked' : narrow ? ' agents--drawer' : ''}`} aria-label="Delegation">
-          {(docked || !narrow || drawer === 'agents') && <><div className="agents__header">
+          {(docked ? agents.length > 0 : !narrow || drawer === 'agents') && <><div className="agents__header">
             <span className="agents__title">Agents</span>
             <span className="agents__count mono" data-testid="agents-count">{agents.length} agent{agents.length === 1 ? '' : 's'}</span>
             <div className="agents__spacer" />
@@ -1438,7 +1440,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           </div>
           <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
           </>}
-          {(docked || !narrow || drawer === 'plan') && <TodoPane plan={todoPlan} onEdit={onEditTodo} onError={setError} />}
+          {(docked ? todoPlan !== null : !narrow || drawer === 'plan') && <TodoPane plan={todoPlan} onEdit={onEditTodo} onError={setError} />}
           {/*
             * Part AS — REQ-WORKSPACE-113's Project section, one of exactly two places manual re-initialization is
             * exposed (the other is Settings › Project) and both opening the same dialog. It never triggers

@@ -144,7 +144,8 @@ A surface fill, a hairline boundary at 3:1, 32 px high; the focus ring is the ac
 
 ### Navigation
 
-The sidebar: New session; Workspace, Overview; Sessions; Project — Requirements, Git, Library; Settings at the foot.
+The sidebar: New session; Workspace, Overview; Project — Requirements, Git, Library; Sessions, the followed one carrying
+the Workspace's agents and plan as its contents; Settings at the foot.
 A view button is 32 px, icon beside label; the active one carries an accent tint and an accent icon.
 
 ### Empty state

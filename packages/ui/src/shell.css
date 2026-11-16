@@ -126,7 +126,10 @@
   display: flex; border: 0; border-radius: var(--rt-radius-sm);
   background: transparent; color: var(--rt-text-secondary);
   cursor: pointer; font: inherit; white-space: nowrap;
-  transition: background var(--rt-duration-fast) var(--rt-ease-out), color var(--rt-duration-fast) var(--rt-ease-out);
+  /* No transition: which view is selected is a fact, and it is drawn in the frame that states it. A background transition here
+     stood stuck on the old view's button in a window that presented no further frame (the 2026-11-16 critique, E-01; measured:
+     two seconds after Ctrl+2 the old button computed the tint and the new one none). */
+  transition: none;
 }
 .nav-item i { font-size: var(--rt-icon-size); line-height: var(--rt-icon-size); width: var(--rt-icon-size); height: var(--rt-icon-size); flex: none; }
 .nav-item:hover { background: var(--rt-hover); color: var(--rt-text); }
@@ -160,12 +163,12 @@
   text-transform: uppercase; color: var(--rt-text-tertiary);
 }
 /* The list takes its rows' height and no more, and gives way first when the column is short; the project's views follow it and the spare height stands above Settings. */
-.nav-rail__sessions { display: flex; flex-direction: column; flex: 0 1 auto; min-height: var(--rt-control-height); }
+.nav-rail__sessions { display: flex; flex-direction: column; flex: none; }
 .nav-rail[data-folded='0'] .nav-rail__foot { margin-top: auto; }
 .nav-rail__sessions-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2); padding-right: var(--rt-space-2); }
 .nav-rail__sessions-head .nav-rail__heading { padding-bottom: var(--rt-space-1); }
 .nav-rail__all { font-size: var(--rt-text-2xs); min-height: 0; }
-.nav-rail__session-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: var(--rt-hairline-width); }
+.nav-rail__session-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-hairline-width); }
 .nav-session {
   display: grid; grid-template-columns: var(--rt-icon-size) minmax(0, 1fr); grid-template-areas: 'dot label' '. meta';
   align-items: center; column-gap: var(--rt-space-3); row-gap: 0;
@@ -3156,16 +3159,48 @@ table, .mono { font-variant-numeric: tabular-nums; }
  * Docked, it is no column of the Workspace's grid: the grid is the transcript column and the inspector. In the
  * sidebar the dock takes the height the fixed regions leave and scrolls; the sessions list gives way before it. */
 .workspace--with-sidebar.workspace--docked:not(.workspace--narrow) { grid-template-columns: 1fr auto; grid-template-areas: 'runhead inspector' 'reauth inspector' 'plangate inspector' 'transcript inspector' 'queue inspector' 'divider inspector' 'composer inspector'; }
-.nav-rail__dock { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.nav-rail__session-region { display: flex; flex-direction: column; flex: 1 1 0; min-height: var(--rt-space-16); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; padding-bottom: var(--rt-space-6); mask-image: linear-gradient(to bottom, black calc(100% - var(--rt-space-6)), transparent); }
+.nav-rail[data-folded='1'] .nav-rail__session-region { display: none; }
+/* The heading, and under it the followed session's row, hold their place while the region scrolls: what the operator is in is always named. */
+.nav-rail__session-region .nav-rail__sessions-head { position: sticky; top: 0; z-index: 2; background: var(--rt-chrome); }
+.nav-rail__session-list > li:has(> .nav-session[data-current='1']) { position: sticky; top: var(--rt-space-6); z-index: 1; background: var(--rt-chrome); }
+/* The dock is the followed session's contents: inset from its row behind a hairline guide, with no rule between the two. */
+.nav-session__children { margin-left: calc(var(--rt-space-2) + var(--rt-icon-size) / 2); border-left: var(--rt-hairline-width) solid var(--rt-border); padding-bottom: var(--rt-space-2); }
+.nav-session__children:has(.nav-rail__dock:empty) { display: none; }
+.nav-rail__dock { display: flex; flex-direction: column; flex: none; }
 .nav-rail__dock:empty { display: none; }
-.nav-rail__dock:not(:empty) { border-top: var(--rt-hairline-width) solid var(--rt-border); margin-inline: calc(-1 * var(--rt-space-2)); }
-/* Beside a filled dock the sessions keep their rows up to a third of the column and scroll past that; the dock takes the rest. */
-.nav-rail__views:has(.nav-rail__dock:not(:empty)) .nav-rail__sessions { flex: 0 0 auto; max-height: 33%; }
-.nav-rail__views:has(.nav-rail__dock:not(:empty)) .nav-rail__foot { margin-top: 0; }
-.agents--docked { border-right: 0; overflow: visible; flex: none; padding-inline: var(--rt-space-4); }
-.agents--docked .agents__header { margin-inline: calc(-1 * var(--rt-space-4)); padding-inline: var(--rt-space-4); border-bottom: 0; }
+.nav-rail__session-region > .nav-rail__dock:not(:empty) { border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+.agents--docked { border-right: 0; overflow: visible; flex: none; padding: var(--rt-space-1) 0 0 var(--rt-space-2); background: transparent; gap: var(--rt-space-1); }
+.agents--docked .agents__header { margin: 0; padding-inline: var(--rt-space-2); border-bottom: 0; }
 /* Docked, the pane's head is 228 px wide: the count stays beside the title on one line, and the selected agent's Steer and Cancel take a line of their own under it. */
 .agents--docked .agents__header { height: auto; min-height: var(--rt-space-10); flex-wrap: wrap; row-gap: 0; padding-block: var(--rt-space-1); }
 .agents--docked .agents__count, .agents--docked .agents__cancel { white-space: nowrap; }
 .agents--docked .agents__spacer { flex: 0 0 100%; height: 0; }
 .agents--docked .agents__cancel { padding-inline: var(--rt-space-2); margin-left: calc(-1 * var(--rt-space-2)); }
+/* C-07 (the first critique, docs/design/briefs/shell.md): the Library's two prompt columns are sections now and need the
+   gutter the boxes gave them, and a count stands beside its own heading so it cannot be read into the next column's. */
+.library-prompts > .library-card:first-child { padding-right: var(--rt-space-4); }
+.library-prompts > .library-card:last-child { padding-left: var(--rt-space-4); }
+.library-card__head { justify-content: flex-start; }
+.library-card__head > .card-meta { color: var(--rt-text-tertiary); }
+
+/* ── The dock after its critique (2026-11-16, docs/design/briefs/shell.md section 5) ── */
+/* E-07: under a session's row its parts are headed below the row's own label: the secondary ink at the caption size. */
+.agents--docked .agents__title, .agents--docked .todo-pane__title { font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.agents--docked .agents__header { min-height: var(--rt-control-height-compact); }
+.agents--docked .todo-pane { border-top: 0; padding-top: var(--rt-space-1); padding-inline: var(--rt-space-2); }
+.agents--docked .agents__project { padding-inline: var(--rt-space-2); }
+.agents--docked .agents__project .agents__header { padding-inline: 0; }
+/* E-08: a selected row is marked by its tint in every list of the column; no stripe (the Settings list lost its own to C-18). */
+.agent-row.is-selected, .mission__run-row.is-selected { border-left-color: transparent; }
+/* E-05: beside an open sidebar the composer's band is narrower than the window's width says, so it may wrap, and a control keeps its label on one line. */
+.workspace--docked .composer__actions { flex-wrap: wrap; }
+.composer__actions .btn { white-space: nowrap; }
+.nav-rail[data-folded='0'] .nav-rail__session-region { border-top: var(--rt-hairline-width) solid var(--rt-border); padding-top: var(--rt-space-3); }
+/* The followed row's disclosure: a quiet control at the row's right edge, over the row and not inside its button. */
+.nav-rail__session-list > li { position: relative; }
+.nav-session__toggle { position: absolute; top: var(--rt-space-1); right: 0; width: var(--rt-control-height-compact); height: var(--rt-control-height-compact); display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text-tertiary); cursor: pointer; }
+.nav-session__toggle:hover { background: var(--rt-hover); color: var(--rt-text); }
+.nav-session__toggle:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.nav-session[data-current='1']:has(+ .nav-session__toggle) { padding-right: var(--rt-space-6); }
+.nav-session__children[hidden] { display: none; }

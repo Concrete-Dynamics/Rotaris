@@ -81,3 +81,28 @@ The owner, asked whether the round both audits named as owed should be done now 
 **The proofs, on the docked build at the default 1440×900.** Green: `layout`, `overview`, `mission`, `settings`, `git`, `sessions`, `palette`, `chat-controls`, `slash`, `composer`, `skills`, `requirements`, `library`, `mcp`, `injection`, `checkpoint`, `sandbox`, `part-j`, `artifacts`, `retrospective`, `compression`. **Two went red because of the dock, and each was the proof's assumption, changed with its reason in the script:** `notice-proof` read "the released run is off screen" from the whole shell's text, which the sidebar's session list now holds by design, and reads the view's text instead; `transcript-proof`'s geometry launch planted a line that must wrap, which fits one line in the 880 px column, and now runs at 1360 px, where the sidebar is the rail. `mission-proof` and `part-j-proof` each went red once while the builder's own gate run competed for the processor, and green alone. `driver-proof` and `resilience-proof` are red on the two checks that are red on `main` on this host.
 
 **Not weighed by a critic.** The loop's three iterations were spent before this was built; the dock was looked at by its builder, by `pnpm ui-audit` and by the proofs.
+
+## 5. Audit 2026-11-16 — an independent critique of the dock, and the third revision
+
+**Evidence:** thirteen captures of the docked build (`f86c1b41` plus one scroll-region change) with three sessions of three agents each, at 1440×900, and with the sidebar opened by hand at 1100×720 and 1000×680; the captures before the dock for comparison. Read by an agent that had built none of it. **Score: 22 of 40**, against 25 for the build before the dock: the dock, as section 4 built it, made the column worse. Its measurements agreed with section 4's (sidebar 260 px, transcript column 880 px).
+
+| Id | Sev. | Finding | Answer |
+|---|---|---|---|
+| E-01 | P1 | After a keyboard switch the selection fill stood on the old view's button. | **Repaired, and real:** two seconds after Ctrl+2 the old button computed the tint and the new one none. A background transition on a view button stood stuck in a window presenting no further frame. The transition is removed. The "second, neutral fill" was the pointer's hover. |
+| E-02 | P1 | The column's strongest rule stood between the followed session and its own agents; nothing said whose agents they were. | **Repaired.** The dock is drawn under the followed session's row, inset behind a hairline guide, with no rule between the two. |
+| E-03 | P1 | Scrolling, or selecting an agent, moved the followed session and every heading out of view. | **Repaired.** The "Sessions" heading and the followed row hold their place while the region scrolls. |
+| E-04 | P1 | The plan and the setup section stood below the fold, with a scrollbar as the only sign. | **Partly.** The region fades at its foot where more lies below, the plan's head and count are in view at 1440×900 with three sessions, and the followed row's control puts the contents away. The setup section is still below the fold there. |
+| E-05 | P1 | At 1100 with the sidebar opened by hand, "Stop run" wrapped and "Queue" was clipped. | **Repaired.** Docked, the composer's band may wrap and a control keeps its label on one line. |
+| E-06 | P2 | The project's views stood 287 px lower on the Workspace than on other views. | **Repaired.** The five views stand first and in one place on every view; the sessions region is under them. |
+| E-07 | P2 | The dock's headings outranked "Sessions", whose contents they are. | **Repaired** for size and ink: under a session's row a part is headed at the caption size in the secondary ink. "Agent plan" over "SCRIPTED PLAN" is the plan pane's own and is left. |
+| E-08 | P2 | A selected agent carried a stripe and a tint beside a navigation selection of tint alone. | **Repaired.** Tint alone, in the tree and on the run row. |
+| E-09 | P2 | A cyan dot stood beside the word "running" on a session not followed. | **Repaired** in the word: such a row reads "running in background", as REQ-MONITOR-171's informational dot means. The two greens are one colour caught at two points of its pulse. |
+| E-10 | P2 | Steer and Cancel appear in the dock and in the inspector, in two styles. | **Open**, `proposed`. |
+| E-11 | P2 | At startup the dock stacked three empty statements about a session that does not exist. | **Repaired.** Docked, a part with nothing in it is not drawn. |
+| E-12 | P2, baseline | The setup failure is plain ink ending in a build command. | **Open**; the defect note stands. |
+| E-13 | P3 | The region's scrollbar drew the platform's arrows and cost label width. | **Repaired.** The product's own scrollbar, in a held gutter. |
+| E-14, E-15 | P3, baseline | The scope filter's hint touches its border; the start marker overlaps the first row. | **Open**; the second is a defect note. |
+
+**What the third revision costs,** as the directive states it: the followed session's contents push the sessions under it down, which the row's control undoes; and the sessions no longer stand directly under Workspace and Overview.
+
+**Not weighed by a critic.** The third revision was looked at by its builder in the captures and by the checks, and by no further critic. This surface has now had four critiques; a fifth is the owner's to ask for.

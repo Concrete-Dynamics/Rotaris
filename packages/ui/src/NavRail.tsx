@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import type { SessionListItemPayload, ViewGroup, ViewId } from '@rotaris/contracts';
 import { describeWithShortcut, type KeyboardPlatform } from './commands/registry.js';
 import { Button as DesignButton } from './design-system/index.js';
@@ -8,9 +8,9 @@ import { sessionDot } from './OverviewView.js';
  * The navigation sidebar (PD-SHELL-016), fed its views by the caller from REQ-SHELL-023's single definition and its
  * sessions from the caller's own `session.list` read.
  *
- * It has two forms and one markup. **Open**, it is a column of the sidebar's width: the start control; Workspace and
- * Overview, the two faces of the session in hand; under them the workspace's sessions; then, at the foot, the project's
- * views and Settings. **Folded**, it is the rail REQ-SHELL-027 described — one button per view, icon above label — with
+ * It has two forms and one markup. **Open**, it is a column of the sidebar's width: the start control; the views — Workspace
+ * and Overview, then the project's three under their heading — which stand in the same place on every view; under them
+ * the workspace's sessions, the followed one carrying the Workspace's dock as its contents; and Settings at the foot. **Folded**, it is the rail REQ-SHELL-027 described — one button per view, icon above label — with
  * one control under the start control that stands for the list and opens the browser. The window's width folds it
  * (`AppShell` resolves it, below `SIDEBAR_FOLD_BELOW`) and the fold control overrides the width either way.
  *
@@ -97,9 +97,10 @@ function ViewButton({ it, active, onSelect, platform }: { it: NavRailItem; activ
 }
 
 /** What stands under a session's label: what it is doing while that matters now, and otherwise when it last moved. */
-function sessionMeta(row: SessionListItemPayload): string {
+function sessionMeta(row: SessionListItemPayload, current: boolean): string {
   if (row.awaitingInput) return 'needs you';
-  if (row.busy) return 'running';
+  // A run this window does not follow carries REQ-MONITOR-171's informational dot, and its word says the same.
+  if (row.busy) return current ? 'running' : 'running in background';
   return row.relativeTime;
 }
 
@@ -118,6 +119,11 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
   const others = sessions ? sessions.rows.filter((row) => row.sessionId !== sessions.currentId) : [];
   const attention = others.some((row) => row.awaitingInput) ? 'needs' : others.some((row) => row.busy) ? 'running' : 'none';
   const followed = sessions ? sessions.rows.find((row) => row.sessionId === sessions.currentId) ?? null : null;
+  const dockHere = !folded && dockRef !== undefined;
+  // The followed session's contents can be put away, so the sessions under it are in reach without scrolling; the dock stays
+  // mounted (the Workspace draws into it) and is only not shown. Local to the window, like the fold.
+  const [contentsHidden, setContentsHidden] = useState(false);
+  const followedListed = sessions !== undefined && listed.some((row) => row.sessionId === sessions.currentId);
   const browseTitle = `List sessions${followed ? ` — following ${followed.label}` : ''}${attention === 'needs' ? '; another session needs you' : attention === 'running' ? '; another session is running' : ''}`;
   return (
     <nav className="nav-rail" aria-label="Primary" data-folded={folded ? '1' : '0'}>
@@ -136,52 +142,64 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
         </DesignButton>
       )}
       <div className="nav-rail__views" role="radiogroup" aria-label="Primary views">
-        {headed.map((g, index) => (
+        {headed.map((g) => (
           <Fragment key={g.id}>
             <div className="nav-rail__group" role="presentation" data-group={g.id}>
               {g.label !== null && <span className="nav-rail__heading" aria-hidden="true">{g.label}</span>}
               {members(g.id).map((it) => <ViewButton key={it.id} it={it} active={active} onSelect={onSelect} platform={platform} />)}
             </div>
-            {index === 0 && sessions && (
-              <>
-                <section className="nav-rail__sessions" aria-label="Sessions" data-testid="sidebar-sessions" data-state={sessions.state}>
-                  <header className="nav-rail__sessions-head">
-                    <span className="nav-rail__heading">Sessions</span>
-                    <DesignButton type="button" className="btn btn-link nav-rail__all" onClick={sessions.onBrowse} title="Open the session browser: search, repair, export and delete">List sessions</DesignButton>
-                  </header>
-                  {listed.length === 0
-                    ? <p className="nav-rail__sessions-empty" data-testid="sidebar-sessions-empty">{sessionsEmptySentence(sessions.state)}</p>
-                    : (
-                      <ul className="nav-rail__session-list">
-                        {listed.map((row) => {
-                          const current = row.sessionId === sessions.currentId;
-                          const dot = sessionDot(row, current);
-                          return (
-                            <li key={row.sessionId}>
-                              <DesignButton
-                                type="button" className="nav-session" data-session={row.sessionId} data-current={current ? '1' : '0'}
-                                aria-current={current ? 'true' : undefined}
-                                title={`${row.label} — ${sessionMeta(row)}`}
-                                onClick={() => sessions.onOpen(row.sessionId)}
-                              >
-                                <span className={`status-dot ov-dot--${dot.tone}${dot.pulse ? ' is-pulsing' : ''}`} aria-hidden="true" />
-                                <span className="nav-session__label">{row.label}</span>
-                                <span className="nav-session__meta">{sessionMeta(row)}</span>
-                              </DesignButton>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  {sessions.rows.length > listed.length && <p className="nav-rail__sessions-more">{sessions.rows.length - listed.length} more in List sessions.</p>}
-                </section>
-              </>
-            )}
-            {/* PD-SHELL-016 clause 8 (revision 2): the dock. The Workspace draws the followed session's agents, task plan and project setup here while
-                it is shown and the sidebar is open; empty, it takes no room. It stands under the sessions, whose followed row it belongs to. */}
-            {index === 0 && !folded && dockRef && <div className="nav-rail__dock" ref={dockRef} data-testid="sidebar-dock" />}
           </Fragment>
         ))}
+        {sessions && (
+          /* One scroll region for the sessions and the dock (PD-SHELL-016 clauses 3 and 8), under the views, which never move:
+             it takes the height the fixed regions leave. The heading and the followed row hold their place while it scrolls. */
+          <div className="nav-rail__session-region" role="presentation">
+            <section className="nav-rail__sessions" aria-label="Sessions" data-testid="sidebar-sessions" data-state={sessions.state}>
+              <header className="nav-rail__sessions-head">
+                <span className="nav-rail__heading">Sessions</span>
+                <DesignButton type="button" className="btn btn-link nav-rail__all" onClick={sessions.onBrowse} title="Open the session browser: search, repair, export and delete">List sessions</DesignButton>
+              </header>
+              {listed.length === 0
+                ? <p className="nav-rail__sessions-empty" data-testid="sidebar-sessions-empty">{sessionsEmptySentence(sessions.state)}</p>
+                : (
+                  <ul className="nav-rail__session-list">
+                    {listed.map((row) => {
+                      const current = row.sessionId === sessions.currentId;
+                      const dot = sessionDot(row, current);
+                      return (
+                        <Fragment key={row.sessionId}>
+                        <li>
+                          <DesignButton
+                            type="button" className="nav-session" data-session={row.sessionId} data-current={current ? '1' : '0'}
+                            aria-current={current ? 'true' : undefined}
+                            title={`${row.label} — ${sessionMeta(row, current)}`}
+                            onClick={() => sessions.onOpen(row.sessionId)}
+                          >
+                            <span className={`status-dot ov-dot--${dot.tone}${dot.pulse ? ' is-pulsing' : ''}`} aria-hidden="true" />
+                            <span className="nav-session__label">{row.label}</span>
+                            <span className="nav-session__meta">{sessionMeta(row, current)}</span>
+                          </DesignButton>
+                          {current && dockHere && (
+                            <DesignButton type="button" className="nav-session__toggle" data-testid="sidebar-dock-toggle" aria-expanded={!contentsHidden}
+                              aria-label={contentsHidden ? 'Show this session\'s agents and plan' : 'Hide this session\'s agents and plan'} title={contentsHidden ? 'Show this session\'s agents and plan' : 'Hide this session\'s agents and plan'}
+                              onClick={() => setContentsHidden(!contentsHidden)}>
+                              <i className={`ph ${contentsHidden ? 'ph-caret-right' : 'ph-caret-down'}`} aria-hidden="true" />
+                            </DesignButton>
+                          )}
+                        </li>
+                        {/* PD-SHELL-016 clause 8: the dock is the followed session's own contents, so it stands directly under that row, inset from it. */}
+                        {current && dockHere && <li className="nav-session__children" role="presentation" hidden={contentsHidden}><div className="nav-rail__dock" ref={dockRef} data-testid="sidebar-dock" /></li>}
+                        </Fragment>
+                      );
+                    })}
+                  </ul>
+                )}
+              {sessions.rows.length > listed.length && <p className="nav-rail__sessions-more">{sessions.rows.length - listed.length} more in List sessions.</p>}
+            </section>
+            {/* No followed session among the listed rows (none yet, or one past the twelfth): the dock stands under the list. */}
+            {dockHere && !followedListed && <div className="nav-rail__dock" ref={dockRef} data-testid="sidebar-dock" />}
+          </div>
+        )}
         {foot.length > 0 && (
           <div className="nav-rail__group nav-rail__foot" role="presentation" data-group="system">
             {foot.map((it) => <ViewButton key={it.id} it={it} active={active} onSelect={onSelect} platform={platform} />)}

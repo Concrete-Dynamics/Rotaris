@@ -386,9 +386,9 @@ describe('ui — the navigation sidebar (PD-SHELL-016)', () => {
     expect(markup).toContain('<span class="nav-session__meta">needs you</span>');
     expect(markup).toContain('<span class="nav-session__meta">2 h ago</span>');
     expect(markup).toContain('3 more in List sessions.');
-    // The list stands under the session views and above the project's, in the document as on screen.
-    expect(markup.indexOf('aria-label="Overview"')).toBeLessThan(markup.indexOf('data-testid="sidebar-sessions"'));
-    expect(markup.indexOf('data-testid="sidebar-sessions"')).toBeLessThan(markup.indexOf('aria-label="Requirements"'));
+    // The views stand first and never move; the list stands under them and above Settings, in the document as on screen.
+    expect(markup.indexOf('aria-label="Library"')).toBeLessThan(markup.indexOf('data-testid="sidebar-sessions"'));
+    expect(markup.indexOf('data-testid="sidebar-sessions"')).toBeLessThan(markup.indexOf('aria-label="Settings"'));
   });
 
   it('clause 5: the folded form\'s one sessions control names the followed session and the most urgent state of the others', () => {
@@ -413,6 +413,25 @@ describe('ui — the navigation sidebar (PD-SHELL-016)', () => {
     expect(draw({ folded: false, onToggleFold: () => undefined })).toContain('data-folded="0"');
     expect(draw({ folded: false, onToggleFold: () => undefined })).toContain('aria-label="Fold the sidebar" aria-expanded="true"');
     expect(draw({ folded: true, onToggleFold: () => undefined })).toContain('aria-label="Open the sidebar" aria-expanded="false"');
+  });
+
+  it('clause 8: open, the dock stands directly under the followed session\'s row; folded, or with no dock asked for, there is none', () => {
+    const rows = [row('a'), row('b', { busy: true })];
+    const open = draw({ sessions: { ...sessions(rows), currentId: 'b' }, dockRef: () => undefined });
+    expect(open).toContain('<span class="nav-session__meta">running</span>');
+    expect(open.indexOf('data-session="b"')).toBeLessThan(open.indexOf('data-testid="sidebar-dock"'));
+    expect(open).toContain('<li class="nav-session__children" role="presentation"><div class="nav-rail__dock" data-testid="sidebar-dock"></div></li>');
+    // The followed row, and only it, carries the control that puts its contents away.
+    expect(open.match(/data-testid="sidebar-dock-toggle"/g)).toHaveLength(1);
+    expect(open).toContain('data-testid="sidebar-dock-toggle" aria-expanded="true" aria-label="Hide this session&#x27;s agents and plan"');
+    // A run this window does not follow says so, as its dot does.
+    expect(draw({ sessions: { ...sessions(rows), currentId: 'a' }, dockRef: () => undefined })).toContain('<span class="nav-session__meta">running in background</span>');
+    // No followed row among those listed: the dock stands under the list, not inside it.
+    const none = draw({ sessions: { ...sessions(rows), currentId: null }, dockRef: () => undefined });
+    expect(none).toContain('data-testid="sidebar-dock"');
+    expect(none).not.toContain('nav-session__children');
+    expect(draw({ sessions: sessions(rows), dockRef: () => undefined, folded: true })).not.toContain('sidebar-dock');
+    expect(draw({ sessions: sessions(rows) })).not.toContain('sidebar-dock');
   });
 
   it('with no sessions handed to it, draws its views alone', () => {

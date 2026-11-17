@@ -270,7 +270,7 @@ describe('preflight — a proof id', () => {
 
   it('every requirement the registry holds has a check or its own note', () => {
     const kinds = [...new Set(PROOFS.flatMap((p: { requires: string[] }) => p.requires))].sort();
-    expect(kinds).toEqual(['a Rust toolchain (`cargo`)', 'a packaged build for `--packaged`', 'a registered endpoint with a stored key', 'code-intelligence bundle']);
+    expect(kinds).toEqual(['a Rust toolchain (`cargo`)', 'a built AppImage under `apps/desktop/release/` (`pnpm package` on Linux), or `--appimage=<path>`', 'a packaged build for `--packaged`', 'a registered endpoint with a stored key', 'code-intelligence bundle']);
     const store = { file: 'C:/fake/endpoints.json', registry: () => ({ default: 'k', endpoints: { k: { label: 'K', model: 'm' } } }), hasKey: () => true };
     for (const p of PROOFS as Array<{ id: string }>) {
       const checks = proofChecks(p.id, { bundle: { ok: true }, getStore: () => store, env: {}, cargo: () => ({ status: 0, stdout: 'cargo 1.99.1' }) });

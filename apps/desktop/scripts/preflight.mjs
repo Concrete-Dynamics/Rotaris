@@ -438,6 +438,7 @@ export function proofChecks(id, { platform = process.platform, bundle = { ok: tr
         : { name: id, status: 'fail', message: 'requires a Rust toolchain — `cargo --version` did not answer: install Rust (rustup) and put cargo on PATH' });
     }
     else if (requirement.startsWith('a packaged build for ')) checks.push({ name: id, status: 'note', message: `${requirement} — needed only when the run passes that flag (pnpm package builds it)` });
+    else if (requirement.startsWith('a built AppImage ')) checks.push({ name: id, status: 'note', message: `${requirement} — pnpm package on a Linux host writes it; the proof names the file it measured` });
     else checks.push({ name: id, status: 'note', message: `no check exists for this record's requirement: "${requirement}"` });
   }
   if (checks.length === 0) checks.push({ name: id, status: 'pass', message: 'nothing beyond the standard harness' });

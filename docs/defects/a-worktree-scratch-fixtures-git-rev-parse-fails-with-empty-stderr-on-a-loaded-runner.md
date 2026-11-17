@@ -15,10 +15,12 @@ Error: git rev-parse HEAD in D:\a\_temp\worktree-tools-rzXL3J\primary failed:
 The message carries an empty stderr: `git rev-parse HEAD` answered with a non-zero status and said nothing.
 `scratchRepo()` has just made the `primary` clone and committed `fixture` into it, so `HEAD` exists by
 construction; a later `rev-parse` failing with no message is not a repository-state failure the fixture can
-explain. The same head passed the suite in the sibling job on the same commit (`✓ tools/worktree/overlaps.test.ts
-(7 tests)`, 10.4 s and 8.5 s), and the file runs green alone on this host and in this worktree (7/7, 0.7 s), so
-the class is an intermittent failure of the fixture's scratch directory under a loaded runner and not a
-regression in `tools/worktree/`.
+explain. The same head passed the suite when that job was rerun — attempt 2 of run `43074654228`, gate job
+`130721624064` (`✓ tools/worktree/overlaps.test.ts (7 tests)`, 10.4 s and 8.5 s) — and the sibling job on the same
+commit, `gate (pnpm check)` of the `push` run `43074643300` (job `130711161167`), passed it in 7,478 ms and
+6,142 ms. The file also runs green alone on this host and in this worktree (7/7, 0.7 s), so the class is an
+intermittent failure of the fixture's scratch directory under a loaded runner and not a regression in
+`tools/worktree/`.
 
 Recorded rather than repaired: the cause was not found, and this note does not name one. What is evidenced is
 the shape — a temp-directory fixture, a spawned `git`, an empty stderr, one job red and its sibling green on

@@ -11,7 +11,8 @@ The Linux AppImage against three of the four acceptance criteria of
   whether the loader lists `libfuse.so.2` and whether `dpkg` has ever seen `libfuse2` or `libfuse2t64`. Only a host
   that reads "never had it" discharges AC-1; anywhere else the proof says the launch does not.
 - **AC-2** — the time from the spawn to the application's own "main window 1 shown" line, against REQ-STARTUP-155's
-  five seconds.
+  five seconds, over five launches, each reported with the load average at its spawn. Two readings: the strict one
+  (every launch inside the bound) and the median, which the exit status follows.
 - **AC-4** — a second launch on the same account exits 0 without claiming an instance, and the first logs the
   hand-over (REQ-STARTUP-164).
 

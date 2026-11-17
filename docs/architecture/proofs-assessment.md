@@ -197,7 +197,7 @@ What the numbers say:
    its runs were red. Part of that red is the known baseline: `main` is red on
    `packages/agent-tools/src/terminal/terminal.test.ts` (four real-PTY cases under load; see
    [the PTY flake note](../defects/the-pty-process-death-assertions-flake-on-a-loaded-host.md) and
-   [the Windows gate note](../defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md)). A
+   [the Windows gate note](../archive/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md)). A
    gate that is red on `main` turns every agent's "is this mine?" into a review step. **Making the baseline green is
    the cheapest time lever available, and it weakens nothing.**
 2. **Selection matters more than existence.** A typical change lands with 2–10 proofs (5–28 min), and only

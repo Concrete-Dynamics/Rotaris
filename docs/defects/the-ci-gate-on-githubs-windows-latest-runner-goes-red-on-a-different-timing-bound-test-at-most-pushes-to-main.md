@@ -22,7 +22,7 @@ Every one of these heads passed the same `pnpm check` green on the landing host 
 landing's own gate, 7 to 9 minutes idle), so the product under test is not what differs: the GitHub-hosted runner is
 two cores with a slower disk, the test stage runs its process-bound cases (git subprocesses, the landing's scratch
 repositories, PTY and child deaths) against fixed bounds, and the log also carries `Error: AttachConsole failed` lines
-from child processes on that runner. The shape is the one `docs/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md`
+from child processes on that runner. The shape is the one `docs/archive/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md`
 records for a loaded local tree, now on the hosted runner at every push, so the CI gate currently reports nothing an
 operator can read without opening the run: a red that means "a timing test" and a red that means "the product" look the
 same. Not repaired here: the acceptance plan hrda reads the runs since this note and decides whether the bounds, the
@@ -37,4 +37,4 @@ None contradicted. R-079 decided the CI workflow (docs/product/requests.md#r-079
 - `.github/workflows/ci.yml` — the gate job (`pnpm check` on `windows-latest`, 90-minute timeout) and the coverage step beside it.
 - `packages/workspace/src/git/checkpoints.test.ts` — the REQ-GIT-034/003 case red at 393cd271.
 - `tools/worktree/land.test.ts` — the re-rebase case red at 747b3911.
-- `docs/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md` — the same shape on a loaded local tree.
+- `docs/archive/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md` — the same shape on a loaded local tree.

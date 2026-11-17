@@ -65,15 +65,15 @@ so their presence alone is not the cause and whether they mark the same moment i
 not yet let go of, or a reading taken before a loaded host has finished — but only two of the sites have a note:
 
 - `mcp.test.ts:333`'s rename is
-  [the stubborn-runner case](the-stubborn-runner-case-renames-its-workspace-before-windows-releases-the-closed-trees-handle.md),
+  [the stubborn-runner case](../../defects/the-stubborn-runner-case-renames-its-workspace-before-windows-releases-the-closed-trees-handle.md),
   whose own suggestion that a handle a terminated process held is not always released by the time `close()` resolves
   fits this red as well; the EPERM at `mcp.test.ts:48` is the same complaint one step earlier, on the scratch directory
   itself, and is not named in that note.
 - `terminal.test.ts:1750` is
-  [the PTY process-death assertions](the-pty-process-death-assertions-flake-on-a-loaded-host.md), which records this
+  [the PTY process-death assertions](../../defects/the-pty-process-death-assertions-flake-on-a-loaded-host.md), which records this
   exact assertion reading `[true, false]` on Windows and `[false, true]` on another attempt of one run.
 - `terminal.test.ts:2008` fails in the neighbourhood of
-  [the PowerShell shell-exit case](the-powershell-shell-exit-case-exceeds-its-bound-under-full-gate-load.md) — same
+  [the PowerShell shell-exit case](../../defects/the-powershell-shell-exit-case-exceeds-its-bound-under-full-gate-load.md) — same
   file, same real-ConPTY family, same under-load timing — but that note is about a wall-clock bound being exceeded with
   the reading correct, and here the reading itself (no `exit_code` in the diagnostic block) is what is wrong. Nothing
   in that note covers it.
@@ -85,7 +85,7 @@ not yet let go of, or a reading taken before a loaded host has finished — but 
   in the listen backlog and is served once `spawnSync` returns — and the leg waits
   `spawnSync(…, { timeout: 20_000 })` on a child whose own fetch aborts at 1,500 ms. What an empty stdout means — the
   child killed rather than reaching its fetch's end, or its output lost — is not decided by this log. The repaired note
-  [the recording proxy could not answer a single call, because `spawnSync` blocked the loop it listened on](../archive/defects/the-recording-proxy-could-not-answer-while-spawnsync-blocked.md)
+  [the recording proxy could not answer a single call, because `spawnSync` blocked the loop it listened on](the-recording-proxy-could-not-answer-while-spawnsync-blocked.md)
   is a **different** defect (the recorder itself was inert under `spawnSync`, since repaired); this is the case that
   pins that arrangement going red on a loaded runner.
 - `runs.test.ts:201` and `setup at 77` had **no note at all** before this one. Those three sites are this note's new
@@ -146,15 +146,15 @@ touch, and none repeated in that day's gates.
   run only because that run ended on a different red: this case did not fail again.
 - `packages/agent-tools/src/terminal/terminal.test.ts`, "PD-TOOLS-001 (OQ-134): a reset restores the snapshot of the last command
   the product saw complete": `expected 93106.2667 to be less than 93050.296`, a timing reading. The case is named in
-  [the repaired note on the restored variable](../archive/defects/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md), which is
+  [the repaired note on the restored variable](a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md), which is
   about a different reading.
 - `packages/agent-tools/src/terminal/terminal.test.ts`, "REQ-TOOLS-098/100/103 (OQ-144): a soft-paused command that ends the shell
   is handed over by the poll as an execution_error": `expected 'soft_pause' not to be 'soft_pause'`. The case comes from
-  [the repaired note on a command that exits the shell](../archive/defects/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md);
+  [the repaired note on a command that exits the shell](a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md);
   this is its reading going red under the gate's load, not shown to be that defect back. Green on the next run of the same head.
 
 The same day's other reds were at recorded sites: `runs.test.ts`'s `-2` collision, `setup at 77`, the soft-paused kill family, the
-shell-exit bound, and [the fork worker's exit](a-vitest-fork-worker-exits-unexpectedly-during-the-gate-and-its-test-file-goes-unreported.md),
+shell-exit bound, and [the fork worker's exit](../../defects/a-vitest-fork-worker-exits-unexpectedly-during-the-gate-and-its-test-file-goes-unreported.md),
 which came three times. No cause was found for any of the four; nothing was repaired.
 
 *Seen again 2026-11-01, later that day* (the same host, `pnpm worktree:land`'s gate on `claude/fix-instance-reclaim-pd-startup-009-ad2d06`'s
@@ -203,6 +203,8 @@ tree not reinstalled when the rebased head adds a dependency). The seventh attem
 shell-exit case of its own note, 1 of 7,779; `terminal.test.ts` alone straight after at 97 % CPU: Tests 93 passed | 42 skipped (135). Another attempt
 follows this note.
 
+**Repaired 2026-11-17, on the owner's word ("please fix the flake").** The real-process suites — the PTY, scratch-repository, stdio-child and recording-proxy files, every site named above among them — run as a Vitest project of their own, one file at a time, after every other file has finished (`REAL_PROCESS_SUITES` in `vitest.config.ts`). Nothing is retried and no bound is widened. On the hosted Windows runner the gate was then green four times of four on one head (runs `44108565319` and `44108581879`, two attempts each), where the same day's gates on four other branches were red eleven times of sixteen. That is a count, not a proof: a site that goes red again while it runs alone is a defect of its own case, and gets a note of its own. The cost: the gate job takes 18 to 21 minutes where it took about 13.
+
 ## Specs
 
 None contradicted on this evidence. The failures are the harness's readings and its bounds: `REQ-MCP-066`/`REQ-MCP-067`
@@ -210,7 +212,7 @@ ask that a close end the server's process tree (which the passing runs show), an
 `REQ-GIT-140`, `REQ-GIT-141` and `REQ-TRACE-498` ask for the `-2` suffix, the derived directory, the base read-back and
 the read-back of the provisioned tree — none of which the failing assertion shows to be wrong, because it does not say
 what `provisionUnitWorktree` refused. The gate itself is development tooling no requirement governs
-([R-079](../product/requests.md#r-079)); if one of the new reds does turn out to be a product fault rather than an early
+([R-079](../../product/requests.md#r-079)); if one of the new reds does turn out to be a product fault rather than an early
 reading, those requirements are where it would land.
 
 ## Relevant files
@@ -273,13 +275,13 @@ And `main` itself was red twice on its **unchanged** head `6b521dc6`: job `12815
 `128256342101` (a `gh run rerun --failed`) on the `EBUSY` rename in `packages/mcp/src/mcp.test.ts:359` (the
 stubborn-runner case) — a different file each time, neither touched by the head. Two more sites the same night: job
 `128268183066` on head `067ce107` was **wholly green in its tests** (`557 passed`, `7949 passed`) and fell only on
-`Errors 1 error`, `Error: [vitest-pool]: Worker forks emitted error` — [the worker exit](a-vitest-fork-worker-exits-unexpectedly-during-the-gate-and-its-test-file-goes-unreported.md)
+`Errors 1 error`, `Error: [vitest-pool]: Worker forks emitted error` — [the worker exit](../../defects/a-vitest-fork-worker-exits-unexpectedly-during-the-gate-and-its-test-file-goes-unreported.md)
 family; and job `128267160826` on head `98c3cfae` was a **typecheck** failure, ~40 `TS2694`/`TS2339` reading
 `node_modules/typescript/lib/version` as if it were the compiler's API (a non-deterministic `tsc` resolution, not the
 diff). The two chronic Windows sites this note holds (the PTY process-death assertions and the stubborn-runner
 `EBUSY` rename) are the two that recurred on `main`. First slice repaired 2026-11-07 (branch
 `fix/gate-flake-softpaused-death`): the PTY suite's death reading is now the `/proc`-aware one
-[the PTY note](the-pty-process-death-assertions-flake-on-a-loaded-host.md) already named, with a case that pins the reading.
+[the PTY note](../../defects/the-pty-process-death-assertions-flake-on-a-loaded-host.md) already named, with a case that pins the reading.
 The `EBUSY`, worker-exit and typecheck families stay open.
 
 **Seen again 2026-11-12, on a dictation-settings branch, in the same push/pull_request shape** (the hosted Windows
@@ -292,6 +294,6 @@ a **sixth site**, in a file the head does not touch:
 
 `Test Files 1 failed | 579 passed | 5 skipped (585)`, `Tests 1 failed | 8295 passed | 136 skipped (8432)`. The failed job
 was re-run with `gh run rerun --failed`; the branch's own gate on the same head was green in three of five local runs,
-the two reds being [the handshake-cancel flake](a-cancel-during-the-first-calls-handshake-can-read-as-cancelled-before-the-command-completed.md).
+the two reds being [the handshake-cancel flake](../../defects/a-cancel-during-the-first-calls-handshake-can-read-as-cancelled-before-the-command-completed.md).
 
 **Seen again 2026-11-17 on `feat/r-101-experience-redesign`, a branch that touches no terminal code:** at `5870c470` the soft-pause case read `expected 'execution_error' to be 'soft_pause'` (REQ-TOOLS-098/179, A10), and at `0b01d0f5` the hard-timeout reset read `reset at 64: … to contain 'were restored'`. One failed test of 8439 each time; both on the `pull_request` gate, while the `push` gate on the same head was green.

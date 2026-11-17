@@ -21,7 +21,7 @@ app" names as the reason the driver's `waitFor` exists ("fixed offsets have prod
 
 - `apps/desktop/scripts/layout-proof.mjs` — step 4, the `sleep(700)` before the "1400×900 again" check.
 - `apps/desktop/scripts/lib/driver.mjs` — `until`, the bounded wait the step takes instead.
-- `docs/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md` — the same day's loaded-host readings
+- `docs/archive/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md` — the same day's loaded-host readings
   of the unit gate.
 
 ## Outcome — repaired 2026-11-04 (the Overview audit's execution branch, with the landing it stopped)

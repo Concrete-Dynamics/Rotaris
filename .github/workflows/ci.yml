@@ -269,3 +269,104 @@ jobs:
             apps/desktop/resources/code-intelligence/bundle.json
           if-no-files-found: warn
           retention-days: 14
+
+  # R-104, ADR-0066: the Linux artifacts built on the base REQ-STARTUP-025 names, and the AppImage held to the ADR's
+  # acceptance criteria on a host this workflow did not prepare for it — no FUSE library is installed here, and the
+  # proof reads whether the runner has or ever had one before it counts the launch for AC-1.
+  package-linux:
+    name: package (linux-x86_64, development)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      # R-079: a development package until the notices inputs exist (see the header).
+      ROTARIS_PACKAGE_WITHOUT_NOTICES: '1'
+    steps:
+      - name: Git settings for this tree
+        run: |
+          git config --global user.name 'Rotaris CI'
+          git config --global user.email 'ci@rotaris.invalid'
+          git config --global init.defaultBranch main
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `pnpm build-id` reads the commit and the tree's state (REQ-SHELL-140).
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Electron runtime
+        run: node node_modules/electron/install.js
+
+      # What AC-1 turns on, read before anything is built: whether this runner has, or ever had, libfuse.so.2.
+      - name: The runner's FUSE libraries, as found
+        run: |
+          cat /etc/os-release | head -4
+          ldconfig -p | grep -i fuse || echo 'the loader lists no fuse library'
+          dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' 'libfuse*' 'fuse*' 2>/dev/null || echo 'dpkg knows no fuse package'
+
+      - name: Code-intelligence runtime (linux-x64)
+        run: pnpm code-intel:bundle --target=linux-x64
+
+      # The load proof launches Electron, which needs a display; xvfb gives it one.
+      - name: pnpm package
+        run: xvfb-run -a pnpm package
+
+      - name: Name, size and digest of what was produced
+        if: success()
+        run: |
+          {
+            echo '| artifact | bytes | sha256 |'
+            echo '|---|---|---|'
+            for f in apps/desktop/release/Rotaris-*-linux-x86_64.AppImage apps/desktop/release/Rotaris-*-linux-x86_64.deb; do
+              echo "| \`$(basename "$f")\` | $(stat -c %s "$f") | \`$(sha256sum "$f" | cut -d' ' -f1)\` |"
+            done
+            echo ''
+            echo 'A development package (no notices file), not a release: R-079.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ADR-0066 AC-1, AC-2 and AC-4 on this runner; the report says whether the runner's FUSE reading lets AC-1 count.
+      - name: The AppImage's acceptance criteria (ADR-0066)
+        if: success()
+        run: |
+          xvfb-run -a node apps/desktop/scripts/linux-acceptance-proof.mjs --out=apps/desktop/release/linux-acceptance.json
+          {
+            echo '### ADR-0066 on this runner'
+            echo '```json'
+            node -e "const r=require('./apps/desktop/release/linux-acceptance.json');console.log(JSON.stringify({host:r.host,fuse2:r.fuse2,criteria:r.criteria},null,2))"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the Linux artifacts
+        if: success()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-x86_64-development-artifacts
+          path: |
+            apps/desktop/release/Rotaris-*-linux-x86_64.AppImage
+            apps/desktop/release/Rotaris-*-linux-x86_64.deb
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload the package evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-x86_64-package-evidence
+          path: |
+            apps/desktop/release/load-proof.json
+            apps/desktop/release/load-proof.afterpack.json
+            apps/desktop/release/linux-acceptance.json
+            apps/desktop/release/electron-builder.package.linux.yml
+            apps/desktop/resources/code-intelligence/bundle.json
+          if-no-files-found: warn
+          retention-days: 14

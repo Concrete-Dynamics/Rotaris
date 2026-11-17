@@ -112,3 +112,5 @@ That outcome SHALL be reported, and it is the one preparation outcome that is: o
 > withdrawn a release publishes for `windows-x64` alone, so the gate exercises that one key rather than three.
 > A download surface reached from macOS or Linux states that this release publishes no build for that platform
 > and offers none. Everything this requirement says about Windows ARM64 and Intel macOS still holds.
+
+> **Narrowed by [`PD-STARTUP-013`](../../product/directives/pd-startup-013.md#pd-startup-013), 2026-11-17.** A release publishes `linux-x86_64` beside `windows-x64`; what the directive above says of Linux holds of `macos-arm64` alone since then.

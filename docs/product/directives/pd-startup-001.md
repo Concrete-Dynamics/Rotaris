@@ -40,6 +40,8 @@ builds "failed". That would be false, and it would read as a broken pipeline. Wh
 - **Withdrawal is a directive of its own.** It is not a quiet change to the pipeline, and it lands only once IC-3
   and IC-8 are discharged.
 
+**Since 2026-11-17** [`PD-STARTUP-013`](pd-startup-013.md#pd-startup-013) publishes `linux-x86_64` beside `windows-x64`, and takes this directive's place for that key: the platform set, the matrix, the body's line and the gate. This directive stands for `macos-arm64`, and its case on the four requirements below is disjoint from that directive's by platform key.
+
 > **Narrows:** REQ-STARTUP-026, REQ-STARTUP-030, REQ-STARTUP-035, REQ-STARTUP-156
 
 *Raised by the owner, 2026-09-25; logged as [R-051](../requests.md#r-051).*

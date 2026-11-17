@@ -1,63 +1,63 @@
 {
-  "$comment": "REQ-STARTUP-143: the maintainer-review table of reviewed exceptions, read by tools/notices/notices.mjs. An entry lets a shipped dependency that carries no license text pass notices validation; a licence file that only names the licence, only points elsewhere for it (Apache-2.0's per-file notice, MPL-2.0's Exhibit A, 'See the LICENSE file'), or only attributes (NOTICE, AUTHORS) is not license text, and is still reproduced beside the entry (OQ-75). Each entry carries: component (the name as the notices file prints it), versions (an exact version, or space-separated comparators such as \">=1.0.0 <2.0.0\"), license (the identifier claimed for it), whyNoText (why no license text is obtainable), reviewer (the maintainer who reviewed it), reviewedOn and expires (YYYY-MM-DD, the review not after the day the generator runs, the expiry at most 365 days after the review). An entry covers a dependency only while its version is inside the range and the expiry has not passed; otherwise it is treated as no entry at all. Adding an entry is a reviewed change made by a maintainer, never by the generator or an agent. Two optional parts of such an entry (OQ-75, 2026-10-23): licenseText, {file, source}, the claimed licence's text as the reviewer obtained it outside the component, kept under tools/notices/licenses/ verbatim and held to the identifier by LICENSE_TEXT_CHECKS in notices.mjs; and embedded, a list of {work, license, file}, the licence of a separately licensed work the component vendors, read from the installed component at file. Both are reproduced under their own heading and neither counts as the component's own licence text. A second kind of entry (OQ-74, 2026-10-23), with covers \"identifier\", supplies the identifier of a dependency that ships its licence text and declares none: it carries whyNoIdentifier and licenseFile (the shipped file, as the component's licence files name it, which must be that licence's text) in place of whyNoText, and covers neither a missing text nor a declared identifier. The entries reviewed 2026-10-23 were written by an agent on the owner's delegation, as their reviewer field says (docs/architecture/open-questions.md, OQ-74 and OQ-75; first-release-plan.md section 6, O-11).",
+  "$comment": "REQ-STARTUP-143: the maintainer-review table of reviewed exceptions, read by tools/notices/notices.mjs. An entry lets a shipped dependency that carries no license text pass notices validation; a licence file that only names the licence, only points elsewhere for it (Apache-2.0's per-file notice, MPL-2.0's Exhibit A, 'See the LICENSE file'), or only attributes (NOTICE, AUTHORS) is not license text, and is still reproduced beside the entry (OQ-75). Each entry carries: component (the name as the notices file prints it), versions (an exact version, or space-separated comparators such as \">=1.0.0 <2.0.0\"), license (the identifier claimed for it), whyNoText (why no license text is obtainable), reviewer (the maintainer who reviewed it), reviewedOn and expires (YYYY-MM-DD, the review not after the day the generator runs, the expiry at most 365 days after the review). An entry covers a dependency only while its version is inside the range and the expiry has not passed; otherwise it is treated as no entry at all. Adding an entry is a reviewed change made by a maintainer, never by the generator or an agent. Two optional parts of such an entry (OQ-75, 2026-10-23): licenseText, {file, source}, the claimed licence's text as the reviewer obtained it outside the component, kept under tools/notices/licenses/ verbatim and held to the identifier by LICENSE_TEXT_CHECKS in notices.mjs; and embedded, a list of {work, license, file}, the licence of a separately licensed work the component vendors, read from the installed component at file. Both are reproduced under their own heading and neither counts as the component's own licence text. A second kind of entry (OQ-74, 2026-10-23), with covers \"identifier\", supplies the identifier of a dependency that ships its licence text and declares none: it carries whyNoIdentifier and licenseFile (the shipped file, as the component's licence files name it, which must be that licence's text) in place of whyNoText, and covers neither a missing text nor a declared identifier. The entries reviewed 2026-10-23 were written by an agent on the owner's delegation, as their reviewer field says (docs/architecture/open-questions.md, OQ-74 and OQ-75; first-release-plan.md section 6, O-11). The six Vercel AI SDK entries were reviewed again on 2026-11-17 for the versions a dependency update brought, by an agent on the owner's delegation given that day (docs/product/requests.md, R-103).",
   "exceptions": [
     {
       "component": "@ai-sdk/gateway",
-      "versions": "4.0.74",
+      "versions": "4.0.135",
       "license": "Apache-2.0",
-      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/34f3b7991f16451e6fd84ba5dc39f9c0b20b0514/LICENSE) and no copy of the full license text.",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0 and is byte for byte the notice reviewed for 4.0.74 on 2026-10-23 (sha256 b4f9adb7c5689048, first sixteen digits); the project's repository carries the same notice on its main branch (https://github.com/vercel/ai/blob/fe1b382b8e02f3e0bfd9939fb46b74a433a29a87/LICENSE) and no copy of the full license text.",
       "licenseText": {
         "file": "tools/notices/licenses/Apache-2.0.txt",
         "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
       },
-      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
-      "reviewedOn": "2026-10-23",
-      "expires": "2027-10-23"
+      "reviewer": "Claude (agent, claude-fable-5-2), on the owner's delegation, 2026-11-17",
+      "reviewedOn": "2026-11-17",
+      "expires": "2027-11-17"
     },
     {
       "component": "@ai-sdk/openai",
-      "versions": "4.0.58",
+      "versions": "4.0.108",
       "license": "Apache-2.0",
-      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/34f3b7991f16451e6fd84ba5dc39f9c0b20b0514/LICENSE) and no copy of the full license text.",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0 and is byte for byte the notice reviewed for 4.0.58 on 2026-10-23 (sha256 b4f9adb7c5689048, first sixteen digits); the project's repository carries the same notice on its main branch (https://github.com/vercel/ai/blob/fe1b382b8e02f3e0bfd9939fb46b74a433a29a87/LICENSE) and no copy of the full license text.",
       "licenseText": {
         "file": "tools/notices/licenses/Apache-2.0.txt",
         "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
       },
-      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
-      "reviewedOn": "2026-10-23",
-      "expires": "2027-10-23"
+      "reviewer": "Claude (agent, claude-fable-5-2), on the owner's delegation, 2026-11-17",
+      "reviewedOn": "2026-11-17",
+      "expires": "2027-11-17"
     },
     {
       "component": "@ai-sdk/openai-compatible",
-      "versions": "3.0.43",
+      "versions": "3.0.84",
       "license": "Apache-2.0",
-      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/8a09c78c039e2c092468eaeff97faaabf3b77366/LICENSE) and no copy of the full license text.",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0 and is byte for byte the notice reviewed for 3.0.43 on 2026-10-23 (sha256 b4f9adb7c5689048, first sixteen digits); the project's repository carries the same notice on its main branch (https://github.com/vercel/ai/blob/fe1b382b8e02f3e0bfd9939fb46b74a433a29a87/LICENSE) and no copy of the full license text.",
       "licenseText": {
         "file": "tools/notices/licenses/Apache-2.0.txt",
         "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
       },
-      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
-      "reviewedOn": "2026-10-23",
-      "expires": "2027-10-23"
+      "reviewer": "Claude (agent, claude-fable-5-2), on the owner's delegation, 2026-11-17",
+      "reviewedOn": "2026-11-17",
+      "expires": "2027-11-17"
     },
     {
       "component": "@ai-sdk/provider",
-      "versions": "4.0.10",
+      "versions": "4.0.35",
       "license": "Apache-2.0",
-      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/3bd0fcf4603ac34511a8e742cff47d3e868549f7/LICENSE) and no copy of the full license text.",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0 and is byte for byte the notice reviewed for 4.0.10 on 2026-10-23 (sha256 b4f9adb7c5689048, first sixteen digits); the project's repository carries the same notice on its main branch (https://github.com/vercel/ai/blob/fe1b382b8e02f3e0bfd9939fb46b74a433a29a87/LICENSE) and no copy of the full license text.",
       "licenseText": {
         "file": "tools/notices/licenses/Apache-2.0.txt",
         "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
       },
-      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
-      "reviewedOn": "2026-10-23",
-      "expires": "2027-10-23"
+      "reviewer": "Claude (agent, claude-fable-5-2), on the owner's delegation, 2026-11-17",
+      "reviewedOn": "2026-11-17",
+      "expires": "2027-11-17"
     },
     {
       "component": "@ai-sdk/provider-utils",
-      "versions": "5.0.36",
+      "versions": "5.0.74",
       "license": "Apache-2.0",
-      "whyNoText": "The published tarball carries no license file of its own, and Apache-2.0 is declared in package.json only; its only license-named file, src/to-json-schema/zod3-to-json-schema/LICENSE, is the ISC license of the vendored zod3-to-json-schema code (Copyright (c) 2020 Stefan Terdell, 2025 Vercel Inc.), which is compiled into the package's dist and is reproduced below as that embedded work's license, not as this package's.",
+      "whyNoText": "The published tarball carries no license file of its own, and Apache-2.0 is declared in package.json only; its only license-named file, src/to-json-schema/zod3-to-json-schema/LICENSE, is the ISC license of the vendored zod3-to-json-schema code (Copyright (c) 2020 Stefan Terdell, 2025 Vercel Inc.), which is compiled into the package's dist and is reproduced below as that embedded work's license, not as this package's. Read again in 5.0.74 and unchanged from 5.0.36, reviewed 2026-10-23.",
       "licenseText": {
         "file": "tools/notices/licenses/Apache-2.0.txt",
         "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
@@ -69,9 +69,9 @@
           "file": "src/to-json-schema/zod3-to-json-schema/LICENSE"
         }
       ],
-      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
-      "reviewedOn": "2026-10-23",
-      "expires": "2027-10-23"
+      "reviewer": "Claude (agent, claude-fable-5-2), on the owner's delegation, 2026-11-17",
+      "reviewedOn": "2026-11-17",
+      "expires": "2027-11-17"
     },
     {
       "component": "@workflow/serde",
@@ -114,16 +114,16 @@
     },
     {
       "component": "ai",
-      "versions": "7.0.92",
+      "versions": "7.0.162",
       "license": "Apache-2.0",
-      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0; the project's repository carries the same notice at the release commit (https://github.com/vercel/ai/blob/34f3b7991f16451e6fd84ba5dc39f9c0b20b0514/LICENSE) and no copy of the full license text.",
+      "whyNoText": "The published tarball carries only the 552-byte Apache-2.0 notice, which points to http://www.apache.org/licenses/LICENSE-2.0 and is byte for byte the notice reviewed for 7.0.92 on 2026-10-23 (sha256 b4f9adb7c5689048, first sixteen digits); the project's repository carries the same notice on its main branch (https://github.com/vercel/ai/blob/fe1b382b8e02f3e0bfd9939fb46b74a433a29a87/LICENSE) and no copy of the full license text.",
       "licenseText": {
         "file": "tools/notices/licenses/Apache-2.0.txt",
         "source": "https://www.apache.org/licenses/LICENSE-2.0.txt"
       },
-      "reviewer": "Augustus (agent), on David Fischer's delegation, 2026-10-23",
-      "reviewedOn": "2026-10-23",
-      "expires": "2027-10-23"
+      "reviewer": "Claude (agent, claude-fable-5-2), on the owner's delegation, 2026-11-17",
+      "reviewedOn": "2026-11-17",
+      "expires": "2027-11-17"
     },
     {
       "component": "certifi",

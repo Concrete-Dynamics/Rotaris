@@ -114,8 +114,8 @@ missing, as it is in a new Git worktree, `node node_modules/electron/install.js`
 
 Rotaris is **pre-release**. The version it declares is `0.1.0rc2` (`apps/desktop/package.json`).
 
-**What is published.** `v0.1.0rc2` is a Windows x64 release candidate: a setup installer, a portable executable,
-`SHA256SUMS.txt` and its signature, built, signed and drafted by the tag workflow
+**What is published.** `v0.1.0rc2`, published 2026-11-17, is a Windows x64 release candidate: a setup installer, a
+portable executable, a CycloneDX SBOM, `SHA256SUMS.txt` and its signature, built, signed and drafted by the tag workflow
 (`.github/workflows/release.yml`). It follows `v0.1.0rc1` of 2026-10-23.
 
 Three things a reader should know about it:

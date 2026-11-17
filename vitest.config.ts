@@ -5,6 +5,32 @@ import { fileURLToPath } from 'node:url';
 // regenerated before collection, by the same generator the build uses.
 const root = fileURLToPath(new URL('.', import.meta.url));
 
+/**
+ * The suites that drive a real process and read what the operating system has done with it: a shell through a real
+ * PTY, Git against a scratch repository, a stdio child, a recording proxy and its client. Each takes a reading that is
+ * only true once the host has got round to it — a process gone from the task list, a handle released, a prompt
+ * returned — and beside some 570 other files on a hosted Windows runner's four cores the host had not, in a different
+ * one of these files each time
+ * (docs/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md). They run as a project of their
+ * own, one file at a time, after every other file has finished: the readings are taken on a host that is doing nothing
+ * else. Nothing is retried and no bound is widened; a red in one of them is a red.
+ *
+ * A file belongs here when it spawns a real process and asserts on timing or on operating-system state. Add it by
+ * path; `tools/vitest-config.test.ts` holds that every path here names files.
+ */
+export const REAL_PROCESS_SUITES: readonly string[] = [
+  'packages/agent-tools/src/terminal/**/*.test.ts',
+  'apps/desktop/src/main/terminal-load.test.ts',
+  'apps/desktop/scripts/lib/terminal-shapes.test.ts',
+  'apps/desktop/scripts/lib/model-traffic.test.ts',
+  'packages/mcp/src/mcp.test.ts',
+  'packages/workspace/src/git/**/*.test.ts',
+  'packages/workspace/src/delivery/runs.test.ts',
+  'tools/worktree/**/*.test.ts',
+  'tools/check-conflict-markers.test.ts',
+];
+const EXCLUDED = ['**/node_modules/**', '**/dist/**', '**/out/**'];
+
 export default defineConfig({
   // The build-time verification flag (`apps/desktop/src/main/seams.d.ts`): true in every build but the packaged one, so
   // tests run the seams as an ordinary build compiles them in. Its false side is the packaged build's, which
@@ -31,8 +57,12 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['packages/**/*.test.ts', 'apps/**/*.test.ts', 'tools/**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/out/**'],
+    // Two projects over one configuration (`extends: true`): every file but the real-process suites, in parallel; then
+    // those suites alone, one file at a time (`sequence.groupOrder`: a higher group starts when the lower has finished).
+    projects: [
+      { extends: true, test: { name: 'parallel', include: ['packages/**/*.test.ts', 'apps/**/*.test.ts', 'tools/**/*.test.ts'], exclude: [...EXCLUDED, ...REAL_PROCESS_SUITES], sequence: { groupOrder: 0 } } },
+      { extends: true, test: { name: 'real-process', include: [...REAL_PROCESS_SUITES], exclude: EXCLUDED, fileParallelism: false, maxWorkers: 1, sequence: { groupOrder: 1 } } },
+    ],
     globalSetup: ['./tools/symbol-artifact/global-setup.ts'],
     environment: 'node',
     testTimeout: 30_000,

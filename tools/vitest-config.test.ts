@@ -32,3 +32,27 @@ describe('mock hygiene between the tests of one file (vitest.config.ts)', () => 
     expect(recorder).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The real-process suites run as a project of their own, one file at a time, after every other file
+ * (`REAL_PROCESS_SUITES` in `vitest.config.ts`). What is held here is the list and the split: a path that names no file
+ * would leave a suite in neither project's intent, and a file in both would run twice, once beside everything else.
+ */
+describe('the real-process suites are a project of their own (vitest.config.ts)', () => {
+  it('every listed path names at least one test file, and the two projects share none', async () => {
+    const { REAL_PROCESS_SUITES, default: config } = await import('../vitest.config.js');
+    const { globSync } = await import('node:fs');
+    const root = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+    for (const pattern of REAL_PROCESS_SUITES) expect(globSync(pattern, { cwd: root }).length, pattern).toBeGreaterThan(0);
+    const projects = (config as { test?: { projects?: { test: { name: string; include: string[]; exclude: string[]; fileParallelism?: boolean; maxWorkers?: number; sequence?: { groupOrder?: number } } }[] } }).test?.projects ?? [];
+    expect(projects.map((p) => p.test.name)).toEqual(['parallel', 'real-process']);
+    const [parallel, real] = projects as [typeof projects[number], typeof projects[number]];
+    // The parallel project leaves out exactly what the other takes in.
+    for (const pattern of REAL_PROCESS_SUITES) expect(parallel.test.exclude).toContain(pattern);
+    expect(real.test.include).toEqual([...REAL_PROCESS_SUITES]);
+    // One file at a time, and only once the parallel project has finished.
+    expect(real.test.fileParallelism).toBe(false);
+    expect(real.test.maxWorkers).toBe(1);
+    expect(real.test.sequence?.groupOrder ?? 0).toBeGreaterThan(parallel.test.sequence?.groupOrder ?? 0);
+  });
+});

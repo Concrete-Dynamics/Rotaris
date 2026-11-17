@@ -34,5 +34,5 @@ offset.
 
 - `apps/desktop/scripts/layout-proof.mjs` — section 7, the two `resize` + `sleep(800)` pairs and the reads that follow.
 - `docs/proofs/README.md` — the registry row for `layout-proof`.
-- `docs/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md` — the same host and the same
+- `docs/archive/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md` — the same host and the same
   evening's load, for the gate's own timing reds.

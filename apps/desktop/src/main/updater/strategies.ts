@@ -33,6 +33,8 @@ export interface StrategyFiles {
   rename(from: string, to: string): Promise<void>;
   /** Remove a file; an absent file is not an error. */
   removeFile(path: string): Promise<void>;
+  /** Leave a file with mode `0755` (REQ-STARTUP-125's AppImage clause). Only the AppImage strategy calls it, so only a POSIX host does. */
+  makeExecutable(path: string): Promise<void>;
 }
 
 export interface StrategySpawn {
@@ -183,6 +185,49 @@ async function putPreviousBack(target: string, holder: string, files: StrategyFi
   return { ok: false, sentence: `could not install the update at ${target}: ${messageOf(error)}` };
 }
 
+/** REQ-STARTUP-125's AppImage clause: the hidden sibling `.{name}.update` beside the target, on the target's own filesystem. */
+export const appImageIncomingPath = (target: string): string => {
+  const { dir, name, sep } = splitPath(target);
+  return dir === '' ? `.${name}.update` : `${dir}${sep}.${name}.update`;
+};
+
+/**
+ * AppImage → the verified file is first placed next to the target as the hidden sibling `.{name}.update`, on the
+ * target's filesystem, left with mode `0755`, flushed, and then moved onto the AppImage's path in one rename — while
+ * the application being replaced is still running, the target being the file the launch started from (`$APPIMAGE`)
+ * and never the image mounted from it (REQ-STARTUP-106, REQ-STARTUP-125). On a failure the sibling is removed and the
+ * step reports; the target was either never touched or holds the whole new file, since a rename is one step.
+ *
+ * No backup is taken, unlike the portable: the clause names none, and a POSIX rename onto a file replaces it atomically,
+ * so the path names a complete executable throughout — the previous one until the rename, the new one after it. The
+ * new file's bytes are flushed before the rename relies on them. The directory is flushed after it, best effort: a
+ * power loss before that reaches the medium leaves the previous AppImage at the path, which is a complete executable
+ * and an update not yet taken, not a failure of this step.
+ *
+ * Built 2026-11-17 for PD-STARTUP-013, which publishes the AppImage; until then the selection refused this flavour.
+ */
+export async function applyAppImage(target: string, verifiedFile: string, files: StrategyFiles): Promise<ApplyOutcome> {
+  const fail = (error: unknown): ApplyOutcome => ({ ok: false, sentence: `could not install the update at ${target}: ${messageOf(error)}` });
+  const { dir } = splitPath(target);
+  if ((await files.pathKind(target)) !== 'file') {
+    if (dir !== '' && (await files.pathKind(dir)) !== 'directory') return fail('the directory holding it cannot be reached (the medium may have been removed)');
+    return { ok: false, sentence: NO_TARGET_SENTENCE };
+  }
+  const incoming = appImageIncomingPath(target);
+  try {
+    await files.copyFile(verifiedFile, incoming);
+    await files.makeExecutable(incoming);
+    await files.flushFile(incoming);
+    await files.rename(incoming, target);
+  } catch (error) {
+    // Nothing reached the target's path: a rename that fails moved nothing. The sibling is this attempt's own.
+    await files.removeFile(incoming).catch(() => undefined);
+    return fail(error);
+  }
+  await files.flushDirectory(dir === '' ? '.' : dir).catch(() => undefined);
+  return { ok: true, outcome: 'replaced', message: REPLACED_MESSAGE };
+}
+
 /**
  * Windows installer → the verified setup executable is started as a process that survives the application exiting,
  * and the application makes no edit of its own to the installed tree; the outcome is handed-off with quit required.
@@ -197,14 +242,14 @@ export async function applyInstaller(setupPath: string, spawn: StrategySpawn): P
   return { ok: true, outcome: 'handed-off', quitRequired: true, message: INSTALLER_HANDOFF_MESSAGE };
 }
 
-/** The strategy for a flavour (REQ-STARTUP-125). The two PD-STARTUP-001 leaves unbuilt refuse with one sentence. */
+/** The strategy for a flavour (REQ-STARTUP-125). The one PD-STARTUP-001 still leaves unbuilt, the disk image's, refuses with one sentence. */
 export async function applyUpdate(flavour: Flavour, target: string, verifiedFile: string, files: StrategyFiles, spawn: StrategySpawn): Promise<ApplyOutcome> {
   switch (flavour) {
     case 'portable': return applyPortable(target, verifiedFile, files);
     case 'installer': return applyInstaller(verifiedFile, spawn);
-    case 'appimage':
+    case 'appimage': return applyAppImage(target, verifiedFile, files);
     case 'app-bundle':
-      return { ok: false, sentence: `the ${flavour === 'appimage' ? 'AppImage' : 'disk-image'} strategy is not built while PD-STARTUP-001 stands; nothing was changed` };
+      return { ok: false, sentence: 'the disk-image strategy is not built while PD-STARTUP-001 stands; nothing was changed' };
   }
 }
 

@@ -144,6 +144,8 @@ export function createUpdaterPorts(updatesDir: string): UpdaterPorts {
       // MOVEFILE_REPLACE_EXISTING): onto the existing target, one step. Not yet measured on a Windows host.
       rename: (from, to) => fsp.rename(from, to),
       removeFile: (path) => fsp.rm(path, { force: true }),
+      // REQ-STARTUP-125's AppImage clause: the placed file is left with mode 0755.
+      makeExecutable: (path) => fsp.chmod(path, 0o755),
     },
     spawn: {
       // REQ-STARTUP-125: a process that survives this application exiting; the installer shows its own window.

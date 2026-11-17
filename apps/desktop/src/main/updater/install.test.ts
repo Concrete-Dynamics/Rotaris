@@ -91,6 +91,7 @@ function targetVolume(initial: Record<string, string> = { [TARGET]: 'v0.1.0' }) 
   const files = new Map(Object.entries(initial));
   const ops: string[] = [];
   const port: StrategyFiles = {
+    makeExecutable: async (p) => { ops.push(`chmod:${p}`); },
     pathKind: async (p) => (files.has(p) ? 'file' : 'absent'),
     copyFile: async (from, to) => { ops.push(`copy:${from}→${to}`); files.set(to, `copy of ${from}`); },
     copyAside: async (from, to) => { ops.push(`copy-aside:${from}→${to}`); files.set(to, files.get(from)!); },

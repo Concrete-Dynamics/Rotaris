@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyInstaller, applyPortable, applyUpdate, cleanupPortableBackup, INSTALLER_HANDOFF_MESSAGE, NO_TARGET_SENTENCE, portableBackupPath, portableIncomingPath, REPLACED_MESSAGE, type StrategyFiles, type StrategySpawn } from './strategies.js';
+import { appImageIncomingPath, applyAppImage, applyInstaller, applyPortable, applyUpdate, cleanupPortableBackup, INSTALLER_HANDOFF_MESSAGE, NO_TARGET_SENTENCE, portableBackupPath, portableIncomingPath, REPLACED_MESSAGE, type StrategyFiles, type StrategySpawn } from './strategies.js';
 
 const TARGET = 'E:\\Tools\\Rotaris-0.1.0-windows-x64-portable.exe';
 
@@ -34,6 +34,7 @@ function volume(initial: Record<string, string>, failing: Partial<Record<Failing
   const durable = (): Record<string, string | null> => Object.fromEntries([...onMedium].map(([p, inode]) => [p, held(inode)]));
   const replacedTarget = () => ops.some((op) => op.endsWith(`→${target}`) && op.startsWith('rename:'));
   const port: StrategyFiles = {
+    makeExecutable: async (p) => { ops.push(`chmod:${p}`); },
     pathKind: async (p) => (entries.has(p) ? 'file' : 'absent'),
     copyFile: async (from, to) => {
       ops.push(`copy:${from}→${to}`);
@@ -285,11 +286,58 @@ describe('the Windows installer strategy — REQ-STARTUP-125, REQ-STARTUP-127', 
   });
 });
 
+describe('the AppImage strategy — REQ-STARTUP-125 (PD-STARTUP-013 publishes the artifact)', () => {
+  const A = '/home/u/Apps/Rotaris.AppImage';
+  const HIDDEN = '/home/u/Apps/.Rotaris.AppImage.update';
+  const fs = (failing: { copy?: string; rename?: string; chmod?: string } = {}) => {
+    const files = new Map<string, string>([[A, 'old'], ['/tmp/s/new', 'new']]);
+    const ops: string[] = [];
+    const port: StrategyFiles = {
+      pathKind: async (p) => (files.has(p) ? 'file' : p === '/home/u/Apps' ? 'directory' : 'absent'),
+      copyFile: async (from, to) => { ops.push(`copy:${from}→${to}`); if (failing.copy) { files.set(to, 'partial'); throw new Error(failing.copy); } files.set(to, files.get(from)!); },
+      copyAside: async () => { throw new Error('the AppImage strategy takes no backup'); },
+      makeExecutable: async (p) => { ops.push(`chmod:${p}`); if (failing.chmod) throw new Error(failing.chmod); },
+      flushFile: async (p) => { ops.push(`flush:${p}`); },
+      flushDirectory: async (d) => { ops.push(`flush-dir:${d}`); },
+      rename: async (from, to) => { ops.push(`rename:${from}→${to}`); if (failing.rename) throw new Error(failing.rename); files.set(to, files.get(from)!); files.delete(from); },
+      removeFile: async (p) => { ops.push(`remove:${p}`); files.delete(p); },
+    };
+    return { files, ops, port };
+  };
+
+  it('names the hidden sibling beside the target', () => {
+    expect(appImageIncomingPath(A)).toBe(HIDDEN);
+    expect(appImageIncomingPath('Rotaris.AppImage')).toBe('.Rotaris.AppImage.update');
+  });
+
+  it('places the hidden sibling, leaves it 0755, flushes it, and moves it onto the path in one rename', async () => {
+    const v = fs();
+    expect(await applyAppImage(A, '/tmp/s/new', v.port)).toEqual({ ok: true, outcome: 'replaced', message: REPLACED_MESSAGE });
+    expect(v.ops).toEqual([`copy:/tmp/s/new→${HIDDEN}`, `chmod:${HIDDEN}`, `flush:${HIDDEN}`, `rename:${HIDDEN}→${A}`, 'flush-dir:/home/u/Apps']);
+    expect(v.files.get(A)).toBe('new');
+    expect(v.files.has(HIDDEN)).toBe(false);
+  });
+
+  it.each([['copy', 'ENOSPC: no space left'], ['chmod', 'EPERM: not permitted'], ['rename', 'EXDEV: cross-device']] as const)('a failing %s removes the sibling and leaves the target as it was', async (step, message) => {
+    const v = fs({ [step]: message });
+    expect(await applyAppImage(A, '/tmp/s/new', v.port)).toEqual({ ok: false, sentence: `could not install the update at ${A}: ${message}` });
+    expect(v.files.get(A)).toBe('old');
+    expect(v.files.has(HIDDEN)).toBe(false);
+  });
+
+  it('an AppImage that is no longer at its path is not replaced', async () => {
+    const v = fs();
+    v.files.delete(A);
+    expect(await applyAppImage(A, '/tmp/s/new', v.port)).toEqual({ ok: false, sentence: NO_TARGET_SENTENCE });
+    expect(v.ops).toEqual([]);
+  });
+});
+
 describe('strategy selection — REQ-STARTUP-125 under PD-STARTUP-001', () => {
-  it('selects by flavour, and the two unbuilt strategies refuse with one sentence changing nothing', async () => {
+  it('selects by flavour, and the one unbuilt strategy refuses with one sentence changing nothing', async () => {
     const v = volume({});
     const spawn: StrategySpawn = { spawnDetached: async () => undefined };
-    expect(await applyUpdate('appimage', '/a.AppImage', '/tmp/x', v.port, spawn)).toEqual({ ok: false, sentence: 'the AppImage strategy is not built while PD-STARTUP-001 stands; nothing was changed' });
+    expect(await applyUpdate('appimage', '/a.AppImage', '/tmp/x', v.port, spawn)).toEqual({ ok: false, sentence: NO_TARGET_SENTENCE });
     expect(await applyUpdate('app-bundle', '/Applications/rotaris.app', '/tmp/x', v.port, spawn)).toEqual({ ok: false, sentence: 'the disk-image strategy is not built while PD-STARTUP-001 stands; nothing was changed' });
     expect(v.ops).toEqual([]);
     expect(await applyUpdate('installer', 'C:\\Rotaris', 'C:\\t\\setup.exe', v.port, spawn)).toMatchObject({ outcome: 'handed-off' });
@@ -309,7 +357,7 @@ describe('launch-time cleanup of the portable backup — REQ-STARTUP-115', () =>
   it('a deletion failure is tolerated silently and left for a later launch; an unreachable directory is nothing to do', async () => {
     const held = volume({ [`${TARGET}.old`]: 'old' }, { 'remove-backup': 'EBUSY' });
     expect(await cleanupPortableBackup('portable', TARGET, held.port)).toBe('kept');
-    const gone: StrategyFiles = { pathKind: async () => { throw new Error('ENOENT: the medium is gone'); }, copyFile: async () => undefined, copyAside: async () => undefined, flushFile: async () => undefined, flushDirectory: async () => undefined, rename: async () => undefined, removeFile: async () => undefined };
+    const gone: StrategyFiles = { pathKind: async () => { throw new Error('ENOENT: the medium is gone'); }, makeExecutable: async () => undefined, copyFile: async () => undefined, copyAside: async () => undefined, flushFile: async () => undefined, flushDirectory: async () => undefined, rename: async () => undefined, removeFile: async () => undefined };
     expect(await cleanupPortableBackup('portable', TARGET, gone)).toBe('kept');
     expect(await cleanupPortableBackup('portable', TARGET, volume({}).port)).toBe('nothing');
   });

@@ -59,7 +59,7 @@
 | D-02 | P2 | The folded rail's "Sessions" control read as a third view, and was a second control so named. | **Repaired.** It stands with the start control, shaped as that control is, with no label; it is outside the radiogroup. |
 | D-03 | P2 | The followed session's name was the dimmest part of the title chip. | **Repaired.** Primary ink, body face. |
 | D-04 | P2 | The Overview's agent-states caption broke between a state and its count. | **Repaired.** Each "state count" is one unit; a wrap falls at a separator. |
-| D-05 | P2 | In one capture at 1440 the start-of-conversation marker overlapped the first row. | **Open**, recorded as [a defect note](../../defects/the-start-of-conversation-marker-is-drawn-under-the-transcripts-first-row.md): the marker is a block in the row pool's flow and the first row stands over it. This round changed neither. |
+| D-05 | P2 | In one capture at 1440 the start-of-conversation marker overlapped the first row. | **Open**, recorded as [a defect note](../../archive/defects/the-start-of-conversation-marker-is-drawn-under-the-transcripts-first-row.md): the marker is a block in the row pool's flow and the first row stands over it. This round changed neither. |
 | D-06 | P3 | Open at 1680 with one session, about 490 px stood empty between the list and the Project group. | **Repaired.** The Project group follows the list; the spare height stands above Settings. |
 | D-07 | P3 | The rail's selected item had a different width on Requirements. | **Repaired.** Every rail item has the rail's width (UIR-023). |
 | D-08 | P3 | `DESIGN.md` and part 08 gave figures the build did not have. | **Repaired** in both. |

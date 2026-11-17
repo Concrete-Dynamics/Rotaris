@@ -9,7 +9,7 @@ import { CAP_DEFAULTS, isLive, rowKey, type DisplayCaps } from './project.js';
 import { createProjector } from './projector.js';
 import {
   beginMeasuring, bindRange, buildOffsets, captureAnchor, commitTable, createMeasureLedger, markMeasured, measureAtCommit, newUpdatesLabel, remeasuredSince,
-  observeAgain, readHeight, restoreAnchor, reuseOffsets, slotRef, updateShape, visibleRange, type Anchor,
+  SLOT_LEAD_ESTIMATE, leadKey, observeAgain, readHeight, restoreAnchor, reuseOffsets, slotRef, updateShape, visibleRange, type Anchor,
 } from './pool.js';
 import { isOwnScroll } from './scroll.js';
 import { countLabel, indexAll, searchPanelCloser, step as stepMatch, type Match } from './search.js';
@@ -284,6 +284,9 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     agentDepth,
   }), [showReasoning, autoCollapseTools, running, live, onOpenLink, onOpenTrailer, terminalHost, attachmentBodies, expanded, toggle, agentDepth]);
 
+  // Whether the first row's slot draws something above its row: the start marker, or the notice of a page that failed.
+  const slotLead = reachedOldest || paging === 'failed';
+
   // ---- REQ-CHAT-058: heights, measured rather than assumed -------------------------------------------------
   // `measuredVersion` is read so the table is rebuilt once the observer has recorded a real height; a `peek` is a
   // pure read that moves no recency and counts no hit, which is what makes it safe to do while laying out.
@@ -312,10 +315,10 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     // above rather than 4 px (PD-CHAT-003): a new row at the tail is positioned by its estimate until its first
     // measurement, and an estimate short of what it draws puts it through the row beneath it for those frames
     // (docs/archive/defects/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
-    (d, at) => readHeight(d, at, viewport.width, expanded, places, measurements, lastByIdentity),
+    (d, at) => readHeight(d, at, viewport.width, expanded, places, measurements, lastByIdentity, at === 0 && slotLead ? SLOT_LEAD_ESTIMATE : 0),
   ),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `measuredVersion` is the observer's "the cache changed" signal
-  [display, places, expanded, viewport.width, measurements, lastByIdentity, ledger, measuredVersion]);
+  [display, places, expanded, viewport.width, measurements, lastByIdentity, ledger, measuredVersion, slotLead]);
   // The table the next one is built against is the one React committed; the ledger's marks it has read are forgotten.
   useLayoutEffect(() => { commitTable(ledger, table); }, [table, ledger]);
 
@@ -676,18 +679,14 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
           */}
         <TranscriptSurfaceProvider value={surface}>
         <div className="transcript__pool" style={{ height: `${table.total}px` }}>
-            {paging === 'failed' && (
-              <div className="transcript__page-error" role="status" data-testid="transcript-page-failed">Older messages could not be loaded. Scroll up to try again.</div>
-            )}
-            {reachedOldest && (
-              <div className="transcript__oldest" data-testid="transcript-oldest">This is the start of the conversation.</div>
-            )}
             {Array.from({ length: capacity }, (_, slot) => {
               const d = bind(slot);
               const at = range.first + slot;
               // Every bound slot is measured, live or settled: REQ-CHAT-058 says heights are measured rather
               // than assumed, and a row in the DOM that carries no key is assumed.
-              const measured = d === null ? '' : measureKey(d, viewport.width, expanded.has(d.key), null);
+              // The first row's slot draws the lead above its row, so its height is filed under the lead's key (`leadKey`).
+              const leads = slotLead && at === 0 && d !== null;
+              const measured = d === null ? '' : leadKey(measureKey(d, viewport.width, expanded.has(d.key), null), leads);
               return (
                 <div
                   key={slot}
@@ -698,6 +697,14 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
                   data-bound={d === null ? '' : d.key}
                   style={{ transform: `translateY(${d === null ? 0 : table.offsets[at] ?? 0}px)`, visibility: d === null ? 'hidden' : 'visible' }}
                 >
+                  {/* What stands above the first row is drawn in that row's slot, where the pool measures it: in the pool's own
+                      flow it lay under the first row, which is placed from the pool's top (REQ-SHELL-022). */}
+                  {leads && paging === 'failed' && (
+                    <div className="transcript__page-error" role="status" data-testid="transcript-page-failed">Older messages could not be loaded. Scroll up to try again.</div>
+                  )}
+                  {leads && reachedOldest && (
+                    <div className="transcript__oldest" data-testid="transcript-oldest">This is the start of the conversation.</div>
+                  )}
                   {d === null ? null : paint(d, range.first + slot)}
                 </div>
             );

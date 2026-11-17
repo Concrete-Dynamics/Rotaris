@@ -297,3 +297,5 @@ was re-run with `gh run rerun --failed`; the branch's own gate on the same head 
 the two reds being [the handshake-cancel flake](../../defects/a-cancel-during-the-first-calls-handshake-can-read-as-cancelled-before-the-command-completed.md).
 
 **Seen again 2026-11-17 on `feat/r-101-experience-redesign`, a branch that touches no terminal code:** at `5870c470` the soft-pause case read `expected 'execution_error' to be 'soft_pause'` (REQ-TOOLS-098/179, A10), and at `0b01d0f5` the hard-timeout reset read `reset at 64: … to contain 'were restored'`. One failed test of 8439 each time; both on the `pull_request` gate, while the `push` gate on the same head was green.
+
+**And on `feat/r-102-view-interiors` at `2ab4bb78` (2026-11-17), one red on each gate of one head:** `pull_request` on the hard-timeout reset (`parse at 240: expected null not to be null`), `push` on `packages/workspace/src/delivery/runs.test.ts` (provisioning under `rotaris/req/`: `expected false to be true`). The branch touches neither.

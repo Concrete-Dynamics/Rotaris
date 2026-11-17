@@ -42,6 +42,9 @@ a scroll rebinds is observed again (`observeAgain`), since an observer reports o
 slot whose key has no measurement yet — a row first bound, or one whose content changed — is read at the commit, before
 the paint (`measureAtCommit`), the pane rendering again inside the commit when it draws other than what placed it; until
 2026-10-01 a row that grew was painted through the row beneath it for the frame before the observer's delivery rendered.
+What stands above the first row — the start-of-conversation marker, the notice of a page that failed — is drawn in that
+row's slot and measured with it, under a key of its own (`leadKey`); until 2026-11-17 it stood in the pool's flow at the
+pool's top, where the slots are placed from, and the first row was drawn over it.
 A size that changes under an unchanged key — an image attachment's `<details>` opened, the image loading, a block start's
 margin — runs no commit, so the observer's delivery renders it synchronously (`flushSync`), after layout and before the
 paint, where it used to render a frame later. One observer serves the pane's life: it is made at mount, never again on a

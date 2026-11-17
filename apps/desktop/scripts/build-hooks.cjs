@@ -30,7 +30,7 @@
  * Under either the build MUST fail, at the named rule. That failing is the whole of what IC-6 asks.
  */
 const { createHash } = require('node:crypto');
-const { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } = require('node:fs');
+const { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
@@ -242,10 +242,12 @@ async function artifactNames() {
  */
 async function checkNaming(declared, renderedNames, platform = 'win32') {
   const { packagingArtifactNames } = await artifactNames();
-  const expected = packagingArtifactNames(declared, platform)[artifactPlatform(platform).kind];
+  const names = packagingArtifactNames(declared, platform);
+  const expected = names[artifactPlatform(platform).kind];
+  const admitted = Object.values(names);
   if (renderedNames.length === 0) throw new Error(`REQ-STARTUP-031: no artifactName is configured, so electron-builder would name the installer by its own pattern rather than "${expected}"; pnpm package (scripts/package.mjs) supplies the names from the declared version`);
   for (const rendered of renderedNames) {
-    if (rendered !== expected) throw new Error(`REQ-STARTUP-031: electron-builder is configured to produce "${rendered}", the naming module renders "${expected}" from the declared version ${declared}${/-(?:a|b|rc)\d/.test(rendered) ? ' (the version reached electron-builder hyphenated: its \${version} macro is the normalised value, not the declared text)' : ''}`);
+    if (!admitted.includes(rendered)) throw new Error(`REQ-STARTUP-031: electron-builder is configured to produce "${rendered}", the naming module renders "${expected}" from the declared version ${declared}${/-(?:a|b|rc)\d/.test(rendered) ? ' (the version reached electron-builder hyphenated: its \${version} macro is the normalised value, not the declared text)' : ''}`);
   }
   return { declared, expected, rendered: renderedNames };
 }
@@ -258,8 +260,12 @@ async function checkNaming(declared, renderedNames, platform = 'win32') {
 function configuredArtifactNames(ctx) {
   const config = ctx.packager.config;
   const naming = artifactPlatform(ctx.electronPlatformName ?? ctx.packager.platform?.nodeName ?? 'win32');
-  const patterns = naming.keys.map((key) => config[key]?.artifactName).filter((p) => typeof p === 'string' && p !== '');
-  return patterns.map((pattern) => ctx.packager.expandMacro(pattern, 'x64', { ext: naming.ext }));
+  // The platform's first artifact, then every further one the run makes (PD-STARTUP-013: the Debian package), each
+  // expanded with its own extension.
+  return [naming, ...naming.also].flatMap((group) => group.keys
+    .map((key) => config[key]?.artifactName)
+    .filter((p) => typeof p === 'string' && p !== '')
+    .map((pattern) => ctx.packager.expandMacro(pattern, 'x64', { ext: group.ext })));
 }
 
 /**
@@ -490,10 +496,26 @@ function unpackedDirFor(arch) {
  * (`doAddElectronFuses` follows afterPack) — so a binary whose fuses do not read as listed never becomes an installer.
  * The result joins afterPack's report.
  */
+/** Clear the group-write and other-write bits of every file and directory under `dir`; symbolic links are left alone. */
+function dropGroupAndOtherWrite(dir) {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isSymbolicLink()) continue;
+    const mode = statSync(full).mode & 0o7777;
+    if ((mode & 0o022) !== 0) chmodSync(full, mode & ~0o022);
+    if (entry.isDirectory()) dropGroupAndOtherWrite(full);
+  }
+}
+
 async function artifactBuildStarted(ctx) {
   // ArtifactBuildStarted has no packager (AppImageTarget emits only target, file and arch).
-  const linux = ctx.targetPresentableName === 'AppImage';
+  const linux = /\.(?:AppImage|deb)$/.test(ctx.file ?? '');
   const exe = path.join(path.dirname(ctx.file), linux ? 'linux-unpacked' : unpackedDirFor(ctx.arch), linux ? 'rotaris' : 'Rotaris.exe');
+  // The packed files take the modes of the tree they were copied from, and an Electron unzipped on a developer's host
+  // is 0777: the first Debian package carried `/opt/Rotaris/rotaris` and `chrome-sandbox` world-writable (2026-11-17).
+  // An artifact is made from a tree no group and no other user may write, whatever the tree it was packed from had.
+  if (linux) dropGroupAndOtherWrite(path.dirname(exe));
   let fuses;
   try {
     fuses = await checkFuses(exe);

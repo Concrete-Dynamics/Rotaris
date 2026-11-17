@@ -44,6 +44,7 @@ describe('the published set — PD-STARTUP-001, REQ-STARTUP-031', () => {
       'Rotaris-1.2.3-windows-x64-portable.exe',
       'Rotaris-1.2.3-macos-arm64.dmg',
       'Rotaris-1.2.3-linux-x86_64.AppImage',
+      'Rotaris-1.2.3-linux-x86_64.deb',
     ]);
     expect(() => expectedAssets('1.2.3', ['windows-arm64'])).toThrow(/not a platform key/);
   });

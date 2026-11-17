@@ -242,7 +242,7 @@ try {
     mkdirSync(RELEASE, { recursive: true });
     const named = join('release', host.configuration);
     writeFileSync(join(APP, named), packageConfigurationText(host, readFileSync(join(APP, config), 'utf8'), declared, yaml));
-    process.stdout.write(`[package] declared ${declared} → ${names.setup ?? names.appimage}, written into ${named} (from ${config})\n`);
+    process.stdout.write(`[package] declared ${declared} → ${Object.values(names).join(" and ")}, written into ${named} (from ${config})\n`);
     return { declared, names, from: config, configuration: named };
   });
   step(`${STEPS.builder} ${host.builderFlag}${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', host.builderFlag, ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', naming.configuration], { env: builderEnv }));

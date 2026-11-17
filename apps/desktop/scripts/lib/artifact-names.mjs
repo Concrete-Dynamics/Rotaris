@@ -46,8 +46,9 @@ export function declaredProductVersion(appDir) {
 
 /** The platform artifact electron-builder produces on this configuration, named by the authority (REQ-STARTUP-031). */
 export function packagingArtifactNames(version, platform = 'win32') {
-  const { kind } = artifactPlatform(platform);
-  return { [kind]: artifactName(parseReleaseVersion(version).version, kind) };
+  const { kind, also } = artifactPlatform(platform);
+  const declared = parseReleaseVersion(version).version;
+  return Object.fromEntries([kind, ...also.map((a) => a.kind)].map((k) => [k, artifactName(declared, k)]));
 }
 
 /**
@@ -95,7 +96,7 @@ export function namedConfigurationText(ymlText, names, yaml) {
  * than the authority (REQ-STARTUP-031, REQ-STARTUP-152). Returns the problem, or null.
  */
 export function producedNameProblem(fileBasename, names) {
-  const expected = names.appimage ?? names.setup;
-  if (fileBasename === expected || (names.setup && fileBasename === `${names.setup}.blockmap`)) return null;
-  return `REQ-STARTUP-031: electron-builder produced "${fileBasename}"; the declared version renders "${expected}" (a prerelease's suffix carries no hyphen)`;
+  const expected = Object.values(names);
+  if (expected.includes(fileBasename) || (names.setup && fileBasename === `${names.setup}.blockmap`)) return null;
+  return `REQ-STARTUP-031: electron-builder produced "${fileBasename}"; the declared version renders ${expected.map((n) => `"${n}"`).join(' and ')} (a prerelease's suffix carries no hyphen)`;
 }

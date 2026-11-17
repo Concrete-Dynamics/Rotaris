@@ -36,6 +36,7 @@ export const PREPARED_TARGETS = Object.freeze({
     kind: 'dmg',
     runner: 'macos-15',
     nameKeys: ['mac.artifactName', 'dmg.artifactName'],
+    alsoNames: [],
     config: {
       mac: {
         target: [{ target: 'dmg', arch: ['arm64'] }],
@@ -60,6 +61,8 @@ export const PREPARED_TARGETS = Object.freeze({
     kind: 'appimage',
     runner: 'ubuntu-24.04',
     nameKeys: ['linux.artifactName', 'appImage.artifactName'],
+    // PD-STARTUP-013: the Debian package the same electron-builder run makes beside the AppImage, named by the authority.
+    alsoNames: [{ key: 'deb.artifactName', kind: 'deb' }],
     config: {
       // ESC-11, option (b): the stable line (app-builder-lib 26.15.3) admits `toolsets.appimage` "1.0.3", the static
       // runtime that needs no `libfuse.so.2`. Its default, "0.0.0", is the legacy FUSE 2 runtime, and with it the tool
@@ -68,8 +71,16 @@ export const PREPARED_TARGETS = Object.freeze({
       // chose. 26.x labels "1.0.3" a beta; spike 12 measures it on a host that never had the legacy library (ADR-0066 AC-1).
       toolsets: { appimage: '1.0.3' },
       linux: {
-        target: [{ target: 'AppImage', arch: ['x64'] }],
-        category: 'Development',
+        target: [{ target: 'AppImage', arch: ['x64'] }, { target: 'deb', arch: ['x64'] }],
+        // REQ-STARTUP-024's categories, `Development;IDE;`. electron-builder writes this value into `Categories=` over the
+        // desktop entry's own, and appends the closing semicolon: with 'Development' alone the first package read
+        // `Categories=Development;` (2026-11-17).
+        category: 'Development;IDE',
+        // The Debian package's control fields (PD-STARTUP-013). A package without a maintainer is refused by the tool.
+        maintainer: 'Concrete Dynamics <info@concrete-dynamics.com>',
+        vendor: 'Concrete Dynamics',
+        synopsis: 'Carries a coding task to a result in your project folder with a team of AI agents',
+        description: 'A desktop application that carries a task through to a result in your project folder with a team of AI agents you can watch, steer and stop.',
         // The packed executable's name. Left to electron-builder it is derived from the package's name, `@rotaris/desktop`,
         // and came out `@rotarisdesktop` at the Linux build's first execution (2026-11-17, ADR-0066): the fuse check, which
         // reads `linux-unpacked/rotaris`, found no executable and refused the build. The name is the product's, lower case.
@@ -131,6 +142,12 @@ export function preparedConfiguration(base, platform, version) {
     const present = base[section] && base[section][field];
     if (present !== undefined && present !== null) throw new Error(`REQ-STARTUP-031: the configuration already sets ${key} ("${present}"); the artifact names are rendered from the declared version and composed nowhere else`);
     setPath(out, key, name);
+  }
+  for (const extra of target.alsoNames ?? []) {
+    const [section = '', field = ''] = extra.key.split('.');
+    const present = base[section] && base[section][field];
+    if (present !== undefined && present !== null) throw new Error(`REQ-STARTUP-031: the configuration already sets ${extra.key} ("${present}"); the artifact names are rendered from the declared version and are not written in the configuration`);
+    setPath(out, extra.key, artifactName(declared, extra.kind));
   }
   if (target.kind === 'dmg') setPath(out, 'dmg.title', dmgVolumeName(declared));
   return out;

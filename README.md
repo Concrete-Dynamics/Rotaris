@@ -1,78 +1,136 @@
+<div align="center">
+
+<img src="docs/design/assets/rotaris-mark.svg" alt="" width="72" height="72">
+
 # Rotaris
+
+**A desktop app that carries a coding task to a result in your project — with a team of AI agents you can watch, steer and stop.**
 
 [![CI](https://github.com/Concrete-Dynamics/Rotaris/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Concrete-Dynamics/Rotaris/actions/workflows/ci.yml)
 [![Release](https://github.com/Concrete-Dynamics/Rotaris/actions/workflows/release.yml/badge.svg)](https://github.com/Concrete-Dynamics/Rotaris/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/Concrete-Dynamics/Rotaris?label=latest)](https://github.com/Concrete-Dynamics/Rotaris/releases/latest)
 [![Licence: GPL-3.0-only](https://img.shields.io/badge/licence-GPL--3.0--only-blue.svg)](LICENSE)
 
-Rotaris is a desktop application that carries a task through to a result in your project folder with a team of AI
-agents. A run classifies the task, hands it to a coordinator that delegates to specialist child agents, works through a
-todo list one iteration at a time, and verifies changed work with deterministic checks before it decides what to do
-next. You watch and steer every agent while the run is live, every tool call passes one permission gate before
-anything executes, and everything the run did is kept in a durable session record.
+[**Download for Windows**](https://github.com/Concrete-Dynamics/Rotaris/releases/latest) · [Website](https://rotaris.ai) · [Build from source](#build-from-source) · [Documentation](#documentation)
 
-It is **one Electron desktop application**, built as a pnpm workspace of TypeScript packages. It is graphical only:
-there is no command-line interface and no terminal user interface, and there never will be (`CONTEXT-MAP.md`;
-domains 17 and 18 of the [specification](docs/spec/README.md) are retired).
+<img src="docs/assets/readme/overview.png" alt="The Rotaris Overview during a run: token and tool-call figures, three delegated agents with their state, and the session list." width="900">
 
-> **Status: pre-release.** `v0.1.0rc1` is published as a **Windows x64** release candidate on this repository's
-> GitHub releases. Windows x64 is the one platform a release publishes for
-> ([`PD-STARTUP-001`](docs/product/directives/pd-startup-001.md#pd-startup-001)). See [Status](#status) for what that release is and
-> what stands between it and `v0.1.0`.
+<sub>The Overview during a run: three specialist agents working on one task. A scripted demo run, captured from the built application.</sub>
+
+</div>
 
 ---
 
-## What it is
+## What Rotaris does
 
-One application, five composition roots in `apps/desktop/src/`. They are the only places `electron` is imported
-([`docs/module-map.md`](docs/module-map.md), [component view](docs/architecture/views/01-component-view.md)).
+You describe a task. Rotaris classifies it, hands it to a coordinator agent, and the coordinator delegates to
+specialists — an analyst, a coding agent, a tester and nine more built-in roles. The run works through a todo list one
+item at a time and checks what it changed with deterministic checks before it decides what comes next.
 
-| Root | What it owns |
-|---|---|
-| `main/` | Windows and dialogs, the command router, provider sign-in and credentials, notices, preferences, process supervision, the updater |
-| `preload/` | The one frozen bridge a window gets, `window.rotaris` |
-| `renderer/` | The React surfaces, one role per route (main, approval, pause, hook review, provider, persona, terminal) |
-| `run-host/` | One live session: runs, turns, tools, hooks, MCP servers, the skill catalogue, checkpoints, terminal streams |
-| `workspace-service/` | Workspace identity, the store's open and migration, backup and restore, configuration, traceability, saved prompts |
+- **You see everything while it happens.** A live transcript of messages, reasoning, tool calls and diffs, and an
+  Overview of every agent, what it is doing and what it has cost.
+- **You stay in charge.** Steer an agent mid-run, queue a follow-up, edit the todo list, switch the model, pause or
+  cancel — without restarting.
+- **Nothing runs unasked.** Every tool call passes one permission gate — allow, ask or deny — before anything
+  executes, and every decision lands in an audit trail.
+- **You can go back.** A checkpoint is taken after each iteration that changed your tree, and any of them can be
+  restored from the Git view.
+- **Nothing is lost when the window closes.** Each session is stored on your machine and can be browsed, continued
+  and exported.
+- **Your models, your keys.** A provider catalogue plus any OpenAI-compatible endpoint; the session record stays on your machine.
 
-The window shows exactly six primary views, in this order: **Overview, Workspace, Requirements, Git, Library,
-Settings** (`REQ-SHELL-023` as `PD-SHELL-015` narrows it; `docs/design/information-architecture.md` is the map).
+<div align="center">
+<img src="docs/assets/readme/workspace-run.png" alt="The Workspace during a run: the transcript with the coordinator delegating to three agents, the composer below, and the inspector with the agent's context use and tools." width="820">
 
-## Why
+<sub>The Workspace: the transcript of a live run, the composer, and the inspector for the agent you follow.</sub>
+</div>
 
-An agent left alone in a repository can run a command you did not want, write outside the project, lose the context
-of what it did, or report work as finished that does not hold up. Each of those has a mechanism here:
+## Why it is built this way
 
-| Failure | What Rotaris does about it | Specified in |
+An agent left alone in a repository can run a command you did not want, write outside the project, lose track of
+what it did, or report work as finished that does not hold up. Each of those has a mechanism here:
+
+| What can go wrong | What Rotaris does about it | Specified in |
 |---|---|---|
-| A tool call does something you did not agree to | Every call resolves to allow, ask or deny at one permission gate before it runs, and every decision is written to a per-session audit trail with secrets redacted | [05](docs/spec/05-tools-permissions-approvals.md) |
+| A tool call does something you did not agree to | Every call resolves to allow, ask or deny at one gate before it runs; every decision is written to a per-session audit trail with secrets redacted | [05](docs/spec/05-tools-permissions-approvals.md) |
 | An agent writes outside the project | File tools are fenced to the workspace; a path outside it fails with a path-fence error | [05](docs/spec/05-tools-permissions-approvals.md) §15 |
 | A command reaches the network or the machine unchecked | A per-host egress policy for `fetch`, and optional operating-system confinement of terminal commands | [10](docs/spec/10-sandbox-network-egress.md) |
 | A run leaves the tree in a state you cannot get back from | A checkpoint at the close of each iteration that changed the tree, restorable from the desktop | [06](docs/spec/06-git-worktrees-checkpoints.md) |
 | Work is declared done without evidence | Changed work is verified with deterministic checks before the run decides what to do next | [01](docs/spec/01-run-orchestration.md) |
-| What happened is gone when the window closes | Every run is persisted as it proceeds in a machine-local session store, and can be browsed, continued and exported | [07](docs/spec/07-sessions-persistence.md), [20](docs/spec/20-event-history-replay-export.md) |
+| What happened is gone when the window closes | Every run is persisted as it proceeds in a machine-local session store | [07](docs/spec/07-sessions-persistence.md), [20](docs/spec/20-event-history-replay-export.md) |
+
+## Get started
+
+### Download (Windows x64)
+
+1. Open the [latest release](https://github.com/Concrete-Dynamics/Rotaris/releases/latest) and download
+   `Rotaris-<version>-windows-x64-setup.exe` (installer) or `Rotaris-<version>-windows-x64-portable.exe` (no install).
+2. Optionally check the file against `SHA256SUMS.txt` beside it.
+3. Start Rotaris and open a project folder.
+4. Under **Settings › Models**, sign in to a provider with an API key, or add your own OpenAI-compatible endpoint.
+5. Type what you want done into the composer in the **Workspace** and press Run.
+
+> [!NOTE]
+> **Rotaris is pre-release software.** The binaries are not Authenticode-signed, so Windows SmartScreen will ask
+> before the first start; what is signed is the checksum manifest, which the in-app updater verifies before it
+> downloads anything. See [Status](#status).
+
+<div align="center">
+<img src="docs/assets/readme/settings.png" alt="Settings, Models: the model slots and the provider list with sign-in controls." width="820">
+
+<sub>Settings › Models: which model serves which slot, and the providers you can sign in to.</sub>
+</div>
+
+### Build from source
+
+On any platform Node 24 runs on. Only Windows x64 has a published release.
+
+**Prerequisites.**
+
+- Node.js 24 or later (`engines.node` is `>=24.0.0` in the root `package.json`).
+- pnpm 11.9.0, the version the root `package.json` pins in `packageManager`.
+- Git on `PATH`.
+- On Linux, a display, or `xvfb-run`, for anything that opens a window.
+- For `pnpm package` only: a Rust toolchain (`cargo`), which builds the portable's launcher stub
+  ([first-release plan §4.5](docs/architecture/first-release-plan/04-4-the-windows-release-pipeline.md#4-the-windows-release-pipeline)).
+- Network access for `pnpm code-intel:bundle`, which builds the bundled code-intelligence runtime from pinned
+  versions of `uv`, a Python interpreter and its packages. `pnpm notices`, `pnpm package` (which runs it itself) and
+  some proofs need that runtime. It cannot yet be built on a Windows ARM64 host
+  ([defect note](docs/defects/no-code-intelligence-bundle-can-be-built-for-a-windows-arm64-development-tree.md)).
+
+```sh
+pnpm install --prefer-offline                       # dependencies; Electron's install script fetches its runtime
+pnpm dev                                            # the application through electron-vite, against the workspace source
+```
+
+`packages/kernel/src/generated/`, which every build imports, is not committed: the first `pnpm dev`, `pnpm build` or
+`pnpm package` writes it with the generator behind `pnpm symbols`, and `pnpm symbols` or a test run keeps it current
+([the repaired note](docs/archive/defects/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md)). If Electron's runtime is
+missing, as it is in a new Git worktree, `node node_modules/electron/install.js` installs it.
 
 ## Status
 
-Rotaris is pre-release. The version it declares is `0.1.0rc1` (`apps/desktop/package.json`).
+Rotaris is **pre-release**. The version it declares is `0.1.0rc2` (`apps/desktop/package.json`).
 
-**What has been published.** The tag `v0.1.0rc1` passed the tag workflow's guard, build, sign and draft stages on
-2026-10-23 and was published as a Windows x64 release (`.github/workflows/release.yml`, header). Its assets are a
-setup installer, a portable executable, `SHA256SUMS.txt` and its signature; the published assets were checked
-against the updater's compiled-in key on 2026-10-24
-([`docs/research/update-path-proof.md`](docs/research/update-path-proof.md)).
+**What is published.** `v0.1.0rc2` is a Windows x64 release candidate: a setup installer, a portable executable,
+`SHA256SUMS.txt` and its signature, built, signed and drafted by the tag workflow
+(`.github/workflows/release.yml`). It follows `v0.1.0rc1` of 2026-10-23.
 
-Two things about that release a reader should know:
+Three things a reader should know about it:
 
-- **GitHub shows it as a stable release, not a pre-release.** The draft was created flagged prerelease and the flag
-  was lost at publication; correcting it is the owner's act
-  ([defect note](docs/defects/the-published-rc1-release-is-marked-stable.md), [R-086](docs/product/requests.md#r-086)).
+- **It is shown as GitHub's latest release, not flagged as a pre-release**, by the owner's choice, so that the
+  download link and the in-app updater — both read `releases/latest`, which skips flagged pre-releases — find it
+  ([R-103](docs/product/requests.md#r-103); the same reading for `v0.1.0rc1` is
+  [this note](docs/defects/the-published-rc1-release-is-marked-stable.md)).
+- **The release gate's clean-machine check was not performed for it.** The installer and the portable were not
+  launched on a clean, offline Windows x64 machine before publication
+  ([the gate](docs/architecture/first-release-plan/06-5-the-release-gate.md#5-the-release-gate); R-103 records the owner's waiver).
 - **The binaries are not Authenticode-signed**, by design (REQ-STARTUP-021/023;
-  [first-release plan §4](docs/architecture/first-release-plan/04-4-the-windows-release-pipeline.md#4-the-windows-release-pipeline)). What is signed is
-  the checksum manifest, which the in-app updater verifies before it downloads anything.
+  [first-release plan §4](docs/architecture/first-release-plan/04-4-the-windows-release-pipeline.md#4-the-windows-release-pipeline)).
 
 **Platforms.**
 
-- **Windows x64** is the one platform the first release will publish for
+- **Windows x64** is the one platform a release publishes for
   ([`PD-STARTUP-001`](docs/product/directives/pd-startup-001.md#pd-startup-001)). `pnpm package` builds its installer on Windows x64.
 - **Linux** may be built on a developer's Linux host
   ([ADR-0066](docs/architecture/adr/0066-the-linux-artifact-is-built-on-a-developer-host.md)); the artifact is
@@ -82,7 +140,7 @@ Two things about that release a reader should know:
   ([IC-3](docs/architecture/implementation-conditions/ic-3-the-build-host-obligations.md)).
   Nothing in the application is removed or disabled on either. The proofs are run from source on Windows and on Linux.
 
-**What stands between `v0.1.0rc1` and `v0.1.0`**, from
+**What stands between `v0.1.0rc2` and `v0.1.0`**, from
 [`docs/architecture/first-release-plan.md`](docs/architecture/first-release-plan.md):
 
 - **The release gate** ([§5](docs/architecture/first-release-plan/06-5-the-release-gate.md#5-the-release-gate)): the installer and the
@@ -93,9 +151,17 @@ Two things about that release a reader should know:
 - **The apply and restart of an update against a real Windows artifact** are unit-tested over fakes and still owed
   ([§4.6](docs/architecture/first-release-plan/04-4-the-windows-release-pipeline.md#4-the-windows-release-pipeline)).
 
-## What it does
+## A tour of what is built
 
-The specification in [`docs/spec/`](docs/spec/README.md) states the behaviour, one domain per file. What is built:
+The window shows six primary views, in this order: **Workspace, Overview, Requirements, Git, Library, Settings**
+([`PD-SHELL-016`](docs/product/directives/pd-shell-016.md#pd-shell-016);
+[the map](docs/design/information-architecture.md)). A sidebar holds them and the workspace's sessions. Rotaris is
+graphical only: there is no command-line interface and no terminal user interface.
+
+The specification in [`docs/spec/`](docs/spec/README.md) states the behaviour, one domain per file.
+
+<details>
+<summary><b>Every built capability, by domain</b></summary>
 
 - **Runs** ([01](docs/spec/01-run-orchestration.md)). One task, classified for intent and carried by a coordinator
   that delegates to child agents, works one todo item per iteration, verifies what changed, and ends with a stop
@@ -144,41 +210,10 @@ The specification in [`docs/spec/`](docs/spec/README.md) states the behaviour, o
 Where the owner decided behaviour the specification does not state, a product directive in
 [`docs/product/directives.md`](docs/product/directives.md) governs over the requirements it names.
 
-## Quick start
+</details>
 
-### Run the release (Windows x64)
-
-Download `Rotaris-0.1.0rc1-windows-x64-setup.exe` (installer) or `Rotaris-0.1.0rc1-windows-x64-portable.exe`
-(portable) from the `v0.1.0rc1` release on this repository's GitHub releases page, and check it against
-`SHA256SUMS.txt` beside it. Then open a project folder, sign in to a provider with an API key under Settings, and
-start a run from the composer.
-
-### Build from source (any platform)
-
-**Prerequisites.**
-
-- Node.js 24 or later (`engines.node` is `>=24.0.0` in the root `package.json`).
-- pnpm 11.9.0, the version the root `package.json` pins in `packageManager`.
-- Git on `PATH`.
-- On Linux, a display, or `xvfb-run`, for anything that opens a window.
-- For `pnpm package` only: a Rust toolchain (`cargo`), which builds the portable's launcher stub
-  ([first-release plan §4.5](docs/architecture/first-release-plan/04-4-the-windows-release-pipeline.md#4-the-windows-release-pipeline)).
-- Network access for `pnpm code-intel:bundle`, which builds the bundled code-intelligence runtime from pinned
-  versions of `uv`, a Python interpreter and its packages. `pnpm notices`, `pnpm package` (which runs it itself) and
-  some proofs need that runtime. It cannot yet be built on a Windows ARM64 host
-  ([defect note](docs/defects/no-code-intelligence-bundle-can-be-built-for-a-windows-arm64-development-tree.md)).
-
-```sh
-pnpm install --prefer-offline                       # dependencies; Electron's install script fetches its runtime
-pnpm dev                                            # the application through electron-vite, against the workspace source
-```
-
-`packages/kernel/src/generated/`, which every build imports, is not committed: the first `pnpm dev`, `pnpm build` or
-`pnpm package` writes it with the generator behind `pnpm symbols`, and `pnpm symbols` or a test run keeps it current
-([the repaired note](docs/archive/defects/a-fresh-clone-cannot-build-until-pnpm-symbols-has-run.md)). If Electron's runtime is
-missing, as it is in a new Git worktree, `node node_modules/electron/install.js` installs it.
-
-## Concepts
+<details>
+<summary><b>Concepts</b> — workspace, session, run, persona, checkpoint, skill, hook, artifact</summary>
 
 | Term | What it means here | Where it is defined |
 |---|---|---|
@@ -194,7 +229,12 @@ missing, as it is in a new Git worktree, `node node_modules/electron/install.js`
 
 The full vocabulary, one context at a time, is [`CONTEXT-MAP.md`](CONTEXT-MAP.md).
 
-## Tools
+</details>
+
+<a id="tools"></a>
+
+<details>
+<summary><b>Tools</b> — what an agent may be granted</summary>
 
 The public tools a persona may be granted are exactly these (`REQ-TOOLS-001`). MCP servers are granted separately,
 through a persona's `mcp_servers` key.
@@ -217,7 +257,12 @@ through a persona's `mcp_servers` key.
 The capability columns are the declarations of `REQ-TOOLS-001`. The executors are in `packages/agent-tools/src/`; a
 declared tool with no executor is removed from the persona rather than offered (`apps/desktop/src/run-host/tools.ts`).
 
-## Permissions
+</details>
+
+<a id="permissions"></a>
+
+<details>
+<summary><b>Permissions</b> — the three modes and the starter rules</summary>
 
 Every tool call resolves to **allow**, **ask** or **deny** at one gate before anything runs, and every decision is
 written to the session's audit trail (spec [05](docs/spec/05-tools-permissions-approvals.md) §2, §8).
@@ -241,7 +286,10 @@ written to the session's audit trail (spec [05](docs/spec/05-tools-permissions-a
 - An approval you grant for the session covers matching calls for the rest of it, including after a mode change
   (`REQ-TOOLS-023`).
 
-## Reference
+</details>
+
+<details>
+<summary><b>Reference</b> — slash commands, files on disk, themes, repository commands</summary>
 
 There is no command line to document. What follows is the in-app command surface, the files the application reads
 and writes, and the repository's own commands.
@@ -291,7 +339,22 @@ Each proof launches the **built** application against a scratch profile and meas
 [`docs/proofs/README.md`](docs/proofs/README.md) is the registry of all of them. `pnpm live-run` is the one check that
 spends real money, and an agent asks before running it ([`AGENTS.md`](AGENTS.md)).
 
-## Repository layout
+</details>
+
+## How it is put together
+
+It is **one Electron desktop application**, built as a pnpm workspace of TypeScript packages.
+
+One application, five composition roots in `apps/desktop/src/`. They are the only places `electron` is imported
+([`docs/module-map.md`](docs/module-map.md), [component view](docs/architecture/views/01-component-view.md)).
+
+| Root | What it owns |
+|---|---|
+| `main/` | Windows and dialogs, the command router, provider sign-in and credentials, notices, preferences, process supervision, the updater |
+| `preload/` | The one frozen bridge a window gets, `window.rotaris` |
+| `renderer/` | The React surfaces, one role per route (main, approval, pause, hook review, provider, persona, terminal) |
+| `run-host/` | One live session: runs, turns, tools, hooks, MCP servers, the skill catalogue, checkpoints, terminal streams |
+| `workspace-service/` | Workspace identity, the store's open and migration, backup and restore, configuration, traceability, saved prompts |
 
 | Path | What is there |
 |---|---|
@@ -320,7 +383,7 @@ All three of `apps/*`, `packages/*` and `tools/*` are workspace members (`pnpm-w
   edit and updated in the same commit as one.
 - **The design language** in [`docs/design/README.md`](docs/design/README.md) binds every drawn surface.
 
-**Documentation.**
+### Documentation
 
 - **Specification:** [`docs/spec/README.md`](docs/spec/README.md) — 3,973 requirement identifiers across 19 shipping
   domains, 258 of them withdrawn in place, as that file counts them; two further domains, the terminal UI and the

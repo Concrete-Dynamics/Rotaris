@@ -70,6 +70,14 @@ export const PREPARED_TARGETS = Object.freeze({
       linux: {
         target: [{ target: 'AppImage', arch: ['x64'] }],
         category: 'Development',
+        // The packed executable's name. Left to electron-builder it is derived from the package's name, `@rotaris/desktop`,
+        // and came out `@rotarisdesktop` at the Linux build's first execution (2026-11-17, ADR-0066): the fuse check, which
+        // reads `linux-unpacked/rotaris`, found no executable and refused the build. The name is the product's, lower case.
+        executableName: 'rotaris',
+        // REQ-STARTUP-024's application icon. electron-builder's icon tool reads PNG, SVG and ICNS and refused the
+        // Windows `icon.ico` at the first execution; `resources/icons/` holds the same seven images (O-4's, 16 to 256 px),
+        // taken out of that file one by one and written as `<size>x<size>.png`, the set the tool expects of a directory.
+        icon: 'resources/icons',
         // REQ-STARTUP-024's desktop entry. Exec is electron-builder's (`AppRun %U`): `%U` passes the directory a file
         // manager hands over, which REQ-STARTUP-041 (a) reads as the opened workspace; `inode/directory` is what makes
         // a folder's "open with" offer the application at all.

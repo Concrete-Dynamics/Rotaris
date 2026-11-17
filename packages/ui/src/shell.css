@@ -3182,3 +3182,8 @@ table, .mono { font-variant-numeric: tabular-nums; }
 .nav-rail[data-folded='0'] .nav-rail__session-region { padding-top: 0; }
 .nav-rail__session-region .nav-rail__sessions-head { padding-top: var(--rt-space-3); }
 .nav-rail__session-list > li:has(> .nav-session[data-current='1']) { top: calc(var(--rt-space-6) + var(--rt-space-3)); }
+
+/* ── R-102: the views' interiors ── */
+/* The Project section's recorded failure (REQ-WORKSPACE-113) is said as a failure: the danger rule, a glyph, the primary ink (REQ-SHELL-116). */
+.agents__project-failure { display: block; margin-top: var(--rt-space-2); padding: var(--rt-space-1) 0 var(--rt-space-1) var(--rt-space-2); border-left: var(--rt-space-1) solid var(--rt-danger-300); color: var(--rt-text); overflow-wrap: anywhere; }
+.agents__project-failure > .ph { margin-right: var(--rt-space-1); color: var(--rt-danger-300); vertical-align: -0.125em; }

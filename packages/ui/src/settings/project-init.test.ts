@@ -93,7 +93,8 @@ describe('the sidebar Project section', () => {
   });
 
   it('appends a recorded failure to the hint', () => {
-    expect(projectSidebarSection(view({ pending: ['a'], lastError: 'it broke' }), LABELS).hint).toBe('Not run yet: Task A. Last run failed: it broke');
+    expect(projectSidebarSection(view({ pending: ['a'], lastError: 'it broke' }), LABELS)).toMatchObject({ hint: 'Not run yet: Task A. Last run failed: it broke', status: 'Not run yet: Task A.', failure: 'Last run failed: it broke' });
+    expect(projectSidebarSection(view({ pending: ['a'] }), LABELS).failure).toBeNull();
   });
 });
 

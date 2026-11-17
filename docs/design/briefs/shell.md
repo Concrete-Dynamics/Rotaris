@@ -139,3 +139,16 @@ Put the three scores and the model's reading — that the dock itself, not its d
 
 **Evidence:** six captures of the build without the dock — the rail at 1440×900, the open sidebar at 1680×1000 with and without an agent selected, the Overview, and the sidebar opened by hand at 1440×900 and 1100×720 — with three sessions, two of them waiting on an approval, so the heading read "2 need you" and the rail's control carried its dot. **Not weighed by a critic:** this build differs from the one scored 25 by the items kept above, and no critic has read it.
 
+## 8. The views' interiors — 2026-11-17, [R-102](../../product/requests.md#r-102)
+
+The owner, after the pull request of sections 1 to 7 was merged: "do the next part of the ui according to our original plan". Read as the findings the critiques left open inside the views, taken where a repair stays inside the surface that draws it.
+
+| Finding | Answer |
+|---|---|
+| C-12 / E-12 — the Workspace pane's setup failure was plain ink. | **Half repaired.** The failure sentence stands on its own line behind the danger rule with a glyph, in the primary ink; REQ-WORKSPACE-113's words are unchanged. The message's build command is the workspace domain's text and stays open in its defect note. |
+| C-14 — Git named the checkpoint session by its identifier. | **Repaired**, [`PD-GIT-003`](../../product/directives/pd-git-003.md#pd-git-003): the label, then the branch; the identifier is the tooltip. |
+| C-16 — an enabled Authenticate on a "Coming soon" provider. | **Repaired** (REQ-CONFIG-371): disabled, with the provider's detail as its tooltip. The defect note is archived. |
+| F-12's "session session 3" | **Not a finding:** REQ-MONITOR-164's form is `session {name}` and the fixture's name began with the word. |
+| D-05 / E-14 / F-13 — the start marker over the first row. | **Open.** The marker stands in the row pool, whose slots are placed from the pool's top; moving it moves the origin ADR-0045's offsets are measured from. A repair of its own, with `transcript-proof`. |
+| C-13, C-15, C-17, E-10 / F-06, F-08 to F-10, F-12's order | **Open**, `proposed`, as sections 2 to 6 state them. |
+

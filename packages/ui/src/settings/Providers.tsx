@@ -141,12 +141,14 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
           <div className="provider-row__actions">
             {/* PD-CONFIG-009: first in the row and a hairline, whether or not credentials are stored — the label
                 (REQ-CONFIG-372), the status word and the indicator say which, and the fill is the card head's.
-                What the press does is `authenticatePress`'s. */}
+                What the press does is `authenticatePress`'s. REQ-CONFIG-371: it is enabled while the provider is actionable,
+                available and not busy; unavailable, its tooltip is the provider's own detail. */}
             <DesignButton
               type="button"
               className="btn btn-secondary btn-compact"
               aria-label={`${authName} ${row.displayName}`}
-              disabled={busy !== null}
+              disabled={busy !== null || !row.available}
+              title={row.available ? undefined : row.health?.detail || word}
               onClick={() => { const press = authenticatePress(row); if (press.kind === 'key-field') { setOpen(true); setMessage({ ok: true, text: press.message }); setKeyFocus((n) => n + 1); } else props.onReauthenticate(row.id); }}
             >
               {authAction}

@@ -40,6 +40,14 @@ describe('the providers card draws one filled control (PD-CONFIG-009, over REQ-C
     expect(actions.filter((a) => a.includes('>Re-authenticate<'))).toHaveLength(1);
   });
 
+  it('disables Authenticate on a provider that is not available, and on no other (REQ-CONFIG-371)', () => {
+    const tags = [...card(SIX).matchAll(/<button[^>]*aria-label="Authenticate ([^"]*)"[^>]*>/g)];
+    const disabled = tags.filter((m) => /\sdisabled=""/.test(m[0])).map((m) => m[1]);
+    expect(disabled).toEqual(['Rotaris Cloud (recommended)']);
+    // The tooltip is the provider's own detail: its status word where it reports none.
+    expect(tags.find((m) => m[1] === 'Rotaris Cloud (recommended)')?.[0]).toContain('title="Coming soon"');
+  });
+
   it('draws one "Add endpoint" when no provider is listed, the head\'s, and names it in the state\'s sentence (REQ-CONFIG-388, REQ-NOTIFY-006)', () => {
     const html = card([]);
     expect(filled(html)).toEqual(['Add endpoint']);

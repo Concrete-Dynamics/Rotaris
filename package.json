@@ -18,6 +18,7 @@
     "proofs:index": "node tools/proof-registry/generate.mjs --write",
     "archive:migrate": "node tools/archive/migrate.mjs",
     "directive-proof": "node apps/desktop/scripts/directive-proof.mjs",
+    "linux-acceptance-proof": "node apps/desktop/scripts/linux-acceptance-proof.mjs",
     "dev": "pnpm --filter @rotaris/desktop dev",
     "build": "node tools/dev-time/cli.mjs run --quiet build:desktop -- pnpm --filter @rotaris/desktop build",
     "theme-proof": "node apps/desktop/scripts/theme-proof.mjs",

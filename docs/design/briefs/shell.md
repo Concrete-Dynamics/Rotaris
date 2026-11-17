@@ -106,3 +106,26 @@ The owner, asked whether the round both audits named as owed should be done now 
 **What the third revision costs,** as the directive states it: the followed session's contents push the sessions under it down, which the row's control undoes; and the sessions no longer stand directly under Workspace and Overview.
 
 **Not weighed by a critic.** The third revision was looked at by its builder in the captures and by the checks, and by no further critic. This surface has now had four critiques; a fifth is the owner's to ask for.
+
+## 6. Audit 2026-11-17 — an independent critique of the third revision, and the fourth
+
+**Evidence:** twelve captures of revision 3's build (`5870c470`), three sessions of three agents each, at 1440×900 and 1680×1000, and with the sidebar opened by hand at 1100×720 and 1000×680. Read by an agent that had built none of it and had not read this brief before scoring; asked for by the owner. **Score: 20 of 40** — below revision 2's 22 and below the 25 the surface held before the dock. Three critics, three falling scores: the dock has cost more than it has given at every reading so far, and the fourth revision below is read by no critic.
+
+| Id | Sev. | Finding | Answer |
+|---|---|---|---|
+| F-01 | P1 | With its contents shown, the followed session pushed every other session out of view at each captured size, with no sign of them but a fade (E-04 again). | **Repaired.** Where other sessions are listed the contents keep to a height that leaves the heading, the followed row and up to two more rows in view, and scroll inside it. The heading, which holds its place, names the sessions not followed: "1 needs you", or "2 running". At 1000×680 with the sidebar opened by hand the contents are 96 px. |
+| F-02 | P2 | On every view but the Workspace the followed row carried a disclosure with nothing under it. | **Repaired.** The control is drawn only where the contents hold something. |
+| F-03 | P2 | The contents' headings stood 4 px left of the session's label and nothing shared a keyline. | **Repaired.** A part's heading starts where the session's label starts; an agent's row is inset from it. |
+| F-04 | P2 | The selected agent carried the active view's tint while the followed session carried none. | **Repaired** on the agent's side: docked, a selected agent takes the hover fill. The followed row is still marked by ink and weight alone. |
+| F-05 | P2 | Two rows began "coding-agent"; the name that told them apart stood under it in the tertiary ink. | **Repaired** when docked: the name leads and the persona stands under it. Session labels still elide at the column's width; **open**. |
+| F-06 | P2 | Steer and Cancel in the dock and in the inspector (E-10). | **Open**, `proposed`. |
+| F-07 | P2 | The project's setup section stands under a session's hairline, though it is the project's. | **Open**, `proposed`: it wants a place of its own under "Project", which is a second dock. Its failure text is E-12. |
+| F-08 | P2 | Four heading styles in one column; three headings stacked over a three-item plan. | **Open**; the plan pane's own (E-07). |
+| F-09 | P3 | "running" in the body face on a session and in the mono face on an agent. | **Open.** The agent's line carries a figure. |
+| F-10 | P3 | The rail's sessions control is an unlabelled glyph among labelled buttons. | **Open**; clause 5 decides it has no label, and its title and accessible name say what it opens. |
+| F-11 | P3 | Scrolled, a line showed above the held heading. | **Repaired.** The heading is opaque to the region's top edge. |
+| F-12 | P3 | The sidebar lists newest first and the Overview's card oldest first; three routes to the browser on one screen; "session session 3". | **Open**, `proposed`. |
+| F-13 | P3 | The start marker overlaps the first row (E-14). | **Open**; a defect note. |
+
+**Not weighed by a critic.** Revision 4 was looked at by its builder in six captures and by the checks. The loop's three iterations for the dock are spent. Whether the dock stays is the question this section leaves: the build before it scored higher than any build with it.
+

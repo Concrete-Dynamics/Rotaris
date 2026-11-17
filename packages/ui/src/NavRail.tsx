@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment } from 'react';
 import type { SessionListItemPayload, ViewGroup, ViewId } from '@rotaris/contracts';
 import { describeWithShortcut, type KeyboardPlatform } from './commands/registry.js';
 import { Button as DesignButton } from './design-system/index.js';
@@ -10,7 +10,7 @@ import { sessionDot } from './OverviewView.js';
  *
  * It has two forms and one markup. **Open**, it is a column of the sidebar's width: the start control; the views — Workspace
  * and Overview, then the project's three under their heading — which stand in the same place on every view; under them
- * the workspace's sessions, the followed one carrying the Workspace's dock as its contents; and Settings at the foot. **Folded**, it is the rail REQ-SHELL-027 described — one button per view, icon above label — with
+ * the workspace's sessions; and Settings at the foot. **Folded**, it is the rail REQ-SHELL-027 described — one button per view, icon above label — with
  * one control under the start control that stands for the list and opens the browser. The window's width folds it
  * (`AppShell` resolves it, below `SIDEBAR_FOLD_BELOW`) and the fold control overrides the width either way.
  *
@@ -63,8 +63,6 @@ export interface NavRailProps {
   readonly folded?: boolean | undefined;
   /** Receives whether the sidebar is folded at the moment of the press. */
   readonly onToggleFold?: ((foldedNow: boolean) => void) | undefined;
-  /** PD-SHELL-016 clause 8 (revision 2): receives the dock element while the sidebar is open, and null when it folds or unmounts. */
-  readonly dockRef?: ((element: HTMLElement | null) => void) | undefined;
 }
 
 /** How many sessions the sidebar lists before it leaves the rest to the browser; the remainder is counted under the list. */
@@ -110,7 +108,7 @@ function sessionsEmptySentence(state: NavRailSessions['state']): string {
   return 'No sessions yet. A run you start is kept here.';
 }
 
-export function NavRail({ items, active, onSelect, platform = 'windows', groups, sessions, folded = false, onToggleFold, dockRef }: NavRailProps) {
+export function NavRail({ items, active, onSelect, platform = 'windows', groups, sessions, folded = false, onToggleFold }: NavRailProps) {
   const headed = groups ? groups.filter((g) => g.id !== 'system') : [{ id: 'work' as ViewGroup, label: null }];
   const members = (group: ViewGroup) => (groups ? items.filter((it) => it.group === group) : items);
   const foot = groups ? items.filter((it) => it.group === 'system') : [];
@@ -120,15 +118,10 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
   const attention = others.some((row) => row.awaitingInput) ? 'needs' : others.some((row) => row.busy) ? 'running' : 'none';
   const followed = sessions ? sessions.rows.find((row) => row.sessionId === sessions.currentId) ?? null : null;
   // The open form's own statement of the sessions this window does not follow: the heading holds its place while the region
-  // scrolls, so a session that needs the operator is named even when its row is under the followed session's contents.
+  // scrolls, so a session that needs the operator is named even when its row is scrolled out of view.
   const needing = others.filter((row) => row.awaitingInput).length;
   const runningElsewhere = others.filter((row) => row.busy && !row.awaitingInput).length;
   const othersNote = needing > 0 ? `${needing} need${needing === 1 ? 's' : ''} you` : runningElsewhere > 0 ? `${runningElsewhere} running` : null;
-  const dockHere = !folded && dockRef !== undefined;
-  // The followed session's contents can be put away, so the sessions under it are in reach without scrolling; the dock stays
-  // mounted (the Workspace draws into it) and is only not shown. Local to the window, like the fold.
-  const [contentsHidden, setContentsHidden] = useState(false);
-  const followedListed = sessions !== undefined && listed.some((row) => row.sessionId === sessions.currentId);
   const browseTitle = `List sessions${followed ? ` — following ${followed.label}` : ''}${attention === 'needs' ? '; another session needs you' : attention === 'running' ? '; another session is running' : ''}`;
   return (
     <nav className="nav-rail" aria-label="Primary" data-folded={folded ? '1' : '0'}>
@@ -156,8 +149,8 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
           </Fragment>
         ))}
         {sessions && (
-          /* One scroll region for the sessions and the dock (PD-SHELL-016 clauses 3 and 8), under the views, which never move:
-             it takes the height the fixed regions leave. The heading and the followed row hold their place while it scrolls. */
+          /* The sessions' scroll region (PD-SHELL-016 clause 3), under the views, which never move: it takes the height the
+             fixed regions leave. The heading and the followed row hold their place while it scrolls. */
           <div className="nav-rail__session-region" role="presentation">
             <section className="nav-rail__sessions" aria-label="Sessions" data-testid="sidebar-sessions" data-state={sessions.state}>
               <header className="nav-rail__sessions-head">
@@ -173,8 +166,7 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
                       const current = row.sessionId === sessions.currentId;
                       const dot = sessionDot(row, current);
                       return (
-                        <Fragment key={row.sessionId}>
-                        <li>
+                        <li key={row.sessionId}>
                           <DesignButton
                             type="button" className="nav-session" data-session={row.sessionId} data-current={current ? '1' : '0'}
                             aria-current={current ? 'true' : undefined}
@@ -185,25 +177,13 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
                             <span className="nav-session__label">{row.label}</span>
                             <span className="nav-session__meta">{sessionMeta(row, current)}</span>
                           </DesignButton>
-                          {current && dockHere && (
-                            <DesignButton type="button" className="nav-session__toggle" data-testid="sidebar-dock-toggle" aria-expanded={!contentsHidden}
-                              aria-label={contentsHidden ? 'Show this session\'s agents and plan' : 'Hide this session\'s agents and plan'} title={contentsHidden ? 'Show this session\'s agents and plan' : 'Hide this session\'s agents and plan'}
-                              onClick={() => setContentsHidden(!contentsHidden)}>
-                              <i className={`ph ${contentsHidden ? 'ph-caret-right' : 'ph-caret-down'}`} aria-hidden="true" />
-                            </DesignButton>
-                          )}
                         </li>
-                        {/* PD-SHELL-016 clause 8: the dock is the followed session's own contents, so it stands directly under that row, inset from it. */}
-                        {current && dockHere && <li className="nav-session__children" role="presentation" hidden={contentsHidden}><div className="nav-rail__dock" ref={dockRef} data-testid="sidebar-dock" /></li>}
-                        </Fragment>
                       );
                     })}
                   </ul>
                 )}
               {sessions.rows.length > listed.length && <p className="nav-rail__sessions-more">{sessions.rows.length - listed.length} more in List sessions.</p>}
             </section>
-            {/* No followed session among the listed rows (none yet, or one past the twelfth): the dock stands under the list. */}
-            {dockHere && !followedListed && <div className="nav-rail__dock" ref={dockRef} data-testid="sidebar-dock" />}
           </div>
         )}
         {foot.length > 0 && (

@@ -129,3 +129,13 @@ The owner, asked whether the round both audits named as owed should be done now 
 
 **Not weighed by a critic.** Revision 4 was looked at by its builder in six captures and by the checks. The loop's three iterations for the dock are spent. Whether the dock stays is the question this section leaves: the build before it scored higher than any build with it.
 
+## 7. The dock withdrawn — 2026-11-17, on the owner's word
+
+Put the three scores and the model's reading — that the dock itself, not its details, cost the surface — the owner answered "Remove the dock". `PD-SHELL-016` revision 5 withdraws clause 8: the Workspace's delegation pane is its own left column again, the sidebar is 232 px and folds below 1600 px, as in the build the second critique scored 25.
+
+**Kept from sections 5 and 6,** since none of it needed the dock: the views first and fixed with the sessions in their own region (E-06); the held heading and followed row (E-03, F-11); the heading's statement of the sessions not followed (F-01's second half); "running in background" (E-09); the selection's tint alone (E-08); no transition on a view button (E-01); the composer's band wrapping beside an open sidebar (E-05).
+
+**Moot with the dock:** E-02, E-04, E-07, E-11, E-13, F-02, F-03, F-04, F-07. **Reverted with it:** F-05's name-first agent row, which was a docked style; in the Workspace's column a row leads with its persona as before, and the finding stands **open** there. **Still open:** E-10/F-06, E-12, E-14/F-13, F-08, F-09, F-10, F-12, and section 3's.
+
+**Evidence:** six captures of the build without the dock — the rail at 1440×900, the open sidebar at 1680×1000 with and without an agent selected, the Overview, and the sidebar opened by hand at 1440×900 and 1100×720 — with three sessions, two of them waiting on an approval, so the heading read "2 need you" and the rail's control carried its dot. **Not weighed by a critic:** this build differs from the one scored 25 by the items kept above, and no critic has read it.
+

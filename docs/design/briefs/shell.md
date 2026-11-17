@@ -149,6 +149,6 @@ The owner, after the pull request of sections 1 to 7 was merged: "do the next pa
 | C-14 — Git named the checkpoint session by its identifier. | **Repaired**, [`PD-GIT-003`](../../product/directives/pd-git-003.md#pd-git-003): the label, then the branch; the identifier is the tooltip. |
 | C-16 — an enabled Authenticate on a "Coming soon" provider. | **Repaired** (REQ-CONFIG-371): disabled, with the provider's detail as its tooltip. The defect note is archived. |
 | F-12's "session session 3" | **Not a finding:** REQ-MONITOR-164's form is `session {name}` and the fixture's name began with the word. |
-| D-05 / E-14 / F-13 — the start marker over the first row. | **Open.** The marker stands in the row pool, whose slots are placed from the pool's top; moving it moves the origin ADR-0045's offsets are measured from. A repair of its own, with `transcript-proof`. |
+| D-05 / E-14 / F-13 — the start marker over the first row. | **Repaired** in a change of its own: the marker is drawn in the first row's slot, above the row, and measured with it (`leadKey`); the pool's origin and its arithmetic are untouched. The defect note is archived. |
 | C-13, C-15, C-17, E-10 / F-06, F-08 to F-10, F-12's order | **Open**, `proposed`, as sections 2 to 6 state them. |
 

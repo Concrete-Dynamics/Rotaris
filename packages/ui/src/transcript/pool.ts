@@ -219,9 +219,28 @@ export function readHeight(
   places: readonly { readonly blockStart: boolean }[],
   measurements: { peek(key: string): number | undefined },
   lastByIdentity: { peek(identity: string): number | undefined },
+  /** The estimated height of what the slot draws above the row (`leadKey`), or 0: only the first row carries any. */
+  lead = 0,
 ): number {
   const open = expanded.has(d.key);
-  return measurements.peek(measureKey(d, width, open, null)) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, width, places[at]?.blockStart ?? false);
+  return measurements.peek(leadKey(measureKey(d, width, open, null), lead > 0)) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, width, places[at]?.blockStart ?? false) + lead;
+}
+
+/** What the start-of-conversation marker draws before it is measured: its two paddings and one line of its caption. */
+export const SLOT_LEAD_ESTIMATE = 32;
+
+/**
+ * The measurement key of a slot that draws something above its row — the start-of-conversation marker, the failed-page
+ * notice — which only the first row's slot does. The slot's height is then the row's and the lead's together, so it is
+ * filed apart from the row's own: the same row measured without a lead (before the oldest page arrived, or under a scope
+ * that puts another row first) must not answer for it, nor it for that row. The identity before the first separator is
+ * unchanged, so `identityOf` still names the row.
+ *
+ * The marker stood in the pool's flow until 2026-11-17, at the pool's top, where the slots are placed from: the first
+ * row was drawn over it (docs/archive/defects/the-start-of-conversation-marker-is-drawn-under-the-transcripts-first-row.md).
+ */
+export function leadKey(key: string, lead: boolean): string {
+  return lead ? `${key}|lead` : key;
 }
 
 /**

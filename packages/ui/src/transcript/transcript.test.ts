@@ -9,7 +9,7 @@ import {
 import type { DisplayRow } from './types.js';
 import {
   beginMeasuring, bindRange, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, forgetMeasured, indexAt, markMeasured, measureAtCommit,
-  newUpdatesLabel, observeAgain, readHeight, remeasuredSince, restoreAnchor, reuseOffsets, slotRef, updateShape, visibleRange,
+  SLOT_LEAD_ESTIMATE, leadKey, newUpdatesLabel, observeAgain, readHeight, remeasuredSince, restoreAnchor, reuseOffsets, slotRef, updateShape, visibleRange,
 } from './pool.js';
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
 import { SCROLL_ORIGIN_EPSILON, isOwnScroll } from './scroll.js';
@@ -540,6 +540,24 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     const key = measureKey(d, 800, false, null);
     const measured = { peek: (k: string): number | undefined => (k === key ? 55 : undefined) };
     expect(readHeight(d, 0, 800, new Set(), starts, measured, last)).toBe(55);
+  });
+
+  it('a slot that draws a lead above its row is measured apart from the row alone, and estimated with the lead', () => {
+    // The start-of-conversation marker stands in the first row's slot, so that slot's height is the row's and the marker's.
+    const d = displayed(0, 'one line');
+    const none = { peek: (): number | undefined => undefined };
+    const starts = [{ blockStart: true }];
+    expect(readHeight(d, 0, 800, new Set(), starts, none, none, SLOT_LEAD_ESTIMATE)).toBe(estimateHeight(d, false, 800, true) + SLOT_LEAD_ESTIMATE);
+    const key = measureKey(d, 800, false, null);
+    expect(leadKey(key, false)).toBe(key);
+    expect(leadKey(key, true)).not.toBe(key);
+    expect(identityOf(leadKey(key, true))).toBe(identityOf(key));
+    // The row measured without a lead does not answer for the slot with one, nor the reverse.
+    const alone = { peek: (k: string): number | undefined => (k === key ? 55 : undefined) };
+    const withLead = { peek: (k: string): number | undefined => (k === leadKey(key, true) ? 87 : undefined) };
+    expect(readHeight(d, 0, 800, new Set(), starts, alone, none, SLOT_LEAD_ESTIMATE)).toBe(estimateHeight(d, false, 800, true) + SLOT_LEAD_ESTIMATE);
+    expect(readHeight(d, 0, 800, new Set(), starts, withLead, none, SLOT_LEAD_ESTIMATE)).toBe(87);
+    expect(readHeight(d, 0, 800, new Set(), starts, withLead, none)).toBe(estimateHeight(d, false, 800, true));
   });
 
   /*

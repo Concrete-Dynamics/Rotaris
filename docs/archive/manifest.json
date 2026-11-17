@@ -1361,6 +1361,7 @@
     "defects/the-stall-waits-between-turns-cite-oq-152-which-is-the-teardown-question.md": "2d89b7ad1dc1ab041ddb2854fccb10855e523686c6abb565bf3a62dec1fddace",
     "defects/the-stalled-call-was-the-one-call-missing-from-the-pack.md": "509eb6e359fea5b641400b9ffcedb14d794e61702e41f8ac1ad5e2b505ce64e7",
     "defects/the-stalled-tag-beside-a-tree-rows-state-can-squeeze-the-persona-onto-two-lines.md": "f8fa1bd1367cd49582a1e2cdbb919431f9f32fc4253233d52fb6efe88dc1de6a",
+    "defects/the-start-of-conversation-marker-is-drawn-under-the-transcripts-first-row.md": "dca7405d1f86b8fcd8d6dfd345122922d6f07fa38da093cf928b2026349c8469",
     "defects/the-start-session-dialog-accepts-and-creates-nothing.md": "018c7380b43b49ef049a4698b9d9a6a634930fd3c7fa7b31ba51ab77da8b1fa4",
     "defects/the-start-session-dialog-does-not-fit-the-minimum-window.md": "a1b367d64594bd9615a4959a9c61a843200c590203ba5fe6eeb1660186f7b4df",
     "defects/the-starter-agents-yaml-header-never-says-models-are-wired-up-by-authenticating-a-provider.md": "63709747b52db77f8575abf16a89bfb0899d5a69dc14608d26aafe853585ed7e",

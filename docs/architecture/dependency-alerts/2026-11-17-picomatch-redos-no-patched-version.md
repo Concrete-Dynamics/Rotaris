@@ -1,8 +1,9 @@
 # Reading — `picomatch` ReDoS, GHSA-fc5q-39xc-vjpf, with no patched version to take (2026-11-17)
 
 The gate's blocking audit, `pnpm audit --prod --audit-level=high`, went red on 2026-11-17 on every branch and on
-`main` for an advisory published that day. This file is its reading. The exception it proposes is the owner's to
-accept; until then the pull request that carries it stays a draft.
+`main` for an advisory published that day. This file is its reading. The exception it proposes was the owner's to
+accept, and **the owner accepted it on 2026-11-17**: shown the reading's summary on the pull request that carries it,
+the owner answered "merge".
 
 - **Read against:** `main` at `dd75ae46`, Linux x86_64, Node 24.18.0, pnpm 11.9.0, 2026-11-17 about 17:30 UTC.
 - **Source:** `pnpm audit --prod --audit-level=high`; `pnpm why -r picomatch --prod`; `pnpm view picomatch dist-tags`;
@@ -60,4 +61,4 @@ the entry in the same commit.
 
 It dismisses no alert on GitHub, and it changes no manifest and no lockfile. It was written by the model
 (`claude-fable-5-2`) while cutting a release for [R-103](../../product/requests.md#r-103); accepting a high advisory's
-exception is the owner's decision.
+exception was the owner's decision, made as the opening paragraph records.

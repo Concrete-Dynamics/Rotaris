@@ -268,8 +268,10 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     expect(clampGitRight(600, 700)).toBe(700 - 280 - 8);
   });
   it('REQ-GIT-086/118: the picker entries and the default session branch', () => {
-    expect(pickerLabel(row({ sessionId: 'S', worktree: binding('p') }))).toBe('S · rotaris/session/S');
-    expect(pickerLabel(row({ sessionId: 'S' }))).toBe('S');
+    // PD-GIT-003: an entry is named by the session's label, as every other list of sessions names it; the identifier where it has none.
+    expect(pickerLabel(row({ sessionId: 'S', label: 'fix the parser', worktree: binding('p') }))).toBe('fix the parser · rotaris/session/S');
+    expect(pickerLabel(row({ sessionId: 'S', label: 'fix the parser' }))).toBe('fix the parser');
+    expect(pickerLabel(row({ sessionId: 'S', label: '  ' }))).toBe('S');
     expect(defaultSessionBranch('abc')).toBe('rotaris/session/abc');
   });
   it('REQ-GIT-116: the five dialog messages, distinguishable, in order', () => {

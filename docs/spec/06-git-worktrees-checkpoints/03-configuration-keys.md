@@ -49,6 +49,9 @@ Part 3 of 8 of [domain 06](../06-git-worktrees-checkpoints.md), which indexes ev
 ### Desktop Git View — Session Checkpoints Card
 
 - **REQ-GIT-086** — The checkpoints card SHALL live inside the Git view. Its header holds a session picker (accessible name "Checkpoint session", minimum width 220 px, entries labeled `<session-id> · <branch>` when the session has a branch, else the bare id) and a "Restore checkpoint" button. The table has columns `Checkpoint | Created | Iteration | Files changed | Kind`, single-row selection, rows ordered oldest first (stated in the table's accessibility description).
+  > **Narrowed by [`PD-GIT-003`](../../product/directives/pd-git-003.md#pd-git-003), 2026-11-17.** A picker entry is
+  > labelled by the session's label in place of its identifier, which is the entry's tooltip; a session with no label
+  > keeps its identifier.
 
 - **REQ-GIT-087** — The card's empty-state text SHALL vary by cause: no selectable session → `Start or open a session to see the checkpoints recorded for it.`; loading or stale listing → `Reading this session's checkpoints…`; unavailable → the listing's unavailable reason verbatim; genuinely empty → `No checkpoints are recorded for this session. Rotaris records one after each iteration of a worktree-isolated run.`
 

@@ -97,6 +97,10 @@ export interface ProjectSidebarSection {
   readonly label: string;
   readonly disabled: boolean;
   readonly hint: string;
+  /** The hint's own first part, what is pending or running, without the failure. */
+  readonly status: string;
+  /** REQ-WORKSPACE-113's "Last run failed: {message}", the hint's closing sentence, or null where no failure is recorded: drawn as a failure (REQ-SHELL-116), not as running text. */
+  readonly failure: string | null;
 }
 
 /**
@@ -106,8 +110,10 @@ export interface ProjectSidebarSection {
  */
 export function projectSidebarSection(view: InitializationView, labels: Readonly<Record<string, string>>): ProjectSidebarSection {
   const runnable = [...view.pending, ...view.skipped];
-  const failure = view.lastError !== null && view.lastError !== '' ? ` Last run failed: ${view.lastError}` : '';
-  if (view.running) return { hidden: false, label: 'Initializing…', disabled: true, hint: `Running the pending setup tasks.${failure}` };
-  if (runnable.length === 0) return { hidden: true, label: '', disabled: true, hint: '' };
-  return { hidden: false, label: 'Initialize Project…', disabled: false, hint: `Not run yet: ${labelsOf(runnable, labels)}.${failure}` };
+  const failure = view.lastError !== null && view.lastError !== '' ? `Last run failed: ${view.lastError}` : null;
+  // The hint is the requirement's whole sentence; `status` and `failure` are its two parts, so the surface can say the second as a failure.
+  const section = (label: string, disabled: boolean, status: string): ProjectSidebarSection => ({ hidden: false, label, disabled, status, failure, hint: failure === null ? status : `${status} ${failure}` });
+  if (view.running) return section('Initializing…', true, 'Running the pending setup tasks.');
+  if (runnable.length === 0) return { hidden: true, label: '', disabled: true, hint: '', status: '', failure: null };
+  return section('Initialize Project…', false, `Not run yet: ${labelsOf(runnable, labels)}.`);
 }

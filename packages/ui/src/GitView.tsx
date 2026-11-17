@@ -170,8 +170,8 @@ export function clampGitRight(right: number, containerWidth: number, dividerWidt
   const maxByLeft = containerWidth - GIT_PANE_MIN - dividerWidth;
   return Math.round(Math.max(GIT_PANE_MIN, Math.min(GIT_RIGHT_MAX, right, Math.max(GIT_PANE_MIN, maxByLeft))));
 }
-/** REQ-GIT-086: the picker's entries. */
-export const pickerLabel = (s: SessionListItemPayload): string => (s.worktree ? `${s.sessionId} · ${s.worktree.branch}` : s.sessionId);
+/** PD-GIT-003 (over REQ-GIT-086): a picker entry is named by the session's label, the identifier where it has none; the branch follows where there is one. */
+export const pickerLabel = (s: SessionListItemPayload): string => { const name = s.label.trim() === '' ? s.sessionId : s.label; return s.worktree ? `${name} · ${s.worktree.branch}` : name; };
 /** REQ-GIT-088: the previous choice when it still exists, else the focused session, else the first entry, else none. */
 export function effectivePicked(entries: readonly SessionListItemPayload[], picked: string | null, focused: string | null | undefined): string | null {
   if (picked !== null && entries.some((s) => s.sessionId === picked)) return picked;
@@ -539,7 +539,7 @@ export function GitView(props: GitViewProps) {
           <Card kicker="Session checkpoints" testId="git-checkpoints" actions={(
             <div className="git__checkpoint-actions">
               <DesignSelect className="input select git__picker" aria-label="Checkpoint session" data-testid="git-checkpoint-session" disabled={pickerEntries.length === 0} value={effectivePick ?? ''} onChange={(e) => setPickedSession(e.currentTarget.value)}>
-                {pickerEntries.map((s) => <option key={s.sessionId} value={s.sessionId}>{pickerLabel(s)}</option>)}
+                {pickerEntries.map((s) => <option key={s.sessionId} value={s.sessionId} title={s.sessionId}>{pickerLabel(s)}</option>)}
               </DesignSelect>
               <DesignButton type="button" className="btn btn-secondary" disabled={restoreReason !== null || flow !== null} title={restoreReason ?? undefined} data-testid="git-restore" data-reason={restoreReason ?? ''} onClick={() => { void startRestore(); }}>Restore checkpoint</DesignButton>
             </div>

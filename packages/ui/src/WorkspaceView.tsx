@@ -1445,7 +1445,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
             <div className="agents__project" data-testid="project-section">
               <div className="agents__header"><span className="agents__title">Project setup</span></div>
               <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={projectSection.disabled} title={projectSection.hint} onClick={onOpenProjectSetup} data-action="project-initialize">{projectSection.label}</DesignButton>
-              <p className="text-tertiary settings__hint" data-testid="project-section-hint">{projectSection.hint}</p>
+              {/* REQ-WORKSPACE-113's hint, word for word; its failure sentence is said as a failure is (REQ-SHELL-116, REQ-NOTIFY-005): the danger rule and a glyph beside the words. */}
+              <p className="text-tertiary settings__hint" data-testid="project-section-hint">
+                {projectSection.status}
+                {projectSection.failure !== null && <>{' '}<span className="agents__project-failure" data-testid="project-section-failure"><i className="ph ph-warning-circle" aria-hidden="true" />{projectSection.failure}</span></>}
+              </p>
             </div>
           )}
         </aside>

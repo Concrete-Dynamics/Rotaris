@@ -311,7 +311,7 @@ const isolated = await launch('isolated', workspace, local, preferences, {
   if (!new RegExp(`session ${session.session_id} bound to .* on rotaris/session/${session.session_id} \\(created by the session\\)`).test(isolated.log)) throw new Error('main did not log the binding');
   if (!/is isolated: the run works in/.test(isolated.log)) throw new Error('the run host did not log the effective root');
   const picker = first(p, '[data-testid="git-checkpoint-session"]');
-  if (!picker || !new RegExp(`${session.session_id} · rotaris/session/${session.session_id}`).test(picker.text)) throw new Error(`the checkpoint picker reads "${picker?.text ?? 'absent'}"`);
+  if (!picker || !new RegExp(` · rotaris/session/${session.session_id}`).test(picker.text)) throw new Error(`the checkpoint picker reads "${picker?.text ?? 'absent'}"`);
   // Since Part P an isolated run records a checkpoint per closing iteration (REQ-GIT-044's unset default): the card lists it.
   // (Until then this line asserted the card's empty sentence; the checkpoint proof owns the card's rows in detail.)
   const ckptRows = p['[data-testid="git-checkpoint-row"]'] ?? [];

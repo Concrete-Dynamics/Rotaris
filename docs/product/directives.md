@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and thirty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and thirty-two.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -75,6 +75,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 |---|---|
 | [PD-GIT-001](directives/pd-git-001.md) | isolation counts the runs that could share the launch's working tree |
 | [PD-GIT-002](directives/pd-git-002.md) | the Git view is titled "Git" |
+| [PD-GIT-003](directives/pd-git-003.md) | the checkpoint picker names a session by its label |
 
 ### HOOKS
 

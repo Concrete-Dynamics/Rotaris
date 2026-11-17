@@ -911,6 +911,7 @@
     "defects/an-open-persona-window-keeps-the-display-preferences-it-booted-with.md": "967118104f7bf3fc7c749760c5f3d4964e25d997b42808f1ab3e3c4bd2f94679",
     "defects/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md": "0db7a5f8032e6fd4c7f41a8010e953df88bf4a1d8f21b29f9b5e7f4663e6e50f",
     "defects/an-orderly-quit-logs-the-run-host-gone-at-error.md": "152babe4101ffac6e81ef4f209fdedb2e693bfc8d7b3348ed0b11736b13e4afd",
+    "defects/an-unavailable-providers-authenticate-is-enabled.md": "6803ddd4bcf99bce44660dcd41809085f99638a6c3be7af9104dbea2bcae66e2",
     "defects/an-unknown-key-in-a-merged-section-is-reported-without-the-file-that-states-it.md": "3b3c216c5d7ce25e0626aa43dc58fc389ca84c10f2899cb63415ee73fb4475eb",
     "defects/an-unreadable-workspace-identifier-leaves-the-window-unopened-without-a-notice.md": "40ed9686199467820e5e71f7af1bc4eeb8c689920eabfb15e7745784d96ae114",
     "defects/an-unresolved-remote-url-is-reported-available.md": "3fbded555c0c90b95b5a34651755571068444e6f5b680c642fb54da2ae9f42be",

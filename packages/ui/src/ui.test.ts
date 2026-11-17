@@ -426,6 +426,10 @@ describe('ui — the navigation sidebar (PD-SHELL-016)', () => {
     expect(open).toContain('data-testid="sidebar-dock-toggle" aria-expanded="true" aria-label="Hide this session&#x27;s agents and plan"');
     // A run this window does not follow says so, as its dot does.
     expect(draw({ sessions: { ...sessions(rows), currentId: 'a' }, dockRef: () => undefined })).toContain('<span class="nav-session__meta">running in background</span>');
+    // The heading names the sessions this window does not follow, so they are stated while their rows are under the contents.
+    expect(draw({ sessions: { ...sessions(rows), currentId: 'a' } })).toContain('data-testid="sidebar-sessions-note" data-attention="running">1 running</span>');
+    expect(draw({ sessions: { ...sessions([row('a'), row('b', { busy: true, awaitingInput: true }), row('c', { busy: true })]), currentId: 'a' } })).toContain('data-attention="needs">1 needs you</span>');
+    expect(open).not.toContain('sidebar-sessions-note');
     // No followed row among those listed: the dock stands under the list, not inside it.
     const none = draw({ sessions: { ...sessions(rows), currentId: null }, dockRef: () => undefined });
     expect(none).toContain('data-testid="sidebar-dock"');

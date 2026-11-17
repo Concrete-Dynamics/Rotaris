@@ -3204,3 +3204,33 @@ table, .mono { font-variant-numeric: tabular-nums; }
 .nav-session__toggle:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .nav-session[data-current='1']:has(+ .nav-session__toggle) { padding-right: var(--rt-space-6); }
 .nav-session__children[hidden] { display: none; }
+
+/* ── The dock after its second critique (2026-11-17, docs/design/briefs/shell.md section 6) ── */
+/* F-01: the followed session's contents never take the whole region: where other sessions are listed, the contents keep to
+   the height that leaves the heading, the followed row and two more rows in view, and scroll inside it. */
+.nav-rail__session-region { container-type: size; }
+.nav-rail__session-list:has(> li:nth-child(3)) > .nav-session__children { max-height: max(var(--rt-space-24), calc(100cqh - var(--rt-space-24) - var(--rt-space-6))); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.nav-rail__session-list:has(> li:nth-child(4)) > .nav-session__children { max-height: max(var(--rt-space-24), calc(100cqh - var(--rt-space-24) - var(--rt-space-16) - var(--rt-space-4))); }
+.nav-rail__sessions-note { margin-right: auto; font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); white-space: nowrap; }
+.nav-rail__sessions-note[data-attention='needs'] { color: var(--rt-warn); }
+/* F-02: a row whose contents hold nothing (another view is shown, or the session has no agents and no plan) offers no disclosure. */
+.nav-session__children:not(:has(.agents--docked > *)) { display: none; }
+.nav-session__toggle { display: none; }
+.nav-rail__session-list > li:has(+ .nav-session__children .agents--docked > *) > .nav-session__toggle { display: inline-flex; }
+.nav-session[data-current='1']:has(+ .nav-session__toggle) { padding-right: var(--rt-space-2); }
+.nav-rail__session-list > li:has(+ .nav-session__children .agents--docked > *) > .nav-session[data-current='1'] { padding-right: var(--rt-space-6); }
+/* F-03: one keyline. A part's heading starts where the session's label starts, and an agent's dot under it. */
+.agents--docked { padding-left: 0; --dock-keyline: calc(var(--rt-icon-size) / 2 + var(--rt-space-3)); }
+.agents--docked .agents__header, .agents--docked .todo-pane, .agents--docked .agents__project { padding-left: var(--dock-keyline); }
+.agents--docked .agents__project .agents__header { padding-left: 0; }
+.agents--docked .agent-tree { padding-left: var(--rt-space-2); }
+/* F-04: under a session the selected agent is marked more quietly than the active view above it. */
+.agents--docked .agent-row.is-selected { background: var(--rt-hover); }
+/* F-05: an agent is told from its sibling by its name, so the name leads and the persona stands under it. */
+.agents--docked .agent-row__main { flex-direction: column-reverse; }
+.agents--docked .agent-row__task { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
+.agents--docked .agent-row__persona, .agents--docked .agent-row.is-live .agent-row__persona { color: var(--rt-text-tertiary); font-weight: var(--rt-weight-body); }
+/* F-11: the held heading is opaque to the region's top edge, so nothing scrolls into view above it. */
+.nav-rail[data-folded='0'] .nav-rail__session-region { padding-top: 0; }
+.nav-rail__session-region .nav-rail__sessions-head { padding-top: var(--rt-space-3); }
+.nav-rail__session-list > li:has(> .nav-session[data-current='1']) { top: calc(var(--rt-space-6) + var(--rt-space-3)); }

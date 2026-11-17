@@ -119,6 +119,11 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
   const others = sessions ? sessions.rows.filter((row) => row.sessionId !== sessions.currentId) : [];
   const attention = others.some((row) => row.awaitingInput) ? 'needs' : others.some((row) => row.busy) ? 'running' : 'none';
   const followed = sessions ? sessions.rows.find((row) => row.sessionId === sessions.currentId) ?? null : null;
+  // The open form's own statement of the sessions this window does not follow: the heading holds its place while the region
+  // scrolls, so a session that needs the operator is named even when its row is under the followed session's contents.
+  const needing = others.filter((row) => row.awaitingInput).length;
+  const runningElsewhere = others.filter((row) => row.busy && !row.awaitingInput).length;
+  const othersNote = needing > 0 ? `${needing} need${needing === 1 ? 's' : ''} you` : runningElsewhere > 0 ? `${runningElsewhere} running` : null;
   const dockHere = !folded && dockRef !== undefined;
   // The followed session's contents can be put away, so the sessions under it are in reach without scrolling; the dock stays
   // mounted (the Workspace draws into it) and is only not shown. Local to the window, like the fold.
@@ -157,6 +162,7 @@ export function NavRail({ items, active, onSelect, platform = 'windows', groups,
             <section className="nav-rail__sessions" aria-label="Sessions" data-testid="sidebar-sessions" data-state={sessions.state}>
               <header className="nav-rail__sessions-head">
                 <span className="nav-rail__heading">Sessions</span>
+                {othersNote !== null && <span className="nav-rail__sessions-note" data-testid="sidebar-sessions-note" data-attention={attention}>{othersNote}</span>}
                 <DesignButton type="button" className="btn btn-link nav-rail__all" onClick={sessions.onBrowse} title="Open the session browser: search, repair, export and delete">List sessions</DesignButton>
               </header>
               {listed.length === 0

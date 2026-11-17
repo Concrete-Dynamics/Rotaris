@@ -81,5 +81,14 @@ catalog:
   zod: ^4.6.6
   zustand: ^5.0.16
 
+# auditConfig — an advisory that has been read and cannot yet be answered by an update. Each id stands in a reading
+# under docs/architecture/dependency-alerts/ (tools/workflows.test.ts holds that), and each goes when its reading says.
+auditConfig:
+  ignoreGhsas:
+    # picomatch <=4.0.7, ReDoS on a crafted glob pattern: reached by the release guard's vite alone, not shipped, and
+    # no patched version is published (docs/architecture/dependency-alerts/2026-11-17-picomatch-redos-no-patched-version.md).
+    # Goes when picomatch >=4.0.8 resolves under minimumReleaseAge.
+    - GHSA-fc5q-39xc-vjpf
+
 # One flat node_modules (see .npmrc for why); pnpm 11 reads it from here.
 nodeLinker: hoisted

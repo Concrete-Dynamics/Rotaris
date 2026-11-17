@@ -108,6 +108,7 @@ function volume(initial: Record<string, string>) {
   const files = new Map(Object.entries(initial));
   const ops: string[] = [];
   const port: StrategyFiles = {
+    makeExecutable: async (p) => { ops.push(`chmod:${p}`); },
     pathKind: async (p) => (files.has(p) ? 'file' : 'absent'),
     copyFile: async (from, to) => { ops.push(`copy:${to}`); files.set(to, `copy of ${from}`); },
     copyAside: async (from, to) => { ops.push(`copy-aside:${to}`); files.set(to, files.get(from)!); },

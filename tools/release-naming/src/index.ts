@@ -19,14 +19,15 @@
 export const PLATFORM_KEYS = ['windows-x64', 'macos-arm64', 'linux-x86_64'] as const;
 export type PlatformKey = (typeof PLATFORM_KEYS)[number];
 
-export const ARTIFACT_KINDS = ['setup', 'portable', 'dmg', 'appimage'] as const;
+export const ARTIFACT_KINDS = ['setup', 'portable', 'dmg', 'appimage', 'deb'] as const;
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 
 /** Per-platform kinds, exactly as REQ-STARTUP-031 fixes them. */
 export const KINDS_BY_PLATFORM: Readonly<Record<PlatformKey, readonly ArtifactKind[]>> = {
   'windows-x64': ['setup', 'portable'],
   'macos-arm64': ['dmg'],
-  'linux-x86_64': ['appimage'],
+  // PD-STARTUP-013: a Debian package beside the AppImage, which REQ-STARTUP-031 names alone.
+  'linux-x86_64': ['appimage', 'deb'],
 };
 
 export class UnknownArtifactKindError extends Error {
@@ -46,6 +47,10 @@ export function artifactName(version: string, kind: string): string {
       return `Rotaris-${version}-macos-arm64.dmg`;
     case 'appimage':
       return `Rotaris-${version}-linux-x86_64.AppImage`;
+    case 'deb':
+      // PD-STARTUP-013. The platform key is the authority's (`linux-x86_64`), not Debian's architecture word (`amd64`),
+      // so one release's assets name their platform one way.
+      return `Rotaris-${version}-linux-x86_64.deb`;
     default:
       throw new UnknownArtifactKindError(kind);
   }

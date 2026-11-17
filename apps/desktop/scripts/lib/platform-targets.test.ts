@@ -92,7 +92,11 @@ describe('linux-x86_64 — REQ-STARTUP-024, ESC-11', () => {
   const linux = config['linux'] as Section;
 
   it('an x64 AppImage on the static runtime, pinned explicitly on the stable line (ESC-11 (b))', () => {
-    expect(linux['target']).toEqual([{ target: 'AppImage', arch: ['x64'] }]);
+    // PD-STARTUP-013: the same run makes the Debian package beside it.
+    expect(linux['target']).toEqual([{ target: 'AppImage', arch: ['x64'] }, { target: 'deb', arch: ['x64'] }]);
+    expect(linux['executableName']).toBe('rotaris');
+    expect(linux['category']).toBe('Development;IDE');
+    expect(preparedConfiguration({}, 'linux-x86_64', '0.1.0rc3')['deb']).toEqual({ artifactName: 'Rotaris-0.1.0rc3-linux-x86_64.deb' });
     expect(config['toolsets']).toEqual({ appimage: '1.0.3' });
   });
 

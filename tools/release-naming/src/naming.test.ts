@@ -16,14 +16,19 @@ describe('release naming — REQ-STARTUP-031', () => {
     expect(() => artifactName('1.0.0', 'console')).toThrow(UnknownArtifactKindError);
     expect(() => artifactName('1.0.0', 'console')).toThrow(/setup, portable, dmg, appimage/);
   });
-  it('REQ-STARTUP-030: the matrix is exactly three platforms and four artifacts, with no console kind', () => {
+  it('REQ-STARTUP-030 under PD-STARTUP-013: the matrix is exactly three platforms and five artifacts — the Debian package beside the AppImage — with no console kind', () => {
     const all = releaseArtifacts('0.1.0');
     expect(all.map((a) => a.name)).toEqual([
       'Rotaris-0.1.0-windows-x64-setup.exe',
       'Rotaris-0.1.0-windows-x64-portable.exe',
       'Rotaris-0.1.0-macos-arm64.dmg',
       'Rotaris-0.1.0-linux-x86_64.AppImage',
+      'Rotaris-0.1.0-linux-x86_64.deb',
     ]);
+  });
+
+  it('PD-STARTUP-013: the Debian package carries the platform key, not Debian\'s architecture word', () => {
+    expect(artifactName('0.1.0rc3', 'deb')).toBe('Rotaris-0.1.0rc3-linux-x86_64.deb');
   });
 });
 
@@ -37,9 +42,9 @@ describe('the SBOM\'s name — PD-STARTUP-012 (extends REQ-STARTUP-031)', () => 
   it('refuses a key REQ-STARTUP-030 does not have, naming the known keys', () => {
     expect(() => sbomName('1.2.3', 'windows-arm64')).toThrow(/"windows-arm64" is not a platform key of REQ-STARTUP-030.*windows-x64, macos-arm64, linux-x86_64/);
   });
-  it('is never an artifact kind: the four shapes, the per-platform kinds and the unknown-kind error are unchanged', () => {
-    expect(ARTIFACT_KINDS).toEqual(['setup', 'portable', 'dmg', 'appimage']);
-    expect(KINDS_BY_PLATFORM).toEqual({ 'windows-x64': ['setup', 'portable'], 'macos-arm64': ['dmg'], 'linux-x86_64': ['appimage'] });
+  it('is never an artifact kind: the five shapes, the per-platform kinds and the unknown-kind error are unchanged', () => {
+    expect(ARTIFACT_KINDS).toEqual(['setup', 'portable', 'dmg', 'appimage', 'deb']);
+    expect(KINDS_BY_PLATFORM).toEqual({ 'windows-x64': ['setup', 'portable'], 'macos-arm64': ['dmg'], 'linux-x86_64': ['appimage', 'deb'] });
     for (const kind of ['sbom', 'sbom.cdx.json', 'cdx']) expect(() => artifactName('1.2.3', kind)).toThrow(UnknownArtifactKindError);
     const artifacts = releaseArtifacts('1.2.3').map((a) => a.name);
     for (const platform of PLATFORM_KEYS) expect(artifacts).not.toContain(sbomName('1.2.3', platform));

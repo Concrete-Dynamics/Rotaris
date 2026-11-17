@@ -59,6 +59,8 @@ what it did, or report work as finished that does not hold up. Each of those has
 | Work is declared done without evidence | Changed work is verified with deterministic checks before the run decides what to do next | [01](docs/spec/01-run-orchestration.md) |
 | What happened is gone when the window closes | Every run is persisted as it proceeds in a machine-local session store | [07](docs/spec/07-sessions-persistence.md), [20](docs/spec/20-event-history-replay-export.md) |
 
+<a id="quick-start"></a>
+
 ## Get started
 
 ### Download (Windows x64)
@@ -67,7 +69,7 @@ what it did, or report work as finished that does not hold up. Each of those has
    `Rotaris-<version>-windows-x64-setup.exe` (installer) or `Rotaris-<version>-windows-x64-portable.exe` (no install).
 2. Optionally check the file against `SHA256SUMS.txt` beside it.
 3. Start Rotaris and open a project folder.
-4. Under **Settings › Models**, sign in to a provider with an API key, or add your own OpenAI-compatible endpoint.
+4. <a id="1-register-a-provider"></a><a id="providers-auth-and-models"></a>Under **Settings › Models**, sign in to a provider with an API key, or add your own OpenAI-compatible endpoint.
 5. Type what you want done into the composer in the **Workspace** and press Run.
 
 > [!NOTE]
@@ -259,7 +261,7 @@ declared tool with no executor is removed from the persona rather than offered (
 
 </details>
 
-<a id="permissions"></a>
+<a id="permissions"></a><a id="permissions-and-security"></a>
 
 <details>
 <summary><b>Permissions</b> — the three modes and the starter rules</summary>

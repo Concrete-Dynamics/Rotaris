@@ -139,7 +139,7 @@ check('A: the place is left holding no store', !firstEmptying.left.includes('wor
   const d = launched.driver;
   await d.waitFor('.app-shell', { timeoutMs: 60_000 });
   const followed = await followNotice(d, 'restore');
-  check('B: the refusal is raised as an error notice whose action opens Settings › Project', followed.notice.action === 'Open Project settings' && followed.selected === 'Project', `${JSON.stringify(followed.notice)}; selected ${followed.selected}`);
+  check('B: the refusal is raised as an error notice whose action opens Settings › Project', followed.notice.action === 'Open Project settings' && followed.selected === 'Session store', `${JSON.stringify(followed.notice)}; selected ${followed.selected}`);
   check('B: the notice says where it is resolved', /Restore a backup or start a new store from Settings › Project, or put the store back in that place and open the workspace again\.$/.test(followed.notice.detail ?? ''), JSON.stringify(followed.notice.detail));
   const refusedList = await listing(d);
   check('B: the listing answers the condition, not an empty list (REQ-SESSION-043)', refusedList.ok === false && refusedList.code === 'workspace.store-missing', JSON.stringify(refusedList));
@@ -261,7 +261,7 @@ const keptBeside = (place, before) => readdirSync(dirname(place)).filter((n) => 
   const d = launched.driver;
   await d.waitFor('.app-shell', { timeoutMs: 60_000 });
   const followed = await followCorruptNotice(d, 'restore');
-  check('E1: the corrupt store is refused and raised as an error notice whose action opens Settings › Project', followed.notice.action === 'Open Project settings' && followed.selected === 'Project', `${JSON.stringify(followed.notice)}; selected ${followed.selected}`);
+  check('E1: the corrupt store is refused and raised as an error notice whose action opens Settings › Project', followed.notice.action === 'Open Project settings' && followed.selected === 'Session store', `${JSON.stringify(followed.notice)}; selected ${followed.selected}`);
   check('E1: the notice names the two remedies and the route by hand', /Restore a backup, or set the damaged store aside and start a new one, from Settings › Project/.test(followed.notice.detail ?? '') && /fails SQLite's integrity check: /.test(followed.notice.detail ?? ''), JSON.stringify(followed.notice.detail));
   const refusedList = await listing(d);
   check('E1: the listing answers the condition (REQ-SESSION-043)', refusedList.ok === false && refusedList.code === 'workspace.store-corrupt', JSON.stringify(refusedList));

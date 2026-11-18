@@ -796,14 +796,15 @@ results.reloadClean = { opened: r0, afterReloadNoEdit: r1, afterEdit: r2, afterR
 // (`docs/archive/defects/a-permission-mode-written-elsewhere-loses-to-an-unsaved-settings-selection.md`).
 const MODE_GROUP = '[aria-label="Permission mode, strictest first"]';
 const MODE_ACTIVE = `${MODE_GROUP} .seg-opt.is-active`;
-const lastProbes = [STRIP_UNSAVED, '.save-bar__status', BREAKER_ON, MODE_ACTIVE];
+// PD-CONFIG-012: the permission mode stands on Permissions and the circuit breaker on Delegation, so the value the pair of
+// writes moves is one that stands beside the mode: access beyond the workspace, written on and then off, read as off.
+const OUTSIDE_OFF = '.toggle:not(.is-on)[aria-labelledby="outside-label"]';
+const lastProbes = [STRIP_UNSAVED, '.save-bar__status', OUTSIDE_OFF, MODE_ACTIVE];
 const lastWrite = await launch('reload-last-write', rWorkspace, rLocal, rPreferences, {
-  // PD-CONFIG-012: the permission mode is on Permissions and the breaker on Delegation; this launch reads both and is owed a repair
-  // (docs/defects/the-settings-proofs-were-repointed-to-the-pages-by-reading-and-not-run.md).
   ...openCategory('Permissions'),
   ROTARIS_CAPTURE_PROBE_AT: [2000, 3400, 4600, 6000].flatMap((ms) => lastProbes.map((sel) => `${sel}@${ms}`)).join(';;'),
   // 2400: the pair of writes, announced together. 3800: `restricted` picked here, unsaved. 5000: the composer's write.
-  ROTARIS_CAPTURE_CONFIG_PAIR_AT: '{"circuit_breaker":{"enabled":false}}>>{"circuit_breaker":{"enabled":true}}@2400',
+  ROTARIS_CAPTURE_CONFIG_PAIR_AT: '{"runtime":{"allow_outside_workspace":true}}>>{"runtime":{"allow_outside_workspace":false}}@2400',
   ROTARIS_CAPTURE_CLICKS: `${MODE_GROUP} [role="radio"]:nth-child(1)@3800`,
   ROTARIS_CAPTURE_EVAL_AT: `window.rotaris.command({ kind: 'config.setField', patch: { runtime: { permission_mode: 'autonomous' } } }).then((r) => r.ok)@5000`,
   ROTARIS_CAPTURE_PROBE: [...PROBES, ...lastProbes].join(';;'),
@@ -814,7 +815,7 @@ const lastReading = (ms) => {
   const read = Object.fromEntries(lastProbes.map((sel) => [sel, lastAt(ms, sel)]));
   const missing = lastProbes.filter((sel) => read[sel] === null);
   if (missing.length > 0) throw new Error(`reload-last-write: the probes at ${ms} ms did not run: ${missing.join(', ')}`);
-  return { unsavedFlag: read[STRIP_UNSAVED].length > 0, status: read['.save-bar__status'][0]?.text ?? '', breaker: read[BREAKER_ON].length > 0, mode: read[MODE_ACTIVE][0]?.text ?? '' };
+  return { unsavedFlag: read[STRIP_UNSAVED].length > 0, status: read['.save-bar__status'][0]?.text ?? '', outsideOff: read[OUTSIDE_OFF].length > 0, mode: read[MODE_ACTIVE][0]?.text ?? '' };
 };
 const pairLine = /capture: config-pair-at 2400 → (.*)$/m.exec(lastWrite.log)?.[1] ?? '';
 if (pairLine !== 'writes [true,true], 2 announcements delivered in one tick') throw new Error(`reload-last-write: the pair seam did not deliver two written announcements together: "${pairLine}" (see reload-last-write.log)`);
@@ -824,13 +825,13 @@ const l0 = lastReading(2000);
 const l1 = lastReading(3400);
 const l2 = lastReading(4600);
 const l3 = lastReading(6000);
-if (l0.unsavedFlag || l0.status !== 'All changes saved' || !l0.breaker || l0.mode === '' || l0.mode === 'restricted' || l0.mode === 'autonomous') throw new Error(`reload-last-write: the form did not open clean, breaker on, on a mode the steps can move: ${JSON.stringify(l0)}`);
-if (l1.unsavedFlag || l1.status !== 'All changes saved' || !l1.breaker) throw new Error(`reload-last-write: two reloads in one tick marked the form dirty or left the first write's value on screen (REQ-CONFIG-419, REQ-SHELL-041): ${JSON.stringify(l1)}`);
+if (l0.unsavedFlag || l0.status !== 'All changes saved' || !l0.outsideOff || l0.mode === '' || l0.mode === 'restricted' || l0.mode === 'autonomous') throw new Error(`reload-last-write: the form did not open clean, access beyond the workspace off, on a mode the steps can move: ${JSON.stringify(l0)}`);
+if (l1.unsavedFlag || l1.status !== 'All changes saved' || !l1.outsideOff) throw new Error(`reload-last-write: two reloads in one tick marked the form dirty or left the first write's value on screen (REQ-CONFIG-419, REQ-SHELL-041): ${JSON.stringify(l1)}`);
 if (!l2.unsavedFlag || l2.status !== 'Unsaved changes' || l2.mode !== 'restricted') throw new Error(`reload-last-write: the unsaved selection of restricted did not take: ${JSON.stringify(l2)}`);
 if (l3.mode !== 'autonomous') throw new Error(`reload-last-write: the unsaved selection outlived a permission mode written elsewhere (REQ-CONFIG-423): ${JSON.stringify(l3)}`);
 if (l3.unsavedFlag || l3.status !== 'All changes saved') throw new Error(`reload-last-write: the displaced selection still reads as an edit (REQ-CONFIG-419, REQ-CONFIG-423): ${JSON.stringify(l3)}`);
 const lYaml = readFileSync(rConfig, 'utf8');
-if (!/permission_mode: autonomous/.test(lYaml) || !/enabled: true/.test(lYaml)) throw new Error(`reload-last-write: the file does not hold the two writes' outcome:\n${lYaml}`);
+if (!/permission_mode: autonomous/.test(lYaml) || !/allow_outside_workspace: false/.test(lYaml)) throw new Error(`reload-last-write: the file does not hold the two writes' outcome:\n${lYaml}`);
 results.reloadLastWrite = { opened: l0, afterPairInOneTick: l1, afterUnsavedSelection: l2, afterWriteElsewhere: l3, pair: pairLine };
 
 results.openedWithoutArgument = openedWithoutArgument;

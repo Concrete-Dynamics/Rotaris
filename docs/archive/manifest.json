@@ -1398,6 +1398,7 @@
     "defects/the-update-shape-never-answers-extend.md": "7779515372dff99fec2ad4b4d9681ff16e4b27fd2b8cbd47038f914238455d6f",
     "defects/the-users-own-pause-is-logged-at-warning.md": "81a4a045d8605e3ed4f9288d17050536e5213f327a948ff641a9afb61fe34c5b",
     "defects/the-views-reconciliation-entries-pile-up-in-the-readme-the-log-was-split-from.md": "7a6aece4f3e178fca52690761dd54632607d4b8c17453a999b263e9c4a578b59",
+    "defects/the-web-search-setup-cards-provider-choices-stand-on-three-different-edges.md": "7aa9a5c01579ff1e886abcf6fba757200dd982df348d99c6c8299e48a2d881de",
     "defects/the-window-close-box-counts-runs-its-yes-cannot-stop.md": "b361a626419be201b9da9648991d2c49ea5353960e477a592883dacb20e31be8",
     "defects/the-window-controls-contract-is-an-object-and-kills-every-ui-audit.md": "97a98a857f0b161f057bb3bc1f407c228669e382c2204c403b0356801573463d",
     "defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md": "7c7f1a45d475231aea066235eab811d85765e1c1cb056c47c7a2a1aa4ba34c04",

@@ -93,14 +93,22 @@ function SkillRowView({ row, home, load, invocation, onLoadMode, onInvocationMod
   const triggers = row.triggers.join(', ');
   return (
     <tr data-testid="skill-row" data-name={row.name} data-scope={row.scope} data-load={load} data-invocation={invocation} data-saved-load={row.loadMode} data-forced={row.forcedThisSession ? 'yes' : 'no'}>
-      <td className="mono">{row.name}</td>
+      {/*
+        * R-105: a skill is one entry — its name, what it does, where it was read from — and two policies. Description
+        * and path were columns of their own: seven columns needed 862 px of a 645 px body at the minimum window
+        * (REQ-SHELL-022), and at 1400x900 a description ran eight lines beside a two-line path cut mid-word.
+        */}
+      <td className="settings__skill-entry">
+        <span className="mono settings__skill-name">{row.name}</span>
+        <span className="settings__skill-description" title={row.description} aria-description={row.description}>{row.description}</span>
+        <span className="mono text-tertiary settings__skill-path" title={full} aria-description={full}>{shown}</span>
+      </td>
       <td className="text-secondary" title={shadowTitle} aria-description={shadowTitle}>
         {row.scope}
         {/* REQ-SHELL-149: the marker is never the only channel — the tooltip and the accessible description
           * carry the same sentence, and the glyph is text rather than colour. */}
         {row.shadowed.length > 0 ? <span aria-hidden="true">{'  ⓘ'}</span> : null}
       </td>
-      <td className="mono text-secondary settings__skill-path" title={full} aria-description={full}>{shown}</td>
       <td className="text-secondary">{triggers === '' ? '—' : triggers}</td>
       <td>
         <Select
@@ -127,7 +135,6 @@ function SkillRowView({ row, home, load, invocation, onLoadMode, onInvocationMod
           {(['name-only', 'on', 'user-invocable-only', 'off'] as const).map((mode) => <option key={mode} value={mode}>{SKILL_LOAD_MODE_LABELS[mode]}</option>)}
         </Select>
       </td>
-      <td title={row.description} aria-description={row.description}>{row.description}</td>
     </tr>
   );
 }
@@ -200,8 +207,8 @@ export function SkillsSettings({ state, workspace, home, pending, onLoadMode, on
             ? <p className="text-secondary" role="status" data-testid="skills-list-note">{listNote}</p>
             : <p className="text-secondary" data-testid="skills-empty">{noWorkspace ? 'No workspace is open, so there are no portable skills to list.' : SKILLS_EMPTY}</p>
         ) : (
-          <Table className="table settings__grid" aria-label="Portable skills">
-            <thead><tr><th>Skill</th><th>Source</th><th>Path</th><th>Trigger</th><th>Invocation</th><th>Load</th><th>Description</th></tr></thead>
+          <Table className="table settings__grid settings__skills" aria-label="Portable skills">
+            <thead><tr><th>Skill</th><th>Source</th><th>Trigger</th><th>Invocation</th><th>Load</th></tr></thead>
             <tbody>
               {skills.map((row) => (
                 <SkillRowView

@@ -127,7 +127,7 @@ By `build-ui`, on `feat/r-097-ui-ux-overhaul`. Evidence: `pnpm ui-audit` at 1400
 
 What was built beyond the three items, each inside §8: "Depth cap" and "Fan-out limit", and "Compression threshold" and "Iteration cap", are one field to a row (Runtime's rows 19 → 21; the order `REQ-CONFIG-320` fixes is unchanged); the security policy's three list rows stand on the axis (their field took a line of its own, off it); a category's own prose is bounded (Display's introductions and the MCP Servers card's statement ran the pane's width): to the measure at the caption's size, to two measures at the body's size (OQ-547).
 
-Not driven: Personas, Skills, Instructions, Hooks, MCP Servers, Plugins and Tools beyond one capture each at 1400×900; `nocturne` and `high-contrast`. A defect noticed on the way and not repaired: [the web-search card's provider choices](../../defects/the-web-search-setup-cards-provider-choices-stand-on-three-different-edges.md).
+Not driven: Personas, Skills, Instructions, Hooks, MCP Servers, Plugins and Tools beyond one capture each at 1400×900; `nocturne` and `high-contrast`. A defect noticed on the way and not repaired: [the web-search card's provider choices](../../archive/defects/the-web-search-setup-cards-provider-choices-stand-on-three-different-edges.md).
 
 ## Critique 2026-11-10
 
@@ -227,3 +227,11 @@ A second independent agent, with no part in the building or in the first critiqu
 **Refused by the second reading, and what was done.** "The six built-in names stay whole": false when written, true now, measured to 0.01 px. Focus on the key field as a measured result: measured now. "The identifier yields first, then the name is cut" as a description of two shrink factors: reworded above as the ratio it is. The Skills head's numbers and the count of defect notes: corrected. The comment that `authenticateWords` is `REQ-CONFIG-372`'s rule: the rule is corrected, UIR-405. **Why captures went stale:** the code-intelligence setup's child process opens a window of its own on the display (1124×822 at the origin), which covers the application at 1000×680, so the application's document is hidden and presents no frame; the evidence was retaken on scratch workspaces whose setup ends at once.
 
 The third commit was not read by a third agent. Its repairs are `implemented`, held by the unit tests and the kept readings, and not `verified-resolved`.
+
+## Parts
+
+Split on 2026-11-18 under [the document budget](../../README.md#the-document-budget): a new audit or execution is a part.
+
+| Part | Holds |
+|---|---|
+| [1](settings/01-audit-and-execution-2026-11-18.md) | The audit and execution of 2026-11-18 ([R-105](../../product/requests.md#r-105), [`PD-CONFIG-011`](../../product/directives/pd-config-011.md#pd-config-011)): all thirteen categories, ten findings, what was left |

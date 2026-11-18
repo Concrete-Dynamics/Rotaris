@@ -216,6 +216,10 @@
 .view { overflow: auto; padding: var(--rt-space-5, 24px); }
 .view__empty h1 { margin: 0 0 var(--rt-space-2, 8px); font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 500; }
 .text-secondary { color: var(--rt-text-secondary); }
+/* R-105: the third ink had a class name and no rule. Sixty-odd elements carry `text-tertiary` and every one of them
+   drew in the ink it inherited: on Settings a caption marked tertiary read 94 % lightness at 11 px, brighter than the
+   label it explained (computed, 1400x900). */
+.text-tertiary { color: var(--rt-text-tertiary); }
 .mono { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); }
 
 /* REQ-SHELL-038: the strip in the mockup's craft — the body face at `--rt-text-xs`, tertiary text, the `--rt-space-3` gap,
@@ -780,11 +784,11 @@
      and finding 7 of the 2026-11-10 critique of the built pack (`9401038db662`) held the caption to it);
    · a row that opens with a button has no label to align, so it keeps the label edge — an edge the body already has —
      and its caption stands under the button.
-   Inside a `Card` the column gives back the card's own inset and hairline, so a card's controls stand on the edge the
-   rows outside it stand on. The guided web-search card keeps its own reviewed arrangement (its rows sit in wrappers
-   this selector does not reach). */
+   A `Card` on this ground is a ruled section with no inset (the 2026-11-14 revision), so it takes the body's column as
+   it is. Until R-105 it still gave back the inset and hairline the boxed card had, and Runtime's rows stood on two
+   edges 21 px apart: 252 px outside a card, 231 px inside one (measured at 1400x900). The guided web-search card
+   keeps its own reviewed arrangement (its rows sit in wrappers this selector does not reach). */
 .settings__body { --settings-label-column: calc(2 * var(--rt-label-column)); }
-.settings__body .settings__card { --settings-label-column: calc(2 * var(--rt-label-column) - var(--rt-space-5) - var(--rt-hairline-width)); }
 .settings__section > .settings__action { margin-top: var(--rt-space-3); }
 :is(.settings__section, .settings__card, .settings__actions) > .settings__action { gap: var(--rt-space-1) var(--rt-space-3); }
 :is(.settings__section, .settings__card, .settings__actions) > .settings__action > :is(label, span):first-child:not(.settings__hint) { flex: 0 0 var(--settings-label-column); min-width: 0; overflow-wrap: anywhere; }
@@ -813,8 +817,52 @@
    2026-11-10 critique's finding 14). The guided web-search card's step titles are not group headings and keep their rule. */
 .settings__section .settings__heading:not([data-mcp-websearch-setup] *) { font-size: var(--rt-text-2xs); font-weight: var(--rt-weight-medium); letter-spacing: var(--rt-tracking-label); text-transform: uppercase; color: var(--rt-text-tertiary); }
 :is(.settings__section, .settings__card, .settings__actions) > .settings__action:has(> .btn:first-child) > .settings__hint { padding-left: 0; padding-right: max(0%, calc(100% - var(--rt-prose-measure))); }
-.settings__dictation-field { display: flex; flex-direction: column; gap: var(--rt-space-1); margin-top: var(--rt-space-2); }
+/* R-105: Dictation's and Diagnostics' fields are rows on the category's axis. They stood label over control, the
+   control as wide as the pane: "Model source", a select of three short options, was 1042 px wide at 1400x900
+   (UIR-009 of the 2026-11-10 critique), and so was Diagnostics' "Output folder". The label takes the label column, the
+   control and everything after it the control edge; a field holds one measure, a read-only path two. The DOM order is
+   unchanged, so the label still precedes its control for a reader and for `dictation-proof`'s walk. */
+.settings__dictation-field { display: grid; grid-template-columns: var(--settings-label-column) minmax(0, 1fr); gap: var(--rt-space-1) var(--rt-space-3); align-items: center; justify-items: start; margin-top: var(--rt-space-3); }
+.settings__dictation-field > label { grid-column: 1; overflow-wrap: anywhere; }
+.settings__dictation-field > :not(label) { grid-column: 2; min-width: 0; margin: 0; }
+.settings__dictation-field > .input:not(.select) { width: 100%; max-width: var(--rt-prose-measure); }
+.settings__dictation-field > .input[readonly] { max-width: calc(2 * var(--rt-prose-measure)); text-overflow: ellipsis; }
+.settings__dictation-field > .select { width: max-content; max-width: 100%; }
+.settings__dictation-field > .settings__hint { max-width: var(--rt-prose-measure); }
+.settings__dictation-field > .settings__action { width: 100%; }
+.settings__dictation-field > .settings__action > .input { flex: 1 1 var(--rt-field-min); width: auto; min-width: var(--rt-field-min); max-width: var(--rt-prose-measure); }
 .settings__select { width: max-content; max-width: 100%; }
+/* R-105: a skill's row. The first cell holds the entry — name, description, path, each on its own line — and takes
+   the width the four narrow columns leave; the description holds two measures and three lines until the row is
+   pointed at or holds focus, when it shows whole (its full text is also the cell's accessible description). */
+.settings__skills { width: 100%; }
+.settings__skills td:not(.settings__skill-entry), .settings__skills th:not(:first-child) { white-space: nowrap; width: 1%; }
+.settings__skill-entry { min-width: 0; }
+.settings__skill-entry > span { display: block; overflow-wrap: anywhere; }
+.settings__skill-name { color: var(--rt-text); }
+.settings__skill-description { margin-top: var(--rt-space-1); max-width: calc(2 * var(--rt-prose-measure)); color: var(--rt-text-secondary); line-height: var(--rt-leading-body); }
+.settings__skill-entry > .settings__skill-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.settings__skills tr:is(:hover, :focus-within) .settings__skill-description { -webkit-line-clamp: unset; }
+.settings__skill-entry > .settings__skill-path { margin-top: var(--rt-space-1); font-size: var(--rt-text-2xs); }
+/* R-105: step 1 of the guided web-search card. Each provider's name is a `.seg-opt` alone on its row, and `.seg-opt`
+   is `flex: 1` with centred text, so each name began where its caption's length left it: three names on three edges,
+   three captions on three more (the defect note of 2026-11-10). The name takes one column and reads from its left
+   edge; the caption follows on one edge and holds the measure. */
+[data-websearch-presets] { display: flex; flex-direction: column; gap: var(--rt-space-2); }
+[data-websearch-presets] > .settings__action { flex-wrap: nowrap; align-items: center; }
+/* Step 3's two fields: their labels take one column, so the key field and the scope select begin on one edge. */
+[data-websearch-step-body] .settings__action > label:first-child { flex: 0 0 var(--rt-label-column); }
+[data-websearch-presets] > .settings__action > .seg-opt { flex: 0 0 calc(var(--rt-label-column) + var(--rt-space-6)); justify-content: flex-start; text-align: left; }
+[data-websearch-presets] > .settings__action > .settings__hint { flex: 0 1 var(--rt-prose-measure); min-width: 0; }
+/* A step's title and the one placeholder category's title are set in the interface face: the display face is the
+   wordmark's alone (the 2026-11-14 revision), and these two had kept it. The placeholder (Plugins) also stood inset
+   24 px from the edge every other category's title holds. */
+[data-mcp-websearch-setup] .settings__heading { font-family: var(--rt-font-body); }
+.settings__body .view__empty { padding: 0; }
+.settings__body .view__empty h1 { font-family: var(--rt-font-body); margin-bottom: var(--rt-space-3); }
+/* The stanza is code to copy, read at the dense mono size the rest of the screen's identifiers take; it stood at the
+   body's 14 px, the largest text on the card. */
+[data-mcp-websearch-setup] pre.mono { margin: var(--rt-space-2) 0; font-size: var(--rt-text-xs); line-height: var(--rt-leading-body); overflow-x: auto; }
 /* C3 (UI review of PR #76, 2026-11-09): a field is sized from the token, never from the pane. The guided card's key
    field had stretched to the card's whole content width — 1003.36 px at 1400x900, 603 px at 1000x680, for a value a
    short key fills — while `--rt-field-min` is 140 px (UIR-010's rule: fields from the token, one axis for the form).
@@ -1217,8 +1265,15 @@
 .composer--locked .composer__hint { color: var(--rt-accent-300); font-weight: var(--rt-weight-medium); }
 
 .tag-wait { border-color: var(--rt-wait); color: var(--rt-wait); }
-.playbooks__slot { margin: var(--rt-space-3, 12px) 0 0; }
-.playbooks__variant { display: grid; grid-template-columns: 140px 1fr; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) 0; border-bottom: 1px solid var(--rt-divider); font-size: var(--rt-text-sm, 13px); }
+/* PD-CONFIG-011 (R-105): a slot is a closed disclosure, its name and its count on the summary's line. */
+.playbooks__slot { margin: 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.playbooks__slot > summary { display: flex; align-items: baseline; gap: var(--rt-space-3); padding: var(--rt-space-2) 0; cursor: pointer; font-size: var(--rt-text-sm); }
+.playbooks__slot > summary > .mono { flex: 0 0 var(--rt-label-column); font-weight: var(--rt-weight-medium); }
+.playbooks__slot > summary > .text-tertiary { font-size: var(--rt-text-xs); }
+.playbooks__slot > summary:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: var(--rt-focus-ring-width); }
+.playbooks__slot[open] > summary { color: var(--rt-text); }
+.playbooks__slot > .playbooks__variant:last-child { border-bottom: 0; padding-bottom: var(--rt-space-3); }
+.playbooks__variant { display: grid; grid-template-columns: var(--rt-label-column) minmax(0, calc(2 * var(--rt-prose-measure))); padding-left: var(--rt-space-4); gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) 0; border-bottom: 1px solid var(--rt-divider); font-size: var(--rt-text-sm, 13px); }
 
 /* ── Stored-session browser (REQ-SHELL-126/127, REQ-SESSION-117/118) ── */
 .session-browser-backdrop { z-index: 20; }
@@ -3133,8 +3188,9 @@ table, .mono { font-variant-numeric: tabular-nums; }
 .agent-table th:first-child, .agent-table td:first-child { padding-left: 0; }
 .table-card .table th:last-child, .table-card .table td:last-child { padding-right: 0; }
 /* C-08: inside a section an absence is a sentence under the heading, never a statement larger than it. */
-.card .empty-state { align-items: flex-start; text-align: left; margin-inline: 0; padding: var(--rt-space-1) 0 0; max-width: none; }
-.card .empty-state-title { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-body); color: var(--rt-text-secondary); }
+/* R-105: Settings' own absences (Hooks' two) stood centred in a body whose every other line begins at the left edge. */
+.card .empty-state, .settings__body .empty-state { align-items: flex-start; text-align: left; margin-inline: 0; padding: var(--rt-space-1) 0 0; max-width: none; }
+.card .empty-state-title, .settings__body .empty-state-title { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-body); color: var(--rt-text-secondary); }
 /* C-11: the view's title is the top of the view's hierarchy, and a session's name is prose, not a measurement. */
 .display { font-size: var(--rt-h4); }
 .overview__session.mono { font-family: var(--rt-font-body); }

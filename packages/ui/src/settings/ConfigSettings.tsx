@@ -122,6 +122,13 @@ export function ModelsSettings(props: ConfigSettingsProps) {
           <ul className="card-body">{snapshot.referential.map((m) => <li key={m}>{m}</li>)}</ul>
         </DesignCard>
       )}
+      {/*
+        * PD-CONFIG-011 (R-105): the providers stand first. A slot can only name a model a provider serves, and the
+        * notice that sends a user here ("No model provider is authenticated yet") is about the providers; under the
+        * seven slot rows they began 470 px down the page at 1400x900 and below the fold at the minimum window.
+        */}
+      {props.providersCard ?? <p className="text-secondary">The provider list is not available in this window.</p>}
+      <h2 className="settings__heading">Model slots</h2>
       <DesignTable className="table settings__grid" aria-label="Model slots">
         <thead><tr><th>Slot</th><th>Model</th><th>Reasoning strength</th></tr></thead>
         <tbody>
@@ -174,7 +181,6 @@ export function ModelsSettings(props: ConfigSettingsProps) {
           })}
         </tbody>
       </DesignTable>
-      {props.providersCard ?? <p className="text-secondary">The provider list is not available in this window.</p>}
       <DictationSettings value={pending.dictation} onChange={onChange} credential={props.dictationCredential} />
     </div>
   );
@@ -201,7 +207,7 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
         <span className="text-secondary settings__hint">Switching scope shows that scope's values; it copies nothing.</span>
       </div>
       <DesignTable className="table settings__grid" aria-label="Roles">
-        <thead><tr><th>Persona</th><th>Role</th><th>Model</th><th>Reasoning</th><th>Scope</th><th>Tools</th></tr></thead>
+        <thead><tr><th>Persona</th><th>Model</th><th>Reasoning</th><th>Scope</th><th>Tools</th></tr></thead>
         <tbody>
           {snapshot.roles.map((r) => {
             // REQ-CONFIG-259/341: the controls show the pending edit made at the selected scope; switching scope shows that scope's values.
@@ -216,7 +222,7 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
             const cell = scopeCellOf(r, pending, scope);
             return (
               <tr key={r.role}>
-                <td>{r.role}</td>
+                {/* PD-CONFIG-011 (R-105): the role's name once. "Persona" and "Role" printed the same identifier in two columns. */}
                 <td className="mono">{r.role}</td>
                 <td>
                   <DesignSearchableSelect

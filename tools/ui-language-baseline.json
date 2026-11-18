@@ -53,7 +53,7 @@
     "packages/ui/src/shell.css|css-metric|margin-top:2px": 2,
     "packages/ui/src/shell.css|css-metric|margin-top:4px": 4,
     "packages/ui/src/shell.css|css-metric|margin-top:8px": 4,
-    "packages/ui/src/shell.css|css-metric|margin:12px": 9,
+    "packages/ui/src/shell.css|css-metric|margin:12px": 8,
     "packages/ui/src/shell.css|css-metric|margin:4px": 4,
     "packages/ui/src/shell.css|css-metric|margin:8px": 13,
     "packages/ui/src/shell.css|css-metric|max-height:100px": 1,

@@ -1,5 +1,11 @@
 ## The web-search setup card's provider choices stand on three different edges
 
+## Outcome: repaired 2026-11-18 (R-105)
+
+Each provider's name takes one column and reads from its left edge, and its caption follows on one edge, bounded to the
+measure (`packages/ui/src/shell.css`, the `[data-websearch-presets]` rules). Read from a capture of the built app at
+1400x900: the four names begin at one x and the four captions at one x. Not probed by a proof.
+
 Step 1 of the guided web-search card (Settings, MCP Servers, "Set up web search") lists the search providers as a radio
 group, one `settings__action` row to a provider: the provider's name as a `seg-opt` button, a caption, and a "Get a key"
 link (`packages/ui/src/settings/McpSettings.tsx:578`). The adopted `.seg-opt` is `flex: 1` and centres its text
@@ -10,7 +16,7 @@ name in it, so each name begins somewhere else: at 1440x900 "Tavily" begins near
 probed). The group has no left edge at all.
 
 Read from a capture of the built app on `3927eda5`, 2026-11-10, while surveying Settings for
-[R-097](../product/requests.md#r-097). Not repaired there: the card's arrangement was reviewed and measured on
+[R-097](../../product/requests.md#r-097). Not repaired there: the card's arrangement was reviewed and measured on
 2026-11-09 (`packages/ui/src/shell.css`, the `[data-mcp-websearch-setup]` rules), its rows sit in wrappers R-097's
 Settings axis does not reach, and its tests pin its measures (`packages/ui/src/settings/web-search-measure.test.ts`).
 

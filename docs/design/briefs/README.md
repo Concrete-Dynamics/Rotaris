@@ -16,7 +16,7 @@ Rules:
 | Transcript rows, run header | [`transcript-rows.md`](transcript-rows.md) — an audit of the run header alone, with the brief's §1, §8, §10 and §11 | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
 | Git | [`git.md`](git.md) — an audit, with the brief's §1, §8, §10 and §11 | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
 | Library | [`library.md`](library.md) — an audit of the Prompts tab, with the brief's §1, §4, §8, §10 and §11 | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
-| Settings | [`settings.md`](settings.md) — the brief for how a category arranges its rows, and its audit | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
+| Settings | [`settings.md`](settings.md) — the brief for how a category arranges its rows, and its audit; [`settings/`](settings/) holds the later parts | 2026-11-18 ([R-105](../../product/requests.md#r-105)): all thirteen categories, built the same day on `feat/r-105-settings-pass`, not landed |
 | Requirements board | [`requirements-board.md`](requirements-board.md) — the brief for the view's frame (header, empty states, foot), and its audit | 2026-11-10 (R-097); built the same day on `feat/r-097-ui-ux-overhaul`, not landed |
 | The shell and the navigation sidebar | [`shell.md`](shell.md) — the brief for the sidebar `PD-SHELL-016` creates, and an independent critique of the product-wide revision built with it | 2026-11-14 ([R-101](../../product/requests.md#r-101)); built the same day on `feat/r-101-experience-redesign`, not landed |
 

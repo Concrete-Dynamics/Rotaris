@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and thirty-three.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and thirty-four.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -62,6 +62,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CONFIG-008](directives/pd-config-008.md) | the Settings category list stands under four headings |
 | [PD-CONFIG-009](directives/pd-config-009.md) | the providers card draws one filled control, the add-endpoint action in its head |
 | [PD-CONFIG-010](directives/pd-config-010.md) | the dictation endpoint's bearer is a stored credential, typed into the field |
+| [PD-CONFIG-011](directives/pd-config-011.md) | what stands first inside a Settings category, and what stands once: providers before slots, one role column, the playbook catalogue closed, a skill as one entry |
 
 ### EVENTS
 

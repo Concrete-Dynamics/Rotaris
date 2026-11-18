@@ -320,12 +320,14 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
               what an override in <code className="mono">playbooks/</code> (your global configuration directory or this workspace's <code className="mono">.rotaris/</code>) may re-word: a slot, a variant identifier, its text. An override may not add a slot or a variant.
             </p>
             {playbooks ? Object.entries(playbooks).map(([slot, variants]) => (
-              <section key={slot} className="playbooks__slot" aria-label={`Slot ${slot}`}>
-                <h3 className="mono">{slot}</h3>
+              // PD-CONFIG-011 (R-105): reference text, closed until asked for. Open, the eight slots stood 1 300 px under the
+              // role table at 1400x900, each headed in the mono face at 24 px, larger than the view's own title.
+              <details key={slot} className="playbooks__slot" aria-label={`Slot ${slot}`}>
+                <summary><span className="mono">{slot}</span><span className="text-tertiary">{Object.keys(variants).length === 1 ? '1 variant' : `${Object.keys(variants).length} variants`}</span></summary>
                 {Object.entries(variants).map(([variant, text]) => (
                   <div key={variant} className="playbooks__variant"><span className="mono text-secondary">{variant}</span><span>{text}</span></div>
                 ))}
-              </section>
+              </details>
             )) : <p className="text-secondary">Reading the catalogue…</p>}
           </div>
         ) : (

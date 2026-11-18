@@ -42,6 +42,7 @@ the readings themselves are.
 | [corrected-restore-rerun.md](corrected-restore-rerun.md) | — | 2026-09-02 | the corrected restore, re-run — discharges IC-1 |
 | [credential-protection.md](credential-protection.md) | — | 2026-09-05 | the credential file's protection on Windows: apply, read back, and what survives |
 | [ipc-hop-latency.md](ipc-hop-latency.md) | 10 | 2026-09-01 | the run-host → main → renderer double hop |
+| [linux-appimage-acceptance.md](linux-appimage-acceptance.md) | 12, 17 (Linux) | 2026-11-17 | the Linux AppImage against ADR-0066's AC-1 to AC-4: the legacy FUSE library, first paint, the load proof's counterfactuals, the instance claim |
 | [machine-identifier-rename.md](machine-identifier-rename.md) | — | 2026-09-03 | the machine identifier under a real rename, and the foreign-lock report as one condition (IC-4) |
 | [mcp-console-suppression.md](mcp-console-suppression.md) | item 4 | 2026-09-05 | no console window at any point, on the packaged build |
 | [mcp-negotiation.md](mcp-negotiation.md) | item 3 | 2026-09-05 | protocol version negotiation over `OwnedStdioTransport` (the spike is the regression test) |

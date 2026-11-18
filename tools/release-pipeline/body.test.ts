@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { changelog, changelogFromGit, draftReleaseArguments, FIRST_RELEASE_CHANGELOG, previousReleaseTag, releaseBody, releaseMetadata, releaseStateProblems, WINDOWS_ONLY_LINE } from './body.mjs';
+import { changelog, changelogFromGit, draftReleaseArguments, FIRST_RELEASE_CHANGELOG, previousReleaseTag, releaseBody, releaseMetadata, releaseStateProblems, WINDOWS_AND_LINUX_LINE, WINDOWS_ONLY_LINE } from './body.mjs';
 
 /**
  * The release's name and body (REQ-STARTUP-033, REQ-STARTUP-034, REQ-STARTUP-035 narrowed by PD-STARTUP-001;
@@ -14,7 +14,7 @@ const SETUP = { name: 'Rotaris-0.2.0-windows-x64-setup.exe', sha256: 'a'.repeat(
 const PORTABLE = { name: 'Rotaris-0.2.0-windows-x64-portable.exe', sha256: 'b'.repeat(64) };
 
 function body(over: Partial<Parameters<typeof releaseBody>[0]> = {}) {
-  return releaseBody({ tag: 'v0.2.0', entries: [PORTABLE, SETUP], platformsWithAssets: ['windows-x64'], changelogText: FIRST_RELEASE_CHANGELOG, ...over });
+  return releaseBody({ tag: 'v0.2.0', entries: [PORTABLE, SETUP], platformsWithAssets: ['windows-x64', 'linux-x86_64'], changelogText: FIRST_RELEASE_CHANGELOG, ...over });
 }
 const blocks = (text: string) => text.trimEnd().split('\n\n');
 
@@ -39,22 +39,32 @@ describe('REQ-STARTUP-035 — the body, element by element', () => {
     ]);
   });
 
-  it('(4) is absent for the platforms PD-STARTUP-001 leaves out; one line in its place says Windows only, between (3) and (5)', () => {
+  it('(4) is absent for the platforms PD-STARTUP-001 leaves out; one line in its place says Windows and Linux x86_64, between (3) and (5) (PD-STARTUP-013)', () => {
     const b = blocks(body());
     expect(b.join('\n')).not.toContain('Not built in this release');
+    expect(b[3]).toBe(WINDOWS_AND_LINUX_LINE);
+    expect(b[4]).toMatch(/^\*\*Verifying a download\.\*\*/);
+  });
+
+  it('(4) says Windows only while the published set is exactly windows-x64 (PD-STARTUP-001)', () => {
+    const b = blocks(body({ publishedPlatforms: ['windows-x64'], platformsWithAssets: ['windows-x64'] }));
     expect(b[3]).toBe(WINDOWS_ONLY_LINE);
+    expect(b).not.toContain(WINDOWS_AND_LINUX_LINE);
     expect(b[4]).toMatch(/^\*\*Verifying a download\.\*\*/);
   });
 
   it('(4) names a published platform that contributed nothing, in the requirement\'s exact sentence', () => {
     const b = blocks(body({ platformsWithAssets: [] }));
-    expect(b[3]).toBe('> **Not built in this release: windows-x64.** Those builds failed; the artifacts above are unaffected. Use the previous release for the missing platforms.');
+    expect(b[3]).toBe('> **Not built in this release: windows-x64, linux-x86_64.** Those builds failed; the artifacts above are unaffected. Use the previous release for the missing platforms.');
+    const linuxOnly = blocks(body({ platformsWithAssets: ['windows-x64'] }));
+    expect(linuxOnly[3]).toBe('> **Not built in this release: linux-x86_64.** Those builds failed; the artifacts above are unaffected. Use the previous release for the missing platforms.');
   });
 
   it('(4) once the directive is withdrawn: a failed platform is named, and the Windows-only line is gone', () => {
     const b = blocks(body({ publishedPlatforms: ['windows-x64', 'macos-arm64', 'linux-x86_64'], platformsWithAssets: ['windows-x64', 'linux-x86_64'] }));
     expect(b[3]).toBe('> **Not built in this release: macos-arm64.** Those builds failed; the artifacts above are unaffected. Use the previous release for the missing platforms.');
     expect(b).not.toContain(WINDOWS_ONLY_LINE);
+    expect(b).not.toContain(WINDOWS_AND_LINUX_LINE);
   });
 
   it('(5) names `sha256sum -c SHA256SUMS.txt` and `certutil -hashfile <filename> SHA256`, and how the Windows digest is compared', () => {

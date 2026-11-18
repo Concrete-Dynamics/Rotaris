@@ -35,6 +35,8 @@ On the slow first launch the main process logged its first line 3.4 to 3.7 s aft
 
 Spike 17 read the Windows artifacts the same two ways, and said the softer reading is the product owner's to apply. So is this one: **a first launch on the hosted Ubuntu 24.04 runner exceeded REQ-STARTUP-155's bound, twice, by half again.** Whether that host stands for the baseline's hardware, or only for its system, the requirement does not say.
 
+**The owner's ruling, 2026-11-18:** shown both readings, "Yes, publish": AC-2 counts as held for publication on the strict reading of the physical host and the median of both; the hosted runner's first launch is recorded as measured and is not explained away.
+
 ## AC-3 — the load proof is constructible on Linux, and D10's counterfactuals are refused: **held on the developer host**
 
 `pnpm package` PASSED: rule 1a found `better_sqlite3.node` (2 364 104 B) and `pty.node` (75 728 B) newer than the rebuild marker and byte-identical in the artifact, with no prebuild; rule 4 loaded both from `app.asar.unpacked` under the packaged Electron 45.2.1 (SQLite 3.53.4, a PTY that exited 0). The hosted runner's `pnpm package` passed the same rules.

@@ -3,6 +3,7 @@ import type { ChecksumEntry } from '@rotaris/release-naming';
 
 export declare const FIRST_RELEASE_CHANGELOG: string;
 export declare const WINDOWS_ONLY_LINE: string;
+export declare const WINDOWS_AND_LINUX_LINE: string;
 export declare function noCommitsChangelog(previousTag: string): string;
 export declare function changesSinceHeading(previousTag: string): string;
 export declare function changelog(previousTag: string | null, subjects: readonly string[]): string;

@@ -40,8 +40,11 @@
 # tags was the other item here and is a request of its own, R-086: the draft stage above passes the flag both ways and
 # reads it back; the published v0.1.0rc1 still reads prerelease=false, which only a publication act changes.
 #
-# Published platform: windows-x64 alone (PD-STARTUP-001). The separate macos-arm64 probe compiles source only,
-# never packages or uploads release assets. IC-3 and IC-8 remain owed; PUBLISHED_PLATFORMS stays unchanged.
+# Published platforms: windows-x64 (the `build` job) and, since PD-STARTUP-013 (2026-11-17), linux-x86_64 (the
+# `build-linux` job), whose acceptance ADR-0066 records. The separate macos-arm64 probe compiles source only, never
+# packages or uploads release assets: PD-STARTUP-001 stands for that key, and IC-3 and IC-8 remain owed for it.
+# Both published platforms must build for a release to be signed and drafted; REQ-STARTUP-030's "publish whatever
+# survived" is not built (docs/defects/a-release-is-not-drafted-when-one-published-platform-fails-to-build.md).
 #
 # Hardening, as in ci.yml: actions pinned by full commit SHA (the tag in the comment); no permission at the top, each
 # job granted only what it uses; checkout without persisted credentials. The signing key reaches one job, `sign`, which
@@ -246,9 +249,89 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  # PD-STARTUP-013 (R-104): the second published key. A job of its own, not a matrix entry of `build`, because every
+  # step of that job is written for a Windows runner's shell; it uploads under the same `release-assets-*` name the
+  # sign job gathers. REQ-STARTUP-025: the oldest supported base, pinned, never `ubuntu-latest`.
+  build-linux:
+    name: build (linux-x86_64)
+    needs: guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `pnpm build-id` reads the commit and the tree's state (REQ-SHELL-140).
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Electron runtime
+        run: node node_modules/electron/install.js
+
+      - name: Requirement symbols
+        run: pnpm symbols
+
+      - name: Code-intelligence runtime (linux-x64)
+        run: pnpm code-intel:bundle --target=linux-x64
+
+      # The notices step runs first inside it and fails the platform's release while validation refuses
+      # (REQ-STARTUP-037). The load proof launches Electron, which needs a display; xvfb gives it one.
+      - name: pnpm package
+        run: xvfb-run -a pnpm package
+
+      # ADR-0066's criteria on the artifact that is about to be published; the report rides with the evidence.
+      - name: The AppImage's acceptance criteria (ADR-0066)
+        run: xvfb-run -a node apps/desktop/scripts/linux-acceptance-proof.mjs --out=apps/desktop/release/linux-acceptance.json
+
+      # PD-STARTUP-012: the platform's SBOM, into the release directory, as the Windows job writes its own.
+      - name: The SBOM (CycloneDX, production dependencies)
+        env:
+          PLATFORM: linux-x86_64
+        run: pnpm sbom:write "$TAG" release-assets "$PLATFORM"
+
+      - name: The release directory
+        run: |
+          version="${TAG#v}"
+          mkdir -p release-assets
+          cp "apps/desktop/release/Rotaris-$version-linux-x86_64.AppImage" "apps/desktop/release/Rotaris-$version-linux-x86_64.deb" release-assets/
+
+      - name: Upload the release directory
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets-linux-x86_64
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload the package evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-evidence-linux-x86_64
+          path: |
+            apps/desktop/release/load-proof.json
+            apps/desktop/release/load-proof.afterpack.json
+            apps/desktop/release/linux-acceptance.json
+            apps/desktop/release/electron-builder.package.linux.yml
+            apps/desktop/resources/code-intelligence/bundle.json
+          if-no-files-found: warn
+          retention-days: 30
+
   sign:
     name: manifest, signature and verification (REQ-STARTUP-032, 167, 168)
-    needs: build
+    needs: [build, build-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # The owner's protection rules on this environment (required reviewers, tag rule) gate the one job that reads the key.
@@ -345,7 +428,7 @@ jobs:
 
   status:
     name: overall status (REQ-STARTUP-030)
-    needs: [guard, build, sign, draft]
+    needs: [guard, build, build-linux, sign, draft]
     if: always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions: {}

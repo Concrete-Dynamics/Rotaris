@@ -18,6 +18,13 @@ const PORTABLE = 'Rotaris-0.2.0-windows-x64-portable.exe';
 /** PD-STARTUP-012: the windows-x64 SBOM, which a release directory holds beside the artifacts. */
 const SBOM = 'Rotaris-0.2.0-windows-x64-sbom.cdx.json';
 
+/** PD-STARTUP-013: the linux-x86_64 key's two artifacts and its SBOM, which a complete release directory holds beside the Windows ones. */
+function layLinux(assets: string, version: string) {
+  writeFileSync(join(assets, `Rotaris-${version}-linux-x86_64.AppImage`), 'appimage');
+  writeFileSync(join(assets, `Rotaris-${version}-linux-x86_64.deb`), 'deb');
+  writeFileSync(join(assets, `Rotaris-${version}-linux-x86_64-sbom.cdx.json`), '{"bomFormat":"CycloneDX"}');
+}
+
 let dir: string;
 let lines: { out: string[]; err: string[] };
 beforeEach(() => {
@@ -47,6 +54,7 @@ function release() {
   writeFileSync(join(assets, SETUP), 'setup');
   writeFileSync(join(assets, PORTABLE), 'portable');
   writeFileSync(join(assets, SBOM), '{"bomFormat":"CycloneDX"}');
+  layLinux(assets, '0.2.0');
   return assets;
 }
 
@@ -108,6 +116,7 @@ describe('the draft\'s channel flag (REQ-STARTUP-029, REQ-STARTUP-034)', () => {
     writeFileSync(join(assets, `Rotaris-${version}-windows-x64-setup.exe`), 'setup');
     writeFileSync(join(assets, `Rotaris-${version}-windows-x64-portable.exe`), 'portable');
     writeFileSync(join(assets, `Rotaris-${version}-windows-x64-sbom.cdx.json`), '{}');
+    layLinux(assets, version);
     run(['manifest', assets, tag]);
     spawnSync('git', ['init', '-q', dir]);
     const out = join(dir, 'out');

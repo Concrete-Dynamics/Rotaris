@@ -15,6 +15,27 @@ row's caption by its visible box may also read differently, since a caption is c
 Also unrepaired: a proof or capture that opened Settings and relied on the Models category being the first shown now
 meets Setup.
 
+## Run on 2026-11-18 and 2026-11-19, on the Linux agent host
+
+Eleven of the suites `pnpm verify:plan` names for the change were then run on this host, one at a time, against the
+branch at `ce5732e2` with the repairs below.
+
+- **Green:** `sandbox-proof`, `mode-reset-proof`, `skills-proof`, `mcp-proof`, `layout-proof`; and, after a repair to
+  the script, `settings-proof`, `store-resolution-proof` and `notice-proof`. The three repairs were of what a script
+  read back, not of the product: the selected entry's name, the body's label, and `settings-proof`'s
+  `reload-last-write`, which now moves access beyond the workspace (a value beside the permission mode) where it moved
+  the circuit breaker.
+- **Red here and on `main` alike** (`131d02cb`, run the same night): `config-proof` at "the models save did not write
+  the slot and its companion" (its Permissions step passed twice; one earlier red there was a Save press that landed
+  as a notice moved the page, under a load average of 14); `mission-proof` at "the confirmation did not name the agent
+  and the cascade", before it reaches Settings; `theme-proof` on focus-ring contrast for controls across the shell and
+  on the dash glyph's contrast, with most focus captures stale on both trees. None of the three is evidence for or
+  against this change.
+- **Not run:** `init-proof` and `code-intel-proof` (the code-intelligence bundle is absent on this host);
+  `continuation-proof`, `retrospective-proof` and `live-run`, which reach Settings through
+  `lib/settings-runtime-field.mjs`; `workspace-proof`, `directive-proof`, `exit-trace-proof`, `portable-proof`,
+  `updater-proof`, `linux-acceptance-proof`. Their label edits are still by reading alone.
+
 ## Specs
 
 - `AGENTS.md`, "The proof scripts": a proof is evidence of the product, and a change that moves a shared seam runs the

@@ -14,6 +14,8 @@ The session writes the next line without waiting for the shell to have taken the
 
 Not repaired (record-only).
 
+**Seen in CI's gate, 2026-11-17 and 2026-11-18, on the hosted Windows x64 runner.** `terminal.test.ts`'s "on PowerShell a poll at once after C-c is OQ-168's soft pause, and the next calls report the end once, each with its own output" read `expected '(no output)' to be 'AAA'` — this note's symptom word for word — four times across four branches that touch no terminal code. The last (run `44259268639`, attempt 1) was after the real-process suites were moved to run alone, one file at a time: the case failed with nothing else running beside it, so it is not the contention that change removed. It passed on the rerun each time.
+
 ## Specs
 
 REQ-TOOLS-096 (keystrokes reach the session in order) with REQ-TOOLS-097/099 (124 and a reset are the hard timeout's for a

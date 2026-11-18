@@ -33,7 +33,8 @@ export function SettingsTitle({ children }: { readonly children: ReactNode }) {
 export function Hint({ about, always = false, children, className, ...rest }: HTMLAttributes<HTMLSpanElement> & { readonly about?: string; /** What an act does to the user's data is never closed. */ readonly always?: boolean }) {
   const { explain } = useContext(SettingsPageContext);
   const [open, setOpen] = useState(false);
-  if (always) return <span {...rest} className={className ?? 'text-secondary settings__hint'}>{children}</span>;
+  // The class stands first, as it did when the element was written out: tests and proofs read the attributes in that order.
+  if (always) return <span className={className ?? 'text-secondary settings__hint'} {...rest}>{children}</span>;
   const shown = explain || open;
   const name = about === undefined ? 'Explanation' : `Explanation of ${about}`;
   return (
@@ -41,7 +42,7 @@ export function Hint({ about, always = false, children, className, ...rest }: HT
       <DesignButton type="button" className="btn btn-ghost btn-icon settings__info" aria-label={name} title={name} aria-expanded={shown} aria-pressed={shown} disabled={explain} onClick={() => setOpen((v) => !v)}>
         <i className="ph ph-info" aria-hidden="true" />
       </DesignButton>
-      <span {...rest} className={className ?? 'text-secondary settings__hint'} hidden={!shown}>{children}</span>
+      <span className={className ?? 'text-secondary settings__hint'} {...rest} hidden={!shown}>{children}</span>
     </>
   );
 }

@@ -127,8 +127,9 @@ describe('PD-WORKSPACE-005 revision 3: the project-setup action reaches its targ
     expect(text).not.toMatch(/case 'open-cloud-account':\s*case 'open-project-init':/);
   });
 
-  it('main.tsx opens Settings › Project when main asks this window on channel 15', () => {
-    expect(text).toMatch(/const open = \(workspace: string \| undefined\) => \{[\s\S]*?useShellState\.getState\(\)\.openSettings\('project'\);[\s\S]*?const off = bridge\.onProjectInitOpen\(\(p\) => \{ open\(/);
+  // PD-CONFIG-012: the initialization card stands on its own page, which the action names; `project` now opens Session store.
+  it('main.tsx opens Settings › Initialization when main asks this window on channel 15', () => {
+    expect(text).toMatch(/const open = \(workspace: string \| undefined\) => \{[\s\S]*?useShellState\.getState\(\)\.openSettings\('initialization'\);[\s\S]*?const off = bridge\.onProjectInitOpen\(\(p\) => \{ open\(/);
   });
 
   // PD-WORKSPACE-005 revision 3 (OQ-294): a window the press added, or one met during its load, may not listen yet; once it

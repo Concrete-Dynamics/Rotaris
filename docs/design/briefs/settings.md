@@ -235,3 +235,4 @@ Split on 2026-11-18 under [the document budget](../../README.md#the-document-bud
 | Part | Holds |
 |---|---|
 | [1](settings/01-audit-and-execution-2026-11-18.md) | The audit and execution of 2026-11-18 ([R-105](../../product/requests.md#r-105), [`PD-CONFIG-011`](../../product/directives/pd-config-011.md#pd-config-011)): all thirteen categories, ten findings, what was left |
+| [2](settings/02-pages-2026-11-18.md) | The three structures of 2026-11-18, their independent scores, the owner's choice and the build ([R-106](../../product/requests.md#r-106), [`PD-CONFIG-012`](../../product/directives/pd-config-012.md#pd-config-012)) |

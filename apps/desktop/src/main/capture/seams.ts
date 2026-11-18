@@ -70,7 +70,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   }
 
   // ROTARIS_CAPTURE_VIEW=<id>|<n>: open that primary view by its Ctrl+<digit> chord and, for Settings, select the category
-  // ROTARIS_CAPTURE_SETTINGS names (Project by default). The value is a view's identifier (`settings`, `overview`, ...) or
+  // ROTARIS_CAPTURE_SETTINGS names (Session store by default; a page's label since PD-CONFIG-012). The value is a view's identifier (`settings`, `overview`, ...) or
   // its 1-based place in the rail; the identifier is the form to write, since PD-SHELL-015 moved four digits once and a
   // proof that names the view it means does not move with the rail. An identifier that names no view (a retired one
   // included) is reported and presses nothing. The first press still lands 200 ms after the chord; it is then verified
@@ -84,7 +84,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       wc.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
       if (view === viewPosition('settings')) {
         await pause(host, 200);
-        await pressCategory(host, process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project', 5_000);
+        await pressCategory(host, process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Session store', 5_000);
       }
     }, failed));
   }

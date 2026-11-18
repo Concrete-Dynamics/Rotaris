@@ -3243,3 +3243,62 @@ table, .mono { font-variant-numeric: tabular-nums; }
 /* The Project section's recorded failure (REQ-WORKSPACE-113) is said as a failure: the danger rule, a glyph, the primary ink (REQ-SHELL-116). */
 .agents__project-failure { display: block; margin-top: var(--rt-space-2); padding: var(--rt-space-1) 0 var(--rt-space-1) var(--rt-space-2); border-left: var(--rt-space-1) solid var(--rt-danger-300); color: var(--rt-text); overflow-wrap: anywhere; }
 .agents__project-failure > .ph { margin-right: var(--rt-space-1); color: var(--rt-danger-300); vertical-align: -0.125em; }
+
+/* ── PD-CONFIG-012 (R-105): the Settings view as pages ──────────────────────────────────────────────────────────────
+   Setup, then twelve pages in the order a run meets what they hold. A page is a ledger: a row is a label, its control,
+   where the value came from (a glyph, nothing for a default) and its explanation behind a control. Text that explains
+   and does not state — a page's or a section's introduction, a row's caption — is closed until asked for, by the row's
+   own control or the page's; it stays in the document, so every `aria-describedby` that names it still resolves. */
+.settings { grid-template-columns: calc(var(--rt-label-column) + var(--rt-space-12, 48px) + var(--rt-space-4)) minmax(0, 1fr); }
+.settings__find { position: relative; display: flex; align-items: center; margin-bottom: var(--rt-space-3); }
+.settings__find > .ph { position: absolute; left: var(--rt-space-2); color: var(--rt-text-tertiary); font-size: var(--rt-text-sm); pointer-events: none; }
+.settings__find-input { padding-left: calc(var(--rt-space-6) + var(--rt-space-1)); }
+.settings__found { margin-bottom: var(--rt-space-3); padding-bottom: var(--rt-space-3); border-bottom: var(--rt-hairline-width) solid var(--rt-border); }
+.settings__found .nav-list__item { height: auto; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; }
+.settings__found-page { font-size: var(--rt-text-2xs); }
+.settings__found-none { font-size: var(--rt-text-xs); padding: var(--rt-space-1) var(--rt-space-3); }
+.settings__categories .nav-list__item { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-2); }
+.settings__attention { flex: none; color: var(--rt-warn); font-size: var(--rt-text-sm); }
+.settings__head { display: flex; align-items: center; gap: var(--rt-space-3); min-height: var(--rt-control-height); padding-bottom: var(--rt-space-3); border-bottom: var(--rt-hairline-width) solid var(--rt-border); }
+.settings__head > .display { margin: 0 auto 0 0; }
+.settings__head .save-bar { padding: 0; margin: 0; border: 0; flex-wrap: nowrap; }
+/* The status is said when there is something to say; clean, it stays for assistive technology and for the proofs that wait on it. */
+.settings__head .save-bar__status:not(.is-dirty) { position: absolute; top: 0; left: 0; width: var(--rt-hairline-width); height: var(--rt-hairline-width); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.settings__explain[aria-pressed='true'], .settings__info[aria-pressed='true'] { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }
+.settings__info { flex: none; margin-left: auto; color: var(--rt-text-tertiary); font-size: var(--rt-text-md); }
+.settings__explain { color: var(--rt-text-secondary); font-size: var(--rt-text-md); }
+.settings__info:hover, .settings__explain:hover { color: var(--rt-text); }
+.settings__info:disabled { opacity: 1; cursor: default; }
+.settings__origin-mark { flex: none; margin-left: auto; display: inline-grid; place-items: center; width: var(--rt-space-6); color: var(--rt-text-secondary); font-size: var(--rt-text-sm); }
+.settings__origin-mark + .settings__info { margin-left: 0; }
+.settings__hint[hidden] { display: none; }
+.settings__body:not([data-explain]) .settings__lede { display: none; }
+/* A section of a shared page, and a group of rows inside it: two levels under the page's title, both sentence case
+   (DESIGN.md: "a section's heading: medium, sentence case, primary ink"). The kicker OQ-500 gave a group heading goes
+   with the category list it was ruled for. */
+.settings__subtitle { font-family: var(--rt-font-body); letter-spacing: 0; margin: var(--rt-space-8) 0 0; padding-bottom: var(--rt-space-2); font-size: var(--rt-text-base); font-weight: var(--rt-weight-medium); color: var(--rt-text); }
+.settings__head + .settings__section > .settings__subtitle:first-child, .settings__section > .settings__subtitle:first-child { margin-top: var(--rt-space-5); }
+.settings__body > .settings__section + .settings__section { margin-top: var(--rt-space-4); }
+.settings__body .settings__section .settings__heading:not([data-mcp-websearch-setup] *) { margin: var(--rt-space-6) 0 0; padding-bottom: var(--rt-space-2); border-bottom: var(--rt-hairline-width) solid var(--rt-border); font-family: var(--rt-font-body); font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); letter-spacing: 0; text-transform: none; color: var(--rt-text); }
+/* The ledger row: a hairline under each, no gap between, so a column of values reads as one list. */
+.settings__body :is(.settings__section, .settings__card, .settings__actions) > .settings__action { margin-top: 0; padding: var(--rt-space-2) 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.settings__body .settings__actions, .settings__body .settings__card { gap: 0; }
+.settings__body .settings__card { border-top: 0; padding-top: 0; margin: 0; }
+.settings__body .settings__dictation-field { margin-top: 0; padding: var(--rt-space-2) 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+/* Setup: what needs attention, each with its one act; then what was changed and what the workspace holds. */
+.setup__attention { list-style: none; margin: 0; padding: 0; }
+.setup__item { display: grid; grid-template-columns: var(--rt-space-5) minmax(0, 1fr) auto; align-items: center; gap: var(--rt-space-3); padding: var(--rt-space-3) 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.setup__glyph { font-size: var(--rt-text-md); color: var(--rt-warn); }
+.setup__item[data-kind='blocks'] .setup__glyph { color: var(--rt-fail); }
+.setup__title { font-size: var(--rt-text-base); font-weight: var(--rt-weight-medium); }
+.setup__clear { display: flex; align-items: center; gap: var(--rt-space-2); margin: var(--rt-space-4) 0 0; color: var(--rt-text-secondary); }
+.setup__clear > .ph { color: var(--rt-ok); font-size: var(--rt-text-md); }
+/* Two columns where each has room for a label and a value, one where it has not: no breakpoint decides it. */
+.setup__columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(3 * var(--rt-label-column)), 1fr)); gap: 0 var(--rt-space-8); }
+.setup__columns .settings__subtitle { border-bottom: var(--rt-hairline-width) solid var(--rt-border); }
+.setup__list { list-style: none; margin: 0; padding: 0; }
+.setup__line { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-3); width: 100%; min-height: var(--rt-control-height); padding: var(--rt-space-1) 0; border: 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); background: none; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm); text-align: left; cursor: pointer; }
+.setup__line:hover { background: var(--rt-hover); }
+.setup__line:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.setup__value { display: inline-flex; align-items: center; gap: var(--rt-space-2); min-width: 0; color: var(--rt-text-secondary); font-size: var(--rt-text-xs); overflow-wrap: anywhere; }
+.setup__none { margin: var(--rt-space-3) 0 0; font-size: var(--rt-text-sm); }

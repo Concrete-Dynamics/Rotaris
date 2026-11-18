@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SettingsTitle } from './page.js';
 import {
   SKILL_INVOCATION_MODE_LABELS, SKILL_INVOCATION_MODE_NAMES, SKILL_LOAD_MODE_LABELS,
   type ConfigSnapshot, type SkillInvocationModeName, type SkillLoadModeName, type SkillRow, type SkillsState,
@@ -165,8 +166,8 @@ export function SkillsSettings({ state, workspace, home, pending, onLoadMode, on
 
   return (
     <div className="settings__section">
-      <h1 className="display">Skills</h1>
-      <p className="text-secondary">
+      <SettingsTitle>Skills</SettingsTitle>
+      <p className="text-secondary settings__lede">
         Portable skills are <code className="mono">SKILL.md</code> files this product reads rather than defines. They are
         discovered from this project and from your own skill folders; the policy below decides what each one puts in front
         of a newly created agent, and applies to this workspace rather than to any one persona.

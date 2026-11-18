@@ -135,18 +135,19 @@ function clicked(name, log, whats) {
 // The Settings category, chosen by a step that WAITS for its item: the view seam's own category click is one attempt at
 // 800 ms and says nothing when it misses, and every step after it then waits on a control that category draws. The
 // deadlines below are deadlines, not appointments (`@~`): each step acts as soon as its control is on screen.
-const RUNTIME_CATEGORY = '.settings__categories .nav-list__item>>Runtime@~6000';
+// PD-CONFIG-012 (2026-11-18): the Runtime category's rows stand on three pages — Delegation, Permissions, Review.
+const RUNTIME_CATEGORY = '.settings__categories .nav-list__item>>Permissions@~6000';
 
 const results = {};
 
 // 1. Settings → Runtime: the outside-workspace toggle with its confirmation, then Save; bytes outside the written key unchanged.
 const s1 = scenario('runtime-save');
 const log1 = await launch('runtime-save', s1, {
-  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Permissions',
   ROTARIS_CAPTURE_CLICKS: `${RUNTIME_CATEGORY};;.toggle[aria-labelledby="outside-label"]@~7000;;.dialog-actions .btn-warning>>Yes@~8000;;.save-bar .btn-primary>>Save@~9000`,
   ROTARIS_CAPTURE_AFTER_MS: '10500',
 });
-clicked('runtime-save', log1, ['Runtime', '.toggle[aria-labelledby="outside-label"]', 'Yes', 'Save']);
+clicked('runtime-save', log1, ['Permissions', '.toggle[aria-labelledby="outside-label"]', 'Yes', 'Save']);
 const ws1 = readFileSync(s1.workspaceFile, 'utf8');
 if (!ws1.includes('  allow_outside_workspace: true\n')) throw new Error(`the runtime save did not write allow_outside_workspace:\n${ws1}`);
 if (!ws1.includes('# workspace configuration\nruntime:\n  # the workspace states two keys and inherits the rest\n  permission_mode: ask\n  max_depth: 2\n')) throw new Error(`the runtime save disturbed the file's other lines:\n${ws1}`);
@@ -207,7 +208,7 @@ let stopped3;
 try {
   // PD-SHELL-015 (2026-11-11): Settings is the sixth view, Ctrl+6 (Ctrl+7 until then, bound to nothing now).
   await d3.chord('Ctrl+6');
-  const category = await clickLanded(d3, '.settings__categories .nav-list__item', { text: 'Runtime', timeoutMs: 15_000 });
+  const category = await clickLanded(d3, '.settings__categories .nav-list__item', { text: 'Delegation', timeoutMs: 15_000 });
   const before = await until(readBar, (b) => b?.keepGoing === 'true' || b?.keepGoing === 'false', { timeoutMs: 15_000, what: 'the Keep going toggle on Runtime' });
   if (before.status !== 'All changes saved') throw new Error(`the Runtime category opened with the save status ${JSON.stringify(before.status)}, not settled`);
   const toggle = await clickLanded(d3, KEEP_GOING, { timeoutMs: 15_000 });

@@ -108,7 +108,7 @@ const followNotice = async (d, label) => {
   const n = await until(() => noticeNow(d), (v) => v?.title === MISSING_TITLE, { timeoutMs: 30_000, what: `the store-missing notice (${label})` });
   await d.click('.notice__action', { text: 'Open Project settings' });
   await d.waitFor('.app-shell[data-view="settings"]', { timeoutMs: 10_000 });
-  const selected = await until(() => d.eval(`document.querySelector('.nav-list__item.is-selected')?.textContent ?? null`), (v) => v === 'Project', { timeoutMs: 10_000, what: 'Settings at Project' });
+  const selected = await until(() => d.eval(`document.querySelector('.nav-list__item.is-selected')?.textContent ?? null`), (v) => v === 'Session store', { timeoutMs: 10_000, what: 'Settings at Project' });
   const offered = await until(() => establishShown(d), (v) => v === true, { timeoutMs: 10_000, what: '"Start a new session store…" offered' });
   return { notice: n, selected, offered };
 };
@@ -246,7 +246,7 @@ const followCorruptNotice = async (d, label) => {
   const n = await until(() => noticeNow(d), (v) => v?.title === CORRUPT_TITLE, { timeoutMs: 30_000, what: `the store-corrupt notice (${label})` });
   await d.click('.notice__action', { text: 'Open Project settings' });
   await d.waitFor('.app-shell[data-view="settings"]', { timeoutMs: 10_000 });
-  const selected = await until(() => d.eval(`document.querySelector('.nav-list__item.is-selected')?.textContent ?? null`), (v) => v === 'Project', { timeoutMs: 10_000, what: 'Settings at Project' });
+  const selected = await until(() => d.eval(`document.querySelector('.nav-list__item.is-selected')?.textContent ?? null`), (v) => v === 'Session store', { timeoutMs: 10_000, what: 'Settings at Project' });
   const offered = await until(() => setAsideShown(d), (v) => v === true, { timeoutMs: 10_000, what: '"Set the damaged store aside and start a new one…" offered' });
   return { notice: n, selected, offered };
 };

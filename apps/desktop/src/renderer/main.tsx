@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
-import { dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
+import { dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, settingsPageFor, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted } from '@rotaris/ui';
 import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
 // ADR-0063 — portable skills: the catalog reader (`askUntilDiscovered`, `bindSkillsReader`, `readWhileMounted`, in the `@rotaris/ui` import above), the Settings tab's props and the composer's commands.
@@ -1025,7 +1025,8 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
     ...(config.pending ? { pending: config.pending.instructions.overrides } : {}),
     onToggle: (id: string, value: InstructionStateName) => config.onChange({ kind: 'instructionToggle', id, value }),
   }), [config]);
-  const initialCategory = settingsCategory === 'models' || settingsCategory === 'personas' || settingsCategory === 'runtime' || settingsCategory === 'interface' || settingsCategory === 'display' || settingsCategory === 'skills' || settingsCategory === 'instructions' || settingsCategory === 'hooks' || settingsCategory === 'mcp' || settingsCategory === 'plugins' || settingsCategory === 'tools' || settingsCategory === 'project' || settingsCategory === 'about' ? settingsCategory : 'models';
+  // PD-CONFIG-012: the stored value is a page, or one of REQ-CONFIG-269's categories from before the pages, which opens the page that holds it.
+  const initialCategory = settingsPageFor(settingsCategory) ?? 'setup';
   return (<>
     <SettingsView
       session={session}
@@ -1040,6 +1041,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       activeTheme={theme.name}
       reducedMotion={reducedMotion}
       initialCategory={initialCategory}
+      providerSignedIn={providers.loading || providers.error !== null ? null : providers.rows.some((row) => row.authenticated)}
       onTheme={onTheme}
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
@@ -1225,7 +1227,7 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
   useEffect(() => {
     const open = (workspace: string | undefined) => {
       console.info(`project-setup action: opening Settings › Project for ${workspace ?? 'this workspace'}`);
-      useShellState.getState().openSettings('project');
+      useShellState.getState().openSettings('initialization'); // PD-CONFIG-012: the page that holds the initialization card
     };
     const off = bridge.onProjectInitOpen((p) => { open((p as { workspace?: string }).workspace); });
     void bridge.command({ kind: 'projectInit.ready' }).then((outcome) => {
@@ -1789,7 +1791,7 @@ async function boot(): Promise<void> {
   const bootTheme = windowTheme.adopt(themeReply.ok ? (themeReply.value as { name?: string }).name : undefined);
   const motionSetting = motionReply.ok ? (motionReply.value as { value?: boolean }).value : undefined;
   setStoredMotionPreference(motionSetting);
-  const settingsCategory = categoryReply.ok ? String((categoryReply.value as { value?: string }).value ?? 'models') : 'models';
+  const settingsCategory = categoryReply.ok ? String((categoryReply.value as { value?: string }).value ?? 'setup') : 'setup';
   // Part AA: REQ-CHAT-167 and REQ-CHAT-067's two display preferences, read once before the first paint so no row is
   // drawn against a default the user has already changed.
   await readDisplayPrefs();

@@ -267,7 +267,7 @@ async function openMcpSettings(d, step) {
   await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
   await step('Ctrl+6', d.chord('Ctrl+6'));
   await step('the Settings view', d.waitFor('.app-shell[data-view="settings"]'));
-  await step('the MCP Servers category', d.click('.nav-list__item', { text: 'MCP Servers' }));
+  await step('the MCP Servers category', d.click('.nav-list__item', { text: 'Tools' }));
   await step('the configured servers card', d.waitFor('[data-mcp-servers]'));
 }
 /** The prompt as the packaged prompt seam types it — Ctrl+1, Ctrl+L, the text, Enter — each once its condition holds. */

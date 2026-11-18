@@ -28,3 +28,5 @@ Also built with it, and covered rather than decided: REQ-SHELL-153's keyboard mo
 Nothing REQ-CONFIG-268 states is displaced: the thirteen categories, their labels and their order stand as written, and the headings are added beside them. REQ-CONFIG-269, REQ-CONFIG-271, REQ-CONFIG-405, REQ-CONFIG-459, REQ-SHELL-152 and REQ-SHELL-153 govern in full.
 
 *Proposed and decided by the model (`claude-fable-5-2`) under the owner's standing delegation [R-098](../requests.md#r-098), which the owner authorised on 2026-11-11; decision D3 of [the information-architecture map](../../design/information-architecture.md), written the same day and read against an independent critique recorded there. The owner did not word this directive.*
+
+*2026-11-18: [`PD-CONFIG-012`](pd-config-012.md#pd-config-012) draws pages in place of the category list, so these four headings are no longer drawn; they remain the grouping of REQ-CONFIG-268's vocabulary.*

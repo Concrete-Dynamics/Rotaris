@@ -3,16 +3,16 @@ import { PUBLIC_TOOL_NAMES, TOOL_IMPLEMENTATIONS, DISPLAY_LINE_CAP_CHOICES } fro
 import { LEGAL_BASE, LEGAL_DOCUMENTS, NO_THIRD_PARTY_BUNDLE, PRODUCT_LICENCE, PUBLISHER, SECURITY_CONTACT } from './About.js';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { categoryFocusMove, SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS, SettingsView } from '../SettingsView.js';
+import { CATEGORY_PAGE, categoryFocusMove, findSettings, SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS, SETTINGS_INDEX, SETTINGS_PAGE_GROUPS, SETTINGS_PAGES, settingsPageFor, SettingsView } from '../SettingsView.js';
 
-describe('REQ-CONFIG-268/269 — the category list, under PD-CONFIG-008\'s headings', () => {
+describe('REQ-CONFIG-268/269 — the category vocabulary, and the pages PD-CONFIG-012 draws', () => {
   it('presents the thirteen categories in the requirement’s order, under its identifiers', () => {
     expect(SETTINGS_CATEGORIES.map((c) => c.id)).toEqual([
       'models', 'personas', 'runtime', 'interface', 'display', 'skills', 'instructions', 'hooks', 'mcp', 'plugins', 'tools', 'project', 'about',
     ]);
   });
 
-  it('PD-CONFIG-008: four headings over that order — Agents, Application, Extensions, Project and about — and no heading repeats a sole member', () => {
+  it('PD-CONFIG-008: the vocabulary keeps its four headings over that order — Agents, Application, Extensions, Project and about — and no heading repeats a sole member', () => {
     expect(SETTINGS_CATEGORY_GROUPS.map((g) => [g.label, g.categories.map((c) => c.label)])).toEqual([
       ['Agents', ['Models', 'Personas', 'Runtime']],
       ['Application', ['Interface', 'Display']],
@@ -22,15 +22,36 @@ describe('REQ-CONFIG-268/269 — the category list, under PD-CONFIG-008\'s headi
     for (const group of SETTINGS_CATEGORY_GROUPS) expect(group.categories.length).toBeGreaterThan(1);
   });
 
-  it('PD-CONFIG-008: a heading is text naming its group — never an option, never focusable', () => {
+  it('PD-CONFIG-012: Setup, then twelve pages under four headings in run order; a heading is text naming its group — never an option, never focusable', () => {
+    expect(SETTINGS_PAGES.map((p) => p.id)).toEqual(['setup', 'models', 'personas', 'instructions', 'initialization', 'delegation', 'permissions', 'tools', 'review', 'store', 'traceability', 'appearance', 'about']);
+    expect(SETTINGS_PAGE_GROUPS.map((g) => g.label)).toEqual(['Before a run', 'While it runs', 'After it ends', 'This application']);
     const html = renderToStaticMarkup(createElement(SettingsView, { session: null, workspace: null, onBackup: async () => ({ ok: true as const }), onRestore: async () => ({ ok: true as const }) }));
     expect(html.match(/role="group"/g)).toHaveLength(4);
     expect(html.match(/role="option"/g)).toHaveLength(13);
-    for (const group of SETTINGS_CATEGORY_GROUPS) {
+    for (const group of SETTINGS_PAGE_GROUPS) {
       expect(html).toContain(`role="group" aria-labelledby="settings-group-${group.id}"`);
       expect(html).toMatch(new RegExp(`<div[^>]*id="settings-group-${group.id}"[^>]*>${group.label}</div>`));
     }
     expect(html).not.toMatch(/<div[^>]*nav-list__heading[^>]*(tabindex|role="option")/);
+    // With nothing stored and nothing asked for, the view opens on Setup.
+    expect(html).toMatch(/aria-selected="true"[^>]*data-settings-page="setup"/);
+  });
+
+  it('PD-CONFIG-012: every one of REQ-CONFIG-269\'s identifiers still opens a page, and a page opens itself', () => {
+    for (const category of SETTINGS_CATEGORIES) expect(settingsPageFor(category.id)).toBe(CATEGORY_PAGE[category.id]);
+    expect(settingsPageFor('runtime')).toBe('delegation');
+    expect(settingsPageFor('project')).toBe('store');
+    for (const page of SETTINGS_PAGES) expect(settingsPageFor(page.id)).toBe(page.id);
+    expect(settingsPageFor('nowhere')).toBeNull();
+    expect(settingsPageFor(null)).toBeNull();
+  });
+
+  it('PD-CONFIG-012 clause 6: a setting is found by the words of its name, and every indexed name names a real page', () => {
+    expect(findSettings('sandbox mode').map((m) => m.page)).toEqual(['permissions']);
+    expect(findSettings('timeout').map((m) => m.label)).toEqual(['Per-agent timeout', 'Improvement analysis timeout']);
+    expect(findSettings('  ')).toEqual([]);
+    expect(findSettings('no such thing')).toEqual([]);
+    for (const entry of SETTINGS_INDEX) expect(SETTINGS_PAGES.some((p) => p.id === entry.page)).toBe(true);
   });
 });
 

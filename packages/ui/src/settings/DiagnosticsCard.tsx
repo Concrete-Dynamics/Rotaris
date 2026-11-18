@@ -80,8 +80,8 @@ export function DiagnosticsCard({ state, onLevel, onChooseFolder, onOpenRunDirec
   return (
     <section aria-labelledby="about-diagnostics-heading" data-testid="diagnostics-card">
       <h2 className="settings__heading" id="about-diagnostics-heading">Diagnostics</h2>
-      <p className="text-secondary settings__hint">Diagnostics write this application's log to a run directory on this machine, one per window. Nothing is sent anywhere.</p>
-      <p className="text-secondary settings__hint" data-testid="diagnostics-log-contents">{DIAGNOSTICS_LOG_SCOPE} {DIAGNOSTICS_LOG_INCLUDES} {DIAGNOSTICS_LOG_EXCLUDES}</p>
+      <p className="text-secondary settings__hint settings__lede">Diagnostics write this application's log to a run directory on this machine, one per window. Nothing is sent anywhere.</p>
+      <p className="text-secondary settings__hint settings__lede" data-testid="diagnostics-log-contents">{DIAGNOSTICS_LOG_SCOPE} {DIAGNOSTICS_LOG_INCLUDES} {DIAGNOSTICS_LOG_EXCLUDES}</p>
       <div className="settings__dictation-field">
         <label htmlFor="diagnostics-level">Capture level</label>
         <DesignSelect

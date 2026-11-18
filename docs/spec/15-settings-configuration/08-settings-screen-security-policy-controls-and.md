@@ -33,6 +33,8 @@ Part 8 of 13 of [domain 15](../15-settings-configuration.md), which indexes ever
 ### Settings screen: runtime policy controls
 
 - **REQ-CONFIG-320** — The Runtime category presents, in order: a delegation strategy selector, a run-start mode selector, delegation limits, the runtime policy card, the security policy card, and the advanced runtime card of REQ-CONFIG-471. The run-start mode selector offers exactly the two values REQ-CONFIG-476 registers and no others, its accessible description states that the mode decides whether a run produces a plan and waits for an answer before it changes anything, and it defers to Save like the rest of destination 1 (REQ-CONFIG-417).
+  > **Narrowed by [`PD-CONFIG-012`](../../product/directives/pd-config-012.md#pd-config-012), 2026-11-18.** One case: the rows stand on three pages, Delegation, Permissions
+  > and Review, in this order within each, the iteration cap and the compression threshold with the delegation limits.
 - **REQ-CONFIG-321** — The delegation strategy selector offers exactly three options in this order: `orchestrator`, `swarm`, `single`. The selected label is the stored value.
 - **REQ-CONFIG-322** — Delegation limits are two numeric controls with hard widget-level clamping, so out-of-range values are unreachable through the UI: depth cap **1–12** inclusive, fan-out limit **1–64** inclusive.
   > **Narrowed by [`PD-CONFIG-003`](../../product/directives/pd-config-003.md#pd-config-003), 2026-10-07.** Delegation limits are

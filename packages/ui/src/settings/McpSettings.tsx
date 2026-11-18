@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SettingsTitle } from './page.js';
 import type { ConfigSnapshot, McpHealth, McpListing, McpProvisioning, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 import { Confirm } from './Confirm.js';
@@ -151,7 +152,7 @@ function LanguageServers({ provisioning }: { provisioning: McpProvisioning }) {
   return (
     <div data-language-servers>
       <div className="card-kicker">Language servers</div>
-      <p className="text-secondary">
+      <p className="text-secondary settings__lede">
         The bundled runtime is installed with Rotaris; the language servers its symbol tools use are not. At the first use of a symbol tool for a
         language, the runtime downloads that language's server into <span className="mono" data-language-server-store>{provisioning.store}</span>.
         Nothing is downloaded before then.
@@ -183,7 +184,7 @@ function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null;
             : <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={setup === null} onClick={() => { void start(); }} data-action="setup-start">{setup?.state === 'finished' ? 'Set up again' : 'Set up code intelligence for this workspace'}</DesignButton>}
         </div>
       </div>
-      <p className="text-secondary">Creates the bundled runtime's project for this workspace, indexes it and initialises its project memories — three steps, in order, each bounded; a workspace without code gets the project only. Runs in the background; you can cancel between steps or while a step is running.</p>
+      <p className="text-secondary settings__lede">Creates the bundled runtime's project for this workspace, indexes it and initialises its project memories — three steps, in order, each bounded; a workspace without code gets the project only. Runs in the background; you can cancel between steps or while a step is running.</p>
       {setup ? <LanguageServers provisioning={setup.provisioning} /> : null}
       {message ? <p className="composer__error" role="alert" data-setup-refused>{message}</p> : null}
       {setup === null ? <p className="text-secondary">Reading…</p> : (
@@ -711,7 +712,7 @@ export function McpSettings(props: McpSettingsProps) {
   const registerSetupFocus = useCallback((focus: (() => void) | null) => { setupFocus.current = focus; }, []);
   return (
     <div className="settings__section" data-mcp-settings>
-      <h1 className="display">MCP Servers</h1>
+      <SettingsTitle>MCP Servers</SettingsTitle>
       <DesignCard className="card settings__card" data-mcp-servers>
         <div className="providers-card__head">
           <div className="card-kicker">Configured servers</div>
@@ -725,7 +726,7 @@ export function McpSettings(props: McpSettingsProps) {
             <DesignButton type="button" className="btn btn-secondary btn-compact" aria-description="Probe every configured MCP server" disabled={props.probing || rows.length === 0} onClick={() => { void probeAll(); }} data-action="check-status">{props.probing ? 'Checking…' : 'Check status'}</DesignButton>
           </div>
         </div>
-        <p className="text-secondary">Every server the configuration declares, whether or not it is enabled. Health is probed on demand and never remembered across launches; the switch turns a server off for this session only, and switching on a server the configuration holds disabled writes `enabled: true` to the configuration file.</p>
+        <p className="text-secondary settings__lede">Every server the configuration declares, whether or not it is enabled. Health is probed on demand and never remembered across launches; the switch turns a server off for this session only, and switching on a server the configuration holds disabled writes `enabled: true` to the configuration file.</p>
         {props.error ? <p className="composer__error" role="alert">{props.error}</p> : null}
         {probeMessage ? <p className="text-secondary" role="status">{probeMessage}</p> : null}
         {rows.length === 0 ? (
@@ -743,7 +744,7 @@ export function McpSettings(props: McpSettingsProps) {
       <SetupCard setup={props.setup} onStart={props.onSetupStart} onCancel={props.onSetupCancel} />
       <DesignCard className="card settings__card" data-mcp-secrets>
         <div className="card-kicker">Stored secrets</div>
-        <p className="text-secondary">What the two secrets files hold, per server and key, with every value masked. Adding, changing and deleting a secret is built on the `Set up web search` card above, for the built-in server's key; any other server's secrets are edited in <code className="mono">secrets.yaml</code> beside the configuration file (workspace or global). A stored secret takes effect on the next configuration load.</p>
+        <p className="text-secondary settings__lede">What the two secrets files hold, per server and key, with every value masked. Adding, changing and deleting a secret is built on the `Set up web search` card above, for the built-in server's key; any other server's secrets are edited in <code className="mono">secrets.yaml</code> beside the configuration file (workspace or global). A stored secret takes effect on the next configuration load.</p>
         <div className="settings__action">
           <label htmlFor="mcp-secrets-server">View</label>
           <DesignSelect id="mcp-secrets-server" className="input select settings__select" aria-label="Secrets for" value={chosen ?? ''} onChange={(e) => props.onSecretsServer(e.currentTarget.value === '' ? null : e.currentTarget.value)}>

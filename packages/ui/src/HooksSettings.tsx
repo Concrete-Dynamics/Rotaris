@@ -1,4 +1,5 @@
 import type { HookAgentId, HookRow, HooksSummary } from '@rotaris/contracts';
+import { SettingsTitle, Hint } from './settings/page.js';
 import { Button as DesignButton, Checkbox as DesignCheckbox, EmptyState as DesignEmptyState, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
 
 /**
@@ -39,9 +40,9 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
   const agents: HookAgentId[] = ['rotaris', 'claude-code'];
   return (
     <div className="settings__section hooks">
-      <h1 className="display">Hooks</h1>
-      <p className="text-secondary">Processes started by a hook can survive its timeout and application exit. Hook timeout handling stops the hook's own process and bounds output collection. Terminal-tool process trees follow the terminal cleanup policy.</p>
-      <p className="text-secondary">
+      <SettingsTitle>Hooks</SettingsTitle>
+      <p className="text-secondary settings__lede">Processes started by a hook can survive its timeout and application exit. Hook timeout handling stops the hook's own process and bounds output collection. Terminal-tool process trees follow the terminal cleanup policy.</p>
+      <p className="text-secondary settings__lede">
         A hook is a shell command of your own that runs at a named point of a run — around tool calls and at session, iteration, child-agent and verifier
         boundaries. It runs on this machine under your own account and is not subject to the agent permission policy. Hooks are declared in
         <code className="mono"> agents.yaml</code>; this screen switches them on and off and decides whether a workspace's hooks may run — it does not author them.
@@ -62,17 +63,17 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
           <div className="settings__actions hooks__actions">
             <div className="settings__action">
               <DesignButton type="button" className="btn btn-primary" disabled={loading || summary.declaredCount === 0} onClick={onReview} aria-description="Opens a dialog showing each command this workspace declares, to allow or refuse them.">Review workspace hooks…</DesignButton>
-              <span className="text-secondary settings__hint">{summary.declaredCount === 0 ? 'Nothing to review: this workspace declares no hooks.' : 'The only place a hook command is shown.'}</span>
+              <Hint>{summary.declaredCount === 0 ? 'Nothing to review: this workspace declares no hooks.' : 'The only place a hook command is shown.'}</Hint>
             </div>
             {summary.decisionStored && (
               <div className="settings__action">
                 <DesignButton type="button" className="btn btn-secondary" disabled={loading} onClick={onClear} aria-description="Removes the stored decision; the workspace's hooks stay withheld until allowed again.">Clear the stored decision</DesignButton>
-                <span className="text-secondary settings__hint">Re-applies the gate at once; the hooks stay withheld until you allow them again.</span>
+                <Hint>Re-applies the gate at once; the hooks stay withheld until you allow them again.</Hint>
               </div>
             )}
             <div className="settings__action">
               <DesignButton type="button" className="btn btn-secondary" disabled={loading} onClick={onRefresh} aria-description="Re-reads the hook sources and redraws this table; starts no hook and changes no decision.">{loading ? 'Reading…' : 'Re-read hook sources'}</DesignButton>
-              <span className="text-secondary settings__hint">Starts no hook and changes no decision; governs runs started afterwards.</span>
+              <Hint>Starts no hook and changes no decision; governs runs started afterwards.</Hint>
             </div>
           </div>
         </>
@@ -127,7 +128,7 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
           <span className="empty-state-hint">Declare them under <code className="mono">hooks:</code> in your global <code className="mono">agents.yaml</code> or in this workspace's <code className="mono">.rotaris/agents.yaml</code>.</span>
         </DesignEmptyState>
       )}
-      <p className="text-secondary settings__hint">A checkbox cleared here takes effect for runs started afterwards; a run already executing keeps the hook set it started with.</p>
+      <p className="text-secondary settings__hint settings__lede">A checkbox cleared here takes effect for runs started afterwards; a run already executing keeps the hook set it started with.</p>
 
       <h2 className="settings__heading">Invocations in this session</h2>
       {summary && summary.invocations.length > 0 ? (

@@ -850,7 +850,7 @@ const s7 = scenario('settings');
     // the configuration when it mounts and the card draws a dash until that answers (a reading 321 ms after the view step
     // read "—" on 2026-11-11). The press waits from 6.2 s on, so the reading comes first.
     ROTARIS_CAPTURE_EVAL_AT: `${card}@6000`,
-    ROTARIS_CAPTURE_CLICKS: '[data-testid="mission-open-runtime"]@6200~14000;;#max-depth@8400;;.save-bar .btn-primary>>Save@10800;;.nav-list__item>>Interface@12200;;[data-testid="agent-pop-out-toggle"]@12700;;.nav-list__item>>Runtime@13300',
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="mission-open-runtime"]@6200~14000;;#max-depth@8400;;.save-bar .btn-primary>>Save@10800;;.nav-list__item>>Appearance@12200;;[data-testid="agent-pop-out-toggle"]@12700;;.nav-list__item>>Runtime@13300',
     ROTARIS_CAPTURE_SELECT: '#strategy>>swarm@7800',
     // The depth cap typed as a person types it: the field's text selected, the digit typed over it, Tab to commit the draft.
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+A@8900', ROTARIS_CAPTURE_TYPE_AT: '2@9300', ROTARIS_CAPTURE_KEYS: 'Tab@10000',
@@ -864,7 +864,7 @@ const s7 = scenario('settings');
   expect(/capture: clicked "\[data-testid="mission-open-runtime"\]"/.test(r.log), 'the "Open Runtime settings" press was not recorded (see settings.log)');
   const landedView = probesAt(r.log, 7400, '.app-shell')?.[0]?.data?.['data-view'];
   const landedCategory = probesAt(r.log, 7400, '.nav-list__item.is-selected')?.map((p) => p.text) ?? [];
-  expect(landedView === 'settings' && JSON.stringify(landedCategory) === JSON.stringify(['Runtime']), `"Open Runtime settings" landed on ${landedView} at ${JSON.stringify(landedCategory)}, not Settings › Runtime (PD-MONITOR-009 clause 6)`);
+  expect(landedView === 'settings' && JSON.stringify(landedCategory) === JSON.stringify(['Delegation']), `"Open Runtime settings" landed on ${landedView} at ${JSON.stringify(landedCategory)}, not Settings › Runtime (PD-MONITOR-009 clause 6)`);
   const dirty = probesAt(r.log, 10400, '.save-bar__status')?.[0]?.text ?? null;
   expect(dirty === 'Unsaved changes', `the save bar after the two edits and before Save: ${JSON.stringify(dirty)}`);
   const yaml = readFileSync(join(s7.workspace, '.rotaris', 'agents.yaml'), 'utf8');

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { Hint, Origin, SettingsTitle, type ValueOrigin } from './page.js';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
 import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, offeredForModel, reasoningChoice, reasoningModelKey, roleReasoningOptions, scopeCellOf, slotModelPick, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
@@ -115,7 +116,7 @@ export function ModelsSettings(props: ConfigSettingsProps) {
   const slotOf = (slot: ModelSlotName) => snapshot.slots.find((s) => s.slot === slot);
   return (
     <div className="settings__section">
-      <h1 className="display">Models</h1>
+      <SettingsTitle>Models</SettingsTitle>
       {snapshot.referential.length > 0 && (
         <DesignCard className="card settings__referential" role="status">
           <div className="card-kicker">Unresolved references</div>
@@ -197,14 +198,14 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
   const modelOptions = [...slotNames, ...snapshot.models.filter((m) => !slotNames.includes(m))];
   return (
     <div className="settings__section">
-      <h1 className="display">Personas</h1>
+      <SettingsTitle>Personas</SettingsTitle>
       <div className="settings__action">
         <label htmlFor="persona-scope">Edit scope</label>
         <DesignSelect id="persona-scope" className="input select settings__select" aria-label="Edit scope" aria-description="Settles whether edits to a role's model and reasoning are recorded for this workspace or for the user as a whole." value={scope} onChange={(e) => setScope(e.currentTarget.value as 'workspace' | 'global')}>
           <option value="workspace">Workspace</option>
           <option value="global">Global</option>
         </DesignSelect>
-        <span className="text-secondary settings__hint">Switching scope shows that scope's values; it copies nothing.</span>
+        <Hint>Switching scope shows that scope's values; it copies nothing.</Hint>
       </div>
       <DesignTable className="table settings__grid" aria-label="Roles">
         <thead><tr><th>Persona</th><th>Model</th><th>Reasoning</th><th>Scope</th><th>Tools</th></tr></thead>
@@ -253,13 +254,13 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
   );
 }
 
-export function Toggle({ id, label, hint, on, onChange, disabled, testId }: { id: string; label: string; hint: string; on: boolean; onChange: (v: boolean) => void; disabled?: boolean; testId?: string }) {
+export function Toggle({ id, label, hint, on, onChange, disabled, testId, origin = 'default' }: { id: string; label: string; hint: string; on: boolean; onChange: (v: boolean) => void; disabled?: boolean; testId?: string; origin?: ValueOrigin }) {
   return (
     <div className="settings__action">
       <span id={`${id}-label`}>{label}</span>
       {/* REQ-CONFIG-323: the accessible description states enabled or disabled and is regenerated on every change. */}
       <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby={`${id}-label`} aria-description={`${label} is ${on ? 'enabled' : 'disabled'}.`} aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} {...(testId ? { 'data-testid': testId, 'data-on': on ? 'true' : 'false' } : {})} />
-      <span className="text-secondary settings__hint">{hint}</span>
+      <Origin of={origin} /><Hint about={label}>{hint}</Hint>
     </div>
   );
 }
@@ -317,14 +318,16 @@ export const RUNTIME_CONFIRMATIONS = {
  * ADR-0022/0023, Part AR; REQ-SANDBOX-113). (Until 2026-10-13 this said the card was not built for want of a confinement
  * backend; both have existed since Part AR.)
  */
-export function RuntimeSettings(props: ConfigSettingsProps) {
-  const { snapshot, pending, onChange, onSetField } = props;
+export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: 'delegation' | 'permissions' | 'review' }) {
+  const { snapshot, pending, onChange, onSetField, part } = props;
   const [confirm, setConfirm] = useState<'outside' | 'autonomous' | null>(null);
   const [advancedScope, setAdvancedScope] = useState<'workspace' | 'global'>('workspace');
   const [advancedMessage, setAdvancedMessage] = useState<string | null>(null);
   if (!snapshot || !pending) return <p className="text-secondary">{props.loading ? 'Reading the configuration…' : props.error ?? 'No configuration service.'}</p>;
   if (!snapshot.loadOk) return <Fatal snapshot={snapshot} />;
   const rt = pending.runtime;
+  // PD-CONFIG-012 clause 5: where a runtime value comes from, read off the two files' own mappings.
+  const from = (key: string): ValueOrigin => snapshot.rawRuntime.workspace !== null && key in snapshot.rawRuntime.workspace ? 'workspace' : snapshot.rawRuntime.global !== null && key in snapshot.rawRuntime.global ? 'global' : 'default';
   // REQ-CONFIG-446 / REQ-CONFIG-419: what the two timeout fields state as stored is the saved configuration's value, never the
   // pending edit, which reaches the file only on Save.
   const stored = snapshot.runtime;
@@ -333,48 +336,61 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
     const r: Outcome = await onSetField(advancedScope, { runtime: { memory_diagnostics_enabled: value } });
     setAdvancedMessage(r.ok ? `memory_diagnostics_enabled is now ${value ? 'on' : 'off'} in the ${advancedScope} file.` : r.reason);
   };
-  return (
-    <div className="settings__section">
-      <h1 className="display">{RUNTIME_CATEGORY_LABEL}</h1>
+  // The rows, each once. With no `part` they stand in REQ-CONFIG-320's order, as one category; PD-CONFIG-012 draws them on
+  // three pages, and `part` names the page.
+  const strategyRow = (<>
       <div className="settings__action">
         <label htmlFor="strategy">Delegation strategy</label>
         <DesignSelect id="strategy" className="input select settings__select" aria-label="Delegation strategy" value={pending.delegationStrategy} onChange={(e) => onChange({ kind: 'delegationStrategy', value: e.currentTarget.value as PendingSettings['delegationStrategy'] })}>
           {DELEGATION_STRATEGY_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
         </DesignSelect>
-        <span className="text-secondary settings__hint">orchestrator coordinates through specialists; swarm lets roles fan out; single does the work in one role with no delegation.</span>
+        <Hint>orchestrator coordinates through specialists; swarm lets roles fan out; single does the work in one role with no delegation.</Hint>
       </div>
+    </>);
+  const runStartRow = (<>
       <div className="settings__action">
         <label htmlFor="run-start-mode">Run-start mode</label>
         <DesignSelect id="run-start-mode" className="input select settings__select" aria-label="Run-start mode" aria-description="Decides whether a run produces a plan and waits for an answer before it changes anything." value={rt.run_start_mode} onChange={(e) => onChange({ kind: 'runtime', key: 'run_start_mode', value: e.currentTarget.value as 'auto' | 'plan' })}>
           {RUN_START_MODE_NAMES.map((m) => <option key={m} value={m}>{m}</option>)}
         </DesignSelect>
-        <span className="text-secondary settings__hint" data-testid="run-start-hint" data-released={props.planReleased === true ? 'true' : 'false'}>{runStartModeHint(props.planReleased === true)}</span>
+        <Hint data-testid="run-start-hint" data-released={props.planReleased === true ? 'true' : 'false'}>{runStartModeHint(props.planReleased === true)}</Hint>
       </div>
-      <h2 className="settings__heading">Delegation limits</h2>
+    </>);
+  const depthRow = (<>
       <div className="settings__action">
         <label htmlFor="max-depth">Depth cap</label>
         <ClampedNumberField id="max-depth" range={DEPTH_CAP_RANGE} shown={clampForDisplay(rt.max_depth, DEPTH_CAP_RANGE.min, DEPTH_CAP_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_depth', value })} />
       </div>
+    </>);
+  const fanOutRow = (<>
       {/* R-097 (the Settings brief's §8): one field to a row, so each control stands on the category's one axis; the order
           REQ-CONFIG-320 fixes is the DOM order it was. */}
       <div className="settings__action">
         <label htmlFor="max-active">Fan-out limit</label>
         <ClampedNumberField id="max-active" range={FAN_OUT_RANGE} shown={clampForDisplay(rt.max_active_children, FAN_OUT_RANGE.min, FAN_OUT_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_active_children', value })} />
       </div>
+    </>);
+  const childTimeoutRow = (<>
       {/* PD-CONFIG-003 / REQ-MONITOR-286: the per-agent timeout, the third delegation limit, in whole minutes (1–240) over
           `runtime.child_timeout`'s seconds. A stored value it cannot show is shown clamped and stated beneath, never
           rewritten until the field is changed (REQ-CONFIG-446, REQ-CONFIG-419). */}
       <div className="settings__action">
         <label htmlFor="child-timeout">{PER_AGENT_TIMEOUT_LABEL}</label>
         <ClampedNumberField id="child-timeout" range={CHILD_TIMEOUT_MINUTES} description={storedSecondsDescription(stored.child_timeout)} shown={timeoutMinutesForDisplay(rt.child_timeout)} onCommit={(minutes) => onChange({ kind: 'runtime', key: 'child_timeout', value: timeoutSecondsFromInput(minutes) })} /><span className="text-secondary">minutes</span>
-        <span className="text-secondary settings__hint" data-testid="child-timeout-hint">Each delegated agent is stopped this long after it starts; the step in flight gets up to 30 s more, and an agent still making progress hands its work back to its parent. Applies to runs started from now.</span>
+        <Hint data-testid="child-timeout-hint">Each delegated agent is stopped this long after it starts; the step in flight gets up to 30 s more, and an agent still making progress hands its work back to its parent. Applies to runs started from now.</Hint>
         {storedTimeoutNote(stored.child_timeout, rt.child_timeout) !== null && <span className="text-secondary settings__hint" data-testid="child-timeout-stored">{storedTimeoutNote(stored.child_timeout, rt.child_timeout)}</span>}
       </div>
-      <h2 className="settings__heading">Runtime policy</h2>
-      <DesignCard className="card settings__card">
+    </>);
+  const circuitBreakerRow = (<>
         <Toggle id="cb" label="Circuit breaker" hint="Watches every agent for repeated work and redirects it; escalates after three activations." on={pending.circuitBreakerEnabled} onChange={(v) => onChange({ kind: 'circuitBreaker', value: v })} />
-        <Toggle id="outside" label="Allow outside workspace" hint="Lets agents read and change files outside the chosen workspace." on={rt.allow_outside_workspace} onChange={(v) => { if (v) setConfirm('outside'); else onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: false }); }} />
-        <Toggle id="improvement" label="Improvement loop" hint="Runs one bounded background analysis after each completed task run and stores reviewable proposals in the Library." on={rt.improvement_collector_enabled} onChange={(v) => onChange({ kind: 'runtime', key: 'improvement_collector_enabled', value: v })} />
+    </>);
+  const outsideRow = (<>
+        <Toggle id="outside" origin={from('allow_outside_workspace')} label="Allow outside workspace" hint="Lets agents read and change files outside the chosen workspace." on={rt.allow_outside_workspace} onChange={(v) => { if (v) setConfirm('outside'); else onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: false }); }} />
+    </>);
+  const improvementRow = (<>
+        <Toggle id="improvement" origin={from('improvement_collector_enabled')} label="Improvement loop" hint="Runs one bounded background analysis after each completed task run and stores reviewable proposals in the Library." on={rt.improvement_collector_enabled} onChange={(v) => onChange({ kind: 'runtime', key: 'improvement_collector_enabled', value: v })} />
+    </>);
+  const improvementTimeoutRow = (<>
         {/* PD-CONFIG-003 revision 2 (OQ-223): the improvement analysis timeout, directly after the toggle it qualifies, in whole
             seconds clamped 10–600 over `runtime.improvement_collector_timeout`, drawn as the per-agent timeout is. A stored value
             outside the range is shown clamped and stated beneath, never rewritten until the field is changed (REQ-CONFIG-446,
@@ -382,10 +398,14 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
         <div className="settings__action">
           <label htmlFor="improvement-timeout">Improvement analysis timeout</label>
           <ClampedNumberField id="improvement-timeout" range={IMPROVEMENT_TIMEOUT_SECONDS} description={storedSecondsDescription(stored.improvement_collector_timeout)} shown={improvementTimeoutForDisplay(rt.improvement_collector_timeout)} onCommit={(value) => onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value })} /><span className="text-secondary">seconds</span>
-          <span className="text-secondary settings__hint" data-testid="improvement-timeout-hint">How long the background review of a finished run may take while the improvement loop is on; a review that runs longer ends with no proposals. It never holds up your work, and applies to runs started from now.</span>
+          <Hint data-testid="improvement-timeout-hint">How long the background review of a finished run may take while the improvement loop is on; a review that runs longer ends with no proposals. It never holds up your work, and applies to runs started from now.</Hint>
           {storedImprovementTimeoutNote(stored.improvement_collector_timeout, rt.improvement_collector_timeout) !== null && <span className="text-secondary settings__hint" data-testid="improvement-timeout-stored">{storedImprovementTimeoutNote(stored.improvement_collector_timeout, rt.improvement_collector_timeout)}</span>}
         </div>
-        <Toggle id="keep-going" label="Keep going" hint="A run holds itself open while the last verification suite still has a failing or timed-out check; no budget is extended." on={rt.keep_going} onChange={(v) => onChange({ kind: 'runtime', key: 'keep_going', value: v })} />
+    </>);
+  const keepGoingRow = (<>
+        <Toggle id="keep-going" origin={from('keep_going')} label="Keep going" hint="A run holds itself open while the last verification suite still has a failing or timed-out check; no budget is extended." on={rt.keep_going} onChange={(v) => onChange({ kind: 'runtime', key: 'keep_going', value: v })} />
+    </>);
+  const permissionRow = (<>
         <div className="settings__action">
           <span>Permission mode</span>
           <div className="seg" role="radiogroup" aria-label="Permission mode, strictest first">
@@ -393,21 +413,28 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
               <DesignButton key={m} type="button" role="radio" aria-checked={rt.permission_mode === m} className={`seg-opt${rt.permission_mode === m ? ' is-active' : ''}`} onClick={() => { if (m === 'autonomous') setConfirm('autonomous'); else onChange({ kind: 'runtime', key: 'permission_mode', value: m }); }}>{m}</DesignButton>
             ))}
           </div>
-          <span className="text-secondary settings__hint">The preset a run starts from. Deferred to Save; it never reaches a live run — the composer's control does that.</span>
+          <Hint>The preset a run starts from. Deferred to Save; it never reaches a live run — the composer's control does that.</Hint>
         </div>
+    </>);
+  const thresholdRow = (<>
         <div className="settings__action">
           <label htmlFor="threshold">Compression threshold</label>
           <ClampedNumberField id="threshold" range={COMPRESSION_THRESHOLD_RANGE} shown={clampForDisplay(pending.compressorThresholdPercentage, COMPRESSION_THRESHOLD_RANGE.min, COMPRESSION_THRESHOLD_RANGE.max)} onCommit={(value) => onChange({ kind: 'compressorThreshold', value })} /><span className="text-secondary">%</span>
         </div>
+    </>);
+  const iterationRow = (<>
         <div className="settings__action">
           <label htmlFor="iterations">Iteration cap</label>
           <ClampedNumberField id="iterations" range={ITERATION_CAP_RANGE} shown={clampForDisplay(rt.max_iterations, ITERATION_CAP_RANGE.min, ITERATION_CAP_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_iterations', value })} /><span className="text-secondary">iterations</span>
         </div>
+    </>);
+  const redactionRow = (<>
         <p className="text-tertiary settings__hint">Secret redaction is always active; there is no way to disable it from this screen.</p>
-      </DesignCard>
-      <h2 className="settings__heading">Security policy</h2>
+    </>);
+  const securityPolicy = (<>
       <SecurityPolicy runtime={pending.runtime} onChange={onChange} confinement={props.confinement ?? null} onRecheck={props.onRecheckConfinement} dirty={props.dirty} />
-      <h2 className="settings__heading">Advanced runtime</h2>
+    </>);
+  const advancedCard = (<>
       <DesignCard className="card settings__card">
         <div className="settings__action">
           <label htmlFor="advanced-scope">Scope</label>
@@ -415,14 +442,62 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
             <option value="workspace">Workspace</option>
             <option value="global">Global</option>
           </DesignSelect>
-          <span className="text-secondary settings__hint">The raw runtime mapping as the {advancedScope} file states it; a key absent here is stated elsewhere or inherited from the built-in defaults.</span>
+          <Hint>The raw runtime mapping as the {advancedScope} file states it; a key absent here is stated elsewhere or inherited from the built-in defaults.</Hint>
         </div>
         <pre className="mono settings__raw" aria-label={`Raw runtime mapping of the ${advancedScope} file`}>{raw ? JSON.stringify(raw, null, 2) : '(no runtime: mapping in this file)'}</pre>
         <Toggle id="diagnostics" label="Memory diagnostics" hint="Written to the selected scope's file immediately and reloaded; outside Save and Discard — Discard does not undo it." on={snapshot.runtime.memory_diagnostics_enabled} disabled={!props.serviceAvailable} onChange={(v) => { void writeDiagnostics(v); }} />
         {advancedMessage && <div className="text-secondary settings__hint" role="status">{advancedMessage}</div>}
       </DesignCard>
+    </>);
+  const confirmations = (<>
       {confirm === 'outside' && <Confirm title={RUNTIME_CONFIRMATIONS.outside.title} body={RUNTIME_CONFIRMATIONS.outside.body} onCancel={() => setConfirm(null)} onYes={() => { setConfirm(null); onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: true }); }} />}
       {confirm === 'autonomous' && <Confirm title={RUNTIME_CONFIRMATIONS.autonomous.title} body={RUNTIME_CONFIRMATIONS.autonomous.body} onCancel={() => setConfirm(null)} onYes={() => { setConfirm(null); onChange({ kind: 'runtime', key: 'permission_mode', value: 'autonomous' }); }} />}
+    </>);
+  if (part === 'delegation') return (
+    <div className="settings__section">
+      <SettingsTitle>Delegation</SettingsTitle>
+      <h2 className="settings__heading">Starting</h2>
+      {strategyRow}{runStartRow}
+      <h2 className="settings__heading">Limits</h2>
+      {depthRow}{fanOutRow}{childTimeoutRow}{iterationRow}{thresholdRow}
+      <h2 className="settings__heading">Stopping</h2>
+      {circuitBreakerRow}{keepGoingRow}
+      <h2 className="settings__heading">Advanced runtime</h2>
+      {advancedCard}
+    </div>
+  );
+  if (part === 'permissions') return (
+    <div className="settings__section">
+      <SettingsTitle>Permissions</SettingsTitle>
+      <h2 className="settings__heading">Permission</h2>
+      {permissionRow}{outsideRow}{redactionRow}
+      <h2 className="settings__heading">Security policy</h2>
+      {securityPolicy}
+      {confirmations}
+    </div>
+  );
+  if (part === 'review') return (
+    <div className="settings__section">
+      <SettingsTitle>Review</SettingsTitle>
+      <h2 className="settings__heading">Improvement</h2>
+      {improvementRow}{improvementTimeoutRow}
+    </div>
+  );
+  return (
+    <div className="settings__section">
+      <SettingsTitle>{RUNTIME_CATEGORY_LABEL}</SettingsTitle>
+      {strategyRow}{runStartRow}
+      <h2 className="settings__heading">Delegation limits</h2>
+      {depthRow}{fanOutRow}{childTimeoutRow}
+      <h2 className="settings__heading">Runtime policy</h2>
+      <DesignCard className="card settings__card">
+        {circuitBreakerRow}{outsideRow}{improvementRow}{improvementTimeoutRow}{keepGoingRow}{permissionRow}{thresholdRow}{iterationRow}{redactionRow}
+      </DesignCard>
+      <h2 className="settings__heading">Security policy</h2>
+      {securityPolicy}
+      <h2 className="settings__heading">Advanced runtime</h2>
+      {advancedCard}
+      {confirmations}
     </div>
   );
 }
@@ -438,7 +513,7 @@ export function AgentPopOutToggle({ on, onChange }: { on: boolean; onChange: (va
     <div className="settings__action" data-testid="agent-pop-out">
       <span id="agent-pop-out-label">Agent pop-out</span>
       <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby="agent-pop-out-label" aria-checked={on} aria-description={`Agent pop-out is ${on ? 'enabled' : 'disabled'}.`} data-testid="agent-pop-out-toggle" onClick={() => onChange(!on)} />
-      <span className="text-secondary settings__hint">On, clicking an agent opens or raises its persona window; off, a click selects it in the inspector only. Explicit Pop out always opens the window.</span>
+      <Hint>On, clicking an agent opens or raises its persona window; off, a click selects it in the inspector only. Explicit Pop out always opens the window.</Hint>
     </div>
   );
 }

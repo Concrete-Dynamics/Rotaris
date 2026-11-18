@@ -52,9 +52,16 @@ Part 7 of 13 of [domain 15](../15-settings-configuration.md), which indexes ever
   > above still governs in full. The directive adds four headings beside it — Agents (Models, Personas, Runtime),
   > Application (Interface, Display), Extensions (Skills to Tools) and Project and about (Project, About) — which are
   > text, take no focus and move no category.
+  > **Narrowed by [`PD-CONFIG-012`](../../product/directives/pd-config-012.md#pd-config-012), 2026-11-18.** One case: the navigation entries are a Setup page and twelve
+  > pages in run order, not these thirteen categories. The categories, their labels and their order stand as the address vocabulary.
 - **REQ-CONFIG-269** — The category identifiers are exactly `models`, `personas`, `runtime`, `interface`, `display`, `skills`, `instructions`, `hooks`, `mcp`, `plugins`, `tools`, `project`, `about`, in the order the categories are presented (REQ-CONFIG-268). The identifier is the value persisted under `interface/settingsTab` (REQ-CONFIG-405). The vocabulary may gain a value, and a value may be retired, but a value that has been used is never reassigned to a different category (REQ-CONFIG-459). An identifier that is not in the list — retired, unknown or absent — selects `models` (REQ-CONFIG-271).
+  > **Extended by [`PD-CONFIG-012`](../../product/directives/pd-config-012.md#pd-config-012), 2026-11-18.** Everything above governs in full. The directive adds that each
+  > identifier opens the page that holds what its category held, and that a page's own identifier opens that page.
 - **REQ-CONFIG-270** — Save, Discard and the save-status indicator are visible and operable from every category: no category's own content can push them out of view, and each acts on the whole set of pending settings changes rather than on the category currently displayed.
+  > **Extended by [`PD-CONFIG-012`](../../product/directives/pd-config-012.md#pd-config-012), 2026-11-18.** Everything above governs in full. The directive adds that the
+  > bar stands in each page's head, and that a clean status is stated to assistive technology and not drawn.
 - **REQ-CONFIG-271** — The selected category persists as a **user-wide** preference (not per workspace). On restart the last valid category is restored; a missing, stale or unknown identifier falls back to **Models**.
+  > **Narrowed by [`PD-CONFIG-012`](../../product/directives/pd-config-012.md#pd-config-012), 2026-11-18.** One case: with nothing valid stored the view opens on Setup.
 - **REQ-CONFIG-272** — Requesting a category by identifier returns the identifier actually selected. Requesting an unknown identifier selects Models and returns `models` rather than raising, which is what makes deep links from elsewhere in the application safe.
 - **REQ-CONFIG-273** — Reading the current category with nothing selected yields `models`. A category-changed notification is emitted only for a real selection.
 - **REQ-CONFIG-274** — At the minimum window size, which is REQ-SHELL-022's and is not restated here, every category's content can be reached by vertical scrolling alone, and no category requires horizontal scrolling at that size. What this requirement relies on that one for is a single figure the whole product is measured against, so a change to it can never leave one screen checked at one size and another at a different one.

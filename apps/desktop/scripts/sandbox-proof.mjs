@@ -162,7 +162,7 @@ const results = {};
  *    the reason names the one mechanism the platform chose and the remediation is that mechanism's own.
  */
 const s1 = scenario('verdict', WORKSPACE_OFF);
-const log1 = await launch('verdict', s1, { ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime', ROTARIS_CAPTURE_AFTER_MS: '4000' });
+const log1 = await launch('verdict', s1, { ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Permissions', ROTARIS_CAPTURE_AFTER_MS: '4000' });
 const verdictLine = log1.split('\n').find((line) => line.includes('confinement:')) ?? '';
 const hostReading = { platform: process.platform, mechanism: mechanism?.name ?? null, launcher: launcherPath, trial, expected };
 if (expected === 'available') {
@@ -193,7 +193,7 @@ const READ_SECURITY = `({
   mode: document.querySelector('[data-testid="sandbox-mode"]')?.value ?? ''
 })`.replace(/\n\s*/g, ' ');
 const log2 = await launch('settings', s1, {
-  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Permissions',
   // Read as soon as the card exists rather than at a clock: this state is left behind by something the
   // product did when it was ready, and pinning that read to a timer reports whatever the timer found.
   ROTARIS_CAPTURE_EVAL_AT: `${READ_SECURITY}>>[data-testid="security-policy"]@~6000`,
@@ -297,12 +297,12 @@ results.downgrade = { started: true, note: 'the kept mode is asserted by the eng
  */
 const s5 = scenario('round-trip', WORKSPACE_OFF);
 await launch('round-trip', s5, {
-  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Permissions',
   // Every step waits for what it acts on rather than for a clock: on a first launch the Runtime category can
   // be drawn after the view's own click has looked for it, and a fixed 1800 ms then chose into Models and
   // saved nothing (measured on Linux, 2026-09-28). The category is pressed again when it is there, and Save
   // only once BOTH choices are showing, so it cannot be pressed between them.
-  ROTARIS_CAPTURE_CLICKS: '.nav-list__item>>Runtime@~6000;;body:has(select[aria-label="Sandbox mode"] option[value="read-only"]:checked):has(select[aria-label="Egress policy"] option[value="deny"]:checked) .save-bar .btn-primary>>Save@~9000',
+  ROTARIS_CAPTURE_CLICKS: '.nav-list__item>>Permissions@~6000;;body:has(select[aria-label="Sandbox mode"] option[value="read-only"]:checked):has(select[aria-label="Egress policy"] option[value="deny"]:checked) .save-bar .btn-primary>>Save@~9000',
   ROTARIS_CAPTURE_SELECT: 'select[aria-label="Sandbox mode"]>>read-only@~8000;;select[aria-label="Egress policy"]>>deny@~8000',
   ROTARIS_CAPTURE_AFTER_MS: '11000',
 });

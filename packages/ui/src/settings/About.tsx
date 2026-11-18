@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SettingsTitle } from './page.js';
 import { Button as DesignButton } from '../design-system/index.js';
 import { DiagnosticsCard, type DiagnosticsCardProps } from './DiagnosticsCard.js';
 
@@ -110,7 +111,7 @@ export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses, 
 
   return (
     <div className="settings__section">
-      <h1 className="display">About</h1>
+      <SettingsTitle>About</SettingsTitle>
 
       <h2 className="settings__heading">Product</h2>
       <Row name="Version" value={info ? `v${info.version}` : 'v—'} />

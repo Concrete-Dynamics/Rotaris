@@ -116,7 +116,7 @@ async function launch(name, workspace, extra, timeoutMs = 120_000) {
 
 const rows = (probes, selector) => probes[selector] ?? [];
 /** One Settings category opened by its rail label, after the view switch settles. */
-const openSkills = (extra = {}) => ({ ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_VIEW_MS: '900', ROTARIS_CAPTURE_SETTINGS: 'Skills', ...extra });
+const openSkills = (extra = {}) => ({ ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_VIEW_MS: '900', ROTARIS_CAPTURE_SETTINGS: 'Instructions', ...extra });
 
 // ── The fixture tree ────────────────────────────────────────────────────────────────────────────────
 const scratch = {

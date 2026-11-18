@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Hint } from './page.js';
 import { confinementMessage, hostPatternProblem, NO_CONFINEMENT_DISCLOSURE, owesNoConfinementDisclosure, SANDBOX_MODE_NAMES, writableRootProblem, type ConfinementVerdict } from '@rotaris/contracts';
 import type { PendingChange, PendingSettings } from './config-state.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect } from '../design-system/index.js';
@@ -63,7 +64,7 @@ function EntryList(props: {
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
       />
       <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid={`${props.id}-add`} onClick={add}>Add</DesignButton>
-      <span className="text-secondary settings__hint">{props.hint}</span>
+      <Hint about={props.label}>{props.hint}</Hint>
       {props.values.length > 0 && (
         <ul className="settings__chips" aria-label={`${props.label} entries`}>
           {props.values.map((v) => (
@@ -155,7 +156,7 @@ export function SecurityPolicy({ runtime, onChange, confinement, onRecheck, dirt
           className={`toggle${runtime.sandbox_allow_network ? ' is-on' : ''}`} data-testid="sandbox-allow-network"
           onClick={() => set('sandbox_allow_network', !runtime.sandbox_allow_network)}
         />
-        <span className="text-secondary settings__hint">Has effect only while a confinement mode other than off is selected. The shipped posture is closed.</span>
+        <Hint>Has effect only while a confinement mode other than off is selected. The shipped posture is closed.</Hint>
       </div>
       <div className="settings__action">
         <label htmlFor="egress-policy">Egress policy</label>
@@ -173,7 +174,7 @@ export function SecurityPolicy({ runtime, onChange, confinement, onRecheck, dirt
         >
           {(['allow', 'ask', 'deny'] as const).map((d) => <option key={d} value={d}>{d}</option>)}
         </DesignSelect>
-        <span className="text-secondary settings__hint">The disposition for a host on neither list. A denied host stays denied: deny wins over allow.</span>
+        <Hint>The disposition for a host on neither list. A denied host stays denied: deny wins over allow.</Hint>
       </div>
       <EntryList
         id="network-allowed-hosts" label="Allowed hosts"

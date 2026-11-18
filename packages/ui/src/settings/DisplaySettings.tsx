@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SettingsTitle, Hint } from './page.js';
 import { DISPLAY_LINE_CAP_CHOICES, type DisplayView } from '@rotaris/contracts';
 import { Toggle, type ConfigSettingsProps } from './ConfigSettings.js';
 import { Select as DesignSelect } from '../design-system/index.js';
@@ -63,7 +64,7 @@ function CapSelect({ id, label, description, value, disabled, onChange }: {
       >
         {capOptions(value).map((cap) => <option key={capKey(cap)} value={capKey(cap)}>{capLabel(cap)}</option>)}
       </DesignSelect>
-      <span className="text-secondary settings__hint">{description}</span>
+      <Hint>{description}</Hint>
     </div>
   );
 }
@@ -87,10 +88,10 @@ export function DisplaySettings({ config, autoCollapseTools, groupTools, showRea
 
   return (
     <div className="settings__section">
-      <h1 className="display">Display</h1>
+      <SettingsTitle>Display</SettingsTitle>
 
       <h2 className="settings__heading">Transcript</h2>
-      <p className="text-secondary">These three are yours, not this workspace's: they are kept with your desktop preferences, take effect as you change them, and Discard does not undo them.</p>
+      <p className="text-secondary settings__lede">These three are yours, not this workspace's: they are kept with your desktop preferences, take effect as you change them, and Discard does not undo them.</p>
       <Toggle
         id="auto-collapse-tools"
         testId="auto-collapse-tools"
@@ -117,7 +118,7 @@ export function DisplaySettings({ config, autoCollapseTools, groupTools, showRea
       />
 
       <h2 className="settings__heading">Tool rows</h2>
-      <p className="text-secondary">
+      <p className="text-secondary settings__lede">
         These four are this workspace's configuration and are written on Save. A change shows on the rows already on screen straight away —
         Save settles what the file says, not what the transcript is drawing. A cap changes only what is drawn: the session record keeps the
         full text, so raising a cap or reopening the session shows the rest without re-running anything.

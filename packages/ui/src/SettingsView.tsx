@@ -1,4 +1,7 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Hint, SettingsPageContext, SettingsTitle } from './settings/page.js';
+import { findSettings, SETTINGS_PAGE_GROUPS, SETTINGS_PAGES, SETTINGS_SETUP_PAGE, settingsPageFor, type SettingsPageId } from './settings/pages.js';
+import { changedFromDefaults, setupAttention, SetupPage, workspaceCounts } from './settings/Setup.js';
 import { isBusy, type PlaybookCatalogue, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
 import { HooksSettings, type HooksSettingsProps } from './HooksSettings.js';
 import { ModelsSettings, PersonasSettings, RuntimeSettings, SaveBar, type ConfigSettingsProps } from './settings/ConfigSettings.js';
@@ -10,7 +13,7 @@ import { SkillsSettings, type SkillsSettingsProps } from './settings/SkillsSetti
 import { ProjectInitSettings, TraceabilitySettings, type ProjectInitSettingsProps, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2, Part AS
 import { useShellState } from './shell-state.js';
 import { RUNTIME_CATEGORY_LABEL } from './settings/config-state.js';
-import { Button as DesignButton, SectionLabel as DesignSectionLabel, Select as DesignSelect, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
+import { Button as DesignButton, Input as DesignInput, SectionLabel as DesignSectionLabel, Select as DesignSelect, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
 
 /**
  * R-097 (docs/design/briefs/settings.md, §8): the category body gives way on one axis only. Its rows stand on a label
@@ -112,8 +115,11 @@ export interface SettingsViewProps {
   readonly onTheme?: ((name: ThemeName) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly reducedMotion?: boolean | undefined;
   readonly onReducedMotion?: ((value: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
-  readonly initialCategory?: SettingsCategoryId | undefined;
-  readonly onCategory?: ((id: SettingsCategoryId) => void) | undefined;
+  /** A page, or one of REQ-CONFIG-269's category identifiers, which opens the page that holds it (PD-CONFIG-012). */
+  readonly initialCategory?: SettingsCategoryId | SettingsPageId | undefined;
+  readonly onCategory?: ((id: SettingsPageId) => void) | undefined;
+  /** Whether a model provider is signed in, for Setup; `null` while it is not known. */
+  readonly providerSignedIn?: boolean | null | undefined;
   /** ADR-0037: destination 1 — the configuration the Models, Personas and Runtime categories edit. */
   readonly config?: ConfigSettingsProps | undefined;
   /** ADR-0034 (Part S): the MCP Servers category, answered by the run host. */
@@ -134,13 +140,15 @@ export interface SettingsViewProps {
   readonly projectInit?: ProjectInitSettingsProps | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, storeHeld = null, onEstablishStore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */, skills /* ADR-0063 */, instructions /* PD-WORKSPACE-002 */, projectInit /* Part AS */ }: SettingsViewProps) {
-  const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
-  // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
+export function SettingsView({ session, workspace, onBackup, onRestore, storeHeld = null, onEstablishStore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'setup', onCategory, providerSignedIn = null, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */, skills /* ADR-0063 */, instructions /* PD-WORKSPACE-002 */, projectInit /* Part AS */ }: SettingsViewProps) {
+  const [chosen, setChosen] = useState<SettingsPageId>(settingsPageFor(initialCategory) ?? 'setup');
+  // A category a notice action asked for (REQ-NOTIFY-223) selects the page that holds it until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
   const take = useShellState((s) => s.takeSettingsCategory);
-  const category: SettingsCategoryId = wanted !== null && SETTINGS_CATEGORIES.some((c) => c.id === wanted) ? (wanted as SettingsCategoryId) : chosen;
-  const setCategory = (id: SettingsCategoryId) => { take(); setChosen(id); onCategory?.(id); };
+  const pageId: SettingsPageId = (wanted === null ? null : settingsPageFor(wanted)) ?? chosen;
+  const setPage = (id: SettingsPageId) => { take(); setChosen(id); onCategory?.(id); };
+  const [explain, setExplain] = useState(false);
+  const [query, setQuery] = useState('');
   const [busyAction, setBusyAction] = useState<'backup' | 'restore' | 'establish' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<ThemeName | undefined>(activeTheme);
@@ -175,147 +183,83 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
     if (target !== null) entries[target]?.focus();
   };
 
+  const page = (title: 'solo' | 'section', body: ReactNode) => <SettingsPageContext.Provider value={{ title, explain }}>{body}</SettingsPageContext.Provider>;
+  const current = SETTINGS_PAGES.find((p) => p.id === pageId)!;
+  const attention = setupAttention({ config, mcp, projectInit, storeHeld, providerSignedIn });
+  const attentionOn = (id: SettingsPageId) => id === 'setup' ? attention : attention.filter((a) => a.page === id);
+  const entry = (p: { readonly id: SettingsPageId; readonly label: string }) => {
+    const selected = p.id === pageId;
+    const waiting = attentionOn(p.id);
+    return (
+      <li key={p.id} role="presentation">
+        <DesignButton
+          type="button"
+          role="option"
+          aria-selected={selected}
+          aria-description={`${selected ? 'Selected, marked with a rule down its left edge.' : 'Not selected.'}${waiting.length === 0 ? '' : ` Needs attention: ${waiting.map((w) => w.title).join('; ')}.`}`}
+          className={`nav-list__item${selected ? ' is-selected' : ''}`}
+          data-settings-page={p.id}
+          onClick={() => setPage(p.id)}
+        >
+          {p.label}
+          {waiting.length === 0 ? null : <i className="ph ph-warning settings__attention" aria-hidden="true" title={waiting.map((w) => w.title).join('; ')} />}
+        </DesignButton>
+      </li>
+    );
+  };
+  const matches = findSettings(query);
+
   return (
     <div className="settings">
       <nav className="settings__categories" aria-label="Settings categories">
-        {/* PD-CONFIG-008: a listbox of four groups, each named by its heading; the heading is not an option and takes no focus. */}
+        {/* PD-CONFIG-012 clause 6: the name of a setting finds the page that holds it. */}
+        <div className="settings__find">
+          <i className="ph ph-magnifying-glass" aria-hidden="true" />
+          <DesignInput className="input settings__find-input" type="search" aria-label="Find a setting" placeholder="Find" value={query} onChange={(event) => setQuery(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter' && matches[0]) { setPage(matches[0].page); setQuery(''); } if (event.key === 'Escape') setQuery(''); }} />
+        </div>
+        {query.trim() === '' ? null : (
+          <ul className="nav-list settings__found" aria-label="Settings found" data-testid="settings-found">
+            {matches.length === 0
+              ? <li className="text-tertiary settings__found-none" role="status">No setting is named that.</li>
+              : matches.map((m) => (
+                <li key={`${m.page}:${m.label}`}>
+                  <DesignButton type="button" className="nav-list__item settings__found-item" onClick={() => { setPage(m.page); setQuery(''); }}>
+                    {m.label}<span className="text-tertiary settings__found-page">{SETTINGS_PAGES.find((p) => p.id === m.page)!.label}</span>
+                  </DesignButton>
+                </li>
+              ))}
+          </ul>
+        )}
+        {/* PD-CONFIG-012: Setup, then four groups in run order, each named by its heading; a heading is not an option and takes no focus. */}
         <ul className="nav-list nav-list--grouped" role="listbox" aria-label="Categories" onKeyDown={moveCategoryFocus}>
-          {SETTINGS_CATEGORY_GROUPS.map((group) => (
+          {entry(SETTINGS_SETUP_PAGE)}
+          {SETTINGS_PAGE_GROUPS.map((group) => (
             <li key={group.id} className="nav-list__group" role="group" aria-labelledby={`settings-group-${group.id}`} data-testid={`settings-group-${group.id}`}>
               <DesignSectionLabel id={`settings-group-${group.id}`} className="nav-list__heading">{group.label}</DesignSectionLabel>
-              <ul className="nav-list" role="presentation">
-                {group.categories.map((c) => {
-                  const selected = c.id === category;
-                  return (
-                    <li key={c.id} role="presentation">
-                      <DesignButton
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        aria-description={selected ? 'Selected, marked with a rule down its left edge.' : 'Not selected.'}
-                        className={`nav-list__item${selected ? ' is-selected' : ''}`}
-                        onClick={() => setCategory(c.id)}
-                      >
-                        {c.label}
-                      </DesignButton>
-                    </li>
-                  );
-                })}
-              </ul>
+              <ul className="nav-list" role="presentation">{group.pages.map(entry)}</ul>
             </li>
           ))}
         </ul>
       </nav>
-      <section className="settings__body" aria-label={SETTINGS_CATEGORIES.find((c) => c.id === category)!.label} {...layoutContractAttributes(SETTINGS_BODY_LAYOUT)}>
-        {/* REQ-CONFIG-270: one bar, above every category's content, acting on the whole set of pending changes. */}
-        {config && <SaveBar dirty={config.dirty} serviceAvailable={config.serviceAvailable} onSave={config.onSave} onDiscard={config.onDiscard} />}
-        {category === 'interface' ? (
+      <section className="settings__body" aria-label={current.label} data-settings-page={pageId} {...(explain ? { 'data-explain': '' } : {})} {...layoutContractAttributes(SETTINGS_BODY_LAYOUT)}>
+        <header className="settings__head">
+          <h1 className="display">{current.label}</h1>
+          {pageId === 'setup' ? null : (
+            <DesignButton type="button" className="btn btn-ghost btn-icon settings__explain" aria-label="Show every explanation on this page" title="Show every explanation on this page" aria-pressed={explain} onClick={() => setExplain((v) => !v)}>
+              <i className="ph ph-info" aria-hidden="true" />
+            </DesignButton>
+          )}
+          {/* REQ-CONFIG-270: one bar, on every page, acting on the whole set of pending changes. */}
+          {config && <SaveBar dirty={config.dirty} serviceAvailable={config.serviceAvailable} onSave={config.onSave} onDiscard={config.onDiscard} />}
+        </header>
+        {pageId === 'setup' ? (
+          <SetupPage attention={attention} changed={changedFromDefaults(config?.snapshot ?? null)} counts={workspaceCounts({ config, mcp, skills, hooks })} onOpen={setPage} />
+        ) : pageId === 'models' && config ? page('solo', <ModelsSettings {...config} />)
+        : pageId === 'personas' ? page('solo', (
           <div className="settings__section">
-            <h1 className="display">Interface</h1>
-            <h2 className="settings__heading">Appearance</h2>
-            <div className="settings__action">
-              <label htmlFor="theme-select">Theme</label>
-              <DesignSelect
-                id="theme-select"
-                className="input select settings__select"
-                aria-label="Theme"
-                aria-description="Choose the colour theme used by every Rotaris window."
-                value={selectedTheme}
-                onChange={(event) => { void chooseTheme(event.currentTarget.value as ThemeName); }}
-              >
-                {themes.map((theme) => <option key={theme.name} value={theme.name}>{theme.label}</option>)}
-              </DesignSelect>
-              <span className="text-secondary settings__hint">{themes.find((theme) => theme.name === selectedTheme)?.description ?? 'Choose a registered theme.'}</span>
-            </div>
-            <div className="settings__action">
-              <span>Reduce motion</span>
-              <DesignButton type="button" className={`toggle${reducedMotion ? ' is-on' : ''}`} role="switch" aria-label="Reduce motion" aria-checked={reducedMotion} onClick={() => { void chooseMotion(!reducedMotion); }} />
-              <span className="text-secondary settings__hint">Every animation collapses to its end state. The operating-system setting is inherited until you choose here.</span>
-            </div>
-            {interfaceExtras}
-            <div className="settings__action">
-              <DesignButton type="button" className="btn btn-secondary" onClick={() => setMessage('Panel sizes already use their declared defaults; no divider is registered yet.')}>Reset panel sizes</DesignButton>
-              <span className="text-secondary settings__hint">Restores every resizable pane to its default size and takes effect immediately.</span>
-            </div>
-            {message && <div className="composer__error" role="status">{message}</div>}
-          </div>
-        ) : category === 'project' ? (
-          <div className="settings__section">
-            <h1 className="display">Project</h1>
-            <h2 className="settings__heading">Session store</h2>
-            <p className="text-secondary">
-              This workspace's sessions live in a store on this machine, found by the identifier in <code className="mono">.rotaris/workspace-id</code>.
-              Copying or syncing the workspace folder does not carry them; a backup does.
-            </p>
-            <div className="settings__actions">
-              <div className="settings__action">
-                <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null || noWorkspace} title={noWorkspace ? disabledReason ?? undefined : undefined} onClick={() => { void act('backup'); }}>
-                  {busyAction === 'backup' ? 'Backing up…' : 'Back up session store…'}
-                </DesignButton>
-                <span className="text-secondary settings__hint">One file, the whole store. Valid while a run is live.{noWorkspace ? ` ${disabledReason}` : ''}</span>
-              </div>
-              <div className="settings__action">
-                <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null || disabledReason !== null} title={disabledReason ?? undefined} onClick={() => { void act('restore'); }}>
-                  {busyAction === 'restore' ? 'Restoring…' : 'Restore session store…'}
-                </DesignButton>
-                <span className="text-secondary settings__hint">
-                  {storeHeld === 'missing'
-                    ? 'The store is not in its place. Restoring moves what is in that place aside, keeps it, and puts the backup\'s sessions there.'
-                    : storeHeld === 'corrupt'
-                      ? 'The store failed its integrity check. Restoring moves the damaged store aside unchanged, keeps it, and puts the backup\'s sessions in its place.'
-                      : 'Replaces this workspace\'s store with a backup; the previous store is kept. Refused while a run is live.'}
-                  {disabledReason ? ` ${disabledReason}` : ''}
-                </span>
-              </div>
-              {/* OQ-281: offered only while the open holds a place with no store; main asks first, Cancel the default. */}
-              {storeHeld === 'missing' && onEstablishStore ? (
-                <div className="settings__action" data-ui="settings-establish-store">
-                  <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null} onClick={() => { void act('establish'); }}>
-                    {busyAction === 'establish' ? 'Starting…' : 'Start a new session store…'}
-                  </DesignButton>
-                  <span className="text-secondary settings__hint">Starts an empty store in that place and recovers nothing that may have been there; what is in the place now is moved aside and kept.</span>
-                </div>
-              ) : null}
-              {/* OQ-477: offered only while the open holds a store that failed its integrity check; main asks first, Cancel the default. */}
-              {storeHeld === 'corrupt' && onEstablishStore ? (
-                <div className="settings__action" data-ui="settings-set-aside-store">
-                  <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null} onClick={() => { void act('establish'); }}>
-                    {busyAction === 'establish' ? 'Setting aside…' : 'Set the damaged store aside and start a new one…'}
-                  </DesignButton>
-                  <span className="text-secondary settings__hint">Moves the damaged store aside unchanged and keeps it, then starts an empty store. It recovers nothing: the sessions in it will no longer be listed.</span>
-                </div>
-              ) : null}
-            </div>
-            {message && <div className="composer__error" role="alert">{message}</div>}
-            {/* Part AS — REQ-WORKSPACE-114's "Project initialization" card, above the traceability one: it is the
-                state a user comes to this category to see, and REQ-WORKSPACE-101's classification sentence lives on it. */}
-            {projectInit ? <ProjectInitSettings {...projectInit} /> : null}
-            {/* Part AJ2 — the traceability card (REQ-TRACE-508..511), a card of this category as REQ-CONFIG-390 shapes one. */}
-            {traceability ? <TraceabilitySettings {...traceability} /> : null}
-          </div>
-        ) : category === 'hooks' && hooks ? (
-          <HooksSettings {...hooks} />
-        ) : category === 'mcp' && mcp ? (
-          <McpSettings {...mcp} />
-        ) : category === 'skills' && skills ? (
-          <SkillsSettings {...skills} workspace={workspace} />
-        ) : category === 'models' && config ? (
-          <ModelsSettings {...config} />
-        ) : category === 'runtime' && config ? (
-          <RuntimeSettings {...config} />
-        ) : category === 'display' && display ? (
-          <DisplaySettings {...display} config={config} />
-        ) : category === 'instructions' ? (
-          <InstructionsSettings snapshot={config?.snapshot ?? null} workspace={workspace} {...instructions} />
-        ) : category === 'tools' ? (
-          <ToolsSettings />
-        ) : category === 'about' && about ? (
-          <AboutSettings {...about} />
-        ) : category === 'personas' ? (
-          <div className="settings__section">
-            {config ? <PersonasSettings {...config} /> : <h1 className="display">Personas</h1>}
+            {config ? <PersonasSettings {...config} /> : null}
             <h2 className="settings__heading">Playbook catalogue</h2>
-            <p className="text-secondary">
+            <p className="text-secondary settings__lede">
               Every role's instructions carry a playbook of eight slots chosen by role, classified intent and model tier. This is the built-in catalogue —
               what an override in <code className="mono">playbooks/</code> (your global configuration directory or this workspace's <code className="mono">.rotaris/</code>) may re-word: a slot, a variant identifier, its text. An override may not add a slot or a variant.
             </p>
@@ -330,18 +274,113 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
               </details>
             )) : <p className="text-secondary">Reading the catalogue…</p>}
           </div>
-        ) : (
-          <div className="view__empty">
-            <h1 className="display">{SETTINGS_CATEGORIES.find((c) => c.id === category)!.label}</h1>
+        ))
+        : pageId === 'instructions' ? page('section', <>
+          <InstructionsSettings snapshot={config?.snapshot ?? null} workspace={workspace} {...instructions} />
+          {skills ? <SkillsSettings {...skills} workspace={workspace} /> : null}
+        </>)
+        : pageId === 'initialization' ? page('solo', <div className="settings__section">{projectInit ? <ProjectInitSettings {...projectInit} /> : <p className="text-secondary">Open a workspace first.</p>}</div>)
+        : pageId === 'delegation' && config ? page('solo', <RuntimeSettings {...config} part="delegation" />)
+        : pageId === 'permissions' && config ? page('solo', <RuntimeSettings {...config} part="permissions" />)
+        : pageId === 'tools' ? page('section', <>
+          {mcp ? <McpSettings {...mcp} /> : null}
+          {hooks ? <HooksSettings {...hooks} /> : null}
+          <ToolsSettings />
+          <div className="settings__section">
+            <SettingsTitle>Plugins</SettingsTitle>
             {/* Plugins says what it is waiting for, because it is not waiting to be drawn. */}
-            <p className="text-secondary">
-              {category === 'plugins'
-                ? 'This build loads no tool plugins yet. The inventory lists what the host process would load, so it appears with the plugin loader — a list of files nothing can load would say less than nothing.'
-                : 'Not drawn yet. Structure from REQ-CONFIG-268; language from docs/design/system.'}
-            </p>
+            <p className="text-secondary settings__lede">This build loads no tool plugins yet. The inventory lists what the host process would load, so it appears with the plugin loader — a list of files nothing can load would say less than nothing.</p>
           </div>
-        )}
+        </>)
+        : pageId === 'review' && config ? page('solo', <RuntimeSettings {...config} part="review" />)
+        : pageId === 'store' ? page('solo', (
+          <div className="settings__section">
+            <SettingsTitle>Session store</SettingsTitle>
+            <h2 className="settings__heading">Session store</h2>
+            <p className="text-secondary settings__lede">
+              This workspace's sessions live in a store on this machine, found by the identifier in <code className="mono">.rotaris/workspace-id</code>.
+              Copying or syncing the workspace folder does not carry them; a backup does.
+            </p>
+            <div className="settings__actions">
+              <div className="settings__action">
+                <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null || noWorkspace} title={noWorkspace ? disabledReason ?? undefined : undefined} onClick={() => { void act('backup'); }}>
+                  {busyAction === 'backup' ? 'Backing up…' : 'Back up session store…'}
+                </DesignButton>
+                <Hint always>One file, the whole store. Valid while a run is live.{noWorkspace ? ` ${disabledReason}` : ''}</Hint>
+              </div>
+              <div className="settings__action">
+                <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null || disabledReason !== null} title={disabledReason ?? undefined} onClick={() => { void act('restore'); }}>
+                  {busyAction === 'restore' ? 'Restoring…' : 'Restore session store…'}
+                </DesignButton>
+                <Hint always>
+                  {storeHeld === 'missing'
+                    ? 'The store is not in its place. Restoring moves what is in that place aside, keeps it, and puts the backup\'s sessions there.'
+                    : storeHeld === 'corrupt'
+                      ? 'The store failed its integrity check. Restoring moves the damaged store aside unchanged, keeps it, and puts the backup\'s sessions in its place.'
+                      : 'Replaces this workspace\'s store with a backup; the previous store is kept. Refused while a run is live.'}
+                  {disabledReason ? ` ${disabledReason}` : ''}
+                </Hint>
+              </div>
+              {/* OQ-281: offered only while the open holds a place with no store; main asks first, Cancel the default. */}
+              {storeHeld === 'missing' && onEstablishStore ? (
+                <div className="settings__action" data-ui="settings-establish-store">
+                  <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null} onClick={() => { void act('establish'); }}>
+                    {busyAction === 'establish' ? 'Starting…' : 'Start a new session store…'}
+                  </DesignButton>
+                  <Hint always>Starts an empty store in that place and recovers nothing that may have been there; what is in the place now is moved aside and kept.</Hint>
+                </div>
+              ) : null}
+              {/* OQ-477: offered only while the open holds a store that failed its integrity check; main asks first, Cancel the default. */}
+              {storeHeld === 'corrupt' && onEstablishStore ? (
+                <div className="settings__action" data-ui="settings-set-aside-store">
+                  <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null} onClick={() => { void act('establish'); }}>
+                    {busyAction === 'establish' ? 'Setting aside…' : 'Set the damaged store aside and start a new one…'}
+                  </DesignButton>
+                  <Hint always>Moves the damaged store aside unchanged and keeps it, then starts an empty store. It recovers nothing: the sessions in it will no longer be listed.</Hint>
+                </div>
+              ) : null}
+            </div>
+            {message && <div className="composer__error" role="alert">{message}</div>}
+          </div>
+        ))
+        : pageId === 'traceability' ? page('solo', <div className="settings__section">{traceability ? <TraceabilitySettings {...traceability} /> : <p className="text-secondary">Open a workspace first.</p>}</div>)
+        : pageId === 'appearance' ? page('section', <>
+          <div className="settings__section">
+            <SettingsTitle>Interface</SettingsTitle>
+            <h2 className="settings__heading">Appearance</h2>
+            <div className="settings__action">
+              <label htmlFor="theme-select">Theme</label>
+              <DesignSelect
+                id="theme-select"
+                className="input select settings__select"
+                aria-label="Theme"
+                aria-description="Choose the colour theme used by every Rotaris window."
+                value={selectedTheme}
+                onChange={(event) => { void chooseTheme(event.currentTarget.value as ThemeName); }}
+              >
+                {themes.map((theme) => <option key={theme.name} value={theme.name}>{theme.label}</option>)}
+              </DesignSelect>
+              <Hint>{themes.find((theme) => theme.name === selectedTheme)?.description ?? 'Choose a registered theme.'}</Hint>
+            </div>
+            <div className="settings__action">
+              <span>Reduce motion</span>
+              <DesignButton type="button" className={`toggle${reducedMotion ? ' is-on' : ''}`} role="switch" aria-label="Reduce motion" aria-checked={reducedMotion} onClick={() => { void chooseMotion(!reducedMotion); }} />
+              <Hint>Every animation collapses to its end state. The operating-system setting is inherited until you choose here.</Hint>
+            </div>
+            {interfaceExtras}
+            <div className="settings__action">
+              <DesignButton type="button" className="btn btn-secondary" onClick={() => setMessage('Panel sizes already use their declared defaults; no divider is registered yet.')}>Reset panel sizes</DesignButton>
+              <Hint>Restores every resizable pane to its default size and takes effect immediately.</Hint>
+            </div>
+            {message && <div className="composer__error" role="status">{message}</div>}
+          </div>
+          {display ? <DisplaySettings {...display} config={config} /> : null}
+        </>)
+        : pageId === 'about' && about ? page('solo', <AboutSettings {...about} />)
+        : <p className="text-secondary">{config?.loading ? 'Reading the configuration…' : config?.error ?? 'No configuration service.'}</p>}
       </section>
     </div>
   );
 }
+
+export { CATEGORY_PAGE, findSettings, SETTINGS_INDEX, SETTINGS_PAGE_GROUPS, SETTINGS_PAGES, SETTINGS_SETUP_PAGE, settingsPageFor, type SettingsPageId } from './settings/pages.js';

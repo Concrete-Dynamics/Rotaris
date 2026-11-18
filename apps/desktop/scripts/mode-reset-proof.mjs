@@ -244,7 +244,7 @@ const summarise = (reading, inspectAt) => ({
 // ── 1. Settings opened once and left; the chip armed `autonomous`; a run started ──
 writeConfig('ask');
 const settingsFirst = await launch('settings-first', workspace, local, preferences, {
-  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Permissions',
   ROTARIS_CAPTURE_VIEWS: 'workspace@3000',
   ...armAndRun(4200),
 });

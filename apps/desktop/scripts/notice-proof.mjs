@@ -820,7 +820,7 @@ if (want('6c')) {
   expect(value.there.action === 'Try again' && value.there.member === 'open-project-init', `the first window's banner offers ${JSON.stringify(value.there)}`);
   const holderId = (log.match(/main window (\d+) loaded for .*atlas-billing/) ?? [])[1];
   expect(holderId !== undefined && new RegExp(`project-setup action for .*atlas-billing: surfaced window ${holderId} and opened`).test(log), `main did not surface the holding window (${holderId ?? 'not found'})`);
-  expect(value.project.view === 'Settings' && value.project.category === 'Project', `the holding window shows ${JSON.stringify(value.project)}, not Settings › Project`);
+  expect(value.project.view === 'Settings' && value.project.category === 'Initialization', `the holding window shows ${JSON.stringify(value.project)}, not Settings › Project`);
   expect(value.project.retry === true, `Settings › Project offers no "Retry initialization": ${JSON.stringify(value.project)}`);
   expect(value.project.save === 'Unsaved changes', `opening Settings › Project lost the unsaved Instructions edit: the save bar reads ${JSON.stringify(value.project.save)}`);
   expect(value.stayed !== 'Settings', 'the pressing window opened Settings itself; only the holding window should');
@@ -829,7 +829,7 @@ if (want('6c')) {
   expect(!/notice action "open-project-init" has no target/.test(log), 'the renderer still reports the action without a target');
   // PD-WORKSPACE-005 revision 3 (OQ-294): the closed project's press added a window for it, which shows Settings › Project.
   expect(value.windowsAfter.length === 3 && value.windowsAfter.some((w) => w.endsWith('closed-project')), `no window was added for the closed project: ${JSON.stringify(value.windowsAfter)}`);
-  expect(value.addedProject.view === 'Settings' && value.addedProject.category === 'Project' && value.addedProject.retry === true, `the added window shows ${JSON.stringify(value.addedProject)}, not Settings › Project with "Retry initialization"`);
+  expect(value.addedProject.view === 'Settings' && value.addedProject.category === 'Initialization' && value.addedProject.retry === true, `the added window shows ${JSON.stringify(value.addedProject)}, not Settings › Project with "Retry initialization"`);
   expect(!value.told.some((t) => /not open in any window/.test(t)), `revision 2's acknowledgement appeared: ${JSON.stringify(value.told)}`);
   expect(/notice action reached .*closed-project: added window \d+ for it/.test(log), 'main did not log the reach adding a window for the closed project');
   expect(/project-setup action for .*closed-project: added window \d+ and opened Settings › Project there \((sent|held); PD-WORKSPACE-005 revision 3, OQ-294\)/.test(log), 'main did not log the closed project\'s press opening Settings › Project in the added window');

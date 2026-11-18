@@ -386,7 +386,7 @@ results.instructionToggle = { off: 'workspace:AGENTS.md', file: true };
 
 // ── 3. The Display category: move all seven, save, and read the file ──────────────────────────────────────────
 const display = await launch('display', workspace, local, preferences, {
-  ...openCategory('Display'),
+  ...openCategory('Appearance'),
   // The two preferences first (immediate), then the four configuration fields (deferred to Save).
   ROTARIS_CAPTURE_CLICKS: [
     '[data-testid="auto-collapse-tools"]@1600',
@@ -419,7 +419,7 @@ if (prefs['display/showReasoning'] !== true) throw new Error(`the reasoning pref
 results.display = { dirtyThenSaved: true, file: { tool_result_max_lines: 20, tool_input_max_lines: 0, show_tool_results: false, foreignKeyKept: true }, preferences: { autoCollapseTools: true, groupTools: false, showReasoning: true } };
 
 // ── 4. Reopen: the saved values come back, and the form is clean ─────────────────────────────────────────────
-const reopen = await launch('reopen', workspace, local, preferences, { ...openCategory('Display'), ROTARIS_CAPTURE_AFTER_MS: '3000' });
+const reopen = await launch('reopen', workspace, local, preferences, { ...openCategory('Appearance'), ROTARIS_CAPTURE_AFTER_MS: '3000' });
 const resultCap = first(reopen.probes, '[data-testid="tool-result-lines"]')?.value;
 const inputCap = first(reopen.probes, '[data-testid="tool-input-lines"]')?.value;
 if (resultCap !== '20') throw new Error(`the result cap came back as ${resultCap}`);
@@ -449,7 +449,7 @@ const live = await launch('live-apply', workspace, local, preferences, {
   ROTARIS_CAPTURE_PROMPT: 'Read the file.',
   // The timings clear code intelligence's discovery at run start (~5 s, Part T), so the tool row exists first.
   ROTARIS_CAPTURE_PROBE_AT: '.tool__preview@13000;;.dialog-title@18000',
-  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_VIEW_MS: '14000', ROTARIS_CAPTURE_SETTINGS: 'Display',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_VIEW_MS: '14000', ROTARIS_CAPTURE_SETTINGS: 'Appearance',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="show-tool-results"]@15500;;.dialog-actions .btn-primary>>Save@18500',
   ROTARIS_CAPTURE_CHORDS: 'Ctrl+1@17500', // back to the Workspace; Ctrl+2 until PD-SHELL-016 (2026-11-14)
   ROTARIS_CAPTURE_PROBE: [...PROBES, '.tool__preview', '.dialog-title'].join(';;'),
@@ -479,7 +479,7 @@ writeFileSync(configFile, [
   '  # Part Z read these two; no requirement ever stated them (REQ-CONFIG-172).',
   '  tool_result_lines: 50', '  tool_input_lines: 1', '',
 ].join('\n'));
-const falsified = await launch('falsified-keys', workspace, local, preferences, { ...openCategory('Display'), ROTARIS_CAPTURE_AFTER_MS: '3000' });
+const falsified = await launch('falsified-keys', workspace, local, preferences, { ...openCategory('Appearance'), ROTARIS_CAPTURE_AFTER_MS: '3000' });
 const fResult = first(falsified.probes, '[data-testid="tool-result-lines"]')?.value;
 const fInput = first(falsified.probes, '[data-testid="tool-input-lines"]')?.value;
 if (fResult !== '10' || fInput !== '2') throw new Error(`the falsified keys still govern: result=${fResult} input=${fInput}`);
@@ -513,7 +513,7 @@ function runStartSession() {
 }
 
 // 7a. No session followed: what `plan` does, and nothing about a release.
-const unfollowed = await launch('run-start-unfollowed', rsWorkspace, rsLocal, rsPreferences, { ...openCategory('Runtime'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
+const unfollowed = await launch('run-start-unfollowed', rsWorkspace, rsLocal, rsPreferences, { ...openCategory('Delegation'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
 const plainHint = hintOf(unfollowed.probes);
 if (!plainHint) throw new Error('the Runtime category drew no run-start mode hint');
 if (/not built/i.test(plainHint.text)) throw new Error(`the hint still says the plan gate is not built: "${plainHint.text}"`);
@@ -542,7 +542,7 @@ if (approvedSession?.plan_released !== 1) throw new Error(`approval did not rele
 // 7d. The approved session followed, Settings open on Runtime: the hint states the release and the re-arming control.
 const released = await launch('run-start-released', rsWorkspace, rsLocal, rsPreferences, {
   ROTARIS_CAPTURE_RESUME: 'latest',
-  ...openCategory('Runtime', 3000),
+  ...openCategory('Delegation', 3000),
   ROTARIS_CAPTURE_AFTER_MS: '5000',
 });
 const releasedHint = hintOf(released.probes);
@@ -753,7 +753,7 @@ const BREAKER_ON = '.toggle.is-on[aria-labelledby="cb-label"]';
 const STRIP_UNSAVED = '[data-testid="strip-unsaved"]';
 const reloadProbes = [STRIP_UNSAVED, '.save-bar__status', DIAGNOSTICS_ON, BREAKER_ON];
 const reload = await launch('reload-clean', rWorkspace, rLocal, rPreferences, {
-  ...openCategory('Runtime'),
+  ...openCategory('Delegation'),
   ROTARIS_CAPTURE_PROBE_AT: [2000, 4000, 6000, 8000].flatMap((ms) => reloadProbes.map((sel) => `${sel}@${ms}`)).join(';;'),
   // 2400: the switch on, nothing edited. 4400: a real edit (the breaker off). 6400: the switch off again, with the edit pending.
   ROTARIS_CAPTURE_CLICKS: `${DIAGNOSTICS}@2400;;[aria-labelledby="cb-label"]@4400;;${DIAGNOSTICS}@6400`,
@@ -798,7 +798,9 @@ const MODE_GROUP = '[aria-label="Permission mode, strictest first"]';
 const MODE_ACTIVE = `${MODE_GROUP} .seg-opt.is-active`;
 const lastProbes = [STRIP_UNSAVED, '.save-bar__status', BREAKER_ON, MODE_ACTIVE];
 const lastWrite = await launch('reload-last-write', rWorkspace, rLocal, rPreferences, {
-  ...openCategory('Runtime'),
+  // PD-CONFIG-012: the permission mode is on Permissions and the breaker on Delegation; this launch reads both and is owed a repair
+  // (docs/defects/the-settings-proofs-were-repointed-to-the-pages-by-reading-and-not-run.md).
+  ...openCategory('Permissions'),
   ROTARIS_CAPTURE_PROBE_AT: [2000, 3400, 4600, 6000].flatMap((ms) => lastProbes.map((sel) => `${sel}@${ms}`)).join(';;'),
   // 2400: the pair of writes, announced together. 3800: `restricted` picked here, unsaved. 5000: the composer's write.
   ROTARIS_CAPTURE_CONFIG_PAIR_AT: '{"circuit_breaker":{"enabled":false}}>>{"circuit_breaker":{"enabled":true}}@2400',

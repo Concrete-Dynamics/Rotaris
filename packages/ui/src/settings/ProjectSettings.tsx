@@ -250,7 +250,7 @@ export function TraceabilitySettings({ workspace, onOperate, onCancel }: Traceab
           {inFlight !== null ? <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { void stop(); }} data-action="traceability-stop">Stop</DesignButton> : null}
         </div>
       </div>
-      <p className="text-secondary">
+      <p className="text-secondary settings__lede">
         The four operations of the requirement toolchain, run against the repository root this workspace resolves to and the layout
         configuration found there — never a root or a configuration you nominate. A check writes nothing and gates nothing by itself;
         regenerate writes the requirement-symbol artifact and the retired-identifier log; a baseline update writes the three baselines;

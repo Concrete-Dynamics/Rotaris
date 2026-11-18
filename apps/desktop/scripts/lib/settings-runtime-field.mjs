@@ -31,7 +31,8 @@ export function runtimeFieldSteps({ id, value, at = 8_000 }) {
   if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`a Settings field id is a bare id: ${id}`);
   if (!/^\d+$/.test(String(value))) throw new Error(`a Runtime number field takes whole digits: ${value}`);
   return {
-    ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
+    // PD-CONFIG-012: the improvement analysis timeout is on Review, every other Runtime number field on Delegation.
+    ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: id === 'improvement-timeout' ? 'Review' : 'Delegation',
     ROTARIS_CAPTURE_CLICKS: `#${id}@~${at};;.save-bar .btn-primary>>Save@${at + 2_600}`,
     ROTARIS_CAPTURE_CHORDS: `Ctrl+A@${at + 500}`,
     ROTARIS_CAPTURE_TYPE_AT: `${value}@${at + 900}`,

@@ -395,7 +395,7 @@ if (want(4)) {
 // enabled, which is once the setup status has arrived. `settledPresses` refuses a launch whose Start was never
 // pressed, and says whether the notice drew.
 const AFTER_NOTICE = 'body:has([data-testid="notice"])';
-const NAV_TO_MCP = `${AFTER_NOTICE} .nav-list__item:not(.is-selected)>>MCP Servers@~20000`;
+const NAV_TO_MCP = `${AFTER_NOTICE} .nav-list__item:not(.is-selected)>>Tools@~20000`;
 const PRESS_START = `${AFTER_NOTICE} button[data-action="setup-start"]:not([disabled])@~30000`;
 const PRESS_CANCEL = `${AFTER_NOTICE} button[data-action="setup-cancel"]@~30000`;
 const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_CHORDS: 'Ctrl+6@600', ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START}`, ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });

@@ -265,7 +265,7 @@ results.failure = { workspaceFile: ws4, banner: log4.split('\n')[bannerLine], ac
  * --------------------------------------------------------------------------------------------- */
 const s5 = scenario('settings-card', WORKSPACE, { code: false });
 const log5 = await launch('settings-card', s5, {
-  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Project',
+  ROTARIS_CAPTURE_VIEW: 'settings', ROTARIS_CAPTURE_SETTINGS: 'Initialization',
   ROTARIS_CAPTURE_EVAL_AT: 'JSON.stringify({probe:"card",state:document.querySelector(\'[data-project-init]\')?.getAttribute(\'data-init-state\')??null,headline:document.querySelector(\'[data-init-headline]\')?.textContent??null,lines:[...document.querySelectorAll(\'[data-init-detail]\')].map(n=>n.textContent),reason:document.querySelector(\'[data-init-reason]\')?.textContent??null})>>[data-init-state="completed"]@~40000',
   ROTARIS_CAPTURE_AFTER_MS: '45000',
 }, 180_000);

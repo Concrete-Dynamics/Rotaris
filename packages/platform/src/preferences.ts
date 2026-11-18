@@ -11,7 +11,8 @@ export type DiagnosticsLevel = (typeof DIAGNOSTICS_LEVELS)[number];
 
 export const PREFERENCE_KEYS = {
   'appearance/theme': { type: 'string', default: undefined, owner: 'REQ-SHELL-128', coerce: (value: unknown) => typeof value === 'string' ? value : undefined },
-  'interface/settingsTab': { type: 'string', default: 'models', owner: 'REQ-CONFIG-271', coerce: (value: unknown) => typeof value === 'string' ? value : 'models' },
+  // PD-CONFIG-012: with nothing stored the Settings view opens on Setup; a stored value is a page, or a category from before the pages.
+  'interface/settingsTab': { type: 'string', default: 'setup', owner: 'REQ-CONFIG-271', coerce: (value: unknown) => typeof value === 'string' ? value : 'setup' },
   'ui/reduced_motion': { type: 'boolean', default: undefined, owner: 'REQ-SHELL-135', coerce: (value: unknown) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : undefined },
   /**
    * REQ-SHELL-069 with REQ-SHELL-006's table: the pane layouts, as the table registers them — ONE schema-version stamp,

@@ -81,6 +81,16 @@ REQ-CONFIG-268's order and with REQ-CONFIG-269's identifiers. A category is writ
 action's category read. A heading is text and no option of the listbox, and `categoryFocusMove` answers where Arrow Up,
 Arrow Down, Home and End move focus, across the groups and without changing the selection (REQ-SHELL-153).
 
+**A Settings page** ([`PD-CONFIG-012`](../../../product/directives/pd-config-012.md#pd-config-012), 2026-11-18). The
+navigation is `SETTINGS_SETUP_PAGE` and `SETTINGS_PAGE_GROUPS` in `packages/ui/src/settings/pages.ts`: Setup, then twelve
+pages under four headings. The categories above remain the address vocabulary: `CATEGORY_PAGE` names the page each opens,
+and `settingsPageFor` resolves a page or a category identifier. A new setting is drawn in the part that owns it
+(`packages/ui/src/settings/`), placed on its page in `SettingsView.tsx`, and named in `SETTINGS_INDEX` so Find reaches
+it. A row's explanation is a `Hint` and a part's title a `SettingsTitle` (`settings/page.tsx`), which read the page's
+context: a part alone on a page drops its title, a part beside others heads itself one level down, and a part mounted
+with no page keeps its first-level title and its explanations open. Setup's three lists are computed in
+`settings/Setup.tsx` from what the other pages already hold.
+
 **A status-strip item** (worked examples: REQ-SANDBOX-121's sandbox indicator, 2026-10-02; the strip rebuilt to
 REQ-SHELL-038's list, fin10, the same day). The strip's items are **values**: `stripItems(width, facts)` in
 `packages/ui/src/composer.ts` answers them left to right in REQ-SHELL-038's order — the workspace path (the one `link`,

@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>Concept 1 — Run panel</title>
+<link rel="stylesheet" href="../../node_modules/@phosphor-icons/web/src/regular/style.css"><link rel="stylesheet" href="mock.css">
+<style>
+  .ws { display: grid; grid-template-columns: minmax(0, 1fr) 336px; min-height: 0; }
+  .ws.folded { grid-template-columns: minmax(0, 1fr); }
+  .main { display: grid; grid-template-rows: 40px minmax(0, 1fr) auto; min-height: 0; min-width: 0; }
+  .log .col, .composer .inner { max-width: 900px; }
+  .panel { background: var(--chrome); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .panel .tabs { display: flex; align-items: center; gap: 4px; height: 40px; padding: 0 10px; border-bottom: 1px solid var(--border); }
+  .panel .inline { margin: 2px 0 4px 24px; padding: 10px 12px; border-left: 2px solid var(--wait); display: flex; flex-direction: column; gap: 11px; background: var(--bg); border-radius: 0 8px 8px 0; }
+</style>
+<body><script src="mock-shared.js"></script><script>
+const band = (o) => `<div class="band">
+  ${o.idle ? '<span class="tag idle"><span class="dot"></span>Ready</span>' : '<span class="tag run"><span class="dot run"></span>Run active</span><span class="mono t2">4:12</span><span class="sep"></span><span class="t2">3 agents · 1 of 4 tasks</span>'}
+  <span class="grow"></span>
+  ${o.idle ? '' : '<span class="seg"><span class="on">All activity</span><span>This task</span></span>'}
+  <span class="btn icon">${ic('magnifying-glass')}</span><span class="btn">${ic('terminal-window')}Terminal</span><span class="btn icon">${ic('dots-three')}</span>
+  <span class="sep"></span><span class="btn icon ${o.folded ? '' : 'on'}">${ic('sidebar-simple')}</span></div>`;
+const panel = () => `<aside class="panel">
+  <div class="tabs"><b style="font-weight:600;padding:0 4px">Run</b><span style="flex:1"></span><span class="sel">${ic('cpu')}Switch model… ${ic('caret-down')}</span><span class="sel">${ic('brain')}Reasoning… ${ic('caret-down')}</span></div>
+  <div class="sect"><div class="hd"><span class="label">Agents</span><span class="mono t3">4</span><span class="grow"></span><span class="tag wait" style="height:18px">1 needs you</span></div>
+    <div>${M.agents('discount-api').replace('</div><div class="agent child"><span class="dot done">', `</div><div class="inline">${M.detail()}</div><div class="agent child"><span class="dot done">`)}</div></div>
+  <div class="sect"><div class="hd"><span class="label">Task plan</span><span class="grow"></span><span class="mono t3">1 of 4 done</span></div><div class="bar"><b style="width:25%"></b></div>${M.plan()}<span class="t3" style="font-size:12px">+ Add task</span></div>
+</aside>`;
+pick({
+  1: () => frame(1440, 900, false, `<div class="ws"><div class="main">${band({})}<div class="log"><div class="col">${M.rows()}</div></div>
+      <div class="composer"><div class="inner">${M.ask()}${M.composer()}</div></div></div>${panel()}</div>`),
+  2: () => frame(1000, 680, true, `<div class="ws folded"><div class="main">${band({ idle: true, folded: true })}<div class="log">${M.empty()}</div>
+      <div class="composer"><div class="inner">${M.composer({ idle: true, narrow: true })}</div></div></div></div>`),
+});
+</script></body>

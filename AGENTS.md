@@ -324,11 +324,11 @@ aborts the rebase and hands back, a red stops it with nothing pushed, and the ga
 
 ## Repository skills — `.agents/skills/`
 
-Seven portable workflows live under `.agents/skills/`, where REQ-WORKSPACE-051 makes them discoverable from
+Eight portable workflows live under `.agents/skills/`, where REQ-WORKSPACE-051 makes them discoverable from
 this repository; Claude Code reaches each through its router (above). **`design-ui`** briefs a surface before it is
 drawn and audits a built one into a refactor brief (its knowledge: `docs/research/design/`), **`build-ui`** creates or
 substantially restyles a surface, **`debug-ui`** repairs a bounded rendered defect, and **`review-ui`** is a
-report-only external critique scored against its rubric.
+report-only external critique scored against its rubric. **`redesign-surface`** takes a whole surface from inventory through two mocked concepts and the owner's choice to a reviewed build.
 
 **`orchestrated-build`** drives a large body of work (a release backlog, every open defect) through a
 multi-agent workflow: per bundle an independent reviewer that repairs in place and lands it, repair rounds,

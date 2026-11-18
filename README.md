@@ -11,7 +11,7 @@
 [![Latest release](https://img.shields.io/github/v/release/Concrete-Dynamics/Rotaris?label=latest)](https://github.com/Concrete-Dynamics/Rotaris/releases/latest)
 [![Licence: GPL-3.0-only](https://img.shields.io/badge/licence-GPL--3.0--only-blue.svg)](LICENSE)
 
-[**Download for Windows**](https://github.com/Concrete-Dynamics/Rotaris/releases/latest) · [Website](https://rotaris.ai) · [Build from source](#build-from-source) · [Documentation](#documentation)
+[**Download for Windows and Linux**](https://github.com/Concrete-Dynamics/Rotaris/releases/latest) · [Website](https://rotaris.ai) · [Build from source](#build-from-source) · [Documentation](#documentation)
 
 <img src="docs/assets/readme/overview.png" alt="The Rotaris Overview during a run: token and tool-call figures, three delegated agents with their state, and the session list." width="900">
 
@@ -63,10 +63,17 @@ what it did, or report work as finished that does not hold up. Each of those has
 
 ## Get started
 
-### Download (Windows x64)
+### Download (Windows x64, Linux x86_64)
 
-1. Open the [latest release](https://github.com/Concrete-Dynamics/Rotaris/releases/latest) and download
-   `Rotaris-<version>-windows-x64-setup.exe` (installer) or `Rotaris-<version>-windows-x64-portable.exe` (no install).
+1. Open the [latest release](https://github.com/Concrete-Dynamics/Rotaris/releases/latest) and download the file for your system:
+
+   | System | File | What it is |
+   |---|---|---|
+   | Windows x64 | `Rotaris-<version>-windows-x64-setup.exe` | installer |
+   | Windows x64 | `Rotaris-<version>-windows-x64-portable.exe` | runs without installing |
+   | Linux x86_64 | `Rotaris-<version>-linux-x86_64.AppImage` | one file: make it executable and run it; updates itself |
+   | Debian, Ubuntu (x86_64) | `Rotaris-<version>-linux-x86_64.deb` | `sudo apt install ./Rotaris-<version>-linux-x86_64.deb`; updated by installing a newer package |
+
 2. Optionally check the file against `SHA256SUMS.txt` beside it.
 3. Start Rotaris and open a project folder.
 4. <a id="1-register-a-provider"></a><a id="providers-auth-and-models"></a>Under **Settings › Models**, sign in to a provider with an API key, or add your own OpenAI-compatible endpoint.
@@ -85,7 +92,7 @@ what it did, or report work as finished that does not hold up. Each of those has
 
 ### Build from source
 
-On any platform Node 24 runs on. Only Windows x64 has a published release.
+On any platform Node 24 runs on. Windows x64 and Linux x86_64 have a published release.
 
 **Prerequisites.**
 
@@ -112,37 +119,45 @@ missing, as it is in a new Git worktree, `node node_modules/electron/install.js`
 
 ## Status
 
-Rotaris is **pre-release**. The version it declares is `0.1.0rc2` (`apps/desktop/package.json`).
+Rotaris is **pre-release**. The version it declares is `0.1.0rc3` (`apps/desktop/package.json`).
 
-**What is published.** `v0.1.0rc2`, published 2026-11-17, is a Windows x64 release candidate: a setup installer, a
-portable executable, a CycloneDX SBOM, `SHA256SUMS.txt` and its signature, built, signed and drafted by the tag workflow
-(`.github/workflows/release.yml`). It follows `v0.1.0rc1` of 2026-10-23.
+**What is published.** `v0.1.0rc3` is a release candidate for **Windows x64** — a setup installer and a portable
+executable — and, for the first time, **Linux x86_64** — an AppImage and a Debian package
+([`PD-STARTUP-013`](docs/product/directives/pd-startup-013.md#pd-startup-013)) — with a CycloneDX SBOM for each platform,
+`SHA256SUMS.txt` and its signature, built, signed and drafted by the tag workflow (`.github/workflows/release.yml`). It
+follows `v0.1.0rc2` of 2026-11-17 and `v0.1.0rc1` of 2026-10-23, which were Windows only.
 
 Three things a reader should know about it:
 
 - **It is shown as GitHub's latest release, not flagged as a pre-release**, by the owner's choice, so that the
   download link and the in-app updater — both read `releases/latest`, which skips flagged pre-releases — find it
-  ([R-103](docs/product/requests.md#r-103); the same reading for `v0.1.0rc1` is
+  ([R-103](docs/product/requests.md#r-103), as for `v0.1.0rc2`; the same reading for `v0.1.0rc1` is
   [this note](docs/defects/the-published-rc1-release-is-marked-stable.md)).
-- **The release gate's clean-machine check was not performed for it.** The installer and the portable were not
-  launched on a clean, offline Windows x64 machine before publication
+- **The release gate's clean-machine check was not performed for it.** No artifact was launched on a clean,
+  offline machine before publication; the Debian package was installed nowhere
   ([the gate](docs/architecture/first-release-plan/06-5-the-release-gate.md#5-the-release-gate); R-103 records the owner's waiver).
 - **The binaries are not Authenticode-signed**, by design (REQ-STARTUP-021/023;
   [first-release plan §4](docs/architecture/first-release-plan/04-4-the-windows-release-pipeline.md#4-the-windows-release-pipeline)).
 
 **Platforms.**
 
-- **Windows x64** is the one platform a release publishes for
-  ([`PD-STARTUP-001`](docs/product/directives/pd-startup-001.md#pd-startup-001)). `pnpm package` builds its installer on Windows x64.
-- **Linux** may be built on a developer's Linux host
-  ([ADR-0066](docs/architecture/adr/0066-the-linux-artifact-is-built-on-a-developer-host.md)); the artifact is
-  accepted only against that record's criteria and is not yet published. The Linux x64 packaging path is wired; AC-1 through AC-4, including the real build and D10
-  counterfactuals, still await execution ([the defect note](docs/defects/the-build-hooks-refuse-a-linux-artifact-in-the-name-of-ic-3.md)). **macOS** has no build host yet, so no
-  release artifact is produced for it
-  ([IC-3](docs/architecture/implementation-conditions/ic-3-the-build-host-obligations.md)).
-  Nothing in the application is removed or disabled on either. The proofs are run from source on Windows and on Linux.
+- **Windows x64** and **Linux x86_64** are the platforms a release publishes for
+  ([`PD-STARTUP-013`](docs/product/directives/pd-startup-013.md#pd-startup-013)). `pnpm package` builds the installer on
+  Windows x64, and the AppImage and the Debian package on Linux x86_64.
+- **The Linux AppImage was held to four acceptance criteria**
+  ([ADR-0066](docs/architecture/adr/0066-the-linux-artifact-is-built-on-a-developer-host.md);
+  [the readings](docs/architecture/spikes/linux-appimage-acceptance.md)): it starts unextracted on Ubuntu 24.04 that never had
+  the legacy FUSE library; its native modules are load-proved; a second launch is handed to the first; and its window is
+  shown in about a second on physical hardware — with one exception recorded as measured: the first-ever launch on a shared
+  virtual runner took 7.5 s against the 5 s bound.
+- **No 32-bit Linux build exists**, x86 or ARM: the Electron the product ships on publishes Linux builds for `x64` and
+  `arm64` only. **Linux arm64** is the stated next step and is not published yet.
+- **macOS** has no build host yet, so no release artifact is produced for it
+  ([IC-3](docs/architecture/implementation-conditions/ic-3-the-build-host-obligations.md);
+  [`PD-STARTUP-001`](docs/product/directives/pd-startup-001.md#pd-startup-001)). Nothing in the application is removed or
+  disabled there. The proofs are run from source on Windows and on Linux.
 
-**What stands between `v0.1.0rc2` and `v0.1.0`**, from
+**What stands between `v0.1.0rc3` and `v0.1.0`**, from
 [`docs/architecture/first-release-plan.md`](docs/architecture/first-release-plan.md):
 
 - **The release gate** ([§5](docs/architecture/first-release-plan/06-5-the-release-gate.md#5-the-release-gate)): the installer and the
@@ -364,7 +379,7 @@ One application, five composition roots in `apps/desktop/src/`. They are the onl
 | [`packages/`](packages/) | Fifteen TypeScript packages (`@rotaris/<name>`), cut along process boundaries rather than features, from `kernel` at the foundation to `ui`. [`docs/module-map.md`](docs/module-map.md) says what each owns and which file to open first. |
 | [`tools/`](tools/) | Build-time and lint-time code, not product code: the checks the gate runs, the symbol generator behind `pnpm symbols`, the release guard and pipeline, the notices and build-identifier generators, `pnpm verify:plan`, and the worktree and development-time tooling. |
 | [`docs/`](docs/) | The record: the specification, the product directives and the request log, the architecture and its decisions, the design language, the defect notes and the proof index. |
-| [`.github/workflows/`](.github/workflows/) | `ci.yml` (**CI**: the gate and a development package on Windows x64 for every push and pull request) and `release.yml` (**Release**: the tag workflow). |
+| [`.github/workflows/`](.github/workflows/) | `ci.yml` (**CI**: the gate, and a development package on Windows x64 and on Linux x86_64, for every push and pull request) and `release.yml` (**Release**: the tag workflow). |
 
 All three of `apps/*`, `packages/*` and `tools/*` are workspace members (`pnpm-workspace.yaml`).
 

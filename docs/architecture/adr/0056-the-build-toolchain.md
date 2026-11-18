@@ -29,3 +29,5 @@ one now names its part.
 | [09](0056-the-build-toolchain/09-fourth-execution-2026-09-11-the-seams-stop.md) | Fourth execution — 2026-09-11, the seams stop shipping, and the build is made to say so |
 | [10](0056-the-build-toolchain/10-the-electron-pin-moves-to-4430-2026-10-22-r-081.md) | The Electron pin moves to 44.3.0 — 2026-10-22 (R-081) |
 | [11](0056-the-build-toolchain/11-the-electron-pin-moves-to-44100-2026-11-04-r-091.md) | The Electron pin moves to 44.10.0 — 2026-11-04 (R-091) |
+
+*2026-11-17 — the load proof's Linux half (ADR-0066 AC-3) was executed on a Linux host: rules 1a and 4 passed on Linux binaries, and both of D10's counterfactuals were refused, `no-force` by rule 1a and `keep-prebuild` by rule 4 ([the spike report](../spikes/linux-appimage-acceptance.md)).*

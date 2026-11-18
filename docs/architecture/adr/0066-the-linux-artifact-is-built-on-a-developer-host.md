@@ -1,6 +1,6 @@
 # ADR-0066 — The Linux artifact is built on a developer host, and accepted against stated criteria
 
-- **Status:** accepted (the owner, 2026-10-26); awaiting its first execution
+- **Status:** accepted (the owner, 2026-10-26); first executed 2026-11-17 — the note above "Consequences"
 - **Wiring note (2026-11-06):** implemented in source; no artifact built, still awaiting its first execution.
 - **Date:** 2026-10-26
 - **Origin:** [R-087](../../product/requests.md#r-087), the owner's ruling that no implementation condition may prevent a
@@ -98,6 +98,17 @@ readback. Windows-only steps are explicitly not applicable in the report and ter
 packaged-session claim is made. Scoped unit tests are wiring evidence only. AC-3's execution on the owner's Linux
 host, including both D10 counterfactuals, remains owed, as do AC-1, AC-2 and AC-4. Nothing was built or accepted;
 the status remains awaiting its first execution. Publication and macOS remain unchanged.*
+
+*2026-11-17 — first execution ([R-104](../../product/requests.md#r-104); [the spike report](../spikes/linux-appimage-acceptance.md)). The artifact was built for the first time, on a developer's host and on a hosted Ubuntu 24.04 runner, and each criterion read:*
+
+| Criterion | Reading | Where |
+| --- | --- | --- |
+| AC-1 | **held**, on a host that never had `libfuse.so.2` — the hosted image, which is Ubuntu 24.04 and is not an unmodified installation | hosted runner, four runs |
+| AC-2 | **held on the median** (744 ms and 867 ms); **not held strictly on the hosted runner**, whose first launch of the file took 7.5 s, twice; held strictly on the developer host (1.37 s) | both |
+| AC-3 | **held**: rules 1a and 4 passed, and both of D10's counterfactuals were refused, each by the rule that owns it | developer host |
+| AC-4 | **held** | both |
+
+*Status: built. Accepted on AC-1, AC-3 and AC-4 as read above; AC-2's strict reading on the hosted runner is put to the owner, who set the condition for publication. Publication is [`PD-STARTUP-013`](../../product/directives/pd-startup-013.md#pd-startup-013)'s.*
 
 ## Consequences
 

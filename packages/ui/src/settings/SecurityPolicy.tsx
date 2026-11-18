@@ -63,7 +63,7 @@ function EntryList(props: {
         onChange={(e) => { setDraft(e.currentTarget.value); if (problem !== null) setProblem(null); }}
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
       />
-      <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid={`${props.id}-add`} onClick={add}>Add</DesignButton>
+      <DesignButton type="button" className="btn btn-secondary btn-compact settings__glyph ph ph-plus" title={`Add to ${props.label}`} data-testid={`${props.id}-add`} onClick={add}>Add</DesignButton>
       <Hint about={props.label}>{props.hint}</Hint>
       {props.values.length > 0 && (
         <ul className="settings__chips" aria-label={`${props.label} entries`}>
@@ -136,7 +136,7 @@ export function SecurityPolicy({ runtime, onChange, confinement, onRecheck, dirt
         {/* REQ-SANDBOX-116: selecting a mode on an incapable host is still STORED — the setting exists for hosts that can honour it. */}
         <span className="settings__availability" role="status" data-testid="confinement-availability">{availability.text}</span>
         {onRecheck && (
-          <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="confinement-recheck" disabled={checking} onClick={() => { void recheck(); }}>
+          <DesignButton type="button" className="btn btn-secondary btn-compact settings__glyph ph ph-arrow-clockwise" title="Re-check confinement" data-testid="confinement-recheck" disabled={checking} onClick={() => { void recheck(); }}>
             {checking ? 'Checking…' : 'Re-check'}
           </DesignButton>
         )}

@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Hint, SettingsPageContext, SettingsTitle } from './settings/page.js';
+import { Hint, Origin, SettingsPageContext, SettingsTitle } from './settings/page.js';
 import { findSettings, SETTINGS_PAGE_GROUPS, SETTINGS_PAGES, SETTINGS_SETUP_PAGE, settingsPageFor, type SettingsPageId } from './settings/pages.js';
 import { changedFromDefaults, setupAttention, SetupPage, workspaceCounts } from './settings/Setup.js';
 import { isBusy, type PlaybookCatalogue, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
@@ -360,12 +360,12 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
               >
                 {themes.map((theme) => <option key={theme.name} value={theme.name}>{theme.label}</option>)}
               </DesignSelect>
-              <Hint>{themes.find((theme) => theme.name === selectedTheme)?.description ?? 'Choose a registered theme.'}</Hint>
+              <Origin of="yours" /><Hint about="Theme">{themes.find((theme) => theme.name === selectedTheme)?.description ?? 'Choose a registered theme.'}</Hint>
             </div>
             <div className="settings__action">
               <span>Reduce motion</span>
               <DesignButton type="button" className={`toggle${reducedMotion ? ' is-on' : ''}`} role="switch" aria-label="Reduce motion" aria-checked={reducedMotion} onClick={() => { void chooseMotion(!reducedMotion); }} />
-              <Hint>Every animation collapses to its end state. The operating-system setting is inherited until you choose here.</Hint>
+              <Origin of="yours" /><Hint about="Reduce motion">Every animation collapses to its end state. The operating-system setting is inherited until you choose here.</Hint>
             </div>
             {interfaceExtras}
             <div className="settings__action">

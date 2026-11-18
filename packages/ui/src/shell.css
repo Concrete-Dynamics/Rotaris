@@ -3302,3 +3302,25 @@ table, .mono { font-variant-numeric: tabular-nums; }
 .setup__line:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .setup__value { display: inline-flex; align-items: center; gap: var(--rt-space-2); min-width: 0; color: var(--rt-text-secondary); font-size: var(--rt-text-xs); overflow-wrap: anywhere; }
 .setup__none { margin: var(--rt-space-3) 0 0; font-size: var(--rt-text-sm); }
+
+/* PD-CONFIG-012 revision 2: an act said by a glyph. The button keeps its words — they are its accessible name and what a
+   proof presses it by — at no size, and the glyph class on the button draws the mark; `title` says the words on hover. */
+.settings__body .settings__glyph { flex: none; width: var(--rt-control-height); min-width: var(--rt-control-height); padding: 0; font-size: 0; justify-content: center; }
+.settings__body .settings__glyph.btn-compact { width: var(--rt-space-6); min-width: var(--rt-space-6); }
+.settings__body .settings__glyph::before { font-size: var(--rt-text-md); line-height: 1; }
+.settings__body .settings__glyph.btn-link { color: var(--rt-text-secondary); text-decoration: none; }
+.settings__body .settings__glyph[aria-pressed='true'] { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }
+/* A value at its default reads as a value, not as a control: the role table's and the slot table's selects drop their
+   frame until the row is pointed at or holds focus, or the value is set. One press still opens them. */
+.settings__roles tr[data-role-set='no']:not(:hover):not(:focus-within) :is(.select, .chip-menu, .input),
+.settings__slots tr:not(:hover):not(:focus-within) .select:disabled { border-color: transparent; background-color: transparent; background-image: none; color: var(--rt-text-tertiary); box-shadow: none; }
+.settings__roles tr[data-role-set='no']:not(:hover):not(:focus-within) .chip-menu .ph { visibility: hidden; }
+/* The Scope cell says where a set value comes from by its glyph; "default" twice a row, fourteen rows down, is closed with the explanations. */
+.settings__body:not([data-explain]) .settings__scope-word { display: none; }
+.settings__body:not([data-explain]) .settings__scope > div[data-origin='default']:not(:has(.btn)) { display: none; }
+/* An empty list says so only with the explanations: the empty field already shows it. */
+.settings__body:not([data-explain]) .settings__list > .text-tertiary.settings__hint { display: none; }
+.settings__scope .settings__origin-mark, .settings__slots .settings__origin-mark { margin-left: 0; }
+/* A provider row: sign out is offered where there is something to sign out of; the footer is an explanation. */
+.settings__body tr[data-authenticated='no'] .provider-row__actions .btn-ghost { display: none; }
+.settings__body:not([data-explain]) .table-card-foot { display: none; }

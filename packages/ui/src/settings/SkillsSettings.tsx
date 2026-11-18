@@ -187,14 +187,14 @@ export function SkillsSettings({ state, workspace, home, pending, onLoadMode, on
               data-testid="skills-enabled"
             />
             <Button
-              type="button" className="btn btn-secondary btn-compact" data-testid="skills-rescan"
+              type="button" className="btn btn-secondary btn-compact settings__glyph ph ph-arrow-clockwise" data-testid="skills-rescan"
               aria-description={RESCAN_DESCRIPTION} title={RESCAN_DESCRIPTION}
               disabled={noWorkspace || busy !== null} onClick={() => { void rescan(); }}
             >
               {busy === 'rescan' ? 'Rescanning…' : RESCAN_LABEL}
             </Button>
             <Button
-              type="button" className="btn btn-secondary btn-compact" data-testid="skills-load-file"
+              type="button" className="btn btn-secondary btn-compact settings__glyph ph ph-file-plus" data-testid="skills-load-file"
               aria-description={LOAD_FILE_DESCRIPTION} title={LOAD_FILE_DESCRIPTION}
               disabled={noWorkspace || busy !== null} onClick={() => { void loadFile(); }}
             >

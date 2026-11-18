@@ -130,7 +130,7 @@ export function ModelsSettings(props: ConfigSettingsProps) {
         */}
       {props.providersCard ?? <p className="text-secondary">The provider list is not available in this window.</p>}
       <h2 className="settings__heading">Model slots</h2>
-      <DesignTable className="table settings__grid" aria-label="Model slots">
+      <DesignTable className="table settings__grid settings__slots" aria-label="Model slots">
         <thead><tr><th>Slot</th><th>Model</th><th>Reasoning strength</th></tr></thead>
         <tbody>
           {EDITABLE_SLOTS.map((slot) => {
@@ -155,7 +155,7 @@ export function ModelsSettings(props: ConfigSettingsProps) {
             ].join(' ');
             return (
               <tr key={slot}>
-                <td className="mono">{slot}<span className="text-tertiary settings__origin"> {view?.origin ?? 'default'}</span></td>
+                <td className="mono">{slot}<span className="text-tertiary settings__origin settings__lede"> {view?.origin ?? 'default'}</span><Origin of={view?.origin === 'workspace' || view?.origin === 'global' ? view.origin : 'default'} /></td>
                 <td>
                   <DesignSearchableSelect
                     className="input select"
@@ -207,7 +207,7 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
         </DesignSelect>
         <Hint>Switching scope shows that scope's values; it copies nothing.</Hint>
       </div>
-      <DesignTable className="table settings__grid" aria-label="Roles">
+      <DesignTable className="table settings__grid settings__roles" aria-label="Roles">
         <thead><tr><th>Persona</th><th>Model</th><th>Reasoning</th><th>Scope</th><th>Tools</th></tr></thead>
         <tbody>
           {snapshot.roles.map((r) => {
@@ -222,7 +222,7 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
             const levels = roleReasoningOptions(offeredForModel(snapshot, reasoningModelKey(snapshot, displayedModel)), thinking);
             const cell = scopeCellOf(r, pending, scope);
             return (
-              <tr key={r.role}>
+              <tr key={r.role} data-role-set={model === '' && thinking === 'default' ? 'no' : 'yes'}>
                 {/* PD-CONFIG-011 (R-105): the role's name once. "Persona" and "Role" printed the same identifier in two columns. */}
                 <td className="mono">{r.role}</td>
                 <td>
@@ -240,8 +240,8 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
                   </DesignSelect>
                 </td>
                 <td className="settings__scope">
-                  <div>model: <span className="text-secondary">{cell.model.origin}</span>{cell.model.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact" aria-label={cell.model.unsetLabel} title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetModel: true })}>Unset</DesignButton>}</div>
-                  <div>reasoning: <span className="text-secondary">{cell.reasoning.origin}</span>{cell.reasoning.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact" aria-label={cell.reasoning.unsetLabel} title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetThinking: true })}>Unset</DesignButton>}</div>
+                  <div data-origin={cell.model.origin}><span className="settings__scope-word">model: <span className="text-secondary">{cell.model.origin}</span></span><Origin of={cell.model.origin === 'workspace' || cell.model.origin === 'global' ? cell.model.origin : 'default'} />{cell.model.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact settings__glyph ph ph-arrow-counter-clockwise" aria-label={cell.model.unsetLabel} title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetModel: true })}>Unset</DesignButton>}</div>
+                  <div data-origin={cell.reasoning.origin}><span className="settings__scope-word">reasoning: <span className="text-secondary">{cell.reasoning.origin}</span></span><Origin of={cell.reasoning.origin === 'workspace' || cell.reasoning.origin === 'global' ? cell.reasoning.origin : 'default'} />{cell.reasoning.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact settings__glyph ph ph-arrow-counter-clockwise" aria-label={cell.reasoning.unsetLabel} title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetThinking: true })}>Unset</DesignButton>}</div>
                 </td>
                 <td className="text-secondary settings__tools">{r.tools.join(', ') || '—'}</td>
               </tr>
@@ -470,7 +470,12 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
     <div className="settings__section">
       <SettingsTitle>Permissions</SettingsTitle>
       <h2 className="settings__heading">Permission</h2>
-      {permissionRow}{outsideRow}{redactionRow}
+      {permissionRow}{outsideRow}
+      <div className="settings__action" data-testid="redaction-row">
+        <span>Secret redaction</span>
+        <span className="text-secondary">Always on</span>
+        <Origin of="fixed" /><Hint about="Secret redaction">Secret redaction is always active; there is no way to disable it from this screen.</Hint>
+      </div>
       <h2 className="settings__heading">Security policy</h2>
       {securityPolicy}
       {confirmations}
@@ -513,7 +518,7 @@ export function AgentPopOutToggle({ on, onChange }: { on: boolean; onChange: (va
     <div className="settings__action" data-testid="agent-pop-out">
       <span id="agent-pop-out-label">Agent pop-out</span>
       <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby="agent-pop-out-label" aria-checked={on} aria-description={`Agent pop-out is ${on ? 'enabled' : 'disabled'}.`} data-testid="agent-pop-out-toggle" onClick={() => onChange(!on)} />
-      <Hint>On, clicking an agent opens or raises its persona window; off, a click selects it in the inspector only. Explicit Pop out always opens the window.</Hint>
+      <Origin of="yours" /><Hint about="Agent pop-out">On, clicking an agent opens or raises its persona window; off, a click selects it in the inspector only. Explicit Pop out always opens the window.</Hint>
     </div>
   );
 }

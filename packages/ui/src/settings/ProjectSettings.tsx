@@ -178,7 +178,7 @@ export function ProjectInitSettings({ state, onInitialize, onRefresh, onCheckAga
       <div className="providers-card__head">
         <div className="card-kicker">Project initialization</div>
         <div className="providers-card__actions">
-          <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { void onRefresh(); }} data-action="init-refresh">Refresh</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary btn-compact settings__glyph ph ph-arrow-clockwise" title="Refresh" onClick={() => { void onRefresh(); }} data-action="init-refresh">Refresh</DesignButton>
           <DesignButton type="button" className="btn btn-primary btn-compact" disabled={card.buttonDisabled} title={card.buttonReason === '' ? undefined : card.buttonReason} onClick={() => { void start(); }} data-action="init-run">{card.button}</DesignButton>
         </div>
       </div>

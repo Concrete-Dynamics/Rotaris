@@ -12,6 +12,8 @@
 6. **Find.** A field above the page list SHALL find a setting by the words of its name and open the page that holds it.
 7. **A navigation entry needing attention** carries a warning glyph, and its accessible description states what waits.
 
+8. **Acts said by a glyph, and values that read as values** *(revision 2, 2026-11-18)*. A secondary act of a section or a row whose meaning a glyph carries — refresh, reload, check status, re-check, add an entry, unset, a provider's settings, rescan, load a skill file — SHALL be drawn as its glyph; the button keeps its words as its accessible name and its tooltip. In the role table and the slot table a value at its default SHALL be drawn without a control's frame until its row is pointed at or holds focus. A provider's identifier and sign-in method, a slot's origin word, the Scope cell's words for a default and an empty list's "(none)" are explanations under clause 4; sign out is drawn only for a signed-in provider.
+
 **Why, and what it costs.** The owner asked for the Settings view to be changed "more fundamentally", chose the run-order structure from three drawn and independently scored structures, asked for the Setup page of the second with it, and then for less text, "hide behind icons and omit useless text" ([R-106](../requests.md#r-106)). The mock he approved is `.ui-review/r-105/mocks/a3-run-order.html`; the independent scoring of the three is in [the Settings brief's part 2](../../design/briefs/settings/02-pages-2026-11-18.md).
 
 What it costs:
@@ -26,5 +28,7 @@ What it costs:
 > **Extends:** REQ-CONFIG-269, REQ-CONFIG-270
 
 The cases narrowed, stated exhaustively. REQ-CONFIG-268: that the thirteen categories are the view's navigation entries; their identifiers, labels and order stand as the address vocabulary. REQ-CONFIG-271: the fallback when nothing valid is stored is Setup. REQ-CONFIG-320: the Runtime rows' one order holds within each page and across the three pages taken in their order, except that the iteration cap and the compression threshold stand with the delegation limits; every row, label, range and confirmation governs as written. REQ-CONFIG-270's bar stands on every page; clean, its status is stated to assistive technology and not drawn.
+
+*Revision 2, the same day: the owner, shown the build and what of the approved mock it lacked, asked to "Finish mock parity"; clause 8 is that. It displaces nothing further.*
 
 *Raised by the owner, 2026-11-18, in conversation, over three drawn structures and a reviewer's scores; logged as [R-106](../requests.md#r-106). Minted by the agent that built it (`claude-fable-5-2`). The owner chose the structure and worded the requests; the agent worded this directive.*

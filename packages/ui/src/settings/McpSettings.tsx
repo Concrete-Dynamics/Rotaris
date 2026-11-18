@@ -717,13 +717,13 @@ export function McpSettings(props: McpSettingsProps) {
         <div className="providers-card__head">
           <div className="card-kicker">Configured servers</div>
           <div className="providers-card__actions">
-            <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={props.onRefresh} disabled={props.loading}>Reload</DesignButton>
+            <DesignButton type="button" className="btn btn-secondary btn-compact settings__glyph ph ph-arrow-clockwise" title="Reload" onClick={props.onRefresh} disabled={props.loading}>Reload</DesignButton>
             {/* FND-3 of the Opus 5.5 review (2026-11-09): §1.7's one filled control is per screen/view, and this
                 view carried THREE `.btn-primary` at once (this one, the guided card's `Store the key`, and the code
                 intelligence card's action). The card-head action is the mockup's own secondary variant —
                 `SETTINGS`' Providers card head draws `Check status` as `btn btn-secondary btn-compact` — so the
                 fill belongs to the one control that writes something, the guided card's `Store the key`. */}
-            <DesignButton type="button" className="btn btn-secondary btn-compact" aria-description="Probe every configured MCP server" disabled={props.probing || rows.length === 0} onClick={() => { void probeAll(); }} data-action="check-status">{props.probing ? 'Checking…' : 'Check status'}</DesignButton>
+            <DesignButton type="button" className="btn btn-secondary btn-compact settings__glyph ph ph-heartbeat" title="Check status" aria-description="Probe every configured MCP server" disabled={props.probing || rows.length === 0} onClick={() => { void probeAll(); }} data-action="check-status">{props.probing ? 'Checking…' : 'Check status'}</DesignButton>
           </div>
         </div>
         <p className="text-secondary settings__lede">Every server the configuration declares, whether or not it is enabled. Health is probed on demand and never remembered across launches; the switch turns a server off for this session only, and switching on a server the configuration holds disabled writes `enabled: true` to the configuration file.</p>

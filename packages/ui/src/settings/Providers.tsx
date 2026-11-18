@@ -129,10 +129,10 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
               <span className="provider-row__dot" data-state={stateName} style={{ background: tone.dot }} />
             </DesignTooltip>
             <span className="provider-row__name" title={row.displayName}>{row.displayName}</span>
-            <span className="mono text-tertiary settings__origin">{row.id}</span>
+            <span className="mono text-tertiary settings__origin settings__lede">{row.id}</span>
             <span className="provider-row__word" style={{ color: tone.word }}>{word}</span>
           </div>
-          <div className="provider-row__detail text-tertiary">{row.health?.detail || row.methodLabel}</div>
+          <div className={`provider-row__detail text-tertiary${row.health?.detail ? '' : ' settings__lede'}`}>{row.health?.detail || row.methodLabel}</div>
           {row.displayMask ? <div className="mono text-tertiary settings__origin" data-mask>{row.displayMask}</div> : null}
         </td>
         {/* UIR-309: a table cell, not `.settings__action`'s wrapping flex line — a flex box in a cell's place is only as
@@ -161,7 +161,7 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
             >
               Sign out
             </DesignButton>
-            <DesignButton type="button" className="btn btn-link btn-compact" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+            <DesignButton type="button" className="btn btn-link btn-compact settings__glyph ph ph-gear" title={open ? `Close ${row.displayName} settings` : `${row.displayName} settings`} aria-expanded={open} aria-pressed={open} onClick={() => setOpen((o) => !o)}>
               {open ? 'Close' : 'Settings'}
             </DesignButton>
           </div>
@@ -243,7 +243,7 @@ export function ProvidersCard(props: ProvidersCardProps) {
       data-providers
       actions={
         <div className="providers-card__actions">
-          <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={refreshing !== null} onClick={() => { setRefreshing('…'); void props.onRefreshAll().then((r) => setRefreshing(r.message)); }}>Refresh catalogs</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary btn-compact settings__glyph ph ph-arrow-clockwise" title="Refresh catalogs" disabled={refreshing !== null} onClick={() => { setRefreshing('…'); void props.onRefreshAll().then((r) => setRefreshing(r.message)); }}>Refresh catalogs</DesignButton>
           <DesignButton type="button" className="btn btn-primary btn-compact" onClick={props.onAdd} data-action="add-endpoint">Add endpoint</DesignButton>
         </div>
       }

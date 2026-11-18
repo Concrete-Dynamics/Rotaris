@@ -93,7 +93,7 @@ export function DisplaySettings({ config, autoCollapseTools, groupTools, showRea
       <h2 className="settings__heading">Transcript</h2>
       <p className="text-secondary settings__lede">These three are yours, not this workspace's: they are kept with your desktop preferences, take effect as you change them, and Discard does not undo them.</p>
       <Toggle
-        id="auto-collapse-tools"
+        id="auto-collapse-tools" origin="yours"
         testId="auto-collapse-tools"
         label="Auto-collapse older tool outputs"
         hint="The latest tool call and its result stay open; earlier rows collapse to the tool name with a control to expand them again."
@@ -101,7 +101,7 @@ export function DisplaySettings({ config, autoCollapseTools, groupTools, showRea
         onChange={(v) => { void write(() => onAutoCollapseTools(v)); }}
       />
       <Toggle
-        id="group-tools"
+        id="group-tools" origin="yours"
         testId="group-tools"
         label="Group consecutive tool calls"
         hint="A run of same-kind calls becomes one counting row naming the call in flight, which expands to the individual calls."
@@ -109,7 +109,7 @@ export function DisplaySettings({ config, autoCollapseTools, groupTools, showRea
         onChange={(v) => { void write(() => onGroupTools(v)); }}
       />
       <Toggle
-        id="show-reasoning"
+        id="show-reasoning" origin="yours"
         testId="show-reasoning"
         label="Show reasoning bodies"
         hint="Reasoning rows open to show their text. Off, each shows only its summary line until you open it. A row you opened or closed yourself keeps your choice."

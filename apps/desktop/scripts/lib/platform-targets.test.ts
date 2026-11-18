@@ -37,12 +37,16 @@ describe('Linux build wiring; macOS IC-3 and publication PD-STARTUP-001 unchange
     expect(base['linux']).toBeUndefined();
   });
 
-  it('the release builds and publishes windows-x64 alone: no matrix entry and no published key for either', () => {
+  it('the release builds windows-x64 in `build` and linux-x86_64 in `build-linux` (PD-STARTUP-013); macos-arm64 has no job and no published key (PD-STARTUP-001)', () => {
     const workflow = yaml.load(readFileSync(join(APP, '..', '..', '.github', 'workflows', 'release.yml'), 'utf8'));
-    const build = (workflow['jobs'] as Record<string, Section>)['build'] as Section;
+    const jobs = workflow['jobs'] as Record<string, Section>;
+    const build = jobs['build'] as Section;
     const include = ((build['strategy'] as Section)['matrix'] as Section)['include'] as Section[];
     expect(include.map((entry) => entry['platform'])).toEqual(['windows-x64']);
-    expect(PUBLISHED_PLATFORMS).toEqual(['windows-x64']);
+    expect(jobs['build-linux']).toBeDefined();
+    expect((jobs['build-linux'] as Section)['runs-on']).toBe('ubuntu-24.04');
+    expect(PUBLISHED_PLATFORMS).toEqual(['windows-x64', 'linux-x86_64']);
+    expect(PUBLISHED_PLATFORMS).not.toContain('macos-arm64');
   });
 
   it('the hooks keep the exact macOS refusal before anything is rebuilt or packed', async () => {

@@ -25,6 +25,8 @@ const PORTABLE = `Rotaris-${VERSION}-windows-x64-portable.exe`;
 const SETUP = `Rotaris-${VERSION}-windows-x64-setup.exe`;
 /** PD-STARTUP-012: the SBOM a release directory holds beside its artifacts, listed in the manifest the pipeline signs. */
 const SBOM = `Rotaris-${VERSION}-windows-x64-sbom.cdx.json`;
+/** PD-STARTUP-013: the linux-x86_64 key's artifacts and SBOM, which the directory holds and the manifest lists beside the Windows ones. */
+const LINUX = [`Rotaris-${VERSION}-linux-x86_64-sbom.cdx.json`, `Rotaris-${VERSION}-linux-x86_64.AppImage`, `Rotaris-${VERSION}-linux-x86_64.deb`];
 const TARGET = 'E:\\Rotaris-0.1.0-windows-x64-portable.exe';
 
 let dir: string;
@@ -36,6 +38,7 @@ beforeEach(() => {
   writeFileSync(join(assets, PORTABLE), Buffer.alloc(2_500_000, 3));
   writeFileSync(join(assets, SETUP), Buffer.alloc(1_000, 4));
   writeFileSync(join(assets, SBOM), '{"bomFormat":"CycloneDX","specVersion":"1.6"}\n');
+  for (const name of LINUX) writeFileSync(join(assets, name), `stand-in ${name}`);
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -133,7 +136,7 @@ describe('the pipeline\'s release, installed by the updater (REQ-STARTUP-122, RE
     expect(publish(key, [key.publicPem]).verified).toBe(0);
     // The signed manifest carries the SBOM's line beside the artifacts', as `sha256sum -c` reads it.
     const listed = parseChecksumManifest(readFileSync(join(assets, 'SHA256SUMS.txt'), 'utf8')).map((e) => e.name);
-    expect(listed).toEqual([PORTABLE, SBOM, SETUP]);
+    expect(listed).toEqual([...LINUX, PORTABLE, SBOM, SETUP]);
     // The feed offers every file the draft attaches, the SBOM among them; the offer is chosen by exact name alone.
     const feed: FeedAsset[] = readdirSync(assets).map((name) => ({ name, url: `https://example.invalid/${name}`, size: readFileSync(join(assets, name)).byteLength }));
     expect(feed.map((a) => a.name)).toContain(SBOM);

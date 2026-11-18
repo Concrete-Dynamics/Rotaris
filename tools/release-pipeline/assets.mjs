@@ -28,11 +28,11 @@ import {
 } from '../release-naming/src/index.ts';
 
 /**
- * The platform keys a release publishes for: `windows-x64` alone while `PD-STARTUP-001` stands. Withdrawing the
- * directive is the one change that widens this list (and the workflow's matrix), and it lands only once IC-3 and IC-8
- * are discharged.
+ * The platform keys a release publishes for: `windows-x64`, and since PD-STARTUP-013 (2026-11-17) `linux-x86_64` beside
+ * it, whose acceptance ADR-0066 records. `macos-arm64` stays out while PD-STARTUP-001 stands for it (IC-3). This list
+ * and the workflow's build jobs change together.
  */
-export const PUBLISHED_PLATFORMS = Object.freeze(['windows-x64']);
+export const PUBLISHED_PLATFORMS = Object.freeze(['windows-x64', 'linux-x86_64']);
 
 /** Every artifact a release of `version` publishes for `platforms`, named by the authority, in matrix order. */
 /** @param {string} version @param {readonly string[]} [platforms] @returns {import('./assets.d.mts').ReleaseAsset[]} */

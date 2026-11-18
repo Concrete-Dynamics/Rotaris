@@ -28,6 +28,8 @@ export const changesSinceHeading = (/** @type {string} */ previousTag) => `Chang
 
 /** `PD-STARTUP-001`'s one line in place of element (4) for the platforms it leaves out. */
 export const WINDOWS_ONLY_LINE = 'This release publishes Windows builds only.';
+/** PD-STARTUP-013: the line in element (4)'s place once Linux x86_64 is published beside Windows. */
+export const WINDOWS_AND_LINUX_LINE = 'This release publishes Windows and Linux x86_64 builds; there is no macOS build.';
 
 /** REQ-STARTUP-033: the changelog against the previous tag, from the commit subjects since it (merge commits excluded). */
 /** @param {string | null} previousTag @param {readonly string[]} subjects @returns {string} */
@@ -117,6 +119,7 @@ export function releaseBody({ tag, entries, platformsWithAssets, changelogText, 
     blocks.push(`> **Not built in this release: ${notBuilt.join(', ')}.** Those builds failed; the artifacts above are unaffected. Use the previous release for the missing platforms.`);
   }
   if (publishedPlatforms.length === 1 && publishedPlatforms[0] === 'windows-x64') blocks.push(WINDOWS_ONLY_LINE);
+  else if (publishedPlatforms.includes('linux-x86_64') && !publishedPlatforms.includes('macos-arm64')) blocks.push(WINDOWS_AND_LINUX_LINE);
   blocks.push(
     [
       `**Verifying a download.** On macOS and Linux, run \`sha256sum -c ${CHECKSUM_MANIFEST_NAME}\` in the directory holding the downloads.`,

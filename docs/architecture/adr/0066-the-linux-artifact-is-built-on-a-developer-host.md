@@ -108,7 +108,7 @@ the status remains awaiting its first execution. Publication and macOS remain un
 | AC-3 | **held**: rules 1a and 4 passed, and both of D10's counterfactuals were refused, each by the rule that owns it | developer host |
 | AC-4 | **held** | both |
 
-*Status: built. Accepted on AC-1, AC-3 and AC-4 as read above; AC-2's strict reading on the hosted runner is put to the owner, who set the condition for publication. Publication is [`PD-STARTUP-013`](../../product/directives/pd-startup-013.md#pd-startup-013)'s.*
+*Status: built, and accepted. AC-1, AC-3 and AC-4 as read above. On AC-2 the owner ruled, 2026-11-18, shown both readings and the 7.5 s figure and asked whether it counts as passed for publishing: "Yes, publish" — the bound is held on physical hardware and on the median, and the slow reading is a first launch on a shared virtual machine under a virtual display; the figure stays in the record as measured. Publication is [`PD-STARTUP-013`](../../product/directives/pd-startup-013.md#pd-startup-013)'s.*
 
 ## Consequences
 

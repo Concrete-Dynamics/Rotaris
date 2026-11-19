@@ -256,7 +256,10 @@ function plantLiveRun(sid) {
     const insert = db.prepare(`INSERT INTO transcript_rows
       (session_id, row_index, kind, settled, body, at, persona, name, ts, page, tool_name, tool_status, call_key, duration_ms, started_at, input, output)
       VALUES (@sid, @i, @kind, @settled, @body, @at, @persona, @name, @ts, NULL, @toolName, @toolStatus, @callKey, @durationMs, @startedAt, NULL, @output)`);
-    const families = ['read_file', 'grep', 'apply_patch', 'bash'];
+    // Eight families, so the line wraps at the transcript's reading measure too: four fitted one line once PD-SHELL-017
+    // gave the transcript 920 px (2026-11-18), and the stage's own guard said so. A name outside REQ-CHAT-064's four is a
+    // family of its own; the last call stays `bash`, the running one.
+    const families = ['read_file', 'grep', 'apply_patch', 'fetch', 'git_read', 'artifact_read', 'todo', 'bash'];
     const planned = [];
     const CALLS = 24;
     for (let i = 0; i < CALLS; i += 1) {

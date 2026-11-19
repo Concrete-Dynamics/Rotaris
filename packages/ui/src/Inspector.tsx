@@ -6,7 +6,7 @@ import { elapsedLabel, elapsedShown } from './AgentTree.js';
 import { AgentArtifactLinks } from './ArtifactLinks.js';
 import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
-import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, StatusDot as DesignStatusDot } from './design-system/index.js';
+import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, StatusDot as DesignStatusDot } from './design-system/index.js';
 import { PopoverMenu } from './design-system/overlays.js';
 import { annotatedModelOptions } from './model-options.js';
 
@@ -52,9 +52,10 @@ export interface InspectorProps {
   readonly onPopOut: (agent: AgentRecord) => void;
   readonly onSetModel?: ((model: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onSetReasoning?: ((level: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
-  /** REQ-MONITOR-051: rendered as an overlay drawer below 1180 px; the caller says whether it is open there. */
+  /** REQ-MONITOR-051: drawn as an overlay drawer below 1180 px. */
   readonly drawer?: boolean | undefined;
-  readonly onCloseDrawer?: (() => void) | undefined;
+  /** PD-SHELL-017 revision 2: folds the panel (a wide window) or closes the drawer (a narrow one); the band's toggle does the same. */
+  readonly onClose?: (() => void) | undefined;
   /** REQ-MONITOR-052 / REQ-LIBRARY-102 (live-run finding K1): follow an artifact link — the caller opens the artifact. */
   readonly onOpenArtifact?: ((id: string) => void) | undefined;
 }
@@ -67,7 +68,7 @@ export const NEXT_ITERATION_NOTE = 'Takes effect from the next iteration, for th
 export const NO_ARTIFACTS = 'This agent has produced and received no artifacts yet.';
 
 export function Inspector(props: InspectorProps) {
-  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, resting, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onCloseDrawer, onOpenArtifact } = props;
+  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, resting, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onClose, onOpenArtifact } = props;
   const agents = useMemo(() => session?.agents ?? [], [session]);
   const selected = useMemo(() => (selectedAgentId === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgentId) ?? null), [selectedAgentId, agents, runLevel]);
   // PD-ORCH-005 clause 4 with OQ-97: the run-level agent owns the rows its roots wrote, under whichever name each carries.
@@ -98,14 +99,21 @@ export function Inspector(props: InspectorProps) {
     return list;
   }, [models, currentModel]);
   const instances = activeTab ? instancesOf(activeTab, agents, runLevel) : [];
+  // PD-SHELL-017 revision 2: the inspector is its own panel on the right of the transcript — a head the band's height, a
+  // body that scrolls, and the three acts held at its foot — and the drawer on that side below 1180 px.
   return (
     <aside className={`inspector${drawer ? ' inspector--drawer' : ''}`} aria-label="Agent inspector" data-shown={shown?.id ?? ''} data-mode={shown ? (pinned ? 'pinned' : 'following') : 'empty'}>
       <div className="inspector__head">
-        <span className="card-kicker">Inspector</span>
-        <span className={`tag ${pinned ? 'tag-accent' : 'tag-neutral'} inspector__tag`} data-testid="inspector-tag">{shown ? (pinned ? PINNED_TAG : FOLLOWING_TAG) : 'No agent'}</span>
+        <span className="inspector__kicker">Inspector</span>
         {pinned && <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={() => onSelect(null)} title="Drop the selection; the panel returns to tracking whichever agent wrote last.">Unpin</DesignButton>}
-        {onCloseDrawer && <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label="Close the inspector" onClick={onCloseDrawer}>×</DesignButton>}
+        {onClose && <DesignButton type="button" className="btn btn-ghost btn-compact inspector__close" aria-label={drawer ? 'Close the inspector' : 'Hide the inspector'} title={drawer ? 'Close the inspector' : 'Hide the inspector'} onClick={onClose}><i className="ph ph-x" aria-hidden="true" /></DesignButton>}
       </div>
+      <div className="inspector__scroll">
+      {/* What the panel is showing and why: the mode, then the persona and its instances on one line. */}
+      <div className="inspector__mode">
+        <span className={`tag ${pinned ? 'tag-accent' : 'tag-neutral'} inspector__tag`} data-testid="inspector-tag">{shown ? (pinned ? PINNED_TAG : FOLLOWING_TAG) : 'No agent'}</span>
+      </div>
+      <div className="inspector__who">
       {/*
         * Density review 2026-09-13: the persona strip drew one 32 px `.tab` per configured persona, and a
         * twelve-persona configuration wrapped it into four rows — 161 px of chrome before any content. The
@@ -124,13 +132,15 @@ export function Inspector(props: InspectorProps) {
           onChoose={(role) => setTab(role)}
         />
       </div>
-      {activeTab && (
+      {/* PD-SHELL-017: a persona's one instance, already pinned, is named by the title below and is not offered again. */}
+      {activeTab && !(pinned && instances.length === 1 && instances[0]?.id === shown?.id) && (
         <div className="inspector__instances" aria-label={`${activeTab} instances`}>
           {instances.length === 0 ? <span className="text-secondary">No instance of {activeTab} in this run.</span> : instances.map((a) => (
             <DesignButton key={a.id} type="button" className={`btn btn-ghost btn-compact inspector__instance${shown?.id === a.id ? ' is-active' : ''}`} data-agent-id={a.id} aria-pressed={shown?.id === a.id} onClick={() => onSelect(a.id)}>{a.name}</DesignButton>
           ))}
         </div>
       )}
+      </div>
       {shown ? (
         <div className="inspector__body">
           <div className="inspector__title">
@@ -140,14 +150,22 @@ export function Inspector(props: InspectorProps) {
           <div className="inspector__meta mono" data-testid="inspector-meta">{metaLine(shown, session, elapsed)}</div>
           {/* PD-CONFIG-003 revision 3 (OQ-234): directly under the meta line, whose REQ-MONITOR-052 form stays as it is. */}
           {shown.timedOut !== null && <TimeoutLine timedOut={shown.timedOut} className="inspector__timeout text-secondary" testId="inspector-timeout" />}
+          <div className="inspector__scope text-secondary" data-testid="inspector-scope">
+            {isRunLevel ? 'Scope: the run itself — the entry role at depth 0.' : `Scope: depth ${shown.depth}${shown.background ? ', background' : ''}${shown.category ? `, ${shown.category}` : ''} — reports to ${agents.find((a) => a.id === shown.parentId)?.name ?? 'the run'}.`}
+          </div>
+          <section className="inspector__section" aria-label="Context window">
+          <span className="card-kicker">Context</span>
           <div className="inspector__ring">
-            <ContextRing used={shown.contextUsed} limit={shown.contextLimit} thresholdPercent={compressionThresholdPercent} label={`${shown.name}'s context window`} />
+            <ContextRing used={shown.contextUsed} limit={shown.contextLimit} thresholdPercent={compressionThresholdPercent} size={44} label={`${shown.name}'s context window`} />
             <div className="inspector__ring-caption text-secondary">
               <div>This agent's own context window: {shown.contextUsed.toLocaleString()} of {shown.contextLimit.toLocaleString()} tokens.</div>
               <div>Compression at {compressionThresholdPercent}% of the limit. Not a session-wide figure.</div>
               <div data-testid="inspector-compressions">{compressionLine(shown)}.</div>
             </div>
           </div>
+          </section>
+          <section className="inspector__section" aria-label="Model and reasoning">
+          <span className="card-kicker">Model and reasoning</span>
           <div className="inspector__controls">
             <label className="field-label" htmlFor="inspector-model">Model</label>
             <DesignSearchableSelect id="inspector-model" className="input select" ariaLabel="Agent model" value={currentModel} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-model"
@@ -158,20 +176,34 @@ export function Inspector(props: InspectorProps) {
               /* REQ-MONITOR-194: the shown key re-chosen counts only when the session holds it out of quota — the explicit choice that clears it. */
               onChange={(v) => { if (onSetModel && v !== '' && (v !== currentModel || (session?.excludedModels ?? []).includes(v))) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }} />
             <label className="field-label" htmlFor="inspector-reasoning">Reasoning</label>
-            <DesignSelect id="inspector-reasoning" className="input select" aria-label="Agent reasoning" value={['low', 'medium', 'high'].includes(shown.reasoning) ? shown.reasoning : 'medium'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning" onChange={(e) => { const v = e.currentTarget.value; if (onSetReasoning) void onSetReasoning(v).then((r) => setError(r.ok ? null : r.reason)); }}>
-              {['low', 'medium', 'high'].map((l) => <option key={l} value={l}>{l}</option>)}
-            </DesignSelect>
+            <DesignSearchableSelect id="inspector-reasoning" className="input select" ariaLabel="Agent reasoning" value={['low', 'medium', 'high'].includes(shown.reasoning) ? shown.reasoning : 'medium'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning"
+              filterPlaceholder="Filter levels…" emptyText="No matching level."
+              options={['low', 'medium', 'high'].map((l) => ({ value: l, label: l }))}
+              onChange={(v) => { if (onSetReasoning && v !== '') void onSetReasoning(v).then((r) => setError(r.ok ? null : r.reason)); }} />
             <span id="inspector-controls-note" className="text-secondary inspector__note" data-testid="inspector-controls-note">{writable ? NEXT_ITERATION_NOTE : PER_PERSONA_NOTE}</span>
           </div>
-          <div className="inspector__scope text-secondary" data-testid="inspector-scope">
-            {isRunLevel ? 'Scope: the run itself — the entry role at depth 0.' : `Scope: depth ${shown.depth}${shown.background ? ', background' : ''}${shown.category ? `, ${shown.category}` : ''} — reports to ${agents.find((a) => a.id === shown.parentId)?.name ?? 'the run'}.`}
-          </div>
-          <div className="inspector__tools" aria-label="Tools">
-            <span className="card-kicker">Tools</span>
-            <div className="chips" data-testid="inspector-chips">
-              {chips.length === 0 && <span className="text-secondary">No tools resolved.</span>}
-              {chips.map((c) => <span key={c.name} className={`tag chip chip--${c.state.replace(' ', '-')}`} data-tool={c.name} data-state={c.state}>{c.name} <span className="chip__state">{c.state}</span></span>)}
-            </div>
+          </section>
+          <div className="inspector__tools inspector__section" aria-label="Tools">
+            <span className="card-kicker">Tools{chips.length > 0 && <span className="inspector__count mono"> {chips.filter((c) => c.state !== 'not used').length} of {chips.length} used</span>}</span>
+            {chips.length === 0 && <span className="text-secondary">No tools resolved.</span>}
+            {/*
+              * PD-SHELL-017 clause 4 with REQ-MONITOR-062: the tools in use and used are named on one line, and the whole
+              * granted set is one strip in its own order behind a disclosure. A chip never moves when its state changes —
+              * the first build of the clause sorted the used chips out of the strip, which the requirement forbids.
+              */}
+            {chips.length > 0 && (
+              <div className="inspector__used mono" data-testid="inspector-used">
+                {chips.filter((c) => c.state !== 'not used').length === 0 ? '—' : chips.filter((c) => c.state !== 'not used').map((c, i) => <span key={c.name} className={`inspector__used-name${c.state === 'active' ? ' is-active' : ''}`} data-state={c.state}>{i > 0 ? ' · ' : ''}{c.name}</span>)}
+              </div>
+            )}
+            {chips.length > 0 && (
+              <details className="inspector__unused" data-testid="inspector-all-tools">
+                <summary>All {chips.length} tools</summary>
+                <div className="chips" data-testid="inspector-chips">
+                  {chips.map((c) => <span key={c.name} className={`tag chip chip--${c.state.replace(' ', '-')}`} data-tool={c.name} data-state={c.state}>{c.name} <span className="chip__state">{c.state}</span></span>)}
+                </div>
+              </details>
+            )}
             {shown.mcpServers.map((srv) => (
               <div key={srv.name} className="inspector__mcp" role="group" aria-label={`MCP server ${srv.name}`} data-mcp-server={srv.name} data-fate={srv.fate}>
                 <span className="card-kicker">MCP server {srv.name} <span className="text-secondary">· {srv.transport} · {srv.origin} · {mcpFateText(srv)}</span></span>
@@ -182,17 +214,11 @@ export function Inspector(props: InspectorProps) {
               </div>
             ))}
           </div>
-          <div className="inspector__artifacts" aria-label="Artifacts" data-testid="inspector-artifacts" data-produced={links.produced.length} data-received={links.received.length}>
+          <div className="inspector__artifacts inspector__section" aria-label="Artifacts" data-testid="inspector-artifacts" data-produced={links.produced.length} data-received={links.received.length}>
             <span className="card-kicker">Artifacts</span>
             <AgentArtifactLinks produced={links.produced} received={links.received} empty={NO_ARTIFACTS} onOpen={onOpenArtifact} testId="inspector-artifacts" />
           </div>
-          <div className="inspector__cascade" data-testid="inspector-cascade" aria-live="polite">{cascadeNote(cascade)}</div>
           {error && <div className="composer__error" role="alert">{error}</div>}
-          <div className="inspector__actions">
-            <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.steer || !runActive} title={enablement.steer && runActive ? `Steer ${shown.name} through its persona window` : 'Steer is enabled while the agent is running or waiting.'} onClick={() => onSteer(shown)}>Steer</DesignButton>
-            <DesignButton type="button" className="btn btn-danger btn-compact" data-testid="inspector-cancel" disabled={!cancellable} title={cancellable ? `Cancel ${shown.name}` : cancelUnavailableReason(shown)} onClick={() => onCancel(shown, cascade.length)}>Cancel</DesignButton>
-            <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.popOut} onClick={() => onPopOut(shown)}>Pop out</DesignButton>
-          </div>
         </div>
       ) : (
         <div className="inspector__body inspector__body--empty" data-testid="inspector-empty">
@@ -203,6 +229,19 @@ export function Inspector(props: InspectorProps) {
             <DesignButton type="button" className="btn btn-secondary btn-compact" disabled>Steer</DesignButton>
             <DesignButton type="button" className="btn btn-danger btn-compact" disabled>Cancel</DesignButton>
             <DesignButton type="button" className="btn btn-secondary btn-compact" disabled>Pop out</DesignButton>
+          </div>
+        </div>
+      )}
+      </div>
+      {shown && (
+        <div className="inspector__foot">
+          {/* The cascade note stands with the act it is about (the first review of revision 2: it was stranded under Artifacts). */}
+          <div className="inspector__cascade" data-testid="inspector-cascade" aria-live="polite">{cascadeNote(cascade)}</div>
+          <div className="inspector__actions">
+          <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.steer || !runActive} title={enablement.steer && runActive ? `Steer ${shown.name} through its persona window` : 'Steer is enabled while the agent is running or waiting.'} onClick={() => onSteer(shown)}>Steer</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.popOut} onClick={() => onPopOut(shown)}>Pop out</DesignButton>
+          <span className="inspector__foot-gap" />
+          <DesignButton type="button" className="btn btn-danger btn-compact" data-testid="inspector-cancel" disabled={!cancellable} title={cancellable ? `Cancel ${shown.name}` : cancelUnavailableReason(shown)} onClick={() => onCancel(shown, cascade.length)}>Cancel</DesignButton>
           </div>
         </div>
       )}

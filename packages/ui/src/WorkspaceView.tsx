@@ -10,7 +10,7 @@ import {
   pausePendingAfter, REASONING_LEVELS, runStateOf, sendRefusal,
   type DraftWriteOutcome, type HistoryWalk, type PauseScope, type RunState,
 } from './composer.js';
-import { RunHeader } from './RunHeader.js';
+import { RunCompress, RunHeader, RunSwitches } from './RunHeader.js';
 import { annotatedModelOptions } from './model-options.js';
 import { NoticeBanner } from './Notice.js';
 import { useCommandContext } from './AppShell.js';
@@ -37,7 +37,7 @@ import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
 import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
-import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea, type SearchableOption } from './design-system/index.js';
+import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea, layoutContractAttributes, type SearchableOption, type UiLayoutContract } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
 // root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
@@ -188,6 +188,9 @@ export interface WorkspaceViewProps {
   /** Part AB — REQ-CHAT-010 / REQ-SHELL-069: the transcript/composer divider, persisted per user under `panels/workspace/state`. */
   readonly composerHeight?: number | undefined;
   readonly onComposerHeight?: ((sizes: readonly [number, number]) => void) | undefined;
+  /** PD-SHELL-017 revision 2 / REQ-SHELL-069: the Run panel's and the inspector's widths as stored per user, 0 for a folded one; and the change, to be stored. */
+  readonly panelWidths?: readonly [number, number] | undefined;
+  readonly onPanelWidths?: ((widths: readonly [number, number]) => void) | undefined;
   /** Part AC — REQ-CHAT-098/103 (098 superseded by PD-CHAT-002): clicking a trailer row opens the question stepper or raises the approval dialog. */
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
   /** PD-CHAT-002: submission and cancellation callbacks for the docked question form. */
@@ -303,6 +306,20 @@ export function adoptDraft(current: string, loaded: string | null, draft: string
 
 const NARROW_QUERY = '(max-width: 1179px)';
 
+/** PD-SHELL-017 revision 2: the widths the two panels are stored under (`--rt-run-panel-width`, `--rt-inspector-width`); a stored 0 is a folded panel. */
+export const RUN_PANEL_WIDTH = 280;
+export const INSPECTOR_WIDTH = 320;
+/**
+ * PD-SHELL-017 revision 2, clause 5: below this window width the two panels do not both stand beside the work — with
+ * both docked the work column fell to 480 px at 1180 (the first review of the revision). The Run panel docks and the
+ * inspector is the drawer on its side, until the window is this wide.
+ */
+export const BOTH_DOCKED_FROM = 1400;
+const BOTH_DOCKED_QUERY = `(max-width: ${BOTH_DOCKED_FROM - 1}px)`;
+
+/** PD-SHELL-017: the Run panel never scrolls sideways; the live-run controls at its head are held inside it (`RunHeader.tsx`). */
+const RUN_PANEL_LAYOUT = { id: 'run-panel', relations: [{ kind: 'viewport-scroll', axis: 'x', expected: false }] } satisfies UiLayoutContract;
+
 /**
  * REQ-MONITOR-051: below 1180 px the inspector and the agents panel are overlay drawers, one open at a time.
  *
@@ -317,8 +334,8 @@ const NARROW_QUERY = '(max-width: 1179px)';
  * The list is now made once, and the effect RE-READS it when it attaches. The second half is what makes a missed
  * event survivable: state that is only ever written by an event cannot recover from one that never arrives.
  */
-function useNarrow(): boolean {
-  const query = useMemo(() => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(NARROW_QUERY) : null), []);
+function useNarrow(media: string = NARROW_QUERY): boolean {
+  const query = useMemo(() => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(media) : null), [media]);
   const [narrow, setNarrow] = useState(query?.matches ?? false);
   useEffect(() => {
     if (!query) return;
@@ -756,7 +773,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -1268,7 +1285,20 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   }, [agents]);
   // REQ-MONITOR-051: below 1180 px the agents panel and the inspector are overlay drawers, mutually exclusive; choosing an agent opens the inspector's.
   const narrow = useNarrow();
-  const [drawer, setDrawer] = useState<'agents' | 'plan' | 'inspector' | null>(null);
+  const [drawer, setDrawer] = useState<'run' | 'inspector' | null>(null);
+  // PD-SHELL-017 revision 2: at a wide window each of the two panels is shown or folded by its toggle in the band, and
+  // what the reader chose is remembered per user with the view's other pane sizes (REQ-SHELL-069): a width of 0 is a
+  // folded panel. Below 1180 px each is a drawer, one open at a time, and nothing is remembered about a drawer.
+  const [wide, setWide] = useState<readonly [boolean, boolean]>(() => [(panelWidths?.[0] ?? RUN_PANEL_WIDTH) > 0, (panelWidths?.[1] ?? INSPECTOR_WIDTH) > 0]);
+  const [seenPanels, setSeenPanels] = useState(panelWidths);
+  if (seenPanels !== panelWidths) { setSeenPanels(panelWidths); if (panelWidths !== undefined) setWide([panelWidths[0] > 0, panelWidths[1] > 0]); }
+  const tight = useNarrow(BOTH_DOCKED_QUERY);
+  const inspectorDrawer = narrow || tight;
+  const runShown = narrow ? drawer === 'run' : wide[0];
+  const inspectorShown = inspectorDrawer ? drawer === 'inspector' : wide[1];
+  const setPanels = (next: readonly [boolean, boolean]) => { setWide(next); onPanelWidths?.([next[0] ? RUN_PANEL_WIDTH : 0, next[1] ? INSPECTOR_WIDTH : 0]); };
+  const toggleRun = () => { if (narrow) setDrawer(drawer === 'run' ? null : 'run'); else setPanels([!wide[0], wide[1]]); };
+  const toggleInspector = () => { if (inspectorDrawer) setDrawer(drawer === 'inspector' ? null : 'inspector'); else setPanels([wide[0], !wide[1]]); };
   // REQ-SHELL-049/050 (Part W): Ctrl+Return is the window-wide fallback submit — the registration says whether the send control is enabled.
   const registerComposer = useShellState((st) => st.registerComposer);
   const registerOverlay = useShellState((st) => st.registerOverlay);
@@ -1292,16 +1322,16 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   // REQ-SHELL-055 (2): window-level Escape on this view closes both compact overlay drawers; nothing to close is nothing done.
   const drawerOpen = drawer !== null;
   useEffect(() => {
-    registerOverlay('drawers', narrow ? () => { if (!drawerOpen) return false; setDrawer(null); return true; } : null);
+    registerOverlay('drawers', inspectorDrawer ? () => { if (!drawerOpen) return false; setDrawer(null); return true; } : null);
     return () => registerOverlay('drawers', null);
-  }, [registerOverlay, narrow, drawerOpen]);
+  }, [registerOverlay, inspectorDrawer, drawerOpen]);
   // Part AN — REQ-CHAT-002 / REQ-SHELL-055 (1): the slash popup is the FIRST thing window-level Escape dismisses.
   useEffect(() => {
     registerOverlay('slashPopup', popupOpen ? () => { setDismissedFor(text); return true; } : null);
     return () => registerOverlay('slashPopup', null);
   }, [registerOverlay, popupOpen, text]);
   const [seenSelection, setSeenSelection] = useState(selectedAgent);
-  if (seenSelection !== selectedAgent) { setSeenSelection(selectedAgent); if (narrow && selectedAgent !== null) setDrawer('inspector'); }
+  if (seenSelection !== selectedAgent) { setSeenSelection(selectedAgent); if (inspectorDrawer && selectedAgent !== null) setDrawer('inspector'); }
   const inspectorCancel = (agent: AgentRecord) => {
     if (agent.id === RUN_AGENT_ID) { if (onCancelRun) setConfirming('cancelRun'); return; }
     setConfirming({ agent: { id: agent.id, name: agent.name } });
@@ -1311,8 +1341,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
       compressionThresholdPercent={compressionThresholdPercent} runActive={runActive} resting={resting} nowIso={nowIso}
       onSteer={(agent) => { if (onOpenPersona) onOpenPersona(agent, true); else setSteering({ id: agent.id, name: agent.name }); }}
       onCancel={inspectorCancel} onPopOut={(agent) => onOpenPersona?.(agent, false)} onSetModel={onSetModel} onSetReasoning={onSetReasoning}
-      drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined}
       // REQ-MONITOR-052 / REQ-LIBRARY-102 (live-run finding K1): a link deep-links to the Library, which opens the artifact.
+      drawer={inspectorDrawer} onClose={toggleInspector}
       onOpenArtifact={(id) => useShellState.getState().openLibrary('artifacts', id)} />
   );
   /*
@@ -1409,57 +1439,51 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     else if (e.key === 'End') { e.preventDefault(); commitHeight(COMPOSER_MIN_HEIGHT); }
   };
   return (
-    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--with-sidebar${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''} data-plan-gate={planGate ? '1' : ''} data-plan-gate-collapsed={planGate && planCollapsed ? '1' : ''}>
-      {narrow && (
-        <div className="workspace__drawer-bar" aria-label="Panels">
-          {agents.length > 0 && <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</DesignButton>}
-          <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'plan' ? ' is-active' : ''}`} aria-pressed={drawer === 'plan'} onClick={() => setDrawer(drawer === 'plan' ? null : 'plan')}>Task plan</DesignButton>
-          <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'inspector' ? ' is-active' : ''}`} aria-pressed={drawer === 'inspector'} onClick={() => setDrawer(drawer === 'inspector' ? null : 'inspector')}>Inspector</DesignButton>
-        </div>
-      )}
-      {(!narrow || drawer === 'agents' || drawer === 'plan') && (
-        <aside className={`agents${narrow ? ' agents--drawer' : ''}`} aria-label="Delegation">
-          {(!narrow || drawer === 'agents') && <><div className="agents__header">
-            <span className="agents__title">Agents</span>
-            <span className="agents__count mono" data-testid="agents-count">{agents.length} agent{agents.length === 1 ? '' : 's'}</span>
-            <div className="agents__spacer" />
-            {/* A paused agent is not live (PD-ORCH-005 clause 13, OQ-100): it offers no Steer, as the inspector offers none. */}
-            {selected && steerOffered(selected, runActive) && onSteer && (
-              <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
-            )}
-            {/* PD-ORCH-005 clause 16: a paused child is cancellable while its session rests; a live agent while its run is active. */}
-            {selected && cancelOffered(selected, runActive, resting) && onCancelAgent && (
-              <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name } })}>Cancel {selected.name}</DesignButton>
-            )}
-          </div>
-          <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
-          </>}
-          {(!narrow || drawer === 'plan') && <TodoPane plan={todoPlan} onEdit={onEditTodo} onError={setError} />}
-          {/*
-            * Part AS — REQ-WORKSPACE-113's Project section, one of exactly two places manual re-initialization is
-            * exposed (the other is Settings › Project) and both opening the same dialog. It never triggers
-            * automatically, and it is HIDDEN when everything is resolved or nothing applies: a section offering
-            * nothing to do is worse than no section.
-            */}
-          {projectSection !== null && !projectSection.hidden && onOpenProjectSetup && (
-            <div className="agents__project" data-testid="project-section">
-              <div className="agents__header"><span className="agents__title">Project setup</span></div>
-              <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={projectSection.disabled} title={projectSection.hint} onClick={onOpenProjectSetup} data-action="project-initialize">{projectSection.label}</DesignButton>
-              {/* REQ-WORKSPACE-113's hint, word for word; its failure sentence is said as a failure is (REQ-SHELL-116, REQ-NOTIFY-005): the danger rule and a glyph beside the words. */}
-              <p className="text-tertiary settings__hint" data-testid="project-section-hint">
-                {projectSection.status}
-                {projectSection.failure !== null && <>{' '}<span className="agents__project-failure" data-testid="project-section-failure"><i className="ph ph-warning-circle" aria-hidden="true" />{projectSection.failure}</span></>}
-              </p>
-            </div>
-          )}
-        </aside>
-      )}
+    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--run-panel${narrow ? ' workspace--narrow' : ''}${tight && !narrow ? ' workspace--tight' : ''}`} data-run-panel={runShown ? 'open' : 'closed'} data-inspector={inspectorShown ? 'open' : 'closed'} data-drawer={drawer ?? ''} data-plan-gate={planGate ? '1' : ''} data-plan-gate-collapsed={planGate && planCollapsed ? '1' : ''}>
       {/*
         * Part AB's run header, extracted to `RunHeader.tsx` by Part AN (no behaviour change): REQ-CHAT-008's run-state
         * label, REQ-CHAT-158's timing indicator, and REQ-CHAT-078's live-run selectors, which are the run header's own
         * controls and follow the OPPOSITE enablement rule to the composer's chips (REQ-CHAT-006's closing sentence).
         */}
-      <RunHeader runState={runState} session={session} runActive={runActive} stepStartedAt={stepStartedAt} models={models} onSetModel={onSetModel} onSetReasoning={onSetReasoning} onError={setError} />
+      <RunHeader runState={runState} session={session} runActive={runActive} stepStartedAt={stepStartedAt}
+        /* PD-SHELL-017 revision 2: the Run panel's toggle leads the band, on the side the panel stands; folded, it says how many agents the run holds. */
+        lead={(
+          <DesignButton type="button" className={`btn btn-ghost btn-compact panel-toggle run-panel-toggle${runShown ? ' is-active' : ''}`} aria-pressed={runShown} aria-label="Run panel" title={runShown ? 'Hide the run panel' : 'Show the run panel: the agents and the task plan'} data-testid="run-panel-toggle" onClick={toggleRun}>
+            <i className="ph ph-sidebar-simple" aria-hidden="true" />{!runShown && agents.length > 0 && <span className="mono">{agents.length} agent{agents.length === 1 ? '' : 's'}</span>}
+          </DesignButton>
+        )}>
+        {intentStatusText(session?.intent ?? null) && (
+          <div className="intent-status mono" role="status" aria-live="polite" data-phase={session?.intent?.phase} title={intentStatusText(session?.intent ?? null) ?? undefined}>{intentStatusText(session?.intent ?? null)}</div>
+        )}
+        <div className="transcript__toolbar" role="toolbar" aria-label="Transcript actions">
+          {/* The controls' own condition is the toolbar's as it was: the renderer always passes `onOpenStash`. */}
+          {(onOpenStash || agents.length > 0) && <>
+            {onOpenStash && (
+              <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
+                data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}><i className="ph ph-push-pin" aria-hidden="true" /><span className="tool-label">{applyStashLabel(stashCount)}</span>{stashCount > 0 && <span className="tool-count mono" aria-hidden="true">{stashCount}</span>}</DesignButton>
+            )}
+            {/* Part AO — REQ-CHAT-073/082/083/084: "Clear transcript" beside "Apply stash", and the binding of the chat-controls host
+              * (`slash/host.ts`) from this closure; `/compress`, `/clear` and the prompt-file commands (REQ-CHAT-160) register on
+              * the catalogue's registry here. The toolbar's own condition is not widened: the renderer always passes `onOpenStash`. */}
+            <ClearTranscriptControl runState={runState} rowCount={rows.length} control={slash?.control} onAcknowledge={onAcknowledge} registry={registry} configKey={personas} skillsRevision={slash?.skillsRevision} loadSkillFile={slash?.loadSkillFile} listSkills={slash?.listSkills} onError={setError} />
+            {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
+            {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
+            {/* REQ-CHAT-074 "opened by toolbar button or Ctrl+F": the toolbar's search control runs the registry's "Search
+              * transcript" (`openSearch`, REQ-SHELL-048's one vocabulary), the command Ctrl+F, the palette and `/search` run.
+              * Drawn from the mockup's WORKSPACE → transcript column, where the magnifying glass sits before the terminal
+              * control as a bare icon in the tertiary text colour; its tooltip and accessible description carry the
+              * platform-formatted chord (REQ-SHELL-058). Until 2026-10-14 the toolbar had no search control
+              * (`docs/archive/defects/the-transcript-has-no-toolbar-control-for-search.md`). */}
+            <TranscriptSearchControl onOpen={openSearch} />
+            {/* Part AL2 — REQ-SHELL-080/108: the toolbar's terminal control with its counts, always enabled; the counts and the opener come from the renderer's terminal host (`terminal/host.tsx`), so this view's props do not change. The toolbar renders whenever `onOpenStash` is given, which the product always gives, so the control is reachable from a cold start; the condition above is not widened. */}
+            <TerminalToolbarControl />
+          </>}
+          {/* PD-SHELL-017 revision 2: the inspector's toggle ends the band, on the side the inspector stands. */}
+          <DesignButton type="button" className={`btn btn-ghost btn-compact panel-toggle panel-toggle--end${inspectorShown ? ' is-active' : ''}`} aria-pressed={inspectorShown} aria-label="Inspector" title={inspectorShown ? 'Hide the inspector' : 'Show the inspector'} data-testid="inspector-toggle" onClick={toggleInspector}>
+            <i className="ph ph-sidebar-simple" aria-hidden="true" />
+          </DesignButton>
+        </div>
+      </RunHeader>
       {/* REQ-NOTIFY-071 / ADR-0048: the re-authentication prompt in its own row beside the continuing run (OQ-181) — in flow,
         * so it overlays nothing; zero high while none is open. */}
       {reauthPrompt}
@@ -1480,32 +1504,6 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
       )}
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
         {/* REQ-LIBRARY-140 (Part X): the transcript toolbar and, so far, its one control — the stash opener with its live count. */}
-        {(onOpenStash || agents.length > 0) && (
-          <div className="transcript__toolbar" role="toolbar" aria-label="Transcript actions">
-            {onOpenStash && (
-              <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
-                data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}><i className="ph ph-push-pin" aria-hidden="true" />{applyStashLabel(stashCount)}</DesignButton>
-            )}
-            {/* Part AO — REQ-CHAT-073/082/083/084: "Clear transcript" beside "Apply stash", and the binding of the chat-controls host
-              * (`slash/host.ts`) from this closure; `/compress`, `/clear` and the prompt-file commands (REQ-CHAT-160) register on
-              * the catalogue's registry here. The toolbar's own condition is not widened: the renderer always passes `onOpenStash`. */}
-            <ClearTranscriptControl runState={runState} rowCount={rows.length} control={slash?.control} onAcknowledge={onAcknowledge} registry={registry} configKey={personas} skillsRevision={slash?.skillsRevision} loadSkillFile={slash?.loadSkillFile} listSkills={slash?.listSkills} onError={setError} />
-            {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
-            {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
-            {/* REQ-CHAT-074 "opened by toolbar button or Ctrl+F": the toolbar's search control runs the registry's "Search
-              * transcript" (`openSearch`, REQ-SHELL-048's one vocabulary), the command Ctrl+F, the palette and `/search` run.
-              * Drawn from the mockup's WORKSPACE → transcript column, where the magnifying glass sits before the terminal
-              * control as a bare icon in the tertiary text colour; its tooltip and accessible description carry the
-              * platform-formatted chord (REQ-SHELL-058). Until 2026-10-14 the toolbar had no search control
-              * (`docs/archive/defects/the-transcript-has-no-toolbar-control-for-search.md`). */}
-            <TranscriptSearchControl onOpen={openSearch} />
-            {/* Part AL2 — REQ-SHELL-080/108: the toolbar's terminal control with its counts, always enabled; the counts and the opener come from the renderer's terminal host (`terminal/host.tsx`), so this view's props do not change. The toolbar renders whenever `onOpenStash` is given, which the product always gives, so the control is reachable from a cold start; the condition above is not widened. */}
-            <TerminalToolbarControl />
-          </div>
-        )}
-        {intentStatusText(session?.intent ?? null) && (
-          <div className="intent-status mono" role="status" aria-live="polite" data-phase={session?.intent?.phase}>{intentStatusText(session?.intent ?? null)}</div>
-        )}
         {session?.wait && runActive && (
           <WaitHeader key={`${session.wait.agent}:${session.wait.attempt}:${session.wait.provider}:${session.wait.model}:${session.wait.rejection ?? ''}`} wait={session.wait} models={models} onSetModel={onSetModel} onKeepWaiting={onKeepWaiting} onCancel={onCancelRun ? () => setConfirming('cancelRun') : undefined} />
         )}
@@ -1547,7 +1545,63 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           />
         )}
       </div>
-      {(!narrow || drawer === 'inspector') && inspector}
+      {/*
+        * PD-SHELL-017: the Run panel — one column for everything the run is: its live switches, its agents, the agent the
+        * reader is looking at, its task plan and the project setup section. It stands on the right of the transcript; below
+        * 1180 px (REQ-MONITOR-051 as the directive narrows it) it is an overlay drawer on the left behind the band's first toggle (revision 2: the inspector is its own panel on the right).
+        */}
+      {/* Below 1180 px the drawer stands over the work: a press on what it covers closes it, as Escape does. */}
+      {inspectorDrawer && drawer !== null && <div className="run-panel__scrim" aria-hidden="true" onClick={() => setDrawer(null)} />}
+      {inspectorShown && inspector}
+      {runShown && (
+        <aside className={`run-panel${narrow ? ' run-panel--drawer' : ''}`} aria-label="Run panel" data-testid="run-panel" {...layoutContractAttributes(RUN_PANEL_LAYOUT)}>
+          <div className="run-panel__head">
+            <span className="run-panel__title">Run</span>
+            <RunCompress runState={runState} runActive={runActive} />
+            {/* REQ-SHELL-055 (2): the drawer also closes on Escape; this is the same act for a pointer. */}
+            {narrow && <DesignButton type="button" className="btn btn-ghost btn-compact run-panel__close" aria-label="Close the run panel" onClick={() => setDrawer(null)}><i className="ph ph-x" aria-hidden="true" /></DesignButton>}
+          </div>
+          <div className="run-panel__switches">
+            <RunSwitches runState={runState} session={session} runActive={runActive} models={models} onSetModel={onSetModel} onSetReasoning={onSetReasoning} onError={setError} />
+          </div>
+          <section className="agents" aria-label="Delegation">
+            <div className="agents__header">
+              <span className="agents__title">Agents</span>
+              <span className="agents__count mono" data-testid="agents-count" data-count={agents.length}>{agents.length} agent{agents.length === 1 ? '' : 's'}</span>
+            </div>
+            <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
+            {/* PD-SHELL-017: the selected agent's two acts stand under the tree they act on, the cancel in the tone a cancel carries. */}
+            <div className="agents__acts">
+            {/* A paused agent is not live (PD-ORCH-005 clause 13, OQ-100): it offers no Steer, as the inspector offers none. */}
+            {selected && steerOffered(selected, runActive) && onSteer && (
+              <DesignButton type="button" className="btn btn-secondary btn-compact agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
+            )}
+            {/* PD-ORCH-005 clause 16: a paused child is cancellable while its session rests; a live agent while its run is active. */}
+            {selected && cancelOffered(selected, runActive, resting) && onCancelAgent && (
+              <DesignButton type="button" className="btn btn-danger btn-compact agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name } })}>Cancel {selected.name}</DesignButton>
+            )}
+            </div>
+          </section>
+          <TodoPane plan={todoPlan} onEdit={onEditTodo} onError={setError} />
+          {/*
+            * Part AS — REQ-WORKSPACE-113's Project section, one of exactly two places manual re-initialization is
+            * exposed (the other is Settings › Project) and both opening the same dialog. It never triggers
+            * automatically, and it is HIDDEN when everything is resolved or nothing applies: a section offering
+            * nothing to do is worse than no section.
+            */}
+          {projectSection !== null && !projectSection.hidden && onOpenProjectSetup && (
+            <div className="agents__project" data-testid="project-section">
+              <div className="agents__header"><span className="agents__title">Project setup</span></div>
+              <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={projectSection.disabled} title={projectSection.hint} onClick={onOpenProjectSetup} data-action="project-initialize">{projectSection.label}</DesignButton>
+              {/* REQ-WORKSPACE-113's hint, word for word; its failure sentence is said as a failure is (REQ-SHELL-116, REQ-NOTIFY-005): the danger rule and a glyph beside the words. */}
+              <p className="text-tertiary settings__hint" data-testid="project-section-hint">
+                {projectSection.status}
+                {projectSection.failure !== null && <>{' '}<span className="agents__project-failure" data-testid="project-section-failure"><i className="ph ph-warning-circle" aria-hidden="true" />{projectSection.failure}</span></>}
+              </p>
+            </div>
+          )}
+        </aside>
+      )}
       <QueuePanel prompts={queued} onEdit={onEditQueued} onRemove={onRemoveQueued} onError={setError} />
       {/* REQ-CHAT-010: the divider between transcript and composer — draggable, keyboard-reachable, position persisted. */}
       <div className="composer__divider" role="separator" aria-orientation="horizontal" aria-label="Resize the composer" tabIndex={0}
@@ -1589,6 +1643,19 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           * surface (REQ-CHAT-010 fixes nothing about the visible row count); the strip, not a second chip
           * row, is what the saved height no longer has to pay for.
           */}
+        {/*
+          * PD-SHELL-017: what the run is waiting on the reader for stands directly above the field, where the answer is
+          * typed, and does not scroll away with the transcript. It is the first pending approval's trailer
+          * (REQ-CHAT-051), in the trailer's own words, and its one control opens what the trailer row opens.
+          */}
+        {pending[0] && onOpenTrailer && (
+          <div className="composer__ask" role="status" data-testid="composer-ask" data-request-id={pending[0].request_id}>
+            <i className="ph ph-shield-warning" aria-hidden="true" />
+            <span className="composer__ask-text"><span className="composer__ask-who">{pending[0].agent_id || pending[0].persona}</span> Approval needed — <span className="mono">{pending[0].command !== '' ? pending[0].command : pending[0].tool_name}</span></span>
+            {pending.length > 1 && <span className="composer__ask-more mono">+{pending.length - 1}</span>}
+            <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => onOpenTrailer({ sort: 'approval', requestId: pending[0]!.request_id, role: pending[0]!.agent_id || pending[0]!.persona, text: `Approval needed — ${pending[0]!.command !== '' ? pending[0]!.command : pending[0]!.tool_name}`, approval: pending[0]! })}>Review</DesignButton>
+          </div>
+        )}
         <div ref={dockRef} className="composer__dock" data-testid="composer-dock">
         <div className="slash-field" style={roleStyle} data-testid="slash-field" data-token-state={tokenState ?? ''}>
           <DesignTextArea

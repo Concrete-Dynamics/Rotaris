@@ -221,7 +221,7 @@ export function ScopeToggle({ scope, agent, nowIso, onScope }: { scope: 'all' | 
         data-testid="scope-task"
         onClick={() => onScope('task')}
       >{label}</DesignButton>
-      <span className="row__scope-detail text-secondary mono" data-testid="scope-detail">{detail}</span>
+      <span className="row__scope-detail text-secondary mono" data-testid="scope-detail" data-empty={agent === null ? '1' : '0'}>{detail}</span>
     </div>
   );
 }

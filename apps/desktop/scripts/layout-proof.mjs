@@ -98,7 +98,9 @@ const MEASURE = `JSON.stringify((() => {
     grid: box(w),
     cols: tracks(s.gridTemplateColumns), rows: tracks(s.gridTemplateRows),
     areaCols: areaRows.length ? areaRows[0].length : 0, areaRows: areaRows.length, names,
-    drawerBar: !!document.querySelector('.workspace__drawer-bar'),
+    // PD-SHELL-017: below 1180 px the Run panel and the inspector are drawers behind the band's two toggles; the three-button drawer bar is gone.
+    panelToggle: !!document.querySelector('[data-testid="run-panel-toggle"]'),
+    panelShown: !!document.querySelector('.run-panel'),
     kids,
     startRun: startRun ? box(startRun) : null,
   };
@@ -157,9 +159,13 @@ try {
   await d.screenshot(join(output, 'wide-1400x900.png'));
   await structure('1400×900', wide);
   await containment('1400×900', wide);
-  check('1400×900: the agents column stands beside the transcript',
-    wide.kids.some((k) => k.cls.startsWith('agents') && k.h > wide.grid.h * 0.8),
-    (() => { const a = wide.kids.find((k) => k.cls.startsWith('agents')); return a ? `.agents is ${a.w}×${a.h} in a grid ${wide.grid.w}×${wide.grid.h}` : '.agents is absent'; })());
+  // PD-SHELL-017 revision 2: the Run panel stands on the transcript's left, holding the agents and the task plan, and the inspector on its right.
+  check('1400×900: the inspector stands beside the transcript too (PD-SHELL-017 revision 2)',
+    wide.kids.some((k) => k.cls.startsWith('inspector') && k.h > wide.grid.h * 0.8),
+    (() => { const a = wide.kids.find((k) => k.cls.startsWith('inspector')); return a ? `.inspector is ${a.w}×${a.h} in a grid ${wide.grid.w}×${wide.grid.h}` : '.inspector is absent'; })());
+  check('1400×900: the Run panel stands beside the transcript (PD-SHELL-017)',
+    wide.kids.some((k) => k.cls.startsWith('run-panel') && k.h > wide.grid.h * 0.8),
+    (() => { const a = wide.kids.find((k) => k.cls.startsWith('run-panel')); return a ? `.run-panel is ${a.w}×${a.h} in a grid ${wide.grid.w}×${wide.grid.h}` : '.run-panel is absent'; })());
 
   // ── 2. REQ-MONITOR-051's floor. Below 1180 the drawer layout is what the requirement asks for.
   await d.resize(1000, 680);
@@ -167,8 +173,8 @@ try {
   const min = await measure();
   await d.screenshot(join(output, 'minimum-1000x680.png'));
   check('1000×680: the narrow layout engages after a live resize (REQ-MONITOR-051)',
-    min.cls.includes('workspace--narrow'),
-    `class "${min.cls}", drawer bar ${min.drawerBar ? 'present' : 'absent'}`);
+    min.cls.includes('workspace--narrow') && min.panelToggle && !min.panelShown,
+    `class "${min.cls}", the panel's toggle ${min.panelToggle ? 'present' : 'absent'}, the panel ${min.panelShown ? 'shown' : 'folded'}`);
   await structure('1000×680', min);
   await containment('1000×680', min);
   const rowSum = min.rows.reduce((a, t) => a + parseFloat(t), 0);
@@ -263,9 +269,9 @@ try {
   await d.waitFor('.todo-task__text', { timeoutMs: 10_000 });
   await sleep(600);
   const plan = JSON.parse(await d.eval(`JSON.stringify((() => {
-    const agents = document.querySelector('.agents');
+    const agents = document.querySelector('.run-panel');
     const text = [...document.querySelectorAll('.todo-task__text')].find((b) => (b.textContent || '').includes(${JSON.stringify(TOKEN)}));
-    if (!agents || !text) return { missing: !agents ? '.agents' : 'the task' };
+    if (!agents || !text) return { missing: !agents ? '.run-panel' : 'the task' };
     const a = agents.getBoundingClientRect();
     const t = text.getBoundingClientRect();
     const cs = getComputedStyle(agents);
@@ -281,7 +287,7 @@ try {
     plan.missing ? `${plan.missing} was not found` : `text box [${plan.text.left}..${plan.text.right}] ${plan.text.w}×${plan.text.h}, its content ${plan.text.scrollWidth} in ${plan.text.clientWidth}; the column's content edge at ${plan.agents.contentRight}`);
   check('the sidebar needs no horizontal scroll to show it (REQ-SHELL-022)',
     !plan.missing && plan.agents.scrollWidth <= plan.agents.clientWidth,
-    plan.missing ? `${plan.missing} was not found` : `.agents scrollWidth ${plan.agents.scrollWidth} against clientWidth ${plan.agents.clientWidth}`);
+    plan.missing ? `${plan.missing} was not found` : `.run-panel scrollWidth ${plan.agents.scrollWidth} against clientWidth ${plan.agents.clientWidth}`);
 
   /**
    * ── 7. The strip's path link and branch item under REQ-WORKSPACE-149 rule 2, at 1180 px and again at 1400 px.

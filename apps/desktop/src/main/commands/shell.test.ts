@@ -161,11 +161,15 @@ describe('prefs.get reads a pane layout against its own view\'s pane count — R
     return { store, get };
   };
 
-  it('answers every view\'s stored two-pane layout today, each view declaring two panes', async () => {
-    expect(declared).toEqual({ overview: 2, git: 2, library: 2, workspace: 2 });
+  it('answers every view\'s stored layout at the pane count it declares: two, and four for the Workspace (PD-SHELL-017 revision 2)', async () => {
+    expect(declared).toEqual({ overview: 2, git: 2, library: 2, workspace: 4 });
     const { store, get } = withStore();
-    for (const view of PANE_LAYOUT_VIEWS) await store.writeLayout(view, { version: 1, panes: 2, sizes: [600, 300] });
-    for (const view of PANE_LAYOUT_VIEWS) expect(await get(view)).toEqual({ version: 1, panes: 2, sizes: [600, 300] });
+    const layoutOf = (view: (typeof PANE_LAYOUT_VIEWS)[number]) => ({ version: 1 as const, panes: declared[view] ?? 2, sizes: [600, 300, 280, 0].slice(0, declared[view] ?? 2) });
+    for (const view of PANE_LAYOUT_VIEWS) await store.writeLayout(view, layoutOf(view));
+    for (const view of PANE_LAYOUT_VIEWS) expect(await get(view)).toEqual(layoutOf(view));
+    // A Workspace layout stored before the directive, with two panes, restores the defaults (REQ-SHELL-069).
+    await store.writeLayout('workspace', { version: 1, panes: 2, sizes: [600, 300] });
+    expect(await get('workspace')).toBeUndefined();
   });
 
   it('a view that gains a pane applies a layout stored for its new count and restores defaults over one stored for the old', async () => {

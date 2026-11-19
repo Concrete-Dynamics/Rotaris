@@ -133,22 +133,23 @@ describe('the re-authentication prompt overlays nothing (ADR-0048 "leaves the re
   });
 
   it('every Workspace grid template names the `reauth` row and gives it a row of its own, zero high when empty', () => {
-    const areas = [...css.matchAll(/\.workspace(?:--with-sidebar|--narrow)\s*\{[^}]*grid-template-areas:\s*([^;]+);/g)].map((m) => m[1]!);
+    const areas = [...css.matchAll(/\.workspace(?:--run-panel|--narrow)\s*\{[^}]*grid-template-areas:\s*([^;]+);/g)].map((m) => m[1]!);
     expect(areas.length).toBe(2);
     for (const a of areas) {
       const rows = [...a.matchAll(/'([^']+)'/g)].map((m) => m[1]!.trim());
       expect(rows.some((r) => r.split(/\s+/).includes('reauth'))).toBe(true);
       expect(rows.findIndex((r) => r.split(/\s+/).includes('reauth'))).toBe(rows.findIndex((r) => r.split(/\s+/).includes('runhead')) + 1);
     }
-    // Each rows template of the view: the wide ones have seven tracks and the narrow ones eight (the drawer bar), the
-    // `reauth` track `minmax(0, auto)` straight after the run header's, so the transcript's floor is sized first.
+    // Each rows template of the view has seven tracks, the `reauth` track `minmax(0, auto)` straight after the run
+    // header's, so the transcript's floor is sized first. Until PD-SHELL-017 the narrow layout had templates of its own
+    // with an eighth track, the drawer bar's; the bar is gone and the narrow layout takes the view's three.
     const templates = [...css.matchAll(/(\.workspace[^{,]*)\{[^}]*grid-template-rows:\s*([^;]+);/g)].map((m) => ({ selector: m[1]!.trim(), rows: m[2]!.trim() }));
-    expect(templates.length).toBeGreaterThanOrEqual(6);
+    expect(templates.length).toBe(3);
     for (const t of templates) {
       const tracks = t.rows.match(/minmax\([^)]*\([^)]*\)[^)]*\)|minmax\([^)]*\)|\S+/g)!;
-      const narrow = t.selector.includes('--narrow');
-      expect(tracks.length, t.selector).toBe(narrow ? 8 : 7);
-      expect(tracks[narrow ? 2 : 1], t.selector).toBe('minmax(0, auto)');
+      expect(t.selector).not.toContain('--narrow');
+      expect(tracks.length, t.selector).toBe(7);
+      expect(tracks[1], t.selector).toBe('minmax(0, auto)');
     }
   });
 

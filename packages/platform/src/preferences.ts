@@ -212,10 +212,12 @@ export type PaneLayoutView = (typeof PANE_LAYOUT_VIEWS)[number];
  * view has two panes today: the Overview's split, the Git view's two columns (REQ-GIT-076), the Library's Prompts tab
  * (REQ-LIBRARY-106) and the Workspace's transcript/composer divider (REQ-CHAT-010). A view that gains a pane changes its
  * figure here, beside the component that draws it, so a layout written for the old count is refused rather than applied.
+ * The Workspace has four since PD-SHELL-017 revision 2 (2026-11-18): the two heights, then the Run panel's and the
+ * inspector's widths, 0 for a folded panel.
  * Until 2026-10-14 main read every view against a literal 2
  * (`docs/archive/defects/the-pane-layout-read-assumes-two-panes-for-every-view.md`).
  */
-export const PANE_LAYOUT_PANES: Readonly<Record<PaneLayoutView, number>> = { overview: 2, git: 2, library: 2, workspace: 2 };
+export const PANE_LAYOUT_PANES: Readonly<Record<PaneLayoutView, number>> = { overview: 2, git: 2, library: 2, workspace: 4 };
 /** The schema-version stamp REQ-SHELL-069 fixes for every stored layout. */
 export const PANE_LAYOUT_VERSION_KEY = 'panels/version' as const;
 export function paneLayoutKeys(view: PaneLayoutView): { readonly state: `panels/${PaneLayoutView}/state`; readonly panes: `panels/${PaneLayoutView}/panes` } {

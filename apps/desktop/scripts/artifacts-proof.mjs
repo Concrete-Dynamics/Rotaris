@@ -554,7 +554,9 @@ let edited = null;
   rmSync(join(edited.directory, edited.bodyFile), { force: true });
   const r = await launch('missing-body', {
     ROTARIS_CAPTURE_RESUME: edited.sessionId,
-    ROTARIS_CAPTURE_RESIZE: '1360x980@300',
+    // 1440 wide, not the 1360 of the stages beside it: this one reads the agent inspector at rest, and below a 1400 px
+    // window the inspector is a drawer that stands closed until it is asked for (PD-SHELL-017 revision 2, clause 5).
+    ROTARIS_CAPTURE_RESIZE: '1440x980@300',
     ROTARIS_CAPTURE_VIEWS: 'library@4000',
     ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@4400`, `${PROBE_ROWS}@5000`, '[data-testid="library-artifacts-inspect"]@6000'].join(';;'),
     // Live-run finding K1 (REQ-MONITOR-049/052/060): the reopened session AT REST, in a freshly opened process, before the

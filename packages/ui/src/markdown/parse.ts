@@ -50,13 +50,44 @@ export interface Document {
 }
 
 const THEMATIC = /^ {0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/;
-const ATX = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$/;
-const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*([^`]*)$/;
+// Each pattern below meets a character class once: a run of blanks is taken by one quantifier and what follows it starts
+// on a non-blank, so no line makes the matcher try the same run two ways (CodeQL js/polynomial-redos). A group that
+// matched nothing is read as the empty string where it is used.
+const ATX_OPEN = /^ {0,3}(#{1,6})[ \t]+/;
+const blank = (ch: string | undefined): boolean => ch === ' ' || ch === '\t';
+/** An ATX heading's level and text: the closing run of `#` and the blanks around it are not part of the text. */
+function atxOf(line: string): { level: number; text: string } | null {
+  const open = ATX_OPEN.exec(line);
+  if (!open) return null;
+  let end = line.length;
+  while (end > open[0].length && blank(line[end - 1])) end -= 1;
+  while (end > open[0].length && line[end - 1] === '#') end -= 1;
+  while (end > open[0].length && blank(line[end - 1])) end -= 1;
+  return { level: open[1]!.length, text: line.slice(open[0].length, end) };
+}
+const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*([^`\t ][^`]*)?$/;
 const QUOTE = /^ {0,3}> ?(.*)$/;
-const BULLET = /^([ \t]*)([-*+])[ \t]+(.*)$/;
-const ORDERED = /^([ \t]*)(\d{1,9})[.)][ \t]+(.*)$/;
-const TASK = /^\[([ xX])\][ \t]+(.*)$/;
-const DELIMITER_ROW = /^ {0,3}\|?[ \t]*:?-{1,}:?[ \t]*(\|[ \t]*:?-{1,}:?[ \t]*)*\|?[ \t]*$/;
+const BULLET = /^([ \t]*)([-*+])[ \t]+(\S.*)?$/;
+const ORDERED = /^([ \t]*)(\d{1,9})[.)][ \t]+(\S.*)?$/;
+const TASK = /^\[([ xX])\][ \t]+(\S.*)?$/;
+const DELIMITER_CELL = /^:?-+:?$/;
+/** A table's delimiter row: cells of dashes, a colon allowed at either end, between optional outer pipes. */
+function isDelimiterRow(line: string): boolean {
+  let at = 0;
+  while (at < 3 && line[at] === ' ') at += 1;
+  const cells = line.slice(at).split('|');
+  if (cells.length > 1 && cells[0] === '') cells.shift();
+  for (let c = 0; c < cells.length; c += 1) {
+    const cell = cells[c]!;
+    let from = 0;
+    let to = cell.length;
+    while (from < to && blank(cell[from])) from += 1;
+    while (to > from && blank(cell[to - 1])) to -= 1;
+    cells[c] = cell.slice(from, to);
+  }
+  if (cells.length > 1 && cells[cells.length - 1] === '') cells.pop();
+  return cells.every((cell) => DELIMITER_CELL.test(cell));
+}
 
 function splitRow(line: string): string[] {
   const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
@@ -114,8 +145,8 @@ function parseBlocks(lines: readonly string[]): Block[] {
       continue;
     }
     if (THEMATIC.test(line)) { flush(); blocks.push({ kind: 'break' }); i += 1; continue; }
-    const atx = ATX.exec(line);
-    if (atx) { flush(); blocks.push({ kind: 'heading', level: atx[1]!.length, spans: parseSpans(atx[2] ?? '') }); i += 1; continue; }
+    const atx = atxOf(line);
+    if (atx) { flush(); blocks.push({ kind: 'heading', level: atx.level, spans: parseSpans(atx.text) }); i += 1; continue; }
     const quote = QUOTE.exec(line);
     if (quote) {
       flush();
@@ -148,7 +179,7 @@ function parseBlocks(lines: readonly string[]): Block[] {
       blocks.push({ kind: 'list', ordered, start, items });
       continue;
     }
-    if (line.includes('|') && i + 1 < lines.length && DELIMITER_ROW.test(lines[i + 1]!) && lines[i + 1]!.includes('-')) {
+    if (line.includes('|') && i + 1 < lines.length && isDelimiterRow(lines[i + 1]!) && lines[i + 1]!.includes('-')) {
       flush();
       const header = splitRow(line).map(parseSpans);
       const align = splitRow(lines[i + 1]!).map(alignOf);
@@ -168,7 +199,19 @@ function parseBlocks(lines: readonly string[]): Block[] {
   return blocks;
 }
 
-const CODE_SPAN = /^(`+)([\s\S]*?)\1/;
+/**
+ * A code span at the start of `rest`: a run of backticks, then the nearest later run of the same length. Where the whole
+ * opening run finds no closer a shorter opening is tried, as the pattern this replaces did by backtracking.
+ */
+function codeSpanAt(rest: string): { length: number; text: string } | null {
+  let run = 0;
+  while (rest[run] === '`') run += 1;
+  for (let ticks = run; ticks >= 1; ticks -= 1) {
+    const close = rest.indexOf('`'.repeat(ticks), ticks);
+    if (close !== -1) return { length: close + ticks, text: rest.slice(ticks, close) };
+  }
+  return null;
+}
 
 /**
  * Inline parsing. Every unmatched delimiter falls through to text, which is what makes partial input a
@@ -181,8 +224,8 @@ export function parseSpans(source: string): Span[] {
   let i = 0;
   while (i < source.length) {
     const rest = source.slice(i);
-    const code = CODE_SPAN.exec(rest);
-    if (code) { push({ kind: 'code', text: code[2]!.replace(/^ (.*) $/, '$1') }); i += code[0].length; continue; }
+    const code = codeSpanAt(rest);
+    if (code) { push({ kind: 'code', text: code.text.replace(/^ (.*) $/, '$1') }); i += code.length; continue; }
     // REQ-CHAT-056: an image reference renders as its alternative text carrying an activatable reference.
     const image = /^!\[([^\]]*)\]\(([^\s)]+)(?:\s+"[^"]*")?\)/.exec(rest);
     if (image) { push({ kind: 'image', alt: image[1] ?? '', href: image[2] ?? '' }); i += image[0].length; continue; }

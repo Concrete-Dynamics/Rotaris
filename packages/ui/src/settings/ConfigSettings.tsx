@@ -360,6 +360,7 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
       <div className="settings__action">
         <label htmlFor="max-depth">Depth cap</label>
         <ClampedNumberField id="max-depth" range={DEPTH_CAP_RANGE} shown={clampForDisplay(rt.max_depth, DEPTH_CAP_RANGE.min, DEPTH_CAP_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_depth', value })} />
+        <Origin of={from('max_depth')} /><Hint about="Depth cap">How many levels deep one agent may delegate to another.</Hint>
       </div>
     </>);
   const fanOutRow = (<>
@@ -368,6 +369,7 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
       <div className="settings__action">
         <label htmlFor="max-active">Fan-out limit</label>
         <ClampedNumberField id="max-active" range={FAN_OUT_RANGE} shown={clampForDisplay(rt.max_active_children, FAN_OUT_RANGE.min, FAN_OUT_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_active_children', value })} />
+        <Origin of={from('max_active_children')} /><Hint about="Fan-out limit">How many agents one parent may have running at once.</Hint>
       </div>
     </>);
   const childTimeoutRow = (<>
@@ -518,7 +520,7 @@ export function AgentPopOutToggle({ on, onChange }: { on: boolean; onChange: (va
     <div className="settings__action" data-testid="agent-pop-out">
       <span id="agent-pop-out-label">Agent pop-out</span>
       <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby="agent-pop-out-label" aria-checked={on} aria-description={`Agent pop-out is ${on ? 'enabled' : 'disabled'}.`} data-testid="agent-pop-out-toggle" onClick={() => onChange(!on)} />
-      <Origin of="yours" /><Hint about="Agent pop-out">On, clicking an agent opens or raises its persona window; off, a click selects it in the inspector only. Explicit Pop out always opens the window.</Hint>
+      <Hint about="Agent pop-out">On, clicking an agent opens or raises its persona window; off, a click selects it in the inspector only. Explicit Pop out always opens the window.</Hint>
     </div>
   );
 }

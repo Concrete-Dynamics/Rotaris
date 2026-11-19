@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Hint, Origin, SettingsPageContext, SettingsTitle } from './settings/page.js';
+import { Hint, SettingsPageContext, SettingsTitle } from './settings/page.js';
 import { findSettings, SETTINGS_PAGE_GROUPS, SETTINGS_PAGES, SETTINGS_SETUP_PAGE, settingsPageFor, type SettingsPageId } from './settings/pages.js';
 import { changedFromDefaults, setupAttention, SetupPage, workspaceCounts } from './settings/Setup.js';
 import { isBusy, type PlaybookCatalogue, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
@@ -152,6 +152,9 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
   const [busyAction, setBusyAction] = useState<'backup' | 'restore' | 'establish' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<ThemeName | undefined>(activeTheme);
+  // The applied theme is what the control shows; the local choice stands only where no applied theme is handed in. It held
+  // the first value for good, so a theme set from the palette left the control naming the old one.
+  const shownTheme = activeTheme ?? selectedTheme;
   const runActive = session !== null && isBusy(session.executionStatus);
   const noWorkspace = workspace === null;
   const disabledReason = noWorkspace ? 'Open a workspace first.' : runActive ? 'Finish the active run first.' : null;
@@ -296,7 +299,6 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
         : pageId === 'store' ? page('solo', (
           <div className="settings__section">
             <SettingsTitle>Session store</SettingsTitle>
-            <h2 className="settings__heading">Session store</h2>
             <p className="text-secondary settings__lede">
               This workspace's sessions live in a store on this machine, found by the identifier in <code className="mono">.rotaris/workspace-id</code>.
               Copying or syncing the workspace folder does not carry them; a backup does.
@@ -346,8 +348,7 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
         : pageId === 'traceability' ? page('solo', <div className="settings__section">{traceability ? <TraceabilitySettings {...traceability} /> : <p className="text-secondary">Open a workspace first.</p>}</div>)
         : pageId === 'appearance' ? page('section', <>
           <div className="settings__section">
-            <SettingsTitle>Interface</SettingsTitle>
-            <h2 className="settings__heading">Appearance</h2>
+            <SettingsTitle section={null}>Interface</SettingsTitle>
             <div className="settings__action">
               <label htmlFor="theme-select">Theme</label>
               <DesignSelect
@@ -355,17 +356,17 @@ export function SettingsView({ session, workspace, onBackup, onRestore, storeHel
                 className="input select settings__select"
                 aria-label="Theme"
                 aria-description="Choose the colour theme used by every Rotaris window."
-                value={selectedTheme}
+                value={shownTheme}
                 onChange={(event) => { void chooseTheme(event.currentTarget.value as ThemeName); }}
               >
                 {themes.map((theme) => <option key={theme.name} value={theme.name}>{theme.label}</option>)}
               </DesignSelect>
-              <Origin of="yours" /><Hint about="Theme">{themes.find((theme) => theme.name === selectedTheme)?.description ?? 'Choose a registered theme.'}</Hint>
+              <Hint about="Theme">{themes.find((theme) => theme.name === shownTheme)?.description ?? 'Choose a registered theme.'}</Hint>
             </div>
             <div className="settings__action">
               <span>Reduce motion</span>
               <DesignButton type="button" className={`toggle${reducedMotion ? ' is-on' : ''}`} role="switch" aria-label="Reduce motion" aria-checked={reducedMotion} onClick={() => { void chooseMotion(!reducedMotion); }} />
-              <Origin of="yours" /><Hint about="Reduce motion">Every animation collapses to its end state. The operating-system setting is inherited until you choose here.</Hint>
+              <Hint about="Reduce motion">Every animation collapses to its end state. The operating-system setting is inherited until you choose here.</Hint>
             </div>
             {interfaceExtras}
             <div className="settings__action">

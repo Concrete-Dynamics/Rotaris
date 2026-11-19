@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type HTMLAttributes, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
 import { Button as DesignButton } from '../design-system/index.js';
 
 /**
@@ -18,10 +18,10 @@ export interface SettingsPageState {
 export const SettingsPageContext = createContext<SettingsPageState>({ title: 'page', explain: true });
 
 /** A part's own title: the view's title when nothing stands around the part, a section's heading on a shared page, nothing on a page it has alone. */
-export function SettingsTitle({ children }: { readonly children: ReactNode }) {
+export function SettingsTitle({ children, section }: { readonly children: ReactNode; /** What heads the part on a shared page, where its own title would repeat the page's; `null`: nothing, its groups head themselves. */ readonly section?: string | null }) {
   const { title } = useContext(SettingsPageContext);
   if (title === 'solo') return null;
-  if (title === 'section') return <h2 className="settings__subtitle">{children}</h2>;
+  if (title === 'section') return section === null ? null : <h2 className="settings__subtitle">{section ?? children}</h2>;
   return <h1 className="display">{children}</h1>;
 }
 
@@ -33,15 +33,30 @@ export function SettingsTitle({ children }: { readonly children: ReactNode }) {
 export function Hint({ about, always = false, children, className, ...rest }: HTMLAttributes<HTMLSpanElement> & { readonly about?: string; /** What an act does to the user's data is never closed. */ readonly always?: boolean }) {
   const { explain } = useContext(SettingsPageContext);
   const [open, setOpen] = useState(false);
+  const shown = explain || open;
+  // A row that does not say what its explanation is about is named by its own label, read once it is drawn: the row's
+  // first element is its label in every row this stands in.
+  const control = useRef<HTMLButtonElement>(null);
+  const [rowLabel, setRowLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (about !== undefined) return;
+    const label = control.current?.closest('.settings__action')?.firstElementChild;
+    const text = label && label !== control.current ? (label.textContent ?? '').trim() : '';
+    if (text !== '') setRowLabel(text);
+  }, [about]);
   // The class stands first, as it did when the element was written out: tests and proofs read the attributes in that order.
   if (always) return <span className={className ?? 'text-secondary settings__hint'} {...rest}>{children}</span>;
-  const shown = explain || open;
-  const name = about === undefined ? 'Explanation' : `Explanation of ${about}`;
+  const subject = about ?? rowLabel;
+  const name = subject === null ? 'Explanation' : `Explanation of ${subject}`;
   return (
     <>
-      <DesignButton type="button" className="btn btn-ghost btn-icon settings__info" aria-label={name} title={name} aria-expanded={shown} aria-pressed={shown} disabled={explain} onClick={() => setOpen((v) => !v)}>
-        <i className="ph ph-info" aria-hidden="true" />
-      </DesignButton>
+      {/* With every explanation open the row's own control has nothing left to do, so it is not drawn: a control that
+          looks live and does nothing was the alternative. */}
+      {explain ? null : (
+        <DesignButton ref={control} type="button" className="btn btn-ghost btn-icon settings__info" aria-label={name} title={name} aria-expanded={shown} onClick={() => setOpen((v) => !v)}>
+          <i className="ph ph-info" aria-hidden="true" />
+        </DesignButton>
+      )}
       <span className={className ?? 'text-secondary settings__hint'} {...rest} hidden={!shown}>{children}</span>
     </>
   );

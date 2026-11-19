@@ -81,7 +81,7 @@ export function InstructionsSettings({ snapshot, workspace, pending, onToggle }:
   if (rows.length === 0) {
     return (
       <div className="settings__section">
-        <SettingsTitle>Instructions</SettingsTitle>
+        <SettingsTitle section="Instruction files">Instructions</SettingsTitle>
         <p className="text-secondary settings__lede">
           The instruction files reaching every agent built in this workspace. Switch a file off to keep it
           on disk while taking it out of what agents are given.
@@ -94,7 +94,7 @@ export function InstructionsSettings({ snapshot, workspace, pending, onToggle }:
   }
   return (
     <div className="settings__section">
-      <SettingsTitle>Instructions</SettingsTitle>
+      <SettingsTitle section="Instruction files">Instructions</SettingsTitle>
       <p className="text-secondary settings__lede">
         The instruction files reaching every agent built in this workspace — this project's pair, the
         global pair, and your own and machine-wide files. Switch a file off to keep it on disk while
@@ -151,7 +151,7 @@ export function ToolsSettings() {
     }));
   return (
     <div className="settings__section">
-      <SettingsTitle>Tools</SettingsTitle>
+      <SettingsTitle section="Built-in tools">Tools</SettingsTitle>
       <p className="text-secondary settings__lede">
         The tools this build implements. Which of them a given agent may call is settled by its persona and by the permission
         policy, not here — this is the catalogue the rest of that machinery draws from.

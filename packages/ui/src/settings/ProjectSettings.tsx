@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { ChangeEntry, Finding, InitializationStateView, ParseError, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
 import { RESOLUTION_FAILED_DETAIL, RESOLUTION_FAILED_HEADLINE } from '@rotaris/contracts';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput } from '../design-system/index.js';
+import { Hint } from './page.js';
 import { projectInitCard } from './project-init.js';
 
 /**
@@ -265,7 +266,7 @@ export function TraceabilitySettings({ workspace, onOperate, onCancel }: Traceab
             {operation === 'compare' ? (
               <DesignInput className="input settings__number" aria-label="Base revision" placeholder="HEAD" value={base} disabled={unavailable !== null} onChange={(event) => setBase(event.currentTarget.value)} data-traceability-base />
             ) : null}
-            <span className="text-secondary settings__hint">{OPERATION_HINT[operation]}{operation === 'compare' ? ' The base defaults to the revision the working tree sits on.' : ''}{unavailable === null ? '' : ` ${unavailable}`}</span>
+            <Hint about={OPERATION_LABEL[operation]}>{OPERATION_HINT[operation]}{operation === 'compare' ? ' The base defaults to the revision the working tree sits on.' : ''}{unavailable === null ? '' : ` ${unavailable}`}</Hint>
           </div>
         ))}
       </div>
@@ -283,7 +284,7 @@ export function TraceabilitySettings({ workspace, onOperate, onCancel }: Traceab
           {last.statement.lines.length > 0 ? <pre className="settings__raw" aria-label={`${OPERATION_LABEL[last.operation]} detail`} data-traceability-lines>{last.statement.lines.join('\n')}</pre> : null}
         </div>
       ) : null}
-      <p className="text-tertiary settings__hint">
+      <p className="text-tertiary settings__hint settings__lede">
         Progress by phase reaches the workspace service's log, not this card. The check's findings also reach the requirements view's cards
         through the board's next reading; the view's own control for the check is not built in this version.
       </p>

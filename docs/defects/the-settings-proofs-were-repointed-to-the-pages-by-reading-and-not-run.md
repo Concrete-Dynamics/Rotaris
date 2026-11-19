@@ -31,10 +31,13 @@ branch at `ce5732e2` with the repairs below.
   and the cascade", before it reaches Settings; `theme-proof` on focus-ring contrast for controls across the shell and
   on the dash glyph's contrast, with most focus captures stale on both trees. None of the three is evidence for or
   against this change.
-- **Not run:** `init-proof` and `code-intel-proof` (the code-intelligence bundle is absent on this host);
-  `continuation-proof`, `retrospective-proof` and `live-run`, which reach Settings through
-  `lib/settings-runtime-field.mjs`; `workspace-proof`, `directive-proof`, `exit-trace-proof`, `portable-proof`,
-  `updater-proof`, `linux-acceptance-proof`. Their label edits are still by reading alone.
+- **A second batch, 2026-11-19:** `settings-proof` again, `continuation-proof`, `retrospective-proof` and
+  `directive-proof` green, so `lib/settings-runtime-field.mjs`'s page choice is run. `workspace-proof` and
+  `exit-trace-proof` red, at checks that name no Settings surface (Chromium's profile directory and a setup start the
+  run host never answers; the renderer-crash line) and that this host's notes already list as red on `main`.
+- **Not run:** `init-proof` and `code-intel-proof` (the code-intelligence bundle is absent on this host), `live-run`,
+  `portable-proof`, `updater-proof`, `linux-acceptance-proof`. After the critique's repairs of 2026-11-19
+  `settings-proof` and `sandbox-proof` were run again and are green; the others were not.
 
 ## Specs
 

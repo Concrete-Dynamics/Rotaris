@@ -126,7 +126,7 @@ function Row({ row, health, probing, onToggle, onOpenWebSearchSetup, showWebSear
         <div className="mono text-tertiary settings__origin" data-line>{row.line}</div>
         {row.unresolved.length > 0 ? <div className="text-tertiary settings__hint">Present but unavailable: {row.unresolved.map((v) => `\${${v}}`).join(', ')} unresolved.</div> : null}
       </td>
-      <td data-origin>{row.origin}</td>
+      <td data-origin>{row.origin === 'default' ? <span className="settings__lede">{row.origin}</span> : row.origin}</td>
       <td>
         <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={accessibleName} aria-description={accessibleDescription} disabled={!row.available || busy} title={title} onClick={() => { void toggle(); }} />
         {/*
@@ -140,7 +140,7 @@ function Row({ row, health, probing, onToggle, onOpenWebSearchSetup, showWebSear
             aria-label={WEB_SEARCH_SETUP_ROW_LABEL} aria-description={WEB_SEARCH_SETUP_ROW_DESCRIPTION}
             onClick={() => onOpenWebSearchSetup?.()}>{WEB_SEARCH_SETUP_ROW_ACTION}</DesignButton>
         ) : null}
-        <div className="text-tertiary settings__hint" data-enablement>{enablement}</div>
+        <div className={`text-tertiary settings__hint${row.overridden || (row.enabled && !row.available) ? '' : ' settings__lede'}`} data-enablement>{enablement}</div>
         {message ? <div className="composer__error" role="alert">{message}</div> : null}
       </td>
     </tr>

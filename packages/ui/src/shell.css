@@ -3264,7 +3264,7 @@ table, .mono { font-variant-numeric: tabular-nums; }
 .settings__head .save-bar { padding: 0; margin: 0; border: 0; flex-wrap: nowrap; }
 /* The status is said when there is something to say; clean, it stays for assistive technology and for the proofs that wait on it. */
 .settings__head .save-bar__status:not(.is-dirty) { position: absolute; top: 0; left: 0; width: var(--rt-hairline-width); height: var(--rt-hairline-width); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.settings__explain[aria-pressed='true'], .settings__info[aria-pressed='true'] { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }
+.settings__explain[aria-pressed='true'], .settings__info[aria-expanded='true'] { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }
 .settings__info { flex: none; margin-left: auto; color: var(--rt-text-tertiary); font-size: var(--rt-text-md); }
 .settings__explain { color: var(--rt-text-secondary); font-size: var(--rt-text-md); }
 .settings__info:hover, .settings__explain:hover { color: var(--rt-text); }
@@ -3276,10 +3276,10 @@ table, .mono { font-variant-numeric: tabular-nums; }
 /* A section of a shared page, and a group of rows inside it: two levels under the page's title, both sentence case
    (DESIGN.md: "a section's heading: medium, sentence case, primary ink"). The kicker OQ-500 gave a group heading goes
    with the category list it was ruled for. */
-.settings__subtitle { font-family: var(--rt-font-body); letter-spacing: 0; margin: var(--rt-space-8) 0 0; padding-bottom: var(--rt-space-2); font-size: var(--rt-text-base); font-weight: var(--rt-weight-medium); color: var(--rt-text); }
+.settings__subtitle { font-family: var(--rt-font-body); letter-spacing: 0; margin: var(--rt-space-8) 0 0; padding-bottom: var(--rt-space-2); font-size: var(--rt-text-md); font-weight: var(--rt-weight-medium); color: var(--rt-text); }
 .settings__head + .settings__section > .settings__subtitle:first-child, .settings__section > .settings__subtitle:first-child { margin-top: var(--rt-space-5); }
 .settings__body > .settings__section + .settings__section { margin-top: var(--rt-space-4); }
-.settings__body .settings__section .settings__heading:not([data-mcp-websearch-setup] *) { margin: var(--rt-space-6) 0 0; padding-bottom: var(--rt-space-2); border-bottom: var(--rt-hairline-width) solid var(--rt-border); font-family: var(--rt-font-body); font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); letter-spacing: 0; text-transform: none; color: var(--rt-text); }
+.settings__body .settings__section .settings__heading:not([data-mcp-websearch-setup] *) { margin: var(--rt-space-6) 0 0; padding-bottom: var(--rt-space-2); border-bottom: var(--rt-hairline-width) solid var(--rt-border); font-family: var(--rt-font-body); font-size: var(--rt-text-base); font-weight: var(--rt-weight-medium); letter-spacing: 0; text-transform: none; color: var(--rt-text); }
 /* The ledger row: a hairline under each, no gap between, so a column of values reads as one list. */
 .settings__body :is(.settings__section, .settings__card, .settings__actions) > .settings__action { margin-top: 0; padding: var(--rt-space-2) 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 .settings__body .settings__actions, .settings__body .settings__card { gap: 0; }
@@ -3324,3 +3324,13 @@ table, .mono { font-variant-numeric: tabular-nums; }
 /* A provider row: sign out is offered where there is something to sign out of; the footer is an explanation. */
 .settings__body tr[data-authenticated='no'] .provider-row__actions .btn-ghost { display: none; }
 .settings__body:not([data-explain]) .table-card-foot { display: none; }
+
+/* The 2026-11-19 critique of the built pages. A row's label is the row's text and its section's heading is larger
+   (it was 12 px over 14 px labels); the explanation column does not move when a page gains a scrollbar; Find stays in
+   reach where the page list scrolls; a provider's status word stands by its dot and name, not a pane's width away. */
+.settings__body :is(.settings__section, .settings__card, .settings__actions) > .settings__action > :is(label, span):first-child:not(.settings__hint) { font-size: var(--rt-text-sm); }
+.settings__body .settings__dictation-field > label { font-size: var(--rt-text-sm); }
+.settings__body { scrollbar-gutter: stable; }
+.settings__find { position: sticky; top: 0; z-index: 1; background: var(--rt-bg); }
+.settings__body .provider-row__status > .provider-row__word { margin-left: var(--rt-space-2); }
+.settings__info:disabled { opacity: var(--rt-disabled-opacity, 0.6); }

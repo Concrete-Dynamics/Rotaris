@@ -118,3 +118,33 @@ describe('ui/markdown — the parse cache (REQ-UIBENCH-063, REQ-UIBENCH-086)', (
     expect(chars.stats().chars).toBe(6);
   });
 });
+
+/**
+ * CodeQL's js/polynomial-redos, 2026-11-19: eight of the parser's patterns let one run of blanks or backticks be matched
+ * two ways, so a line built to fail them cost the square of its length — measured at about half a second for a
+ * 40,000-character fence line. Each now meets a run once; what a line parses to is unchanged.
+ */
+describe('the Markdown parser reads a long hostile line in linear time (REQ-CHAT-056, REQ-CHAT-075)', () => {
+  const blanks = '\t'.repeat(40_000);
+  it.each([
+    ['a fence whose info string ends in a backtick', '```' + blanks + '`'],
+    ['a bullet followed by blanks alone', '* ' + blanks],
+    ['a heading closed far away', '# ' + blanks + '#x'],
+    ['a delimiter row that is not one', 'a|b\n-' + blanks + 'x'],
+    ['a run of backticks with no closer of its length', '`'.repeat(20_001)],
+  ])('%s', (_name, source) => {
+    const started = performance.now();
+    parseMarkdown(source);
+    expect(performance.now() - started).toBeLessThan(250);
+  });
+
+  it('and still reads what the patterns read', () => {
+    expect(parseMarkdown('## Title ##  ').blocks).toEqual([{ kind: 'heading', level: 2, spans: [{ kind: 'text', text: 'Title' }] }]);
+    expect(parseMarkdown('#\t').blocks).toEqual([{ kind: 'heading', level: 1, spans: [] }]);
+    expect(kinds(parseMarkdown('-   \n- [x] done').blocks)).toEqual(['list']);
+    expect(kinds(parseMarkdown('a|b\n |:-- | --: |\nc|d').blocks)).toEqual(['table']);
+    expect(kinds(parseMarkdown('a|b\n    |---|---|').blocks)).toEqual(['paragraph']);
+    expect(parseSpans('``a`b`` `c')).toEqual([{ kind: 'code', text: 'a`b' }, { kind: 'text', text: ' `c' }]);
+    expect(parseSpans('``a`')).toEqual([{ kind: 'code', text: '' }, { kind: 'text', text: 'a`' }]);
+  });
+});

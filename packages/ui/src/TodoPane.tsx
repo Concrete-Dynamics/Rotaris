@@ -83,7 +83,7 @@ export function TodoPane({ plan, onEdit, onError }: TodoPaneProps) {
     <section className="todo-pane" aria-label="Task plan" data-source={shown?.source ?? 'none'}>
       <div className="todo-pane__header">
         <span className="todo-pane__title">Task plan</span>
-        <span className="todo-pane__count">{todoCountLabel(done, tasks.length)}</span>
+        <span className="todo-pane__count" data-total={tasks.length}>{todoCountLabel(done, tasks.length)}</span>
       </div>
       {shown && <div className="todo-pane__source">{shown.sourceLabel}</div>}
       {tasks.length === 0 && (

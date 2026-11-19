@@ -23,7 +23,7 @@ describe('the Todo pane counts the coordinator\'s own plan it is given (REQ-CHAT
     source: 'agent', ownerId: null, sourceLabel: 'Agent plan',
     phases: [{ id: 'e002ab7d', name: 'Execute', tasks: states.map((state, i) => ({ id: `0000000${i}`, text: ['Run the sequence', 'Report each command\'s outcome in one line'][i]!, state })) }],
   });
-  const count = (plan: TaskPlan): string => /todo-pane__count">([^<]*)</.exec(renderToStaticMarkup(createElement(TodoPane, { plan })))![1]!;
+  const count = (plan: TaskPlan): string => /todo-pane__count"[^>]*>([^<]*)</.exec(renderToStaticMarkup(createElement(TodoPane, { plan })))![1]!;
 
   it('an item left open reads as not done: the pack\'s "1 of 2 tasks done"', () => {
     expect(count(agentPlan(['done', 'open']))).toBe('1 of 2 tasks done');

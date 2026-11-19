@@ -82,7 +82,7 @@ describe('a pane layout is stored under `panels/version`, `panels/{view-key}/sta
     const store = new PreferenceStore(join(dir, 'preferences'));
     expect(PANE_LAYOUT_VIEWS).toEqual(['overview', 'git', 'library', 'workspace']);
     // Each view's current pane count, the figure its stored count is compared against: one per view, none beside them.
-    expect(PANE_LAYOUT_PANES).toEqual({ overview: 2, git: 2, library: 2, workspace: 2 });
+    expect(PANE_LAYOUT_PANES).toEqual({ overview: 2, git: 2, library: 2, workspace: 4 });
     expect(paneLayoutKeys('git')).toEqual({ state: 'panels/git/state', panes: 'panels/git/panes' });
     expect(store.readLayout('overview', 2)).toBeUndefined();
     await store.writeLayout('overview', { version: 1, panes: 2, sizes: [700, 340] });

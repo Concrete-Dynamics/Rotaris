@@ -190,7 +190,9 @@ expect(Object.keys(storedPreferences).every((key) => !key.includes('alpha') && !
   `a preference key spells a workspace path: ${JSON.stringify(Object.keys(storedPreferences))}`);
 // REQ-SHELL-069 under REQ-SHELL-006's registered keys: one `panels/version` stamp, the view's pane count and its state.
 const draggedTo = { version: storedPreferences['panels/version'], panes: storedPreferences['panels/workspace/panes'], sizes: storedPreferences['panels/workspace/state'] };
-expect(draggedTo.version === 1 && draggedTo.panes === 2 && Array.isArray(draggedTo.sizes) && !('panels/workspace' in storedPreferences), `the divider did not persist a pane layout under the registered keys: ${JSON.stringify(storedPreferences)}`);
+// PD-SHELL-017 revision 2: the Workspace stores four panes — the two heights the divider sets, then the Run panel's and the
+// inspector's widths, 0 for a folded panel.
+expect(draggedTo.version === 1 && draggedTo.panes === 4 && Array.isArray(draggedTo.sizes) && draggedTo.sizes.length === 4 && !('panels/workspace' in storedPreferences), `the divider did not persist a pane layout under the registered keys: ${JSON.stringify(storedPreferences)}`);
 expect(draggedTo.sizes[1] === 180, `three ArrowUp presses of 10 px from 150 px should store 180: ${JSON.stringify(draggedTo.sizes)}`);
 const beforeAnyRun = match(draftRun, '[data-testid="run-timing"]', 4300);
 expect(beforeAnyRun?.attrs['data-seconds'] === '', `the run header showed a duration before any run: ${JSON.stringify(beforeAnyRun?.text)}`);

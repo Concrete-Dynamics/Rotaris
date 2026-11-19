@@ -209,7 +209,7 @@ export function ClearTranscriptControl({ runState, rowCount, control, onAcknowle
       <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="transcript-clear" aria-label={CLEAR_LABEL}
         // REQ-CHAT-073: disabled on an empty transcript; REQ-CHAT-082: the accessible description, verbatim.
         disabled={empty || busy} aria-disabled={empty || busy} aria-describedby="transcript-clear-reason"
-        title={empty ? TRANSCRIPT_EMPTY : CLEAR_DESCRIPTION} onClick={requestClear}>{CLEAR_LABEL}</DesignButton>
+        title={empty ? TRANSCRIPT_EMPTY : CLEAR_DESCRIPTION} onClick={requestClear}><i className="ph ph-broom" aria-hidden="true" /><span className="tool-label">{CLEAR_LABEL}</span></DesignButton>
       <span className="visually-hidden" id="transcript-clear-reason">{empty ? TRANSCRIPT_EMPTY : CLEAR_DESCRIPTION}</span>
       {/* Defect AO-2 — what this registrar has put on the registry the composer currently holds, and whether the roots have
         * been read at all. The popup's list is a memo of the text and that registry, so anything reading the popup must act

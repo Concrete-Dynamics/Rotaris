@@ -993,9 +993,8 @@
 /* The template for this class is declared ONCE, in Part R's block below, where the inspector column joins it.
    A second copy stood here without the inspector and was overridden by it — dead since Part R, removed 2026-09-11
    with the eighty-second defect, since two templates for one class is how that defect stayed unreadable. */
-.workspace--with-sidebar > .agents { grid-area: agents; }
-.workspace--with-sidebar > .transcript { grid-area: transcript; }
-.workspace--with-sidebar > .composer { grid-area: composer; }
+.workspace--run-panel > .transcript { grid-area: transcript; }
+.workspace--run-panel > .composer { grid-area: composer; }
 /* Part AB: every layout names the same five rows, so the queue panel is above the composer in all of them. */
 .workspace > .run-header { grid-area: runhead; }
 .workspace > .plan-gate { grid-area: plangate; }
@@ -1024,11 +1023,9 @@
  * written, and it governs again the moment the gate is collapsed or answered.
  */
 .workspace[data-plan-gate='1'] { grid-template-rows: auto minmax(0, auto) minmax(0, 1fr) 0 auto auto min-content; }
-.workspace--narrow[data-plan-gate='1'] { grid-template-rows: auto auto minmax(0, auto) minmax(0, 1fr) 0 auto auto min-content; }
 .workspace[data-plan-gate='1'] > .transcript { display: none; }
 /* Collapsed: the bar is one `auto` row and the transcript reads under REQ-CHAT-010's own floor, as it does with no gate. */
 .workspace[data-plan-gate='1'][data-plan-gate-collapsed='1'] { grid-template-rows: auto minmax(0, auto) auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
-.workspace--narrow[data-plan-gate='1'][data-plan-gate-collapsed='1'] { grid-template-rows: auto auto minmax(0, auto) auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
 .workspace[data-plan-gate='1'][data-plan-gate-collapsed='1'] > .transcript { display: flex; }
 .workspace > .queue { grid-area: queue; }
 .workspace > .composer__divider { grid-area: divider; }
@@ -1937,7 +1934,8 @@
    position stays a NUMBER in TEXT (`Step N · …`, REQ-SHELL-149) — never colour alone. */
 .settings__steps--bar .btn.is-active { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }
 /* ── Part R: the agent surfaces — Mission, the inspector, the persona window, the table, the ring, the chips (tokens by name) ── */
-.workspace--with-sidebar { grid-template-columns: 260px 1fr auto; grid-template-areas: 'agents runhead inspector' 'agents reauth inspector' 'agents plangate inspector' 'agents transcript inspector' 'agents queue inspector' 'agents divider inspector' 'agents composer inspector'; }
+/* PD-SHELL-017: two columns — the work on the left, the Run panel on the right; the panel's column is its own width and nothing when it is hidden. */
+.workspace--run-panel { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'panel runhead inspector' 'panel reauth inspector' 'panel plangate inspector' 'panel transcript inspector' 'panel queue inspector' 'panel divider inspector' 'panel composer inspector'; }
 /**
  * REMOVED 2026-09-11 — the eighty-second defect, and the falsified rule is stated rather than quietly deleted.
  *
@@ -1957,7 +1955,6 @@
  * The rules are gone rather than repaired because with `--with-sidebar` unconditional there is no reachable
  * state they could describe. `pnpm layout-proof` now fails if any child names an area the template lacks.
  */
-.workspace > .inspector { grid-area: inspector; }
 .inspector { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); width: 300px; padding: var(--rt-space-3, 12px); border-left: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; font-size: var(--rt-text-xs, 12px); }
 .inspector__head { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
 .inspector__tag { font-size: var(--rt-text-2xs, 10px); }
@@ -2024,14 +2021,11 @@
 .sparkline { display: block; width: 100%; height: var(--rt-space-6); overflow: visible; }
 .sparkline__series { fill: none; stroke: var(--rt-viz-1); stroke-width: calc(1.5 * var(--rt-hairline-width)); stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .sparkline__axes { fill: none; stroke: var(--rt-viz-grid); stroke-width: var(--rt-hairline-width); vector-effect: non-scaling-stroke; }
-.workspace--narrow { grid-template-columns: 1fr; grid-template-areas: 'bar' 'runhead' 'reauth' 'plangate' 'transcript' 'queue' 'divider' 'composer'; grid-template-rows: auto auto minmax(0, auto) auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); position: relative; }
-.workspace--narrow > .workspace__drawer-bar { grid-area: bar; display: flex; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); border-bottom: 1px solid var(--rt-border); background: var(--rt-chrome); }
-.workspace--narrow > .transcript { grid-area: transcript; }
-.workspace--narrow > .composer { grid-area: composer; }
-.workspace--narrow > .agents--drawer, .workspace--narrow > .inspector--drawer { position: absolute; top: 0; bottom: 0; z-index: 3; width: min(320px, 80%); box-shadow: var(--rt-shadow-lg); }
-.workspace--narrow > .agents--drawer { left: 0; }
-.workspace--narrow > .inspector--drawer { right: 0; }
-.workspace__drawer-bar .is-active { color: var(--rt-accent-200); }
+/* PD-SHELL-017: below 1180 px the Run panel is the one overlay drawer, on the right, behind the header band's toggle. */
+.workspace--narrow { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'runhead' 'reauth' 'plangate' 'transcript' 'queue' 'divider' 'composer'; position: relative; }
+.workspace > .run-panel--drawer, .workspace > .inspector--drawer { position: absolute; top: 0; bottom: 0; z-index: 3; box-shadow: var(--rt-shadow-lg); }
+.workspace > .run-panel--drawer { left: 0; width: min(var(--rt-run-panel-width), 86%); }
+.workspace > .inspector--drawer { right: 0; width: min(var(--rt-inspector-width), 86%); }
 /* R-097, the page frame (docs/design/briefs/overview/04-audit-2026-11-10.md, item 1): every titled primary view's root takes
    ONE inset — `--rt-space-4` on the block axis, `--rt-space-5` on the inline — and its page header the control height, as
    the Overview and Git already did (`.overview`, above, is the rule the others cite). The Mission view, which set no inset
@@ -3334,3 +3328,174 @@ table, .mono { font-variant-numeric: tabular-nums; }
 .settings__find { position: sticky; top: 0; z-index: 1; background: var(--rt-bg); }
 .settings__body .provider-row__status > .provider-row__word { margin-left: var(--rt-space-2); }
 .settings__info:disabled { opacity: var(--rt-disabled-opacity, 0.6); }
+
+/*
+ * PD-SHELL-017 — the workspace as one frame. A single header band says what the run is doing and holds the transcript's
+ * controls; the transcript and the composer stand on the ground plane at a reading measure; everything the run is —
+ * its live switches, its agents, the agent being read, its task plan — is the Run panel on the right.
+ */
+.run-header { padding: var(--rt-space-1) var(--rt-space-4); column-gap: var(--rt-space-3); }
+.run-header > .transcript__toolbar { margin-left: auto; padding: 0; flex: 0 1 auto; }
+.run-header > .intent-status { position: static; flex: 0 1 auto; min-width: 0; margin: 0; padding: 0 0 0 var(--rt-space-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: none; border-left: var(--rt-hairline-width) solid var(--rt-divider); }
+.run-header > .intent-status[data-phase='classified'] { border-left-color: var(--rt-divider); }
+.run-header .row__scope-detail { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.workspace > .run-panel { grid-area: panel; }
+.run-panel { display: flex; flex-direction: column; width: var(--rt-run-panel-width); min-height: 0; overflow: hidden auto; background: var(--rt-chrome); border-right: var(--rt-hairline-width) solid var(--rt-border); font-size: var(--rt-text-xs); }
+.run-panel__head { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-1) var(--rt-space-2); padding: var(--rt-space-1) var(--rt-space-3) var(--rt-space-2); background: var(--rt-chrome); border-bottom: var(--rt-hairline-width) solid var(--rt-border); }
+.run-panel__title { flex: 1 1 auto; font-size: var(--rt-text-sm); font-weight: 600; color: var(--rt-text); }
+.run-panel > .agents, .run-panel > .todo-pane, .run-panel > .agents__project { flex: none; width: auto; padding: var(--rt-space-3); background: none; border: 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); overflow: visible; }
+.run-panel > :last-child { border-bottom: 0; }
+.run-panel .agents__header { height: auto; min-height: var(--rt-control-height-compact); margin: 0; padding: 0; border-bottom: 0; flex-wrap: wrap; }
+.run-panel .agents__title, .run-panel .todo-pane__title { font-size: var(--rt-text-2xs); font-weight: 500; letter-spacing: 0.075em; text-transform: uppercase; color: var(--rt-text-tertiary); }
+/* The inspector with nothing to show is one sentence: a dead ring and three dead buttons said nothing more. */
+.inspector__unused { margin-top: var(--rt-space-1); }
+.inspector__unused > summary { cursor: pointer; color: var(--rt-text-tertiary); }
+.inspector__unused[open] > summary { margin-bottom: var(--rt-space-1); }
+
+/* The transcript is the lit plane: no frame of its own, and its rows at a reading measure however wide the window is. */
+.workspace--run-panel > .transcript { padding: 0 var(--rt-space-5); gap: var(--rt-space-2); }
+/* REQ-CHAT-070 as PD-SHELL-017 narrows it: the treatment while following is the transcript's lower edge, in the accent and at the reading measure; the composer's own border stays neutral (the third review). */
+.workspace--run-panel .transcript__scroll { border-color: transparent; border-radius: 0; }
+.workspace--run-panel .transcript__scroll.is-following { border-color: transparent; }
+.workspace--run-panel .transcript__scroll.is-following { background: linear-gradient(var(--rt-accent-400), var(--rt-accent-400)) bottom center / min(100%, var(--rt-reading-measure)) var(--rt-hairline-width) no-repeat; }
+.workspace--run-panel .transcript__pool, .workspace--run-panel > .transcript > :not(.transcript-pane):not(.transcript__scroll) { max-width: var(--rt-reading-measure); margin-inline: auto; }
+.workspace--run-panel > .transcript > :not(.transcript-pane):not(.transcript__scroll) { width: 100%; }
+.workspace--run-panel > .composer__divider { background: var(--rt-bg); border-top-color: transparent; }
+.workspace--run-panel > .composer__divider:hover { border-top-color: var(--rt-border); }
+.workspace--run-panel > .composer { background: var(--rt-bg); padding: 0 var(--rt-space-5) var(--rt-space-3); }
+.workspace--run-panel > .composer > *, .workspace--run-panel > .queue > * { width: 100%; max-width: var(--rt-reading-measure); margin-inline: auto; }
+.workspace--run-panel > .queue { background: var(--rt-bg); padding-inline: var(--rt-space-5); }
+.composer__ask { display: flex; align-items: center; gap: var(--rt-space-3); padding: var(--rt-space-2) var(--rt-space-3); background: var(--rt-wait-tint, var(--rt-surface)); border: var(--rt-hairline-width) solid var(--rt-wait); border-radius: var(--rt-radius-md); }
+.composer__ask > .ph { flex: none; color: var(--rt-wait); }
+.composer__ask-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer__ask-who { font-weight: 600; margin-right: var(--rt-space-1); }
+.composer__ask-more { flex: none; color: var(--rt-text-tertiary); }
+/* PD-SHELL-017: inside the panel every heading is the one ruled-section label, and a control is the compact one. */
+.run-panel .card-kicker, .inspector .card-kicker { font-size: var(--rt-text-2xs); font-weight: 500; letter-spacing: 0.075em; text-transform: uppercase; color: var(--rt-text-tertiary); }
+.run-panel > .todo-pane { padding-top: var(--rt-space-3); border-top: 0; }
+.inspector .inspector__controls .input { min-height: 0; height: var(--rt-control-height-compact); padding-block: 0; font-size: var(--rt-text-xs); }
+.inspector .inspector__ring { gap: var(--rt-space-2); }
+.inspector .inspector__ring-caption { font-size: var(--rt-text-xs); }
+.workspace--run-panel > .transcript { padding-top: var(--rt-space-2); }
+/* REQ-CHAT-069's sentence for a scope with no agent stays the control's description; in the band it is not drawn beside it. */
+.run-header .row__scope-detail[data-empty='1'] { position: absolute; width: var(--rt-hairline-width); height: var(--rt-hairline-width); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.run-panel__head { padding-bottom: var(--rt-space-3); }
+.run-panel__close { order: 3; }
+/* A selected agent's two acts take a line of their own under the heading, and never wrap one under the other. */
+.run-panel .agents__spacer { flex: 1 0 100%; height: 0; }
+.run-panel .agents__cancel { height: var(--rt-control-height-compact); padding-inline: var(--rt-space-2); font-size: var(--rt-text-xs); }
+.run-panel__head { flex: none; }
+
+/* PD-SHELL-017, after the first independent review (2026-11-18). */
+/* The band is one line at every width the view has: below a container width its text buttons are their icons, and the intent line and the scope's detail give way before anything wraps. */
+/* `data-compact` is the band's own measured width against RUN_BAND_COMPACT_BELOW (`RunHeader.tsx`). */
+.run-header { box-sizing: border-box; height: var(--rt-workspace-band); min-height: 0; padding-block: 0; flex-wrap: nowrap; }
+.run-header > * { flex-shrink: 0; }
+.run-header > .intent-status { flex-shrink: 1; }
+.run-header > .transcript__toolbar { flex-wrap: nowrap; }
+.run-header .tool-label { white-space: nowrap; }
+.run-header[data-compact='1'] .tool-label, .run-header[data-compact='1'] > .intent-status, .run-header[data-compact='1'] .row__scope-detail { position: absolute; width: var(--rt-hairline-width); height: var(--rt-hairline-width); overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; padding: 0; }
+/* The scope switch in the band: the compact height every control beside it has, the selected segment a fill and no second frame, its detail inside the frame with room at the end. */
+.run-header .row__scope { height: var(--rt-control-height-compact); }
+.run-header .row__scope .seg-opt { height: 100%; padding-block: 0; border-radius: 0; box-shadow: none; }
+.run-header .row__scope-detail { max-width: none; margin-left: var(--rt-space-2); padding-right: var(--rt-space-2); }
+/* The panel's head is the band's height, so one rule runs across the window; the two selectors are the panel's first row beneath it. */
+.run-panel__head { box-sizing: border-box; flex-wrap: nowrap; height: var(--rt-workspace-band); min-height: 0; padding-block: 0; }
+.run-panel__close { order: 0; }
+.run-panel__switches { flex: none; padding: var(--rt-space-2) var(--rt-space-3); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.run-panel__switches .run-header__end { display: block; }
+.run-panel__switches .run-controls { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; gap: var(--rt-space-2); }
+.run-panel__switches .run-controls > .visually-hidden { position: absolute; }
+.run-panel__switches .run-controls__icon { display: none; }
+.run-panel__switches .chip-control__select { width: 100%; min-width: 0; }
+.run-panel__switches .chip-control__select:disabled, .run-panel__switches .chip-control__select[aria-disabled='true'] { opacity: 0.6; cursor: default; }
+/* Below 1180 px the drawer hangs under the band, so the toggle that opened it stays in reach, and what it covers is dimmed. */
+.workspace > .run-panel--drawer, .workspace > .inspector--drawer { top: var(--rt-workspace-band); }
+.run-panel__scrim { position: absolute; inset: var(--rt-workspace-band) 0 0 0; z-index: 2; background: var(--rt-overlay); }
+/* The agents: one inset for the heading, the rows and the acts; the dot on the first line; a zero count says nothing the sentence does not. */
+/* The heading, the acts and the plan share the section's edge; a row's highlight bleeds outward into the section's own padding, which clips it (an unclipped negative margin made the panel scroll sideways: layout-proof, 2026-11-18). */
+.run-panel .agent-row { align-items: start; margin-inline: calc(-1 * var(--agent-row-pad) - var(--agent-row-rule)); }
+.run-panel > .agents { overflow: hidden; }
+.run-panel .agent-row > .status-dot, .run-panel .agent-row > [class*='status-dot'] { margin-top: var(--rt-space-1); }
+.agents__acts { display: flex; gap: var(--rt-space-2); }
+.agents__acts:empty { display: none; }
+.agents__count[data-count='0'], .todo-pane__count[data-total='0'] { display: none; }
+/* The task plan: a phase's name is the plan's own words, set as text; the empty block stands on the section's edge. */
+.run-panel .todo-phase__kicker { font-family: var(--rt-font-body); font-size: var(--rt-text-xs); letter-spacing: 0; text-transform: none; color: var(--rt-text-secondary); }
+.run-panel .todo-pane__title { font-size: var(--rt-text-2xs); }
+.run-panel .todo-pane__empty { padding: 0; }
+/* The inspector: its mode on a line of its own, so pinning moves nothing beneath it. */
+/* The composer's strip: the estimate is one more quiet figure, every chip one weight, and the divider alone sizes the field. */
+.composer__strip .composer__estimate { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); }
+.workspace--run-panel .composer__input { resize: none; }
+/* The scope switch never gives up its own width; the intent line is what shortens. */
+.run-header .row__scope, .run-header .row__scope-detail { flex: none; overflow: visible; }
+
+/* PD-SHELL-017, after the second independent review. */
+.run-header .seg { box-sizing: border-box; min-height: 0; height: var(--rt-control-height-compact); align-items: stretch; padding: 0; }
+.run-header .seg .seg-opt { box-sizing: border-box; min-height: 0; height: auto; padding-block: 0; border: 0; border-radius: 0; box-shadow: none; }
+.run-header .row__scope-detail { align-self: center; }
+/* A stash that holds something stays said when the band shows icons only. */
+.tool-count { display: none; }
+.run-header[data-compact='1'] .tool-count { display: inline; }
+
+/*
+ * PD-SHELL-017 revision 2 — the inspector is its own panel on the right: a head the band's height, a body that scrolls,
+ * the agent's three acts held at its foot. Its content is ruled sections under one label style, as the Run panel's is.
+ */
+.workspace > .inspector { grid-area: inspector; }
+.inspector { display: flex; flex-direction: column; gap: 0; width: var(--rt-inspector-width); min-height: 0; padding: 0; overflow: hidden; background: var(--rt-chrome); border-left: var(--rt-hairline-width) solid var(--rt-border); font-size: var(--rt-text-xs); }
+.inspector__head { box-sizing: border-box; flex: none; display: flex; flex-wrap: nowrap; align-items: center; gap: var(--rt-space-2); height: var(--rt-workspace-band); padding: 0 var(--rt-space-2) 0 var(--rt-space-3); border-bottom: var(--rt-hairline-width) solid var(--rt-border); }
+.inspector__kicker { flex: 1 1 auto; font-size: var(--rt-text-sm); font-weight: 600; color: var(--rt-text); }
+.inspector__scroll { flex: 1 1 auto; min-height: 0; overflow: hidden auto; display: flex; flex-direction: column; gap: var(--rt-space-2); padding: var(--rt-space-3); }
+.inspector__mode { display: flex; }
+.inspector__who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-1) var(--rt-space-2); }
+.inspector .inspector__picker, .inspector .inspector__instances { display: inline-flex; flex-wrap: wrap; gap: var(--rt-space-1); }
+.inspector .inspector__body { display: flex; flex-direction: column; gap: var(--rt-space-2); margin-top: var(--rt-space-2); }
+.inspector .inspector__title { gap: var(--rt-space-2); }
+.inspector .inspector__name { font-size: var(--rt-text-md); font-weight: 600; letter-spacing: 0; }
+.inspector .inspector__scope { color: var(--rt-text-tertiary); }
+.inspector__section { display: flex; flex-direction: column; gap: var(--rt-space-2); margin-top: var(--rt-space-2); padding-top: var(--rt-space-3); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+.inspector__count { margin-left: var(--rt-space-1); letter-spacing: 0; text-transform: none; }
+.inspector .inspector__ring-caption > :first-child { color: var(--rt-text); }
+.inspector .inspector__ring-caption > :not(:first-child) { color: var(--rt-text-tertiary); }
+.inspector .inspector__controls { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--rt-space-1) var(--rt-space-2); }
+.inspector .inspector__controls > label { grid-row: 1; color: var(--rt-text-tertiary); }
+.inspector .inspector__controls > .inspector__note { color: var(--rt-text-tertiary); }
+.inspector .inspector__cascade:empty { display: none; }
+.inspector__foot { flex: none; display: flex; align-items: center; gap: var(--rt-space-2); margin: 0; padding: var(--rt-space-2) var(--rt-space-3); border-top: var(--rt-hairline-width) solid var(--rt-border); background: var(--rt-chrome); }
+.inspector__foot-gap { flex: 1 1 auto; }
+/* With nothing to show the panel is its mode and one sentence. */
+.inspector[data-mode='empty'] .inspector__who, .inspector[data-mode='empty'] .inspector__title, .inspector[data-mode='empty'] .inspector__ring, .inspector[data-mode='empty'] .inspector__actions { display: none; }
+/* The two toggles: the Run panel's leads the band, the inspector's ends it and is the same glyph turned to its side. */
+.panel-toggle.is-active { color: var(--rt-accent-200); background: var(--rt-accent-tint-10); }
+.panel-toggle--end > .ph { transform: scaleX(-1); }
+.run-header > .panel-toggle { margin-left: calc(-1 * var(--rt-space-2)); }
+/* At the Run panel's width the two live-run selectors take a line each, whole. */
+.run-panel__switches .run-controls { grid-template-columns: minmax(0, 1fr); }
+/* An MCP server's line is a name and three facts about it, set as text. */
+.inspector .inspector__mcp > .card-kicker { font-size: var(--rt-text-xs); letter-spacing: 0; text-transform: none; color: var(--rt-text-secondary); }
+.inspector .inspector__mcp { display: flex; flex-direction: column; gap: var(--rt-space-1); margin-top: var(--rt-space-2); }
+/*
+ * The composer's card (the owner, 2026-11-18: "fix the spacing of the input card at the bottom"). Measured: the card was
+ * 104 px in a 150 px row, so 8 px stood above it and 46 px below; and the typed text began 10 px right of the strip's
+ * first control. The card now fills the row the divider sizes, with one interval above and below it, and the field's
+ * text and the strip's controls share a left edge.
+ */
+.workspace--run-panel > .composer { padding: var(--rt-space-1) var(--rt-space-5) var(--rt-space-3); overflow: hidden; }
+.workspace--run-panel .composer__dock { flex: 1 1 auto; min-height: 0; }
+.workspace--run-panel .composer__dock > .slash-field { flex: 1 1 auto; min-height: 0; padding: var(--rt-space-2) var(--rt-space-2) 0; }
+.workspace--run-panel .composer__dock .composer__input { height: 100%; max-height: none; padding-inline: var(--rt-space-1); }
+.workspace--run-panel .composer__dock > .composer__strip { flex: none; }
+
+/* PD-SHELL-017 revision 2, after its first review. */
+.workspace--run-panel { position: relative; }
+.inspector__foot { flex-direction: column; align-items: stretch; }
+.inspector__foot > .inspector__actions { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--rt-space-2); }
+.inspector__foot > .inspector__cascade { color: var(--rt-warn); }
+.run-header > .panel-toggle, .run-header .transcript__toolbar > .panel-toggle { flex: none; }
+.run-panel__head > .run-controls { flex: none; }
+/* The tools an agent is using or has used, named on one line; the one in flight in the running colour. */
+.inspector__used { color: var(--rt-text); overflow-wrap: anywhere; }
+.inspector__used-name.is-active { color: var(--rt-run); }

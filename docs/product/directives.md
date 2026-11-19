@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and thirty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and thirty-six.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -184,6 +184,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-SHELL-014](directives/pd-shell-014.md) | a persona window and the terminal window have a floor, and what each shows there |
 | [PD-SHELL-015](directives/pd-shell-015.md) | six primary views: Mission is not one |
 | [PD-SHELL-016](directives/pd-shell-016.md) | the navigation is a sidebar holding the views and the sessions; the window opens on the Workspace |
+| [PD-SHELL-017](directives/pd-shell-017.md) | the Workspace is one header band and the transcript, between a Run panel and the inspector |
 
 ### STARTUP
 

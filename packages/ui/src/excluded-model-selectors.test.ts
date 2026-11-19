@@ -8,7 +8,7 @@ import { AuthRecoveryDialog } from './AuthRecoveryDialog.js';
 import { Inspector } from './Inspector.js';
 import { choiceFires } from './design-system/searchable-select.js';
 import { annotatedModelOptions, EXCLUDED_MODEL_HINT } from './model-options.js';
-import { RunHeader } from './RunHeader.js';
+import { RunSwitches } from './RunHeader.js';
 import { WorkspaceView } from './WorkspaceView.js';
 
 /*
@@ -62,8 +62,8 @@ describe('REQ-MONITOR-194: every model selector annotates a pair the session hol
     expect(annotatedModelOptions(MODELS, [])).toEqual(MODELS.map((m) => ({ value: m, label: m })));
   });
 
-  it('the run header\'s Switch model', () => {
-    const html = renderToStaticMarkup(createElement(RunHeader, { runState: 'running', session: session(['alpha']), runActive: true, stepStartedAt: null, models: MODELS, onSetModel: ok, onError: () => undefined }));
+  it('the live run\'s Switch model, at the head of the Run panel (PD-SHELL-017)', () => {
+    const html = renderToStaticMarkup(createElement(RunSwitches, { runState: 'running', session: session(['alpha']), runActive: true, models: MODELS, onSetModel: ok, onError: () => undefined }));
     expect(rows(html, 'Active run model')).toEqual(['::', 'alpha:' + H + ':', 'beta::', 'gamma::']);
   });
 

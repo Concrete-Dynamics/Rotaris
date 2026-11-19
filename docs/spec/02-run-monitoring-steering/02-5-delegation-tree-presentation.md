@@ -25,6 +25,8 @@ Part 2 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 
 **REQ-MONITOR-043** — Rows for task agents put the persona first, with the task title on the line below. The run's synthetic root is neither rendered as a task agent nor selectable in the tree; run-level control lives in a dedicated run header instead.
 
+> **Narrowed by [`PD-SHELL-017`](../../product/directives/pd-shell-017.md#pd-shell-017), 2026-11-18.** The live-run controls stand in the Workspace's Run panel; the run-state label and the timing stay in the header band.
+
 **REQ-MONITOR-044** — Each agent as presented to views carries: id, name, persona, presentation state (running / waiting / queued / done / failed / cancelled), parent id, dependencies, activity text, model, reasoning level (default "medium"), context tokens used, context limit (the configured default context capacity of REQ-MONITOR-080 where the model's own capacity is unknown, per REQ-MONITOR-049), tool-call count, elapsed string, granted tools, granted MCP tools per server, previously called tool names, currently active tool names, artifacts (name, producer, ready flag), produced and received artifact ids, category, background flag, delegation task, delegation session id, and inherited context.
   > **Extended by [`PD-CONFIG-003`](../../product/directives/pd-config-003.md#pd-config-003) revision 3, 2026-10-07.** An agent as presented also carries whether its stored report
   > carries REQ-ORCH-088's timeout error: the limit it ran under and whether it was cut off while making progress
@@ -56,6 +58,8 @@ Part 2 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 > sentence above still governs.
 
 **REQ-MONITOR-052** — The inspector for an agent shows: a state-colored status dot that pulses while live; the agent name; a meta line of the form `{state} · {elapsed or em-dash} · {N} tool calls`; a context ring showing used against limit with the compression threshold marked; a caption naming it the context window and stating the compression threshold percentage; a model selector; a reasoning selector offering low / medium / high; a scope note; tool chips; artifact links; a cascade note; and Steer, Cancel, and Pop out actions.
+
+> **Narrowed by [`PD-SHELL-017`](../../product/directives/pd-shell-017.md#pd-shell-017), 2026-11-18.** The tool chips stand in one counted disclosure, the tools in use and used named on a line above it; with no agent to show, the dot, the ring and the three acts are not drawn.
   > **Extended by [`PD-CONFIG-003`](../../product/directives/pd-config-003.md#pd-config-003) revision 3, 2026-10-07 (revision 4, 2026-10-13: a one-second limit reads "1 second").** Directly under the meta line, unchanged in form, the
   > inspector of an agent cut off at its per-agent timeout shows one line giving the limit and naming
   > Settings › Runtime › Per-agent timeout.

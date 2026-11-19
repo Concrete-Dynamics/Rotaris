@@ -82,6 +82,6 @@ export function TerminalToolbarControl() {
       data-running={running}
       data-total={total}
       onClick={() => { if (host) host.open(); else openTerminalWindow(); }}
-    >{TOOLBAR.label(running)}</DesignButton>
+    ><i className="ph ph-terminal-window" aria-hidden="true" /><span className="tool-label">{TOOLBAR.label(running)}</span>{running > 0 && <span className="tool-count mono" aria-hidden="true">{running}</span>}</DesignButton>
   );
 }

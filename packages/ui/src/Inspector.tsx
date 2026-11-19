@@ -185,7 +185,7 @@ export function Inspector(props: InspectorProps) {
           </section>
           <div className="inspector__tools inspector__section" aria-label="Tools">
             <span className="card-kicker">Tools{chips.length > 0 && <span className="inspector__count mono"> {chips.filter((c) => c.state !== 'not used').length} of {chips.length} used</span>}</span>
-            {chips.length === 0 && <span className="text-secondary">No tools resolved.</span>}
+            {chips.length === 0 && <div className="chips" data-testid="inspector-chips"><span className="text-secondary">No tools resolved.</span></div>}
             {/*
               * PD-SHELL-017 clause 4 with REQ-MONITOR-062: the tools in use and used are named on one line, and the whole
               * granted set is one strip in its own order behind a disclosure. A chip never moves when its state changes —

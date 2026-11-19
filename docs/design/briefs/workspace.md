@@ -83,3 +83,14 @@ side and the Run panel docks. Round 2: satisfied, all six seen fixed and nothing
 - The transcript's accent rule is one segment per row and stands off the text it marks; it belongs to
   [`transcript-rows.md`](transcript-rows.md).
 - With the Run panel folded, the live-run controls are one act away.
+
+## 7. Verification, as run
+
+- **Before the rebase** (2026-11-18, an idle desktop): the gate green but for the two `SIGINT` cases of
+  `packages/agent-tools/src/terminal/background.test.ts`, which fail alone on this host; the twenty-eight suites the
+  verification plan named green, `theme-proof` excepted (red on `main` alike).
+- **After the rebase onto `e425c5a7`** (2026-11-19): `pnpm check` green, 8397 tests. `mcp-proof` had found a real defect —
+  an empty native grant left the inspector without its tools field — repaired in the branch's second commit and green
+  since. Seventeen suites green; ten red or changing colour, each of them red on `main` in the same hour or green when
+  run alone: `docs/defects/nine-surface-proofs-are-red-on-main-and-on-a-branch-alike-while-the-desktop-is-in-use.md`.
+- **Captures of the final head:** `.ui-review/workspace-run-panel/final/` (git-ignored), empty and running at 1440, 1920 and 1000 px.

@@ -179,9 +179,28 @@ function urlPasswords(text: string): string {
   return text.replace(/(^|[^A-Za-z0-9+.\-])([A-Za-z][A-Za-z0-9+.-]{0,63}:\/\/[^\s:@/]+:)([^\s@/]+)(@)/g, (_m, pre: string, a: string, _p: string, c: string) => `${pre}${a}${REDACTION_MARK}${c}`);
 }
 
+const PEM_BEGIN = /-----BEGIN [^-\n]*-----/g;
+const PEM_END = /-----END [^-\n]*-----/g;
+
 function pemBodies(text: string): string {
   // REQ-EVENTS-060: everything between the delimiters of a PEM-delimited private key block.
-  return text.replace(/(-----BEGIN [^-\n]*-----)([\s\S]*?)(-----END [^-\n]*-----)/g, (_m, a: string, _b: string, c: string) => `${a}\n${REDACTION_MARK}\n${c}`);
+  // Two linear scans rather than one expression with a lazy body: that one re-scanned to the end of the
+  // text from every opening delimiter that had no closing one, quadratic over a text of openings alone.
+  // The reading is the same — the leftmost opening, then the first closing after it — and an opening with
+  // no closing after it ends the pass, since no later opening has one either.
+  let out = '';
+  let at = 0;
+  for (;;) {
+    PEM_BEGIN.lastIndex = at;
+    const begin = PEM_BEGIN.exec(text);
+    if (begin === null) break;
+    PEM_END.lastIndex = begin.index + begin[0].length;
+    const end = PEM_END.exec(text);
+    if (end === null) break;
+    out += `${text.slice(at, begin.index)}${begin[0]}\n${REDACTION_MARK}\n${end[0]}`;
+    at = end.index + end[0].length;
+  }
+  return at === 0 ? text : out + text.slice(at);
 }
 
 /** The pass. Deterministic, idempotent, no entropy or length heuristic anywhere. */

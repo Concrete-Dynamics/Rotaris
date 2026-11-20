@@ -170,8 +170,14 @@ export function snapshotLayer(snapshot: ProjectSnapshot): { layer: PlainMap | nu
   for (const id of ids) {
     const rec = snapshot.providers[id]!;
     for (const m of rec.models) {
+      // REQ-PROVIDER-082/090: a model discovery recorded as unavailable stays in the snapshot and is never a usable entry.
+      const availability = m.capabilities?.['availability'];
+      if (typeof availability === 'string' && availability !== '' && availability !== 'available') continue;
       const modelId = m.id.startsWith(`${id}/`) ? m.id.slice(id.length + 1) : m.id;
       const entry: Record<string, unknown> = { provider: snapshotProviderFamily(id, rec.family), model_id: modelId, auth_provider: id };
+      // REQ-PROVIDER-091: the API mode discovery chose is carried through.
+      const apiMode = m.capabilities?.['api_mode'];
+      if (apiMode === 'chat' || apiMode === 'responses') entry['api_mode'] = apiMode;
       if (rec.base_url !== undefined) entry['base_url'] = rec.base_url;
       const input = m.limits['context_window'];
       const output = m.limits['max_output_tokens'];

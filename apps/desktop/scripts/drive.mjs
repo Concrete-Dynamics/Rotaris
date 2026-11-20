@@ -31,7 +31,8 @@
  *
  * A window is named by its index in `windows` (0 is the most recently focused main window), by a suffix of a main
  * window's workspace path, or by a role: `persona:<persona>` (that persona's window, REQ-SHELL-072), `approval` (the
- * open approval dialog, REQ-TOOLS-063) or `terminal` (the terminal window). A role names the first such window,
+ * open approval dialog, REQ-TOOLS-063), `terminal` (the terminal window), `auth-recovery` or `provider` (the provider
+ * authentication window, REQ-PROVIDER-116). A role names the first such window,
  * main window by main window in `windows`' order; a name that matches no open window is refused with what is open.
  *
  * Nothing here is product code, and nothing here is evidence: a proof asserts, this reports.

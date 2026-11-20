@@ -602,7 +602,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
    * one message in the product that carries a credential value; it travels main → utility process only and no
    * renderer schema (commands, channels) has a field for it (ADR-0030 c.2).
    */
-  z.object({ kind: z.literal('credentials.leased'), bearers: z.record(z.string(), z.string()), report: z.object({ authenticated: z.array(z.string()), renewed: z.array(z.string()), unresolved: z.record(z.string(), z.string()) }) }),
+  z.object({ kind: z.literal('credentials.leased'), bearers: z.record(z.string(), z.string()), headers: z.record(z.string(), z.record(z.string(), z.string())).default({}), renewable: z.array(z.string()).default([]), report: z.object({ authenticated: z.array(z.string()), renewed: z.array(z.string()), unresolved: z.record(z.string(), z.string()) }) }),
   /** ADR-0039 (Part P): the workspace service's five answers and the run host's three. `invocations` and `elapsedMs` are what the proof measures. */
   z.object({ kind: z.literal('checkpoint.captured'), outcome: z.enum(['recorded', 'nothing-to-record', 'unavailable', 'failed']), ref: z.string().optional(), commit: z.string().optional(), files: z.array(z.string()).optional(), detail: z.string().optional(), invocations: z.number().int().nonnegative(), elapsedMs: z.number().nonnegative() }),
   z.object({ kind: z.literal('checkpoint.refs'), ok: z.boolean(), entries: z.array(z.object({ sequence: z.number().int(), commit: z.string(), ref: z.string() })), detail: z.string().optional() }),

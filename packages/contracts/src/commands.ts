@@ -348,6 +348,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('provider.payload') }),
   /** The pasted key travels INWARD here and nowhere else; `openai-compatible` as providerId means a custom instance from label + URL. */
   z.object({ kind: z.literal('provider.signIn'), providerId: z.string().max(NAME_MAX).min(1), label: z.string().max(NAME_MAX).optional(), baseUrl: z.string().max(PATH_MAX).optional(), apiKey: z.string().max(PATH_MAX), replace: z.boolean().optional(), allowEmpty: z.boolean().optional() }),
+  /**
+   * REQ-PROVIDER-096/116: an interactive sign-in (device code, browser page) for the asking window's provider. It answers
+   * with the flow's one outcome once the user has finished at the provider; while it waits the window reads the prompt
+   * to show with `provider.authPrompt`, and `provider.authCancel` ends a pending wait early. No credential travels on any of the three.
+   */
+  z.object({ kind: z.literal('provider.authenticate'), providerId: z.string().max(NAME_MAX).min(1), reauthenticate: z.boolean().optional(), allowEmpty: z.boolean().optional() }),
+  z.object({ kind: z.literal('provider.authPrompt') }),
+  z.object({ kind: z.literal('provider.authCancel') }),
   z.object({ kind: z.literal('providers.save'), id: z.string().max(NAME_MAX).min(1), apiKey: z.string().max(PATH_MAX), baseUrl: z.string().max(PATH_MAX).nullable(), validate: z.boolean() }),
   z.object({ kind: z.literal('providers.validate'), id: z.string().max(NAME_MAX).min(1) }),
   z.object({ kind: z.literal('providers.signOut'), id: z.string().max(NAME_MAX).min(1) }),

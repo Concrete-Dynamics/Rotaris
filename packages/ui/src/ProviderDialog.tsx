@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ProviderChoice, ProviderDialogPayload, ProviderSignInResult } from '@rotaris/contracts';
+import type { ProviderChoice, ProviderDialogPayload, ProviderSignInPrompt, ProviderSignInResult } from '@rotaris/contracts';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect } from './design-system/index.js';
 
 /**
@@ -10,20 +10,33 @@ import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Selec
  * input; the confirm button is "Authenticate" ("Add endpoint" for a custom instance), busy text as specified.
  * REQ-PROVIDER-052's replacement confirmation (default No) and REQ-PROVIDER-097's zero-model recovery
  * (retry at most twice, choose a different provider, abandon; editing by hand is owed) are asked in place.
+ * A device-code or browser provider (REQ-PROVIDER-096/116) starts its own flow on "Authenticate": main opens the system
+ * browser and this window shows the prompt it reads back — "Open <link> and enter code <code>." or the browser sentence
+ * followed by the link — until the flow has its one outcome; Cancel ends the pending wait early.
  * Structure from the specification; language from the design system (`.dialog`, `.btn-*`, `.input`).
  */
 export interface ProviderDialogProps {
   readonly payload: ProviderDialogPayload;
   readonly onSubmit: (req: { providerId: string; label: string; baseUrl: string; apiKey: string; replace: boolean; allowEmpty: boolean }) => Promise<ProviderSignInResult | { outcome: 'error'; message: string }>;
+  /** REQ-PROVIDER-096: the provider's own flow; it answers once the user has finished at the provider, or cancelled. */
+  readonly onAuthenticate?: (req: { providerId: string; reauthenticate: boolean; allowEmpty: boolean }) => Promise<ProviderSignInResult | { outcome: 'error'; message: string }>;
+  /** The prompt the pending flow shows, or null while it has none yet. */
+  readonly onPrompt?: () => Promise<ProviderSignInPrompt | null>;
+  /** REQ-PROVIDER-116: ends a pending device or callback wait early. */
+  readonly onCancelSignIn?: () => void;
+  readonly onOpenLink?: (url: string) => void;
   readonly onClose: () => void;
 }
+
+export const PKCE_PROMPT = "Your browser should have opened automatically. If it didn't, open this link to complete authentication:";
+const PROMPT_POLL_MS = 400;
 
 export const KEY_INSTRUCTION = 'Enter the provider API key. It will be validated with the provider\'s model catalog endpoint before it is saved.';
 export const OAUTH_INSTRUCTION = 'Start authentication. Rotaris will open or display the provider\'s official sign-in flow here.';
 export const BUSY_AUTH = 'Authenticating and checking provider health…';
 export const BUSY_ADD = 'Validating endpoint and discovering models…';
 
-export function ProviderDialog({ payload, onSubmit, onClose }: ProviderDialogProps) {
+export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, onCancelSignIn, onOpenLink, onClose }: ProviderDialogProps) {
   const fixed = payload.mode !== 'add';
   const initial = useMemo(() => (fixed ? payload.choices.find((c) => c.id === payload.providerId) ?? null : payload.choices.find((c) => c.custom) ?? payload.choices[0] ?? null), [fixed, payload]);
   const [choice, setChoice] = useState<ProviderChoice | null>(initial);
@@ -37,6 +50,29 @@ export function ProviderDialog({ payload, onSubmit, onClose }: ProviderDialogPro
   const [noModels, setNoModels] = useState<{ retries: number } | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const keyInput = useRef<HTMLInputElement>(null);
+  const [prompt, setPrompt] = useState<ProviderSignInPrompt | null>(null);
+  const [waiting, setWaiting] = useState(false);
+  const interactive = choice !== null && choice.available && choice.method !== 'api-key';
+
+  // REQ-PROVIDER-116: while the provider's flow waits for the user, the prompt main holds is read back and shown.
+  useEffect(() => {
+    if (!waiting || !onPrompt) return;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const read = async (): Promise<void> => {
+      const p = await onPrompt().catch(() => null);
+      if (!live) return;
+      if (p !== null) setPrompt(p);
+      timer = setTimeout(() => { void read(); }, PROMPT_POLL_MS);
+    };
+    void read();
+    return () => { live = false; if (timer !== null) clearTimeout(timer); };
+  }, [waiting, onPrompt]);
+
+  const cancel = (): void => {
+    if (waiting) onCancelSignIn?.();
+    onClose();
+  };
 
   const name = choice ? (choice.custom ? (label.trim() || 'endpoint') : choice.displayName) : '';
   const title = payload.mode === 'reauthenticate' ? `Re-authenticate ${payload.displayName ?? name}` : payload.mode === 'authenticate' ? `Authenticate ${payload.displayName ?? name}` : choice?.custom ? 'Add provider' : `Authenticate ${name}`;
@@ -54,7 +90,23 @@ export function ProviderDialog({ payload, onSubmit, onClose }: ProviderDialogPro
   const submit = async (opts: { replace?: boolean; allowEmpty?: boolean } = {}) => {
     if (!choice || busy) return;
     if (!choice.available) { setError(choice.unavailabilityReason ?? 'This provider is not available.'); return; }
-    if (choice.method !== 'api-key') { setError(`${choice.displayName} signs in with "${choice.methodLabel}", which this build does not provide yet.`); return; }
+    if (choice.method !== 'api-key') {
+      if (!onAuthenticate) { setError(`${choice.displayName} signs in with "${choice.methodLabel}", which this window cannot start.`); return; }
+      setBusy(true);
+      setWaiting(true);
+      setPrompt(null);
+      setError(null);
+      const r = await onAuthenticate({ providerId: choice.id, reauthenticate: payload.mode === 'reauthenticate', allowEmpty: opts.allowEmpty ?? false });
+      setBusy(false);
+      setWaiting(false);
+      setPrompt(null);
+      if (r.outcome === 'signed-in') { setDone(r.message); return; }
+      if (r.outcome === 'no-models') { setNoModels((n) => ({ retries: n?.retries ?? 0 })); return; }
+      if (r.outcome === 'cancelled') { onClose(); return; }
+      if (r.outcome === 'needs-confirmation') { setError(r.message); return; }
+      setError(r.message);
+      return;
+    }
     const errs: { label?: string; baseUrl?: string; apiKey?: string } = {};
     if (choice.custom && label.trim() === '') errs.label = 'Label is required.';
     if (choice.custom && baseUrl.trim() === '') errs.baseUrl = 'Endpoint URL is required.';
@@ -74,10 +126,10 @@ export function ProviderDialog({ payload, onSubmit, onClose }: ProviderDialogPro
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); if (waiting) onCancelSignIn?.(); onClose(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, onCancelSignIn, waiting]);
 
   if (done !== null) {
     return (
@@ -114,14 +166,28 @@ export function ProviderDialog({ payload, onSubmit, onClose }: ProviderDialogPro
           {fieldErrors.baseUrl && <span className="composer__error" role="alert">{fieldErrors.baseUrl}</span>}
         </label>
       </>)}
-      {choice && choice.method === 'api-key' && (
+      {choice && !choice.available && <p className="composer__error" role="alert" data-unavailable>{choice.unavailabilityReason ?? 'This provider is not available.'}</p>}
+      {choice && choice.available && choice.method === 'api-key' && (
         <label className="provider-dialog__field">
           <span className="text-secondary">{KEY_INSTRUCTION}</span>
           <DesignInput id="provider-key" ref={keyInput} className="input mono" type="password" autoComplete="off" value={apiKey} disabled={busy} onChange={(e) => setApiKey(e.currentTarget.value)} aria-label="API key" aria-invalid={fieldErrors.apiKey ? true : undefined} />
           {fieldErrors.apiKey && <span className="composer__error" role="alert">{fieldErrors.apiKey}</span>}
         </label>
       )}
-      {choice && choice.method !== 'api-key' && <p className="text-secondary">{OAUTH_INSTRUCTION}</p>}
+      {interactive && !prompt && <p className="text-secondary">{OAUTH_INSTRUCTION}</p>}
+      {interactive && prompt?.kind === 'device-code' && (
+        <div className="provider-dialog__prompt" role="status" data-prompt="device-code">
+          <p className="dialog-body">Open <a href={prompt.verificationUri} onClick={(e) => { e.preventDefault(); onOpenLink?.(prompt.verificationUri); }}>{prompt.verificationUri}</a> and enter code <strong className="mono" data-user-code>{prompt.userCode}</strong>.</p>
+          <p className="text-secondary">The code stays valid for {Math.max(1, Math.round(prompt.expiresInSeconds / 60))} minutes; Rotaris checks every {prompt.intervalSeconds} seconds whether you have entered it.</p>
+        </div>
+      )}
+      {interactive && prompt?.kind === 'browser' && (
+        <div className="provider-dialog__prompt" role="status" data-prompt="browser">
+          <p className="dialog-body">{prompt.message}</p>
+          <p className="text-secondary">{PKCE_PROMPT}</p>
+          <p className="provider-dialog__link"><a href={prompt.url} onClick={(e) => { e.preventDefault(); onOpenLink?.(prompt.url); }}>{prompt.url}</a></p>
+        </div>
+      )}
       {confirm && (
         <DesignCard className="card provider-dialog__confirm" role="alertdialog" aria-label="Confirm replacement">
           <p className="card-body">{confirm.message}</p>
@@ -145,8 +211,8 @@ export function ProviderDialog({ payload, onSubmit, onClose }: ProviderDialogPro
       {busy && <p className="text-secondary" role="status" data-busy>{choice?.custom ? BUSY_ADD : BUSY_AUTH}</p>}
       {error && <p className="composer__error" role="alert" data-outcome="failed">{error}</p>}
       <div className="dialog-actions">
-        <DesignButton type="button" className="btn btn-primary" disabled={busy || !choice} onClick={() => { void submit(); }} data-action="authenticate">{choice?.custom ? 'Add endpoint' : 'Authenticate'}</DesignButton>
-        <DesignButton type="button" className="btn btn-secondary" disabled={busy} onClick={onClose} title="Escape">Cancel</DesignButton>
+        <DesignButton type="button" className="btn btn-primary" disabled={busy || !choice || !choice.available} onClick={() => { void submit(); }} data-action="authenticate">{choice?.custom ? 'Add endpoint' : 'Authenticate'}</DesignButton>
+        <DesignButton type="button" className="btn btn-secondary" disabled={busy && !waiting} onClick={cancel} title="Escape" data-action="cancel">Cancel</DesignButton>
       </div>
     </div>
   );

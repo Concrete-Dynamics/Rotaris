@@ -269,6 +269,9 @@ describe('REQ-CONFIG-082..110 model and persona entries', () => {
     expect(readModelEntry('f', { provider: 'deepseek', model_id: 'x', max_parallel: 5 }, s)).toMatchObject({ max_parallel: 5 });
     const copilot = readModelEntry('c', { provider: 'openai', model_id: 'x', auth_provider: 'copilot', mystery: 1 }, s)!;
     expect(copilot.disable_responses_api).toBe(true);
+    // R-110: a Copilot model the catalogue serves on the responses route only keeps that route; the stated switch still wins.
+    expect(readModelEntry('r', { provider: 'openai', model_id: 'x', auth_provider: 'copilot', api_mode: 'responses' }, s)!.disable_responses_api).toBe(false);
+    expect(readModelEntry('r', { provider: 'openai', model_id: 'x', auth_provider: 'copilot', api_mode: 'responses', disable_responses_api: true }, s)!.disable_responses_api).toBe(true);
     expect(s.errors).toEqual([]);
     expect(s.warnings.map((w) => w.path)).toEqual(['models.c.mystery']);
   });

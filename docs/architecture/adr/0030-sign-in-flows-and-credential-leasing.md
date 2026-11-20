@@ -175,3 +175,56 @@ it (REQ-ORCH-009 then takes the next slot), so no call goes out that the lease r
 refused. `session.start` already leased every provider the configuration names (REQ-PROVIDER-066), so nothing
 crosses the process boundary that did not before. **Found: nothing in the leasing** — the defect was in the run
 host's wiring of it, and `configuration.test.ts` now pins two providers each receiving their own bearer.
+
+## Third execution — 2026-11-20, the device-code and browser flows, the listener and the renewing lease (R-110)
+
+*Recorded under GD-10. Two things found in the request the subscription endpoint accepts, one in the specification; the
+listener's guarantee held.*
+
+**Built** (`packages/providers/src/flows/`, `signin.ts`, `discovery-strategies.ts`; `apps/desktop/src/main/commands/providers.ts`;
+`apps/desktop/src/run-host/leased-credentials.ts`; `packages/ui/src/ProviderDialog.tsx`): what the first execution listed as
+not built, less the hosted provider and the bridge artifacts. **The loopback listener** binds `127.0.0.1` on the declared
+ports in order and no other, serves one path, answers 404 elsewhere, treats a state mismatch as forgery, and is closed in a
+`finally` the sign-in awaits — a test starts a second listener on the port the first released, and another holds both
+declared ports busy and reads the failure naming them (the conformance test this decision asked for; the tests take
+ephemeral ports, so no test binds 1455). **`codex`**: authorization code with PKCE, the exchange, the refresh, the account
+id read unverified from the id token and then the access token (consequence 4, named `unverifiedJwtClaims`). **`copilot`**:
+the device flow with REQ-PROVIDER-023's polling, the `ghu_` check, the session exchange and its refresh. **The window**
+starts the flow with one command that answers when the flow has its outcome, reads the prompt to show with a second, and
+cancels with a third; main opens the system browser and logs the sign-in page's host only, since its address carries the
+flow's state. No credential crosses to a renderer on any of the three (consequence 2). **The lease** is now asynchronous
+and renews: a credential that has expired or will within 300 seconds is renewed before its bearer is handed over
+(REQ-PROVIDER-067), one refresh per provider at a time, and the answer carries beside the bearers the request headers a
+provider's API needs (REQ-PROVIDER-070/076: not credentials) and which leased credentials carry an expiry. **The keep-fresh
+scope** did not land where this decision put it: the run host asks main again every 60 seconds while a run is live, for
+the credentials with an expiry only, and lays main's latest bearer over each run's own lease per request
+(`LeasedCredentials`). The store, the refresh and the last error stay in main and single-valued, which is what the decision
+protects; the timer sits in the process that knows whether a run lasts. Kept beside the decision rather than repaired
+quietly.
+
+**Run for real, on the owner's accounts, in the built application against a scratch profile:** `codex` signed in through
+the browser page on port 1455 and discovered 3 models; `copilot` signed in by device code and discovered 46 models on the
+tenant base the exchange returned, 11 of them recorded `policy_disabled`. Each credential file is mode 0600.
+
+**Found by the first requests.** (1) The subscription endpoint refused the SDK's ordinary responses request with HTTP 400
+"Store must be set to false". The request now says `store: false`, asks for the encrypted reasoning it must replay, and
+carries the system text as the body's own `instructions` (`ResponsesShape` in `packages/model/src/ai-sdk-client.ts`,
+chosen per model by its sign-in provider). REQ-PROVIDER-151 makes the endpoint's shape a contract the product consumes;
+no requirement states this part of it. (2) Copilot answered a model it advertises on the responses route alone with HTTP
+400 `unsupported_api_for_model` on the chat route REQ-CONFIG-084 forces — **OQ-551**, with the reading the build proceeds
+under. (3) Signing out of the first provider by id leaves its slot picks seeding the startup slots, and runs are refused
+([the note](../../defects/a-signed-out-provider-keeps-seeding-the-startup-slots-so-runs-are-refused.md)).
+
+**Not established.** No turn completed on either provider: both accounts were out of quota on the day (`codex`: HTTP 429
+`usage_limit_reached`, the plan's weekly window; `copilot`: HTTP 429 "quota exceeded", premium interactions at −18 of
+1500). Each request was authenticated and reached the provider's quota check on the route intended, and that is all that
+was read. A renewal by refresh token was exercised in tests only: neither bearer came within its margin during the session.
+
+**Not built, said so:** the hosted provider's OIDC flow (REQ-PROVIDER-037..041; its entry is unavailable); `claude-code`'s
+sign-in, refused with its reason until a local runtime exists
+([the note](../../defects/claude-code-cannot-be-signed-in-to-because-no-local-runtime-uses-its-token.md)); REQ-PROVIDER-013's
+30-second non-interactive attempt; the bridge artifacts (REQ-PROVIDER-061, 063..065); REQ-PROVIDER-035's token exchange;
+the in-place flow of REQ-NOTIFY-076
+([the note](../../defects/the-recovery-surfaces-do-not-start-a-browser-or-device-sign-in-in-place.md)); REQ-PROVIDER-097's
+edit-by-hand option and REQ-PROVIDER-099's offer to open the configuration.
+

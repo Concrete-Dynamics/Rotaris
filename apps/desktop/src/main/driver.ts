@@ -37,9 +37,9 @@ import { SECURITY_PREFERENCE_KEYS } from './secure-web-preferences.js';
  * authentication recovery dialog presented over it (REQ-NOTIFY-072).
  */
 export interface AuxiliaryWindow {
-  /** What `window` and `useWindow` name it by: `persona:<persona>`, `approval`, `terminal` or `auth-recovery`. */
+  /** What `window` and `useWindow` name it by: `persona:<persona>`, `approval`, `terminal`, `auth-recovery` or `provider`. */
   readonly selector: string;
-  readonly role: 'persona' | 'approval' | 'terminal' | 'auth-recovery';
+  readonly role: 'persona' | 'approval' | 'terminal' | 'auth-recovery' | 'provider';
   /** The main window it belongs to, by its index in `windows`. */
   readonly owner: number;
   readonly wcId: number;
@@ -49,7 +49,7 @@ export interface AuxiliaryWindow {
 
 /** Whether a selector names an auxiliary window's role rather than a main window. */
 export function namesAuxiliary(which: string): boolean {
-  return which === 'approval' || which === 'terminal' || which === 'auth-recovery' || which.startsWith('persona:');
+  return which === 'approval' || which === 'terminal' || which === 'auth-recovery' || which === 'provider' || which.startsWith('persona:');
 }
 
 /**

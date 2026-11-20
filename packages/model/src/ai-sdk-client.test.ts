@@ -122,6 +122,28 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
     expect(outputDowngrade([{ type: 'unsupported', feature: 'topK' }], schemaOut)).toBeNull();
     expect(outputDowngrade([{ type: 'unsupported', feature: 'responseFormat' }], { kind: 'json_object' })).toBeNull();
   });
+  it('R-110: a sign-in provider\'s own headers ride on its model\'s requests, and a stateless responses endpoint is asked the way it requires', async () => {
+    const seen: { headers: Record<string, string>; body: Record<string, unknown> }[] = [];
+    const fake: FetchLike = async (_input, init) => {
+      seen.push({ headers: Object.fromEntries(new Headers(init?.headers).entries()), body: JSON.parse(bodyOf(init)) as Record<string, unknown> });
+      return new Response('{"error":{"message":"stop here"}}', { status: 400, headers: { 'content-type': 'application/json' } });
+    };
+    const client = new AiSdkModelClient({
+      timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake,
+      headersFor: (m) => (m.modelId === 'acme-1' ? { 'chatgpt-account-id': 'acct-1', originator: 'codex_cli_rs' } : undefined),
+      responsesShapeFor: (m) => (m.modelId === 'acme-1' ? { stateless: true, instructionsInBody: true } : undefined),
+    });
+    const messages = [{ role: 'system' as const, content: [{ kind: 'text' as const, text: 'You are terse.' }] }, { role: 'user' as const, content: [{ kind: 'text' as const, text: 'hi' }] }];
+    await collect(client.stream(request('responses', { messages })));
+    expect(seen[0]!.headers['chatgpt-account-id']).toBe('acct-1');
+    expect(seen[0]!.headers['originator']).toBe('codex_cli_rs');
+    expect(seen[0]!.body).toMatchObject({ store: false, instructions: 'You are terse.', include: ['reasoning.encrypted_content'] });
+    expect(JSON.stringify(seen[0]!.body['input'])).not.toContain('You are terse.');
+    // Another model of the same client is asked the ordinary way.
+    await collect(client.stream(request('responses', { messages, model: { providerId: 'acme', modelId: 'acme-2', dialect: 'responses' } })));
+    expect(seen[1]!.headers['chatgpt-account-id']).toBeUndefined();
+    expect(seen[1]!.body['store']).toBeUndefined();
+  });
   it('responses: the same base URL reaches <base>/responses through the vendor constructor; a 401 keeps its status and body', async () => {
     const seen: string[] = [];
     const fake: FetchLike = async (input, init) => {

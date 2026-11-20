@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createReportingRoot, type ReportingRoot } from './render-failure.js';
 import { useStore } from 'zustand';
-import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type AuthRecoveryPayload, type AuthRecoveryResult, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
+import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type AuthRecoveryPayload, type AuthRecoveryResult, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInPrompt, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { Acknowledgements, ApprovalDialog, AuthRecoveryDialog, ArtifactInspector, createTerminalWindowStreams, type ArtifactLoaded, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
 import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, reloadThisWindow, replica, terminalHost, terminalStreams } from './shell.js';
 import { entryOf, useCancelOverlaid, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
@@ -56,7 +56,18 @@ export function bootProvider(): Promise<void> {
       if (!c.ok) return { outcome: 'error', message: c.detail ?? c.headline };
       return c.value as ProviderSignInResult;
     };
-    root.render(<StrictMode><ProviderDialog payload={payload} onSubmit={onSubmit} onClose={() => window.close()} /></StrictMode>);
+    const onAuthenticate = async (req: { providerId: string; reauthenticate: boolean; allowEmpty: boolean }): Promise<ProviderSignInResult | { outcome: 'error'; message: string }> => {
+      const c = await bridge.command({ kind: 'provider.authenticate', providerId: req.providerId, reauthenticate: req.reauthenticate, allowEmpty: req.allowEmpty });
+      if (!c.ok) return { outcome: 'error', message: c.detail ?? c.headline };
+      return c.value as ProviderSignInResult;
+    };
+    const onPrompt = async (): Promise<ProviderSignInPrompt | null> => {
+      const c = await bridge.command({ kind: 'provider.authPrompt' });
+      return c.ok ? (c.value as { prompt: ProviderSignInPrompt | null }).prompt : null;
+    };
+    const onCancelSignIn = (): void => { void bridge.command({ kind: 'provider.authCancel' }); };
+    const onOpenLink = (url: string): void => { void bridge.command({ kind: 'shell.openExternal', url }); };
+    root.render(<StrictMode><ProviderDialog payload={payload} onSubmit={onSubmit} onAuthenticate={onAuthenticate} onPrompt={onPrompt} onCancelSignIn={onCancelSignIn} onOpenLink={onOpenLink} onClose={() => window.close()} /></StrictMode>);
   });
 }
 

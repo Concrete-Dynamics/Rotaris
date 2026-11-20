@@ -84,6 +84,18 @@ export const ProviderSignInResultSchema = z.discriminatedUnion('outcome', [
 ]);
 export type ProviderSignInResult = z.infer<typeof ProviderSignInResultSchema>;
 
+/**
+ * REQ-PROVIDER-012/096/116: the prompt an interactive sign-in shows while it waits for the user. A device-code prompt
+ * carries the verification address, the code to enter there, the polling interval and how long the code stays valid;
+ * a browser prompt carries the authorization address. Neither is a credential: the code and the address are what the
+ * user is shown, and the tokens the flow ends in never leave main (ADR-0030).
+ */
+export const ProviderSignInPromptSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('device-code'), verificationUri: z.string(), userCode: z.string(), intervalSeconds: z.number().nonnegative(), expiresInSeconds: z.number().nonnegative() }),
+  z.object({ kind: z.literal('browser'), url: z.string(), message: z.string() }),
+]);
+export type ProviderSignInPrompt = z.infer<typeof ProviderSignInPromptSchema>;
+
 export const ProviderActionResultSchema = z.object({ ok: z.boolean(), message: z.string() });
 export type ProviderActionResult = z.infer<typeof ProviderActionResultSchema>;
 

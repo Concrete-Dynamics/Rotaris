@@ -6,9 +6,10 @@ import { err, failure, ok, type Failure, type Result } from '@rotaris/kernel';
  * the type's answer (`null`), never a placeholder string (REQ-PROVIDER-005: `claude-code` declares neither
  * URL). Nothing in the running product writes any attribute here.
  *
- * Built in Part K with ONE authenticator registered (`api-key`) and one discoverer (generic HTTP); the
- * device-code and browser-PKCE flows are owed and a sign-in to a provider needing one ends in
- * REQ-PROVIDER-012's failure outcome naming the method.
+ * Built in Part K with ONE authenticator (`api-key`) and one discoverer (generic HTTP). Since R-110 (2026-11-20)
+ * `copilot`'s device code and `codex`'s browser PKCE are built (`flows/`), with their discovery strategies
+ * (`discovery-strategies.ts`); the hosted provider's OIDC flow is owed and its entry is unavailable, and
+ * `claude-code`'s sign-in is refused until a local runtime uses its token.
  */
 export const PROVIDER_IDS = ['concrete-cloud', 'copilot', 'codex', 'openai-compatible', 'claude-code', 'deepseek'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];

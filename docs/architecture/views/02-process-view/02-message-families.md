@@ -115,7 +115,15 @@ Main relays a session or hook command to the run host, a workspace or
 config command to the workspace service, and answers preference, theme, **provider** and **dictation** commands itself (the
 credential store and the dictation credential live in main). `provider.signIn` and `dictation.setCredential` are the two
 commands carrying a pasted secret inward; no outcome
-carries one back — the list shows the display mask. A sign-in that succeeds asks the workspace service
+carries one back — the list shows the display mask. **Since 2026-11-20 (R-110) a device-code or browser provider signs
+in with `provider.authenticate {providerId, reauthenticate?}`**, which main answers with the flow's one outcome once the
+user has finished at the provider (`ProviderService.signInInteractive`; main opens the system browser itself);
+`provider.authPrompt` reads the prompt the asking window shows meanwhile — the verification address and code, or the
+authorization address — and `provider.authCancel` ends the pending wait early, as closing the window does. None of the
+three carries a credential in either direction. The run host's `credentials.lease` ask is answered after any renewal it
+needed (REQ-PROVIDER-067), with `headers` (what a provider's API needs beside the bearer, REQ-PROVIDER-070/076) and
+`renewable` (the leased credentials that carry an expiry) beside the bearers; the run host asks again every 60 seconds
+while a run is live (REQ-PROVIDER-068). A sign-in that succeeds asks the workspace service
 `config.bootstrap` (the starter `agents.yaml` if absent, then the load again; since 2026-10-03 the open has already
 written it, so the answer is normally `exists`) and broadcasts `config:changed` (to each main
 window's family with its own workspace's snapshot, `announceConfig`, since 2026-10-03). **`repository.read`

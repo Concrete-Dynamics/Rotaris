@@ -19,6 +19,7 @@ import { captureAfterRun, dalWhileOpen } from './improvement-capture.js';
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, postRunAnalystOf, restingCatalogueOf, type ConfiguredRun } from './configuration.js';
 import { reloadWorkspaceConfiguration } from './mcp-reload.js';
 import { leasedSetup, leaseForContinuation, LeaseReportLog, type LeasedSetup } from './launch.js';
+import { LeasedCredentials, LEASE_ASK_MS } from './leased-credentials.js';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -136,6 +137,8 @@ export function createRunHost() {
   const configured = new Map<string, ConfiguredRun>();
   // ADR-0030: latest workspace lease for continuation loads. Active launches capture their own lease.
   const leased = new Map<string, Readonly<Record<string, string>>>();
+  // REQ-PROVIDER-068 / 070 / 076: main's latest answer per sign-in provider — renewed bearers and the headers its API needs.
+  const leasedCredentials = new LeasedCredentials();
   // The workspace root a session was started or resumed under — the key a continuation's lease refresh reads.
   const sessionRoots = new Map<string, string>();
   // Each active run retains its setup through deferred preflight and tool creation.
@@ -220,7 +223,7 @@ export function createRunHost() {
   const configurationDeps = {
     clocks, globalDir: configDir, env: process.env, scriptedClient: scripted, codeIntelligenceLaunch,
     onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
-    log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
+    log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {}, leasedCredentials,
     confinement: () => confinement.peek(),
     // PD-PROVIDER-001: the caps the provider catalogue declares, as main handed them at the handshake (`hello`).
     sharedQuotaCaps: () => sharedQuotaCaps,
@@ -324,8 +327,9 @@ export function createRunHost() {
     // REQ-SANDBOX-097: the continuation's lease prepares through the start-time gate, so it settles first; `leasedSetup` does not.
     settleConfinement,
     leaseCredentials: async (providers: readonly string[]) => {
-      const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credential lease: main did not answer the lease (${e.message})`, 'warn'); return null; });
+      const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(LEASE_ASK_MS)).catch((e: Error) => { log(`credential lease: main did not answer the lease (${e.message})`, 'warn'); return null; });
       const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
+      leasedCredentials.absorb(providers, answer?.kind === 'credentials.leased' ? answer : null);
       // The re-lease itself stays: it is what fixed the continuation's 401. Only the report is quieted.
       leaseReports.report(workspaceRoot, answer?.kind === 'credentials.leased' ? answer.report : null, (m) => log(m));
       return bearers;
@@ -552,6 +556,13 @@ export function createRunHost() {
   presenters.start();
   // Part U: the browser's actions over this registry, the clock ports and the ask channel.
   const sessionActions = { sessions, clocks, ask, log: (m: string, level?: 'info' | 'warn') => log(m, level ?? 'info') };
+  // REQ-PROVIDER-068: while a run lasts, a leased credential that carries an expiry is asked about again every 60 seconds.
+  leasedCredentials.keepFresh(
+    clocks.timers,
+    () => sessions.activeRunCount() > 0,
+    async (providers) => { const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(LEASE_ASK_MS)); return answer.kind === 'credentials.leased' ? answer : null; },
+    (m) => log(m, 'warn'),
+  );
 
   // Part AL — the live terminal (ADR-0021 first executed): the stream publisher over the terminal manager, the run's
   // `runtime.terminal_stream_*` settings (REQ-TOOLS-126), and the seven `terminal.*` requests (`run-host/terminal.ts`).
@@ -595,6 +606,7 @@ export function createRunHost() {
     skills,
     configure,
     leaseReports,
+    leasedCredentials,
     continuationLeaseForSession,
     retrospectiveSetup,
     configuredFor,

@@ -484,7 +484,7 @@
    A ruled line, not a card: consecutive lines share their rules, so three agents read as one list. */
 .row--thread { padding: 0; margin-top: 0; border: 0; border-radius: 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 .row--thread.row--block-start { margin-top: var(--rt-space-3); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
-.thread { display: grid; grid-template-columns: calc(var(--rt-space-5) - var(--rt-space-2)) auto minmax(0, 1fr) auto var(--rt-space-4); align-items: baseline; column-gap: var(--rt-space-2); row-gap: 0; width: 100%; padding: var(--rt-space-2) var(--rt-space-3); border: 0; border-radius: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm); text-align: start; cursor: pointer; }
+.thread { display: grid; grid-template-columns: calc(var(--rt-space-5) - var(--rt-space-2)) auto minmax(0, 1fr) auto var(--rt-space-4); align-items: baseline; column-gap: var(--rt-space-2); row-gap: 0; width: 100%; padding: var(--rt-space-2) calc(var(--rt-space-3) + var(--rt-hairline-width)); border: 0; border-radius: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm); text-align: start; cursor: pointer; }
 .thread:disabled { cursor: default; opacity: 1; }
 .thread:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .thread::before { content: ''; grid-column: 1; grid-row: 1; align-self: center; width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: 50%; background: var(--rt-row-persona, var(--rt-accent-300)); }

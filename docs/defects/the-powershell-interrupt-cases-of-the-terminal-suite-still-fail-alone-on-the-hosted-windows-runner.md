@@ -7,7 +7,9 @@ It did not make `packages/agent-tools/src/terminal/terminal.test.ts` reliable. T
 - run `44259268639` attempt 1 (2026-11-18, branch `chore/release-0.1.0rc3`): "on PowerShell a poll at once after C-c is OQ-168's soft pause, and the next calls report the end once, each with its own output" — `expected '(no output)' to be 'AAA'`. That is [the swallowed command](on-windows-a-command-written-in-the-same-tick-as-a-c-c-is-swallowed.md)'s symptom, and that note carries the sighting.
 - run `44355144125` attempt 1 (2026-11-18, branch `docs/r-104-rc3-published`, a documentation-only change): "the window's interrupt ends a running ping and a running node at once; the call itself runs out its cap, and the reset r…" — `ping: expected null to be true`.
 
-Both passed when the job was run again. The archived note on the gate's flake said a site that goes red again while it runs alone is a defect of its own case; these are those. Whether each is the product's race with PowerShell's own Ctrl-C handling, as the first is measured to be, or a reading the case takes too early, is not decided for the second: its log gives the assertion and not what the session reported.
+- run `44799479879` attempt 1 (2026-11-20, branch `test-suite-speed`, the change that spread the real-PTY cases over `terminal.pty-01..14.test.ts`): the same case, now in `terminal.pty-06.test.ts`, with the same `ping: expected null to be true`. The runner has four cores, so the real-process files still ran one at a time there; what changed for the case is that its file starts a session of its own.
+
+The first two passed when the job was run again. The archived note on the gate's flake said a site that goes red again while it runs alone is a defect of its own case; these are those. Whether each is the product's race with PowerShell's own Ctrl-C handling, as the first is measured to be, or a reading the case takes too early, is not decided for the second: its log gives the assertion and not what the session reported.
 
 Recorded while publishing `v0.1.0rc3` ([R-104](../product/requests.md#r-104)); not repaired there.
 
@@ -17,6 +19,6 @@ REQ-TOOLS-096, REQ-TOOLS-098 and REQ-SHELL-092/093 are what the two cases hold. 
 
 ## Relevant files
 
-- `packages/agent-tools/src/terminal/terminal.test.ts` — the two cases, in the "OQ-168 / OQ-147 / OQ-10 on PowerShell and ConPTY" group and beside it.
+- `packages/agent-tools/src/terminal/terminal.pty-06.test.ts` — the ping case since 2026-11-20, the other in a part file beside it (both in `terminal.test.ts` until then), in the "OQ-168 / OQ-147 / OQ-10 on PowerShell and ConPTY" group and beside it.
 - `packages/agent-tools/src/terminal/` — the session's interrupt path on Windows.
 - `vitest.config.ts` — `REAL_PROCESS_SUITES`, which runs the file alone.

@@ -9,6 +9,9 @@ Part 5 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
 - **REQ-WORKSPACE-134** — *Withdrawn.* There is no run subcommand and no exit code; the desktop refusals of REQ-WORKSPACE-137 carry what the user sees when a run is attempted with no model or no connected provider, and REQ-WORKSPACE-152 carries where the guided provider setup is started from.
 
 - **REQ-WORKSPACE-135** — The guided provider setup flow SHALL carry out these steps in this order: present the provider catalog for the user to choose from — exactly the built-in providers of REQ-PROVIDER-001, in that requirement's fixed order, together with any user-defined OpenAI-compatible instances already added, this domain declaring no provider and no ordering of its own; authenticate the chosen provider, collecting a device code or an API key according to what that provider supports; discover the models the credential grants access to; write the provider snapshot `project_settings.yaml` into the per-user configuration directory (REQ-PROVIDER-084, REQ-PROVIDER-085), and write the minimal bootstrap `agents.yaml` of REQ-WORKSPACE-038 only when no `agents.yaml` exists at the target path, an existing file never being overwritten; then assign discovered models to the named capability slots of REQ-PROVIDER-088. This domain relies on that requirement for the slot names, for how a slot left unset resolves, and for the fallback each slot takes, and states no slot vocabulary and no fallback of its own. Every step SHALL be a step of the desktop interface: it SHALL keep the window responsive while it runs, and abandoning it at any step SHALL leave every configuration file and the snapshot exactly as they were before that step. When discovery returns no models at all, the flow SHALL offer three ways forward — continue anyway, abandon the flow, or authenticate a different provider. Authenticating a second provider SHALL leave the first provider's snapshot in place and usable.
+  > **Extended by [`PD-WORKSPACE-010`](../../product/directives/pd-workspace-010.md#pd-workspace-010), 2026-11-21.** The
+  > first-launch setup's model step carries these steps out in place, over the same catalogue, sign-in, discovery and slot
+  > assignment.
 
 - **REQ-WORKSPACE-136** — *Withdrawn.* There is no login subcommand; REQ-WORKSPACE-152 carries the two entry points it offered — starting the flow for a provider chosen up front, and starting it to re-authenticate a provider already configured.
 
@@ -17,6 +20,10 @@ Part 5 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
   > **Extended by [`PD-LIBRARY-002`](../../product/directives/pd-library-002.md#pd-library-002) revision 5, 2026-10-14** ([OQ-300](../../archive/architecture/open-questions/61-spikes-and-later-questions-28.md#oq-300)). A
   > retrospective's authentication refusal at its capture is one of the refusals clause (2) names: its error notice carries the
   > action that opens Settings at Models. Clauses (1) to (3) are untouched.
+  > **Narrowed by [`PD-WORKSPACE-010`](../../product/directives/pd-workspace-010.md#pd-workspace-010), 2026-11-21.** While the
+  > first-launch setup is owed it stands in the place of clause (3)'s notice and carries the flow out itself, over the whole
+  > window and until skipped; the notice is published when the setup ends with no provider authenticated. Clauses (1) and (2)
+  > are untouched.
 
 - **REQ-WORKSPACE-137** — Desktop equivalents: submitting a prompt with no model configured SHALL yield "No model configured" / "Choose a model in Settings before starting a run." with an "Open Settings" action; with providers configured but none connected, "Provider authentication required" / "Authenticate at least one configured provider before starting a run." Provider health and authentication management live in Settings.
 
@@ -36,6 +43,9 @@ Part 5 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
 ### Cross-Cutting Invariants
 
 - **REQ-WORKSPACE-141** — Desktop workspace-open ordering SHALL be: window constructed → typeable-command catalogue built (and rebuilt on library/settings changes) → window shown → (bundled first run only: machine-setup modal) → git refresh without blocking the interface → update check → cloud-credit polling → once the window is interactive: initialization resolution and hook-review notice → (first launch only, after the shared deferred first-paint delay of REQ-SHELL-011) project chooser.
+  > **Narrowed by [`PD-WORKSPACE-010`](../../product/directives/pd-workspace-010.md#pd-workspace-010), 2026-11-21.** At a launch
+  > that owes the first-launch setup the ordering's last step, the deferred project chooser, is not scheduled: the setup's first
+  > step asks for the project on the user's press.
 
 - **REQ-WORKSPACE-142** — Consent boundary: the only thing in this domain that gates agent execution is an unanswered consent-requiring initialization prompt, and even that gates only the composer. Background setup, git absence, and refused hooks SHALL never block runs.
 

@@ -3,6 +3,7 @@ import { CONFIG_SCOPES, DesktopSaveSchema, LiveStateSchema, SANDBOX_MODE_NAMES }
 import { z } from 'zod';
 import { HOOK_AGENT_IDS } from './hooks.js';
 import { PROVIDER_DIALOG_MODES } from './providers.js';
+import { ONBOARDING_OUTCOMES } from './onboarding.js';
 import { PaneLayoutSchema } from './repository.js';
 import { PromptListSchema } from './library.js';
 import { ImprovementCommandSchema } from './improvements.js';
@@ -347,7 +348,15 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('providers.open'), mode: z.enum(PROVIDER_DIALOG_MODES), providerId: z.string().max(NAME_MAX).optional() }),
   z.object({ kind: z.literal('provider.payload') }),
   /** The pasted key travels INWARD here and nowhere else; `openai-compatible` as providerId means a custom instance from label + URL. */
-  z.object({ kind: z.literal('provider.signIn'), providerId: z.string().max(NAME_MAX).min(1), label: z.string().max(NAME_MAX).optional(), baseUrl: z.string().max(PATH_MAX).optional(), apiKey: z.string().max(PATH_MAX), replace: z.boolean().optional(), allowEmpty: z.boolean().optional() }),
+  z.object({ kind: z.literal('provider.signIn'), providerId: z.string().max(NAME_MAX).min(1), label: z.string().max(NAME_MAX).optional(), baseUrl: z.string().max(PATH_MAX).optional(), apiKey: z.string().max(PATH_MAX), replace: z.boolean().optional(), allowEmpty: z.boolean().optional(), quiet: z.boolean().optional() }),
+  /**
+   * PD-WORKSPACE-010: the first-launch setup. `read` answers the facts the surface derives its step from; `chooseProject`
+   * opens REQ-WORKSPACE-009's chooser for the window that asked, or takes the folder the application started in, and
+   * remembers the answer; `finish` ends the setup for the installation. No request names a folder: main resolves it.
+   */
+  z.object({ kind: z.literal('onboarding.read') }),
+  z.object({ kind: z.literal('onboarding.chooseProject'), useCurrent: z.boolean().optional() }),
+  z.object({ kind: z.literal('onboarding.finish'), outcome: z.enum(ONBOARDING_OUTCOMES) }),
   z.object({ kind: z.literal('providers.save'), id: z.string().max(NAME_MAX).min(1), apiKey: z.string().max(PATH_MAX), baseUrl: z.string().max(PATH_MAX).nullable(), validate: z.boolean() }),
   z.object({ kind: z.literal('providers.validate'), id: z.string().max(NAME_MAX).min(1) }),
   z.object({ kind: z.literal('providers.signOut'), id: z.string().max(NAME_MAX).min(1) }),

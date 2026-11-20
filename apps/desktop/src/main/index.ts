@@ -53,6 +53,8 @@ import { improvementsCommands } from './commands/improvements.js';
 import { initializationCommands, projectInitCommands } from './commands/initialization.js';
 import { libraryCommands } from './commands/library.js';
 import { mcpCommands } from './commands/mcp.js';
+import { onboardingCommands } from './commands/onboarding.js';
+import { createOnboarding } from './onboarding.js';
 import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands } from './commands/session.js';
@@ -328,6 +330,11 @@ async function main(): Promise<void> {
 
   const preferenceRoot = resolvePreferenceRoot();
   const preferences = new PreferenceStore(preferenceRoot);
+  const onboarding = createOnboarding({
+    readState: () => preferences.read('onboarding/state'),
+    writeState: (state) => preferences.write('onboarding/state', state),
+    log: (m) => log(m),
+  });
   /*
    * Whether this launch is a capture. A packaged build still answers it (the packaged probe, `capture/probe.ts`), so it decides
    * nothing scriptable on its own: every seam main reads beside it — the dialogs' answers, the choosers' paths, the theme, the
@@ -645,11 +652,10 @@ async function main(): Promise<void> {
             // action that starts the flow (the Overview audit of 2026-11-02, item 1, `docs/design/briefs/overview.md`).
             const authenticated = providers.list().filter((row) => row.authenticated).map((row) => row.id);
             log(`providers: ${authenticated.length} authenticated${authenticated.length > 0 ? ` (${authenticated.join(', ')})` : ''}`);
-            if (authenticated.length === 0) {
-              const recovery = recoveryFor('providers.add');
-              void notices.report({ severity: 'info', title: NO_PROVIDER_HEADLINE, key: 'providers.none', message: NO_PROVIDER_MESSAGE, ...(recovery.length === 0 ? {} : { action: recovery[0]! }) });
-              log(`notice: ${NO_PROVIDER_HEADLINE}`);
-            }
+            // PD-WORKSPACE-010: while the first-launch setup is owed it stands in the notice's place and asks for the provider
+            // itself; the notice is published when the setup ends with none authenticated (`onboarding.finish`).
+            if (authenticated.length === 0 && onboarding.owed()) log('notice: the no-provider notice is held back while the first-launch setup is owed (PD-WORKSPACE-010)');
+            else raiseNoProviderNotice();
           }
           if (snapshot !== null) void configFatal.observe(key, snapshot);
         }).catch(() => undefined);
@@ -853,6 +859,13 @@ async function main(): Promise<void> {
   };
   /** REQ-WORKSPACE-152 (3): the first-launch notice — persistent, informational, dismissible, gating nothing. */
   const NO_PROVIDER_HEADLINE = 'No model provider is authenticated yet';
+  /** REQ-WORKSPACE-152 (3): the persistent INFO notice, published only while no provider is authenticated. */
+  const raiseNoProviderNotice = (): void => {
+    if (providers.list().some((row) => row.authenticated)) return;
+    const recovery = recoveryFor('providers.add');
+    void notices.report({ severity: 'info', title: NO_PROVIDER_HEADLINE, key: 'providers.none', message: NO_PROVIDER_MESSAGE, ...(recovery.length === 0 ? {} : { action: recovery[0]! }) });
+    log(`notice: ${NO_PROVIDER_HEADLINE}`);
+  };
   /** REQ-WORKSPACE-152 (3)'s second clause, the message row under that title; it agrees with the one action and names no other route. */
   const NO_PROVIDER_MESSAGE = 'Runs cannot start until a model provider is authenticated.';
   /**
@@ -1733,6 +1746,7 @@ async function main(): Promise<void> {
       return active?.kind === 'runs.count' ? active.count : null;
     },
     persistWorkspace: (workspace) => preferences.write('workspace/lastOpened', workspace),
+    setupOwed: () => onboarding.owed(),
     raiseTransient: (windowId, kind, title, body, action) => {
       const owner = windowFor(windowId);
       if (owner) raiseTransient(owner, kind, title, body, action);
@@ -2016,6 +2030,7 @@ async function main(): Promise<void> {
     measurePersonaPaint, terminalWindowCommand, surface,
     notices, raiseNotice, raiseNoticeKeyed, recoveryFor, configFatal, raiseTransient: (w, kind, title) => raiseTransient(w, kind, title), announceRepairs, updater,
     providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange, dictationCredential,
+    firstLaunchSetup: onboarding, raiseNoProviderNotice,
     preferences, diagnostics, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey, userDirs: dirs,
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
@@ -2055,6 +2070,7 @@ async function main(): Promise<void> {
     ...projectInitCommands(commandContext),
     ...libraryCommands(commandContext),
     ...mcpCommands(commandContext),
+    ...onboardingCommands(commandContext),
     ...providersCommands(commandContext),
     ...requirementsCommands(commandContext),
     ...sessionCommands(commandContext),
@@ -2135,6 +2151,12 @@ async function main(): Promise<void> {
    * paths entirely: (a), (b) and (c) all resolve to a real folder, and the sentinel now stands only for a window
    * built with none at all, which ADR-0055 still requires to be a state the shell can render.
    */
+  // PD-WORKSPACE-010: decided before the first window is built, on the same reading that schedules the deferred chooser.
+  // Verification seam: `ROTARIS_CAPTURE_ONBOARDING=off` is a launch whose profile is a scratch one made for a proof, which
+  // measures the chooser, the notice and the shell as they stand once the setup has ended; every proof launch names it
+  // (`proofIsolationEnv`) and the proof of the setup itself names `on`. Compiled out of a packaged build.
+  const setupHeldOff = __ROTARIS_SEAMS__ && process.env['ROTARIS_CAPTURE_ONBOARDING'] === 'off';
+  onboarding.begin(mainWindows.resolveStartup(argvWorkspace).prompt && !setupHeldOff);
   const mainWin = await mainWindows.launch(argvWorkspace);
   /**
    * The verification seams at the end of this function drive the FIRST main window on purpose — a capture is a

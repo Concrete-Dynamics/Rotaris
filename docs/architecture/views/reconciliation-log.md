@@ -14,6 +14,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-11-21**
+
+**The first-launch setup ([`PD-WORKSPACE-010`](../../product/directives/pd-workspace-010.md#pd-workspace-010), R-110; REQ-WORKSPACE-152/141/007 narrowed; 2026-11-21).** `04-seams/08-8-a-drawn-surface.md` gains "A full-window surface over the shell": the setup's mount, what it reads, the paths its steps reuse and who owns `onboarding/state` (main, alone). `02-process-view/02-message-families.md`: the three `onboarding.*` commands, answered by main, and `provider.signIn`'s `quiet`. No package appeared and no edge changed.
+
 Last reconciled with the code: **2026-11-20**
 
 **The transcript is the run's conversation and its threads (R-109; [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015), `PD-CHAT-004` revision 4, `PD-CHAT-005` revision 2; REQ-CHAT-050/057/069 narrowed; 2026-11-20).** `03-runtime-view/16-9-what-a-surface-does-with-a-publication-adr.md` gains "The run and its threads": `WorkspaceView` holds the scope and `threadedRows` replaces a delegated agent's rows with one computed `delegation` row, which is a row like any other to the projection, the pool and the caches; `agentDepth` left `TranscriptSurface` for `threadState` and `openThread`. `03-runtime-view/16-9-…` corrects what the 14 px of `SHORTEST_ROW_HEIGHT` is. No process, message, channel, store column or owner of a fact changed.

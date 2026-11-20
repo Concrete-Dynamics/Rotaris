@@ -51,7 +51,7 @@ describe('proof isolation lands inside the scratch profile on every platform', (
 
   it('names both variable pairs, and spells the POSIX pair the way a POSIX machine reads it', () => {
     expect(Object.keys(env).sort()).toEqual([
-      'APPDATA', 'HOME', 'LOCALAPPDATA', 'ROTARIS_CAPTURE_INSTRUCTIONS_HOME', 'ROTARIS_CAPTURE_SKILLS_HOME', 'ROTARIS_PREFERENCES_ROOT',
+      'APPDATA', 'HOME', 'LOCALAPPDATA', 'ROTARIS_CAPTURE_INSTRUCTIONS_HOME', 'ROTARIS_CAPTURE_ONBOARDING', 'ROTARIS_CAPTURE_SKILLS_HOME', 'ROTARIS_PREFERENCES_ROOT',
       'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_RUNTIME_DIR',
     ]);
     expect(Object.keys(windowsEnv).sort()).toEqual(Object.keys(env).filter((key) => key !== 'HOME').sort());

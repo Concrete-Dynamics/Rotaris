@@ -63,6 +63,8 @@ function harness(options: {
   readonly failReloads?: ReadonlySet<number>;
   /** OQ-476: whether the application's quit has begun; absent, never. */
   readonly quitting?: () => boolean;
+  /** PD-WORKSPACE-010: whether the first-launch setup is owed; absent, never. */
+  readonly setupOwed?: () => boolean;
 } = {}) {
   const actions: string[] = [];
   /** The workspace-open gates asked, in order (REQ-SHELL-021). */
@@ -163,6 +165,7 @@ function harness(options: {
     integrationRunning: async (workspaceId) => { gates.push('integration'); return options.integrating?.(workspaceId) ?? false; },
     activeRunCount: async (workspaceId) => { gates.push('runs'); return options.runsIn?.(workspaceId) ?? 0; },
     persistWorkspace: async (workspace) => { actions.push(`persist:${workspace}`); },
+    ...(options.setupOwed === undefined ? {} : { setupOwed: options.setupOwed }),
     raiseTransient: (windowId, _kind, title, _body, action) => {
       notices.push({ windowId, title, ...(action === undefined ? {} : { action: action.label }) });
     },
@@ -664,6 +667,74 @@ describe('MainWindows', () => {
       `log:offering the first-launch project chooser for window ${second.wcId}`,
     ]);
     expect(h.notices.map((notice) => notice.windowId)).toEqual([first.wcId, second.wcId]);
+  });
+
+  describe('the first-launch setup\'s project step (PD-WORKSPACE-010)', () => {
+    it('schedules no deferred chooser at a launch that owes the setup, and says why', async () => {
+      const h = harness({ cwd: 'C:/startup', setupOwed: () => true });
+      const win = await h.mainWindows.launch();
+      h.advanceTimers();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(h.actions.filter((action) => action.startsWith('log:offering'))).toEqual([]);
+      expect(h.actions).toContain(`log:the first-launch project chooser for window ${win.wcId} is not scheduled: the setup asks for the project (PD-WORKSPACE-010)`);
+    });
+
+    it('still schedules the deferred chooser at a launch with no project once the setup has ended', async () => {
+      const h = harness({ cwd: 'C:/startup', setupOwed: () => false });
+      const win = await h.mainWindows.launch();
+      h.folders.push(null);
+      h.advanceTimers();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(h.actions).toContain(`log:offering the first-launch project chooser for window ${win.wcId}`);
+    });
+
+    it('remembers the folder the application started in when it is taken as the project, and replaces nothing', async () => {
+      const h = harness({ cwd: 'C:/startup', setupOwed: () => true });
+      const win = await h.mainWindows.launch();
+      const builds = h.actions.filter((action) => action.startsWith('build:')).length;
+      const outcome = await h.mainWindows.chooseForSetup(win.wcId, { useCurrent: true });
+      expect(outcome).toEqual({ ok: true, value: { workspace: 'C:/startup', wcId: win.wcId, kept: true } });
+      expect(h.actions).toContain('persist:C:/startup');
+      expect(h.actions.filter((action) => action.startsWith('build:')).length).toBe(builds);
+      expect(h.notices).toEqual([]);
+    });
+
+    it('remembers a chosen folder that is already this window\'s, where the title bar\'s chooser would only offer a session', async () => {
+      const h = harness({ cwd: 'C:/startup', setupOwed: () => true });
+      const win = await h.mainWindows.launch();
+      h.folders.push('C:/startup');
+      const outcome = await h.mainWindows.chooseForSetup(win.wcId, { useCurrent: false });
+      expect(outcome.ok && (outcome.value as { kept?: boolean }).kept).toBe(true);
+      expect(h.actions).toContain('persist:C:/startup');
+      expect(h.notices).toEqual([]);
+    });
+
+    it('answers a dismissed chooser as cancelled and raises no reminder, the setup staying on screen', async () => {
+      const h = harness({ cwd: 'C:/startup', setupOwed: () => true });
+      const win = await h.mainWindows.launch();
+      h.folders.push(null);
+      expect(await h.mainWindows.chooseForSetup(win.wcId, { useCurrent: false })).toEqual({ ok: true, value: { cancelled: true } });
+      expect(h.notices).toEqual([]);
+      expect(h.actions.filter((action) => action.startsWith('persist:'))).toEqual([]);
+    });
+
+    it('replaces the window for a different folder, as the title bar\'s chooser does, and remembers it', async () => {
+      const h = harness({ cwd: 'C:/startup', setupOwed: () => true });
+      const win = await h.mainWindows.launch();
+      h.folders.push('C:/project');
+      const outcome = await h.mainWindows.chooseForSetup(win.wcId, { useCurrent: false });
+      expect(outcome.ok && (outcome.value as { workspace?: string }).workspace).toBe('C:/project');
+      expect(h.actions).toContain('persist:C:/project');
+      expect(h.gates).toEqual(['unsaved', 'integration', 'runs']);
+    });
+
+    it('is declined by the workspace-open gates like any other change of project', async () => {
+      const h = harness({ cwd: 'C:/startup', setupOwed: () => true, unsavedAllows: () => false });
+      const win = await h.mainWindows.launch();
+      h.folders.push('C:/project');
+      expect(await h.mainWindows.chooseForSetup(win.wcId, { useCurrent: false })).toEqual({ ok: true, value: { cancelled: true } });
+      expect(h.actions.filter((action) => action.startsWith('persist:'))).toEqual([]);
+    });
   });
 
   it('REQ-TOOLS-063: answers whether a queued approval waits behind an open dialog or requests ahead of it', async () => {

@@ -29,7 +29,7 @@ product's own default location (REQ-STARTUP-131).
 
 A single platform-standard per-user preference store, scoped by organization "Rotaris" and application "Rotaris". The physical location and encoding are platform-defined and deliberately unfixed (REQ-SHELL-006); the observable contract is the key set, value semantics, and defaults:
 
-Keys are slash-namespaced. The namespaces in use are `workspace/` (startup workspace state), `appearance/` (theme), `ui/` (motion), `interface/` (shell toggles), `display/` (transcript display), `panels/` (pane layouts), `updates/` (update state), `diagnostics/` (diagnostics capture), `requirements/` (requirements board state), `hooks/` (external hook enablement), and
+Keys are slash-namespaced. The namespaces in use are `workspace/` (startup workspace state), `appearance/` (theme), `ui/` (motion), `interface/` (shell toggles), `display/` (transcript display), `panels/` (pane layouts), `updates/` (update state), `onboarding/` (the first-launch setup), `diagnostics/` (diagnostics capture), `requirements/` (requirements board state), `hooks/` (external hook enablement), and
 `workspaces/` (per-workspace state).
 
 This table is the registry REQ-SHELL-006 makes closed: every key the product may store is listed here, whatever document owns the behavior behind it, and a key absent from it does not exist. No key of any other form — in particular no dot-namespaced `desktop.*` key — is a key of this store.
@@ -52,6 +52,7 @@ This table is the registry REQ-SHELL-006 makes closed: every key the product may
 | `panels/version` | one schema-version stamp covering all stored pane layouts | 1 when written |
 | `panels/{view-key}/state`, `panels/{view-key}/panes` | per-divider layout state and pane count, global per user, keyed by a stable per-view string | unset |
 | `updates/dismissedVersion` | the single remembered waved-off version | unset |
+| `onboarding/state` | where the first-launch setup stands for the installation, `started` or `done`; meaning owned by [`PD-WORKSPACE-010`](../../product/directives/pd-workspace-010.md#pd-workspace-010), which added the row on 2026-11-21 | unset |
 | `diagnostics/level` | diagnostics capture level for windows built afterwards; one of `off`, `light`, `deep` | `off` |
 | `diagnostics/outputDir` | absolute folder diagnostics runs are written under; unset means the product default | unset |
 | `workspaces/{workspace-key}/composerDraft` | per-workspace composer draft, debounced writes, keyed by workspace path | `""` |

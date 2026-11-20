@@ -23,6 +23,9 @@ Part 1 of 7 of [domain 13](../13-workspace-context-onboarding.md), which indexes
 - **REQ-WORKSPACE-006** — Given an ordinary launch with no such explicit selection, the remembered `workspace/lastOpened` value SHALL be used if and only if it names an existing directory; in that case no prompt of any kind is shown.
 
 - **REQ-WORKSPACE-007** — Given an ordinary launch with no explicit selection and no usable remembered path, the app SHALL open on a fallback workspace (default: the directory the application process starts in) for first paint and schedule the first-launch project chooser to appear afterwards. A remembered path that no longer exists SHALL NOT be overwritten in the preference store at this point.
+  > **Narrowed by [`PD-WORKSPACE-010`](../../product/directives/pd-workspace-010.md#pd-workspace-010), 2026-11-21.** Where the
+  > first-launch setup is owed, the launch still opens on the fallback workspace for first paint and schedules no chooser; the
+  > setup asks for the project.
 
 - **REQ-WORKSPACE-008** — The first-launch project chooser SHALL be deferred after first paint by the one shared deferred first-paint delay REQ-SHELL-011 fixes; this domain relies on that requirement for the interval and states no figure of its own. If the window is closed before the delay elapses, the prompt SHALL be cancelled cleanly (no dialog, no crash).
 

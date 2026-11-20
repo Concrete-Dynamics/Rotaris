@@ -119,6 +119,13 @@ export const PREFERENCE_KEYS = {
    */
   'updates/dismissedVersion': { type: 'string', default: undefined, owner: 'REQ-STARTUP-146', coerce: (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : undefined) },
   /**
+   * PD-WORKSPACE-010: where the first-launch setup stands for this installation. Absent means it was never begun, `started`
+   * that a first launch began it and nothing has ended it, `done` that it was carried through or skipped. Written by main
+   * alone (`apps/desktop/src/main/onboarding.ts`), so it is absent from `PREFERENCE_COMMAND_KEYS`: a renderer ends the
+   * setup through `onboarding.finish` and can store no state of its own. Any other stored value reads as absent.
+   */
+  'onboarding/state': { type: 'string', default: undefined, owner: 'PD-WORKSPACE-010', coerce: (value: unknown): 'started' | 'done' | undefined => (value === 'started' || value === 'done' ? value : undefined) },
+  /**
    * REQ-SHELL-163 owns both diagnostics keys and REQ-STARTUP-129 makes this store their one source: the capture level,
    * `off` where nothing is stored or the stored value is not one of the three, and the output base, unset meaning the
    * default location of REQ-STARTUP-131. Neither is in `PREFERENCE_COMMAND_KEYS`: Settings › About writes the level

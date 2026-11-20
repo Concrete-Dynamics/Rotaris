@@ -42,7 +42,8 @@ export function providersCommands(
         credentialsChanged(outcome.id);
         // A catalog that answers without a key validated nothing (REQ-PROVIDER-133's gap on a public catalog): health stays unchecked and the notice warns.
         healthCache.set(outcome.id, outcome.keyValidated ? { state: 'healthy', detail: outcome.message, available: true } : { state: 'unknown', detail: outcome.message, available: true });
-        raiseNotice(outcome.keyValidated ? 'info' : 'warning', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
+        // PD-WORKSPACE-010: the first-launch setup states the outcome itself, in the step that asked, and passes `quiet`; a key that validated nothing still warns.
+        if (!(req.quiet === true && outcome.keyValidated)) raiseNotice(outcome.keyValidated ? 'info' : 'warning', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
         await afterProviderChange();
       } else if (outcome.outcome === 'failed') {
         log(`providers: sign-in failed for ${req.providerId}: ${outcome.message}`);

@@ -362,6 +362,9 @@ export function proofIsolationEnv({ profileRoot, local, preferences, home, platf
     XDG_DATA_HOME: data,
     XDG_CONFIG_HOME: config,
     XDG_RUNTIME_DIR: runtime,
+    // PD-WORKSPACE-010: a proof's scratch profile is a first launch every time, and the first-launch setup would stand over
+    // the shell each proof measures. Every proof launch holds it off; `onboarding-proof` and `pnpm app:drive` name `on`.
+    ROTARIS_CAPTURE_ONBOARDING: 'off',
   };
   // Omitted rather than set to `undefined`: two launches here isolate the data directory and deliberately
   // leave the preference root alone (the workspace-service driver, and the packaged load check, neither of

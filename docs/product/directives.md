@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and thirty-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and thirty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -251,6 +251,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-WORKSPACE-007](directives/pd-workspace-007.md) | the status strip's path link and flag explanations follow the shell domain |
 | [PD-WORKSPACE-008](directives/pd-workspace-008.md) | the strip's branch item names the states in which there is no branch to show |
 | [PD-WORKSPACE-009](directives/pd-workspace-009.md) | the file-access flag and the autonomous prompt state the workspace boundary per tool |
+| [PD-WORKSPACE-010](directives/pd-workspace-010.md) | a first launch opens on a setup of three steps that ends in the first prompt |
 
 ---
 <!--

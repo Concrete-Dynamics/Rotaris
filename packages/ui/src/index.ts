@@ -68,6 +68,7 @@ export * from './slash/skills.js';
 export * from './settings/SkillsSettings.js';
 // Part AS (ADR-0064) — the setup dialog and the two pure surface readings.
 export * from './ProjectSetupDialog.js';
+export * from './FirstRunSetup.js';
 export * from './ReauthPrompt.js'; // REQ-NOTIFY-071/078
 export * from './settings/project-init.js';
 export * from './settings/ProjectSettings.js';

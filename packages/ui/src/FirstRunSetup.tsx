@@ -55,11 +55,17 @@ export function stepState(step: FirstRunStep, current: FirstRunStep): 'done' | '
 }
 const STATE_WORDS = { done: 'Done', now: 'Now', waiting: 'Waiting' } as const;
 
+/** A path without the separators it ends on. A scan from the end, linear in the path: no expression backtracks over it. */
+function withoutTrailingSeparators(path: string): string {
+  let end = path.length;
+  while (end > 0 && (path[end - 1] === '/' || path[end - 1] === '\\')) end -= 1;
+  return path.slice(0, end);
+}
 /** A folder's last segment, the name the title bar's chip shows; the whole path where it has none. */
 export function projectName(path: string | null): string {
   if (path === null) return '';
-  const trimmed = path.replace(/[\\/]+$/, '');
-  const name = trimmed.split(/[\\/]/).pop() ?? '';
+  const trimmed = withoutTrailingSeparators(path);
+  const name = trimmed.slice(Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\')) + 1);
   return name === '' ? path : name;
 }
 /** A model as a chip names it: the identifier without the provider it is served by. */
@@ -70,7 +76,7 @@ export function modelName(id: string): string {
 /** REQ-WORKSPACE-149 rule 1, for the one line the setup shows a path on: the home directory reads as `~`. */
 export function homeRelative(path: string, home: string | undefined): string {
   if (home === undefined || home === '') return path;
-  const base = home.replace(/[\\/]+$/, '');
+  const base = withoutTrailingSeparators(home);
   return path === base ? '~' : path.startsWith(`${base}/`) || path.startsWith(`${base}\\`) ? `~${path.slice(base.length)}` : path;
 }
 

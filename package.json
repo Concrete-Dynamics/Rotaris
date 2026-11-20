@@ -16,6 +16,7 @@
     "test:coverage": "node tools/dev-time/cli.mjs run --quiet other:test-coverage -- vitest run --coverage",
     "symbols": "node tools/dev-time/cli.mjs run --quiet gate:symbols -- node tools/symbol-artifact/generate.mjs",
     "proofs:index": "node tools/proof-registry/generate.mjs --write",
+    "proofs:run": "node tools/proof-run/run.mjs",
     "archive:migrate": "node tools/archive/migrate.mjs",
     "directive-proof": "node apps/desktop/scripts/directive-proof.mjs",
     "linux-acceptance-proof": "node apps/desktop/scripts/linux-acceptance-proof.mjs",

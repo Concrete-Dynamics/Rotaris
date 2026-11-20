@@ -5,7 +5,7 @@ import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
 import { TerminalPreviewBlock } from '../terminal/TerminalPreviewBlock.js';
 import type { TerminalPreview } from '../terminal/streams.js';
-import { FACT_SEPARATOR, activitySpanMs, activitySummary, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, rowKey, segmentFacts, type Severity } from './project.js';
+import { FACT_SEPARATOR, activitySpanMs, activitySummary, drawnFacts, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, rowKey, type Severity } from './project.js';
 import { describeToolCall } from './tool-description.js';
 
 /**
@@ -123,11 +123,13 @@ export interface TranscriptSurface {
   /** The surface's clock for the live figures — never a global; REQ-CHAT-063's refresh moves it. */
   readonly nowMs: number;
   /**
-   * PD-CHAT-005: how deep the named agent sits in the delegation tree (REQ-MONITOR-036/037), from which the row
-   * takes its indentation. One function for the whole pane, exactly as the clock and the link opener are —
-   * a row cannot know it from itself. Absent leaves every row at depth 0, which is what a plain list does.
+   * PD-CHAT-015: a thread line's live state and elapsed time ("running · 0:42"), by the agent's name — the one figure
+   * of the line that moves with the clock, so it is read at render time as the clock is. Absent, or null for an agent
+   * the surface does not know, the line draws the state its row carries.
    */
-  readonly agentDepth?: ((name: string, persona: string) => number) | undefined;
+  readonly threadState?: ((name: string) => string | null) | undefined;
+  /** PD-CHAT-015: pressing a thread line shows that agent's own transcript. Absent draws the line inert. */
+  readonly openThread?: ((name: string) => void) | undefined;
   /**
    * REQ-CHAT-164's drawing half: the whole seconds a live call's provider has been silent, or null. **Detecting
    * the ten seconds is stream-side and is Part Z's** (Z3b); drawing what it found is this file's.
@@ -372,10 +374,15 @@ export interface Placed {
 
 /** The role a block is broken on (REQ-CHAT-057): an activity line's is its agent's, and a trailer's is its own. */
 function blockRole(d: DisplayRow): string {
+  // PD-CHAT-015: consecutive thread lines are one block whoever they name, so they read as one ruled list.
+  if (d.shape === 'row' && d.row.kind === 'delegation') return 'thread:';
   return d.shape === 'row' ? rowRole(d.row) : d.shape === 'group' ? d.role : `trailer:${d.trailer.sort}`;
 }
 
 const isToolRow = (d: DisplayRow): boolean => d.shape === 'row' && d.row.kind === 'tool';
+const isDiffRow = (d: DisplayRow): boolean => d.shape === 'row' && d.row.kind === 'diff';
+/** PD-CHAT-015: the lines of an edit diff drawn before the reader asks for the rest — its heading line and five of the change. */
+export const DIFF_PREVIEW_LINES = 6;
 
 /**
  * `placements(display)`, built from `previous` — the places of the array the pane showed before — rather than from
@@ -414,9 +421,14 @@ export function placementsFrom(previous: Placed | null, display: readonly Displa
       places[at] = { blockStart: places[at]!.blockStart, recentTool: recent.has(at) };
     }
   }
-  let above = first > 0 ? blockRole(display[first - 1]!) : '';
+  // PD-CHAT-015: an edit diff belongs to the turn it stands in — it draws no heading of its own and the agent's next
+  // row is not a new block — so the role "above" is read past any diff rows.
+  let before = first - 1;
+  while (before >= 0 && isDiffRow(display[before]!)) before -= 1;
+  let above = before >= 0 ? blockRole(display[before]!) : '';
   for (let i = first; i < display.length; i += 1) {
     const d = display[i]!;
+    if (isDiffRow(d) && above !== '') { places.push({ blockStart: false, recentTool: recent.has(i) }); continue; }
     const role = blockRole(d);
     places.push({ blockStart: i === 0 || role !== above || d.shape === 'trailer', recentTool: recent.has(i) });
     above = role;
@@ -511,28 +523,25 @@ function PlainText({ text, match, onOpenLink }: { text: string; match: RowRender
 }
 
 /**
- * REQ-CHAT-057: the timestamp column, then the role column — attribution on a block's first row, a persona bar
- * on a continuation. PD-CHAT-005: the role label is drawn in the SAME persona colour as the bar and the
- * expanded rail, so one agent reads as one colour wherever it appears and two agents working at once are told
- * apart before a word of either is read. A row naming no persona — the reader's own, a system notice — keeps
- * the stylesheet's accent and takes no inline colour at all.
+ * PD-CHAT-015: a turn's heading — the agent's name in its persona colour behind a dot of the same colour, the task
+ * beside it, and the time at the line's end — drawn on the first row of a block (REQ-CHAT-057's attribution rule,
+ * untouched) and on no other. A continuation row draws nothing here: it belongs to the heading above it, and the
+ * 2 px bar that used to say so is gone with the gutter it stood in. A row naming no persona — the reader's own, a
+ * system notice — keeps the stylesheet's accent and takes no inline colour at all.
+ *
+ * A member of an expanded activity line keeps its own timestamp (PD-CHAT-004), at the end of its own line.
  */
-function Attribution({ row, place, personaBar }: { row: TranscriptRow; place: RowPlace; personaBar: string }) {
+function Attribution({ row, place }: { row: TranscriptRow; place: RowPlace }) {
   const task = rowTask(row);
-  // PD-CHAT-004: a member of an expanded run keeps its own timestamp and draws no bar — the line's single
-  // continuous rule is the attribution for every row beneath it.
-  if (place.member === true) return <><time className="row__time mono" dateTime={row.at}>{row.ts || rowTime(row.at)}</time><span aria-hidden="true" /></>;
+  if (place.member === true) return <time className="row__time mono" dateTime={row.at}>{row.ts || rowTime(row.at)}</time>;
+  if (!place.blockStart) return null;
   return (
     <>
-      <time className="row__time mono" dateTime={row.at}>{place.blockStart ? (row.ts || rowTime(row.at)) : ''}</time>
-      {place.blockStart ? (
-        <span className="row__attribution">
-          <span className="row__role" style={personaInk(row)}>{rowRole(row)}</span>
-          {task !== null && <span className="row__task mono" data-testid="row-task">{task}</span>}
-        </span>
-      ) : (
-        <span className="row__bar" data-testid="row-bar" style={{ background: `var(${personaBar}, var(--rt-border))` }} aria-hidden="true" />
-      )}
+      <time className="row__time mono" dateTime={row.at}>{row.ts || rowTime(row.at)}</time>
+      <span className="row__attribution" style={personaVar(row)}>
+        <span className="row__role" style={personaInk(row)}>{rowRole(row)}</span>
+        {task !== null && <span className="row__task" data-testid="row-task">{task}</span>}
+      </span>
     </>
   );
 }
@@ -571,15 +580,15 @@ function personaInk(row: Pick<TranscriptRow, 'name' | 'persona'>): { color: stri
 }
 
 /**
- * PD-CHAT-005: a delegated agent's rows are indented one step per level of the delegation tree, so the
- * transcript says who reports to whom in the same place the Agents panel does. The depth is a custom property
- * and the step is a token: `shell.css` multiplies the two, and this file writes no pixel.
- *
- * REQ-CHAT-057's 52 px and 112 px columns are UNTOUCHED — the indent moves the grid, it does not resize it.
+ * PD-CHAT-015: the persona's colour as a custom property on the heading, which the heading's dot is filled with.
+ * The falsified mechanism, kept named: a depth style set `--rt-row-depth` here and the stylesheet indented the row
+ * one step per level of the delegation tree (PD-CHAT-005's second clause). Measured on 2026-11-20 in a 719 px
+ * column, a depth-1 agent's text had 469 px and the same agent's expanded run 246 px; the tree is now said by the
+ * thread line and the tabs, and no row is indented by who delegated to whom.
  */
-function depthStyle(surface: TranscriptSurface, row: Pick<TranscriptRow, 'name' | 'persona'> | undefined): CSSProperties | undefined {
-  const depth = row === undefined ? 0 : surface.agentDepth?.(row.name ?? '', row.persona ?? '') ?? 0;
-  return depth > 0 ? ({ '--rt-row-depth': String(depth) } as CSSProperties) : undefined;
+function personaVar(row: Pick<TranscriptRow, 'name' | 'persona'>): CSSProperties | undefined {
+  const persona = row.persona ?? row.name ?? '';
+  return persona === '' ? undefined : ({ '--rt-row-persona': `var(${personaColourToken(persona)}, var(--rt-accent-300))` } as CSSProperties);
 }
 
 /**
@@ -656,6 +665,27 @@ function SkillListingBlock({ listing, match, onOpenLink }: { listing: ParsedSkil
   );
 }
 
+/**
+ * PD-CHAT-015: an edit diff (REQ-CHAT-050) draws its heading line and the first lines of the change, and the rest when
+ * the reader asks — a forty-line file no longer stands between two things an agent said. A row holding a search match
+ * is drawn whole, so the match is on screen. The expansion is the pane's, keyed by the row (REQ-CHAT-059).
+ */
+function DiffBody({ body, expanded, onToggle, match, onOpenLink }: { body: string; expanded: boolean; onToggle: () => void; match: RowRenderProps['match']; onOpenLink: ((href: string) => void) | undefined }) {
+  const lines = body.split('\n');
+  const hidden = lines.length - DIFF_PREVIEW_LINES;
+  const shown = expanded || hidden <= 1 ? body : lines.slice(0, DIFF_PREVIEW_LINES).join('\n');
+  return (
+    <>
+      <div className="row__body mono row__body--diff"><PlainText text={shown} match={shown === body ? match : null} onOpenLink={onOpenLink} /></div>
+      {hidden > 1 && (
+        <DesignButton type="button" className="row__more" aria-expanded={expanded} onClick={onToggle} data-testid="diff-more">
+          {expanded ? 'Show fewer lines' : `Show ${hidden} more lines`}
+        </DesignButton>
+      )}
+    </>
+  );
+}
+
 export function Row(p: RowProps) {
   const surface = useTranscriptSurface();
   const place = p.place ?? FIRST_OF_BLOCK;
@@ -677,21 +707,23 @@ export function Row(p: RowProps) {
     const summary = activitySummary(display.segments);
     const live = isLive(display) && surface.runActive;
     const durationMs = activitySpanMs(display, surface.nowMs, surface.runActive);
-    const rail = personaColourToken(display.persona);
     return (
       // REQ-CHAT-065: the header carries the number of members, so it is observable rather than only readable
       // out of the summary string. Part Z's placeholder published it and the proof reads it; the real row did
       // not, which is what the merge found. `data-segments` is PD-CHAT-004's equivalent for the run's shape.
       <article {...common} className={`row row--group tool tool--${severity}${live ? ' row--streaming' : ''}${blockStartClass}`}
-        style={depthStyle(surface, display.members[0])}
         data-family={display.family} data-severity={severity} data-members={display.members.length}
         data-segments={display.segments.length} data-agent={display.role} data-testid="row-group">
         <div className="row__grid">
-          <time className="row__time mono" dateTime={display.startedAt}>{rowTime(display.startedAt)}</time>
-          {/* PD-CHAT-004 / REQ-CHAT-057: the role gutter names the AGENT. The family words are in the line. */}
-          {place.blockStart
-            ? <span className="row__attribution"><span className="row__role" style={personaInk({ persona: display.persona, name: display.role })}>{display.role}</span></span>
-            : <span className="row__bar" data-testid="row-bar" style={{ background: `var(${rail}, var(--rt-border))` }} aria-hidden="true" />}
+          {/* PD-CHAT-004 / REQ-CHAT-057: the heading names the AGENT. The family words are in the line. */}
+          {place.blockStart && (
+            <>
+              <time className="row__time mono" dateTime={display.startedAt}>{rowTime(display.startedAt)}</time>
+              <span className="row__attribution" style={personaVar({ persona: display.persona, name: display.role })}>
+                <span className="row__role" style={personaInk({ persona: display.persona, name: display.role })}>{display.role}</span>
+              </span>
+            </>
+          )}
           <div className="row__main">
             <DesignButton type="button" className="tool__header mono" onClick={p.onToggle} aria-expanded={expanded} aria-description={summary} data-testid="group-header">
               <span className="tool__chevron" aria-hidden="true">{expanded ? '▾' : live ? '◉' : '▸'}</span>
@@ -704,7 +736,7 @@ export function Row(p: RowProps) {
                         element rather than part of the fact behind it, so the dot between `3 ok` and `1 failed`
                         stays the colour every other separator on the line is. The segment keeps `nowrap`, so
                         splitting it changes where it may break not at all: it still may not break anywhere. */}
-                    {segmentFacts(segment).flatMap((fact, at) => {
+                    {drawnFacts(segment).flatMap((fact, at) => {
                       const drawn = (
                         <span
                           key={fact.text}
@@ -735,9 +767,9 @@ export function Row(p: RowProps) {
             {/* REQ-CHAT-065: while a member is in flight the header carries that call's text. */}
             {!expanded && display.inFlight !== null && <div className="tool__preview text-secondary mono">⤷ {display.inFlight}</div>}
             {expanded && (
-              // PD-CHAT-004: the revealed members hang from a SINGLE continuous rule in the agent's persona
-              // colour spanning the whole run — one line for one agent's callings, rather than a rule per row.
-              <div className="row__members" data-testid="group-members" style={{ borderInlineStartColor: `var(${rail}, var(--rt-border))` }}>
+              // PD-CHAT-015: the revealed members stand one step in from the line that holds them, and no further
+              // however deep their agent sits. PD-CHAT-004's persona-coloured rule is gone: the heading names the agent.
+              <div className="row__members" data-testid="group-members">
                 {display.members.map((m) => {
                   // R0-4: `memberKey` — the member's own `rowKey`, the identity step 4 holds the caps against.
                   // `data-member-key` on the drawn member row publishes the card's key (below), so the proof's
@@ -801,9 +833,9 @@ export function Row(p: RowProps) {
     // for the row's stream, expanded or not, so it stays visible; the card's INPUT/OUTPUT sit beneath it when open.
     const preview = stream !== null && !row.settled ? (surface.terminalPreview?.(stream) ?? null) : null;
     return (
-      <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} style={depthStyle(surface, row)} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-member-key={display.key} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
+      <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-member-key={display.key} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
         <div className="row__grid">
-          <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
+          <Attribution row={row} place={place} />
           <div className="row__main">
             <DesignButton
               type="button"
@@ -849,9 +881,9 @@ export function Row(p: RowProps) {
   if (isReasoningRow(row)) {
     const summary = reasoningSummary(row, surface.nowMs, surface.runActive);
     return (
-      <article {...common} className={`row row--thinking tool${summary.live ? ' row--streaming' : ''}${blockStartClass}`} style={depthStyle(surface, row)} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid="row-thinking">
+      <article {...common} className={`row row--thinking tool${summary.live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid="row-thinking">
         <div className="row__grid">
-          <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
+          <Attribution row={row} place={place} />
           <div className="row__main">
             <DesignButton type="button" className="tool__header mono" onClick={p.onToggle} aria-expanded={expanded} aria-description={summary.text} data-testid="thinking-header">
               {/* The collapsed summary's own leading marker IS this chevron; the label never repeats it. */}
@@ -869,20 +901,42 @@ export function Row(p: RowProps) {
     );
   }
 
+  // PD-CHAT-015: the thread line — REQ-CHAT-046's delegation category drawn IN the transcript, at the place the
+  // agent's own rows would begin: who was handed what, its state, and the latest thing it did or what it reported.
+  if (row.kind === 'delegation') {
+    const name = row.name ?? row.persona ?? '';
+    const state = surface.threadState?.(name) ?? row.output ?? '';
+    const running = row.toolStatus === 'running' && surface.runActive;
+    return (
+      <article {...common} className={`row row--thread${running ? ' row--streaming' : ''}${blockStartClass}`} data-settled={row.settled} data-agent={row.name} data-state={row.toolStatus} data-testid="row-thread">
+        <DesignButton type="button" className="thread" style={personaVar(row)} onClick={() => surface.openThread?.(name)} disabled={surface.openThread === undefined}
+          aria-label={`Open ${rowRole(row)}${row.input ? `, ${row.input}` : ''}`} aria-description={[state, row.body].filter((t) => t !== '').join('. ')} data-testid="thread-open">
+          <span className="thread__name" style={personaInk(row)}>{rowRole(row)}</span>
+          <span className="thread__task">{row.input ?? ''}</span>
+          <span className="thread__state mono" data-running={running ? '1' : undefined}>{state}</span>
+          <span className={`thread__latest${running ? ' thread__latest--live' : ''}`}><Highlighted text={row.body} match={match} /></span>
+          <i className="ph ph-caret-right thread__open" aria-hidden="true" />
+        </DesignButton>
+      </article>
+    );
+  }
+
   // Every other category. REQ-CHAT-056's Markdown on the agent-message category only.
   const markdown = isMessageRow(row);
   // REQ-CHAT-162: a system notice whose text is the `/skills` listing is drawn as the listing.
   const listing = row.kind === 'system' ? parseSkillListing(row.body) : null;
   return (
-    <article {...common} className={`row row--${row.kind}${live ? ' row--streaming' : ''}${blockStartClass}`} style={depthStyle(surface, row)} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
+    <article {...common} className={`row row--${row.kind}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
       <div className="row__grid">
-        <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
+        <Attribution row={row} place={place} />
         <div className="row__main">
           {markdown
             ? <Markdown source={row.body} onOpenLink={surface.openLink} className="row__body row__body--md" testId="row-markdown" />
             : listing !== null
               ? <SkillListingBlock listing={listing} match={match} onOpenLink={surface.openLink} />
-              : <div className={`row__body${row.kind === 'diff' ? ' mono row__body--diff' : ''}`}><PlainText text={row.body} match={match} onOpenLink={surface.openLink} /></div>}
+              : row.kind === 'diff'
+                ? <DiffBody body={row.body} expanded={expanded || match !== null} onToggle={p.onToggle} match={match} onOpenLink={surface.openLink} />
+                : <div className="row__body"><PlainText text={row.body} match={match} onOpenLink={surface.openLink} /></div>}
           {row.attachments && row.attachments.length > 0 && (
             <ol className="row__attachments" aria-label="Image attachments">
               {row.attachments.map((attachment, index) => (

@@ -25,7 +25,7 @@ import { AgentTree } from './AgentTree.js';
 import { cancelOffered, restingView, steerOffered } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
-import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
+import { DelegationHeader, ThreadTabs, scopedRows, threadState, threadedRows, type Acknowledger, type TranscriptScope } from './TranscriptSurface.js';
 import { TranscriptPane } from './transcript/TranscriptPane.js';
 import { TerminalToolbarControl } from './terminal/host.js'; // Part AL2 — the slot's control (one import line; the slot rule names the slot line only, reported in the handoff)
 import type { DisplayCaps } from './transcript/project.js';
@@ -775,8 +775,12 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
 
 export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
-  // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
-  const [scope, setScope] = useState<'all' | 'task'>('all');
+  // PD-CHAT-015: whose transcript is shown — the run's own conversation first. REQ-CHAT-069's "This task" needs a
+  // selected agent, and without one it is the run's.
+  const [scope, setScope] = useState<TranscriptScope>('run');
+  // The thread lines' row objects, held from one projection to the next so an unchanged line is the same object
+  // (`threadedRows`); a cache of derived rows, never a fact the view draws from.
+  const [heldThreads] = useState(() => new Map<string, TranscriptRow>());
   const [error, setError] = useState<string | null>(null);
   /** REQ-WORKSPACE-112: a keyboard refusal carries its recovery control beside the two-sentence error. */
   const [setupSubmitRefused, setSetupSubmitRefused] = useState(false);
@@ -1268,21 +1272,25 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   // unavailable with that as its stated reason, so the transcript is never filtered to nothing.
   // PD-ORCH-005 clause 4 with OQ-97: the run-level agent's rows include those its roots wrote under another persona's name.
   const entryRoots = session?.entryRoots;
-  const shownRows = useMemo(() => (scope === 'task' && selected !== null ? scopedRows(rows, selected, entryRoots) : rows), [scope, selected, rows, entryRoots]);
-  /**
-   * PD-CHAT-005: how deep a row's agent sits in the delegation tree, which is what indents a delegated agent's
-   * rows in the transcript. The tree is the run's (REQ-MONITOR-036/037) and the record already carries the
-   * depth per agent, so this reads it rather than walking `parentId` a second time. An agent the record does
-   * not name — the run-level persona, a row written before its agent was announced — sits at depth 0.
-   */
-  const agentDepth = useMemo(() => {
-    const byName = new Map<string, number>();
-    for (const a of agents) {
-      byName.set(a.name, a.depth);
-      if (!byName.has(a.persona)) byName.set(a.persona, a.depth);
-    }
-    return (name: string, persona: string): number => byName.get(name) ?? byName.get(persona) ?? 0;
-  }, [agents]);
+  // PD-CHAT-015: the run's own conversation and an agent's own transcript each draw the agents it delegated to as
+  // one thread line; "All activity" is every row in the order recorded. With no agent in the run nothing is folded.
+  const shownAgent = scope === 'all' ? null : scope === 'task' && selected !== null ? selected : runLevel;
+  const shownRows = useMemo(() => {
+    if (shownAgent === null) return rows;
+    if (agents.length === 0) return shownAgent.id === RUN_AGENT_ID ? rows : scopedRows(rows, shownAgent, entryRoots);
+    return threadedRows(rows, shownAgent, agents, entryRoots, heldThreads);
+  }, [shownAgent, agents, rows, entryRoots, heldThreads]);
+  /** PD-CHAT-015: a thread line's state and live elapsed time, by the agent's name; pressing the line shows that agent's transcript. */
+  const threadStateOf = useMemo(() => {
+    const byName = new Map(agents.map((a) => [a.name, a]));
+    return (name: string): string | null => { const a = byName.get(name); return a === undefined ? null : threadState(a, nowIso); };
+  }, [agents, nowIso]);
+  const openThread = useCallback((name: string) => {
+    const a = agents.find((x) => x.name === name);
+    if (a === undefined) return;
+    selectAgentShared(a.id); onSelectAgent?.(a.id, 'click');
+    setScope('task');
+  }, [agents, onSelectAgent, selectAgentShared]);
   // REQ-MONITOR-051: below 1180 px the agents panel and the inspector are overlay drawers, mutually exclusive; choosing an agent opens the inspector's.
   const narrow = useNarrow();
   const [drawer, setDrawer] = useState<'run' | 'inspector' | null>(null);
@@ -1467,7 +1475,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
               * the catalogue's registry here. The toolbar's own condition is not widened: the renderer always passes `onOpenStash`. */}
             <ClearTranscriptControl runState={runState} rowCount={rows.length} control={slash?.control} onAcknowledge={onAcknowledge} registry={registry} configKey={personas} skillsRevision={slash?.skillsRevision} loadSkillFile={slash?.loadSkillFile} listSkills={slash?.listSkills} onError={setError} />
             {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
-            {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
+            {/* PD-CHAT-015: the scope is the tab strip at the head of the transcript, below. */}
             {/* REQ-CHAT-074 "opened by toolbar button or Ctrl+F": the toolbar's search control runs the registry's "Search
               * transcript" (`openSearch`, REQ-SHELL-048's one vocabulary), the command Ctrl+F, the palette and `/search` run.
               * Drawn from the mockup's WORKSPACE → transcript column, where the magnifying glass sits before the terminal
@@ -1508,6 +1516,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           <WaitHeader key={`${session.wait.agent}:${session.wait.attempt}:${session.wait.provider}:${session.wait.model}:${session.wait.rejection ?? ''}`} wait={session.wait} models={models} onSetModel={onSetModel} onKeepWaiting={onKeepWaiting} onCancel={onCancelRun ? () => setConfirming('cancelRun') : undefined} />
         )}
         {/* Part AA — REQ-CHAT-068: above the shown transcript, and only for a CHILD agent; a root agent produces none. */}
+        {/* PD-CHAT-015: whose transcript this is — the run's, one agent's, or everything in order. Drawn once the run holds an agent. */}
+        {agents.length > 0 && <ThreadTabs scope={scope} agents={agents} selected={selected} nowIso={nowIso} onScope={setScope} onSelect={(id) => select(id, 'click')} />}
         {scope === 'task' && selected !== null && selected.id !== RUN_AGENT_ID && <DelegationHeader agent={selected} />}
         {/*
           * ADR-0045's recycled pool and ADR-0046's steps 4 and 5. The empty state (REQ-CHAT-073), the projection,
@@ -1523,7 +1533,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           pendingQuestions={session?.pendingQuestions ?? []}
           pendingApprovals={pending}
           questionAgent={session?.agents[0]?.name}
-          agentDepth={agentDepth}
+          threadState={threadStateOf}
+          onOpenThread={openThread}
           onPageOlder={onPageOlder}
           reachedOldest={reachedOldest}
           onFocusComposer={() => area.current?.focus()}

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { AgentRecord, EntryRoot, TranscriptRow } from '@rotaris/contracts';
+import { RUN_AGENT_ID, type AgentRecord, type EntryRoot, type TranscriptRow } from '@rotaris/contracts';
 import { elapsedLabel } from './AgentTree.js';
 import { countNoun, ownRow } from './agents.js';
 import {
-  Row, TranscriptSurfaceProvider, defaultExpanded, delegationSummary, expansionKey, placements, rowKey as memberRowKey, rowMenuEntries,
+  Row, TranscriptSurfaceProvider, defaultExpanded, delegationSummary, expansionKey, isMessageRow, isReasoningRow, personaColourToken, placements, rowKey as memberRowKey, rowMenuEntries,
   type DisplayRow, type RowMenuEntry, type RowMenuRequest, type TranscriptSurface,
 } from './transcript/Row.js';
-import { Button as DesignButton } from './design-system/index.js';
+import { describeToolCall } from './transcript/tool-description.js';
+import { Button as DesignButton, Tabs as DesignTabs, type TabItem } from './design-system/index.js';
 
 /**
  * Part AA — everything ONE row is not: the surface that holds a set of rows, the single context menu, the
@@ -223,6 +224,151 @@ export function ScopeToggle({ scope, agent, nowIso, onScope }: { scope: 'all' | 
       >{label}</DesignButton>
       <span className="row__scope-detail text-secondary mono" data-testid="scope-detail" data-empty={agent === null ? '1' : '0'}>{detail}</span>
     </div>
+  );
+}
+
+// ── PD-CHAT-015: the run and its threads ──────────────────────────────────────────────────────────────────
+
+/**
+ * PD-CHAT-015: whose transcript is shown. `run` is the run's own conversation — the reader and the run-level agent —
+ * with each agent it delegated to as one thread line; `task` is one agent's own transcript (REQ-CHAT-069's
+ * "This task"); `all` is every row in the order it was recorded (REQ-CHAT-069's "All activity").
+ */
+export type TranscriptScope = 'run' | 'task' | 'all';
+
+/**
+ * The thread line's second line is one line of the text: the first that is a sentence rather than a heading or a
+ * one-word acknowledgement ("Done."), its Markdown marks left out; a text holding no such line gives its first line.
+ */
+function firstLine(text: string): string {
+  let fallback = '';
+  for (const line of text.split('\n')) {
+    const plain = line.replace(/^[\s#>*\-`]+/u, '').replace(/[*`]/gu, '').trim();
+    if (plain === '') continue;
+    if (fallback === '') fallback = plain;
+    if (!/^\s*#/u.test(line) && plain.split(/\s+/u).length >= 4) return plain;
+  }
+  return fallback;
+}
+
+/**
+ * PD-CHAT-015: what a thread line says beneath the agent's name — while the agent works, the latest thing it did
+ * (a call by its derived description, REQ-CHAT-175..178; its reasoning by that word; its own words by their first
+ * line); once it has ended, the first line of the last thing it said, which is its report.
+ */
+export function threadLatest(own: readonly TranscriptRow[], ended: boolean): string {
+  for (let i = own.length - 1; i >= 0; i -= 1) {
+    const row = own[i]!;
+    if (isMessageRow(row)) { const line = firstLine(row.body); if (line !== '') return ended ? `Reported: ${line}` : line; }
+    if (ended) continue;
+    if (row.kind === 'tool') { const derived = describeToolCall(row.toolName ?? '', row.input); return derived !== '' ? derived : firstLine(row.body); }
+    if (isReasoningRow(row)) return 'reasoning';
+  }
+  return '';
+}
+
+/** A thread line's state: REQ-CHAT-069's state and elapsed time, as "This task" has always shown them. */
+export function threadState(agent: AgentRecord, nowIso: string | null): string { return scopeDetail(agent, nowIso); }
+
+/**
+ * PD-CHAT-015: the rows of one agent's transcript with each agent IT delegated to folded into one thread line.
+ *
+ * `shown` is the agent whose transcript this is: the run-level agent for the run's own conversation, a child for its
+ * own. A row is kept when it is run-owned (REQ-CHAT-069's five kinds) or `shown`'s own. The rows of a DIRECT child are
+ * replaced by one row of REQ-CHAT-046's delegation category — which has no recorded row behind it, and is computed
+ * here — standing where the child's first row stood and carrying that row's index, so the order of the array is the
+ * order of the record. The rows of a deeper agent are in its parent's transcript and are not drawn here.
+ *
+ * The run's own conversation keeps every row that is not a known child's: a row of a persona the record names no
+ * agent for (a turn the reader gave to another entry persona) belongs to the run, not to a thread.
+ *
+ * `held` carries each thread line's row object from one call to the next, so a line whose text did not change is the
+ * same object and the projector's bounded form sees an unchanged row (REQ-CHAT-055).
+ */
+export function threadedRows(
+  rows: readonly TranscriptRow[], shown: AgentRecord, agents: readonly AgentRecord[], roots: readonly EntryRoot[] = [],
+  held: Map<string, TranscriptRow> = new Map(),
+): readonly TranscriptRow[] {
+  const ids = new Set(agents.map((a) => a.id));
+  const run = shown.id === RUN_AGENT_ID;
+  const children = new Map<string, AgentRecord>();
+  const others = new Set<string>();
+  for (const a of agents) {
+    if (a.id === shown.id) continue;
+    if (run ? !ids.has(a.parentId) : a.parentId === shown.id) children.set(a.name, a); else others.add(a.name);
+  }
+  const own = new Map<string, TranscriptRow[]>();
+  const first = new Map<string, number>();
+  const out: (TranscriptRow | string)[] = [];
+  for (const row of rows) {
+    const child = row.name === undefined ? undefined : children.get(row.name);
+    if (child !== undefined && !RUN_OWNED_KINDS.has(row.kind)) {
+      const list = own.get(child.name);
+      if (list === undefined) { own.set(child.name, [row]); first.set(child.name, out.length); out.push(child.name); } else list.push(row);
+      continue;
+    }
+    if (RUN_OWNED_KINDS.has(row.kind) || (run ? !(row.name !== undefined && others.has(row.name)) : ownRow(row, shown, roots))) out.push(row);
+  }
+  return out.map((entry) => {
+    if (typeof entry !== 'string') return entry;
+    const agent = children.get(entry)!;
+    const mine = own.get(entry)!;
+    const ended = agent.completedAt !== null;
+    const line: TranscriptRow = {
+      index: mine[0]!.index, kind: 'delegation', settled: ended, at: mine[0]!.at, ts: mine[0]!.ts, name: agent.name, persona: agent.persona,
+      body: threadLatest(mine, ended), input: agent.givenName !== '' && agent.givenName !== agent.persona ? agent.givenName : agent.name,
+      toolStatus: agent.presentationState, output: ended ? threadState(agent, agent.completedAt) : agent.presentationState,
+    };
+    const before = held.get(entry);
+    if (before !== undefined && before.index === line.index && before.settled === line.settled && before.body === line.body && before.input === line.input
+      && before.toolStatus === line.toolStatus && before.output === line.output && before.persona === line.persona) return before;
+    held.set(entry, line);
+    return line;
+  });
+}
+
+/**
+ * PD-CHAT-015: the tabs over the transcript — "Run", one per agent in the tree's order, and REQ-CHAT-069's
+ * "All activity". They replace that requirement's two-option toggle: an agent's tab IS "This task" for that agent,
+ * names it, and shows its state and live elapsed time, so the reader can tell whose output is shown without leaving
+ * the transcript. Choosing an agent's tab selects that agent, as choosing its row in the Run panel does.
+ */
+export function ThreadTabs({ scope, agents, selected, nowIso, onScope, onSelect }: {
+  scope: TranscriptScope; agents: readonly AgentRecord[]; selected: AgentRecord | null; nowIso: string | null;
+  onScope: (s: TranscriptScope) => void; onSelect: (id: string) => void;
+}) {
+  const task = scope === 'task' && selected !== null && selected.id !== RUN_AGENT_ID ? selected : null;
+  const value = scope === 'all' ? 'all' : task !== null ? `agent:${task.id}` : 'run';
+  // "All activity" stands before the agents, so a run of many agents — whose tabs scroll — never pushes it out of reach.
+  const tabs: TabItem[] = [
+    { value: 'run', label: <span className="thread-tab" data-testid="scope-run"><i className="ph ph-chats" aria-hidden="true" />Run</span> },
+    { value: 'all', label: <span className="thread-tab" data-testid="scope-all">All activity</span> },
+    ...agents.map((a): TabItem => {
+      const shown = task?.id === a.id;
+      const ended = a.completedAt !== null;
+      const live = a.presentationState === 'running';
+      return {
+        value: `agent:${a.id}`,
+        label: (
+          <span className="thread-tab" data-testid={shown ? 'scope-task' : 'scope-agent'} data-agent-id={a.id} title={`${a.name} — ${threadState(a, nowIso)}`}
+            style={{ ['--rt-row-persona' as string]: `var(${personaColourToken(a.persona)}, var(--rt-accent-300))` }}>
+            <span className="thread-tab__dot" aria-hidden="true" />
+            {a.persona}
+            {/* The state is drawn where it is news — the shown agent's, and any agent still at work; every tab's title carries it. */}
+            {(shown || !ended) && <span className="thread-tab__state mono" data-testid={shown ? 'scope-detail' : undefined} data-running={live ? '1' : undefined}>{threadState(a, nowIso)}</span>}
+          </span>
+        ),
+      };
+    }),
+  ];
+  return (
+    <DesignTabs className="thread-tabs" label="Transcript scope" data-testid="scope-toggle" data-scope={scope === 'task' && task === null ? 'run' : scope}
+      tabs={tabs} value={value}
+      onChange={(next) => {
+        if (next === 'run' || next === 'all') { onScope(next); return; }
+        onSelect(next.slice('agent:'.length));
+        onScope('task');
+      }} />
   );
 }
 

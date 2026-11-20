@@ -120,6 +120,30 @@ export function segmentFacts(s: ActivitySegment): readonly SegmentFact[] {
   return [{ text: `${s.label} ×${s.members}`, outcome: null }, ...outcomeFacts(s.counts)];
 }
 
+/** PD-CHAT-015: the four activity words of REQ-CHAT-064 as what was done, and what was counted. */
+const DONE: Readonly<Record<string, readonly [verb: string, one: string, many: string]>> = {
+  reading: ['Read', 'file', 'files'],
+  editing: ['Edited', 'file', 'files'],
+  searching: ['Searched', 'time', 'times'],
+  running: ['Ran', 'command', 'commands'],
+};
+
+/**
+ * PD-CHAT-015: what the activity line DRAWS for one segment — a sentence about what was done ("Read 4 files"), then
+ * only the outcomes a reader has to act on: a count that failed, was blocked or is still running. A segment whose
+ * calls all succeeded says so by saying nothing more. A reasoning segment draws that it thought and for how long.
+ *
+ * `segmentFacts` above is untouched and is still what the line copies as and is described by to assistive technology
+ * (REQ-CHAT-065's string, `reading ×4 · 3 ok · 1 failed`), so nothing a reader could count is lost: the `ok` count and
+ * the token figure are one press or one copy away. A tool the family table does not name keeps its name and its count.
+ */
+export function drawnFacts(s: ActivitySegment): readonly SegmentFact[] {
+  if (s.reasoning) return [{ text: s.members === 1 ? 'Thought' : `Thought ×${s.members}`, outcome: null }, { text: `${Math.floor(s.durationMs / 1000)}s`, outcome: null }];
+  const done = DONE[s.label];
+  const lead = done === undefined ? `${s.label} ×${s.members}` : `${done[0]} ${s.members} ${s.members === 1 ? done[1] : done[2]}`;
+  return [{ text: lead, outcome: null }, ...outcomeFacts(s.counts).filter((f) => f.outcome !== 'ok')];
+}
+
 /** PD-CHAT-004: one segment's own text — the facts above, joined. Copy and the accessible description read this. */
 export function segmentSummary(s: ActivitySegment): string {
   return segmentFacts(s).map((f) => f.text).join(FACT_SEPARATOR);

@@ -405,17 +405,25 @@
 /* PD-CHAT-003: the mockup's 12 px between blocks; the first row of the transcript carries none. */
 .row--block-start { margin-top: var(--rt-space-3, 12px); }
 .rowlist .row:first-child { margin-top: 0; }
-.row__grid { display: grid; grid-template-columns: 52px 112px minmax(0, 1fr); align-items: baseline; column-gap: var(--rt-space-2, 8px); }
-/* PD-CHAT-005: a delegated agent's rows indent one step per level of the delegation tree, so the transcript
-   says who reports to whom in the same place the Agents panel does. `Row.tsx` sets `--rt-row-depth` from the
-   tree and writes no pixel; the step is the language's own 16 px. REQ-CHAT-057's 52 px and 112 px columns are
-   UNTOUCHED — the indent MOVES the grid, it does not resize it, so `rows-proof` measures the same two widths. */
-.row[style*='--rt-row-depth'] > .row__grid { padding-inline-start: calc(var(--rt-row-depth, 0) * var(--rt-space-4, 16px)); }
-.row__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.row__attribution { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.row__task { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* REQ-CHAT-057: a continuation row shows a 2 px bar in the role gutter, coloured by the persona (the token comes from the element). */
-.row__bar { display: block; width: 2px; align-self: stretch; min-height: 14px; border-radius: 1px; }
+/* PD-CHAT-015 — a turn, not three columns. REQ-CHAT-057's 52 px timestamp column and 112 px role column stood here
+   (`grid-template-columns: 52px 112px minmax(0, 1fr)`), with PD-CHAT-005's indent of one step per level of the
+   delegation tree moving that grid and PD-CHAT-004's rule and padding added again inside an expanded run. Measured in
+   the built app on 2026-11-20 at 1440 x 900, the transcript column 719 px wide: a row's text had 485 px, a depth-1
+   agent's 469 px, and a member of that agent's expanded run 246 px — a third of the column — with prose capped at
+   366 px. The falsified rules are kept named: the two columns, `.row[style*='--rt-row-depth'] > .row__grid`'s
+   `padding-inline-start`, and `.row__bar`, the 2 px continuation bar in the role column.
+
+   What stands instead: the first row of a block carries a heading on a line of its own — a dot in the persona's
+   colour, the name, the task, and the time at the line's end — and every row's content starts at one step in from
+   the row's edge, at any depth of the delegation tree. A continuation row draws no heading and nothing in its place. */
+.row__grid { display: grid; grid-template-columns: var(--rt-space-5) minmax(0, 1fr) auto; align-items: baseline; }
+.row__attribution { grid-column: 1 / 3; grid-row: 1; display: flex; align-items: baseline; gap: var(--rt-space-2); min-width: 0; padding-bottom: var(--rt-space-1); }
+/* The dot is the persona's colour and nothing else: the name beside it says who, in the same colour (state twice). */
+.row__attribution::before { content: ''; flex: none; align-self: center; width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); margin-inline-end: calc(var(--rt-space-5) - var(--rt-status-dot-size) - var(--rt-space-2)); border-radius: 50%; background: var(--rt-row-persona, var(--rt-accent-300)); }
+.row__time { grid-column: 3; grid-row: 1; padding-inline-start: var(--rt-space-3); }
+/* The 14 px is the floor the pool's capacity unit is held to (`transcript.test.ts`): no row's content is drawn shorter. */
+.row__main { grid-column: 2 / 4; grid-row: 2; display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; min-height: 14px; }
+.row__task { min-width: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Without a border to darken, hover is the design's own list-row treatment: a wash, not an outline. */
 .row:hover { background: var(--rt-hover); }
 .row:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
@@ -436,7 +444,9 @@
    exists to carry. The truncation half goes and the wrapping half stays, deliberately now: a name breaks at its
    hyphen, an unbroken one breaks anywhere rather than clipping mid-glyph, and `estimateHeight` models the second
    line it costs (docs/archive/defects/role-gutter-truncation-rule-is-inert.md). */
-.row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); overflow-wrap: anywhere; }
+.row__role { flex: none; font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); color: var(--rt-accent-300); white-space: nowrap; }
+/* The reader's own row and the product's are named by a word, not an identifier. */
+.row--user .row__role, .row--system .row__role { text-transform: capitalize; }
 /* REQ-CHAT-057: timestamps in the monospace stack at 8 pt — the requirement's own unit, not a token's. */
 .row__time { font-family: var(--rt-font-mono); font-size: 8pt; color: var(--rt-text-tertiary); }
 /* The design gives prose a measure — nothing in the mockup's transcript runs the full width of a wide window;
@@ -461,11 +471,42 @@
    the rule is on the container, not on each row, so it does not break at the gap between two members. The
    colour arrives as an inline custom value from `personaColourToken`; a surface that supplies none keeps
    the border token, so the rail is never invisible. */
-.row__members { display: flex; flex-direction: column; gap: 0; margin-top: var(--rt-space-2, 8px);
-  border-inline-start: 2px solid var(--rt-border); padding-inline-start: var(--rt-space-3); }
-/* The falsified reason, kept: a 1 px divider PER ROW read as a dashed line rather than one agent's thread,
-   and told the reader nothing about whose run it was. */
-.row__members .row { margin-left: 0; margin-right: 0; padding-left: 0; border-left: 0; border-radius: 0; }
+.row__members { display: flex; flex-direction: column; gap: 0; margin-top: var(--rt-space-1); padding-inline-start: var(--rt-space-4); }
+/* PD-CHAT-015: a member is one line under the line that holds it — its content, and its own time at the line's end.
+   The falsified treatment, kept named: PD-CHAT-004's 2 px rule in the persona's colour down the members' left edge,
+   inside which each member repeated the two empty columns of the row grid. */
+.row__members .row { margin-inline: 0; padding-inline: 0; border-radius: 0; }
+.row__members .row__grid { grid-template-columns: minmax(0, 1fr) auto; }
+.row__members .row__main { grid-column: 1; grid-row: 1; }
+.row__members .row__time { grid-column: 2; grid-row: 1; }
+/* PD-CHAT-015: the thread line — one delegated agent, where its work begins in the transcript it was handed out of.
+   A ruled line, not a card: consecutive lines share their rules, so three agents read as one list. */
+.row--thread { padding: 0; margin-top: 0; border: 0; border-radius: 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.row--thread.row--block-start { margin-top: var(--rt-space-3); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+.thread { display: grid; grid-template-columns: var(--rt-space-5) auto minmax(0, 1fr) auto var(--rt-space-4); align-items: baseline; column-gap: var(--rt-space-2); row-gap: 0; width: 100%; padding: var(--rt-space-2) var(--rt-space-3); border: 0; border-radius: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm); text-align: start; cursor: pointer; }
+.thread:disabled { cursor: default; opacity: 1; }
+.thread:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.thread::before { content: ''; grid-column: 1; grid-row: 1; align-self: center; width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: 50%; background: var(--rt-row-persona, var(--rt-accent-300)); }
+.thread__name { grid-column: 2; grid-row: 1; font-weight: var(--rt-weight-medium); white-space: nowrap; }
+.thread__task { grid-column: 3; grid-row: 1; min-width: 0; color: var(--rt-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread__state { grid-column: 4; grid-row: 1; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); white-space: nowrap; }
+.thread__state[data-running] { color: var(--rt-run); }
+.thread__latest { grid-column: 2 / 5; grid-row: 2; min-width: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
+.thread__latest--live { color: var(--rt-axis-y-300); }
+.thread__latest:empty { display: none; }
+.thread__open { grid-column: 5; grid-row: 1 / 3; align-self: center; justify-self: end; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+/* PD-CHAT-015: whose transcript is shown — the run's own conversation, one agent's, or everything in order. */
+.thread-tabs { flex: none; width: 100%; min-width: 0; gap: var(--rt-space-1); overflow-x: auto; scrollbar-width: none; }
+.thread-tabs .tab { display: inline-flex; flex: none; align-items: center; gap: var(--rt-space-2); padding-inline: var(--rt-space-2); border-inline: 0; border-top: 0; background: transparent; font-size: var(--rt-text-xs); white-space: nowrap; }
+.thread-tabs .tab:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.thread-tab__dot { flex: none; width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: 50%; background: var(--rt-row-persona, var(--rt-accent-300)); }
+.thread-tab__state { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); }
+.thread-tab__state[data-running] { color: var(--rt-run); }
+.thread-tab { display: inline-flex; align-items: center; gap: var(--rt-space-2); }
+.thread-tabs .tab { color: var(--rt-text-secondary); border-bottom: var(--rt-notice-rule-width) solid transparent; }
+.thread-tabs .tab.is-active { color: var(--rt-text); border-bottom-color: var(--rt-accent); }
+.thread-tabs .tab:not(.is-active):hover { color: var(--rt-text); background: var(--rt-hover); }
+.thread-tabs { border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 /* PD-CHAT-004: the activity line's segments. Each is one unbroken phrase, so the line wraps BETWEEN
    segments and never inside one — `reading ×2` and `2 ok` may not end up on different lines. */
 /* The spacing tokens are named WITHOUT a literal fallback here: `tokens/spacing.css` always loads ahead of
@@ -475,7 +516,8 @@
 .activity__segment + .activity__segment::before { content: '·'; margin-inline-end: var(--rt-space-2); color: var(--rt-text-tertiary); }
 /* A reasoning segment is drawn in the hue the mockup gives an agent's own deliberation, so the three kinds
    of one-liner stay told apart by wording AND hue (docs/design §1.3: colour never carries a fact alone). */
-.activity__segment--reasoning { color: var(--rt-accent-300); }
+/* PD-CHAT-015: that an agent thought is the quietest fact on the line — what it did is what a reader follows. */
+.activity__segment--reasoning { color: var(--rt-text-tertiary); }
 .row--group .activity__segment:not(.activity__segment--reasoning) { color: var(--rt-axis-y-300); }
 /* PD-CHAT-004: the activity word of the segment in flight — what the agent is doing NOW, at a glance. */
 .activity__now { white-space: nowrap; color: var(--rt-run); }
@@ -950,10 +992,16 @@
 .tool__blocked { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
 /* The two rows that DO earn a surface, because each reveals something rather than narrating it: an edit the user
    made outside the run, and a call suspended waiting on a person. Both take the design's rail-on-a-panel form. */
-.row--diff { background: var(--rt-surface); border-color: var(--rt-border); border-left: 2px solid var(--rt-border-strong); }
+/* PD-CHAT-015: the diff is a block INSIDE the turn it belongs to — the surface an expanded tool call earns — and no
+   longer a row-wide box with a 2 px rail (`.row--diff { background; border-color; border-left: 2px solid }`, kept named). */
+.row__body--diff { padding: var(--rt-space-2) var(--rt-space-3); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); white-space: pre; overflow-x: auto; }
 .row__body--diff { font-size: var(--rt-text-xs, 12px); }
+/* PD-CHAT-015: the rest of a diff is one press away, in the link ink every in-row act takes. */
+.row__more { align-self: flex-start; padding: 0; border: 0; background: transparent; font: inherit; font-size: var(--rt-text-xs); color: var(--rt-accent-300); cursor: pointer; }
+.row__more:hover { color: var(--rt-accent-200); }
+.row__more:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: var(--rt-focus-ring-width); }
 .row--approval { background: var(--rt-surface); border-color: var(--rt-border); border-left: 2px solid var(--rt-wait); }
-.row--approval:hover, .row--diff:hover { background: var(--rt-surface-2); }
+.row--approval:hover { background: var(--rt-surface-2); }
 .row--approval .row__body { color: var(--rt-warn); }
 @media (prefers-reduced-motion: reduce) { .tool__outcome--running { animation: none; } }
 

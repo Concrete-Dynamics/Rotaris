@@ -89,13 +89,14 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   });
 
   it('PD-CHAT-003: the capacity unit is no taller than the shortest row the stylesheet can draw', () => {
-    // A continuation row is `.row`'s 4 px top margin, its 1 px border either side and a grid whose role column holds the
-    // continuation bar (2 px wide) at its 14 px `min-height`; the first row of a block carries 12 px above it and a role line instead.
+    // A continuation row is `.row`'s 4 px top margin, its 1 px border either side and its content, which the stylesheet
+    // holds to at least one 14 px line (`.row__main`'s `min-height`). PD-CHAT-015: the floor stood on `.row__bar`, the
+    // continuation bar of the role column, until that column and its bar went on 2026-11-20; the figure is the same.
     const css = readFileSync(new URL('../shell.css', import.meta.url), 'utf8');
     const rule = (selector: string): string => new RegExp(`^${selector.replace(/\./g, '\\.')} \\{([^}]*)\\}`, 'm').exec(css)?.[1] ?? '';
     const marginTop = Number(/margin:\s*(\d+)px/.exec(rule('.row'))?.[1]);
     const border = Number(/border:\s*(\d+)px/.exec(rule('.row'))?.[1]);
-    const bar = Number(/min-height:\s*(\d+)px/.exec(rule('.row__bar'))?.[1]);
+    const bar = Number(/min-height:\s*(\d+)px/.exec(rule('.row__main'))?.[1]);
     const floor = marginTop + 2 * border + bar;
     expect(floor).toBe(20);
     expect(SHORTEST_ROW_HEIGHT).toBeLessThanOrEqual(floor);
@@ -244,15 +245,17 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   // gap above each row): the first repair covered only the block gap, and `transcript-proof` went on catching a
   // one-line agent message INSIDE a block drawn 33.4 px into the 30 px it was given.
 
-  it('PD-CHAT-003: the first row of a block estimates the 12 px it is drawn below, over what one row inside a block is', () => {
+  it('PD-CHAT-003 / PD-CHAT-015: the first row of a block estimates the 12 px it is drawn below and the heading it draws, over what one row inside a block is', () => {
     const shapes: DisplayRow[] = [
       { shape: 'row', key: 'k', row: row(0, { body: 'one line' }) },
       { shape: 'row', key: 't', row: row(0, { kind: 'thinking', body: 'deliberating' }) },
       asGroup(projectDisplay(options([tool(0, 'read'), tool(1, 'read')]))[0]),
     ];
     for (const d of shapes) {
-      // `.row--block-start`'s `--rt-space-3` against `.row`'s 4 px: the only difference between the two boxes.
-      expect(estimateHeight(d, false, 900, true) - estimateHeight(d, false, 900, false), d.key).toBe(8);
+      // `.row--block-start`'s `--rt-space-3` against `.row`'s 4 px, and PD-CHAT-015's heading on a line of its own:
+      // measured in the built app on 2026-11-20, a one-line agent message drew 64.9 px starting a block and 33.4 px
+      // inside one (31.5 px apart: the 8 px and a 23.4 px heading). The estimate errs long by half a pixel.
+      expect(estimateHeight(d, false, 900, true) - estimateHeight(d, false, 900, false), d.key).toBe(32);
     }
     // A caller that says nothing about the block keeps the estimate it had (a row inside a block).
     expect(estimateHeight(shapes[0]!, false, 900)).toBe(estimateHeight(shapes[0]!, false, 900, false));
@@ -262,27 +265,36 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     const WIDTH = 740;
     const PROSE = 'The transcript keeps each row at the height it drew, and until a row has been measured the pane positions it by an estimate of that height, which is why the estimate has to be read against what the built application actually draws on this host and on every other one it ships to, including the wrapped paragraphs an agent writes when it explains what it changed and why the change was needed at all.';
     const at = (over: Partial<TranscriptRow>): DisplayRow => ({ shape: 'row', key: 'k', row: row(0, over) });
+    // PD-CHAT-015 (2026-11-20): every row that STARTS a block below is the figure measured on 2026-09-30 plus the 23.4 px
+    // heading it now draws on a line of its own (measured: 64.9 px against 33.4 px for a one-line agent message). The
+    // three wrapped paragraphs were measured in the 78 % measure of a 514 px column, which is now 674 px wide at this
+    // viewport; their bound here is the lines that text draws in the new measure at the 6.7 px advance the fixture's
+    // paragraphs drew at, one 19.5 px line each, with the paragraph's 8 px margin and the row's 6 px. Remeasuring them
+    // in the built app is owed (docs/design/briefs/transcript-rows.md).
+    const wrapped = (characters: number): number => Math.ceil((characters * 6.7) / Math.round((WIDTH - 66) * 0.78)) * 19.5 + 8 + 6;
     const drawn: [string, DisplayRow, boolean, number][] = [
       // The case transcript-proof caught after the first repair: a one-line agent message INSIDE a block, whose
       // Markdown paragraph keeps its 8 px bottom margin in the row. Estimated 30 before this repair.
       ['one-line agent message inside a block', at({ body: 'The scripted answer, after deliberating.' }), false, 33.4],
-      ['one-line agent message starting a block', at({ body: 'agent one line' }), true, 41.4],
+      ['one-line agent message starting a block', at({ body: 'agent one line' }), true, 64.8],
       // `.row--user`'s 8 px padding above and below: 11.4 px short before this repair, at both positions.
       ['one-line user message inside a block', at({ kind: 'user', body: 'second user line' }), false, 41.4],
-      ['one-line user message starting a block', at({ kind: 'user', body: 'Say something about the notes.' }), true, 49.4],
+      ['one-line user message starting a block', at({ kind: 'user', body: 'Say something about the notes.' }), true, 72.8],
       ['one-line system notice inside a block', at({ kind: 'system', body: 's2' }), false, 23.8],
-      ['one-line system notice starting a block', at({ kind: 'system', body: 'The run completed.' }), true, 31.8],
-      ['collapsed reasoning row starting a block', at({ kind: 'thinking', body: 'deliberating' }), true, 33.4],
+      ['one-line system notice starting a block', at({ kind: 'system', body: 'The run completed.' }), true, 55.2],
+      ['collapsed reasoning row starting a block', at({ kind: 'thinking', body: 'deliberating' }), true, 56.8],
       ['three Markdown paragraphs', at({ body: 'para one\n\npara two\n\npara three' }), false, 88.3],
-      ['a two-item Markdown list starting a block', at({ body: '- item one\n- item two' }), true, 68.9],
+      ['a two-item Markdown list starting a block', at({ body: '- item one\n- item two' }), true, 92.3],
       ['a Markdown heading and a paragraph', at({ body: '# Heading\n\nbody' }), false, 71.3],
-      ['a six-line user message starting a block', at({ kind: 'user', body: 'u1\nu2\nu3\nu4\nu5\nu6' }), true, 146.6],
-      ['a paragraph that wraps to seven lines', at({ body: PROSE }), false, 150.1],
-      ['a user message that wraps to seven lines', at({ kind: 'user', body: PROSE }), true, 166.1],
-      ['a paragraph of 800 characters that wraps to fourteen lines', at({ body: 'word '.repeat(160) }), false, 286.1],
-      ['a five-line diff starting a block', at({ kind: 'diff', name: 'edit', body: '--- a/x\n+++ b/x\n@@\n-a\n+b' }), true, 103.1],
-      ['a sixteen-segment activity line starting a block (six drawn lines)',
-        asGroup(projectDisplay(options(Array.from({ length: 16 }, (_, i) => tool(i, `inspect-${i}`))))[0]), true, 130.6],
+      ['a six-line user message starting a block', at({ kind: 'user', body: 'u1\nu2\nu3\nu4\nu5\nu6' }), true, 170.0],
+      ['a paragraph that wraps to seven lines', at({ body: PROSE }), false, wrapped(PROSE.length)],
+      ['a user message that wraps to seven lines', at({ kind: 'user', body: PROSE }), true, wrapped(PROSE.length) - 8 + 16 + 8 + 23.4], // plain text: no paragraph margin; the user row's padding, the block gap, the heading
+      ['a paragraph of 800 characters that wraps to fourteen lines', at({ body: 'word '.repeat(160) }), false, wrapped(800)],
+      ['a five-line diff starting a block', at({ kind: 'diff', name: 'edit', body: '--- a/x\n+++ b/x\n@@\n-a\n+b' }), true, 126.5],
+      // PD-CHAT-015: six drawn lines in the old 514 px column; sixteen segments of about 107 px each are three lines of
+      // the 658 px the line now has (derived, not measured — owed with the wrapped paragraphs above).
+      ['a sixteen-segment activity line starting a block (three drawn lines)',
+        asGroup(projectDisplay(options(Array.from({ length: 16 }, (_, i) => tool(i, `inspect-${i}`))))[0]), true, 3 * 19.5 + 6 + 8 + 23.4],
     ];
     for (const [name, d, blockStart, height] of drawn) {
       expect(estimateHeight(d, false, WIDTH, blockStart), name).toBeGreaterThanOrEqual(height);
@@ -323,10 +335,14 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
       .toBe(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'one line' }) }, false));
   });
 
-  it('a long agent name costs the row a second line, because the role gutter wraps (REQ-CHAT-057)', () => {
-    const short = estimateHeight({ shape: 'row', key: 'k', row: row(0, { name: 'planner', body: 'hi' }) }, false, 900);
-    const long = estimateHeight({ shape: 'row', key: 'k', row: row(0, { name: 'requirements-engineer', body: 'hi' }) }, false, 900);
-    expect(long).toBeGreaterThan(short);
+  it('a long agent name costs the row nothing: the heading is a line of its own and never wraps (PD-CHAT-015)', () => {
+    // The falsified behaviour, kept: the role label wrapped inside REQ-CHAT-057's 112 px column, so `requirements-engineer`
+    // cost its row a second line. The column is gone; the name stands in the block's heading, on one line.
+    for (const blockStart of [false, true]) {
+      const short = estimateHeight({ shape: 'row', key: 'k', row: row(0, { name: 'planner', body: 'hi' }) }, false, 900, blockStart);
+      const long = estimateHeight({ shape: 'row', key: 'k', row: row(0, { name: 'requirements-engineer', body: 'hi' }) }, false, 900, blockStart);
+      expect(long).toBe(short);
+    }
   });
 
   it('a LIVE row has a measurement key even though it has no rendering-reuse key (REQ-CHAT-058)', () => {
@@ -531,7 +547,7 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     // Nothing measured: the estimate, read with the block start of the row's OWN position.
     expect(readHeight(d, 0, 800, new Set(), starts, none, none)).toBe(estimateHeight(d, false, 800, true));
     expect(readHeight(d, 0, 800, new Set(), inside, none, none)).toBe(estimateHeight(d, false, 800, false));
-    expect(readHeight(d, 0, 800, new Set(), starts, none, none) - readHeight(d, 0, 800, new Set(), inside, none, none)).toBe(8);
+    expect(readHeight(d, 0, 800, new Set(), starts, none, none) - readHeight(d, 0, 800, new Set(), inside, none, none)).toBe(32);
     // A position the places do not reach is read as a row inside a block, never as an error.
     expect(readHeight(d, 3, 800, new Set(), starts, none, none)).toBe(estimateHeight(d, false, 800, false));
     // What the identity drew last wins over any estimate, and the row's own measurement over both.

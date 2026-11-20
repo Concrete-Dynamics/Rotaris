@@ -339,14 +339,12 @@ export function RowProof({ onOpenLink, onAcknowledge }: RowProofProps) {
           surface={{ showReasoning: false, autoCollapseTools: false, runActive: true, nowMs: Date.parse(at(45)), openLink: onOpenLink }}
         />
       </div>
-      {/* PD-CHAT-004 rev. 2 / PD-CHAT-005: two agents working at once. The depth resolver is the delegation
-          tree's, which the Workspace view supplies from `session.agents`; here it is the fixture's own. */}
+      {/* PD-CHAT-004 rev. 2 / PD-CHAT-015: two agents working at once, told apart by their headings; no row is indented by depth. */}
       <div className="rows-proof__surface transcript" data-testid="proof-interleave">
         <RowList
           rows={[]} displays={interleaveProofDisplays()} label="Two agents at once" acknowledge={onAcknowledge}
           surface={{
             showReasoning: false, autoCollapseTools: false, runActive: true, nowMs: Date.parse(at(75)), openLink: onOpenLink,
-            agentDepth: (name) => (name === 'analyst' ? 1 : 0),
           }}
         />
       </div>

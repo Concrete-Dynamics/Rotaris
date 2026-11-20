@@ -24,9 +24,17 @@ describe('ui/ProviderDialog — what the window offers before a sign-in starts',
     expect(html).toContain('type="password"');
   });
 
-  it('a provider that cannot be signed in to yet says why, offers no field and disables Authenticate', () => {
-    const reason = 'Claude Code (subscription) runs through the Claude Agent SDK installed on this machine, which this build cannot drive yet, so no token is stored for it.';
-    const html = draw({ mode: 'authenticate', providerId: 'claude-code', displayName: 'Claude Code (subscription)', choices: [choice({ id: 'claude-code', displayName: 'Claude Code (subscription)', method: 'api-key', methodLabel: 'Paste an API key', available: false, unavailabilityReason: reason })] });
+  it('PD-PROVIDER-002: a provider connected through the local tool shows its own sentence, no key field, and an enabled Authenticate', () => {
+    const sentence = 'Rotaris will use the Claude Code tool installed and signed in on this computer.';
+    const html = draw({ mode: 'authenticate', providerId: 'claude-code', displayName: 'Claude Code (subscription)', choices: [choice({ id: 'claude-code', displayName: 'Claude Code (subscription)', method: 'api-key', methodLabel: 'Paste an API key', localInstruction: sentence })] });
+    expect(html).toContain(sentence);
+    expect(html).not.toContain('id="provider-key"');
+    expect(html).toMatch(/<button[^>]*data-action="authenticate"(?![^>]*disabled)/);
+  });
+
+  it('an unavailable provider says why, offers no field and disables Authenticate', () => {
+    const reason = 'Claude Code is not installed on this computer.';
+    const html = draw({ mode: 'authenticate', providerId: 'claude-code', displayName: 'Claude Code (subscription)', choices: [choice({ id: 'claude-code', displayName: 'Claude Code (subscription)', method: 'api-key', methodLabel: 'Paste an API key', available: false, unavailabilityReason: reason, localInstruction: 'x' })] });
     expect(html).toContain(reason);
     expect(html).not.toContain('id="provider-key"');
     expect(html).toMatch(/<button[^>]*disabled[^>]*data-action="authenticate"|<button[^>]*data-action="authenticate"[^>]*disabled/);

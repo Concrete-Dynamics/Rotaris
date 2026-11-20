@@ -9,7 +9,7 @@ import { authenticatePress, authenticateWords, KEY_PROVIDER_FIRST_SENTENCE, KEY_
  * action cell is a table cell, and a key provider's Authenticate opens the settings its answer stands in.
  */
 const row = (over: Partial<ProviderRow>): ProviderRow => ({
-  id: 'deepseek', displayName: 'DeepSeek', method: 'api-key', methodLabel: 'Paste an API key', authenticated: false, status: 'unauthenticated',
+  id: 'deepseek', displayName: 'DeepSeek', method: 'api-key', methodLabel: 'Paste an API key', local: false, authenticated: false, status: 'unauthenticated',
   displayMask: null, baseUrl: null, modelCount: 0, userDefined: false, available: true, lastError: null, health: null, ...over,
 });
 const done = async () => ({ ok: true, message: '' });

@@ -8,8 +8,8 @@ import { err, failure, ok, type Failure, type Result } from '@rotaris/kernel';
  *
  * Built in Part K with ONE authenticator (`api-key`) and one discoverer (generic HTTP). Since R-110 (2026-11-20)
  * `copilot`'s device code and `codex`'s browser PKCE are built (`flows/`), with their discovery strategies
- * (`discovery-strategies.ts`); the hosted provider's OIDC flow is owed and its entry is unavailable, and
- * `claude-code`'s sign-in is refused until a local runtime uses its token.
+ * (`discovery-strategies.ts`); the hosted provider's OIDC flow is owed and its entry is unavailable. `claude-code`
+ * is connected through the Claude Code tool installed on the machine and takes no key (PD-PROVIDER-002).
  */
 export const PROVIDER_IDS = ['concrete-cloud', 'copilot', 'codex', 'openai-compatible', 'claude-code', 'deepseek'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];

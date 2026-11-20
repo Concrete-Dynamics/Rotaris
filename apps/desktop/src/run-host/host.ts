@@ -20,8 +20,12 @@ import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, 
 import { reloadWorkspaceConfiguration } from './mcp-reload.js';
 import { leasedSetup, leaseForContinuation, LeaseReportLog, type LeasedSetup } from './launch.js';
 import { LeasedCredentials, LEASE_ASK_MS } from './leased-credentials.js';
+import { ClaudeCliModelClient } from './claude-cli/client.js';
+import { launchClaudeCli, readClaudeUserSettings, sessionFiles } from './claude-cli/launch.js';
+import { LoopbackToolBridge } from './claude-cli/tool-bridge.js';
 import { randomUUID } from 'node:crypto';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network. Reached only behind
 // `__ROTARIS_SEAMS__` below, so a packaged build's bundle carries none of it (OQ-312).
@@ -139,6 +143,15 @@ export function createRunHost() {
   const leased = new Map<string, Readonly<Record<string, string>>>();
   // REQ-PROVIDER-068 / 070 / 076: main's latest answer per sign-in provider — renewed bearers and the headers its API needs.
   const leasedCredentials = new LeasedCredentials();
+  // PD-PROVIDER-002: the Claude Code tool installed on this machine, started per turn; its tools are the product's, over the bridge.
+  const claudeCliDir = join(tmpdir(), `rotaris-claude-code-${process.pid}`);
+  const claudeCliFiles = sessionFiles(claudeCliDir);
+  const claudeCliBridge = new LoopbackToolBridge((m) => log(m, 'warn'));
+  const claudeCli = new ClaudeCliModelClient({
+    timers: clocks.timers, bridge: claudeCliBridge, launch: launchClaudeCli, env: process.env, cwd: claudeCliDir, readUserSettings: readClaudeUserSettings,
+    writeSessionFile: (kind, text) => claudeCliFiles.write(kind, text), removeFile: (path) => claudeCliFiles.remove(path), log: (m) => log(m), warn: (m) => log(m, 'warn'),
+  });
+  const endClaudeCli = async (): Promise<void> => { claudeCli.shutdown(); await claudeCliBridge.close(); rmSync(claudeCliDir, { recursive: true, force: true }); };
   // The workspace root a session was started or resumed under — the key a continuation's lease refresh reads.
   const sessionRoots = new Map<string, string>();
   // Each active run retains its setup through deferred preflight and tool creation.
@@ -223,7 +236,7 @@ export function createRunHost() {
   const configurationDeps = {
     clocks, globalDir: configDir, env: process.env, scriptedClient: scripted, codeIntelligenceLaunch,
     onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
-    log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {}, leasedCredentials,
+    log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {}, leasedCredentials, claudeCli,
     confinement: () => confinement.peek(),
     // PD-PROVIDER-001: the caps the provider catalogue declares, as main handed them at the handshake (`hello`).
     sharedQuotaCaps: () => sharedQuotaCaps,
@@ -607,6 +620,7 @@ export function createRunHost() {
     configure,
     leaseReports,
     leasedCredentials,
+    endClaudeCli,
     continuationLeaseForSession,
     retrospectiveSetup,
     configuredFor,

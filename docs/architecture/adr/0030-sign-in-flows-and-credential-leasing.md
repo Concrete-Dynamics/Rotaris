@@ -222,7 +222,7 @@ was read. A renewal by refresh token was exercised in tests only: neither bearer
 
 **Not built, said so:** the hosted provider's OIDC flow (REQ-PROVIDER-037..041; its entry is unavailable); `claude-code`'s
 sign-in, refused with its reason until a local runtime exists
-([the note](../../defects/claude-code-cannot-be-signed-in-to-because-no-local-runtime-uses-its-token.md)); REQ-PROVIDER-013's
+([the note](../../archive/defects/claude-code-cannot-be-signed-in-to-because-no-local-runtime-uses-its-token.md)); REQ-PROVIDER-013's
 30-second non-interactive attempt; the bridge artifacts (REQ-PROVIDER-061, 063..065); REQ-PROVIDER-035's token exchange;
 the in-place flow of REQ-NOTIFY-076
 ([the note](../../defects/the-recovery-surfaces-do-not-start-a-browser-or-device-sign-in-in-place.md)); REQ-PROVIDER-097's

@@ -22,11 +22,11 @@ function fetchWith(handler: (url: string, headers: Headers) => Response | Promis
 }
 const okCatalogue = fetchWith((_u, h) => new Response(h.get('authorization') === `Bearer ${KEY}` ? JSON.stringify(catalogue) : '{}', { status: h.get('authorization') === `Bearer ${KEY}` ? 200 : 401 }));
 
-function service(fetch = okCatalogue) {
+function service(fetch = okCatalogue, localTool?: { installed: () => boolean; state: () => Promise<{ installed: boolean; signedIn: boolean; subscription: boolean; plan: string | null }> }) {
   const lock = { pid: process.pid, startedAt: '2026-09-05T00:00:00.000Z', timers: clock, monotonic: clock };
   const credentials = new CredentialStore({ dir: join(dir, 'data', 'tokens'), protector: { protect: async () => ok(undefined) }, lock, random: () => 'r', warn: (m) => log.push(`warn:${m}`), info: (m) => log.push(`info:${m}`) });
   const settings = new ProjectSettingsStore({ path: join(dir, 'config', 'project_settings.yaml'), lock, timers: clock, warn: (m) => log.push(`warn:${m}`) });
-  const svc = new ProviderService({ credentials, settings, wall: clock, timers: clock, fetch, log: (m) => log.push(`log:${m}`), warn: (m) => log.push(`warn:${m}`) });
+  const svc = new ProviderService({ credentials, settings, wall: clock, timers: clock, fetch, ...(localTool ? { localTool } : {}), log: (m) => log.push(`log:${m}`), warn: (m) => log.push(`warn:${m}`) });
   return { svc, credentials, settings };
 }
 
@@ -193,7 +193,7 @@ describe('the recovery dialog\'s re-authentication (REQ-NOTIFY-076/077, REQ-NOTI
     expect(svc.reauthentication('deepseek')).toMatchObject({ method: 'api-key' });
     expect(svc.reauthentication('copilot')).toEqual({ method: 'interactive', message: 'GitHub Copilot signs in with "Code shown here, entered at the provider". Start its sign-in, complete it at the provider, then confirm here.' });
     expect(svc.reauthentication('codex').method).toBe('interactive');
-    expect(svc.reauthentication('claude-code').method).toBe('unavailable');
+    expect(svc.reauthentication('claude-code').method).toBe('interactive');
     expect(svc.reauthentication('concrete-cloud')).toEqual({ method: 'unavailable', message: 'Rotaris Cloud is coming soon.' });
     expect(svc.reauthentication('scripted')).toMatchObject({ method: 'configuration', message: expect.stringMatching(/^Authentication is managed by model configuration\./) });
     // No message sends the user to a shell, a terminal or a separate program (REQ-NOTIFY-076's last sentence).
@@ -321,9 +321,7 @@ describe('the interactive sign-in, refresh and the lease (R-110; REQ-PROVIDER-02
     expect(await svc.signInInteractive('concrete-cloud', { prompt: () => undefined })).toEqual({ outcome: 'failed', message: 'Rotaris Cloud is coming soon.' });
     expect((await svc.signInInteractive('deepseek', { prompt: () => undefined })).outcome).toBe('failed');
     expect((await svc.signInInteractive('nope', { prompt: () => undefined })).outcome).toBe('failed');
-    const claude = await svc.signInWithKey('claude-code', 'sk-ant-oat01-abc');
-    expect(claude).toMatchObject({ outcome: 'failed', message: expect.stringContaining('cannot drive yet') });
-    expect(svc.reauthentication('claude-code')).toMatchObject({ method: 'unavailable' });
+    expect(await svc.signInWithKey('claude-code', 'sk-ant-oat01-abc')).toMatchObject({ outcome: 'failed', message: expect.stringContaining('takes no key') });
     expect(contacts).toBe(0);
     expect(credentials.list()).toEqual([]);
   });
@@ -382,13 +380,53 @@ describe('the interactive sign-in, refresh and the lease (R-110; REQ-PROVIDER-02
   });
 });
 
-describe('a local-sdk provider stores no token by any route (R-110)', () => {
-  it('refuses the settings key path, reads unavailable in the list and in the health check', async () => {
-    const { svc, credentials } = service();
-    expect(await svc.replaceKey('claude-code', 'sk-ant-oat01-abc')).toMatchObject({ ok: false, stage: 'method', message: expect.stringContaining('cannot drive yet') });
+describe('Claude Code is connected through the tool installed on this machine (PD-PROVIDER-002)', () => {
+  const tool = (state: { installed: boolean; signedIn: boolean; subscription: boolean; plan: string | null }) => ({ installed: () => state.installed, state: async () => state });
+  const ready = { installed: true, signedIn: true, subscription: true, plan: 'max' };
+
+  it('connects when the tool is signed in with a subscription: a marker is stored, never a credential, and the three models recorded', async () => {
+    const { svc, credentials, settings } = service(okCatalogue, tool(ready));
+    const r = await svc.signInInteractive('claude-code', { prompt: () => { throw new Error('no prompt is shown for the local tool'); } });
+    expect(r).toMatchObject({ outcome: 'signed-in', id: 'claude-code', discovered: 3, message: 'Login complete for Claude Code (subscription); discovered 3 models.' });
+    expect(credentials.load('claude-code')).toEqual({ access_token: 'claude-code-local-tool', refresh_token: '', expires_at: 0, account_id: null, extra: { connection: 'local-tool', plan: 'max' } });
+    const snap = settings.read();
+    expect(snap.ok && snap.value!.providers['claude-code']!.models.map((m) => m.id).sort()).toEqual(['claude-code/haiku', 'claude-code/opus', 'claude-code/sonnet']);
+    expect(snap.ok && snap.value!.providers['claude-code']!.base_url).toBeUndefined();
+    const row = svc.list().find((x) => x.id === 'claude-code')!;
+    expect(row).toMatchObject({ authenticated: true, local: true, available: true, maskedKey: null, methodLabel: 'Uses Claude Code signed in on this computer' });
+    expect(await svc.health('claude-code')).toMatchObject({ state: 'healthy', available: true });
+    const lease = await svc.lease(['claude-code']);
+    expect(lease.report).toMatchObject({ authenticated: ['claude-code'], unresolved: {} });
+    expect(lease.renewable).toEqual([]);
+    expect((await svc.signOut('claude-code')).outcome).toBe('signed-out');
+    expect(svc.status('claude-code')).toBe('unauthenticated');
+  });
+
+  it('says what is missing and stores nothing: not installed, not signed in, signed in without a subscription', async () => {
+    for (const [state, text] of [
+      [{ ...ready, installed: false }, /not installed/],
+      [{ ...ready, signedIn: false, subscription: false }, /not signed in/],
+      [{ ...ready, subscription: false }, /API key or a cloud provider/],
+    ] as const) {
+      const { svc, credentials } = service(okCatalogue, tool(state));
+      const r = await svc.signInInteractive('claude-code', { prompt: () => undefined });
+      expect(r.outcome).toBe('failed');
+      expect(r.outcome === 'failed' && r.message).toMatch(text);
+      expect(credentials.list()).toEqual([]);
+    }
+    const absent = service(okCatalogue, tool({ ...ready, installed: false }));
+    expect(absent.svc.list().find((x) => x.id === 'claude-code')).toMatchObject({ available: false, local: true });
+    expect(await absent.svc.health('claude-code')).toMatchObject({ state: 'error', available: false });
+  });
+
+  it('takes no key by any route, and a connected provider whose tool has since signed out reads unauthenticated on its health', async () => {
+    let state = ready;
+    const { svc, credentials } = service(okCatalogue, { installed: () => true, state: async () => state });
+    expect(await svc.replaceKey('claude-code', 'sk-ant-oat01-abc')).toMatchObject({ ok: false, stage: 'method', message: expect.stringContaining('takes no key') });
     expect(await svc.reauthenticateWithKey('claude-code', 'sk-ant-oat01-abc')).toMatchObject({ ok: false, stage: 'method' });
     expect(credentials.list()).toEqual([]);
-    expect(svc.list().find((r) => r.id === 'claude-code')).toMatchObject({ available: false, authenticated: false });
-    expect(await svc.health('claude-code')).toMatchObject({ state: 'coming_soon', available: false, detail: expect.stringContaining('Claude Agent SDK') });
+    await svc.signInInteractive('claude-code', { prompt: () => undefined });
+    state = { ...ready, signedIn: false, subscription: false };
+    expect(await svc.health('claude-code')).toMatchObject({ state: 'unauthenticated', detail: expect.stringMatching(/not signed in/) });
   });
 });

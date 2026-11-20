@@ -75,6 +75,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     configure,
     leaseReports,
     leasedCredentials,
+    endClaudeCli,
     continuationLeaseForSession,
     retrospectiveSetup,
     configuredFor,
@@ -829,6 +830,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // REQ-WORKSPACE-092/109: the code-intelligence setup's step, and what it started, ended before the host exits — asked
       // first, so its short grace runs beside the rest of the shutdown, and waited for before the exit below.
       const setupEnded = mcp.endSetup();
+      // PD-PROVIDER-002: no Claude Code process this host started outlives it.
+      void endClaudeCli().catch(() => undefined);
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their h.terminal results.
       for (const controller of improvementControllers.values()) controller.abort();
       improvementControllers.clear();

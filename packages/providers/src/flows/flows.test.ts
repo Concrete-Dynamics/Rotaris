@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
-import { claudeCodeModels, claudeCodeStatus, CLAUDE_CODE_TOKEN_IS_API_KEY, CLAUDE_CODE_TOKEN_REQUIRED, CLAUDE_CODE_TOKEN_SHAPE, validateSubscriptionToken } from './claude-code.js';
+import { CLAUDE_CODE_MARKER, CLAUDE_CODE_NOT_A_SUBSCRIPTION, CLAUDE_CODE_NOT_INSTALLED, CLAUDE_CODE_NOT_SIGNED_IN, claudeCodeModels, claudeCodeStatus, localToolProblem, localToolStateOf } from './claude-code.js';
 import { authenticateCodex, codexAccountId, codexAuthorizationUrl, CODEX_CLIENT_ID, CODEX_SCOPES, refreshCodex } from './codex.js';
 import { authenticateCopilot, copilotDeviceFlow, copilotSessionExchange, copilotStatus, refreshCopilot, COPILOT_CANNOT_REFRESH } from './copilot.js';
 import { AUTHENTICATION_TIMED_OUT, openLoopback } from './loopback.js';
@@ -264,18 +264,21 @@ describe('GitHub Copilot (REQ-PROVIDER-020..027)', () => {
   });
 });
 
-describe('Claude Code subscription token (REQ-PROVIDER-045, 047)', () => {
-  it('validates the pasted token and classifies status by the same validation', () => {
-    expect(validateSubscriptionToken('  ')).toEqual({ ok: false, error: CLAUDE_CODE_TOKEN_REQUIRED });
-    expect(validateSubscriptionToken('sk-ant-api03-x')).toEqual({ ok: false, error: CLAUDE_CODE_TOKEN_IS_API_KEY });
-    expect(validateSubscriptionToken('sk-other')).toEqual({ ok: false, error: CLAUDE_CODE_TOKEN_SHAPE });
-    expect(validateSubscriptionToken(' sk-ant-oat01-abc ')).toEqual({ ok: true, value: 'sk-ant-oat01-abc' });
-    expect(validateSubscriptionToken('sk-ant-oat01-ü').ok).toBe(false);
-    expect(claudeCodeStatus({ access_token: 'sk-ant-oat01-abc', refresh_token: '', expires_at: 0, account_id: null, extra: {} })).toBe('authenticated');
-    expect(claudeCodeStatus({ access_token: 'sk-ant-api03-x', refresh_token: '', expires_at: 0, account_id: null, extra: {} })).toBe('unauthenticated');
-    expect(claudeCodeStatus(null)).toBe('unauthenticated');
+describe('Claude Code through the locally installed tool (PD-PROVIDER-002; REQ-PROVIDER-047)', () => {
+  it('reads the tool\'s own status answer and keeps three facts of it, none of them the account', () => {
+    const state = localToolStateOf(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'someone@example.com', orgName: 'An Org', subscriptionType: 'max' }));
+    expect(state).toEqual({ installed: true, signedIn: true, subscription: true, plan: 'max' });
+    expect(JSON.stringify(state)).not.toContain('example.com');
+    expect(localToolProblem(state)).toBeNull();
+    expect(localToolProblem(localToolStateOf(null))).toBe(CLAUDE_CODE_NOT_INSTALLED);
+    expect(localToolProblem(localToolStateOf('{"loggedIn":false}'))).toBe(CLAUDE_CODE_NOT_SIGNED_IN);
+    expect(localToolProblem(localToolStateOf('not json'))).toBe(CLAUDE_CODE_NOT_SIGNED_IN);
+    expect(localToolProblem(localToolStateOf('{"loggedIn":true,"authMethod":"api_key"}'))).toBe(CLAUDE_CODE_NOT_A_SUBSCRIPTION);
   });
-  it('offers exactly the three aliases, offline', () => {
+  it('reads authenticated from the marker alone, and offers exactly the three aliases, offline', () => {
+    expect(claudeCodeStatus({ access_token: CLAUDE_CODE_MARKER, refresh_token: '', expires_at: 0, account_id: null, extra: {} })).toBe('authenticated');
+    expect(claudeCodeStatus({ access_token: 'sk-ant-oat01-abc', refresh_token: '', expires_at: 0, account_id: null, extra: {} })).toBe('unauthenticated');
+    expect(claudeCodeStatus(null)).toBe('unauthenticated');
     expect(claudeCodeModels().map((m) => [m.qualifiedId, m.displayName])).toEqual([['claude-code/opus', 'Claude Opus (subscription)'], ['claude-code/sonnet', 'Claude Sonnet (subscription)'], ['claude-code/haiku', 'Claude Haiku (subscription)']]);
   });
 });

@@ -52,7 +52,8 @@ export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, on
   const keyInput = useRef<HTMLInputElement>(null);
   const [prompt, setPrompt] = useState<ProviderSignInPrompt | null>(null);
   const [waiting, setWaiting] = useState(false);
-  const interactive = choice !== null && choice.available && choice.method !== 'api-key';
+  const local = choice?.localInstruction !== undefined;
+  const interactive = choice !== null && choice.available && (choice.method !== 'api-key' || local);
 
   // REQ-PROVIDER-116: while the provider's flow waits for the user, the prompt main holds is read back and shown.
   useEffect(() => {
@@ -90,7 +91,7 @@ export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, on
   const submit = async (opts: { replace?: boolean; allowEmpty?: boolean } = {}) => {
     if (!choice || busy) return;
     if (!choice.available) { setError(choice.unavailabilityReason ?? 'This provider is not available.'); return; }
-    if (choice.method !== 'api-key') {
+    if (choice.method !== 'api-key' || choice.localInstruction !== undefined) {
       if (!onAuthenticate) { setError(`${choice.displayName} signs in with "${choice.methodLabel}", which this window cannot start.`); return; }
       setBusy(true);
       setWaiting(true);
@@ -167,14 +168,14 @@ export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, on
         </label>
       </>)}
       {choice && !choice.available && <p className="composer__error" role="alert" data-unavailable>{choice.unavailabilityReason ?? 'This provider is not available.'}</p>}
-      {choice && choice.available && choice.method === 'api-key' && (
+      {choice && choice.available && choice.method === 'api-key' && !local && (
         <label className="provider-dialog__field">
           <span className="text-secondary">{KEY_INSTRUCTION}</span>
           <DesignInput id="provider-key" ref={keyInput} className="input mono" type="password" autoComplete="off" value={apiKey} disabled={busy} onChange={(e) => setApiKey(e.currentTarget.value)} aria-label="API key" aria-invalid={fieldErrors.apiKey ? true : undefined} />
           {fieldErrors.apiKey && <span className="composer__error" role="alert">{fieldErrors.apiKey}</span>}
         </label>
       )}
-      {interactive && !prompt && <p className="text-secondary">{OAUTH_INSTRUCTION}</p>}
+      {interactive && !prompt && <p className="text-secondary" data-instruction={local ? 'local' : 'flow'}>{local ? choice.localInstruction : OAUTH_INSTRUCTION}</p>}
       {interactive && prompt?.kind === 'device-code' && (
         <div className="provider-dialog__prompt" role="status" data-prompt="device-code">
           <p className="dialog-body">Open <a href={prompt.verificationUri} onClick={(e) => { e.preventDefault(); onOpenLink?.(prompt.verificationUri); }}>{prompt.verificationUri}</a> and enter code <strong className="mono" data-user-code>{prompt.userCode}</strong>.</p>

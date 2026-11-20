@@ -1,42 +1,60 @@
-import { err, ok, type Result } from '@rotaris/kernel';
-import { headerValidKey, type CredentialStatus, type StoredCredential } from '../credentials/store.js';
+import type { CredentialStatus, StoredCredential } from '../credentials/store.js';
 import type { DiscoveredModel } from '../discovery.js';
 
 /**
- * REQ-PROVIDER-045, 047 — the Claude Code subscription provider mints no token of its own: the user mints one with
- * the external tool and pastes it. Validation is local; model discovery is static and offline.
+ * PD-PROVIDER-002 (superseding REQ-PROVIDER-044 to 046, narrowing REQ-PROVIDER-008 and 049) — the Claude Code
+ * subscription provider is the Claude Code tool the user installed and signed in to. This product asks that tool
+ * whether it is signed in and starts it to answer a model call; it never reads, asks for, stores or passes on the
+ * tool's credential. What the credential store holds for the provider is a MARKER that the user connected it here,
+ * not a secret: signing out removes the marker and leaves the tool's own sign-in alone.
  */
-export const CLAUDE_CODE_TOKEN_LABEL = 'Claude Code subscription token (sk-ant-oat...)';
-export const CLAUDE_CODE_TOKEN_REQUIRED = "Subscription token is required. Run 'claude setup-token' to mint one.";
-export const CLAUDE_CODE_TOKEN_IS_API_KEY = "This is an Anthropic API key (sk-ant-api...), which would bill the API rather than the subscription. Paste the subscription token minted by 'claude setup-token' instead.";
-export const CLAUDE_CODE_TOKEN_SHAPE = "Expected a subscription OAuth token starting with 'sk-ant-oat' (minted by 'claude setup-token').";
-export const CLAUDE_CODE_MINT_FIRST = "Claude Code (subscription) cannot sign in by itself: mint a subscription token with the Claude Code tool's 'claude setup-token' command, then paste it into this provider's sign-in.";
+export const CLAUDE_CODE_MARKER = 'claude-code-local-tool';
+export const CLAUDE_CODE_METHOD_LABEL = 'Uses Claude Code signed in on this computer';
+export const CLAUDE_CODE_INSTRUCTION = 'Rotaris will use the Claude Code tool installed and signed in on this computer. Nothing is pasted here, and Rotaris never sees or stores your Claude sign-in.';
+export const CLAUDE_CODE_NOT_INSTALLED = 'Claude Code is not installed on this computer, or is not on the search path Rotaris was started with. Install Claude Code, sign in to it with your Claude subscription, then authenticate again.';
+export const CLAUDE_CODE_NOT_SIGNED_IN = 'Claude Code is installed but not signed in. Open Claude Code, sign in with your Claude subscription, then authenticate again.';
+export const CLAUDE_CODE_NOT_A_SUBSCRIPTION = 'Claude Code is signed in with an API key or a cloud provider, not with a Claude subscription, so runs would be billed there. Sign in to Claude Code with your Claude subscription, then authenticate again.';
+export const CLAUDE_CODE_NO_KEY = 'Claude Code (subscription) takes no key: it uses the Claude Code tool signed in on this computer. Press Authenticate instead.';
 
-/** The numbered setup and where the token is kept, for the paste-token sign-in once it is offered. */
-export const CLAUDE_CODE_INSTRUCTIONS: readonly string[] = Object.freeze([
-  'Install the Claude Code tool and sign in to it.',
-  "Run 'claude setup-token' in a terminal.",
-  "Paste the 'sk-ant-oat' token it prints below.",
-]);
-export const CLAUDE_CODE_STORAGE_NOTE = 'The token is kept on this machine with owner-only file permissions and is never written to workspace files, logs or session snapshots.';
-
-/** REQ-PROVIDER-045. */
-export function validateSubscriptionToken(raw: string): Result<string, string> {
-  const key = headerValidKey(raw);
-  if (!key.ok) return key;
-  if (key.value.length === 0) return err(CLAUDE_CODE_TOKEN_REQUIRED);
-  if (key.value.startsWith('sk-ant-api')) return err(CLAUDE_CODE_TOKEN_IS_API_KEY);
-  if (!key.value.startsWith('sk-ant-oat')) return err(CLAUDE_CODE_TOKEN_SHAPE);
-  return ok(key.value);
+/** What the local tool says about itself when asked (`claude auth status`); nothing in it is a credential. */
+export interface LocalToolState {
+  readonly installed: boolean;
+  readonly signedIn: boolean;
+  /** Signed in with a Claude subscription, as opposed to an API key or a cloud provider. */
+  readonly subscription: boolean;
+  /** The plan the tool reports (`pro`, `max`, …), when it reports one. */
+  readonly plan: string | null;
 }
 
-/** REQ-PROVIDER-045: status reuses the validation — an invalid stored token reads unauthenticated. */
+/** Reads the tool's own status answer. Anything unreadable is "installed, not signed in". */
+export function localToolStateOf(statusJson: string | null): LocalToolState {
+  if (statusJson === null) return { installed: false, signedIn: false, subscription: false, plan: null };
+  try {
+    const v: unknown = JSON.parse(statusJson);
+    if (v === null || typeof v !== 'object') throw new Error('not an object');
+    const o = v as Record<string, unknown>;
+    const plan = typeof o['subscriptionType'] === 'string' && o['subscriptionType'].length > 0 ? o['subscriptionType'] : null;
+    return { installed: true, signedIn: o['loggedIn'] === true, subscription: o['loggedIn'] === true && o['authMethod'] === 'claude.ai', plan };
+  } catch {
+    return { installed: true, signedIn: false, subscription: false, plan: null };
+  }
+}
+
+/** The sentence for a tool that cannot serve the subscription, or null when it can. */
+export function localToolProblem(state: LocalToolState): string | null {
+  if (!state.installed) return CLAUDE_CODE_NOT_INSTALLED;
+  if (!state.signedIn) return CLAUDE_CODE_NOT_SIGNED_IN;
+  if (!state.subscription) return CLAUDE_CODE_NOT_A_SUBSCRIPTION;
+  return null;
+}
+
+/** Authenticated exactly when the user connected the provider here; the tool's own state is asked when it matters. */
 export function claudeCodeStatus(c: StoredCredential | null): CredentialStatus {
-  return c !== null && validateSubscriptionToken(c.access_token).ok ? 'authenticated' : 'unauthenticated';
+  return c !== null && c.access_token === CLAUDE_CODE_MARKER ? 'authenticated' : 'unauthenticated';
 }
 
 /** REQ-PROVIDER-047: exactly three version-independent aliases; no network call. */
 export function claudeCodeModels(): DiscoveredModel[] {
   return ([['opus', 'Claude Opus (subscription)'], ['sonnet', 'Claude Sonnet (subscription)'], ['haiku', 'Claude Haiku (subscription)']] as const)
-    .map(([id, displayName]) => ({ id, qualifiedId: `claude-code/${id}`, displayName, capabilities: {}, limits: {}, pricing: {}, raw: { id } }));
+    .map(([id, displayName]) => ({ id, qualifiedId: `claude-code/${id}`, displayName, capabilities: { accepts_image_input: true }, limits: { context_window: 200_000 }, pricing: {}, raw: { id } }));
 }

@@ -2,6 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
+import { execFile } from 'node:child_process';
 import { integrationAllowsClose, integrationAllowsUpdate, noWorktreeIntegration } from './integration-guard.js';
 import { askRendererGuard, askUnsavedInTurn, createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, RENDERER_UNSAVED_PROBE_SCRIPT, type CloseGuard, type UnsavedGuardAnswer } from './main-windows.js';
 import { createLiveStateArbiter } from './live-state.js';
@@ -15,7 +16,7 @@ import { createLibraryRevision } from './library.js';
 import { everyHandlerThrows, startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
-import { requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
+import { findExecutable, windowsLaunchOf, requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
 import { createImprovementCoordinator } from './improvements.js';
@@ -36,7 +37,7 @@ import { diagnosticsCommands } from './commands/diagnostics.js'; // REQ-SHELL-16
 import { DiagnosticsCaptures, isExistingDirectory } from './diagnostics.js'; // REQ-STARTUP-129..133, hardening D2, PD-STARTUP-011
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
-import { CATALOGUE, localRuntimeOwed, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, validateCatalog } from '@rotaris/providers';
+import { CATALOGUE, CLAUDE_CODE_INSTRUCTION, CLAUDE_CODE_NOT_INSTALLED, localToolStateOf, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator, serviceMarkerWriter } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
@@ -364,7 +365,23 @@ async function main(): Promise<void> {
   const credentials = new CredentialStore({ dir: layout.tokens, protector, lock: lockDeps, random, warn: (m) => log(`credential store: ${m}`, 'warn'), info: (m) => log(`credential store: ${m}`) });
   const dictationCredential: DictationCredentialDeps = { dir: layout.dictation, protector, warn: (m) => log(`dictation credential: ${m}`, 'warn') };
   const projectSettings = new ProjectSettingsStore({ path: join(dirs.config, PROJECT_SETTINGS_FILE), lock: lockDeps, timers: clocks.timers, warn: (m) => log(`project settings: ${m}`, 'warn') });
-  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, timers: clocks.timers, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
+  /**
+   * PD-PROVIDER-002: the Claude Code tool the user installed. Whether it is there is read off the search path without
+   * starting anything; what it says of its own sign-in is its `auth status` answer, of which only three facts are kept
+   * (`localToolStateOf`) — the account it names is never logged, stored or sent anywhere.
+   */
+  const claudeCodeInstalled = (): boolean => findExecutable('claude', process.env) !== null;
+  const claudeCodeState = (): Promise<ReturnType<typeof localToolStateOf>> => new Promise((resolve) => {
+    const target = windowsLaunchOf('claude', ['auth', 'status'], process.env);
+    const env = { ...process.env };
+    delete env['CLAUDECODE'];
+    delete env['CLAUDE_CODE_ENTRYPOINT'];
+    execFile(target.command, target.args, { env, timeout: 15_000, windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) }, (error, stdout) => {
+      const text = String(stdout).trim();
+      resolve(localToolStateOf(text.startsWith('{') ? text : error && (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : '{}'));
+    });
+  });
+  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, timers: clocks.timers, localTool: { installed: claudeCodeInstalled, state: claudeCodeState }, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
 
   /**
    * REQ-NOTIFY-076 as the two recovery surfaces can act on it today: a key-based provider gets its key field. A device-code or
@@ -1068,13 +1085,14 @@ async function main(): Promise<void> {
       { id: custom.id, displayName: 'OpenAI-compatible endpoint (custom URL)', method: custom.signInMethod, methodLabel: METHOD_LABELS[custom.signInMethod], hint: destinationHint(custom), defaultBaseUrl: custom.baseUrl, custom: true, available: true, unavailabilityReason: null },
       ...builtIns.map((c) => ({
         id: c.id, displayName: nameOf(c), method: c.signInMethod, methodLabel: METHOD_LABELS[c.signInMethod], hint: destinationHint(c), defaultBaseUrl: null, custom: false,
-        // A local-sdk provider is listed and not selectable, with the reason, until the runtime that would use its token exists.
-        available: c.available && c.connectionMode !== 'local-sdk', unavailabilityReason: c.connectionMode === 'local-sdk' ? localRuntimeOwed(c.displayName) : c.unavailabilityReason,
+        // PD-PROVIDER-002: a local-sdk provider is unavailable exactly when its tool is not on the search path, and takes no key.
+        available: c.available && (c.connectionMode !== 'local-sdk' || claudeCodeInstalled()), unavailabilityReason: c.connectionMode === 'local-sdk' && !claudeCodeInstalled() ? CLAUDE_CODE_NOT_INSTALLED : c.unavailabilityReason,
+        ...(c.connectionMode === 'local-sdk' ? { localInstruction: CLAUDE_CODE_INSTRUCTION } : {}),
       })),
     ];
   };
   const providerRows = (): ProviderRow[] => providers.list().map((r) => ({
-    id: r.id, displayName: r.displayName, method: r.method, methodLabel: r.methodLabel, authenticated: r.authenticated, status: r.status, displayMask: r.maskedKey,
+    id: r.id, displayName: r.displayName, method: r.method, methodLabel: r.methodLabel, authenticated: r.authenticated, status: r.status, displayMask: r.maskedKey, local: r.local,
     baseUrl: r.baseUrl, modelCount: r.modelCount, userDefined: r.userDefined, available: r.available, lastError: r.lastError, health: healthCache.get(r.id) ?? null,
   }));
   const presentProvider = async (mode: ProviderDialogPayload['mode'], providerId: string | null): Promise<void> => {

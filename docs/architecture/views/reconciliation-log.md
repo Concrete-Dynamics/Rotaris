@@ -14,6 +14,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-11-21**
+
+**The run host starts the user's Claude Code tool for a `claude-code` model (R-111; [`PD-PROVIDER-002`](../../product/directives/pd-provider-002.md#pd-provider-002); ADR-0026's fourth execution; 2026-11-21).** `02-process-view/01-what-each-process-owns.md`: the run host's row gains the tool's processes — one per turn, started and ended by `run-host/claude-cli/` — and the loopback tool bridge. `05-state-ownership/01-volatile.md` gains the row for them. `02-process-view/02-message-families.md`: `provider.authenticate` also connects the local tool, with no prompt. No package or edge moved; `packages/model` is untouched.
+
 Last reconciled with the code: **2026-11-20**
 
 **A provider signs in by its own flow, and the lease renews (R-110; ADR-0030's third execution; REQ-PROVIDER-020..034, 057, 058, 066..068, 096, 116; 2026-11-20).** `02-process-view/02-message-families.md`: the provider commands gain `provider.authenticate`, `provider.authPrompt` and `provider.authCancel`, none carrying a credential, and `credentials.leased` gains `headers` and `renewable`. The state-ownership view gains two volatile rows — the pending interactive sign-in of each authentication window (main), and main's latest lease per sign-in provider with the keep-fresh timer (run host) — and, having reached the document budget, is split: `05-state-ownership.md` keeps the rule and indexes `05-state-ownership/01-volatile.md` and `02-durable-and-the-rules.md`, moved verbatim. `packages/providers` gains `flows/` and `discovery-strategies.ts`; no package, edge or entry point moved, so the module map is unchanged.

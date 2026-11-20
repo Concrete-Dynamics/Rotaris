@@ -4,7 +4,7 @@ import { CATALOGUE, displayNameFor, instanceId, isInstanceId, lookupProvider, MA
 import { credentialStatus, headerValidKey, type CredentialStatus, type CredentialStore, type StoredCredential } from './credentials/store.js';
 import { discover, type DiscoveredModel, type DiscoveryError, type FetchLike } from './discovery.js';
 import { discoverCodex, discoverCopilot, isAvailable } from './discovery-strategies.js';
-import { CLAUDE_CODE_MINT_FIRST, claudeCodeModels, claudeCodeStatus } from './flows/claude-code.js';
+import { CLAUDE_CODE_MARKER, CLAUDE_CODE_METHOD_LABEL, CLAUDE_CODE_NO_KEY, CLAUDE_CODE_NOT_INSTALLED, claudeCodeModels, claudeCodeStatus, localToolProblem, type LocalToolState } from './flows/claude-code.js';
 import { authenticateCodex, CODEX_ORIGINATOR, refreshCodex } from './flows/codex.js';
 import { authenticateCopilot, COPILOT_API_HEADERS, copilotStatus, refreshCopilot } from './flows/copilot.js';
 import { CANCELLED_BY_USER, type FlowDeps, type SignInPrompt } from './flows/oauth.js';
@@ -15,9 +15,9 @@ import { assignSlots } from './slots.js';
 /**
  * ADR-0030's sign-in flows. The API-KEY method (REQ-PROVIDER-050..054, 108, 133), for
  * `openai-compatible--<slug>` instances and the built-in `deepseek`: validate → discover → persist the credential
- * AFTER discovery → upsert the snapshot with rollback → the outcome. `claude-code`'s pasted subscription token
- * is validated, classified and catalogued here (`flows/claude-code.ts`) and its sign-in is
- * REFUSED until the local runtime that would use the token exists (owed; the defect note names the requirements). The INTERACTIVE methods (R-110): `copilot`'s device code (REQ-PROVIDER-020..027) and
+ * AFTER discovery → upsert the snapshot with rollback → the outcome. `claude-code` (PD-PROVIDER-002) takes no key: it
+ * is connected by asking the Claude Code tool installed on this machine whether it is signed in with a subscription,
+ * and what is stored for it is a marker, never that tool's credential. The INTERACTIVE methods (R-110): `copilot`'s device code (REQ-PROVIDER-020..027) and
  * `codex`'s browser PKCE on the loopback listener (REQ-PROVIDER-028..034), in REQ-PROVIDER-096's sequence, the
  * credential stored BEFORE discovery (REQ-PROVIDER-097: every discovery outcome leaves it in place). The hosted
  * provider's OIDC flow is owed and its entry is unavailable (REQ-PROVIDER-006). Silent
@@ -32,6 +32,11 @@ export interface SignInDeps {
   /** The timer port the interactive waits run on (the device flow's poll, the callback's 300 seconds). */
   readonly timers: Timers;
   readonly fetch?: FetchLike;
+  /**
+   * PD-PROVIDER-002: the Claude Code tool on this machine — whether its executable is on the search path (read without
+   * starting anything), and what it says of its own sign-in when asked. Absent where no local tool can be reached.
+   */
+  readonly localTool?: { readonly installed: () => boolean; readonly state: () => Promise<LocalToolState> };
   readonly log: (m: string) => void;
   readonly warn: (m: string) => void;
 }
@@ -93,6 +98,8 @@ export interface ProviderRow {
   readonly displayName: string;
   readonly method: SignInMethod | null;
   readonly methodLabel: string;
+  /** PD-PROVIDER-002: connected through the tool installed on this machine — no key field, Authenticate starts the check. */
+  readonly local: boolean;
   readonly authenticated: boolean;
   readonly status: CredentialStatus;
   /** REQ-PROVIDER-107/140: the display mask, or null when no key is stored. */
@@ -144,6 +151,11 @@ export class ProviderService {
   }
 
   private localSdk(id: string): boolean { return CATALOGUE.some((c) => c.id === id && c.connectionMode === 'local-sdk'); }
+  private localInstalled(): boolean { return this.deps.localTool?.installed() ?? false; }
+  private async localState(): Promise<LocalToolState> {
+    if (!this.deps.localTool || !this.deps.localTool.installed()) return { installed: false, signedIn: false, subscription: false, plan: null };
+    return this.deps.localTool.state().catch(() => ({ installed: true, signedIn: false, subscription: false, plan: null }));
+  }
 
   private flowFetch(): FetchLike { return this.deps.fetch ?? ((input, init) => fetch(input, init)); }
 
@@ -226,10 +238,8 @@ export class ProviderService {
     if (!entry.value.available) return { outcome: 'failed', message: entry.value.unavailabilityReason ?? 'This provider is not available.' };
     const method = entry.value.signInMethod;
     if (method !== 'api-key') return { outcome: 'failed', message: `${entry.value.displayName} signs in with "${METHOD_LABELS[method]}", not with a pasted key.` };
-    // A local-sdk provider's models are served by a runtime this build does not carry (owed), so a
-    // token stored for it could be used by no run — and its models would still seed the startup slots. Refused before
-    // anything is contacted or stored, and the failure is the only output (OQ-20).
-    if (entry.value.connectionMode === 'local-sdk') return { outcome: 'failed', message: localRuntimeOwed(entry.value.displayName) };
+    // PD-PROVIDER-002: a local-sdk provider takes no key by any route.
+    if (entry.value.connectionMode === 'local-sdk') return { outcome: 'failed', message: CLAUDE_CODE_NO_KEY };
     const key = headerValidKey(apiKey);
     if (!key.ok) return { outcome: 'failed', message: key.error };
     if (key.value.length === 0) return { outcome: 'failed', message: 'API key is required.' };
@@ -285,8 +295,7 @@ export class ProviderService {
     if (entry && !entry.available) return { method: 'unavailable', message: entry.unavailabilityReason ?? `${entry.displayName} is not available.` };
     const method = signInMethodFor(id, this.deps.credentials.load(id)?.extra['provider_family'] ?? null);
     if (method === null) return { method: 'configuration', message: `${MANAGED_BY_CONFIGURATION} Re-authenticate ${this.displayName(id)} by correcting the key its model configuration names, then retry.` };
-    if (method !== 'api-key') return { method: 'interactive', message: `${this.displayName(id)} signs in with "${METHOD_LABELS[method]}". Start its sign-in, complete it at the provider, then confirm here.` };
-    if (entry?.connectionMode === 'local-sdk') return { method: 'unavailable', message: `${localRuntimeOwed(this.displayName(id))} Choose a model from another provider instead.` };
+    if (method !== 'api-key' || entry?.connectionMode === 'local-sdk') return { method: 'interactive', message: `${this.displayName(id)} signs in with "${METHOD_LABELS[method]}". Start its sign-in, complete it at the provider, then confirm here.` };
     return { method: 'api-key', message: `Enter a new API key for ${this.displayName(id)}. It is validated with the provider's model catalog endpoint before it is saved.` };
   }
 
@@ -305,8 +314,8 @@ export class ProviderService {
   private async storeKey(id: string, apiKey: string, validate: boolean): Promise<ReauthenticationOutcome> {
     const method = this.method(id);
     if (method !== 'api-key') return { ok: false, stage: 'method', message: `${this.displayName(id)} does not sign in with an API key.` };
-    // The settings' key field reaches here too: a local-sdk provider stores no token until a runtime uses it.
-    if (this.localSdk(id)) return { ok: false, stage: 'method', message: localRuntimeOwed(this.displayName(id)) };
+    // PD-PROVIDER-002: the settings' key field reaches here too, and a local-sdk provider takes no key.
+    if (this.localSdk(id)) return { ok: false, stage: 'method', message: CLAUDE_CODE_NO_KEY };
     const key = headerValidKey(apiKey);
     if (!key.ok) return { ok: false, stage: 'key', message: key.error };
     if (key.value.length === 0) return { ok: false, stage: 'key', message: `A key is required for ${this.displayName(id)}.` };
@@ -452,8 +461,14 @@ export class ProviderService {
   async health(id: string): Promise<ProviderHealth> {
     const entry = lookupProvider(id);
     if (entry.ok && !entry.value.available) return { state: 'coming_soon', detail: entry.value.unavailabilityReason ?? '', available: false };
-    // Not signable until its runtime exists: said as the same state an unavailable entry has, with its own reason.
-    if (entry.ok && entry.value.connectionMode === 'local-sdk') return { state: 'coming_soon', detail: localRuntimeOwed(entry.value.displayName), available: false };
+    // PD-PROVIDER-002: a local-sdk provider is unavailable exactly when its executable is not on the search path
+    // (REQ-CONFIG-371's disposition); connected, its health is what the tool says of its own sign-in — no catalog call.
+    if (entry.ok && entry.value.connectionMode === 'local-sdk') {
+      if (!this.localInstalled()) return { state: 'error', detail: CLAUDE_CODE_NOT_INSTALLED, available: false };
+      if (this.status(id) !== 'authenticated') return { state: 'unauthenticated', detail: 'Not authenticated.', available: true };
+      const problem = localToolProblem(await this.localState());
+      return problem === null ? { state: 'healthy', detail: `${entry.value.displayName} is signed in on this computer.`, available: true } : { state: 'unauthenticated', detail: problem, available: true };
+    }
     const method = this.method(id);
     if (method === null) return { state: 'unknown', detail: 'Authentication is managed by model configuration.', available: true };
     const status = this.status(id);
@@ -485,11 +500,12 @@ export class ProviderService {
       const method = this.method(id);
       const status = this.statusOf(id, cred);
       return {
-        id, displayName: this.displayName(id), method, methodLabel: method ? METHOD_LABELS[method] : 'Authentication is managed by model configuration.',
+        id, displayName: this.displayName(id), method, methodLabel: this.localSdk(id) ? CLAUDE_CODE_METHOD_LABEL : method ? METHOD_LABELS[method] : 'Authentication is managed by model configuration.',
+        local: this.localSdk(id),
         authenticated: status === 'authenticated', status,
-        maskedKey: cred && method === 'api-key' && cred.access_token.length > 0 ? displayMask(cred.access_token) : null,
+        maskedKey: cred && method === 'api-key' && !this.localSdk(id) && cred.access_token.length > 0 ? displayMask(cred.access_token) : null,
         baseUrl: cred?.extra['api_base'] ?? rec?.base_url ?? (entry.ok ? entry.value.baseUrl : null),
-        modelCount: rec?.models.length ?? 0, userDefined: isInstanceId(id), available: entry.ok ? entry.value.available && entry.value.connectionMode !== 'local-sdk' : true,
+        modelCount: rec?.models.length ?? 0, userDefined: isInstanceId(id), available: entry.ok ? entry.value.available && (entry.value.connectionMode !== 'local-sdk' || this.localInstalled()) : true,
         lastError: this.lastError(id),
       };
     });
@@ -503,7 +519,7 @@ export class ProviderService {
     const flow = { fetch: this.flowFetch() };
     if (id === 'codex') return refreshCodex(flow, cred, () => this.nowSeconds());
     if (id === 'copilot') return refreshCopilot(flow, cred);
-    if (id === 'claude-code') return cred.access_token.length > 0 ? ok(cred) : err(CLAUDE_CODE_MINT_FIRST);
+    if (this.localSdk(id)) return ok(cred);
     if (cred.expires_at === 0) return ok(cred);
     return err('Authentication expired; re-authentication required.');
   }
@@ -593,6 +609,25 @@ export class ProviderService {
   }
 
   /**
+   * PD-PROVIDER-002 — connecting the local tool: it is asked whether it is signed in with a subscription, and when it
+   * is, the marker is stored and the static catalogue recorded. Nothing of the tool's sign-in is read or kept.
+   */
+  private async connectLocalTool(id: string, name: string): Promise<SignInOutcome> {
+    const state = await this.localState();
+    const problem = localToolProblem(state);
+    if (problem !== null) { this.recordError(id, problem); return { outcome: 'failed', message: problem }; }
+    const saved = await this.deps.credentials.save(id, { access_token: CLAUDE_CODE_MARKER, refresh_token: '', expires_at: 0, account_id: null, extra: { connection: 'local-tool', ...(state.plan ? { plan: state.plan } : {}) } });
+    if (!saved.ok) { const message = failureText(saved.error); this.recordError(id, message); return { outcome: 'failed', message }; }
+    const models = claudeCodeModels();
+    const persisted = await this.persistModels(id, name, null, null, models);
+    if (!persisted.ok) { await this.deps.credentials.delete(id); const message = `Could not save provider ${id}: ${failureText(persisted.error)}`; this.recordError(id, message); return { outcome: 'failed', message }; }
+    this.clearError(id);
+    const message = `Login complete for ${name}; discovered ${countNoun(models.length, 'model')}.`;
+    this.deps.log(message);
+    return { outcome: 'signed-in', id, displayName: name, discovered: models.length, message, keyValidated: true };
+  }
+
+  /**
    * REQ-PROVIDER-096/097/099 — the interactive sign-in of a device-code or browser provider: status; a requested
    * re-authentication discards the stored authentication first; an authentication already stored is used as it is;
    * otherwise the provider's own flow runs with the prompt callback. The credential is stored BEFORE discovery, and
@@ -603,7 +638,8 @@ export class ProviderService {
     if (!entry.ok) return { outcome: 'failed', message: `${entry.error.headline}. ${entry.error.detail ?? ''}`.trim() };
     const name = entry.value.displayName;
     if (!entry.value.available) return { outcome: 'failed', message: entry.value.unavailabilityReason ?? 'This provider is not available.' };
-    if (entry.value.signInMethod === 'api-key') return { outcome: 'failed', message: id === 'claude-code' ? CLAUDE_CODE_MINT_FIRST : `${name} signs in with "${METHOD_LABELS['api-key']}".` };
+    if (entry.value.connectionMode === 'local-sdk') return this.connectLocalTool(id, name);
+    if (entry.value.signInMethod === 'api-key') return { outcome: 'failed', message: `${name} signs in with "${METHOD_LABELS['api-key']}".` };
     if (opts.reauthenticate && this.deps.credentials.exists(id)) {
       await this.deps.credentials.delete(id);
       this.deps.log(`Discarded stored authentication for ${name}.`);
@@ -647,10 +683,6 @@ export class ProviderService {
   }
 }
 
-/** Why a local-sdk provider cannot be signed in to yet, in one sentence every surface uses. */
-export function localRuntimeOwed(name: string): string {
-  return `${name} runs through the Claude Agent SDK installed on this machine, which this build cannot drive yet, so no token is stored for it.`;
-}
 export const NEEDS_KEY = (name: string) => `A key is required for ${name}.`;
 export function failureText(f: Failure): string { return f.detail ? `${f.headline} (${f.detail})` : f.headline; }
 export { failure };

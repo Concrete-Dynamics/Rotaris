@@ -1,3 +1,10 @@
+## Outcome: repaired 2026-11-21 (R-111, PD-PROVIDER-002)
+
+The provider is connected through the Claude Code tool the user installed and signed in to, and a `claude-code` model is
+answered by that tool started as a subprocess with its own tools switched off and the product's tools served to it
+(`apps/desktop/src/run-host/claude-cli/`). No token is pasted or stored: the pasted-token sign-in this note describes
+as "ready" was withdrawn by the directive rather than offered. REQ-PROVIDER-048's precheck runs before every prompt.
+
 ## Claude Code (subscription) cannot be signed in to, because no local runtime uses its token
 
 The `claude-code` provider is refused at sign-in. Its pasted subscription token is validated, classified and

@@ -31,6 +31,8 @@ export const ProviderRowSchema = z.object({
   displayName: z.string(),
   method: z.enum(SIGN_IN_METHOD_NAMES).nullable(),
   methodLabel: z.string(),
+  /** PD-PROVIDER-002: connected through the tool installed on this machine — no key field; Authenticate starts the check. */
+  local: z.boolean(),
   authenticated: z.boolean(),
   status: z.enum(CREDENTIAL_STATUS_NAMES),
   /** REQ-PROVIDER-107: the display mask of a stored value, or null when none is stored. */
@@ -58,6 +60,8 @@ export const ProviderChoiceSchema = z.object({
   /** REQ-PROVIDER-142: shown as coming soon and not selectable. */
   available: z.boolean(),
   unavailabilityReason: z.string().nullable(),
+  /** PD-PROVIDER-002: the sentence the window shows for a provider connected through the locally installed tool; absent otherwise. */
+  localInstruction: z.string().optional(),
 });
 export type ProviderChoice = z.infer<typeof ProviderChoiceSchema>;
 

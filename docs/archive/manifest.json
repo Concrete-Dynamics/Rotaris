@@ -932,6 +932,7 @@
     "defects/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md": "bf273cec02bc3d1e8e823e69a8dcdf3546d63e5db312022f8bd0362540c55698",
     "defects/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md": "2ac8b826368bdbb73f62eb750a58f20a3ec3eefa688d2e279b8efda9f0bff97c",
     "defects/classification-decided-by-the-runtimes-extension-list.md": "c7b4dbafcd0c88d919de0aaccbb73a3554204c68e5ec98ea812d1022b5b6b42d",
+    "defects/claude-code-cannot-be-signed-in-to-because-no-local-runtime-uses-its-token.md": "4a707e84f7025ca676e80620fd77d2983273f4e6109dea901880e2511f466908",
     "defects/claude-md-and-two-readmes-state-a-discharged-theme-bound-as-unmet.md": "64039e877f4e87ae9cd160e7c7b4e1b137e57252d4de5aee427441c11982c3d1",
     "defects/closing-a-window-while-a-run-is-active-asks-no-confirmation.md": "8a1b74400708c46b08385edbaef80f0d96a1305c036d4d8fa25ccefdc2522ce3",
     "defects/code-comments-call-built-mechanisms-unbuilt-or-owed.md": "e2910ff94e10ed434f49e0dafa84aa5e04e09833643557d8ec9f7bbe2ab30030",

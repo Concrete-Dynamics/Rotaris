@@ -217,3 +217,38 @@ category deliberation, which naming the keys does not touch. The loop classifier
 pack at `552d346` before this change, and cut by the activation budget, so its bare sentence is unmeasured. Read from a copy
 of the pack: [`live-0bc3eee-default-autopsy.md`](../live-runs/live-0bc3eee-default-autopsy.md). The row is in
 [`../first-executions.md`](../first-executions.md).
+
+## Fourth execution — 2026-11-21, the `claude-code` provider, built below the port this record put it above (R-111, PD-PROVIDER-002)
+
+*Recorded under GD-10. The decision's reason for a second backend was falsified by the tool it was written about, and
+is kept here beside what was built.*
+
+**What this record decided:** a second `AgentBackend` for `claude-code`, supervising an external runtime that "runs its
+own turn loop, calls its own tools and manages its own context", because adapting it to `ModelClient` would mean
+"re-entering it per turn" or "buffering an entire agent session behind one call". **What OQ-17's ruling then required**
+(2026-10-06): every tool call it performs passes through the product's approval flow and produces the product's tool
+events and transcript rows — so the runtime may not call its own tools at all.
+
+**What was built** (`apps/desktop/src/run-host/claude-cli/`): a `ModelClient`. The Claude Code tool is started in its
+non-interactive mode with its built-in tools switched off, no settings of the user's or the project's loaded, and one
+tool server: the product's own bridge on the loopback interface. The tool keeps its conversation for as long as its
+process lives, and a tool call it makes arrives at the bridge as a request that stays open. So a step has a real end
+without the session being abandoned or buffered: the step ends when the model's message has asked for its calls, the
+run loop dispatches them as it does any model's, and the next step — which carries their results — answers the open
+requests and reads on, on the same process. A step that finds no process waiting (a restart, an idle bound of 15
+minutes, a compressed history) starts one and hands it the conversation as text. The engine drives the loop, `ownsTheLoop`
+stays false for every backend, and REQ-ORCH-146's toggle has nothing to switch.
+
+**The falsified reason, kept:** alternative A was rejected as "a fiction" on the premise that the external runtime
+cannot be stopped at a tool call and resumed. With its tools replaced by a server the product answers, it can: the
+stop is the unanswered request. Alternative A is what stands. The second port remains in the type (`AgentBackend`,
+`ownsTheLoop`) with one implementation, as before; consequence 1's parameterised conformance suite has no second
+backend to run against.
+
+**Measured on the owner's subscription, 2026-11-21, the built application on a scratch profile:** one run on
+`claude-code/haiku` — the intent classification answered on the first rung, the turn read `package.json` through the
+product's `read_file` (transcript row, tool event, 1 tool call in the inspector), answered from it and completed in 4 s;
+no process and no session file was left when the turn ended, and the bridge's directory was removed at quit.
+**Not measured:** a turn with an approval pending longer than the idle bound; parallel tool calls in one message
+(covered by a test against a scripted process only); images; Windows, where the tool is a command shim.
+

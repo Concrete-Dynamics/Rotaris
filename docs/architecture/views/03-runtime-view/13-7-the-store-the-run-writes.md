@@ -1,8 +1,8 @@
-# Runtime view — a run from prompt to terminal result, and everything that reaches into it — 7. The store the run writes (`packages/store/src/schema.ts`, v35)
+# Runtime view — a run from prompt to terminal result, and everything that reaches into it — 7. The store the run writes (`packages/store/src/schema.ts`, v36)
 
 Part 13 of 16 of [the runtime view](../03-runtime-view.md), which indexes every part.
 
-## 7. The store the run writes (`packages/store/src/schema.ts`, v35)
+## 7. The store the run writes (`packages/store/src/schema.ts`, v36)
 
 **The whole-store restore around it (ADR-0058, REQ-SESSION-201).** The workspace service runs `restoreStore` with the run
 host's connection closed: the artifact staged as `<identifier>.restoring-<n>` (step 6), the store displaced (step 8), the

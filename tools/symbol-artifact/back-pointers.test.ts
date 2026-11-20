@@ -138,13 +138,14 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
     // REQ-LIBRARY-088's field inventory is closed and gains `commands[]`; REQ-LIBRARY-090 fixes its sections "in this order"
     // and gains Commands. A change to an exact enumeration is a narrowing (acceptance finding F15).
     for (const req of ['REQ-LIBRARY-088', 'REQ-LIBRARY-090']) {
-      expect(narrowed(req)).toEqual(['PD-LIBRARY-001']);
+      // PD-LIBRARY-007 (R-108) narrows both too, on a disjoint case: the `answer` key and the Answer section after Created Files.
+      expect(narrowed(req)).toEqual(['PD-LIBRARY-001', 'PD-LIBRARY-007']);
       expect(extended(req)).toBeUndefined();
       expect(
         backPointers()
           .filter((p) => p.requirement === req)
           .map((p) => `${p.verb} ${p.directive}`),
-      ).toEqual(['Narrowed PD-LIBRARY-001']);
+      ).toEqual(['Narrowed PD-LIBRARY-001', 'Narrowed PD-LIBRARY-007']);
     }
   });
 

@@ -77,7 +77,7 @@ Checked and sound on this surface: the header is one 33 px line at both sizes wi
 | UIR-003 | high | "No task plan" in the task plan pane drawn at the browser's `bolder`, a bare `strong` with no rule, where §1.4 stops at 500; seven more call sites; predates R-097 | implemented: one `strong` rule at `--rt-weight-medium` (500 measured) |
 | UIR-016 | low | the inspector's persona menu is 28 px high, a fourth control height, where the same component is 24 px in the run header; counted baseline debt; predates R-097 | open |
 
-## Redesign 2026-11-20 — the run and its threads ([R-108](../../product/requests.md#r-108), [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015))
+## Redesign 2026-11-20 — the run and its threads ([R-109](../../product/requests.md#r-109), [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015))
 
 **Status:** built on `feat/r-108-transcript-threads`; not landed. By `redesign-surface`, with Impeccable's context loaded. The owner chose concept 2 of two mocked ("Build concept 2"); concept 1 was one interleaved stream of turns with a pinned speaker and a run map.
 

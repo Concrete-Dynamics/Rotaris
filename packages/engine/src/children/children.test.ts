@@ -1467,6 +1467,14 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(buildSelection).toMatchObject({ sibling_index_suppressed: true, sibling_index_included: 0, attached_unresolved: ['no-such-artifact'] });
     });
 
+    it("PD-LIBRARY-007: a child's answer reaches its report's artifact, so attach_artifacts hands a later child the answer and not a summary of it", async () => {
+      // The summariser says 'done'; the survey said 'The module is small.' Until PD-LIBRARY-007 only the first reached the artifact.
+      const { payloads } = await surveyThenBuild({ attach_artifacts: ['survey'] });
+      expect(payloads.get('build')).toContain('PRIOR AGENT CONTEXT (FULL)');
+      expect(payloads.get('build')).toContain('## Summary\n\ndone');
+      expect(payloads.get('build')).toContain('## Answer\n\nThe module is small.');
+    });
+
     /*
      * PD-SESSION-002 (OQ-207, ruled 2026-10-07): summary.md's Mostly-elided artifacts line reads the `task_id` and the
      * `attached_elided` that `artifactContext` writes on a `context_selection` entry. Each side names those keys on its own

@@ -63,6 +63,8 @@ export function storeChildReport(deps: { readonly writer: SessionWriter; readonl
     status: text(report['status']) || row.state, summary: text(report['summary']),
     keyFindings: list(report['key_findings']), editedFiles: list(report['edited_files']), createdFiles: list(report['created_files']),
     commands: commandsForArtifact(report['commands']),
+    // PD-LIBRARY-007: the answer itself, by the order every hand-off reads it in (`notify.ts`): final, else last.
+    answer: text(report['final_response']) || text(report['last_response']),
     highlightPaths: [], snippets: [], tags: list(report['tags']), conversationId: taskId,
   });
   if (!m.ok) deps.warn(`the report for child ${taskId} could not be materialised as an artifact: ${m.error.reason}`);

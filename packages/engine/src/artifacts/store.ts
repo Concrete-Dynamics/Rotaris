@@ -68,6 +68,8 @@ export interface ChildReportInput {
   readonly createdFiles: readonly string[];
   /** PD-LIBRARY-001: the commands the child ran, in the order it ran them. */
   readonly commands: readonly RanCommand[];
+  /** PD-LIBRARY-007: the answer the child ended on — its final response, else its last response; `''` when it gave none. */
+  readonly answer?: string | undefined;
   readonly highlightPaths: readonly HighlightPath[];
   readonly snippets: readonly Snippet[];
   readonly tags: readonly string[];
@@ -216,7 +218,7 @@ export class ArtifactStore {
       sourceTaskId: null, canonicalName: input.createdBy, sourcePersona: input.persona,
       // REQ-LIBRARY-093: `status` is `published`; `key_findings` is the body; `summary` is its first line, capped at 280.
       status: 'published', summary: firstLineSummary(input.body), keyFindings: input.body,
-      highlightPaths: [], snippets: [], editedFiles: [], createdFiles: [], commands: [], tags: tags.tags,
+      highlightPaths: [], snippets: [], editedFiles: [], createdFiles: [], commands: [], answer: '', tags: tags.tags,
       supersedes: target?.id ?? null, supersededBy: null,
       createdBy: input.createdBy, consumedBy: [],
       timelineEventId: null, conversationId: input.conversationId ?? null,
@@ -368,7 +370,7 @@ export class ArtifactStore {
             session_id: this.sessionId, id: existingRow.id, status, summary: input.summary, key_findings: keyFindings,
             highlight_paths: JSON.stringify(input.highlightPaths), snippets: JSON.stringify(input.snippets),
             edited_files: JSON.stringify(editedFiles.map((e) => ({ path: e.path, change_type: e.changeType }))),
-            created_files: JSON.stringify(input.createdFiles), commands: JSON.stringify(commandRows(input.commands)), tags: JSON.stringify(acceptedTags),
+            created_files: JSON.stringify(input.createdFiles), commands: JSON.stringify(commandRows(input.commands)), answer: input.answer ?? '', tags: JSON.stringify(acceptedTags),
             source_persona: input.persona, canonical_name: input.canonicalName, created_by: input.canonicalName, importance,
             timeline_event_id: null, conversation_id: input.conversationId ?? null,
           });
@@ -388,7 +390,7 @@ export class ArtifactStore {
       sourceTaskId: input.taskId, canonicalName: input.canonicalName, sourcePersona: input.persona,
       status, summary: input.summary, keyFindings,
       highlightPaths: input.highlightPaths, snippets: input.snippets, editedFiles, createdFiles: input.createdFiles, commands: input.commands,
-      tags: acceptedTags, supersedes: null, supersededBy: null,
+      answer: input.answer ?? '', tags: acceptedTags, supersedes: null, supersededBy: null,
       createdBy: input.canonicalName, consumedBy: [], timelineEventId: null,
       conversationId: input.conversationId ?? null, importance: deriveImportance('child_report', status),
       createdAt, editedAt: null, bodyFile: bodyFileName(id),
@@ -433,7 +435,7 @@ function toRow(sessionId: SessionId, record: ArtifactRecord): ArtifactInsert {
     snippets: JSON.stringify(record.snippets),
     edited_files: JSON.stringify(record.editedFiles.map((e) => ({ path: e.path, change_type: e.changeType }))),
     created_files: JSON.stringify(record.createdFiles),
-    commands: JSON.stringify(commandRows(record.commands)),
+    commands: JSON.stringify(commandRows(record.commands)), answer: record.answer,
     tags: JSON.stringify(record.tags), supersedes: record.supersedes, superseded_by: record.supersededBy,
     created_by: record.createdBy, consumed_by: JSON.stringify(record.consumedBy),
     timeline_event_id: record.timelineEventId, conversation_id: record.conversationId,

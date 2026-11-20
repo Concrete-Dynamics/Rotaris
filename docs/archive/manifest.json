@@ -606,6 +606,7 @@
     "defects/a-child-cut-off-at-its-per-agent-timeout-reads-only-failed.md": "279ba4cfe1ac27e304270662e5b9261f0286ef63c9726c84b5c6f54d2067d4bf",
     "defects/a-child-moved-by-a-fallback-is-drawn-on-its-configured-model.md": "b9ed09ea12f8cfc00d12f07e8d28417e6c4f4bf080049d3f1a3c02b3d907579b",
     "defects/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md": "a1403b4ec9d572339a8eae6eb3b20a99a25424cfa511b3a88a81c631b9cfdb1a",
+    "defects/a-child-report-artifact-holds-a-summary-of-the-childs-answer-and-never-the-answer.md": "69d97893032474f19ea51955a15aa7a95c9770e47c408a715ef6a3bc50a0d780",
     "defects/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md": "0fed50acfa7514bf4c07076ba0503af96db24a26edd5b2e9b79b18ff51f1b610",
     "defects/a-child-streaming-a-long-tool-call-is-reported-stalled.md": "24e83788a6508b549a3a07218d865c25c042b0a71517a48aaf29d29f69d3acd5",
     "defects/a-child-that-edits-through-the-code-intelligence-edit-tools-is-reported-as-having-changed-nothing.md": "953cb4749728d559db229501354e2e5b1e3cdd98b7d418ca53a7ae17618d04cd",

@@ -64,4 +64,4 @@ them in "All activity" or the child's tab.
 > **Extends:** REQ-CHAT-046, REQ-CHAT-068
 
 *Raised by the owner, 2026-11-20, and chosen by him from two mocked concepts the same day ("Build concept 2"); logged
-as [R-108](../requests.md#r-108).*
+as [R-109](../requests.md#r-109).*

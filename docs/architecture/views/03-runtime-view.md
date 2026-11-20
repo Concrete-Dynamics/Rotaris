@@ -15,7 +15,7 @@ is forwarded (ADR-0009/0010).
 | touching delegation | [§4 Children](03-runtime-view/07-4-children-adr-0012.md#4-children-adr-0012) |
 | adding or changing a control operation | [§5 Controls reaching in](03-runtime-view/09-5-controls-reaching-in-adr-0010-1.md#5-controls-reaching-in-adr-0010-1-sessionscontrol) |
 | changing teardown, or acting on a session no run holds | [§6 End](03-runtime-view/11-6-end.md#6-end) and [§6a](03-runtime-view/12-6a-the-session-browsers-actions-reaching-a.md#6a-the-session-browsers-actions-reaching-a-record-no-run-holds-part-u) |
-| adding a table or a column | [§7 The store the run writes](03-runtime-view/13-7-the-store-the-run-writes.md#7-the-store-the-run-writes-packagesstoresrcschemats-v35) |
+| adding a table or a column | [§7 The store the run writes](03-runtime-view/13-7-the-store-the-run-writes.md#7-the-store-the-run-writes-packagesstoresrcschemats-v36) |
 | adding a configuration key | [§8 Configuration's three tiers](03-runtime-view/15-8-configurations-three-tiers-adr-0037-as-they.md#8-configurations-three-tiers-adr-0037-as-they-touch-the-run) |
 | drawing something from a publication | [§9 What a surface does with a publication](03-runtime-view/16-9-what-a-surface-does-with-a-publication-adr.md#9-what-a-surface-does-with-a-publication-adr-0046-adr-0045-part-z) |
 
@@ -41,7 +41,7 @@ one now names its part.
 | [10](03-runtime-view/10-5-controls-reaching-in-adr-0010-1-2.md) | 5. Controls reaching in (ADR-0010 #1, `Sessions.control`) *(continued, from "A **paused** session has no live run: `session.continue {action}` is a session command …")* |
 | [11](03-runtime-view/11-6-end.md) | 6. End |
 | [12](03-runtime-view/12-6a-the-session-browsers-actions-reaching-a.md) | 6a. The session browser's actions reaching a record no run holds (Part U) |
-| [13](03-runtime-view/13-7-the-store-the-run-writes.md) | 7. The store the run writes (`packages/store/src/schema.ts`, v35) |
-| [14](03-runtime-view/14-7-the-store-the-run-writes-2.md) | 7. The store the run writes (`packages/store/src/schema.ts`, v35) *(continued, from "Table \| Holds \| Written by \|")* |
+| [13](03-runtime-view/13-7-the-store-the-run-writes.md) | 7. The store the run writes (`packages/store/src/schema.ts`, v36) |
+| [14](03-runtime-view/14-7-the-store-the-run-writes-2.md) | 7. The store the run writes (`packages/store/src/schema.ts`, v36) *(continued, from "Table \| Holds \| Written by \|")* |
 | [15](03-runtime-view/15-8-configurations-three-tiers-adr-0037-as-they.md) | 8. Configuration's three tiers (ADR-0037) as they touch the run; Post-run improvement state |
 | [16](03-runtime-view/16-9-what-a-surface-does-with-a-publication-adr.md) | 9. What a surface does with a publication (ADR-0046, ADR-0045; Part Z) |

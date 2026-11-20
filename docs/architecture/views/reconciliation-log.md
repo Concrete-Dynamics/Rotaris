@@ -16,7 +16,9 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-20**
 
-**The transcript is the run's conversation and its threads (R-108; [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015), `PD-CHAT-004` revision 4, `PD-CHAT-005` revision 2; REQ-CHAT-050/057/069 narrowed; 2026-11-20).** `01-component-view/03-where-the-responsibilities-sit.md` gains "The run and its threads": `WorkspaceView` holds the scope and `threadedRows` replaces a delegated agent's rows with one computed `delegation` row, which is a row like any other to the projection, the pool and the caches; `agentDepth` left `TranscriptSurface` for `threadState` and `openThread`. `03-runtime-view/16-9-…` corrects what the 14 px of `SHORTEST_ROW_HEIGHT` is. No process, message, channel, store column or owner of a fact changed.
+**The transcript is the run's conversation and its threads (R-109; [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015), `PD-CHAT-004` revision 4, `PD-CHAT-005` revision 2; REQ-CHAT-050/057/069 narrowed; 2026-11-20).** `03-runtime-view/16-9-what-a-surface-does-with-a-publication-adr.md` gains "The run and its threads": `WorkspaceView` holds the scope and `threadedRows` replaces a delegated agent's rows with one computed `delegation` row, which is a row like any other to the projection, the pool and the caches; `agentDepth` left `TranscriptSurface` for `threadState` and `openThread`. `03-runtime-view/16-9-…` corrects what the 14 px of `SHORTEST_ROW_HEIGHT` is. No process, message, channel, store column or owner of a fact changed.
+
+**A child report's artifact carries the child's answer (PD-LIBRARY-007, R-108; REQ-LIBRARY-088, REQ-LIBRARY-090; 2026-11-20).** `03-runtime-view/14-7-the-store-the-run-writes-2.md`: the `artifacts` row gains `answer` (**v36**), the answer a child ended on, written by `materialiseChildReport` from the report's `final_response`, else its `last_response`, and rendered as the document's last section; the store section's heading reads v36.
 
 Last reconciled with the code: **2026-11-17**
 

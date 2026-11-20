@@ -1,6 +1,6 @@
 ## The redesign capture script starts the driven app on a workspace inside the checkout, which the driver refuses
 
-Noticed 2026-11-20, while capturing the transcript for [R-108](../product/requests.md#r-108).
+Noticed 2026-11-20, while capturing the transcript for [R-109](../product/requests.md#r-109).
 `.agents/skills/redesign-surface/references/capture.sh` sets its scratch workspace to `$OUT/../scratch-workspace`. With
 the output directory under `.ui-review/` in the checkout, where the skill's phase 4 places it, `pnpm app:drive start`
 answers "refusing --workspace inside the checkout" and exits 2. The script goes on: every later step fails into

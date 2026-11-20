@@ -64,6 +64,9 @@ Part 3 of 7 of [domain 14](../14-library-artifacts-improvements.md), which index
   > shape and its meaning, the `status` closure is untouched, and a record of any other kind carries
   > the inventory exactly as written.
   > *(Labelled* Extended by *until 2026-10-13; relabelled under [OQ-237](../../architecture/open-questions.md), the directive's disposition corrected: a closed inventory gaining a key is a narrowing.)*
+  > **Narrowed by [`PD-LIBRARY-007`](../../product/directives/pd-library-007.md#pd-library-007), 2026-11-20.** The
+  > inventory gains one more key, `answer`, on a record whose `kind` is `child_report`: the answer the child ended on,
+  > whole. Every key listed here keeps its name, its shape and its meaning.
 
 **REQ-LIBRARY-089** — Artifact tags MUST come from a closed vocabulary of exactly six values: `research`, `planning`, `implementation`, `review`, `verification`, `errors`. A publish carrying any other tag MUST be refused whole — no record is created, no file is written, and no partial state is left behind — with an error that begins `Invalid tag(s): `, names the rejected tags, and continues `Valid tags are: ` followed by the six permitted values in the order given here. A supplied tag MUST be normalised before it is matched: surrounding whitespace is stripped and the remainder is compared case-insensitively, so ` Research ` is the tag `research` and is accepted. A tag that does not match after that normalisation is rejected, and the error MUST name it as the user supplied it rather than in its normalised form. A tag supplied more than once MUST be collapsed to one occurrence rather than rejected — a duplicate expresses no ambiguity, so refusing the publish over it would be gratuitous — and the record MUST store each tag in its normalised form, preserving the order of first occurrence. This requirement is the product's single definition of the artifact tag vocabulary and of the normalisation, duplicate collapsing and refusal that go with it: a document that publishes or accepts artifact tags cites this identifier rather than restating the set. A surface needing a new tag extends this list rather than admitting a value elsewhere.
 
@@ -74,6 +77,9 @@ Part 3 of 7 of [domain 14](../14-library-artifacts-improvements.md), which index
   > is unchanged for every section it names and a reader meets the new one between Snippets and Edited
   > Files.
   > *(Labelled* Extended by *until 2026-10-13; relabelled under [OQ-237](../../architecture/open-questions.md), the directive's disposition corrected: the fixed section list gaining a member is a narrowing, the case being a child report's Commands section.)*
+  > **Narrowed by [`PD-LIBRARY-007`](../../product/directives/pd-library-007.md#pd-library-007), 2026-11-20.** The
+  > directive adds one section, **Answer**, a child report's alone, placed after Created Files; the order above is
+  > unchanged for every section it names, and the omit-an-empty-section rule governs the new one too.
 
 **REQ-LIBRARY-091** — Store hydration MUST tolerate: a session whose store holds no artifacts at all (zero artifacts), an index that cannot be read (warning, zero artifacts), an index entry whose record cannot be found (warning, skipped), an artifact whose Markdown document (REQ-LIBRARY-087) cannot be read — which leaves the record itself usable and is reported by the surface that needed the body (REQ-LIBRARY-134) rather than dropping the artifact — and per-record validation failures (skipped). Hydration never raises. A store that cannot be opened at all is a different condition and is not hydration's to absorb: the session does not start, and that refusal is stated where the store is opened (REQ-SESSION-089).
 

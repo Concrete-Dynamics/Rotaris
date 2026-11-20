@@ -138,6 +138,8 @@
  *                 inspector, and continued, whose handoff must carry the edit; and a `rotaris.delegation_strategy: swarm` run,
  *                 whose overrun takes the duress run's reading since fin46 (L8): a model that kept the endpoint busy to the
  *                 end of the wait is a NOTE, a run that stopped moving or a product that held the time FAILS.
+ *                 Since 2026-11-20 (PD-LIBRARY-007) the first launch also holds each ended child's answer to the artifact
+ *                 of its report: unchanged in `answer`, and the last section of its document (`reportAnswerReading`).
  *   8i. rename   — OPT-IN (`--only=rename`), a few minutes: one coding-agent child delegated to rename the fixture's `remaining`
  *                 to `countRemaining` with the code-intelligence EDIT tier's symbol rename (`rename_symbol`), then run `node --test`.
  *                 Asserted from the store and the files (`lib/rename-reading.mjs`): the rename row `ok`; `src/todos.js`,
@@ -269,7 +271,7 @@ import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/renam
 import { CLASSIFIER_MARK, DELEGATED_MARK, REPORT_MARK, ROOT_MARK, answerReading, planReading, waitReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
-import { HANDOFF_ARTIFACT_CAP, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
+import { HANDOFF_ARTIFACT_CAP, reportAnswerReading, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
 import { frontmatterOfRow, leadingFrontmatter } from './lib/artifact-frontmatter.mjs';
 import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, terminalWaitMs, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -3133,12 +3135,14 @@ if (wanted.includes('delegation')) {
   const delegates = calls.filter((c) => c.tool_name === 'delegate');
   const Database = require('better-sqlite3');
   let children = [];
+  let reportArtifacts = [];
   let timeline = [];
   let latest = null;
   if (sid !== null) {
     const db = new Database(oneDatabase(), { readonly: true });
     try {
-      children = db.prepare('SELECT task_id, canonical_name, persona, state FROM children WHERE session_id = ? ORDER BY spawned_at, rowid').all(sid);
+      children = db.prepare('SELECT task_id, canonical_name, persona, state, report FROM children WHERE session_id = ? ORDER BY spawned_at, rowid').all(sid);
+      reportArtifacts = db.prepare("SELECT source_task_id, kind, answer, summary, body_file, edited_at FROM artifacts WHERE session_id = ? AND kind = 'child_report'").all(sid);
       timeline = db.prepare("SELECT name, metadata FROM timeline WHERE session_id = ? AND name IN ('child_resumed', 'context_selection') ORDER BY ordinal").all(sid).map((t) => ({ name: t.name, metadata: (() => { try { return JSON.parse(t.metadata); } catch { return {}; } })() }));
       // The artifact the next run's handoff names, chosen as `latestArtifactText` chooses it (`handoffArtifact`): the last the
       // latest iteration's root published, else the last that nothing superseded.
@@ -3162,6 +3166,10 @@ if (wanted.includes('delegation')) {
   if (attached.kind === 'not-asked') noted('no delegation attached an artifact', 'attach_artifacts is unasked this run');
   else if (attached.kind !== 'attached') noted('a delegation named attachments, and none was given whole', `${attached.kind}: ${delegates.filter((d) => Array.isArray(d.args.attach_artifacts) && d.args.attach_artifacts.length > 0).map((d) => `#${d.ordinal} ${JSON.stringify(d.args.attach_artifacts)}`).join(', ')}`);
   else check(attached.faults.length === 0, "an attached artifact was given to the child whole, the observation and the child's context_selection entry agreeing (PD-TOOLS-006 revision 5)", attached.faults.length === 0 ? `${attached.given} given whole over ${attached.asked} admitted delegation(s)${attached.rejected > 0 ? `; ${attached.rejected} rejected by the gate, not read` : ''}` : attached.faults.join('; '));
+  // PD-LIBRARY-007: each ended child's answer is on its report's artifact, whole, and closes its document.
+  const answers = reportAnswerReading(children, reportArtifacts, (file) => { try { return readFileSync(join(dirname(oneDatabase()), 'sessions', sid ?? '', file), 'utf8'); } catch { return null; } });
+  if (answers.kind === 'not-asked') noted('no child ended on an answer', "the answer on a child report's artifact is unasked this run");
+  else check(answers.faults.length === 0, "each ended child's answer is on its report's artifact whole, the last section of its document (PD-LIBRARY-007)", answers.faults.length === 0 ? `${answers.carried} artifact(s) over ${answers.asked} child(ren) that ended on an answer` : answers.faults.join('; '));
   // PD-TOOLS-006 revision 3 / PD-ORCH-005 clause 22: the first child followed up under its own task id.
   const followed = followUpReading(delegates, children, timeline.filter((t) => t.name === 'child_resumed'));
   if (followed.kind === 'not-asked') noted('no delegation carried a session_id', 'the follow-up of a settled child is unasked this run');
@@ -3170,7 +3178,7 @@ if (wanted.includes('delegation')) {
     if (named) noted('every follow-up was refused for a reason PD-TOOLS-006 revision 3 lists', followed.refused.map((r) => `#${r.ordinal}: ${r.reason}`).join('; '));
     else check(false, 'a follow-up by session_id was accepted or refused for a listed reason', followed.refused.map((r) => `#${r.ordinal}: ${r.reason}`).join('; '));
   } else check(followed.faults.length === 0, 'a settled child followed up by session_id resumed under its own task id, with its child_resumed entry (PD-TOOLS-006 revision 3, PD-ORCH-005 clause 22)', followed.faults.length === 0 ? `ordinal(s) ${followed.accepted.join(', ')}` : followed.faults.join('; '));
-  results.scenarios.delegation = { status: read?.session.execution_status, delegations: delegates.length, children: children.map((c) => `${c.canonical_name}:${c.persona}:${c.state}`), narrowing: narrowing.kind, attached: attached.kind, followUp: followed.kind, latestArtifact: latest?.id ?? null };
+  results.scenarios.delegation = { status: read?.session.execution_status, delegations: delegates.length, children: children.map((c) => `${c.canonical_name}:${c.persona}:${c.state}`), narrowing: narrowing.kind, attached: attached.kind, followUp: followed.kind, answers: answers.kind === 'read' ? `${answers.carried}/${answers.asked}` : answers.kind, latestArtifact: latest?.id ?? null };
   if (sid !== null) preserveRun('delegation', sid);
   await budgetGate();
 

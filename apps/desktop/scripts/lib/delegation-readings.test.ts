@@ -3,7 +3,7 @@
  * survey). A reader that stopped matching its record would turn its check into "not asked" over a green run.
  */
 import { describe, expect, it } from 'vitest';
-import { DIRECT_WORK_STATEMENT, HANDOFF_ARTIFACT_CAP, SWARM_HEADING, attachReading, handoffArtifact, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './delegation-readings.mjs';
+import { DIRECT_WORK_STATEMENT, HANDOFF_ARTIFACT_CAP, SWARM_HEADING, reportAnswerReading, attachReading, handoffArtifact, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './delegation-readings.mjs';
 
 const body = (system: string, user: string, tools: { name: string; description?: string }[]) => ({
   requestBody: JSON.stringify({ model: 'm', messages: [{ role: 'system', content: system }, { role: 'user', content: [{ type: 'text', text: user }] }], tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description ?? t.name, parameters: {} } })) }),
@@ -68,6 +68,39 @@ describe('followUpReading (PD-TOOLS-006 revision 3, PD-ORCH-005 clause 22)', () 
     expect(refused.kind).toBe('refused');
     expect(refused.refused[0]?.reason).toMatch(/names no settled child of yours/);
     expect(followUpReading([{ ordinal: 1, args: { persona: 'x' }, result: '', status: 'ok' }], children, resumed).kind).toBe('not-asked');
+  });
+});
+
+describe('reportAnswerReading (PD-LIBRARY-007)', () => {
+  const child = (task_id: string, name: string, report: Record<string, unknown> | null) => ({ task_id, canonical_name: name, report: report === null ? null : JSON.stringify(report) });
+  const artifact = (task: string, answer: string, over: Record<string, unknown> = {}) => ({ source_task_id: task, kind: 'child_report', answer, summary: 'The agent listed the exports.', body_file: `artifact-${task}.md`, edited_at: null, ...over });
+  const documents = (docs: Record<string, string>) => (file: string) => docs[file] ?? null;
+
+  it("credits an artifact that holds the child's answer unchanged and whose document ends with it", () => {
+    const answer = '\n# Exports\n\n- add\n- remove\n\n';
+    const r = reportAnswerReading([child('bg_1', 'exports-survey', { final_response: answer, last_response: 'ignored' }), child('bg_2', 'silent', { final_response: '', last_response: '' }), child('bg_3', 'queued', null)],
+      [artifact('bg_1', answer)], documents({ 'artifact-bg_1.md': '---\nid: "x"\n---\n# t\n\n## Summary\n\nThe agent listed the exports.\n\n## Answer\n\n# Exports\n\n- add\n- remove\n' }));
+    expect(r).toEqual({ kind: 'read', asked: 1, carried: 1, faults: [] });
+  });
+
+  it('reads the last response where no final one was given, and no child with an answer as not asked', () => {
+    const r = reportAnswerReading([child('bg_1', 'cut', { final_response: '', last_response: 'Half done.' })], [artifact('bg_1', 'Half done.')], documents({ 'artifact-bg_1.md': '# t\n\n## Answer\n\nHalf done.\n' }));
+    expect(r).toMatchObject({ kind: 'read', carried: 1, faults: [] });
+    expect(reportAnswerReading([child('bg_1', 'silent', { final_response: '' })], [], documents({})).kind).toBe('not-asked');
+  });
+
+  it('names an artifact that holds a summary alone, a missing artifact, and a document without the section', () => {
+    const report = { final_response: 'The whole specification.' };
+    expect(reportAnswerReading([child('bg_1', 'spec', report)], [artifact('bg_1', '')], documents({})).faults).toEqual(['spec: the artifact holds 0 character(s) of a 24-character answer']);
+    expect(reportAnswerReading([child('bg_1', 'spec', report)], [artifact('bg_9', 'The whole specification.')], documents({})).faults).toEqual(['spec: no child_report artifact']);
+    expect(reportAnswerReading([child('bg_1', 'spec', report)], [artifact('bg_1', 'The whole specification.')], documents({ 'artifact-bg_1.md': '# t\n\n## Summary\n\ns\n' })).faults).toEqual(['spec: the document does not end with the answer as its Answer section']);
+    expect(reportAnswerReading([child('bg_1', 'spec', report)], [artifact('bg_1', 'The whole specification.')], documents({})).faults).toEqual(['spec: the document artifact-bg_1.md could not be read']);
+  });
+
+  it('does not hold the document to the section where the summary states the answer or a person edited it', () => {
+    const report = { final_response: 'Done.' };
+    expect(reportAnswerReading([child('bg_1', 'short', report)], [artifact('bg_1', 'Done.', { summary: 'Done.' })], documents({})).faults).toEqual([]);
+    expect(reportAnswerReading([child('bg_1', 'edited', report)], [artifact('bg_1', 'Done.', { edited_at: '2026-11-20T00:00:00.000Z' })], documents({})).faults).toEqual([]);
   });
 });
 

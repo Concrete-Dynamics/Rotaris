@@ -193,6 +193,7 @@ describe('engine/artifacts — the session artifact store', () => {
       highlightPaths: [{ path: 'a.ts', reason: 'why' }], snippets: [{ path: 'a.ts', language: 'ts', code: 'const x = 1;' }],
       editedFiles: [{ path: 'b.ts', changeType: 'modified' }], createdFiles: ['c.ts'],
       commands: [{ command: 'pnpm test', exitCode: 0 }, { command: 'wc -l x', exitCode: 1 }, { command: 'tail -f log', exitCode: null }],
+      answer: 'A',
     });
     const order = SIDECAR_SECTIONS.map((h) => full.indexOf(`## ${h}`));
     expect(order.every((n) => n > 0)).toBe(true);
@@ -305,6 +306,63 @@ describe('engine/artifacts — the session artifact store', () => {
     const fallback = store.body(r.value.id);
     expect(fallback.ok && fallback.value.fallback).toBe(true);
     if (fallback.ok) expect(fallback.value.text).toContain(`id: ${JSON.stringify(r.value.id)}`);
+  });
+
+  it("PD-LIBRARY-007: a child report's document carries the child's answer whole, last, and artifact_read returns it", () => {
+    // The defect this pins: the record held a summary and findings ABOUT the answer and never the answer, so a later
+    // agent's `artifact_read` of a specification returned a description of one
+    // (docs/archive/defects/a-child-report-artifact-holds-a-summary-of-the-childs-answer-and-never-the-answer.md).
+    const store = storeFor();
+    const answer = '# M1 data model\n\n## Entities\n\n- `Entry`: one row per clock-in.\n\n    indented code survives\n\n## Invariants\n\nINV-1: an entry never overlaps another.';
+    const r = store.materialiseChildReport({
+      taskId: 'bg_spec', canonicalName: 'specify-m1', persona: 'architect', status: 'succeeded', summary: 'The agent wrote the M1 data model.',
+      keyFindings: ['It names Entry.'], editedFiles: [], createdFiles: ['notes.md'], commands: [], highlightPaths: [], snippets: [], tags: [], answer: `\n\n${answer}\n\n`,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.record.answer).toBe(`\n\n${answer}\n\n`);
+    const ops = artifactOps(store, { canonicalName: 'writer-1', persona: 'writer' });
+    const read = ops.read(r.value.record.slug, []);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    // Whole and unchanged but for the blank lines around it, and after every other section: the answer opens headings
+    // of its own, and a section written after it would read as part of it.
+    expect(read.text.endsWith(`\n## Answer\n\n${answer}\n`)).toBe(true);
+    expect(read.text.indexOf('## Created Files')).toBeLessThan(read.text.indexOf('## Answer'));
+    expect(read.text).toContain('## Summary\n\nThe agent wrote the M1 data model.');
+    // The explicit hand-off carries the same document (REQ-LIBRARY-098), so `attach_artifacts` hands the answer on too.
+    const body = store.body(r.value.record.id);
+    expect(body.ok && body.value.text).toBe(read.text);
+  });
+
+  it('PD-LIBRARY-007: the answer survives a re-render, a re-materialisation replaces it, and one the Summary states in full is not written twice', () => {
+    const store = storeFor();
+    const report = (over: { summary: string; answer?: string }) => store.materialiseChildReport({
+      taskId: 'bg_ans', canonicalName: 'designer', persona: 'architect', status: 'succeeded', keyFindings: [], editedFiles: [], createdFiles: [],
+      commands: [], highlightPaths: [], snippets: [], tags: [], ...over,
+    });
+    const first = report({ summary: 's', answer: 'The first design, in full.' });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const file = join(dir, 'files', first.value.record.bodyFile);
+    // A supersession re-renders the older document from the record (REQ-LIBRARY-095): the answer is on the record, so it stays.
+    const newer = publish(store, { supersedes: first.value.record.id });
+    expect(newer.ok).toBe(true);
+    const rerendered = readFileSync(file, 'utf8');
+    expect(rerendered).toContain('superseded_by:');
+    expect(rerendered).toContain('## Answer\n\nThe first design, in full.\n');
+    // REQ-LIBRARY-092's update in place moves the answer with the report it came from.
+    const again = report({ summary: 's', answer: 'The second design.' });
+    expect(again.ok && again.value.created).toBe(false);
+    expect(readFileSync(file, 'utf8')).toContain('## Answer\n\nThe second design.\n');
+    expect(readFileSync(file, 'utf8')).not.toContain('The first design');
+    // A short answer IS its summary (`report.ts` cuts one from the other), and a child that said nothing has none.
+    report({ summary: 'Done.', answer: 'Done.\n' });
+    expect(readFileSync(file, 'utf8')).not.toContain('## Answer');
+    report({ summary: 'Cancelled.' });
+    expect(readFileSync(file, 'utf8')).not.toContain('## Answer');
+    // An agent's own publish has no answer: its body is its Key Findings (REQ-LIBRARY-093), as before.
+    if (newer.ok) expect(readFileSync(join(dir, 'files', newer.value.bodyFile), 'utf8')).not.toContain('## Answer');
   });
 
   it('REQ-LIBRARY-092: materialisation is idempotent on the task id and updates IN PLACE, preserving what the requirement lists', () => {

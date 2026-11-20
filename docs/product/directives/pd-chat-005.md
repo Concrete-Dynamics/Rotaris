@@ -4,7 +4,7 @@
 
 ### PD-CHAT-005 — a row names its agent by colour, and a delegated agent's rows sit one step in
 
-*Revision 2 (2026-11-20, [R-108](../requests.md#r-108)) — **the place** is withdrawn; the colour stands. Revision 1
+*Revision 2 (2026-11-20, [R-109](../requests.md#r-109)) — **the place** is withdrawn; the colour stands. Revision 1
 (2026-09-16, [R-025](../requests.md#r-025)) is quoted where it is replaced. The title keeps revision 1's words.*
 
 **The colour.** A transcript row's **role label** SHALL be drawn in its persona's assigned colour —

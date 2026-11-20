@@ -4,7 +4,7 @@
 
 ### PD-CHAT-004 — an agent's uninterrupted work draws as one activity line that updates in place
 
-*Revision 4 (2026-11-20, [R-108](../requests.md#r-108)) — **what the line draws, and how its members stand**, at the
+*Revision 4 (2026-11-20, [R-109](../requests.md#r-109)) — **what the line draws, and how its members stand**, at the
 foot. Revision 3 (2026-09-15, [R-029](../requests.md#r-029)) — **the line's colour**, below. It was raised the
 day before revision 2 and reached `main` after it, so it takes the next free revision under the rule the
 `R-016` collision settled: the one that lands first keeps its number. Revision 2, 2026-09-16
@@ -178,4 +178,4 @@ and SHALL NOT hang from a rule: [`PD-CHAT-015`](pd-chat-015.md#pd-chat-015) give
 approaches as [R-019](../requests.md#r-019). **Revised** at the owner's request, 2026-09-16; logged as
 [R-025](../requests.md#r-025). Revised again, 2026-09-15 and landed after it; logged as
 [R-029](../requests.md#r-029). Revised a fourth time for the transcript's redesign, 2026-11-20; logged as
-[R-108](../requests.md#r-108).*
+[R-109](../requests.md#r-109).*

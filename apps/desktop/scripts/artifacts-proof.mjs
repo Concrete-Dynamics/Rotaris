@@ -657,10 +657,14 @@ let edited = null;
   const parsed = JSON.parse((sidecarRead.stdout ?? '').trim() || '{"ok":false}');
   if (!parsed.ok) throw new Error(`the sidecar did not parse: ${JSON.stringify(parsed)} ${sidecarRead.stderr}`);
   // Empty sections are omitted entirely (REQ-LIBRARY-090), so this report — with no highlights,
-  // snippets or files — carries Summary, Key Findings, then Commands LAST among the present headings.
+  // snippets or files — carries Summary, Key Findings, then Commands last of REQ-LIBRARY-090's own sections. Since
+  // PD-LIBRARY-007 the child's answer follows as the Answer section, after every other; it was "Commands LAST" until then,
+  // and this launch's first run on that directive's branch stopped here on ["Summary","Key Findings","Commands","Answer"].
   if (parsed.headings.filter((h) => h === 'Commands').length !== 1) throw new Error(`the sidecar does not carry exactly one Commands section: ${JSON.stringify(parsed.headings)}`);
-  if (parsed.headings[parsed.headings.length - 1] !== 'Commands') throw new Error(`Commands is not the last section present: ${JSON.stringify(parsed.headings)}`);
-  if (parsed.headings[parsed.headings.length - 2] !== 'Key Findings') throw new Error(`the heading before Commands is not Key Findings: ${JSON.stringify(parsed.headings)}`);
+  const own = parsed.headings.filter((h) => h !== 'Answer');
+  if (parsed.headings.includes('Answer') && parsed.headings[parsed.headings.length - 1] !== 'Answer') throw new Error(`Answer is not the last section present: ${JSON.stringify(parsed.headings)}`);
+  if (own[own.length - 1] !== 'Commands') throw new Error(`Commands is not the last of the record's own sections: ${JSON.stringify(parsed.headings)}`);
+  if (own[own.length - 2] !== 'Key Findings') throw new Error(`the heading before Commands is not Key Findings: ${JSON.stringify(parsed.headings)}`);
   const commandsBody = parsed.body.slice(parsed.body.indexOf('## Commands'));
   for (const line of ['- `node --version`', '- `node -e "process.exit(7)"` — **failed, exit 7**', '- `rm -rf build` — exit status not recorded']) {
     if (!commandsBody.includes(line)) throw new Error(`the sidecar's Commands section lacks "${line}"`);

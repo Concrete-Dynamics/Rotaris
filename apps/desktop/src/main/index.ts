@@ -376,7 +376,8 @@ async function main(): Promise<void> {
     const env = { ...process.env };
     delete env['CLAUDECODE'];
     delete env['CLAUDE_CODE_ENTRYPOINT'];
-    execFile(target.command, target.args, { env, timeout: 15_000, windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) }, (error, stdout) => {
+    // The command is a name written here, never one read from the environment (`ComSpec`): CodeQL js/indirect-command-line-injection.
+    execFile(target.windowsVerbatimArguments ? 'cmd.exe' : 'claude', target.args, { env, timeout: 15_000, windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) }, (error, stdout) => {
       const text = String(stdout).trim();
       resolve(localToolStateOf(text.startsWith('{') ? text : error && (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : '{}'));
     });

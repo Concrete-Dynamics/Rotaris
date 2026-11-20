@@ -22,7 +22,12 @@ export function availabilitySentence(code: string | null | undefined, detail: st
   const sentence = code === 'policy_disabled' ? "Your provider account has this model switched off. Enable it in the provider's settings, then refresh the model catalog."
     : code === 'no_supported_route' ? 'The provider offers this model only on an endpoint Rotaris cannot send requests to.'
     : 'The provider will not accept requests for this model.';
-  const extra = (detail ?? '').trim().replace(/[.!?]+$/, '');
+  // The detail's own closing punctuation is dropped by a scan from the end, not a pattern: a run of it inside the text
+  // would make a `+$` pattern retry from every position of the run (CodeQL js/polynomial-redos).
+  let extra = (detail ?? '').trim();
+  let end = extra.length;
+  while (end > 0 && '.!?'.includes(extra[end - 1]!)) end -= 1;
+  extra = extra.slice(0, end);
   if (extra.length === 0 || `${extra}.` === sentence || extra === sentence) return sentence;
   return `${sentence} ${extra}.`;
 }

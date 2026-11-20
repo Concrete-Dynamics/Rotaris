@@ -11,12 +11,17 @@ import type { CliLaunch, CliProcess } from './client.js';
  * the application was started with and run as it is: this product ships no copy of it and changes nothing in it.
  */
 const STDERR_TAIL = 2_000;
+export const WINDOWS_COMMAND_INTERPRETER = 'cmd.exe';
 
 export function launchClaudeCli(l: CliLaunch): CliProcess {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(l.env)) if (v !== undefined) env[k] = v;
   const target = windowsLaunchOf(l.executable, l.args, env);
-  const child = spawn(target.command, target.args, { cwd: l.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
+  // What is started is named here and never read from the environment: the tool by its own name, found on the search
+  // path by the system, or — for a Windows command shim, which only the command interpreter can run — `cmd.exe` by name
+  // rather than by whatever `ComSpec` holds (CodeQL js/indirect-command-line-injection).
+  const command = target.windowsVerbatimArguments ? WINDOWS_COMMAND_INTERPRETER : l.executable;
+  const child = spawn(command, target.args, { cwd: l.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
   let stderr = '';
   let exited = false;
   const lines: ((line: string) => void)[] = [];

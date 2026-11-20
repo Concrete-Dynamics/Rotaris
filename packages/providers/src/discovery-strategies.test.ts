@@ -60,3 +60,13 @@ describe('the codex subscription catalogue (REQ-PROVIDER-076)', () => {
     expect(await run({ models: [{ id: 'no-slug' }] })).toMatchObject({ ok: false, error: { message: 'Invalid response format: expected model slug' } });
   });
 });
+
+describe('the availability sentence reads a provider\'s detail in linear time (CodeQL js/polynomial-redos)', () => {
+  it('drops the closing punctuation only, and is not slowed by a long run of it inside the text', () => {
+    expect(availabilitySentence('policy_disabled', 'Really?!... yes!!!')).toBe("Your provider account has this model switched off. Enable it in the provider's settings, then refresh the model catalog. Really?!... yes.");
+    const hostile = `${'!'.repeat(200_000)}x`;
+    const started = performance.now();
+    expect(availabilitySentence('no_supported_route', hostile)!.endsWith('x.')).toBe(true);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});

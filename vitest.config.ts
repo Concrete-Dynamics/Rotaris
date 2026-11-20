@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+import { availableParallelism } from 'node:os';
 
 // ADR-0001 consequence 5 / ADR-0056: the requirement-symbol artifact is
 // regenerated before collection, by the same generator the build uses.
@@ -12,8 +13,9 @@ const root = fileURLToPath(new URL('.', import.meta.url));
  * returned — and beside some 570 other files on a hosted Windows runner's four cores the host had not, in a different
  * one of these files each time
  * (docs/defects/the-windows-gate-goes-red-on-a-different-test-each-time-on-one-tree.md). They run as a project of their
- * own, one file at a time, after every other file has finished: the readings are taken on a host that is doing nothing
- * else. Nothing is retried and no bound is widened; a red in one of them is a red.
+ * own, after every other file has finished: the readings are taken on a host that is doing nothing else but these
+ * suites, `realProcessWorkers` of them at a time. Nothing is retried and no bound is widened; a red in one of them is a
+ * red.
  *
  * A file belongs here when it spawns a real process and asserts on timing or on operating-system state. Add it by
  * path; `tools/vitest-config.test.ts` holds that every path here names files.
@@ -29,6 +31,15 @@ export const REAL_PROCESS_SUITES: readonly string[] = [
   'tools/worktree/**/*.test.ts',
   'tools/check-conflict-markers.test.ts',
 ];
+
+/**
+ * How many real-process files run side by side. One on a host with fewer than eight cores — the hosted runners, where
+ * the readings went red beside other work — and half the cores above that, where most of each file's time is a wait on
+ * a shell and a core stays free for every one of them (the owner, 2026-11-20: the whole suite took 282 s on 24 cores,
+ * 245 s of them these files in a row).
+ */
+export const realProcessWorkers = (cores: number): number => (cores < 8 ? 1 : Math.floor(cores / 2));
+const REAL_PROCESS_WORKERS = realProcessWorkers(availableParallelism());
 const EXCLUDED = ['**/node_modules/**', '**/dist/**', '**/out/**'];
 
 export default defineConfig({
@@ -58,10 +69,11 @@ export default defineConfig({
   },
   test: {
     // Two projects over one configuration (`extends: true`): every file but the real-process suites, in parallel; then
-    // those suites alone, one file at a time (`sequence.groupOrder`: a higher group starts when the lower has finished).
+    // those suites alone, `REAL_PROCESS_WORKERS` files at a time (`sequence.groupOrder`: a higher group starts when the
+    // lower has finished).
     projects: [
       { extends: true, test: { name: 'parallel', include: ['packages/**/*.test.ts', 'apps/**/*.test.ts', 'tools/**/*.test.ts'], exclude: [...EXCLUDED, ...REAL_PROCESS_SUITES], sequence: { groupOrder: 0 } } },
-      { extends: true, test: { name: 'real-process', include: [...REAL_PROCESS_SUITES], exclude: EXCLUDED, fileParallelism: false, maxWorkers: 1, sequence: { groupOrder: 1 } } },
+      { extends: true, test: { name: 'real-process', include: [...REAL_PROCESS_SUITES], exclude: EXCLUDED, fileParallelism: REAL_PROCESS_WORKERS > 1, maxWorkers: REAL_PROCESS_WORKERS, sequence: { groupOrder: 1 } } },
     ],
     globalSetup: ['./tools/symbol-artifact/global-setup.ts'],
     environment: 'node',

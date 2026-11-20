@@ -78,7 +78,9 @@ only tests reach is named `<unit>.test-support.ts` in every package under `packa
 `tools/vitest-config.test.ts` (the mock hygiene `vitest.config.ts` sets), `tools/proof-registry/` (the proof registry behind `pnpm proofs:index` —
 `registry.mjs` holds one record per proof entry, `generate.mjs` renders `docs/proofs/README.md` and `pnpm lint` fails
 when it is stale, `flags.mjs` reads the flags a proof script takes from its own argv, and `registry.test.ts` holds
-the registry to the tree), `tools/verify-plan/` (`pnpm verify:plan` —
+the registry to the tree), `tools/proof-run/` (`pnpm proofs:run`, since 2026-11-20 — one build, then the named proof
+suites or the plan's side by side, each told `--skip-build` where its registry record lists the flag; open `run.mjs`,
+tests in `run.test.ts`), `tools/verify-plan/` (`pnpm verify:plan` —
 given a diff, the gate, the complete affected proof suites, the architecture documents and the requirements its files cite (since 2026-11-02, read through `tools/requirement-coverage/`); an unmapped path requires
 explicit review; open `plan.mjs`, tests in `plan.test.ts`), `tools/dev-time/` (since 2026-10-18 the recorder behind
 `pnpm dev-time` (R-075) — measured spans of setup, build, each gate stage, proofs, repairs and repeated rebases, one
@@ -148,8 +150,9 @@ Each of these was decided; the authority is in brackets, and none of them is saf
 - **The proof scripts are root `package.json` scripts whose files sit in `apps/desktop/scripts/`** — each id
   is `node apps/desktop/scripts/<id>.mjs`, because a proof launches the built application
   (`apps/desktop/out`), and `tools/proof-registry/registry.test.ts` and `tools/verify-plan/plan.test.ts` pin
-  every proof id as a root script by name. `pnpm <id>` is how `pnpm verify:plan`, `pnpm worktree:land` and
-  `tools/dev-time/` reach them, so the entries do not move without those three.
+  every proof id as a root script by name. `pnpm <id>` is how `pnpm verify:plan` and
+  `tools/dev-time/` reach them, and `pnpm proofs:run` (and through it `pnpm worktree:land`) reads the script each id
+  names, so the entries do not move without those.
 
 ## The largest files, and what they are
 

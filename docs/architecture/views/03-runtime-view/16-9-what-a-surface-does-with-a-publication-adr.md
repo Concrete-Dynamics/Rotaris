@@ -67,3 +67,12 @@ otherwise carry one row's state onto another.
 **Older rows** are fetched by `session.pageOlder` when the reader scrolls toward the top and placed above by the
 replica's `prependOlder`, off the interface thread, with the anchor holding the reader still; a failed load says so
 and is re-attemptable, and reaching the oldest recorded row is a different state from a failure (REQ-CHAT-165).
+
+**The run and its threads (PD-CHAT-015, 2026-11-20).** `WorkspaceView` holds the transcript's scope — `run`, `task`
+or `all` — and hands the pane the rows of that scope: `threadedRows` (`TranscriptSurface.tsx`) keeps the run-owned
+kinds and the shown agent's own rows and replaces each directly delegated agent's rows with **one computed row of
+kind `delegation`** carrying its first row's index, which `Row.tsx` draws as the thread line. The projection, the
+pool and the caches are unchanged: a thread line is a row to them, keyed `deleg:<agent>` (`rowKey`), and its object is
+held from one call to the next so an unchanged line is an unchanged row to the projector's bounded form. Its live
+state and what pressing it does arrive on `TranscriptSurface` (`threadState`, `openThread`), as the clock does.
+Display-only: no new edge, no new message, no recorded row, nothing reaches a model.

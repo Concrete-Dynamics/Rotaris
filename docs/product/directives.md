@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and thirty-six.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and thirty-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -95,6 +95,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-LIBRARY-004](directives/pd-library-004.md) | a read marks the reading agent instance a consumer by its canonical name |
 | [PD-LIBRARY-005](directives/pd-library-005.md) | an improvement pass whose collector failed reads as the failure it is |
 | [PD-LIBRARY-006](directives/pd-library-006.md) | while the Library's query is non-empty each tab shows how many of its rows match |
+| [PD-LIBRARY-007](directives/pd-library-007.md) | a child report's artifact carries the answer the child ended on |
 
 ### MCP
 

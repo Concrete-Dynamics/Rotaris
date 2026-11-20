@@ -1147,6 +1147,22 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE sessions ADD COLUMN pending_questions TEXT NOT NULL DEFAULT '[]';
     `,
   },
+  {
+    to: 36,
+    /*
+     * PD-LIBRARY-007 (R-108): the answer a child ended on, on the record that materialises its report, so the document
+     * REQ-LIBRARY-090 renders from the record carries it and every re-render keeps it. Until this version the record held
+     * the report's summary and key findings alone, and `artifact_read` of a child's report returned a description of an
+     * answer no later agent could reach
+     * (docs/archive/defects/a-child-report-artifact-holds-a-summary-of-the-childs-answer-and-never-the-answer.md).
+     * NOT NULL DEFAULT '' like `summary` and `key_findings`: a record written before this version reads back as carrying
+     * no answer, which is true of what was stored for it, and REQ-LIBRARY-090 omits an empty section entirely, so an older
+     * artifact renders exactly as it did. '' on every kind but `child_report`.
+     */
+    sql: `
+      ALTER TABLE artifacts ADD COLUMN answer TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

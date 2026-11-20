@@ -138,25 +138,25 @@ describe('store — the integrity check before a migration (hardening C1, REQ-SE
   });
 });
 
-/** PD-ORCH-005 clause 9 / REQ-SESSION-031: what v35 added, undone so a store can stand at v34 and climb it again. */
-const UNDO_V35 = 'ALTER TABLE sessions DROP COLUMN pending_questions;';
+/** PD-LIBRARY-007: what v36 added, undone so a store can stand at v35 and climb it again. */
+const UNDO_V36 = 'ALTER TABLE artifacts DROP COLUMN answer;';
 
 describe('store — foreign keys after a migration (hardening C1)', () => {
-  function storeAtV34(orphan: boolean): void {
+  function storeAtV35(orphan: boolean): void {
     const r = openWorkspaceStore(root, id, ws);
     new StoreDal(r.db).upsertSession(session(1));
     r.db.close();
     forgetSpelling(r.dir);
     const raw = new Database(storeFile(root, id), { fileMustExist: true });
     raw.pragma('foreign_keys = OFF');
-    raw.exec(UNDO_V35);
+    raw.exec(UNDO_V36);
     if (orphan) raw.prepare('INSERT INTO session_locks(session_id, pid, host, acquired_at) VALUES (?, ?, ?, ?)').run('S-ghost', 1, 'h', 't');
     raw.pragma(`user_version = ${CURRENT_SCHEMA_VERSION - 1}`);
     raw.close();
   }
 
   it('rows naming a missing parent are reported after the migration, and the store still opens', () => {
-    storeAtV34(true);
+    storeAtV35(true);
     const r = openWorkspaceStore(root, id, ws);
     expect(r.migration).toEqual({ kind: 'migrated', from: CURRENT_SCHEMA_VERSION - 1, to: CURRENT_SCHEMA_VERSION });
     expect(r.foreignKeyViolations).toEqual({ count: 1, first: [{ table: 'session_locks', rowid: expect.any(Number), parent: 'sessions' }] });
@@ -165,7 +165,7 @@ describe('store — foreign keys after a migration (hardening C1)', () => {
   });
 
   it('(counterfactual) the same migration over sound rows reports nothing', () => {
-    storeAtV34(false);
+    storeAtV35(false);
     const r = openWorkspaceStore(root, id, ws);
     expect(r.migration.kind).toBe('migrated');
     expect(r.foreignKeyViolations).toBeUndefined();

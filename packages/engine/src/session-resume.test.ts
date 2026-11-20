@@ -218,7 +218,7 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: (none recorded in this session)');
     const artifact = (id: string, title: string, summary: string, createdAt: string, supersededBy: string | null = null, kind: 'child_report' | 'agent_published' = 'child_report', findings = '- found the bug') => dal.insertArtifact({
       session_id: sid, id, slug: id, title, kind, source_task_id: 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: kind === 'child_report' ? 'succeeded' : 'published',
-      summary, key_findings: findings, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+      summary, key_findings: findings, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', answer: '', tags: '[]',
       supersedes: null, superseded_by: supersededBy, created_by: 'build', consumed_by: '[]', timeline_event_id: null, conversation_id: null, importance: 'normal',
       created_at: createdAt, edited_at: null, body_file: `${id}.md`,
     });
@@ -562,7 +562,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
   const iteration = (sid: SessionId, n: number, rootTaskId: string, openedAt = '2026-09-27T00:00:00.000Z'): void => dal.insertIteration({ session_id: sid, iteration: n, root_task_id: rootTaskId, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: `t${n}`, task: 'work', opened_at: openedAt });
   const artifact = (sid: SessionId, id: string, kind: 'child_report' | 'agent_published', conversationId: string | null, createdAt: string, supersededBy: string | null = null) => dal.insertArtifact({
     session_id: sid, id, slug: id, title: `${id} title`, kind, source_task_id: conversationId ?? 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: kind === 'child_report' ? 'succeeded' : 'published',
-    summary: `${id} summary`, key_findings: `${id} body`, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+    summary: `${id} summary`, key_findings: `${id} body`, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', answer: '', tags: '[]',
     supersedes: null, superseded_by: supersededBy, created_by: 'build', consumed_by: '[]', timeline_event_id: null, conversation_id: conversationId, importance: 'normal',
     created_at: createdAt, edited_at: null, body_file: `${id}.md`,
   });
@@ -989,7 +989,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     /** A publish as an agent's own tool port records it (`ArtifactStore.publish`): no source task, its task id as conversation. */
     const publish = (id: string, conversationId: string | null, persona: string, createdBy: string, createdAt: string, supersededBy: string | null = null) => dal.insertArtifact({
       session_id: sid, id, slug: id, title: `${id} title`, kind: 'agent_published', source_task_id: null, canonical_name: createdBy, source_persona: persona, status: 'published',
-      summary: '', key_findings: '', highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+      summary: '', key_findings: '', highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', answer: '', tags: '[]',
       supersedes: null, superseded_by: supersededBy, created_by: createdBy, consumed_by: '[]', timeline_event_id: null, conversation_id: conversationId, importance: 'normal',
       created_at: createdAt, edited_at: null, body_file: `${id}.md`,
     });

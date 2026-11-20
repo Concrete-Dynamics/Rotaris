@@ -9,7 +9,7 @@ import type { ArtifactRecord, RanCommand } from './record.js';
  * record's timestamps, and — ONLY when the record has them — its source ids, its tags and its supersession
  * links; then `# <title>`; then Summary, Key Findings, Highlight Paths, Snippets, Commands (PD-LIBRARY-001,
  * which places it immediately before Edited Files and moves nothing else), Edited Files, Created
- * Files, in that order, each omitted ENTIRELY when empty (no heading, no placeholder), so a reader never has
+ * Files, Answer (PD-LIBRARY-007, a child report's alone, after everything else), in that order, each omitted ENTIRELY when empty (no heading, no placeholder), so a reader never has
  * to tell an empty section from an absent one. A record carrying only a body renders as frontmatter, title
  * and its Key Findings, and one carrying nothing renders as frontmatter and title alone.
  *
@@ -107,8 +107,12 @@ export function renderSidecar(record: ArtifactRecord): string {
   section('Commands', record.commands.map(renderCommand));
   section('Edited Files', record.editedFiles.map((e) => (e.changeType === '' ? `- \`${e.path}\`` : `- \`${e.path}\` (${e.changeType})`)));
   section('Created Files', record.createdFiles.map((p) => `- \`${p}\``));
+  // PD-LIBRARY-007: the answer whole, but for the blank lines around it, and LAST: an answer is Markdown that may open
+  // headings of its own, and every section after it would read as part of it. One the Summary already states in full
+  // (`report.ts` cuts a summary from the same text) is not written twice.
+  if (record.answer.trim() !== '' && record.answer.trim() !== record.summary.trim()) section('Answer', [trimBlankLines(record.answer)]);
   return `${out.join('\n')}\n`;
 }
 
 /** REQ-LIBRARY-090's section order, as one list, so a reader (and the proof) can assert it without restating it. */
-export const SIDECAR_SECTIONS = ['Summary', 'Key Findings', 'Highlight Paths', 'Snippets', 'Commands', 'Edited Files', 'Created Files'] as const;
+export const SIDECAR_SECTIONS = ['Summary', 'Key Findings', 'Highlight Paths', 'Snippets', 'Commands', 'Edited Files', 'Created Files', 'Answer'] as const;

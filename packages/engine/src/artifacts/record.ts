@@ -48,6 +48,11 @@ export interface ArtifactRecord {
   readonly createdFiles: readonly string[];
   /** PD-LIBRARY-001: the commands the child ran, in the order it ran them. Empty for any other kind. */
   readonly commands: readonly RanCommand[];
+  /**
+   * PD-LIBRARY-007: the answer the child ended on, whole and unchanged: its final response, else its last response.
+   * Empty for any other kind, and for a child that ended without saying anything.
+   */
+  readonly answer: string;
   readonly tags: readonly string[];
   readonly supersedes: string | null;
   readonly supersededBy: string | null;
@@ -158,6 +163,7 @@ export function toArtifactRecord(row: ArtifactRow): ArtifactRecord | null {
     editedFiles: parseList(row.edited_files, asEditedFile),
     createdFiles: parseList(row.created_files, asString),
     commands: parseList(row.commands, asRanCommand),
+    answer: row.answer,
     tags: parseList(row.tags, asString),
     supersedes: row.supersedes, supersededBy: row.superseded_by,
     createdBy: row.created_by, consumedBy: parseList(row.consumed_by, asString),

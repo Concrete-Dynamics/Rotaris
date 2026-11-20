@@ -14,6 +14,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+**A child report's artifact carries the child's answer (PD-LIBRARY-007, R-108; REQ-LIBRARY-088, REQ-LIBRARY-090; 2026-11-20).** `03-runtime-view/14-7-the-store-the-run-writes-2.md`: the `artifacts` row gains `answer` (**v36**), the answer a child ended on, written by `materialiseChildReport` from the report's `final_response`, else its `last_response`, and rendered as the document's last section; the store section's heading reads v36.
+
 Last reconciled with the code: **2026-11-17**
 
 **The start-of-conversation marker is drawn in the first row's slot (R-102; 2026-11-17).** `03-runtime-view/16-9-what-a-surface-does-with-a-publication-adr.md` gains the sentence: the marker and the failed-page notice left the pool's flow for the first slot, whose height is filed under `leadKey`. No offset, range or scroll arithmetic changed.

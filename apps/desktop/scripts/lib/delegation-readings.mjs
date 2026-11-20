@@ -147,6 +147,42 @@ export function attachReading(delegates, selections, children) {
 }
 
 /**
+ * PD-LIBRARY-007: whether each ended child's answer reached the artifact of its report. The answer is read as the engine
+ * reads it (`storeChildReport`, `packages/engine/src/children/ledger.ts`): the stored report's `final_response`, else its
+ * `last_response`. For every child that ended on one, its `child_report` artifact (by `source_task_id`) must hold it
+ * unchanged in `answer`, and the document must end with it as the Answer section, the blank lines around it dropped
+ * (`renderSidecar`), unless the summary already states it in full or a person edited the document (PD-LIBRARY-003 keeps the
+ * edit). `kind`: `not-asked` when no child ended on an answer, else `read`; `carried` counts the artifacts that hold one.
+ * @param {readonly { task_id: string, canonical_name: string, report?: string | null }[]} children
+ * @param {readonly { source_task_id?: string | null, kind: string, answer?: string | null, summary?: string | null, body_file: string, edited_at?: string | null }[]} artifacts
+ * @param {(file: string) => string | null} readDocument the document's text, or null where it cannot be read
+ */
+export function reportAnswerReading(children, artifacts, readDocument) {
+  /** @type {string[]} */
+  const faults = [];
+  let asked = 0;
+  let carried = 0;
+  const text = (/** @type {unknown} */ v) => (typeof v === 'string' ? v : '');
+  for (const child of children) {
+    let report = null;
+    try { report = JSON.parse(child.report ?? 'null'); } catch { report = null; }
+    const answer = text(report?.final_response) || text(report?.last_response);
+    if (answer.trim() === '') continue;
+    asked += 1;
+    const artifact = artifacts.find((a) => a.kind === 'child_report' && a.source_task_id === child.task_id);
+    if (artifact === undefined) { faults.push(`${child.canonical_name}: no child_report artifact`); continue; }
+    if (text(artifact.answer) !== answer) { faults.push(`${child.canonical_name}: the artifact holds ${text(artifact.answer).length} character(s) of a ${answer.length}-character answer`); continue; }
+    carried += 1;
+    if (answer.trim() === text(artifact.summary).trim() || (artifact.edited_at ?? null) !== null) continue;
+    const document = readDocument(artifact.body_file);
+    const section = `\n## Answer\n\n${answer.replace(/^(?:[ \t]*\r?\n)+/, '').replace(/(?:\r?\n[ \t]*)+$/, '')}\n`;
+    if (document === null) faults.push(`${child.canonical_name}: the document ${artifact.body_file} could not be read`);
+    else if (!document.endsWith(section)) faults.push(`${child.canonical_name}: the document does not end with the answer as its Answer section`);
+  }
+  return { kind: asked === 0 ? 'not-asked' : 'read', asked, carried, faults };
+}
+
+/**
  * The artifact a continued session's handoff names, chosen as `latestArtifactText` (`packages/engine/src/sessions.ts`) chooses
  * it: of the artifacts nothing superseded (rows in `created_at, id` order), the last one the latest iteration's root
  * published — unless a plan cycle opened after that iteration, when there is no such root — and otherwise the last of all.

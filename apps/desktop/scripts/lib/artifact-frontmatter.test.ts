@@ -9,7 +9,7 @@ import { frontmatterOfRow, leadingFrontmatter } from './artifact-frontmatter.mjs
 
 const base = {
   id: 'art_A1b2C3d4', slug: 'travel-plan', title: 'Travel "plan"\u2028two', kind: 'artifact', sourceTaskId: null, canonicalName: null, sourcePersona: null,
-  status: 'final', summary: '', keyFindings: '', highlightPaths: [], snippets: [], editedFiles: [], createdFiles: [], commands: [], tags: [],
+  status: 'final', summary: '', keyFindings: '', highlightPaths: [], snippets: [], editedFiles: [], createdFiles: [], commands: [], answer: '', tags: [],
   supersedes: null, supersededBy: null, createdBy: '', consumedBy: [], timelineEventId: null, conversationId: null, importance: 'normal',
   createdAt: '2026-10-14T00:00:00.000Z', editedAt: null, bodyFile: 'art_A1b2C3d4.md',
 } as unknown as ArtifactRecord;

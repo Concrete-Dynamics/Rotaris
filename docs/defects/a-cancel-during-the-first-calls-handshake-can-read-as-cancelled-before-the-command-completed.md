@@ -49,3 +49,8 @@ first.
 - `packages/agent-tools/src/terminal/terminal.test.ts` — the case (lines about 1089 to 1113) and `slowStart`.
 - `packages/agent-tools/src/terminal/foreground.ts` — the handshake's guard (about line 1474) and the cancel branches.
 - `packages/agent-tools/src/terminal/index.ts` — the two cancel texts (about line 457).
+
+*2026-11-20 (branch `test-suite-speed`):* the case now stands in
+`packages/agent-tools/src/terminal/terminal.pty-01.test.ts`, the real-PTY cases having been spread over part files. Red
+in the same way in two of twelve copies of the unsplit file run at once on a 24-thread Linux host, and in one run of
+eight of the real-process project at twelve files side by side; green in the one sequential run taken.

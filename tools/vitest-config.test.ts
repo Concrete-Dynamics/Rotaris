@@ -34,13 +34,15 @@ describe('mock hygiene between the tests of one file (vitest.config.ts)', () => 
 });
 
 /**
- * The real-process suites run as a project of their own, one file at a time, after every other file
- * (`REAL_PROCESS_SUITES` in `vitest.config.ts`). What is held here is the list and the split: a path that names no file
+ * The real-process suites run as a project of their own, after every other file (`REAL_PROCESS_SUITES` in
+ * `vitest.config.ts`): one file at a time on a host with fewer than eight cores, half the cores' worth above that
+ * (`realProcessWorkers`). What is held here is the list and the split: a path that names no file
  * would leave a suite in neither project's intent, and a file in both would run twice, once beside everything else.
  */
 describe('the real-process suites are a project of their own (vitest.config.ts)', () => {
   it('every listed path names at least one test file, and the two projects share none', async () => {
-    const { REAL_PROCESS_SUITES, default: config } = await import('../vitest.config.js');
+    const { REAL_PROCESS_SUITES, realProcessWorkers, default: config } = await import('../vitest.config.js');
+    const { availableParallelism } = await import('node:os');
     const { globSync } = await import('node:fs');
     const root = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
     for (const pattern of REAL_PROCESS_SUITES) expect(globSync(pattern, { cwd: root }).length, pattern).toBeGreaterThan(0);
@@ -50,9 +52,13 @@ describe('the real-process suites are a project of their own (vitest.config.ts)'
     // The parallel project leaves out exactly what the other takes in.
     for (const pattern of REAL_PROCESS_SUITES) expect(parallel.test.exclude).toContain(pattern);
     expect(real.test.include).toEqual([...REAL_PROCESS_SUITES]);
-    // One file at a time, and only once the parallel project has finished.
-    expect(real.test.fileParallelism).toBe(false);
-    expect(real.test.maxWorkers).toBe(1);
+    // One file at a time below eight cores (the hosted runners' four among them), half the cores above; and only once the
+    // parallel project has finished.
+    expect([1, 2, 4, 7].map(realProcessWorkers)).toEqual([1, 1, 1, 1]);
+    expect([8, 16, 24].map(realProcessWorkers)).toEqual([4, 8, 12]);
+    const workers = realProcessWorkers(availableParallelism());
+    expect(real.test.maxWorkers).toBe(workers);
+    expect(real.test.fileParallelism).toBe(workers > 1);
     expect(real.test.sequence?.groupOrder ?? 0).toBeGreaterThan(parallel.test.sequence?.groupOrder ?? 0);
   });
 });

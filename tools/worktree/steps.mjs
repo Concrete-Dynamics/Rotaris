@@ -6,7 +6,7 @@
 // and repeated rebases", and these are that time wherever a wrapper ran them. The gate and the proof scripts are
 // the exception — they record themselves through `tools/dev-time/` (the wrapped `pnpm check`, the harness
 // libraries a proof imports), so measuring them here would count the same span twice.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { VIA_ENV, recordSpan } from '../dev-time/dev-time.mjs';
 import { run, runPnpm } from './exec.mjs';
@@ -121,12 +121,20 @@ export function defaultDeps({ via = null } = {}) {
       return JSON.parse(r.stdout);
     },
     proofs(dir, ids) {
-      for (const id of ids) {
-        // The proof records itself (its harness arms the clock); `VIA_ENV` says a landing asked for it.
-        const env = via === null ? process.env : { ...process.env, [VIA_ENV]: via };
-        if (runPnpm(['run', id], { cwd: dir, stdio: 'inherit', env }).status !== 0) return { ok: false, failed: id };
+      // One build, then the suites side by side (`pnpm proofs:run`); every proof runs to its end, so a red names all
+      // of them. Each proof records itself (its harness arms the clock); `VIA_ENV` says a landing asked for it.
+      const env = via === null ? process.env : { ...process.env, [VIA_ENV]: via };
+      const ran = run(process.execPath, [join(dir, 'tools', 'proof-run', 'run.mjs'), ...ids], { cwd: dir, stdio: 'inherit', env });
+      if (ran.status === 0) return { ok: true };
+      /** @type {string | undefined} */
+      let failed;
+      try {
+        const { results } = JSON.parse(readFileSync(join(dir, '.proof', 'proofs-run', 'results.json'), 'utf8'));
+        failed = results.filter((/** @type {{ status: number | null, alone?: { status: number | null } }} */ r) => r.status !== 0 && r.alone?.status !== 0).map((/** @type {{ id: string }} */ r) => r.id).join(', ') || undefined;
+      } catch {
+        failed = undefined;
       }
-      return { ok: true };
+      return { ok: false, failed };
     },
   };
 }

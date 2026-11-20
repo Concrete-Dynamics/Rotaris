@@ -10,7 +10,8 @@ Part 4 of 4 of [the component view](../01-component-view.md), which indexes ever
 `pnpm preflight`), and the landing sequence — fetch, `git rebase origin/main` (a conflict aborts the rebase and
 hands back; the tool never resolves one), a **landing worktree** detached at the rebased head and re-installed,
 `tools/verify-plan`'s plan read against `origin/main` (its `review` list demands `--reviewed`), `pnpm check` then
-the named proof suites on that exact head (`--skip-proofs` skips them loudly), `git push origin HEAD:main` —
+the named proof suites on that exact head (through `tools/proof-run`'s `pnpm proofs:run` since 2026-11-20: one build,
+the suites side by side, every red named; `--skip-proofs` skips them loudly), `git push origin HEAD:main` —
 fast-forward only, re-rebasing while `main` moves under it — and the removal of both worktrees and the branch.
 `overlaps.mjs` (`pnpm worktree:overlaps`) is the report beside them: every registered worktree's branch read
 against its fork from `origin/main` — the files it touches (committed, staged, unstaged and untracked), the

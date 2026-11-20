@@ -21,7 +21,8 @@ function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const path = join(dir, e.name);
     if (e.isDirectory()) return sources(path);
-    return e.name.endsWith('.ts') && !e.name.endsWith('.test.ts') ? [path] : [];
+    // A `.test-support.ts` module is one only tests reach (`tools/test-support-naming/`), so what it imports is the tests'.
+    return e.name.endsWith('.ts') && !e.name.endsWith('.test.ts') && !e.name.endsWith('.test-support.ts') ? [path] : [];
   });
 }
 

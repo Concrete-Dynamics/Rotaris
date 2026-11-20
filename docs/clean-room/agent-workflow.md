@@ -58,7 +58,9 @@ Abandoning a branch because the rebase is hard is not an outcome an agent may ch
 rebase and hands back**, its files named; resolving is the person's or the agent's reading, never the tool's —
 puts up a **landing worktree** (a sibling `<checkout>-wt-<topic>-land`, detached at the rebased head, installed
 on first use) and runs the gate on that exact head; then the proof suites `pnpm verify:plan` names for the diff
-(run as their scripts on the same head; `--skip-proofs` skips them with a warning that says so), then
+(run by `pnpm proofs:run` on the same head since 2026-11-20: one build, then the suites side by side, every one to its
+end, so a red names each red suite, and a suite red beside the others is run again alone, where its reading decides and
+the summary names it; `--skip-proofs` skips them with a warning that says so), then
 `git push origin HEAD:main` — fast-forward only, never a force — re-rebasing while `main` moves under it
 (`--max-attempts=`, 3 by default), and finally removes both worktrees and deletes the branch (`--keep` leaves
 them; on Windows the removal of a tree a shell sits in is printed as the commands to run once out of it). A red

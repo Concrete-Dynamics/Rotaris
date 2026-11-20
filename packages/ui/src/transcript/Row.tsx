@@ -128,6 +128,8 @@ export interface TranscriptSurface {
    * the surface does not know, the line draws the state its row carries.
    */
   readonly threadState?: ((name: string) => string | null) | undefined;
+  /** PD-CHAT-015: the words a named task is shown by (the agent's given name), so a heading and its thread line name one task one way. Absent, or null, keeps the row's own name. */
+  readonly taskLabel?: ((name: string) => string | null) | undefined;
   /** PD-CHAT-015: pressing a thread line shows that agent's own transcript. Absent draws the line inert. */
   readonly openThread?: ((name: string) => void) | undefined;
   /**
@@ -532,7 +534,10 @@ function PlainText({ text, match, onOpenLink }: { text: string; match: RowRender
  * A member of an expanded activity line keeps its own timestamp (PD-CHAT-004), at the end of its own line.
  */
 function Attribution({ row, place }: { row: TranscriptRow; place: RowPlace }) {
-  const task = rowTask(row);
+  const surface = useTranscriptSurface();
+  // The task is named as the thread line and the Run panel name it, where the surface knows the agent; else by the row's own name.
+  const named = rowTask(row);
+  const task = named === null ? null : (surface.taskLabel?.(named) ?? named);
   if (place.member === true) return <time className="row__time mono" dateTime={row.at}>{row.ts || rowTime(row.at)}</time>;
   if (!place.blockStart) return null;
   return (
@@ -765,7 +770,8 @@ export function Row(p: RowProps) {
               <span className="tool__outcome" data-severity={severity}>{(durationMs / 1000).toFixed(1)}s</span>
             </DesignButton>
             {/* REQ-CHAT-065: while a member is in flight the header carries that call's text. */}
-            {!expanded && display.inFlight !== null && <div className="tool__preview text-secondary mono">⤷ {display.inFlight}</div>}
+            {/* PD-CHAT-015: a preview that only repeats the word in flight (a call with no text but its tool's name) is not drawn. */}
+            {!expanded && display.inFlight !== null && display.inFlight.trim() !== (display.inFlightLabel ?? '') && <div className="tool__preview text-secondary mono">⤷ {display.inFlight}</div>}
             {expanded && (
               // PD-CHAT-015: the revealed members stand one step in from the line that holds them, and no further
               // however deep their agent sits. PD-CHAT-004's persona-coloured rule is gone: the heading names the agent.
@@ -913,7 +919,7 @@ export function Row(p: RowProps) {
           aria-label={`Open ${rowRole(row)}${row.input ? `, ${row.input}` : ''}`} aria-description={[state, row.body].filter((t) => t !== '').join('. ')} data-testid="thread-open">
           <span className="thread__name" style={personaInk(row)}>{rowRole(row)}</span>
           <span className="thread__task">{row.input ?? ''}</span>
-          <span className="thread__state mono" data-running={running ? '1' : undefined}>{state}</span>
+          <span className="thread__state mono" data-running={running ? '1' : undefined} data-state={row.toolStatus}>{state}</span>
           <span className={`thread__latest${running ? ' thread__latest--live' : ''}`}><Highlighted text={row.body} match={match} /></span>
           <i className="ph ph-caret-right thread__open" aria-hidden="true" />
         </DesignButton>

@@ -95,7 +95,7 @@ truncation line "… +N more lines, diff truncated".
 `REQ-CHAT-055` – `REQ-CHAT-067`, `REQ-CHAT-163` – `REQ-CHAT-165`, `REQ-CHAT-175` – `REQ-CHAT-178`. Timestamp column 52 px, role column
 112 px, minimum row height 30 px, timestamps in the monospace stack at 8 pt, attribution drawn only
 on the first row of a block, continuation rows showing a 2 px persona-coloured bar in the role
-gutter, row margins 10 px horizontal and 5 px vertical. Plus the tool row (`▸ <description>` — `Runs npm test`,
+gutter, row margins 10 px horizontal and 5 px vertical. *(2026-11-20, `PD-CHAT-015`: the two columns and the bar are displaced — a block's first row carries a heading line, and every row has one left edge.)* Plus the tool row (`▸ <description>` — `Runs npm test`,
 `Reads src/app.ts`, the tool's own name where the build derives no line (REQ-CHAT-175) — with
 `ok · 3.2s` / `failed` / `blocked · Ns` / pulsing `◉ running…`), its expansion into an INPUT/OUTPUT
 card, the thinking row, and the folded group header carrying per-outcome counts and taking its colour

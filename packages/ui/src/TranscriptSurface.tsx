@@ -237,18 +237,22 @@ export function ScopeToggle({ scope, agent, nowIso, onScope }: { scope: 'all' | 
 export type TranscriptScope = 'run' | 'task' | 'all';
 
 /**
- * The thread line's second line is one line of the text: the first that is a sentence rather than a heading or a
- * one-word acknowledgement ("Done."), its Markdown marks left out; a text holding no such line gives its first line.
+ * The thread line's second line is one sentence of the text: the first that is a sentence rather than a heading or a
+ * one-word acknowledgement ("Done."), its Markdown marks left out, cut where the sentence ends; a lead-in ("Appended:")
+ * loses its colon. A text holding no such line gives its first line.
  */
-function firstLine(text: string): string {
+function firstSentence(text: string): string {
   let fallback = '';
   for (const line of text.split('\n')) {
     const plain = line.replace(/^[\s#>*\-`]+/u, '').replace(/[*`]/gu, '').trim();
     if (plain === '') continue;
     if (fallback === '') fallback = plain;
-    if (!/^\s*#/u.test(line) && plain.split(/\s+/u).length >= 4) return plain;
+    if (/^\s*#/u.test(line) || plain.split(/\s+/u).length < 4) continue;
+    const end = /[.!?](?=\s|$)/u.exec(plain);
+    const sentence = end === null ? plain : plain.slice(0, end.index + 1);
+    return (sentence.split(/\s+/u).length >= 4 ? sentence : plain).replace(/:$/u, '');
   }
-  return fallback;
+  return fallback.replace(/:$/u, '');
 }
 
 /**
@@ -259,9 +263,9 @@ function firstLine(text: string): string {
 export function threadLatest(own: readonly TranscriptRow[], ended: boolean): string {
   for (let i = own.length - 1; i >= 0; i -= 1) {
     const row = own[i]!;
-    if (isMessageRow(row)) { const line = firstLine(row.body); if (line !== '') return ended ? `Reported: ${line}` : line; }
+    if (isMessageRow(row)) { const line = firstSentence(row.body); if (line !== '') return ended ? `Reported: ${line}` : line; }
     if (ended) continue;
-    if (row.kind === 'tool') { const derived = describeToolCall(row.toolName ?? '', row.input); return derived !== '' ? derived : firstLine(row.body); }
+    if (row.kind === 'tool') { const derived = describeToolCall(row.toolName ?? '', row.input); return derived !== '' ? derived : firstSentence(row.body); }
     if (isReasoningRow(row)) return 'reasoning';
   }
   return '';
@@ -339,10 +343,9 @@ export function ThreadTabs({ scope, agents, selected, nowIso, onScope, onSelect 
 }) {
   const task = scope === 'task' && selected !== null && selected.id !== RUN_AGENT_ID ? selected : null;
   const value = scope === 'all' ? 'all' : task !== null ? `agent:${task.id}` : 'run';
-  // "All activity" stands before the agents, so a run of many agents — whose tabs scroll — never pushes it out of reach.
+  // "All activity" ends the strip and is pinned there by the stylesheet, so a run of many agents — whose tabs scroll — never pushes it out of reach.
   const tabs: TabItem[] = [
     { value: 'run', label: <span className="thread-tab" data-testid="scope-run"><i className="ph ph-chats" aria-hidden="true" />Run</span> },
-    { value: 'all', label: <span className="thread-tab" data-testid="scope-all">All activity</span> },
     ...agents.map((a): TabItem => {
       const shown = task?.id === a.id;
       const ended = a.completedAt !== null;
@@ -355,11 +358,12 @@ export function ThreadTabs({ scope, agents, selected, nowIso, onScope, onSelect 
             <span className="thread-tab__dot" aria-hidden="true" />
             {a.persona}
             {/* The state is drawn where it is news — the shown agent's, and any agent still at work; every tab's title carries it. */}
-            {(shown || !ended) && <span className="thread-tab__state mono" data-testid={shown ? 'scope-detail' : undefined} data-running={live ? '1' : undefined}>{threadState(a, nowIso)}</span>}
+            {(shown || !ended) && <span className="thread-tab__state mono" data-testid={shown ? 'scope-detail' : undefined} data-running={live ? '1' : undefined} data-state={a.presentationState}>{threadState(a, nowIso)}</span>}
           </span>
         ),
       };
     }),
+    { value: 'all', label: <span className="thread-tab" data-testid="scope-all">All activity</span> },
   ];
   return (
     <DesignTabs className="thread-tabs" label="Transcript scope" data-testid="scope-toggle" data-scope={scope === 'task' && task === null ? 'run' : scope}

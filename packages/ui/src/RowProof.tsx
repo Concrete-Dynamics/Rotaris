@@ -301,6 +301,8 @@ export function RowProof({ onOpenLink, onAcknowledge }: RowProofProps) {
           onSubmit={async () => REFUSED} onStop={async () => REFUSED}
           entry={{ persona: 'orchestrator', model: 'scripted', reasoning: 'high', tools: [] }}
           groupTools={false}
+          /* PD-CHAT-015: this surface is where every row kind is measured, so it opens on "All activity". */
+          initialScope="all"
           {...shared}
         />
       </div>

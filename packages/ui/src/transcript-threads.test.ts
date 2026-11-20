@@ -71,6 +71,9 @@ describe('PD-CHAT-015 — the run\'s own conversation folds each delegated agent
     expect(threadLatest(own, true)).toBe('Reported: The function is in place and eleven tests pass.');
     expect(threadLatest(own.slice(0, 2), true)).toBe('Reported: I will start by reading the files I need to touch.');
     expect(threadLatest([], true)).toBe('');
+    // One sentence, cut where it ends; a lead-in loses its colon.
+    expect(threadLatest([mine('impl', 'coding-agent', { body: 'I added the function after the untouched helper. Then I ran the suite.' })], true)).toBe('Reported: I added the function after the untouched helper.');
+    expect(threadLatest([mine('impl', 'coding-agent', { body: 'Appended to the README without touching lines 1–3:' })], true)).toBe('Reported: Appended to the README without touching lines 1–3');
   });
 
   it('an ended agent\'s line is settled and carries its state and elapsed time; an unchanged line is the same object (REQ-CHAT-055)', () => {

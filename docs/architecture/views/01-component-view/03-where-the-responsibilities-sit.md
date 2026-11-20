@@ -24,7 +24,7 @@ Part 3 of 4 of [the component view](../01-component-view.md), which indexes ever
 | Markdown: the subset, its tree, its renderer, the bounded parse cache (ADR-0051) | `ui/src/markdown/` | renderer (the artifact inspector's Preview tab and, from Part AA, the transcript's agent-message rows — nothing renders Markdown a second way) |
 | The transcript engine: the recycled slot pool, the apply pipeline's steps 3-5, the two bounded caches, the search index (ADR-0045, ADR-0046) | `ui/src/transcript/` | renderer (the Workspace transcript; the persona window keeps a plain list) |
 | One transcript row, drawn: the categories, the outcomes, the group header, the trailers, the stalled indicator (REQ-CHAT-056/057/060/061/062/065/164) | `ui/src/transcript/Row.tsx` — a **pure function of its props**, holding no state, because Part Z's pool rebinds slots (ADR-0045) | renderer (the Workspace transcript and every persona window) |
-| A transcript surface: the expansion map, the one context menu, keyboard navigation, the delegation-context header, the scope toggle (REQ-CHAT-059/068/069/075/077) | `ui/src/TranscriptSurface.tsx` | renderer |
+| A transcript surface: the expansion map, the one context menu, keyboard navigation, the delegation-context header, the scope tabs and the thread lines' rows (`ThreadTabs`, `threadedRows`; REQ-CHAT-059/068/069/075/077, PD-CHAT-015) | `ui/src/TranscriptSurface.tsx` | renderer |
 | The traceability engine: the store parse, the sweep, the verification pass, the four operations, the artifacts' one I/O owner, the worker (ADR-0040, REQ-TRACE-001..229); since Part AJ′ the syntax-tree parser (`parser.ts`, the TypeScript compiler API loaded at first use — no new edge, `typescript` is resolved at run time) and the consumer half (`consumer.ts`, REQ-TRACE-176/182/183/500) | `workspace/src/traceability/` | workspace-service (`traceability.ts`, `traceability-worker.ts` — the `?nodeWorker` entry; `delivery.ts`'s two operation arms); ui (`settings/ProjectSettings.tsx`, the Settings card) |
 | The requirements adoption assistant (domain 22, PD-TRACE-001; 2026-10-29): the read-only detection pass, the adapter composed from it and one model interpretation and validated by `parseLayout`, its execution, the record in `.rotaris/requirements-adoption.json` and the comparison on opening (REQ-ADOPT-001..030); the interpretation's one bounded request (`engine/src/adoption/interpret.ts`) — no new package and no new edge | `workspace/src/adoption/`, `engine/src/adoption/`, `contracts/src/adoption.ts` | workspace-service (`adoption.ts`, answered beside the delivery service, never through it); run-host (`dispatch.ts`'s `adoption.interpret`, on the `requirements-engineer` role's model); main (`index.ts` forwards the service's ask; `requirements.ts` stamps the actor and bounds the run at 240 s); ui (`requirements/AdoptionStrip.tsx` beneath the board's header) |
 | The delivery store and the board projection: the transition, the two handles, the gate, the reap, one frozen value per generation (ADR-0041, REQ-TRACE-232..483) | `workspace/src/delivery/`, `store/src/delivery/`, `contracts/requirements.ts`, `ui-core/requirements/display.ts` (the pure display mapping) | workspace-service (`delivery.ts`); main stamps the `Actor` (`main/requirements.ts`) |
@@ -72,9 +72,18 @@ backwards: `cleanCut` takes the earliest first-member index of any run still ope
 cut *inside* a run would drop members the reused prefix no longer holds and the re-projected suffix never sees
 (REQ-MONITOR-223 forbids re-projecting the whole state). `buildSegments` now accumulates **one segment per
 family** carrying that family's totals, ordered by first appearance, rather than one per switch. On the drawing
-side, `Row.tsx` takes the persona's colour for the role line and an indent by delegation depth; the depth arrives
-as `agentDepth` on `TranscriptSurface`, supplied by `WorkspaceView` from `session.agents`. Display-only: no new
+side, `Row.tsx` takes the persona's colour for the role line. *(Until 2026-11-20 it also took an indent by delegation
+depth, arriving as `agentDepth` on `TranscriptSurface`; PD-CHAT-015 withdrew it.)* Display-only: no new
 edge, no new message, nothing reaches a model.
+
+**The run and its threads (PD-CHAT-015, 2026-11-20).** `WorkspaceView` holds the transcript's scope — `run`, `task`
+or `all` — and hands the pane the rows of that scope: `threadedRows` (`TranscriptSurface.tsx`) keeps the run-owned
+kinds and the shown agent's own rows and replaces each directly delegated agent's rows with **one computed row of
+kind `delegation`** carrying its first row's index, which `Row.tsx` draws as the thread line. The projection, the
+pool and the caches are unchanged: a thread line is a row to them, keyed `deleg:<agent>` (`rowKey`), and its object is
+held from one call to the next so an unchanged line is an unchanged row to the projector's bounded form. Its live
+state and what pressing it does arrive on `TranscriptSurface` (`threadState`, `openThread`), as the clock does.
+Display-only: no new edge, no new message, no recorded row, nothing reaches a model.
 
 ### `mcp` (Part S, 2026-09-05)
 

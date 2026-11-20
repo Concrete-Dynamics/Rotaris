@@ -14,6 +14,10 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
+Last reconciled with the code: **2026-11-20**
+
+**The transcript is the run's conversation and its threads (R-108; [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015), `PD-CHAT-004` revision 4, `PD-CHAT-005` revision 2; REQ-CHAT-050/057/069 narrowed; 2026-11-20).** `01-component-view/03-where-the-responsibilities-sit.md` gains "The run and its threads": `WorkspaceView` holds the scope and `threadedRows` replaces a delegated agent's rows with one computed `delegation` row, which is a row like any other to the projection, the pool and the caches; `agentDepth` left `TranscriptSurface` for `threadState` and `openThread`. `03-runtime-view/16-9-…` corrects what the 14 px of `SHORTEST_ROW_HEIGHT` is. No process, message, channel, store column or owner of a fact changed.
+
 Last reconciled with the code: **2026-11-17**
 
 **The start-of-conversation marker is drawn in the first row's slot (R-102; 2026-11-17).** `03-runtime-view/16-9-what-a-surface-does-with-a-publication-adr.md` gains the sentence: the marker and the failed-page notice left the pool's flow for the first slot, whose height is filed under `leadKey`. No offset, range or scroll arithmetic changed.

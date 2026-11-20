@@ -124,6 +124,8 @@ export interface WorkspaceViewProps {
   readonly compressionThresholdPercent?: number | undefined;
   /** REQ-SHELL-073 / REQ-MONITOR-072: a tree click selects (the shared selection) and, with the preference on, the caller opens the window; `key` moves select only. */
   readonly onSelectAgent?: ((id: string | null, source?: 'click' | 'key') => void) | undefined;
+  /** PD-CHAT-015: the scope the transcript opens in — the run's own conversation unless a surface says otherwise (the row proof opens on every row). */
+  readonly initialScope?: TranscriptScope | undefined;
   /** REQ-SHELL-072/073, REQ-MONITOR-137: open or raise the persona window; `focusSteer` when the inspector's Steer asked for it. */
   readonly onOpenPersona?: ((agent: AgentRecord, focusSteer: boolean) => void) | undefined;
   /** REQ-LIBRARY-140 / REQ-CHAT-042 (Part X): the composer's Stash control — pushes the TRIMMED composer text and clears the composer. */
@@ -773,11 +775,11 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // PD-CHAT-015: whose transcript is shown — the run's own conversation first. REQ-CHAT-069's "This task" needs a
   // selected agent, and without one it is the run's.
-  const [scope, setScope] = useState<TranscriptScope>('run');
+  const [scope, setScope] = useState<TranscriptScope>(initialScope ?? 'run');
   // The thread lines' row objects, held from one projection to the next so an unchanged line is the same object
   // (`threadedRows`); a cache of derived rows, never a fact the view draws from.
   const [heldThreads] = useState(() => new Map<string, TranscriptRow>());
@@ -1285,6 +1287,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     const byName = new Map(agents.map((a) => [a.name, a]));
     return (name: string): string | null => { const a = byName.get(name); return a === undefined ? null : threadState(a, nowIso); };
   }, [agents, nowIso]);
+  const taskLabel = useMemo(() => {
+    const byName = new Map(agents.map((a) => [a.name, a.givenName !== '' && a.givenName !== a.persona ? a.givenName : null]));
+    return (name: string): string | null => byName.get(name) ?? null;
+  }, [agents]);
   const openThread = useCallback((name: string) => {
     const a = agents.find((x) => x.name === name);
     if (a === undefined) return;
@@ -1535,6 +1541,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           questionAgent={session?.agents[0]?.name}
           threadState={threadStateOf}
           onOpenThread={openThread}
+          taskLabel={taskLabel}
           onPageOlder={onPageOlder}
           reachedOldest={reachedOldest}
           onFocusComposer={() => area.current?.focus()}

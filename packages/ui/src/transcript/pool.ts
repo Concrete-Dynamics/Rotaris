@@ -50,16 +50,22 @@ import type { DisplayRow } from './types.js';
  * wrap in; a caller that has not measured its viewport yet passes nothing and gets a one-line answer, which the
  * first measurement corrects like any other estimate.
  */
-const TIME_COLUMN = 52;
-const ROLE_COLUMN = 112;
-const COLUMN_GAPS = 16;
+/**
+ * PD-CHAT-015: the one step a row's content stands in from the row's edge (`--rt-space-5`), which replaced the 52 px
+ * timestamp column, the 112 px role column and their two 8 px gaps (`TIME_COLUMN`, `ROLE_COLUMN`, `COLUMN_GAPS`) on
+ * 2026-11-20; and the heading the first row of a block draws on a line of its own, with the 4 px beneath it.
+ */
+const CONTENT_INSET = 20;
+const HEADING = 24;
+/** PD-CHAT-015: a thread line — two lines of text and its 8 px above and below. */
+const THREAD_LINE = 56;
 /**
  * The row's own inline box, which the grid sits inside and the viewport's width therefore loses before the gutter:
  * `.row`'s `margin: 4px 10px 0`, its `0 --rt-space-3` padding (`.row--user`'s is the same inline) and its 1 px border
  * either side. Measured 2026-09-30: at a 740 px viewport the main column was 514 px, not the 560 the gutter alone left.
  */
 const ROW_INLINE = 10 + 10 + 12 + 12 + 1 + 1;
-const GUTTER = TIME_COLUMN + ROLE_COLUMN + COLUMN_GAPS + ROW_INLINE;
+const GUTTER = CONTENT_INSET + ROW_INLINE;
 /**
  * Rough advances: `--rt-text-sm` body, and the `2xs` uppercase label, which is tracked and so wider per glyph. The
  * body's is an EFFECTIVE advance — what a drawn line holds once it breaks at a word — and is set so that a wrapped
@@ -67,7 +73,6 @@ const GUTTER = TIME_COLUMN + ROLE_COLUMN + COLUMN_GAPS + ROW_INLINE;
  * the 6.2 before it predicted 13 lines of a paragraph that drew 14.
  */
 const CHARACTER = 7.2;
-const LABEL_CHARACTER = 6.6;
 /**
  * One drawn line of `--rt-text-sm` at `--rt-leading-body` (13 px × 1.5): 19.44 px in the built app. The 18 before it
  * was "~17 px", which put a six-line message 18.6 px short of what it drew (2026-09-30).
@@ -124,7 +129,8 @@ function wrappedLines(text: string, width: number, advance = CHARACTER): number 
  */
 export function estimateHeight(d: DisplayRow, expanded = false, width = 0, blockStart = false): number {
   if (d.shape === 'trailer') return 36;
-  return estimateBox(d, expanded, width) + (blockStart ? BLOCK_GAP_OVER_ROW_GAP : 0);
+  if (d.shape === 'row' && d.row.kind === 'delegation') return THREAD_LINE + (blockStart ? BLOCK_GAP_OVER_ROW_GAP + 4 : 0);
+  return estimateBox(d, expanded, width) + (blockStart ? BLOCK_GAP_OVER_ROW_GAP + HEADING : 0);
 }
 
 /**
@@ -165,8 +171,9 @@ function estimateBox(d: Exclude<DisplayRow, { shape: 'trailer' }>, expanded: boo
   // REQ-CHAT-057's attribution shares the row's height: `.row__role` wraps inside its 112 px column rather than
   // truncating (docs/archive/defects/role-gutter-truncation-rule-is-inert.md), so a long agent name costs a second line
   // even when the main column needs only one.
-  const role = (d.shape === 'group' ? d.role : d.row.name ?? '').toUpperCase();
-  const roleLines = wrappedLines(role, ROLE_COLUMN, LABEL_CHARACTER);
+  // PD-CHAT-015: the heading is one line of its own (`estimateHeight` adds it to a block's first row) and never
+  // shares the row's height, so no row grows by the length of its agent's name.
+  const roleLines = 1;
   if (d.shape === 'group') {
     // PD-CHAT-004: the activity line is one line only while its segments FIT. `.activity__segments` is
     // `flex-wrap: wrap` of `white-space: nowrap` segments, so a segment that does not fit the rest of a line starts the

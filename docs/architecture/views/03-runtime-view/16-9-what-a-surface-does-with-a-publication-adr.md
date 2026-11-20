@@ -29,7 +29,7 @@ episode however many arrive — an arrival-timing dependency would break the ben
 
 **What paints it (ADR-0045).** A scroll container of **226 absolutely positioned slots** — `ceil(H_max ÷ 20 px) + 10`
 with `H_max` a declared product constant of 4,320 px and 20 px the shortest a row's slot holds (`SHORTEST_ROW_HEIGHT`:
-the 4 px row gap, the border and the 14 px continuation bar; 30 px until 2026-10-01, taller than a row PD-CHAT-003 draws)
+the 4 px row gap, the border and the 14 px floor of a row's content — until 2026-11-20 the continuation bar's, which PD-CHAT-015 removed; 30 px until 2026-10-01, taller than a row PD-CHAT-003 draws)
 — allocated at window construction, **emptied rather than unmounted** when a row leaves it, and rendered whether or not the transcript holds any rows. The pool's size follows the viewport (`capacityFor`): a viewport taller than `H_max` grows it and a shorter one shrinks it again, and only then are slots mounted or unmounted. **Corrected 2026-10-02, kept beside its replacement: "never added to or removed from".** Since the capacity growth of 2026-10-01 that was no longer so. The slot index is
 the framework key, never the row identity. Heights are **measured** by a `ResizeObserver` into a bounded cache and fed
 to a prefix-sum offset table — rebuilt from the first height that changed, not from the top (REQ-CHAT-055) — which is
@@ -67,3 +67,12 @@ otherwise carry one row's state onto another.
 **Older rows** are fetched by `session.pageOlder` when the reader scrolls toward the top and placed above by the
 replica's `prependOlder`, off the interface thread, with the anchor holding the reader still; a failed load says so
 and is re-attemptable, and reaching the oldest recorded row is a different state from a failure (REQ-CHAT-165).
+
+**The run and its threads (PD-CHAT-015, 2026-11-20).** `WorkspaceView` holds the transcript's scope — `run`, `task`
+or `all` — and hands the pane the rows of that scope: `threadedRows` (`TranscriptSurface.tsx`) keeps the run-owned
+kinds and the shown agent's own rows and replaces each directly delegated agent's rows with **one computed row of
+kind `delegation`** carrying its first row's index, which `Row.tsx` draws as the thread line. The projection, the
+pool and the caches are unchanged: a thread line is a row to them, keyed `deleg:<agent>` (`rowKey`), and its object is
+held from one call to the next so an unchanged line is an unchanged row to the projector's bounded form. Its live
+state and what pressing it does arrive on `TranscriptSurface` (`threadState`, `openThread`), as the clock does.
+Display-only: no new edge, no new message, no recorded row, nothing reaches a model.

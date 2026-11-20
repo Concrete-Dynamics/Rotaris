@@ -76,3 +76,38 @@ Checked and sound on this surface: the header is one 33 px line at both sizes wi
 |---|---|---|---|
 | UIR-003 | high | "No task plan" in the task plan pane drawn at the browser's `bolder`, a bare `strong` with no rule, where §1.4 stops at 500; seven more call sites; predates R-097 | implemented: one `strong` rule at `--rt-weight-medium` (500 measured) |
 | UIR-016 | low | the inspector's persona menu is 28 px high, a fourth control height, where the same component is 24 px in the run header; counted baseline debt; predates R-097 | open |
+
+## Redesign 2026-11-20 — the run and its threads ([R-109](../../product/requests.md#r-109), [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015))
+
+**Status:** built on `feat/r-108-transcript-threads`; not landed. By `redesign-surface`, with Impeccable's context loaded. The owner chose concept 2 of two mocked ("Build concept 2"); concept 1 was one interleaved stream of turns with a pinned speaker and a run map.
+
+**Measured before** (built app, real run on the owner's local model, 1440 × 900, `rotaris-dim`): transcript column 719 px; a row's text 485 px, a depth-1 agent's 469 px, a member of that agent's expanded run 246 px; prose 366 px; one small delegated task 9,955 px of transcript.
+**Measured after** (same window, same kind of task): a row's text 645 px at every depth; prose 503 px; the run's own conversation 1,448 px. A block's heading is 23.4 px; a thread line 54.6 px (67.6 px starting a block).
+
+**Composition.** Tabs at the head of the transcript (Run, one per agent, All activity — the last pinned at the strip's end while the agents' tabs scroll beneath it, so a run of many agents cannot push it out of reach). A block's first row: persona dot, role, task, and the time at the line's end; content one step (`--rt-space-5`) in. A thread line: persona dot and name, task, state and elapsed time at the end, the latest act or the report beneath, a caret. Consecutive thread lines share their rules. An activity line reads what was done; its members stand one step in with their own times at the line's end. A diff is a block inside its turn, five lines and "Show N more lines".
+
+**Function inventory** (read-only, 2026-11-20): every row kind, control, test id and required literal of the transcript was listed before the build. Moved or displaced, each named in the directive: the scope toggle (now tabs; `scope-toggle`, `scope-task`, `scope-detail` kept as test ids, `scope-run`, `scope-all`, `scope-agent` added), "This task" and the no-agent sentence, the timestamp and role columns, the continuation bar (`row-bar`), the depth indent, the members' rule. New: `row-thread`, `thread-open`, `diff-more`.
+
+**Deliberately left.** The "N steps · N files" figures the mock drew on a thread line (the Run panel states the tool calls). A thread line for an agent that has written no row. The system notice's 2 px left rule and the tool card's, which predate this pass. The persona window's plain list, which draws the same rows and no tabs.
+
+**Owed.** `rows-proof` and `transcript-proof` assert the displaced structure and are to be rewritten to the new one, not deleted. The wrapped-paragraph and sixteen-segment figures of `transcript.test.ts`'s "what the built app drew" table are derived for the new measure, not measured. Captures in `nocturne` and `high-contrast`. A run of more than six agents (tab strip overflow), a failed agent's thread line, focus rings, and a search match on a thread line were not captured.
+
+Captures: `.ui-review/transcript-redesign/` in the primary checkout (before, the two mocks) and in the branch's worktree (`build1/`); git-ignored.
+
+### Critique 2026-11-20 (independent, report-only; two rounds)
+
+Round 1 read the captures of `build1/` against the capture before the change, the approved mock and the diff: **not satisfied**, nine findings. Round 2 read `build2/`, a fresh real run on the repaired build: **satisfied**, with what is left bound by a requirement or older than this change. A finding repaired here is `implemented`; `verified-resolved` takes a fresh pack read in a fresh context.
+
+| # | Finding | Round 2 |
+|---|---|---|
+| 1 | a thread line's text stood 8 px in from every other row's | resolved (role 425, content 425, thread 424 px measured; the last pixel closed after the capture) |
+| 2 | an agent's tab opens on the delegation header's raw wording, the start marker below it, and the reader's prompt | partial: the header is one line. Its wording is REQ-CHAT-068's, the marker is drawn in the pool's first slot, and REQ-CHAT-069 keeps the run-owned rows; open |
+| 3 | "Reported:" took a line, not a sentence | resolved in code; no round-2 capture shows a finished thread line |
+| 4 | one call named three times on a live activity line | resolved in what was captured |
+| 5 | work that had ended drawn in the run colour | resolved |
+| 6 | a failed or waiting agent not coloured on its thread line or tab | resolved in code; no capture of a failed agent |
+| 7 | one task under two names (slug in the heading, words on the thread line) | resolved |
+| 8 | the approval row's 2 px side rule | open; predates this pass. The system notice's rule is the same pattern and is now the only ruled row in the column |
+| 9 | "All activity" between the run and its agents; no sign of overflow | order resolved; the pinned tab's fade was not seen overflowing |
+
+New in round 2, open: a running call with a derived description still draws its raw input on the `⤷` line (`{"task_ids":[…]}` under "Waits for 2 children"); REQ-CHAT-061 gives that line, so leaving it out is a narrowing to classify, not a repair.

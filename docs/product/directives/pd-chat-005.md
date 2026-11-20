@@ -4,6 +4,9 @@
 
 ### PD-CHAT-005 — a row names its agent by colour, and a delegated agent's rows sit one step in
 
+*Revision 2 (2026-11-20, [R-109](../requests.md#r-109)) — **the place** is withdrawn; the colour stands. Revision 1
+(2026-09-16, [R-025](../requests.md#r-025)) is quoted where it is replaced. The title keeps revision 1's words.*
+
 **The colour.** A transcript row's **role label** SHALL be drawn in its persona's assigned colour —
 the same colour REQ-CHAT-057's continuation bar and PD-CHAT-004's expanded rail already take, so one
 agent reads as one colour everywhere it appears. A row that names no persona — the reader's own row, a
@@ -15,17 +18,28 @@ a stable function of the persona's name. No persona colour SHALL be a **state** 
 product uses to say `ok`, `running`, `waiting` or `failed` may not also say *who*, because the two would
 then be indistinguishable on a row that carries both.
 
-**The place.** A row belonging to an agent at depth *N* in the run's delegation tree
-(REQ-MONITOR-036/037) SHALL be drawn indented *N* steps, one step being the design language's base
-spacing step, with the run's own entry persona at depth 0. The indent SHALL move the row's columns and
-SHALL NOT resize them: REQ-CHAT-057's 52 px timestamp column and 112 px role column are untouched, as
-are its margins and its minimum height. That is why this directive **extends** that requirement rather
-than narrowing it — every figure REQ-CHAT-057 fixes still holds on an indented row, and the indent is a
-new fact drawn beside them. (`PD-CHAT-003` already narrows REQ-CHAT-057, and one requirement may be
-narrowed by one directive only, so a second claim on it would have had to be settled rather than
-declared; there is nothing to settle, because nothing here disagrees with it.) A surface that does
-not know the delegation tree SHALL draw every row at depth 0, which is what every surface did before
-this directive.
+**The place — revision 2.** A row SHALL NOT be indented by its agent's depth in the delegation tree. Who reports to
+whom is said by [`PD-CHAT-015`](pd-chat-015.md#pd-chat-015)'s thread lines and tabs, and every row's content starts at
+one left edge.
+
+> *Revision 1 said, and no longer governs:*
+>
+> **The place.** A row belonging to an agent at depth *N* in the run's delegation tree
+> (REQ-MONITOR-036/037) SHALL be drawn indented *N* steps, one step being the design language's base
+> spacing step, with the run's own entry persona at depth 0. The indent SHALL move the row's columns and
+> SHALL NOT resize them: REQ-CHAT-057's 52 px timestamp column and 112 px role column are untouched, as
+> are its margins and its minimum height. That is why this directive **extends** that requirement rather
+> than narrowing it — every figure REQ-CHAT-057 fixes still holds on an indented row, and the indent is a
+> new fact drawn beside them. (`PD-CHAT-003` already narrows REQ-CHAT-057, and one requirement may be
+> narrowed by one directive only, so a second claim on it would have had to be settled rather than
+> declared; there is nothing to settle, because nothing here disagrees with it.) A surface that does
+> not know the delegation tree SHALL draw every row at depth 0, which is what every surface did before
+> this directive.
+>
+> **Why it was withdrawn, measured 2026-11-20.** At 1440 × 900 the transcript column is 719 px. The indent moved the
+> columns and did not resize them, so each level took 16 px from the text and nothing else: a depth-1 agent's text
+> had 469 px against 485 px, and inside that agent's expanded run, where each member repeats the columns, 246 px.
+> The owner: "the indentations make the padding grow larger."
 
 **Why, and what it costs.** The owner read a live two-agent transcript and reported that "agents can be
 barely distinguished". They were not: the role label was drawn in one accent colour for every agent, the

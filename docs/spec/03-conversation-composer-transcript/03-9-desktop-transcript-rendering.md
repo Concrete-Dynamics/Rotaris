@@ -26,6 +26,14 @@ Part 3 of 7 of [domain 03](../03-conversation-composer-transcript.md), which ind
   > beside them — the role line is drawn in the persona's own colour instead of one shared accent,
   > and a delegated agent's rows are indented one step per level of delegation. The indent moves the
   > columns; it does not resize them.
+  > *Revision 2, 2026-11-20:* the indent is withdrawn; the colour stands.
+  >
+  > **Narrowed by [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015), 2026-11-20.** The attribution rule
+  > (what a block is, and that attribution is drawn on its first row only), the 8 pt monospace timestamps and the
+  > 10 px horizontal margin still govern. The 52 px timestamp column, the 112 px role column and the 2 px continuation
+  > bar do not: a block's first row carries a heading on a line of its own — persona dot, role, task, time — every
+  > row's content starts at one left edge, and a continuation row draws nothing in the bar's place. This qualifies the
+  > two notes above, which say the columns and the bar still govern.
 - **REQ-CHAT-058** — Desktop transcript memory MUST stay bounded however long the conversation grows: retained row measurements and retained row renderings MUST each be held only up to a fixed limit, beyond which the least recently used are discarded. A retained rendering MUST be reused only while everything that determines the row's appearance is unchanged — its identity, its content, the width it was laid out for, and its expansion state — so that inserting, removing, or reordering rows can never make one row display another row's content. Rows that are live (a running tool, verifier, or group, or reasoning still streaming) MUST be redrawn on every repaint rather than reused, so their elapsed times keep advancing. Switching theme MUST redraw every row in the new theme while leaving every row's expanded or collapsed state exactly as the user set it.
 - **REQ-CHAT-059** — Row expansion state MUST be keyed by stable identity — tool/verifier rows by their tool-call key (content-hash fallback), thinking rows by start time (text-hash fallback), delegation headers by agent, groups by the key of the group's **first** member — so an opened box stays open while the group grows, while rows are inserted above it, and across model resets.
 

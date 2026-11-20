@@ -185,7 +185,7 @@ const r = await launch('rows', {
     `${W} .row--system@7900`,
   ].join(';;'),
   ROTARIS_CAPTURE_INSPECT_AT: [
-    `${W} .row__time@1500`, `${W} .row__attribution@1500`, `${W} .row@1500`, `${W} .row__bar@1500`,
+    `${W} .row__time@1500`, `${W} .row__attribution@1500`, `${W} .row@1500`, `${W} .row__bar@1500`, `${W} .transcript__slot > .row > .row__grid > .row__main@1500`,
     `${G} [data-testid="group-header"]@5000`, `${G} [data-testid="row-group"]@5000`,
     `${A} [data-testid="group-header"]@5000`, `${A} [data-testid="row-group"]@5000`,
     `${AO} [data-testid="group-members"]@5000`,
@@ -278,32 +278,45 @@ const paragraphs = text(r.probes, `${W} .md__p`);
 expect(paragraphs.some((t) => t.includes('<script>') && t.includes('</script>')), `raw HTML was not shown as text: ${JSON.stringify(paragraphs)}`);
 results.dialect = { markdownBodies: bodiesInWorkspace, dialectBodies, fencedBlocks: pre.length, tableHeaders: [...new Set(headers)], links: links.length, images: [...new Set(images)], taskBoxes: tasks, rawHtmlAsText: true };
 
-// REQ-CHAT-057: the stated geometry, measured from the live layout.
+// PD-CHAT-015 (narrowing REQ-CHAT-057): the stated geometry, measured from the live layout. Until 2026-11-20 this read
+// a 52 px timestamp column, a 112 px role column and a 2 px continuation bar; what stands instead is ONE left edge —
+// every heading starts at the same x, every row's content at the same x one step in from it — with the timestamp at
+// the END of the heading's line, and no bar at all.
 const times = inspect(r.log, 1500, `${W} .row__time`);
 const attribution = inspect(r.log, 1500, `${W} .row__attribution`);
 const rowRects = inspect(r.log, 1500, `${W} .row`);
 const bars = inspect(r.log, 1500, `${W} .row__bar`);
-expect(times && times.matches.length > 0, 'no timestamp column was measured');
-const timeWidths = [...new Set(times.matches.map((m) => Math.round(m.rect.width)))];
-const roleWidths = [...new Set(attribution.matches.map((m) => Math.round(m.rect.width)))];
+const mains = inspect(r.log, 1500, `${W} .transcript__slot > .row > .row__grid > .row__main`);
+expect(times && times.matches.length > 0, 'no timestamp was measured');
+expect(attribution && attribution.matches.length > 0 && mains && mains.matches.length > 0, 'no heading or no content column was measured');
+// "One edge" is read to 2 px: a system notice's own 2 px rule stands where another row's 1 px border does, so its
+// heading starts a pixel further in, and nothing else may differ.
+const lefts = (found) => [...new Set(found.matches.map((m) => Math.round(m.rect.x)))].sort((x, y) => x - y);
+const spread = (xs) => xs[xs.length - 1] - xs[0];
+const headingLefts = lefts(attribution);
+const contentLefts = lefts(mains);
+expect(spread(headingLefts) <= 2, `the headings started at ${JSON.stringify(headingLefts)}, not at one left edge`);
+expect(spread(contentLefts) <= 2, `the rows' content started at ${JSON.stringify(contentLefts)}, not at one left edge`);
+const inset = contentLefts[0] - headingLefts[0];
+expect(inset === 20, `the content stood ${inset} px in from the heading's edge, not the language's 20 px step (--rt-space-5)`);
+const drawnTimes = times.matches.filter((m) => m.text !== '');
+const timeEnds = [...new Set(drawnTimes.map((m) => Math.round(m.rect.x + m.rect.width)))].sort((x, y) => x - y);
+expect(drawnTimes.length > 0 && spread(timeEnds) <= 2, `the timestamps ended at ${JSON.stringify(timeEnds)} — they are not all at the heading line's end`);
+expect(drawnTimes.every((m) => m.rect.x > contentLefts[0] + 200), 'a timestamp was not at the end of its heading line');
 const minRowHeight = Math.min(...rowRects.matches.map((m) => m.rect.height));
-expect(timeWidths.length === 1 && timeWidths[0] === 52, `the timestamp column measured ${JSON.stringify(timeWidths)} px, not 52`);
-expect(roleWidths.length === 1 && roleWidths[0] === 112, `the role column measured ${JSON.stringify(roleWidths)} px, not 112`);
 expect(minRowHeight >= 16 && minRowHeight <= 22, `the compact one-line row measured ${minRowHeight} px; PD-CHAT-003 expects its content line`);
 expect(rasterSlots.length > 0, 'the Workspace yielded no bound transcript slots for the rasterization check');
 expect(rasterSlots.every((slot) => slot.willChange === 'auto'), `Workspace slots requested persistent compositor promotion: ${JSON.stringify(rasterSlots)}`);
 expect(rasterSlots.every((slot) => slot.transform !== 'none'), `Workspace slots lost their recycler coordinate transform: ${JSON.stringify(rasterSlots)}`);
 const fontSize = times.matches[0].attrs.class.includes('mono');
 expect(fontSize, 'the timestamp is not drawn in the monospace stack');
-// Attribution on the first row of a block only; a continuation shows the 2 px persona bar instead.
-const barWidths = [...new Set((bars?.matches ?? []).map((m) => Math.round(m.rect.width)))];
-expect(bars && bars.matches.length > 0, 'no continuation row drew the persona gutter bar (REQ-CHAT-057)');
-expect(barWidths.length === 1 && barWidths[0] === 2, `the persona bar measured ${JSON.stringify(barWidths)} px, not 2`);
+// Attribution on the first row of a block only (REQ-CHAT-057, untouched); a continuation draws nothing in its place.
+expect((bars?.matches ?? []).length === 0, `${bars?.matches?.length} continuation bars were drawn; PD-CHAT-015 draws none`);
 const roleCount = text(r.probes, `${W} .row__role`).length;
 const rowCount = text(r.probes, `${W} .row`).length;
 expect(roleCount < rowCount, `every row drew attribution (${roleCount} of ${rowCount}); continuation rows must not`);
 expect(text(r.probes, `${W} [data-testid="row-task"]`).includes('helper'), 'the task line did not name the row\'s task');
-results.geometry = { timestampColumnPx: timeWidths[0], roleColumnPx: roleWidths[0], minRowHeightPx: Math.round(minRowHeight), personaBarPx: barWidths[0], rows: rowCount, attributionRows: roleCount, continuationBars: bars.matches.length };
+results.geometry = { headingLeftPx: headingLefts, contentLeftPx: contentLefts, contentInsetPx: inset, timestampEndPx: timeEnds, minRowHeightPx: Math.round(minRowHeight), continuationBars: 0, rows: rowCount, attributionRows: roleCount };
 results.rasterization = { boundSlots: rasterSlots.length, defaultWillChange: true, transformedSlots: true };
 
 // REQ-CHAT-060: the four outcomes, and a glyph already in the text drawn once.
@@ -391,7 +404,9 @@ const plain = parts.filter((p) => !p.marked);
 // Anti-vacuity, both ways: the line must actually hold a failure, and must actually hold facts that are not one.
 // Without these the assertions below pass on a line that states nothing, which is a finding and not a proof.
 expect(marked.length === 1 && marked[0].text === '1 failed', `the line's failure facts read ${JSON.stringify(marked)}`);
-expect(plain.length >= 6, `the line drew only ${plain.length} facts that state no failure, so "everything else keeps its colour" is untested`);
+// PD-CHAT-004 revision 4: the line draws `Thought ×2 · 17s`, `Read 4 files`, `Searched 1 time · 1 failed` — four facts that state
+// no failure, where it drew seven while the `ok` counts and the token figure were drawn too.
+expect(plain.length >= 4, `the line drew only ${plain.length} facts that state no failure, so "everything else keeps its colour" is untested`);
 expect(colours?.reasoningSegments >= 1, `the line held ${colours?.reasoningSegments} reasoning segments, so "reasoning is never coloured as failed" is untested`);
 const failColour = marked[0].colour;
 const sameAsFail = plain.filter((p) => p.colour === failColour);
@@ -416,15 +431,15 @@ const now = text(r.probes, `${A} [data-testid="activity-now"]`);
 expect(now.length === 1 && now[0] === 'running…', `the in-flight activity word read ${JSON.stringify(now)}`);
 const preview = text(r.probes, `${A} .tool__preview`);
 expect(preview.some((line) => line.includes('bash pnpm test')), `the in-flight call's text was not on the preview line: ${JSON.stringify(preview)}`);
-// (g) Expanded: ONE continuous rule in the agent's persona colour, the members hanging from it, each keeping
-//     its own timestamp and drawing no bar of its own. C's contribution, measured rather than asserted.
+// (g) Expanded — PD-CHAT-004 revision 4: the members stand ONE step in from the line and hang from no rule, each
+//     keeping its own timestamp and drawing no bar of its own. Until 2026-11-20 this measured a 2 px rule in the
+//     persona's colour; the reading is kept, and what it must now read is no rule and one 16 px step.
 const rail = evalAt(r.log, 'activityRail');
 const railWidth = Number.parseFloat(String(rail?.activityRail ?? '0'));
-expect(railWidth >= 2, `the expanded run's rule measured ${JSON.stringify(rail?.activityRail)}, not the 2 px continuous rail`);
-// It is ONE rule, in the agent's persona colour: every member hangs from this single element and none draws a
-// bar of its own, which is the difference between a continuous line and a dashed column of per-row borders.
-expect(rail?.memberBars === 0, `${rail?.memberBars} members drew a persona bar of their own beside the continuous rule`);
-expect(rail?.members === 7, `the rule spanned ${rail?.members} members, not the run's 7`);
+expect(railWidth === 0, `the expanded run drew a ${JSON.stringify(rail?.activityRail)} rule; PD-CHAT-015 draws none`);
+expect(Number.parseFloat(String(rail?.railPad ?? '0')) === 16, `the members stood ${JSON.stringify(rail?.railPad)} in from their line, not one 16 px step`);
+expect(rail?.memberBars === 0, `${rail?.memberBars} members drew a persona bar of their own`);
+expect(rail?.members === 7, `the expanded run held ${rail?.members} members, not the run's 7`);
 const openMembers = text(r.probes, `${AO} [data-testid="group-members"] .row`);
 expect(openMembers.length === 7, `expanding the run revealed ${openMembers.length} members, not 7`);
 const memberTimes = text(r.probes, `${AO} [data-testid="group-members"] .row__time`).filter((t) => t !== '');
@@ -481,24 +496,22 @@ expect(weaveSegments.length === 4, `the two lines carried ${weaveSegments.length
 // PD-CHAT-004 rev. 2: each agent thought twice with tool calls BETWEEN the two, and each line states that as ONE
 // reasoning segment carrying the totals. Revision 1 drew `reasoning ×1 · … · reasoning ×1`, which is the growth
 // the owner's screenshot showed. The families themselves still differ per agent, so nothing was merged across them.
-expect(weaveSegments.filter((t) => /^reasoning ×2 · /.test(t)).length === 2,
+// PD-CHAT-004 revision 4: the line DRAWS what was done — `Thought ×2 · <S>s`, `Read 3 files`, `Searched 3 times · 1 running`.
+expect(weaveSegments.filter((t) => /^Thought ×2 · /.test(t)).length === 2,
   `the two split thinking runs were not each stated as one segment with totals: ${JSON.stringify(weaveSegments)}`);
-expect(weaveSegments.some((t) => /^reading ×3 /.test(t)) && weaveSegments.some((t) => /^searching ×3 · 2 ok · 1 running/.test(t)),
+expect(weaveSegments.some((t) => /^Read 3 files/.test(t)) && weaveSegments.some((t) => /^Searched 3 times · 1 running/.test(t)),
   `the per-agent families or the in-flight word did not survive the fold: ${JSON.stringify(weaveSegments)}`);
 const weave = evalAt(r.log, 'interleave')?.interleave ?? [];
 expect(weave.length === 2, `the live layout reported ${weave.length} lines, not 2`);
 const [parentLine, childLine] = weave;
-// (a) PD-CHAT-005: the delegated agent's rows are indented one step, and the root's are not. Measured from
-//     the live boxes, so a rule that did not apply cannot pass by being declared.
+// (a) PD-CHAT-015 / PD-CHAT-005 revision 2: NO row is indented by its agent's depth. Until 2026-11-20 the delegated
+//     agent's line stood one 16 px step in; the two lines now start at one left edge, measured from the live boxes.
 expect(parentLine.pad === '0px' || parentLine.pad === '', `the root agent's line was indented by ${parentLine.pad}`);
-expect(childLine.depth === '1', `the delegated agent's line published depth ${JSON.stringify(childLine.depth)}, not 1`);
-expect(Number.parseFloat(childLine.pad) === 16, `the delegated agent's line indented by ${childLine.pad}, not the language's 16 px step`);
-expect(childLine.roleLeft - parentLine.roleLeft === 16, `the two role labels sat ${childLine.roleLeft - parentLine.roleLeft} px apart, not one 16 px step`);
-// (b) REQ-CHAT-057's columns are UNTOUCHED by the indent — it moves the grid, it does not resize it. The
-//     movement is the directive's fourth declared cost, so it is measured rather than assumed: the child's
-//     timestamp starts one step right of the parent's, which is what makes the time gutter a stepped column.
-expect(parentLine.timeWidth === childLine.timeWidth, `the indent resized the timestamp column: ${parentLine.timeWidth} vs ${childLine.timeWidth}`);
-expect(childLine.timeLeft - parentLine.timeLeft === 16, `the timestamps stepped by ${childLine.timeLeft - parentLine.timeLeft} px, not the one step PD-CHAT-005 declares`);
+expect(childLine.pad === '0px' || childLine.pad === '', `the delegated agent's line was indented by ${childLine.pad}; no row is indented by depth`);
+expect(childLine.depth === '', `the delegated agent's line published depth ${JSON.stringify(childLine.depth)}; none is published`);
+expect(childLine.roleLeft === parentLine.roleLeft, `the two role labels sat ${childLine.roleLeft - parentLine.roleLeft} px apart, not at one left edge`);
+// (b) The timestamps end at one edge: the end of each heading's line.
+expect(parentLine.timeLeft + parentLine.timeWidth === childLine.timeLeft + childLine.timeWidth, `the two timestamps ended ${(childLine.timeLeft + childLine.timeWidth) - (parentLine.timeLeft + parentLine.timeWidth)} px apart`);
 // (c) PD-CHAT-005: the role label carries the persona's own colour, and the two agents differ in it.
 expect(parentLine.ink && childLine.ink && parentLine.ink !== childLine.ink,
   `the two agents' role labels were drawn in the same ink: ${JSON.stringify([parentLine.ink, childLine.ink])}`);

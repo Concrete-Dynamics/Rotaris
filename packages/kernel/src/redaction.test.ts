@@ -30,6 +30,23 @@ describe('kernel — redaction (REQ-TOOLS-171/172, REQ-EVENTS-060..063)', () => 
     expect(redact('tasks_done')).toBe('tasks_done');
   });
 
+  it('REQ-EVENTS-060: PEM blocks are read leftmost opening to first closing, in linear time', () => {
+    // The reading the single lazy expression gave, on the shapes that distinguish the two.
+    const b = '-----BEGIN X-----';
+    const e = '-----END X-----';
+    const masked = `${b}\n***\n${e}`;
+    expect(redact(`${b}one${e} mid ${b}two${e} tail`)).toBe(`${masked} mid ${masked} tail`);
+    expect(redact(`${b}${b}in${e}${e}`)).toBe(`${masked}${e}`);
+    expect(redact(`${e}${b}body`)).toBe(`${e}${b}body`);
+    expect(redact(`${b}a${e}${b}`)).toBe(`${masked}${b}`);
+    expect(redact(`${b}${e}`)).toBe(masked);
+    expect(redact(`-----BEGIN a-b-----x${e}`)).toBe(`-----BEGIN a-b-----x${e}`);
+    // Openings with no closing: quadratic for the lazy expression, one pass here.
+    const started = performance.now();
+    expect(redact(`${b}a`.repeat(50_000))).toHaveLength(900_000);
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
   it('REQ-EVENTS-060: URL userinfo password and PEM body', () => {
     expect(redact('git clone https://bob:hunter2@example.com/r.git')).toBe('git clone https://bob:***@example.com/r.git');
     const pem = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\nkqhkiG9w0BAQEF\n-----END PRIVATE KEY-----';

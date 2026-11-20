@@ -4,7 +4,8 @@
 
 ### PD-CHAT-004 — an agent's uninterrupted work draws as one activity line that updates in place
 
-*Revision 3 (2026-09-15, [R-029](../requests.md#r-029)) — **the line's colour**, below. It was raised the
+*Revision 4 (2026-11-20, [R-109](../requests.md#r-109)) — **what the line draws, and how its members stand**, at the
+foot. Revision 3 (2026-09-15, [R-029](../requests.md#r-029)) — **the line's colour**, below. It was raised the
 day before revision 2 and reached `main` after it, so it takes the next free revision under the rule the
 `R-016` collision settled: the one that lands first keeps its number. Revision 2, 2026-09-16
 ([R-025](../requests.md#r-025)) — the run's boundary and the segment's shape. Revision 1 (2026-09-15,
@@ -151,10 +152,30 @@ is that the failure is now a smaller mark — two words rather than a line — s
 transcript for a red line will not find it as fast. That is the trade: precision over salience, on a
 surface that now has somewhere precise to put it.
 
+**What the line draws, and how its members stand — revision 4.** The line SHALL DRAW each tool segment as what was
+done — "Read 4 files", "Edited 2 files", "Searched 3 times", "Ran 2 commands" for REQ-CHAT-064's four activity words,
+and `<name> ×N` for a tool that table does not name — followed only by the counts a reader has to act on: `N failed`,
+`N blocked`, `N running`. A segment whose calls all succeeded states no count. A reasoning segment draws "Thought"
+(`Thought ×N` for several) and its seconds. The string the line **copies as** and is **described by** to assistive
+technology is unchanged — `reading ×4 · 3 ok · 1 failed`, `reasoning ×N · <S>s · ~<T> tok` — so the `ok` count and the
+token figure are still stated, where they are asked for. The expanded members SHALL stand one step in from the line
+and SHALL NOT hang from a rule: [`PD-CHAT-015`](pd-chat-015.md#pd-chat-015) gives every row one left edge.
+
+> *Revisions 1 to 3 said, and no longer govern:* a tool segment "reads `<family> ×N` followed by the per-outcome counts
+> of REQ-CHAT-065 — `3 ok`, `1 failed`", a reasoning segment "reads `reasoning ×N · <S>s · ~<T> tok`", and the members
+> are revealed "hanging from a **single continuous rule in the agent's persona colour** that spans the whole revealed
+> run".
+>
+> **Why, 2026-11-20.** The owner could not keep track of a live run. A line reading `reading ×6 · 5 ok · 1 failed ·
+> reasoning ×2 · 8s · ~1090 tok` asks the reader to decode a notation to learn that six files were read and one read
+> failed; and the rule, with the padding inside it, was one of the two things that narrowed the text of an expanded
+> run to 246 px of a 719 px column.
+
 > **Narrows:** REQ-CHAT-046, REQ-CHAT-062, REQ-CHAT-064, REQ-CHAT-065
 > **Extends:** REQ-CHAT-067
 
 *Raised by the owner, 2026-09-15; logged as [R-017](../requests.md#r-017) and chosen from four drawn
 approaches as [R-019](../requests.md#r-019). **Revised** at the owner's request, 2026-09-16; logged as
 [R-025](../requests.md#r-025). Revised again, 2026-09-15 and landed after it; logged as
-[R-029](../requests.md#r-029).*
+[R-029](../requests.md#r-029). Revised a fourth time for the transcript's redesign, 2026-11-20; logged as
+[R-109](../requests.md#r-109).*

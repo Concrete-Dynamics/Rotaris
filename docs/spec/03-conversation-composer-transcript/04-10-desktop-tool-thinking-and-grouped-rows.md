@@ -54,6 +54,10 @@ Part 4 of 7 of [domain 03](../03-conversation-composer-transcript.md), which ind
   > drawn on the `N failed` and `N blocked` counts inside the segment that holds them, and nothing else
   > on the line changes hue. A tool row drawn as its own row is unaffected and REQ-CHAT-060's colouring
   > governs it in full. The text above states the behavioural target and is kept for that reason.
+  > *`PD-CHAT-004` revision 4, 2026-11-20:* the line DRAWS each segment as what was done ("Read 4 files") and only the
+  > counts that failed, were blocked or are running; the string above is still what the line copies as and is
+  > described by. The members stand one step in and hang from no rule.
+
 - **REQ-CHAT-066** — The structured-questions tool row MUST never fold into a group, and an unsettled live terminal row MUST never fold into a group (its live preview must stay visible). Incremental updates to grouped transcripts MUST remain incremental, refusing (and falling back to a full refresh) only when the update and the view describe different transcripts.
 - **REQ-CHAT-067** — A persisted display setting MUST auto-collapse all but the most recent tool-call/result pair (the last two tool rows; fewer than two → none collapse) to name-plus-chevron; it defaults **off**; per-row manual expansion overrides it; question rows and live terminal rows are exempt; toggling takes effect immediately. The tool-grouping display setting defaults **on**. Both of these are desktop preferences and are stored in the desktop preference store (REQ-CONFIG-405), not in the YAML configuration surface.
   > **Extended by [`PD-CHAT-004`](../../product/directives/pd-chat-004.md#pd-chat-004), 2026-09-15; revised 2026-09-16.** Both settings are
@@ -91,6 +95,10 @@ Part 4 of 7 of [domain 03](../03-conversation-composer-transcript.md), which ind
   > header above is unchanged and stays the place the child's task is read in full. The directive
   > makes the same parent/child relation visible without selecting the child, by indenting that
   > agent's rows one step per level.
+  > **Extended by [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015), 2026-11-20.** The header above an
+  > agent's own transcript is untouched. The directive adds the same category drawn in the transcript of the agent
+  > that delegated: one thread line per delegated agent, stating its task, its state and the latest thing it did.
+
 - **REQ-CHAT-069** — A transcript scope toggle MUST switch between "All activity" and "This task". Filtering keeps rows of kinds user, system, question, approval, and verifier (run-owned) plus the selected agent's rows; verifier rows MUST never be filtered out per agent. The toggle MUST name the agent "This task" refers to and show that agent's state and its live elapsed wall-clock time (REQ-MONITOR-111), so the reader can tell whose output is being shown without leaving the transcript. With no agent selected, "This task" MUST be unavailable with that as its stated reason rather than filtering the transcript to nothing.
   > **Extended by [`PD-CHAT-005`](../../product/directives/pd-chat-005.md#pd-chat-005), 2026-09-16.** The scope
   > toggle above is unchanged and remains the way to read one agent alone. The directive addresses
@@ -105,6 +113,12 @@ Part 4 of 7 of [domain 03](../03-conversation-composer-transcript.md), which ind
   > never a stream; the text above still governs in full, and the directive adds behaviour beside it.
 
 ### 11. Desktop Transcript Scrolling, Tail-Follow, and Search
+  > **Narrowed by [`PD-CHAT-015`](../../product/directives/pd-chat-015.md#pd-chat-015), 2026-11-20.** The filter — the
+  > run-owned kinds plus the selected agent's rows, verifier rows never filtered per agent — and the duty to name the
+  > agent and show its state and live elapsed time still govern, and "All activity" keeps its name. The two-option
+  > toggle does not: the scope is a row of tabs — "Run", one per agent, "All activity" — an agent's tab being "This
+  > task" for that agent, and the default is the run's own conversation with each delegated agent as one thread line.
+  > "This task" as a label and the no-agent sentence are displaced; with no agent selected the transcript is the run's.
 
 - **REQ-CHAT-070** — The transcript MUST be in exactly one of two states, following the tail or not, and MUST be following whenever its scrollbar rests at its maximum. While following, the transcript MUST show a border treatment that is absent while not following, and its accessible description MUST state which of the two states is current, so the distinction is available without seeing the border. Only movement the reader causes may change the state; keyboard scrolling re-derives it, while scrolls the application performs itself — pinning to the bottom, restoring an anchor, jumping to a search match — MUST leave it unchanged. After the set of rows changes, the reader's position MUST be restored by locating the anchored row again, never by re-applying a stored pixel offset. The accessible description MUST convey which of the two states is current and, while not following, that new output is arriving out of view; its wording is left to the implementation, provided the two states are never described by the same text.
   > **Narrowed by [`PD-SHELL-017`](../../product/directives/pd-shell-017.md#pd-shell-017), 2026-11-18.** The border treatment while following is one edge: the transcript's lower edge, at the reading measure.

@@ -47,11 +47,10 @@ export interface TranscriptPaneProps {
    */
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
   readonly questionAgent?: string | undefined;
-  /**
-   * PD-CHAT-005: how deep a named agent sits in the delegation tree, for the row's indentation. The view above
-   * holds the tree (REQ-MONITOR-036/037); the pane holds none and asks. Absent leaves every row at depth 0.
-   */
-  readonly agentDepth?: ((name: string, persona: string) => number) | undefined;
+  /** PD-CHAT-015: a thread line's live state by agent name, and what pressing one does. The view above holds the agents; the pane holds none and asks. */
+  readonly threadState?: ((name: string) => string | null) | undefined;
+  readonly onOpenThread?: ((name: string) => void) | undefined;
+  readonly taskLabel?: ((name: string) => string | null) | undefined;
   /** REQ-CHAT-165: fetch the next older span. Resolves false when the load FAILED, which a reader must be able to tell from having reached the oldest row. */
   readonly onPageOlder?: ((beforeIndex: number) => Promise<boolean>) | undefined;
   /** REQ-CHAT-165: the first recorded row is among those held, so there is nothing older to fetch. */
@@ -91,7 +90,7 @@ const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activ
 
 export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const {
-    rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, agentDepth,
+    rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, threadState, onOpenThread, taskLabel,
     onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row, onOpenTrailer,
     showReasoning = false, autoCollapseTools = false, onOpenLink, onReadAttachment, onAcknowledge, nowMs = 0,
   } = props;
@@ -281,8 +280,8 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     attachmentUrl: (attachment) => attachmentBodies.get(attachment.digest) ?? null,
     memberExpanded: (key) => expanded.has(key),
     toggleMember: (key) => toggle(key, expanded.has(key)),
-    agentDepth,
-  }), [showReasoning, autoCollapseTools, running, live, onOpenLink, onOpenTrailer, terminalHost, attachmentBodies, expanded, toggle, agentDepth]);
+    threadState, openThread: onOpenThread, taskLabel,
+  }), [showReasoning, autoCollapseTools, running, live, onOpenLink, onOpenTrailer, terminalHost, attachmentBodies, expanded, toggle, threadState, onOpenThread, taskLabel]);
 
   // Whether the first row's slot draws something above its row: the start marker, or the notice of a page that failed.
   const slotLead = reachedOldest || paging === 'failed';

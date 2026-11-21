@@ -38,7 +38,9 @@ const GLOBAL = [
   '# global configuration — the comment header must survive every write',
   'models:',
   '  scripted: { provider: scripted, model_id: scripted }   # the verification client',
-  '  other: { provider: scripted, model_id: other }',
+  // REQ-CONFIG-332: a model that offers no reasoning level draws its reasoning control disabled, so `other` declares
+  // the level the models scenario chooses.
+  '  other: { provider: scripted, model_id: other, reasoning_effort_map: { high: high } }',
   'small_model: scripted',
   'medium_model: scripted',
   'large_model: scripted',

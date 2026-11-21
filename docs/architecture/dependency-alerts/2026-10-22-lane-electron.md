@@ -58,7 +58,7 @@ All of it ran on Linux x86_64 with Node 26.8.1 and pnpm 11.9.0.
   - `exit-trace-proof`, 35 of 37: after the proof's `SIGSEGV` to the renderer, main wrote no `RENDERER GONE` line. It
     failed the same two checks on untouched `b0d1b3ff` under Electron 44.1.1, run alone, and again on this tree. The
     new note is
-    [`exit-trace-proofs-renderer-crash-writes-no-renderer-gone-line-on-a-linux-host.md`](../../defects/exit-trace-proofs-renderer-crash-writes-no-renderer-gone-line-on-a-linux-host.md).
+    [`exit-trace-proofs-renderer-crash-writes-no-renderer-gone-line-on-a-linux-host.md`](../../archive/defects/exit-trace-proofs-renderer-crash-writes-no-renderer-gone-line-on-a-linux-host.md).
 - **A cold rebuild against 44.3.0.** `better-sqlite3` 13.0.3 and `node-pty` 1.1.0 were copied to a scratch project
   without their `build/` and `prebuilds/`. Both were compiled through `@electron/rebuild` 4.2.0's API with `beforeBuild`'s
   own options (`electronVersion: '44.3.0'`, `buildFromSource`, `force`, `useCache: false`, `mode: 'sequential'`,

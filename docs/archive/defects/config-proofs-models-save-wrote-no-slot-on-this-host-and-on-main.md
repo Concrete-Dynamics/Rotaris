@@ -1,5 +1,15 @@
 ## config-proof's models save wrote no slot, on this host and on `main`
 
+## Outcome: repaired 2026-11-21 (R-119's branch, `feat/r-117-web-search-setup`)
+
+The harness, not the product. Since REQ-CONFIG-332's offered levels (2026-11-08), a model offers reasoning levels
+only from its `reasoning_effort_map` or its catalogue capability record; the proof's `other` model declared neither, so
+its reasoning control was drawn disabled with "Provider default" alone, as REQ-CONFIG-332 says, and no level was saved.
+The capture seam's select step set the value on the disabled `<select>` anyway and logged `chosen`. The fixture's
+`other` now declares `reasoning_effort_map: { high: high }`, and the seam (`apps/desktop/src/main/capture/seams.ts`)
+answers `disabled` or `no such option` instead of `chosen` when nothing could be chosen. `pnpm config-proof` green on
+this host, 2026-11-21.
+
 `pnpm config-proof --skip-build` stops at its second scenario, `models`, on this Linux host:
 
 ```
@@ -21,7 +31,7 @@ control was driven — and the workspace file read after the launch ended holds 
 alone and the host otherwise idle. It is therefore not load-dependent and not the branch's.
 
 This is the same proof and the same shape as
-[config-proof's runtime-save launch read no written key under load, and passed alone](config-proofs-runtime-save-launch-read-no-written-key-under-load-and-passed-alone.md),
+[config-proof's runtime-save launch read no written key under load, and passed alone](../../defects/config-proofs-runtime-save-launch-read-no-written-key-under-load-and-passed-alone.md),
 which is the `runtime-save` scenario and passed alone on its re-run; this one is the `models` scenario and did not. The
 two are kept apart because the earlier note's own open question — whether the write had not landed when the capture ended
 the launch — is answered differently here: the scenario's Save is pressed well inside the capture's window, and the file

@@ -1,5 +1,14 @@
 ## compression-proof never clicks "Pop out" on Linux and goes red alone
 
+## Outcome: repaired 2026-11-21 (R-119's branch, `feat/r-117-web-search-setup`)
+
+The harness, not the product. PD-SHELL-017 (R-107) moved the shown agent's Steer, Pop out and Cancel out of
+`.inspector__body` into the inspector's foot (`packages/ui/src/Inspector.tsx`), so the click step's
+`.inspector__body:not(.inspector__body--empty) .inspector__actions .btn` matched nothing; the capture ended before the
+step's 60 s bound, so the log said neither `clicked` nor `never matched`. The step now names `.inspector__foot
+.inspector__actions .btn`, which is drawn only while an agent is shown. `pnpm compression-proof` green on this host
+(Linux, X11, Node 24.18.0), 2026-11-21.
+
 `pnpm compression-proof` ends red at `apps/desktop/scripts/compression-proof.mjs:278`, "the run-level agent was never
 popped out of the inspector": the launch's log holds no `clicked "Pop out"` line. Measured 2026-11-20 on Linux 7.0
 (X11 session forced, Node 24.18.0), the built app of `origin/main` at `644c73ef`, with `--skip-build` after one

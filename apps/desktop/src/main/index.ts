@@ -16,7 +16,7 @@ import { createLibraryRevision } from './library.js';
 import { everyHandlerThrows, startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
-import { findExecutable, windowsLaunchOf, requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
+import { findExecutable, fixedLaunchOf, requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
 import { createImprovementCoordinator } from './improvements.js';
@@ -372,12 +372,11 @@ async function main(): Promise<void> {
    */
   const claudeCodeInstalled = (): boolean => findExecutable('claude', process.env) !== null;
   const claudeCodeState = (): Promise<ReturnType<typeof localToolStateOf>> => new Promise((resolve) => {
-    const target = windowsLaunchOf('claude', ['auth', 'status'], process.env);
+    const target = fixedLaunchOf('claude', ['auth', 'status'], process.env);
     const env = { ...process.env };
     delete env['CLAUDECODE'];
     delete env['CLAUDE_CODE_ENTRYPOINT'];
-    // The command is a name written here, never one read from the environment (`ComSpec`): CodeQL js/indirect-command-line-injection.
-    execFile(target.windowsVerbatimArguments ? 'cmd.exe' : 'claude', target.args, { env, timeout: 15_000, windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) }, (error, stdout) => {
+    execFile(target.command, target.args, { env, timeout: 15_000, windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) }, (error, stdout) => {
       const text = String(stdout).trim();
       resolve(localToolStateOf(text.startsWith('{') ? text : error && (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : '{}'));
     });

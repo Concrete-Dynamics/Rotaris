@@ -133,6 +133,20 @@ const listings = new Map<string, { readonly mtimeNs: bigint; readonly names: Rea
  * arguments passed verbatim, the way ADR-0015's hook children already reach the interpreter. Any other command is
  * returned unchanged. Pure: the caller spawns.
  */
+/**
+ * How a FIXED command line is started when nothing of it may come from the environment: the tool by its own name, and
+ * — only where that name resolves to a Windows command shim, which the command interpreter alone can run — `cmd.exe`
+ * by name with the same name and arguments on its line. The search path decides WHETHER the shim form is used and
+ * contributes no text to what is run: neither the interpreter (`ComSpec`) nor the shim's location is read into the
+ * command (CodeQL js/indirect-command-line-injection). The caller's arguments are its own to keep free of the environment.
+ */
+export function fixedLaunchOf(name: string, args: readonly string[], env: Readonly<Record<string, string | undefined>>, platform: NodeJS.Platform = process.platform): { command: string; args: string[]; windowsVerbatimArguments?: boolean } {
+  const shim = platform === 'win32' && /\.(cmd|bat)$/i.test(findExecutable(name, env, platform) ?? '');
+  if (!shim) return { command: name, args: [...args] };
+  const quote = (a: string): string => (/[\s"&|<>^()]/.test(a) || a === '' ? `"${a.replace(/"/g, '\\"')}"` : a);
+  return { command: 'cmd.exe', args: ['/d', '/s', '/c', `"${[name, ...args].map(quote).join(' ')}"`], windowsVerbatimArguments: true };
+}
+
 export function windowsLaunchOf(command: string, args: readonly string[], env: Readonly<Record<string, string | undefined>>, platform: NodeJS.Platform = process.platform): { command: string; args: string[]; windowsVerbatimArguments?: boolean } {
   if (platform !== 'win32') return { command, args: [...args] };
   const found = findExecutable(command, env, platform);

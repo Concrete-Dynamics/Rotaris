@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { windowsLaunchOf } from '@rotaris/platform';
+import { fixedLaunchOf } from '@rotaris/platform';
 import type { CliLaunch, CliProcess } from './client.js';
 
 /**
@@ -11,17 +11,14 @@ import type { CliLaunch, CliProcess } from './client.js';
  * the application was started with and run as it is: this product ships no copy of it and changes nothing in it.
  */
 const STDERR_TAIL = 2_000;
-export const WINDOWS_COMMAND_INTERPRETER = 'cmd.exe';
 
 export function launchClaudeCli(l: CliLaunch): CliProcess {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(l.env)) if (v !== undefined) env[k] = v;
-  const target = windowsLaunchOf(l.executable, l.args, env);
-  // What is started is named here and never read from the environment: the tool by its own name, found on the search
-  // path by the system, or — for a Windows command shim, which only the command interpreter can run — `cmd.exe` by name
-  // rather than by whatever `ComSpec` holds (CodeQL js/indirect-command-line-injection).
-  const command = target.windowsVerbatimArguments ? WINDOWS_COMMAND_INTERPRETER : l.executable;
-  const child = spawn(command, target.args, { cwd: l.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
+  // Nothing of the command line comes from the environment (`fixedLaunchOf`): the tool's name is this product's, and the
+  // arguments are the client's flags, the model's name and two file names relative to the working directory.
+  const target = fixedLaunchOf(l.executable, l.args, env);
+  const child = spawn(target.command, target.args, { cwd: l.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
   let stderr = '';
   let exited = false;
   const lines: ((line: string) => void)[] = [];
@@ -60,15 +57,19 @@ export function readClaudeUserSettings(): string | null {
   try { return readFileSync(join(homedir(), '.claude', 'settings.json'), 'utf8'); } catch { return null; }
 }
 
-/** A session's files under `dir`, each owner-only; removed when the session ends. The tool description holds the bridge's bearer. */
+/**
+ * A session's files under `dir`, each owner-only; removed when the session ends. The tool description holds the bridge's
+ * bearer. A file is named RELATIVE to `dir`, which is the process's working directory, so no path read from the
+ * environment (the temporary directory's) is ever part of the command line.
+ */
 export function sessionFiles(dir: string): { write: (kind: 'instructions' | 'tools', text: string) => string; remove: (path: string) => void } {
   return {
     write: (kind, text) => {
       mkdirSync(dir, { recursive: true, mode: 0o700 });
-      const path = join(dir, `${kind}-${randomBytes(8).toString('hex')}.${kind === 'tools' ? 'json' : 'txt'}`);
-      writeFileSync(path, text, { encoding: 'utf8', mode: 0o600 });
-      return path;
+      const name = `${kind}-${randomBytes(8).toString('hex')}.${kind === 'tools' ? 'json' : 'txt'}`;
+      writeFileSync(join(dir, name), text, { encoding: 'utf8', mode: 0o600 });
+      return name;
     },
-    remove: (path) => { rmSync(path, { force: true }); },
+    remove: (name) => { rmSync(join(dir, name), { force: true }); },
   };
 }

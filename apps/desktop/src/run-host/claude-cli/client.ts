@@ -71,7 +71,8 @@ export interface ClaudeCliOptions {
   /** `~/.claude/settings.json` as text, or null when it is absent (REQ-PROVIDER-048). */
   readonly readUserSettings: () => string | null;
   /**
-   * Writes one of a session's two files — its system text, its tool-server description — and answers the path. Both go
+   * Writes one of a session's two files — its system text, its tool-server description — into `cwd` and answers its name
+   * there. Both go
    * by file because neither survives every platform's command line: the text can be longer than one allows, and the
    * description is JSON.
    */

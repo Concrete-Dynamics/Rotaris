@@ -242,7 +242,7 @@ export interface SlashHost {
    * main, so the refusal "Skills are disabled. Enable them in Settings." comes from the process that read the
    * saved configuration rather than from a projection the composer happens to hold.
    */
-  readonly forceLoadSkill?: ((name: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  readonly forceLoadSkill?: ((name: string) => Promise<{ ok: true; marked?: boolean } | { ok: false; reason: string }>) | undefined;
   /** REQ-CHAT-034: bumped after a rescan or a hand-loaded skill, so the typeable commands list exactly the rescanned set. */
   readonly skillsRevision?: number | undefined;
   /**
@@ -250,7 +250,7 @@ export interface SlashHost {
    * where that requirement's DIRECTORY form stays reachable, since REQ-WORKSPACE-151's chooser cannot offer both
    * on Windows or Linux (OQ-59).
    */
-  readonly loadSkillFile?: ((path: string) => Promise<{ ok: true; name: string } | { ok: false; reason: string }>) | undefined;
+  readonly loadSkillFile?: ((path: string) => Promise<{ ok: true; name: string; marked?: boolean } | { ok: false; reason: string }>) | undefined;
   /**
    * REQ-CHAT-162: `/skills` — the discovered skills listed into the followed session's transcript as one saved
    * system row. Main names the session; the run host writes the row through that session's own writer.

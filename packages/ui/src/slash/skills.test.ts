@@ -102,7 +102,7 @@ describe('registration on the catalogue’s registry', () => {
 });
 
 describe('REQ-WORKSPACE-073 — what invoking a skill command does', () => {
-  const ctxWith = (forceLoadSkill: (name: string) => Promise<{ ok: true } | { ok: false; reason: string }>) => {
+  const ctxWith = (forceLoadSkill: (name: string) => Promise<{ ok: true; marked?: boolean } | { ok: false; reason: string }>) => {
     const notices: string[] = [];
     const ctx = { notify: (t: string) => notices.push(t), forceLoadSkill } as never;
     return { ctx, notices };
@@ -116,6 +116,23 @@ describe('REQ-WORKSPACE-073 — what invoking a skill command does', () => {
     expect(await registry.lookup('alpha')!.run('', ctx)).toEqual({ kind: 'executed' });
     expect(loaded).toEqual(['alpha']);
     expect(notices).toEqual(['Skill loaded for the next prompt: alpha']);
+  });
+
+  it('PD-CHAT-016 clause 4: where the host marked the load in the transcript, no toast repeats it', async () => {
+    const registry = createSlashRegistry();
+    registerSkillCommands(registry, state([row()]));
+    const { ctx, notices } = ctxWith(async () => ({ ok: true, marked: true }));
+    expect(await registry.lookup('alpha')!.run('', ctx)).toEqual({ kind: 'executed' });
+    expect(notices).toEqual([]);
+  });
+
+  it('PD-CHAT-016 clause 4: `/skill <path>` reports through the marker where one was written, else through the toast', async () => {
+    const notices: string[] = [];
+    const ctx = { notify: (t: string) => notices.push(t) } as never;
+    expect(await skillPathCommand(async () => ({ ok: true, name: 'x', marked: true }), () => undefined).run('/p', ctx)).toEqual({ kind: 'executed' });
+    expect(notices).toEqual([]);
+    expect(await skillPathCommand(async () => ({ ok: true, name: 'x' }), () => undefined).run('/p', ctx)).toEqual({ kind: 'executed' });
+    expect(notices).toEqual(['Skill loaded for this session: x']);
   });
 
   it('reports the host’s refusal verbatim and shows no toast', async () => {

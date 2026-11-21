@@ -1,5 +1,6 @@
+import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { SKILLS_GESTURE_REPLY_BOUND_MS, SKILLS_READ_REPLY_BOUND_MS, skillListing, skillListingBody, type SkillsState, type SkillRow } from '@rotaris/contracts';
+import { SKILLS_GESTURE_REPLY_BOUND_MS, SKILLS_READ_REPLY_BOUND_MS, skillListing, skillListingBody, skillLoadMarkerBody, type SkillLoadedBy, type SkillsState, type SkillRow } from '@rotaris/contracts';
 import type { SessionWriter } from '@rotaris/engine';
 import { millis, type Millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
 import {
@@ -572,6 +573,21 @@ export class SkillHost {
   }
 
   /**
+   * PD-CHAT-016 clause 1 — the skill whose `SKILL.md` is exactly `path`, or null. `path` is absolute (the caller resolves
+   * a tool's relative path against its root first); both sides are compared as real paths, so a skill directory reached
+   * through a link is the same skill, and on Windows without regard to case. A read of any other file — a sibling in the
+   * skill's directory, a file with the same name elsewhere — names no skill.
+   */
+  skillAt(workspaceRoot: string, sessionId: string | undefined, path: string): string | null {
+    const wanted = canonicalFile(path);
+    if (wanted === null) return null;
+    for (const r of this.resolved(workspaceRoot, sessionId)) {
+      if (canonicalFile(r.skill.path) === wanted) return r.skill.name;
+    }
+    return null;
+  }
+
+  /**
    * REQ-WORKSPACE-060, 061, 062 — the context units this session's agents receive, in the requirement's
    * order. Called at every agent construction (a getter, not a captured value), so a force-load reaches the
    * next agent built and never retracts one already running (REQ-CONFIG-166).
@@ -660,4 +676,26 @@ export function writeSkillListing(
   const r = writer.appendRow('system', skillListingBody(listing), true);
   if (!r.ok) return { ok: false, code: 'skills.list-failed', reason: 'reason' in r.error ? r.error.reason : r.error.code };
   return { ok: true, count: listing.count, index: r.value.index };
+}
+
+/** A path as the filesystem names it, for comparison; null when it does not exist. */
+function canonicalFile(path: string): string | null {
+  try {
+    const real = realpathSync.native(path);
+    return process.platform === 'win32' ? real.toLowerCase() : real;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * PD-CHAT-016 — the skill-load marker, written as REQ-CHAT-162's listing is: through the session's own writer, so the row
+ * and its `transcript.row` event commit together, every window following the session draws it, and a reopened session or
+ * the trajectory export reads it back. An agent's marker carries the agent's name on the row, as that agent's other rows
+ * do, so its thread shows it; the user's carries none. `true` when the row was written.
+ */
+export function writeSkillLoadMarker(writer: Pick<SessionWriter, 'appendRow'> | undefined, skill: string, by: SkillLoadedBy, persona?: string): boolean {
+  if (writer === undefined) return false;
+  const attribution = by.kind === 'agent' ? { name: by.agent, ...(persona === undefined ? {} : { persona }) } : {};
+  return writer.appendRow('system', skillLoadMarkerBody(skill, by), true, attribution).ok;
 }

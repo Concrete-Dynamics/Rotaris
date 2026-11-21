@@ -102,7 +102,9 @@ function skillCommand(registration: SkillRegistration): SlashCommand {
     description: skillCommandDescription(skill, registration.renamed),
     availability: () => ({ ok: true }),
     /*
-     * REQ-WORKSPACE-073 / REQ-CHAT-034: invoking force-loads the skill for the session and shows the toast;
+     * REQ-WORKSPACE-073 / REQ-CHAT-034: invoking force-loads the skill for the session and says so — by the skill-load
+     * marker the run host wrote into the followed session's transcript, or, where none could be written, the toast
+     * (PD-CHAT-016 clause 4);
      * with skills switched off it fails with "Skills are disabled. Enable them in Settings." and leaves the
      * skill's load mode as it was. The refusal text comes back from the run host, which reads the SAVED
      * configuration — the composer never decides it, so a stale snapshot cannot make the wrong claim.
@@ -114,7 +116,7 @@ function skillCommand(registration: SkillRegistration): SlashCommand {
       try {
         const r = await ctx.forceLoadSkill(skill.name);
         if (!r.ok) return { kind: 'failed', message: r.reason };
-        ctx.notify(skillLoadedToast(skill.name));
+        if (r.marked !== true) ctx.notify(skillLoadedToast(skill.name));
         return { kind: 'executed' };
       } catch (cause) {
         return { kind: 'failed', message: cause instanceof Error ? cause.message : String(cause) };
@@ -211,7 +213,7 @@ export function readWhileMounted(read: () => void, retire: () => void): () => vo
 export const SKILL_COMMAND_NAME = 'skill';
 export const skillLoadUsage = (): string => 'Usage: /skill <path to a SKILL.md file or a directory containing one>';
 
-export function skillPathCommand(load: (path: string) => Promise<{ ok: true; name: string } | { ok: false; reason: string }>, onLoaded: () => void): SlashCommand {
+export function skillPathCommand(load: (path: string) => Promise<{ ok: true; name: string; marked?: boolean } | { ok: false; reason: string }>, onLoaded: () => void): SlashCommand {
   return {
     name: SKILL_COMMAND_NAME,
     description: 'Load a skill from a path for this session',
@@ -226,7 +228,8 @@ export function skillPathCommand(load: (path: string) => Promise<{ ok: true; nam
         // REQ-CHAT-162: a failure surfaces the reason and registers nothing.
         if (!r.ok) return { kind: 'failed', message: r.reason };
         onLoaded();
-        ctx.notify(`Skill loaded for this session: ${r.name}`);
+        // PD-CHAT-016 clause 4: the skill-load marker reports the name; the toast only where none was written.
+        if (r.marked !== true) ctx.notify(`Skill loaded for this session: ${r.name}`);
         return { kind: 'executed' };
       } catch (cause) {
         return { kind: 'failed', message: cause instanceof Error ? cause.message : String(cause) };

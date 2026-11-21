@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { RUN_AGENT_ID, skillListing, skillListingBody, type AgentRecord, type QuestionPrompt, type SkillRow, type TranscriptRow } from '@rotaris/contracts';
+import { RUN_AGENT_ID, skillListing, skillListingBody, skillLoadMarkerBody, type AgentRecord, type QuestionPrompt, type SkillRow, type TranscriptRow } from '@rotaris/contracts';
 import { trailerRows } from './transcript/project.js';
 import {
   compactTask, defaultExpanded, delegationSummary, expansionKey, groupDurationMs, groupSeverity, groupSummary, isLiveTerminalRow,
@@ -410,5 +410,43 @@ describe('rows — REQ-CHAT-162 / REQ-CHAT-076, the `/skills` listing keeps a ba
   it('a listing whose fields hold no URL draws no link at all', () => {
     const body = skillListingBody(skillListing([skill({ description: 'Renders PDFs.' })]));
     expect(drawn(body, () => undefined)).not.toContain('md__link');
+  });
+});
+
+describe('rows — PD-CHAT-016, the skill-load marker', () => {
+  const drawn = (r: TranscriptRow) => renderToStaticMarkup(createElement(TranscriptSurfaceProvider, {
+    value: { showReasoning: false, autoCollapseTools: false, runActive: false, nowMs: 0, openLink: undefined },
+    children: createElement(Row, { display: display(r), expanded: false, onToggle: () => undefined, match: null }),
+  }));
+
+  it('draws one line — the lead, the name in mono, who loaded it — with its sentence as the title and its layout contract', () => {
+    const body = skillLoadMarkerBody('impeccable', { kind: 'agent', agent: 'Planner' });
+    const markup = drawn(row({ kind: 'system', body, name: 'Planner', persona: 'planner' }));
+    expect(markup).toContain('row--skill-load');
+    expect(markup).toContain('data-testid="skill-load-marker"');
+    expect(markup).toContain('data-skill="impeccable"');
+    expect(markup).toContain('data-by="Planner"');
+    expect(markup).toContain(`title="${body}"`);
+    expect(markup).toContain('skill-load__name mono');
+    expect(markup).toContain('skill-load-marker');
+    expect(markup.replace(/<[^>]+>/g, '')).toContain('Skill loadedimpeccable· by Planner');
+  });
+
+  it('names the user as "you" for a force-load', () => {
+    expect(drawn(row({ kind: 'system', body: skillLoadMarkerBody('pdf', { kind: 'user' }) }))).toContain('data-by="you"');
+  });
+
+  it('any other system row is drawn as before', () => {
+    expect(drawn(row({ kind: 'system', body: 'Context compressed for orchestrator — budget' }))).not.toContain('skill-load');
+  });
+
+  it('stands in its turn: no heading of its own, and the agent\'s next row continues the block', () => {
+    const agent = { name: 'orchestrator', persona: 'orchestrator' };
+    const ds = [
+      display(row({ index: 0, kind: 'agent', body: 'reading the skill', ...agent })),
+      display(row({ index: 1, kind: 'system', body: skillLoadMarkerBody('pdf', { kind: 'agent', agent: 'orchestrator' }), ...agent })),
+      display(row({ index: 2, kind: 'agent', body: 'applying it', ...agent })),
+    ];
+    expect(placements(ds).map((p) => p.blockStart)).toEqual([true, false, false]);
   });
 });

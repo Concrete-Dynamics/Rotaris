@@ -32,7 +32,7 @@ export interface ClearTranscriptControlProps {
    */
   readonly skillsRevision?: number | undefined;
   /** REQ-CHAT-162: `/skill <path>`'s loader, answered by the run host through main. Absent means the command is not offered. */
-  readonly loadSkillFile?: ((path: string) => Promise<{ ok: true; name: string } | { ok: false; reason: string }>) | undefined;
+  readonly loadSkillFile?: ((path: string) => Promise<{ ok: true; name: string; marked?: boolean } | { ok: false; reason: string }>) | undefined;
   /** REQ-CHAT-162: `/skills`, the listing written as one saved system row by the run host. Absent means the command is not offered. */
   readonly listSkills?: (() => Promise<{ ok: true; count: number } | { ok: false; reason: string }>) | undefined;
   readonly onError?: ((reason: string) => void) | undefined;

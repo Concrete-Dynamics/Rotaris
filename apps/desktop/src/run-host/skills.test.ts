@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { FileToolState, grepTool, readFileTool, writeFileTool } from '@rotaris/agent-tools';
@@ -8,7 +8,7 @@ import { parseSkillListing } from '@rotaris/contracts';
 import { readTrajectory, Sessions, withContextUnits, withMcpSection } from '@rotaris/engine';
 import { asSessionId, FakeClock, millis, mintMachineId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import { SKILLS_CONFIGURATION_UNLOADED, SkillHost, SkillsUnloaded, writeSkillListing, type RunSections, type SavedRead, type SkillHostDeps } from './skills.js';
+import { SKILLS_CONFIGURATION_UNLOADED, SkillHost, SkillsUnloaded, writeSkillListing, writeSkillLoadMarker, type RunSections, type SavedRead, type SkillHostDeps } from './skills.js';
 import { dispatch, skillsUnloaded } from './dispatch.js';
 import type { RunHost } from './host.js';
 
@@ -553,6 +553,40 @@ describe("the retrospective's instruction files (PD-LIBRARY-002 revision 2, OQ-2
  * listing written through it, then a SECOND process's resume of the same session reading it back, and the
  * trajectory export (REQ-SESSION-189) carrying it as the `transcript.row` event the append recorded.
  */
+describe('PD-CHAT-016 — which skill a read loaded, and the marker it writes', () => {
+  it('names the skill whose SKILL.md is exactly the path, through a link too, and nothing for a sibling or another file', () => {
+    const t = tree();
+    try {
+      const h = host(t.root, t.home);
+      const file = join(t.root, '.agents', 'skills', 'alpha', 'SKILL.md');
+      expect(h.skillAt(t.root, 's1', file)).toBe('alpha');
+      symlinkSync(join(t.root, '.agents', 'skills', 'alpha'), join(t.root, 'linked'));
+      expect(h.skillAt(t.root, 's1', join(t.root, 'linked', 'SKILL.md'))).toBe('alpha');
+      writeFileSync(join(t.root, '.agents', 'skills', 'alpha', 'notes.md'), 'n\n');
+      expect(h.skillAt(t.root, 's1', join(t.root, '.agents', 'skills', 'alpha', 'notes.md'))).toBeNull();
+      expect(h.skillAt(t.root, 's1', join(t.root, 'missing', 'SKILL.md'))).toBeNull();
+      // A hand-loaded skill is its session's alone.
+      mkdirSync(join(t.root, 'elsewhere', 'by-hand'), { recursive: true });
+      writeFileSync(join(t.root, 'elsewhere', 'by-hand', 'SKILL.md'), '---\nname: by-hand\ndescription: B.\n---\nb\n');
+      expect(h.loadFile(t.root, 's1', join(t.root, 'elsewhere', 'by-hand')).ok).toBe(true);
+      expect(h.skillAt(t.root, 's1', join(t.root, 'elsewhere', 'by-hand', 'SKILL.md'))).toBe('by-hand');
+      expect(h.skillAt(t.root, 's2', join(t.root, 'elsewhere', 'by-hand', 'SKILL.md'))).toBeNull();
+    } finally { t.cleanup(); }
+  });
+
+  it('writes the marker through the writer it is given — the agent named on the row, the user not — and nothing without one', () => {
+    const rows: { kind: string; body: string; settled: boolean; extra: unknown }[] = [];
+    const writer = { appendRow: (kind: string, body: string, settled: boolean, extra: unknown) => { rows.push({ kind, body, settled, extra }); return { ok: true as const, value: { index: 0, kind, settled, body, at: '', ts: '' } }; } };
+    expect(writeSkillLoadMarker(writer as never, 'alpha', { kind: 'agent', agent: 'Planner' }, 'planner')).toBe(true);
+    expect(writeSkillLoadMarker(writer as never, 'alpha', { kind: 'user' })).toBe(true);
+    expect(writeSkillLoadMarker(undefined, 'alpha', { kind: 'user' })).toBe(false);
+    expect(rows).toEqual([
+      { kind: 'system', body: 'Skill loaded: alpha — by Planner', settled: true, extra: { name: 'Planner', persona: 'planner' } },
+      { kind: 'system', body: 'Skill loaded: alpha — by you', settled: true, extra: {} },
+    ]);
+  });
+});
+
 describe('the /skills listing is one saved system row (REQ-CHAT-162)', () => {
   const HOST = mintMachineId('0000000000000000000000000000000c');
   const sessionsFor = (dir: string, pid: number, isProcessAlive: (pid: number) => boolean = () => true) => new Sessions({

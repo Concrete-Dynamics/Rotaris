@@ -495,6 +495,8 @@ export function createRunHost() {
       // read a SKILL.md and its siblings even outside the workspace; writes stay refused by the fence itself.
       // REQ-WORKSPACE-050: from the BASE workspace, never a worktree's effective root.
       skillReadRoots: () => skills.readRoots(ctx.workspaceRoot, ctx.sessionId),
+      // PD-CHAT-016: which catalogued skill, if any, a settled read loaded — from the same BASE-workspace catalog.
+      skillAt: (path) => skills.skillAt(ctx.workspaceRoot, ctx.sessionId, path),
       // ADR-0023 / REQ-SANDBOX-038: the saved files at each fetch call, never the live state; the read's cost logged.
       egress: (workspaceRoot) => {
         const read = egressReader(configDir, workspaceRoot, clocks);

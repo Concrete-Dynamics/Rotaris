@@ -38,7 +38,7 @@ export function skillsCommands(
       if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
       const r = await runHost.request({ kind: 'skills.forceLoad', workspaceRoot: canonicalPath(w.workspace), name: req.name, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(SKILLS_GESTURE_REPLY_BOUND_MS));
       // REQ-WORKSPACE-073: the refusal text is the run host's — "Skills are disabled. Enable them in Settings."
-      return r.kind === 'skills.state' ? { ok: true, value: { name: r.loaded, state: r.state } } : refusal(r, 'The skill could not be loaded');
+      return r.kind === 'skills.state' ? { ok: true, value: { name: r.loaded, state: r.state, ...(r.marked === true ? { marked: true } : {}) } } : refusal(r, 'The skill could not be loaded');
     },
     /*
      * REQ-WORKSPACE-151 — "Load skill file…". With no path the platform's own chooser opens on REQ-SHELL-164's
@@ -59,7 +59,7 @@ export function skillsCommands(
         path = chosen;
       }
       const r = await runHost.request({ kind: 'skills.loadFile', workspaceRoot: canonicalPath(w.workspace), path, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(SKILLS_GESTURE_REPLY_BOUND_MS));
-      return r.kind === 'skills.state' ? { ok: true, value: { cancelled: false, name: r.loaded, state: r.state } } : refusal(r, 'The skill file could not be loaded');
+      return r.kind === 'skills.state' ? { ok: true, value: { cancelled: false, name: r.loaded, state: r.state, ...(r.marked === true ? { marked: true } : {}) } } : refusal(r, 'The skill file could not be loaded');
     },
     /*
      * REQ-CHAT-162 — `/skills`: the listing written into the followed session's transcript as one saved system

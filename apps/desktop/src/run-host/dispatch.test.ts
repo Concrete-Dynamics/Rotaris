@@ -698,8 +698,8 @@ describe('the run host answers workspace.opened before it warms the skill catalo
 
   const asks: readonly { readonly name: string; readonly req: RunHostRequest; readonly answer: Record<string, unknown> }[] = [
     { name: 'skills.read', req: { kind: 'skills.read', workspaceRoot: root }, answer: { kind: 'skills.state' } },
-    { name: 'skills.forceLoad', req: { kind: 'skills.forceLoad', workspaceRoot: root, sessionId: 's1', name: 'alpha' }, answer: { kind: 'skills.state', loaded: 'alpha' } },
-    { name: 'skills.loadFile', req: { kind: 'skills.loadFile', workspaceRoot: root, sessionId: 's1', path: `${root}/.agents/skills/alpha` }, answer: { kind: 'skills.state', loaded: 'alpha' } },
+    { name: 'skills.forceLoad', req: { kind: 'skills.forceLoad', workspaceRoot: root, sessionId: 's1', name: 'alpha' }, answer: { kind: 'skills.state', loaded: 'alpha', marked: true } },
+    { name: 'skills.loadFile', req: { kind: 'skills.loadFile', workspaceRoot: root, sessionId: 's1', path: `${root}/.agents/skills/alpha` }, answer: { kind: 'skills.state', loaded: 'alpha', marked: true } },
     { name: 'skills.list', req: { kind: 'skills.list', workspaceRoot: root, sessionId: 's1' }, answer: { kind: 'skills.listed', count: 1, index: 7 } },
   ];
   for (const ask of asks) {
@@ -722,6 +722,22 @@ describe('the run host answers workspace.opened before it warms the skill catalo
       } finally { close(); }
     });
   }
+
+  it('PD-CHAT-016: a force-load writes its skill-load marker into the followed session, and with no session it marks nothing', async () => {
+    const { host, close } = setup();
+    const rows: { kind: string; body: string; extra: unknown }[] = [];
+    const recording = { ...host, sessions: { writer: () => ({ appendRow: (kind: string, body: string, _settled: boolean, extra: unknown) => { rows.push({ kind, body, extra }); return { ok: true, value: { index: rows.length - 1 } }; } }) } } as unknown as RunHost;
+    try {
+      expect(await dispatch({ kind: 'skills.forceLoad', workspaceRoot: root, sessionId: 's1', name: 'alpha' }, recording)).toMatchObject({ kind: 'skills.state', loaded: 'alpha', marked: true });
+      expect(rows).toEqual([{ kind: 'system', body: 'Skill loaded: alpha — by you', extra: {} }]);
+      // No followed session: nothing can be written, so the composer's toast stands (clause 4).
+      expect(await dispatch({ kind: 'skills.forceLoad', workspaceRoot: root, name: 'alpha' }, recording)).toMatchObject({ kind: 'skills.state', loaded: 'alpha', marked: false });
+      expect(rows).toHaveLength(1);
+      // A refused force-load marks nothing.
+      expect(await dispatch({ kind: 'skills.forceLoad', workspaceRoot: root, sessionId: 's1', name: 'nope' }, recording)).toMatchObject({ kind: 'refused' });
+      expect(rows).toHaveLength(1);
+    } finally { close(); }
+  });
 
   it('a skills request with no warm-up in flight is answered at once', async () => {
     const { host, close } = setup();

@@ -1,5 +1,5 @@
 import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { toIsoUtc, type Clocks, type WallClock } from '@rotaris/kernel';
 import { presetRank, resolvePreset, restrictionsAllow, TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
@@ -11,6 +11,7 @@ import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
 import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
 import { throwOnAbort } from './throw-on-abort.js';
+import { writeSkillLoadMarker } from './skills.js';
 import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
@@ -198,6 +199,11 @@ export interface ToolPortDeps {
    * port, so a rescan governs agents constructed afterwards (REQ-WORKSPACE-069) and leaves built ones alone.
    */
   readonly skillReadRoots?: ((workspaceRoot: string) => readonly string[]) | undefined;
+  /**
+   * PD-CHAT-016 clause 1: the skill whose catalogued `SKILL.md` is exactly this absolute path, or null — the session's
+   * catalog, read per call. Absent (a test, a build with no skill host): no read is a skill's load.
+   */
+  readonly skillAt?: ((path: string) => string | null) | undefined;
   /** ADR-0020: one manager for the run host; null when no shell is present (REQ-TOOLS-104) and the tool is removed. */
   readonly terminal: TerminalManager | null;
   /** ADR-0023 / REQ-SANDBOX-038: the egress policy and `tool_call_timeout`, read from the workspace's SAVED configuration at each fetch call. */
@@ -261,6 +267,34 @@ function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, wa
     open.clear();
   };
   return { sink, close, closed: () => closed };
+}
+
+/** PD-CHAT-016 clause 1: the file tools whose successful read of a `SKILL.md` loads the skill. A shell command does not. */
+const SKILL_LOADING_READS: ReadonlySet<string> = new Set(['read_file', 'haet_read']);
+
+/**
+ * PD-CHAT-016 — the agent's own load of a skill: a `read_file` or `haet_read` call that settled `ok` on exactly a
+ * catalogued `SKILL.md` writes one skill-load marker, once per skill for this port's agent (clause 2: a port is one
+ * agent's for one run, so the set is that agent's in that run). A failed read, any other file and a call settled after
+ * the run closed its sink mark nothing. The tool's path is relative to the root the fence resolves it against.
+ */
+function skillLoadMarking(
+  ctx: Pick<ToolPortContext, 'writer' | 'persona'>,
+  root: string,
+  skillAt: ((path: string) => string | null) | undefined,
+  closed: () => boolean,
+): (o: Parameters<GateSink['toolSettle']>[1], s: Parameters<GateSink['toolSettle']>[2]) => void {
+  const marked = new Set<string>();
+  return (o, s) => {
+    if (skillAt === undefined || closed() || s.status !== 'ok' || s.is_error || !SKILL_LOADING_READS.has(o.tool_name)) return;
+    const raw = o.args['path'] ?? o.args['file_path'];
+    if (typeof raw !== 'string' || raw.trim() === '') return;
+    const skill = skillAt(isAbsolute(raw) ? raw : resolve(root, raw));
+    if (skill === null) return;
+    const key = `${o.agent_name}\u0000${skill}`;
+    if (marked.has(key)) return;
+    if (writeSkillLoadMarker(ctx.writer, skill, { kind: 'agent', agent: o.agent_name }, ctx.persona)) marked.add(key);
+  };
 }
 
 /**
@@ -615,6 +649,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
   const approvals = new PendingApprovals(deps.clocks.timers, { held: quitting });
   const writes = writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn);
+  const markSkillLoad = skillLoadMarking(ctx, root, deps.skillAt, writes.closed);
   const toolHooks = ctx.hooks ?? null;
   const gate = new Gate({
     sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter, quitting,
@@ -628,7 +663,13 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // PD-ORCH-005 clause 9 / REQ-SESSION-031: the gate hands its own registry's list; the column takes the session's whole
     // list (`ctx.pendingApprovalsOfSession`, every port's), so a second agent's approval no longer overwrites the first's
     // (docs/archive/defects/pending-approvals-holds-one-agents-list-when-two-agents-wait-on-approvals.md).
-    sink: { ...writes.sink, pendingChanged: (pending) => writes.sink.pendingChanged(ctx.pendingApprovalsOfSession?.() ?? pending) }, nextSequence: deps.nextSequence,
+    // PD-CHAT-016: a settled read of a catalogued SKILL.md is that skill's load, marked in the transcript after the call's own row.
+    sink: {
+      ...writes.sink,
+      pendingChanged: (pending) => writes.sink.pendingChanged(ctx.pendingApprovalsOfSession?.() ?? pending),
+      toolSettle: (ordinal, o, s) => { writes.sink.toolSettle(ordinal, o, s); markSkillLoad(o, s); },
+    },
+    nextSequence: deps.nextSequence,
     // REQ-SESSION-094: a call that returns after its run ended fires no `post_tool` hook — the run's hooks write into its
     // session, and the run has removed its own attachment (REQ-HOOKS-087).
     hooks: toolHooks ? { preTool: (c) => toolHooks.preTool(c), postTool: (c) => (writes.closed() ? Promise.resolve({ feedback: '' }) : toolHooks.postTool(c)) } : null,

@@ -47,7 +47,8 @@ export interface SlashContext {
    * comes back from the process that read the SAVED configuration, so the composer never decides whether
    * skills are switched off and a stale snapshot cannot make the wrong claim.
    */
-  forceLoadSkill(name: string): Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** `marked`: the load wrote its skill-load marker into the followed session's transcript (PD-CHAT-016 clause 4). */
+  forceLoadSkill(name: string): Promise<{ ok: true; marked?: boolean } | { ok: false; reason: string }>;
 }
 
 export interface SlashCommand {

@@ -701,6 +701,16 @@
 .skill-listing__facts, .skill-listing__label { color: var(--rt-text-tertiary); }
 .skill-listing__description { color: var(--rt-text-secondary); }
 .skill-listing__path { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); overflow-wrap: anywhere; }
+/* PD-CHAT-016 — the skill-load marker: a seam in the turn, not a message. The system notice's rule and nothing heavier
+   — no fill, no radius, no axis colour (loading a skill is not a state of the work). One line at the dense size:
+   `Skill loaded` in the notice's secondary ink, the name in mono at the primary ink and medium weight (it is what the
+   user types; `.skill-listing__name` draws it the same way), `· by …` in the tertiary ink. The line never wraps: the
+   name gives way first, then the agent, each eliding; the lead does not. Its attribution is the `by` clause, so a marker
+   inside a turn draws no heading (`standsInTurn`). Tokens only, no literal geometry. */
+.skill-load { display: flex; align-items: baseline; max-width: none; min-width: 0; white-space: nowrap; overflow: hidden; }
+.skill-load__lead { flex: none; padding-inline-end: var(--rt-space-1); }
+.skill-load__name { flex: 0 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--rt-text); font-weight: var(--rt-weight-medium); }
+.skill-load__by { flex: 0 1 auto; min-width: 0; padding-inline-start: var(--rt-space-1); overflow: hidden; text-overflow: ellipsis; color: var(--rt-text-tertiary); }
 /* PD-CHAT-006: a row still being written draws no animated indicator of its own. The falsified rules, kept beside
    their replacement — there is no replacement, which is the point; the row's own growth says it is being written:
      .row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse …; }

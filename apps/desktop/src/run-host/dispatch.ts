@@ -11,7 +11,7 @@ import { CHECKPOINTS_DEFAULTS, liveStateProblems, type LiveState } from '@rotari
 import { improvementCollectorOf, modelRefOf, retrospectiveOf, thinkingOf } from './configuration.js';
 import { launchSession } from './launch.js';
 import { SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, SKILLS_STILL_DISCOVERING } from '@rotaris/contracts'; // OQ-386 point 1
-import { SKILLS_CONFIGURATION_UNLOADED, SkillsUnloaded, writeSkillListing, type SkillHost, type SkillsWaiter } from './skills.js'; // REQ-CHAT-162, OQ-279
+import { SKILLS_CONFIGURATION_UNLOADED, SkillsUnloaded, writeSkillListing, writeSkillLoadMarker, type SkillHost, type SkillsWaiter } from './skills.js'; // REQ-CHAT-162, OQ-279, PD-CHAT-016
 import { randomUUID } from 'node:crypto';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
 
@@ -84,6 +84,17 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     sessionActions,
     terminalHost,
   } = h;
+  /**
+   * PD-CHAT-016 — the user's force-load (a skill's command, `/skill <path>`, Settings' "Load skill file…"), marked in the
+   * session the window follows through that session's own writer. False when no session is followed or loaded: the
+   * composer then shows REQ-WORKSPACE-073's toast as before (clause 4).
+   */
+  const markUserLoad = (sessionId: string | undefined, skill: string): boolean => {
+    if (sessionId === undefined || sessionId === '') return false;
+    const marked = writeSkillLoadMarker(sessions.writer(asSessionId(sessionId)), skill, { kind: 'user' });
+    if (marked) log(`skills: '${skill}' force-load marked in session ${sessionId}'s transcript`);
+    return marked;
+  };
   /*
    * REQ-SANDBOX-097 for every run-launching continuation (`session.continue`, `session.prompt`, `session.planDecision`,
    * `session.retry`, and the restarts of REQ-NOTIFY-070 and REQ-NOTIFY-074): the availability decision is settled before the
@@ -154,14 +165,15 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return skillsAnswerSettled(skills, req.workspaceRoot, 'gesture', () => {
         const r = skills.forceLoad(req.workspaceRoot, req.sessionId, req.name);
         if (!r.ok) return { kind: 'refused', code: r.reason === 'disabled' ? 'skills.disabled' : 'skills.unknown', headline: r.reason === 'disabled' ? SKILLS_DISABLED_MESSAGE : r.reason };
-        return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
+        // PD-CHAT-016 clause 4: the force-load's marker, in the followed session's transcript; the toast only when none could be written.
+        return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name, marked: markUserLoad(req.sessionId, r.name) };
       });
     case 'skills.loadFile':
       return skillsAnswerSettled(skills, req.workspaceRoot, 'gesture', () => {
         const r = skills.loadFile(req.workspaceRoot, req.sessionId, req.path);
         // REQ-WORKSPACE-151: a failure is reported with the reason REQ-WORKSPACE-057 gives and leaves the catalog unchanged.
         if (!r.ok) return { kind: 'refused', code: 'skills.load-failed', headline: r.reason };
-        return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
+        return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name, marked: markUserLoad(req.sessionId, r.name) };
       });
     case 'skills.list':
       return skillsAnswerSettled(skills, req.workspaceRoot, 'gesture', () => {

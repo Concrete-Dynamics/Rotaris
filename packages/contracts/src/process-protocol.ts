@@ -672,9 +672,10 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   /**
    * ADR-0063: the skill catalog as a surface reads it. One shape for all four commands — a force-load and
    * a manual load answer with the state they produced, so no caller has to ask again to redraw, and
-   * `loaded` names the skill for the toast (REQ-WORKSPACE-073/151).
+   * `loaded` names the skill for the toast (REQ-WORKSPACE-073/151). `marked` says the load wrote its skill-load marker
+   * into the followed session's transcript (PD-CHAT-016 clause 4), in which case the composer shows no toast.
    */
-  z.object({ kind: z.literal('skills.state'), state: SkillsStateSchema, loaded: z.string().optional() }),
+  z.object({ kind: z.literal('skills.state'), state: SkillsStateSchema, loaded: z.string().optional(), marked: z.boolean().optional() }),
   /** REQ-CHAT-162: the listing row was committed — how many skills it lists and the transcript index it took. */
   z.object({ kind: z.literal('skills.listed'), count: z.number().int().nonnegative(), index: z.number().int().nonnegative() }),
 ]);

@@ -8,8 +8,8 @@ import type { CommandOutcome, CommandRequest, McpHealth, McpListing, McpSecretRo
  * R-117 (2026-11-21) replaced the four-step card that stood here with one panel: the provider the entry points at, the
  * key, and the status. The shipped entry now names a real endpoint (`packages/config/src/mcp/defaults.ts`), so for the
  * default the key is all a user supplies; `Save and test` stores it, switches an entry configured off on (PD-CONFIG-006
- * revision 2) and probes it (REQ-MCP-092). Another provider is still a file edit (REQ-CONFIG-350/464), offered behind
- * "Use a different provider" with the stanza to paste.
+ * revision 2) and probes it (REQ-MCP-092). Another provider is chosen behind "Use a different provider", which writes
+ * the entry's url (PD-CONFIG-013) and still offers the stanza for an edit by hand.
  *
  * REQ-MCP-111: the dedicated control stores the built-in `web_search` server's key without the user naming the server
  * or the variable, and it is visible whether or not `web_search` is enabled. REQ-CONFIG-181 leaves the VENDOR to the
@@ -88,9 +88,9 @@ export function webSearchProviderOf(row: McpServerRow | null): WebSearchPreset |
 }
 
 /**
- * The stanza "Use a different provider" hands over: exactly `mcp_servers.web_search` with the chosen url,
- * REQ-CONFIG-181's `request_timeout: 600` and `enabled: true` — the durable enablement REQ-MCP-115 names.
- * REQ-CONFIG-350/464: this is TEXT for the user's own file edit; the screen writes none of it.
+ * The stanza "Use a different provider" hands over for an edit by hand: exactly `mcp_servers.web_search` with the
+ * chosen url, REQ-CONFIG-181's `request_timeout: 600` and `enabled: true` — the durable enablement REQ-MCP-115 names.
+ * This is TEXT; what the panel writes itself is the url alone (PD-CONFIG-013).
  */
 export interface WebSearchStanza {
   readonly text: string;
@@ -175,7 +175,7 @@ export function webSearchKeyApplies(row: McpServerRow | null, storedKey: McpSecr
 export const WEB_SEARCH_ABOUT: readonly string[] = [
   'Agents search the web through the provider named here, and your queries go to that provider under your key.',
   'Save and test stores the key in the secrets file of the scope you choose, switches the server on (which writes enabled: true to the configuration file) and checks that it answers.',
-  'Another provider is declared in the configuration file: Rotaris does not write a tool server’s address for you.',
+  'Choosing another provider writes its address, and nothing else, to the configuration file of the scope you choose; the key stays in the secrets file.',
 ];
 
 /** REQ-SHELL-144: the explanation control's accessible name and tooltip — it names the surface, never a generic `Info`. */
@@ -183,7 +183,8 @@ export const WEB_SEARCH_ABOUT_CONTROL = 'About web search';
 
 /** The disclosure that holds the file edit (REQ-CONFIG-350/464). */
 export const WEB_SEARCH_OTHER_PROVIDER = 'Use a different provider';
-export const WEB_SEARCH_OTHER_PROVIDER_LEDE = 'Choose one, put its declaration in your configuration file, then reload. A provider that takes a key reads the one stored above.';
+export const WEB_SEARCH_OTHER_PROVIDER_LEDE = 'Choosing one writes its address to the configuration file of the scope chosen above. A provider that takes a key reads the one stored there.';
+export const WEB_SEARCH_EDIT_YOURSELF = 'Or declare the entry yourself:';
 
 export const WEB_SEARCH_NO_ENTRY = "No web_search entry is configured. Declare one under mcp_servers in this workspace's configuration file; this screen writes no tool server.";
 
@@ -248,7 +249,7 @@ export function webSearchProbeBasis(facts: WebSearchFacts): string {
 }
 
 /** The panel's one in-flight state: while one holds, every control is disabled, so two writes cannot race. */
-export type WebSearchInFlight = 'save' | 'enable' | 'remove' | 'open' | 'probe';
+export type WebSearchInFlight = 'save' | 'enable' | 'remove' | 'open' | 'probe' | 'provider';
 
 /** The in-flight state said in words (REQ-SHELL-149). */
 export const WEB_SEARCH_IN_FLIGHT: Readonly<Record<WebSearchInFlight, string>> = {
@@ -257,6 +258,7 @@ export const WEB_SEARCH_IN_FLIGHT: Readonly<Record<WebSearchInFlight, string>> =
   remove: 'Deleting the stored key…',
   open: 'Opening the configuration file…',
   probe: 'Checking the server…',
+  provider: 'Writing the provider’s address to the configuration file…',
 };
 
 /** REQ-MCP-110's confirmation, from the write's own masked outcome — never a value. */
@@ -285,7 +287,8 @@ export const WEB_SEARCH_CONTROLS = {
  *   - `Turn on and test` → the enable step, then `mcp.probe`;
  *   - `Delete` → `mcp.unsetSecret`;
  *   - `Test` → `mcp.probe {name}`;
- *   - `Get a key ↗` → `shell.openExternal`; `Open the file` → `shell.openConfigFile`.
+ *   - `Get a key ↗` → `shell.openExternal`; `Open the file` → `shell.openConfigFile`;
+ *   - `Use <provider>` → `config.setField` `mcp_servers.web_search.url` in the scope, then the re-read (PD-CONFIG-013).
  *
  * The enable step reads the listing afresh (`mcp.list`) — the props the press began with predate the write — and, on an
  * available `web_search` entry configured off, hands that row to `enable`, which is the row switch's own durable press
@@ -298,6 +301,8 @@ export interface WebSearchSetupHandlers {
   readonly onProbe: () => Promise<McpHealth>;
   readonly onOpenFile: () => Promise<{ ok: true } | { ok: false; message: string }>;
   readonly onGetKey: (preset: WebSearchPreset) => Promise<{ ok: true } | { ok: false; message: string }>;
+  /** PD-CONFIG-013: write the chosen provider's url into the scope. */
+  readonly onUseProvider: (preset: WebSearchPreset, typed: string, scope: WebSearchScope) => Promise<WebSearchSaveReply>;
 }
 
 /** A write's outcome, or the words of a refusal; `refreshFailure` is the re-read's refusal where the write stood. */
@@ -393,6 +398,41 @@ export async function pressDeleteWebSearchKey(deps: WebSearchSetupDeps, scope: W
   return { ok: true, outcome: outcome.value as McpSecretWriteOutcome, refreshFailure };
 }
 
+/**
+ * PD-CONFIG-013 (R-117 path B): the panel writes the provider the built-in entry reaches — `mcp_servers.web_search.url`,
+ * that field alone, into the chosen scope through the scoped per-field write (REQ-CONFIG-441). A hosted provider is
+ * written as its own url; your own server is the address the user typed, refused here unless it parses as an http or
+ * https url with a host. The press writes no key: a provider that takes one reads the key the secrets store holds.
+ */
+export type WebSearchUrlChoice = { readonly ok: true; readonly url: string } | { readonly ok: false; readonly message: string };
+
+export function webSearchChosenUrl(preset: WebSearchPreset, typed: string): WebSearchUrlChoice {
+  if (preset.host !== null) return { ok: true, url: preset.url };
+  const url = typed.trim();
+  if (url === '') return { ok: false, message: 'Type your server’s address first; nothing was written.' };
+  if (/\s/.test(url)) return { ok: false, message: 'An address holds no spaces; nothing was written.' };
+  let parsed: URL;
+  try { parsed = new URL(url.replace(/\$\{[A-Z0-9_]+\}/g, 'x')); } catch { return { ok: false, message: 'That is not an address the panel can read; nothing was written.' }; }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return { ok: false, message: 'The address must start with https:// or http://; nothing was written.' };
+  if (parsed.hostname === '' || parsed.hostname.includes('<')) return { ok: false, message: 'The address names no host; nothing was written.' };
+  return { ok: true, url };
+}
+
+/** The confirmation the provider write answers with — what was written, and where (REQ-CONFIG-437 names the file). */
+export function webSearchProviderWritten(preset: WebSearchPreset, scope: WebSearchScope, host: string | null): string {
+  const what = preset.host !== null ? preset.name : `your server${host === null ? '' : ` (${host})`}`;
+  return `Web search now reaches ${what}: its address is written to the ${WEB_SEARCH_SCOPE_LABELS[scope]} configuration file.`;
+}
+
+export async function pressUseWebSearchProvider(deps: WebSearchSetupDeps, preset: WebSearchPreset, typed: string, scope: WebSearchScope): Promise<WebSearchSaveReply> {
+  const chosen = webSearchChosenUrl(preset, typed);
+  if (!chosen.ok) return { ok: false, message: chosen.message, lines: [] };
+  const written = await send(deps, { kind: 'config.setField', scope, patch: { mcp_servers: { [WEB_SEARCH_SERVER]: { url: chosen.url } } } });
+  if (!written.ok) return { ok: false, message: written.detail ?? written.headline, lines: [] };
+  const refreshFailure = await refreshAfterWrite(deps);
+  return { ok: true, lines: [webSearchProviderWritten(preset, scope, webSearchHost(chosen.url))], health: null, refreshFailure };
+}
+
 /** The write stood, the re-read after it did not — said, not swallowed (REQ-SHELL-149: text). */
 export const WEB_SEARCH_REFRESH_FAILED = (detail: string): string =>
   `The change went through, but the list could not be refreshed: ${detail}. Reload to see the new state.`;
@@ -422,5 +462,6 @@ export function bindWebSearchSetup(deps: WebSearchSetupDeps): WebSearchSetupHand
     onProbe: () => pressCheckWebSearch(deps),
     onOpenFile: () => pressOpenWebSearchFile(deps),
     onGetKey: (preset) => pressGetWebSearchKey(deps, preset),
+    onUseProvider: (preset, typed, scope) => pressUseWebSearchProvider(deps, preset, typed, scope),
   };
 }

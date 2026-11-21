@@ -21,8 +21,10 @@ copy by hand.
 3. **Save and test** stores the key, switches an entry configured off on (PD-CONFIG-006 revision 2) and probes it, and
    reports each step under the rows. The probe lists tools and runs no search; Tavily answered Healthy to a made-up
    key, so a keyed Healthy says the provider checks the key when an agent first searches.
-4. Another provider (Linkup, Exa without a key, your own server) stays a file edit (REQ-CONFIG-350/464), behind "Use a
-   different provider", closed: the choice, the stanza, Copy and Open the file.
+4. Another provider (Linkup, Exa without a key, your own server) is behind "Use a different provider", closed: the
+   choice, then **Use <provider>**, which writes the entry's url alone into the chosen scope ([`PD-CONFIG-013`](../../../product/directives/pd-config-013.md#pd-config-013),
+   path B) and reads "<provider> is in use" for the one the entry already reaches; your own server takes a typed http(s)
+   address, refused unless it parses. The stanza, Copy and Open the file stay beneath it for an edit by hand.
 5. One filled control in every state: Save and test until a key is stored (or while one is typed), Turn on and test
    while the entry is off, Test otherwise; Open the file in the empty state.
 6. The explanation sits behind the head's information control, closed until asked for (PD-CONFIG-012 clause 4).

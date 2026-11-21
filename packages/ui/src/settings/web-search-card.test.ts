@@ -64,6 +64,7 @@ let saveGate: ((r: WebSearchSaveReply) => void) | null = null;
 let saved: { value: string; scope: WebSearchScope }[] = [];
 let deleted: WebSearchScope[] = [];
 let probes = 0;
+let used: { preset: string; typed: string; scope: WebSearchScope }[] = [];
 /** The views a draw hands the panel, stable across draws until a test replaces one (as a re-read would). */
 let views: { listing: McpListing; webSearchSecrets: McpSecretsView } | null = null;
 const viewsNow = (rows: McpServerRow[] = [row()], keys: typeof keyRow[] = []) => (views ??= { listing: { configFile: '/ws/.rotaris/agents.yaml', rows }, webSearchSecrets: secrets(keys) });
@@ -81,6 +82,7 @@ const props = (over: Partial<McpSettingsProps> = {}): McpSettingsProps => ({
     onProbe: async (): Promise<McpHealth> => { probes += 1; return health; },
     onOpenFile: async () => ({ ok: true as const }),
     onGetKey: async () => ({ ok: true as const }),
+    onUseProvider: async (preset, typed, scope) => { used.push({ preset: preset.id, typed, scope }); return { ok: true as const, lines: [`Web search now reaches ${preset.name}.`], health: null, refreshFailure: null }; },
   },
   ...over,
 });
@@ -94,7 +96,7 @@ function draw(over: Partial<McpSettingsProps> = {}): { html: string; find: (attr
 const press = (d: ReturnType<typeof draw>, attr: string) => (d.find(attr)['onClick'] as () => void)();
 const type = (d: ReturnType<typeof draw>, value: string) => (d.find('data-websearch-key-field')['onChange'] as (e: unknown) => void)({ currentTarget: { value } });
 const settle = async (): Promise<void> => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
-const reset = (): void => { harness.cells.length = 0; saved = []; deleted = []; probes = 0; saveGate = null; health = { state: 'unknown' }; views = null; };
+const reset = (): void => { harness.cells.length = 0; used = []; saved = []; deleted = []; probes = 0; saveGate = null; health = { state: 'unknown' }; views = null; };
 
 describe('Save and test, pressed', () => {
   it('sends the typed key and the chosen scope, holds every control while it runs and says so, then reports each step and empties the field — fails if a step goes unsaid or the key stays in the field', async () => {
@@ -177,5 +179,27 @@ describe('the other presses', () => {
     const linkup = harness.elements.find((e) => e.props['role'] === 'radio' && String(e.props['aria-label']).startsWith('Linkup'))!;
     (linkup.props['onClick'] as () => void)();
     expect(draw().html).toContain('https://mcp.linkup.so/mcp?apiKey=');
+  });
+
+  it('choosing Linkup and pressing Use Linkup writes it in the chosen scope and says so; your own server sends the typed address (PD-CONFIG-013) — fails if the press writes another provider than the one shown', async () => {
+    reset();
+    press(draw(), 'data-websearch-other-control');
+    draw();
+    (harness.elements.find((e) => e.props['role'] === 'radio' && String(e.props['aria-label']).startsWith('Linkup'))!.props['onClick'] as () => void)();
+    (draw().find('data-websearch-scope')['onChange'] as (e: unknown) => void)({ currentTarget: { value: 'global' } });
+    const d = draw();
+    expect(d.html).toContain('Use Linkup');
+    press(d, 'data-websearch-use');
+    await settle();
+    expect(used).toEqual([{ preset: 'linkup', typed: '', scope: 'global' }]);
+    expect(draw().html).toContain('Web search now reaches Linkup.');
+    draw();
+    (harness.elements.find((e) => e.props['role'] === 'radio' && String(e.props['aria-label']).startsWith('Your own server'))!.props['onClick'] as () => void)();
+    (draw().find('data-websearch-own-url')['onChange'] as (e: unknown) => void)({ currentTarget: { value: 'https://search.example.org/mcp' } });
+    const own = draw();
+    expect(own.html).toContain('Use this server');
+    press(own, 'data-websearch-use');
+    await settle();
+    expect(used.at(-1)).toEqual({ preset: 'own', typed: 'https://search.example.org/mcp', scope: 'global' });
   });
 });

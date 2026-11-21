@@ -103,7 +103,7 @@ message:** its **Save and test** press sends `mcp.setSecret`, re-reads, sends `m
 left, and — on an available `web_search` entry configured off — makes the row switch's own durable press
 (`config.setField` `mcp_servers.web_search.enabled: true`, then `mcp.setEnabled`, PD-CONFIG-006 revision 2), then
 `mcp.probe {name: 'web_search'}`. The shipped entry's url is Tavily's hosted endpoint since that day
-(`packages/config/src/mcp/defaults.ts`), so a stored key alone resolves it.
+(`packages/config/src/mcp/defaults.ts`), so a stored key alone resolves it. Its **Use <provider>** press (PD-CONFIG-013) is a `config.setField {scope, patch: {mcp_servers: {web_search: {url}}}}` — the existing scoped write, whose `mcp_servers` patch already fires `mcp.reload` — and nothing else.
 
 **Confinement (Part AR; ADR-0022's first execution).** Renderer → main: `confinement.status {recheck?}`; main relays it
 to the run host unchanged and answers with `{available, backend, reason, remediation}` — REQ-SANDBOX-071's four fields,

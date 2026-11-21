@@ -31,7 +31,7 @@ const props = (over: Partial<McpSettingsProps> = {}): McpSettingsProps => ({
   secrets: secrets([]), webSearchSecrets: secrets([]), onSecretsServer: () => undefined, setup: null,
   onSetupStart: async () => ({ ok: true, message: '' }), onSetupCancel: async () => undefined,
   webSearchSetup: {
-    onSaveAndTest: inert, onEnableAndTest: inert,
+    onSaveAndTest: inert, onEnableAndTest: inert, onUseProvider: inert,
     onDeleteKey: async () => ({ ok: false as const, message: 'not pressed here' }),
     onProbe: async () => ({ state: 'unknown' as const }),
     onOpenFile: async () => ({ ok: true as const }),
@@ -173,5 +173,20 @@ describe('the web search panel, state by state', () => {
     const p = panel(render());
     expect(p.match(/type="password"/g)).toHaveLength(1);
     expect(p).toMatch(/autoComplete="off"|autocomplete="off"/);
+  });
+
+  it('the provider disclosure offers a press that writes the chosen provider, and marks the one in use (PD-CONFIG-013) — fails if choosing a provider is still only a stanza', () => {
+    const p = panel(render());
+    expect(p).toContain('data-websearch-use');
+    expect(p).toContain('Tavily is in use');
+    expect(p).toContain('writes its address to the configuration file');
+    expect(p).toContain('Or declare the entry yourself:');
+    expect(p).not.toContain('data-websearch-own-url');
+  });
+
+  it('a keyless provider with a key still stored says the key is not sent to it — fails if a stored key reads as one Exa uses', () => {
+    const p = panel(render({ listing: listing([row({ line: 'https://mcp.exa.ai/mcp', unresolved: [], available: true, enabled: true, origin: 'yaml' })]), webSearchSecrets: secrets([keyRow()]) }));
+    expect(p).toContain('Exa searches without a key, so the stored key is not sent to it.');
+    expect(fills(render({ listing: listing([row({ line: 'https://mcp.exa.ai/mcp', unresolved: [], available: true, enabled: true, origin: 'yaml' })]), webSearchSecrets: secrets([keyRow()]) }))).toBe(1);
   });
 });

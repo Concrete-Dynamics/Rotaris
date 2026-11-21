@@ -30,6 +30,7 @@ const render = (rows: McpListing) => renderToStaticMarkup(createElement(McpSetti
     onGetKey: async () => ({ ok: true as const }),
     onSaveAndTest: async () => ({ ok: false as const, message: 'not pressed here', lines: [] }),
     onEnableAndTest: async () => ({ ok: false as const, message: 'not pressed here', lines: [] }),
+    onUseProvider: async () => ({ ok: false as const, message: 'not pressed here', lines: [] }),
     onDeleteKey: async () => ({ ok: false as const, message: 'not pressed here' }),
     onProbe: async () => ({ state: 'unknown' as const }),
   },

@@ -943,6 +943,10 @@
 [data-mcp-websearch-setup] .websearch__more[aria-expanded='true'] > .ph { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { [data-mcp-websearch-setup] .websearch__more > .ph { transition: none; } }
 [data-mcp-websearch-setup] [data-websearch-other] { margin-top: var(--rt-space-2); padding-left: var(--rt-space-4); }
+[data-mcp-websearch-setup] [data-websearch-other] > .settings__action { margin-top: var(--rt-space-3); }
+[data-mcp-websearch-setup] [data-websearch-other] > .settings__action + .settings__hint { margin-top: var(--rt-space-4); }
+/* PD-CONFIG-013: your own server's address — a url, read at the dense mono size, two measures at most. */
+[data-mcp-websearch-setup] .websearch__url { width: 100%; max-width: calc(2 * var(--rt-prose-measure)); margin-top: var(--rt-space-2); }
 /* R5-FND-1 (Opus 5.5 review, round 5, 2026-11-09): the shared confirmation prompt holds its answers with
    `aria-disabled` during the delete press (R4-FND-1: a `disabled` element cannot hold the focus), and
    `aria-disabled` alone paints nothing — `.btn:disabled` was the only rule that drew the held look, so the held

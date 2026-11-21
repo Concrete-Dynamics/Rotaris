@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandOutcome, CommandRequest, McpServerRow } from '@rotaris/contracts';
 import {
-  bindWebSearchSetup, pressCheckWebSearch, pressDeleteWebSearchKey, pressEnableAndTest, pressGetWebSearchKey, pressOpenWebSearchFile, pressSaveAndTest,
+  bindWebSearchSetup, pressUseWebSearchProvider, webSearchChosenUrl, pressCheckWebSearch, pressDeleteWebSearchKey, pressEnableAndTest, pressGetWebSearchKey, pressOpenWebSearchFile, pressSaveAndTest,
   webSearchPreset, EMPTY_KEY_REFUSAL, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_SERVER,
 } from './web-search-setup.js';
 
@@ -137,8 +137,40 @@ describe('the other presses', () => {
     expect(await pressCheckWebSearch(deps)).toEqual({ state: 'unreachable', detail: 'channel closed' });
   });
 
-  it('the handler set the panel is handed is exactly these six presses — fails if a press is added or dropped without the panel knowing', () => {
+  it('the handler set the panel is handed is exactly these seven presses — fails if a press is added or dropped without the panel knowing', () => {
     const set = bindWebSearchSetup(recorder(answer).deps);
-    expect(Object.keys(set).sort()).toEqual(['onDeleteKey', 'onEnableAndTest', 'onGetKey', 'onOpenFile', 'onProbe', 'onSaveAndTest']);
+    expect(Object.keys(set).sort()).toEqual(['onDeleteKey', 'onEnableAndTest', 'onGetKey', 'onOpenFile', 'onProbe', 'onSaveAndTest', 'onUseProvider']);
+  });
+});
+
+describe('Use a provider (PD-CONFIG-013)', () => {
+  it('writes mcp_servers.web_search.url — that field alone — in the scope, through config.setField, then re-reads — fails if it writes a key, another field or another entry', async () => {
+    const r = recorder(answer);
+    const reply = await pressUseWebSearchProvider(r.deps, webSearchPreset('linkup')!, '', 'workspace');
+    expect(r.sent).toEqual([{ kind: 'config.setField', scope: 'workspace', patch: { mcp_servers: { web_search: { url: `https://mcp.linkup.so/mcp?apiKey=\${${WEB_SEARCH_KEY_VARIABLE}}` } } } }]);
+    expect(r.log).toEqual(['config.setField', 'read']);
+    expect(reply.ok && reply.lines[0]).toBe('Web search now reaches Linkup: its address is written to the Workspace configuration file.');
+  });
+
+  it('your own server writes the typed address, trimmed, and names its host — fails if the typed address is altered', async () => {
+    const r = recorder(answer);
+    const reply = await pressUseWebSearchProvider(r.deps, webSearchPreset('own')!, '  https://search.example.org/mcp?key=${ROTARIS_SEARCH_API_KEY} ', 'global');
+    expect(r.sent[0]).toEqual({ kind: 'config.setField', scope: 'global', patch: { mcp_servers: { web_search: { url: 'https://search.example.org/mcp?key=${ROTARIS_SEARCH_API_KEY}' } } } });
+    expect(reply.ok && reply.lines[0]).toContain('your server (search.example.org)');
+  });
+
+  it('an address that is empty, not a url, not http(s) or the template\'s own placeholder host is refused here and nothing is sent — fails if a broken address reaches the file', async () => {
+    const own = webSearchPreset('own')!;
+    for (const typed of ['', 'not a url', 'ftp://x/mcp', 'https://<your-search-server>/mcp', 'file:///etc/passwd']) {
+      expect(webSearchChosenUrl(own, typed).ok).toBe(false);
+    }
+    const r = recorder(answer);
+    expect((await pressUseWebSearchProvider(r.deps, own, 'ftp://x', 'workspace')).ok).toBe(false);
+    expect(r.sent).toEqual([]);
+  });
+
+  it('a refused write keeps main\'s words — fails if a refused write is reported as done', async () => {
+    const r = recorder(() => ({ ok: false, code: 'config.write-failed', headline: 'The setting could not be written', detail: 'agents.yaml: read-only' }));
+    expect(await pressUseWebSearchProvider(r.deps, webSearchPreset('exa')!, '', 'workspace')).toEqual({ ok: false, message: 'agents.yaml: read-only', lines: [] });
   });
 });

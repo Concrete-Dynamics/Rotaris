@@ -8,7 +8,7 @@ import {
   deletedKeySentence, webSearchFileLine, webSearchHost, webSearchKeyApplies, webSearchOtherTransport, webSearchPreset, webSearchProbeBasis,
   webSearchProbeSentence, webSearchPressFailure, webSearchProviderOf, webSearchRowSetupVisible, webSearchSituation, webSearchStanza, webSearchStatus,
   webSearchStoredKey, webSearchUnresolvedNote,
-  WEB_SEARCH_ABOUT, WEB_SEARCH_ABOUT_CONTROL, WEB_SEARCH_CONTROLS, WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_NO_ENTRY, WEB_SEARCH_OFF, WEB_SEARCH_OTHER_PROVIDER,
+  WEB_SEARCH_ABOUT, WEB_SEARCH_ABOUT_CONTROL, WEB_SEARCH_CONTROLS, WEB_SEARCH_EDIT_YOURSELF, WEB_SEARCH_IN_FLIGHT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_NO_ENTRY, WEB_SEARCH_OFF, WEB_SEARCH_OTHER_PROVIDER,
   WEB_SEARCH_OTHER_PROVIDER_LEDE, WEB_SEARCH_PRESETS, WEB_SEARCH_REFRESH_FAILED, WEB_SEARCH_SCOPE_LABELS, WEB_SEARCH_SERVER, WEB_SEARCH_SETUP_ROW_ACTION,
   WEB_SEARCH_SETUP_ROW_DESCRIPTION, WEB_SEARCH_SETUP_ROW_LABEL,
   type WebSearchInFlight, type WebSearchPreset, type WebSearchSaveReply, type WebSearchScope, type WebSearchSetupHandlers,
@@ -209,8 +209,8 @@ function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null;
  * delete and its scope choice, REQ-MCP-092's single-server probe with REQ-CONFIG-353's vocabulary as TEXT beside the
  * indicator (REQ-SHELL-149), and PD-CONFIG-006 revision 2's one-press enable. It replaced a four-step card: what a user
  * of the shipped default does is paste a key and press one button, so the panel is three ledger rows — the provider the
- * entry points at, the key, the status — and the file edit for another provider (REQ-CONFIG-350/464: this screen
- * writes no tool server's address) waits behind "Use a different provider". The logic is `web-search-setup.ts`'s.
+ * entry points at, the key, the status — and another provider waits behind "Use a different provider", where one press
+ * writes its url (PD-CONFIG-013) and the stanza stays offered for an edit by hand. The logic is `web-search-setup.ts`'s.
  */
 function WebSearchPanel(props: McpSettingsProps) {
   const row = (props.listing?.rows ?? []).find((r) => r.name === WEB_SEARCH_SERVER) ?? null;
@@ -247,6 +247,7 @@ function WebSearchPanel(props: McpSettingsProps) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [otherOpen, setOtherOpen] = useState(false);
   const [presetId, setPresetId] = useState<string | null>(null);
+  const [ownUrl, setOwnUrl] = useState('');
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const [openFailure, setOpenFailure] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -267,6 +268,8 @@ function WebSearchPanel(props: McpSettingsProps) {
   // §1.7: one filled control in every state — the act the panel waits on. Typing a key makes saving it that act.
   const fill: 'save' | 'enable' | 'test' = keyApplies && (storedKey === null || keyDraft !== '') ? 'save' : canEnable ? 'enable' : 'test';
   const chosen = webSearchPreset(presetId) ?? provider ?? WEB_SEARCH_PRESETS[0]!;
+  /** PD-CONFIG-013: a hosted provider the entry already reaches has nothing to write. */
+  const inUse = chosen.host !== null && provider?.id === chosen.id;
   const stanza = webSearchStanza(chosen);
 
   /** The row's "Add a key" lands on the key field (REQ-MCP-108's one venue: the way in stays in this category). */
@@ -304,7 +307,7 @@ function WebSearchPanel(props: McpSettingsProps) {
   const test = () => run('probe', async () => {
     const result = await props.webSearchSetup.onProbe();
     setProbe({ basis: situationInputs, health: result, read: props.webSearchSecrets, listed: props.listing });
-    setLines([webSearchProbeSentence(result, keyApplies)]);
+    setLines([webSearchProbeSentence(result, keyApplies && (provider === null || provider.needsKey))]);
   });
   const remove = () => run('remove', async () => {
     try {
@@ -317,6 +320,11 @@ function WebSearchPanel(props: McpSettingsProps) {
       setConfirmingDelete(false);
       keyField.current?.focus();
     }
+  });
+  const chooseProvider = () => run('provider', async () => {
+    const r = await props.webSearchSetup.onUseProvider(chosen, ownUrl, scope);
+    report(r);
+    if (r.ok) { setOwnUrl(''); setProbe(null); }
   });
   const openFile = () => run('open', async () => {
     setOpenFailure(null);
@@ -420,6 +428,7 @@ function WebSearchPanel(props: McpSettingsProps) {
       {keyApplies && storedKey !== null ? (
         <div className="websearch__under">
           <p className="text-secondary settings__hint" data-websearch-stored>Stored in the {storedKey.scope} scope, value <span className="mono" data-mask>{storedKey.masked}</span>.</p>
+          {provider !== null && !provider.needsKey ? <p className="text-secondary settings__hint" data-websearch-key-unused>{provider.name} searches without a key, so the stored key is not sent to it.</p> : null}
         </div>
       ) : null}
 
@@ -473,6 +482,17 @@ function WebSearchPanel(props: McpSettingsProps) {
             </div>
           ))}
         </div>
+        {chosen.host === null ? (
+          <DesignInput type="url" className="input mono websearch__url" data-websearch-own-url aria-label="Your search server's address"
+            placeholder={`https://your-server/mcp?key=\${${WEB_SEARCH_KEY_VARIABLE}}`} spellCheck={false} autoComplete="off"
+            value={ownUrl} disabled={busy} onChange={(e) => setOwnUrl(e.currentTarget.value)} />
+        ) : null}
+        <div className="settings__action">
+          <DesignButton type="button" className="btn btn-secondary btn-compact" data-websearch-use disabled={busy || inUse}
+            aria-description="Writes this provider's address to the configuration file of the scope chosen above."
+            onClick={() => { void chooseProvider(); }}>{inFlight === 'provider' ? 'Writing…' : inUse ? `${chosen.name} is in use` : chosen.host === null ? 'Use this server' : `Use ${chosen.name}`}</DesignButton>
+        </div>
+        <p className="text-secondary settings__hint">{WEB_SEARCH_EDIT_YOURSELF}</p>
         <pre className="mono" data-websearch-stanza>{stanza.text}</pre>
         {stanza.note !== null ? <p className="text-tertiary settings__hint" data-websearch-example>{stanza.note}</p> : null}
         <div className="settings__action">

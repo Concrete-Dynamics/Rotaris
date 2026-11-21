@@ -2,7 +2,6 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
-import { execFile } from 'node:child_process';
 import { integrationAllowsClose, integrationAllowsUpdate, noWorktreeIntegration } from './integration-guard.js';
 import { askRendererGuard, askUnsavedInTurn, createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, RENDERER_UNSAVED_PROBE_SCRIPT, type CloseGuard, type UnsavedGuardAnswer } from './main-windows.js';
 import { createLiveStateArbiter } from './live-state.js';
@@ -16,7 +15,7 @@ import { createLibraryRevision } from './library.js';
 import { everyHandlerThrows, startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
-import { findExecutable, requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
+import { requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
 import { createImprovementCoordinator } from './improvements.js';
@@ -37,7 +36,8 @@ import { diagnosticsCommands } from './commands/diagnostics.js'; // REQ-SHELL-16
 import { DiagnosticsCaptures, isExistingDirectory } from './diagnostics.js'; // REQ-STARTUP-129..133, hardening D2, PD-STARTUP-011
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
-import { CATALOGUE, CLAUDE_CODE_INSTRUCTION, CLAUDE_CODE_NOT_INSTALLED, localToolStateOf, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, validateCatalog } from '@rotaris/providers';
+import { claudeCodeTool } from './claude-code-tool.js';
+import { CATALOGUE, CLAUDE_CODE_INSTRUCTION, CLAUDE_CODE_NOT_INSTALLED, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator, serviceMarkerWriter } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
@@ -372,25 +372,10 @@ async function main(): Promise<void> {
   const credentials = new CredentialStore({ dir: layout.tokens, protector, lock: lockDeps, random, warn: (m) => log(`credential store: ${m}`, 'warn'), info: (m) => log(`credential store: ${m}`) });
   const dictationCredential: DictationCredentialDeps = { dir: layout.dictation, protector, warn: (m) => log(`dictation credential: ${m}`, 'warn') };
   const projectSettings = new ProjectSettingsStore({ path: join(dirs.config, PROJECT_SETTINGS_FILE), lock: lockDeps, timers: clocks.timers, warn: (m) => log(`project settings: ${m}`, 'warn') });
-  /**
-   * PD-PROVIDER-002: the Claude Code tool the user installed. Whether it is there is read off the search path without
-   * starting anything; what it says of its own sign-in is its `auth status` answer, of which only three facts are kept
-   * (`localToolStateOf`) — the account it names is never logged, stored or sent anywhere.
-   */
-  const claudeCodeInstalled = (): boolean => findExecutable('claude', process.env) !== null;
-  const claudeCodeState = (): Promise<ReturnType<typeof localToolStateOf>> => new Promise((resolve) => {
-    // A fixed command line: nothing of it is read from the environment, and the search path only decides its Windows form.
-    const shim = process.platform === 'win32' && /\.(cmd|bat)$/i.test(findExecutable('claude', process.env) ?? '');
-    const target = shim ? { command: 'cmd.exe', args: ['/d', '/s', '/c', '"claude auth status"'], windowsVerbatimArguments: true } : { command: 'claude', args: ['auth', 'status'], windowsVerbatimArguments: false };
-    const env = { ...process.env };
-    delete env['CLAUDECODE'];
-    delete env['CLAUDE_CODE_ENTRYPOINT'];
-    execFile(target.command, target.args, { env, timeout: 15_000, windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) }, (error, stdout) => {
-      const text = String(stdout).trim();
-      resolve(localToolStateOf(text.startsWith('{') ? text : error && (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : '{}'));
-    });
-  });
-  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, timers: clocks.timers, localTool: { installed: claudeCodeInstalled, state: claudeCodeState }, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
+  /** PD-PROVIDER-002 / PD-PROVIDER-003: the Claude Code tool the user installed, as main asks about it. */
+  const claudeCode = claudeCodeTool({ cwd: dirs.data });
+  const claudeCodeInstalled = (): boolean => claudeCode.installed();
+  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, timers: clocks.timers, localTool: { installed: claudeCodeInstalled, state: () => claudeCode.state(), models: () => claudeCode.models() }, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
 
   /**
    * REQ-NOTIFY-076 as the two recovery surfaces can act on it today: a key-based provider gets its key field. A device-code or
@@ -1181,6 +1166,43 @@ async function main(): Promise<void> {
     // ADR-0037 Tier B: the run host's next load folds the snapshot itself; nothing to hand over.
     if (notices.current()?.title === NO_PROVIDER_HEADLINE && providers.list().some((row) => row.authenticated)) void notices.dismiss(notices.current()?.id);
   };
+  /**
+   * PD-PROVIDER-003 — once per launch, after the first window is shown and never in its way: the Claude Code tool is
+   * connected when it is found signed in and was never connected here (clause 2), and REQ-PROVIDER-118's health check
+   * runs for every provider holding a credential, side by side (clause 3). Each row shows what its check found. One warning names every provider whose check ended
+   * other than healthy, and it is published only when no other notice is current.
+   */
+  let providerLaunchCheckStarted = false;
+  const providerLaunchCheck = async (): Promise<void> => {
+    if (providerLaunchCheckStarted) return;
+    providerLaunchCheckStarted = true;
+    try {
+      const connected = await providers.connectLocalToolIfFound();
+      if (connected?.outcome === 'signed-in') {
+        authRecovery.credentialsChanged(connected.id);
+        log(`providers: launch check connected ${connected.displayName}, found signed in on this computer`);
+        raiseNotice('info', `${connected.displayName} was connected`, `Claude Code is installed and signed in on this computer, so Rotaris uses it; it offers ${connected.discovered === 1 ? '1 model' : `${connected.discovered} models`}. Review the model slots under Settings → Models, or sign out of it there.`, recoveryFor('config.models'));
+      } else if (connected?.outcome === 'failed') {
+        log(`providers: launch check could not connect the Claude Code tool: ${connected.message}`, 'warn');
+      }
+      for (const row of providers.list()) if (row.authenticated) healthCache.set(row.id, { state: 'checking', detail: '', available: true });
+      const { health } = await providers.launchCheck();
+      const failing: string[] = [];
+      for (const [id, h] of health) {
+        healthCache.set(id, h);
+        log(`providers: launch check ${providers.displayName(id)}: ${h.state}${h.detail ? ` — ${h.detail}` : ''}`, h.state === 'healthy' || h.state === 'unknown' ? 'info' : 'warn');
+        if (h.state !== 'healthy' && h.state !== 'unknown') failing.push(`${providers.displayName(id)}: ${h.detail || h.state}`);
+      }
+      // A check left at `checking` by a provider the store no longer lists is cleared rather than left spinning.
+      for (const [id, h] of healthCache) if (h.state === 'checking' && !health.has(id)) healthCache.delete(id);
+      if (connected?.outcome === 'signed-in' || health.size > 0) await afterProviderChange();
+      if (failing.length > 0 && !notices.current()) {
+        raiseNotice('warning', failing.length === 1 ? 'A model provider did not pass its launch check' : `${failing.length} model providers did not pass their launch check`, failing.join(' · '), recoveryFor('config.models'));
+      }
+    } catch (cause) {
+      log(`providers: launch check failed: ${String(cause)}`, 'warn');
+    }
+  };
   const parentWindowIds = new Set<string>();
   /**
    * A3 — which main window owns a session's approval. `REQ-TOOLS-063` ends "each presentation makes the dialog
@@ -1837,6 +1859,7 @@ async function main(): Promise<void> {
         void notices.report(preparationNotice(preparationFinding)).then((r) => { if (r.shown) log(`launch preparation: warning notice #${r.id} raised after the show (REQ-STARTUP-165 (c))`); });
       }
       void updater.activate({ windowId: window.wcId });
+      void providerLaunchCheck();
     },
     // REQ-WORKSPACE-013: a workspace no window holds any more has its initialization run cancelled, and nothing recorded.
     workspaceClosed: (workspace) => { initialization.close(canonicalPath(workspace)); },

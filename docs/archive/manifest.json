@@ -818,6 +818,7 @@
     "defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md": "a5905588e7b363ce00cf5fbbea297af27611e69ddd58ae29c58da4bee3efa45b",
     "defects/a-sign-in-reload-marks-settings-unsaved-though-nothing-was-edited.md": "d87334db4427a3fe3a12e7389f0b63cf52134a6d21c0145db209bc4dc7990f3b",
     "defects/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md": "0a5d5b4e4ac9984ccc573b30bc45959564c8600d6fa54cbf134252028037ed10",
+    "defects/a-signed-out-provider-keeps-seeding-the-startup-slots-so-runs-are-refused.md": "3f9e684b683fc57e8f4638a3f418305e18644cf1830d455b79d16af6bbf19f12",
     "defects/a-single-line-powershell-command-that-throws-loses-its-end-frame.md": "ca1e5e033c1ecb7de7c3bc54c580923a23fe97c33921771a9fc5347bca6166b2",
     "defects/a-skill-named-skill-takes-the-skill-command.md": "b2a23bfa38d0588eebe254118efd10580aef17943a0f38de7f6ada54cdc9b9d9",
     "defects/a-skills-request-throws-when-the-configuration-stops-loading-between-its-two-reads.md": "ab9735b8cb68f7e9db6e71bccbb6fec56c0918141713c2a58cc4a035d538fa45",

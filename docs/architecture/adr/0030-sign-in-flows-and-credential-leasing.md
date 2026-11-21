@@ -213,7 +213,7 @@ chosen per model by its sign-in provider). REQ-PROVIDER-151 makes the endpoint's
 no requirement states this part of it. (2) Copilot answered a model it advertises on the responses route alone with HTTP
 400 `unsupported_api_for_model` on the chat route REQ-CONFIG-084 forces — **OQ-551**, with the reading the build proceeds
 under. (3) Signing out of the first provider by id leaves its slot picks seeding the startup slots, and runs are refused
-([the note](../../defects/a-signed-out-provider-keeps-seeding-the-startup-slots-so-runs-are-refused.md)).
+([the note](../../archive/defects/a-signed-out-provider-keeps-seeding-the-startup-slots-so-runs-are-refused.md)).
 
 **Not established.** No turn completed on either provider: both accounts were out of quota on the day (`codex`: HTTP 429
 `usage_limit_reached`, the plan's weekly window; `copilot`: HTTP 429 "quota exceeded", premium interactions at −18 of

@@ -20,3 +20,7 @@ does. No requirement says which of the two is the truth for slot seeding.
 - `packages/providers/src/signin.ts` — `signOut` deletes the credential and nothing else.
 - `packages/config/src/project-settings.ts` — `snapshotLayer` reads `authenticated` from the snapshot record alone.
 - `apps/desktop/src/run-host/launch.ts` — the refusal when the entry model's sign-in provider was not leased.
+
+## Repaired
+
+2026-11-21, by [`PD-PROVIDER-003`](../../product/directives/pd-provider-003.md#pd-provider-003) clause 4: sign-out marks the record `authenticated: false`. Seen in the built application: after signing out of `claude-code` its record read `authenticated: false`.

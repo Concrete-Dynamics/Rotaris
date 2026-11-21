@@ -441,7 +441,7 @@ function ModelStep({ titleId, heading, view, config, onSignIn, onAuthenticate, o
         return (
           <DesignButton key={c.id} className="first-run__choice" role="radio" aria-checked={selected} data-choice={c.id} tabIndex={selected ? 0 : -1} disabled={!open || busy} onClick={() => pick(c)}>
             <span className="first-run__radio" aria-hidden="true" />
-            <span className="first-run__choice-name">{c.custom ? 'OpenAI-compatible endpoint' : c.displayName}</span>
+            <span className="first-run__choice-name" title={c.custom ? undefined : c.displayName}>{c.custom ? 'OpenAI-compatible endpoint' : c.displayName}</span>
             <span className="first-run__choice-how">{open ? (c.custom ? 'Any server that speaks the OpenAI API' : how === 'local' ? 'Your subscription, through Claude Code on this computer' : how === 'flow' ? (c.method === 'device-code' ? 'Sign in with a code at the provider' : 'Sign in on a browser page') : 'API key') : c.available ? 'Sign-in is not available here' : c.unavailabilityReason ?? 'Not available yet'}</span>
           </DesignButton>
         );

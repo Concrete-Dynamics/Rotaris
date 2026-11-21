@@ -28,6 +28,8 @@ Part 2 of 7 of [domain 04](../04-model-providers-auth.md), which indexes every p
 
 - **REQ-PROVIDER-060** — Sign-out for a provider deletes the stored credential and forgets any cached in-process provider state and last error; for `codex` it additionally deletes the staged external-runtime bridge credential, best-effort with a warning on failure.
 
+  > **Narrowed by [`PD-PROVIDER-003`](../../product/directives/pd-provider-003.md#pd-provider-003), 2026-11-21.** Sign-out also marks the provider's snapshot record `authenticated: false`; the rest stands.
+
 - **REQ-PROVIDER-061** — Saving a credential also rewrites that provider's external bridge artifacts, and they are on disk before the save call returns: a `codex` credential is mirrored into the secondary credential store the external agent runtime reads, recorded under the vendor key "openai" with its expiry expressed in milliseconds; a `copilot` credential is staged into the per-workspace gateway files of REQ-PROVIDER-063 whenever the workspace the save belongs to is known and its identifier can be read (REQ-SESSION-197), and is skipped without error when it is not. A failure to write either artifact — including the empty-token failure of REQ-PROVIDER-065 — is logged as a warning and never turns a successful credential save into a failed one; the missing artifact then surfaces as an authentication error on the next model call.
 
 ### Credential Bridges and Key Hygiene

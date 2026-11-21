@@ -6,6 +6,8 @@ import { FakeClock, failure, ok } from '@rotaris/kernel';
 import { CredentialStore } from './credentials/store.js';
 import { ProjectSettingsStore } from './project-settings.js';
 import { ProviderService } from './signin.js';
+import type { DiscoveredModel } from './discovery.js';
+import { LOCAL_TOOL_MODELS_REQUEST, LOCAL_TOOL_MODELS_REQUEST_ID, localToolModelsOf } from './flows/claude-code.js';
 
 let dir: string;
 let clock: FakeClock;
@@ -22,7 +24,7 @@ function fetchWith(handler: (url: string, headers: Headers) => Response | Promis
 }
 const okCatalogue = fetchWith((_u, h) => new Response(h.get('authorization') === `Bearer ${KEY}` ? JSON.stringify(catalogue) : '{}', { status: h.get('authorization') === `Bearer ${KEY}` ? 200 : 401 }));
 
-function service(fetch = okCatalogue, localTool?: { installed: () => boolean; state: () => Promise<{ installed: boolean; signedIn: boolean; subscription: boolean; plan: string | null }> }) {
+function service(fetch = okCatalogue, localTool?: { installed: () => boolean; state: () => Promise<{ installed: boolean; signedIn: boolean; subscription: boolean; plan: string | null }>; models?: () => Promise<readonly DiscoveredModel[] | null> }) {
   const lock = { pid: process.pid, startedAt: '2026-09-05T00:00:00.000Z', timers: clock, monotonic: clock };
   const credentials = new CredentialStore({ dir: join(dir, 'data', 'tokens'), protector: { protect: async () => ok(undefined) }, lock, random: () => 'r', warn: (m) => log.push(`warn:${m}`), info: (m) => log.push(`info:${m}`) });
   const settings = new ProjectSettingsStore({ path: join(dir, 'config', 'project_settings.yaml'), lock, timers: clock, warn: (m) => log.push(`warn:${m}`) });
@@ -122,12 +124,15 @@ describe('the rest of the provider service', () => {
     expect(rows.find((r) => r.id === 'concrete-cloud')!.available).toBe(false);
     expect(rows.find((r) => r.id === 'deepseek')!.baseUrl).toBe('https://api.deepseek.com/v1');
   });
-  it('sign-out (REQ-PROVIDER-102) leaves the snapshot; delete (055) removes both; validate (141) needs a credential', async () => {
+  it('sign-out (REQ-PROVIDER-102) keeps the snapshot record and marks it signed out (PD-PROVIDER-003 clause 4); delete (055) removes both; validate (141) needs a credential', async () => {
     const { svc, settings, credentials } = service();
     await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
     expect(await svc.signOut(' OPENAI-COMPATIBLE--OPENROUTER ')).toEqual({ outcome: 'signed-out', message: 'Signed out of OpenRouter.' });
     expect(credentials.exists('openai-compatible--openrouter')).toBe(false);
     expect(settings.read().ok && (settings.read() as { value: { providers: Record<string, unknown> } }).value.providers['openai-compatible--openrouter']).toBeTruthy();
+    const kept = settings.read();
+    expect(kept.ok && kept.value!.providers['openai-compatible--openrouter']).toMatchObject({ authenticated: false, base_url: OR });
+    expect(kept.ok && kept.value!.providers['openai-compatible--openrouter']!.models).toHaveLength(3);
     expect(await svc.signOut('openai-compatible--openrouter')).toMatchObject({ outcome: 'nothing' });
     expect(await svc.signOut('openai-compatible')).toMatchObject({ outcome: 'unknown' });
     expect((await svc.signOut('zzz')).message).toMatch(/openai-compatible--<label>/);
@@ -428,5 +433,91 @@ describe('Claude Code is connected through the tool installed on this machine (P
     await svc.signInInteractive('claude-code', { prompt: () => undefined });
     state = { ...ready, signedIn: false, subscription: false };
     expect(await svc.health('claude-code')).toMatchObject({ state: 'unauthenticated', detail: expect.stringMatching(/not signed in/) });
+  });
+});
+
+describe('PD-PROVIDER-003 — the tool is asked for its catalogue, the tool connected when found, and the launch check', () => {
+  const ready = { installed: true, signedIn: true, subscription: true, plan: 'max' };
+  const answer = (models: unknown[]): string => JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: LOCAL_TOOL_MODELS_REQUEST_ID, response: { models, account: { email: 'someone@example.com' } } } });
+  const listed = localToolModelsOf(answer([
+    { value: 'default', resolvedModel: 'claude-x-9', displayName: 'Default (recommended)' },
+    { value: 'opus', resolvedModel: 'claude-opus-9', displayName: 'Opus 9', supportedEffortLevels: ['low', 'high'] },
+    { value: 'claude-x-9', resolvedModel: 'claude-x-9', displayName: 'X 9' },
+    { value: 'opus', displayName: 'a second opus' },
+    { value: 'bad name; rm', displayName: 'refused' },
+    { value: 7 },
+  ]))!;
+
+  it('reads the answer of the tool: every named model but `default`, once, nothing of the account, and nothing from another line', () => {
+    expect(listed.map((m) => m.qualifiedId)).toEqual(['claude-code/opus', 'claude-code/claude-x-9']);
+    expect(listed[0]).toMatchObject({ id: 'opus', displayName: 'Opus 9 (subscription)', capabilities: { accepts_image_input: true, reasoning_levels: ['low', 'high'], resolved_model: 'claude-opus-9' } });
+    expect(JSON.stringify(listed)).not.toContain('someone@example.com');
+    expect(localToolModelsOf('{"type":"system","subtype":"init"}')).toBeNull();
+    expect(localToolModelsOf('not json')).toBeNull();
+    expect(localToolModelsOf(JSON.stringify({ type: 'control_response', response: { request_id: 'another', response: { models: [{ value: 'opus' }] } } }))).toBeNull();
+    expect(localToolModelsOf(answer([]))).toEqual([]);
+    expect(JSON.parse(LOCAL_TOOL_MODELS_REQUEST)).toEqual({ type: 'control_request', request_id: LOCAL_TOOL_MODELS_REQUEST_ID, request: { subtype: 'initialize' } });
+  });
+
+  it('records the catalogue of the tool on connecting, and the three aliases where the tool cannot be asked', async () => {
+    const asked = service(okCatalogue, { installed: () => true, state: async () => ready, models: async () => listed });
+    expect(await asked.svc.signInInteractive('claude-code', { prompt: () => undefined })).toMatchObject({ outcome: 'signed-in', discovered: 2 });
+    const snap = asked.settings.read();
+    expect(snap.ok && snap.value!.providers['claude-code']!.models.map((m) => m.id).sort()).toEqual(['claude-code/claude-x-9', 'claude-code/opus']);
+    for (const models of [async () => null, async () => [], async () => { throw new Error('the tool did not start'); }]) {
+      const silent = service(okCatalogue, { installed: () => true, state: async () => ready, models });
+      expect(await silent.svc.signInInteractive('claude-code', { prompt: () => undefined })).toMatchObject({ outcome: 'signed-in', discovered: 3 });
+    }
+  });
+
+  it('connects a tool found signed in once, and never again after the user signed out of it', async () => {
+    const { svc, credentials } = service(okCatalogue, { installed: () => true, state: async () => ready, models: async () => listed });
+    expect(await svc.connectLocalToolIfFound()).toMatchObject({ outcome: 'signed-in', id: 'claude-code', discovered: 2 });
+    expect(credentials.exists('claude-code')).toBe(true);
+    expect(await svc.connectLocalToolIfFound()).toBeNull();
+    await svc.signOut('claude-code');
+    expect(await svc.connectLocalToolIfFound()).toBeNull();
+    expect(credentials.exists('claude-code')).toBe(false);
+  });
+
+  it('connects nothing where the tool is absent, signed out, or not on a subscription', async () => {
+    for (const state of [{ ...ready, installed: false }, { ...ready, signedIn: false, subscription: false }, { ...ready, subscription: false }]) {
+      const { svc, credentials } = service(okCatalogue, { installed: () => state.installed, state: async () => state });
+      expect(await svc.connectLocalToolIfFound()).toBeNull();
+      expect(credentials.list()).toEqual([]);
+    }
+    expect(await service().svc.connectLocalToolIfFound()).toBeNull();
+  });
+
+  it('checks every provider holding a credential at launch, refreshes its catalogue, and leaves a record with no credential as it is', async () => {
+    let models = listed;
+    const { svc, credentials, settings } = service(okCatalogue, { installed: () => true, state: async () => ready, models: async () => models });
+    expect((await svc.launchCheck()).health.size).toBe(0);
+    await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
+    await svc.connectLocalToolIfFound();
+    models = [...listed, ...localToolModelsOf(answer([{ value: 'haiku', displayName: 'Haiku 9' }]))!];
+    const first = await svc.launchCheck();
+    expect([...first.health.keys()].sort()).toEqual(['claude-code', 'openai-compatible--openrouter']);
+    expect(first.health.get('claude-code')).toMatchObject({ state: 'healthy', detail: expect.stringContaining('3 models') });
+    expect(first.health.get('openai-compatible--openrouter')).toMatchObject({ state: 'healthy' });
+    const snap = settings.read();
+    expect(snap.ok && snap.value!.providers['claude-code']!.models.map((m) => m.id)).toContain('claude-code/haiku');
+    // A record with no credential behind it (a provider authenticated by its model configuration) is not checked and not rewritten.
+    await credentials.delete('openai-compatible--openrouter');
+    const second = await svc.launchCheck();
+    expect([...second.health.keys()]).toEqual(['claude-code']);
+    const after = settings.read();
+    expect(after.ok && after.value!.providers['openai-compatible--openrouter']!.authenticated).toBe(true);
+  });
+
+  it('reports an endpoint that stopped answering as the state of that provider, and still answers for the others', async () => {
+    let down = false;
+    const { svc } = service(fetchWith((_u, h) => (down ? new Response('gone', { status: 503, statusText: 'Service Unavailable' }) : new Response(h.get('authorization') === `Bearer ${KEY}` ? JSON.stringify(catalogue) : '{}', { status: h.get('authorization') === `Bearer ${KEY}` ? 200 : 401 }))), { installed: () => true, state: async () => ready, models: async () => listed });
+    await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
+    await svc.connectLocalToolIfFound();
+    down = true;
+    const { health } = await svc.launchCheck();
+    expect(health.get('openai-compatible--openrouter')!.state).toBe('error');
+    expect(health.get('claude-code')!.state).toBe('healthy');
   });
 });

@@ -36,7 +36,9 @@ export interface SignInDeps {
    * PD-PROVIDER-002: the Claude Code tool on this machine — whether its executable is on the search path (read without
    * starting anything), and what it says of its own sign-in when asked. Absent where no local tool can be reached.
    */
-  readonly localTool?: { readonly installed: () => boolean; readonly state: () => Promise<LocalToolState> };
+  readonly localTool?: { readonly installed: () => boolean; readonly state: () => Promise<LocalToolState>;
+    /** PD-PROVIDER-003 clause 1: the models the tool offers the signed-in account, or null when it could not be asked. */
+    readonly models?: () => Promise<readonly DiscoveredModel[] | null> };
   readonly log: (m: string) => void;
   readonly warn: (m: string) => void;
 }
@@ -157,6 +159,12 @@ export class ProviderService {
     return this.deps.localTool.state().catch(() => ({ installed: true, signedIn: false, subscription: false, plan: null }));
   }
 
+  /** PD-PROVIDER-003 clause 1: the tool's own catalogue, and REQ-PROVIDER-047's three aliases where it cannot be asked. */
+  private async localModels(): Promise<DiscoveredModel[]> {
+    const listed = this.deps.localTool?.models ? await this.deps.localTool.models().catch(() => null) : null;
+    return listed && listed.length > 0 ? [...listed] : claudeCodeModels();
+  }
+
   private flowFetch(): FetchLike { return this.deps.fetch ?? ((input, init) => fetch(input, init)); }
 
   method(id: string): SignInMethod | null {
@@ -173,7 +181,7 @@ export class ProviderService {
 
   /** REQ-PROVIDER-069: the discovery dispatch. `cred` supplies what a strategy reads beside the token (account id, tenant base). */
   private async runDiscovery(id: string, token: string, baseUrl: string | null, displayName: string = this.displayName(id), cred: StoredCredential | null = this.deps.credentials.load(id)): Promise<Result<DiscoveredModel[], DiscoveryError>> {
-    if (id === 'claude-code') return ok(claudeCodeModels());
+    if (id === 'claude-code') return ok(await this.localModels());
     const url = this.discoveryUrl(id, baseUrl);
     const common = { providerId: id, displayName, token, knownLimits: KNOWN_LIMITS, ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}) };
     if (id === 'codex' && url !== null) return discoverCodex({ ...common, modelsUrl: url, accountId: cred?.account_id ?? null });
@@ -207,7 +215,13 @@ export class ProviderService {
 
   private async persistModels(id: string, displayName: string, family: string | null, baseUrl: string | null, models: readonly DiscoveredModel[]): Promise<Result<{ preserved: number }, Failure>> {
     const previous = this.snapshotRecord(id);
-    const picks = assignSlots(models.map((m) => ({ qualifiedId: m.qualifiedId, id: m.id, available: isAvailable(m) })));
+    // PD-PROVIDER-003 clause 1: the tool's aliases name the newest model of each family, so they seed the slots where
+    // the tool names them; the tier heuristic reads version numbers out of the dated ids and would pick older ones.
+    const known = new Set(models.map((m) => m.qualifiedId));
+    const alias = (name: string): string | undefined => (this.localSdk(id) && known.has(`${id}/${name}`) ? `${id}/${name}` : undefined);
+    const [large, medium, small] = [alias('opus'), alias('sonnet'), alias('haiku')];
+    const assigned = assignSlots(models.map((m) => ({ qualifiedId: m.qualifiedId, id: m.id, available: isAvailable(m) })), { ...(large ? { large } : {}), ...(medium ? { medium } : {}), ...(small ? { small, fallback: small } : {}) });
+    const picks = medium ? { ...assigned, default_summary_model: medium } : assigned;
     const { record, preserved } = mergeProviderRecord(previous, models, picks, { id, displayName, family, baseUrl, authenticated: true }, this.nowIso());
     const w = await this.deps.settings.upsertProvider(record);
     return w.ok ? ok({ preserved }) : w;
@@ -382,7 +396,47 @@ export class ProviderService {
     return ok(`Validated ${this.displayName(id)}; discovered ${countNoun(found.value.length, 'model')}.${p.value.preserved > 0 ? ` ${countNoun(p.value.preserved, 'previously known model')} preserved.` : ''}`);
   }
 
-  /** REQ-PROVIDER-102/060: sign-out. Never touches the snapshot. */
+  /**
+   * PD-PROVIDER-003 clause 4: the snapshot's `authenticated` says what the credential store says. One field of the
+   * record, written at sign-out alone and only when it says otherwise; a failed write is logged and leaves sign-out's
+   * own answer alone.
+   */
+  private async markSignedOut(id: string): Promise<boolean> {
+    const rec = this.snapshotRecord(id);
+    if (!rec || !rec.authenticated || this.deps.credentials.exists(id)) return false;
+    const w = await this.deps.settings.upsertProvider({ ...rec, authenticated: false });
+    if (!w.ok) { this.deps.warn(`Could not mark ${this.displayName(id)} as signed out in the provider snapshot: ${failureText(w.error)}`); return false; }
+    return true;
+  }
+
+  /**
+   * PD-PROVIDER-003 clause 2: the Claude Code tool connected without being asked for — only when it is installed,
+   * signed in with a subscription, and the product holds neither a marker nor a snapshot record for it. A provider
+   * the user signed out of keeps its record, so it is never connected again from here.
+   */
+  async connectLocalToolIfFound(): Promise<SignInOutcome | null> {
+    const entry = CATALOGUE.find((c) => c.connectionMode === 'local-sdk' && c.available);
+    if (!entry || !this.localInstalled()) return null;
+    if (this.deps.credentials.exists(entry.id) || this.snapshotRecord(entry.id) !== null) return null;
+    if (localToolProblem(await this.localState()) !== null) return null;
+    return this.connectLocalTool(entry.id, entry.displayName);
+  }
+
+  /**
+   * PD-PROVIDER-003 clause 3: the launch check — REQ-PROVIDER-118's health check, once for every provider holding a
+   * credential, side by side. Never throws: a check that fails is that provider's `error` state. A snapshot record
+   * with no credential behind it is left as it is: the first build marked such a record signed out here, and a record
+   * whose provider is authenticated by its model configuration lost its slots (`pnpm resilience-proof`, same-tier).
+   */
+  async launchCheck(): Promise<{ readonly health: ReadonlyMap<string, ProviderHealth> }> {
+    const ids = this.deps.credentials.list().filter((id) => id !== 'openai-compatible');
+    const results = await Promise.all(ids.map(async (id): Promise<[string, ProviderHealth]> => {
+      try { return [id, await this.health(id)]; } catch (cause) { return [id, { state: 'error', detail: String((cause as Error).message ?? cause), available: true }]; }
+    }));
+    return { health: new Map(results) };
+  }
+
+  /** REQ-PROVIDER-102/060: sign-out. Of the snapshot it writes one field, the record's `authenticated` (PD-PROVIDER-003 clause 4). */
   async signOut(target: string): Promise<{ readonly outcome: 'signed-out' | 'nothing' | 'failed' | 'unknown'; readonly message: string }> {
     const id = target.trim().toLowerCase();
     const known = this.knownSignOutTargets();
@@ -391,6 +445,7 @@ export class ProviderService {
     const r = await this.deps.credentials.delete(id);
     this.lastErrors.delete(id);
     if (!r.ok) return { outcome: 'failed', message: `Sign-out of ${name} failed: ${r.error.headline}${r.error.detail ? ` (${r.error.detail})` : ''}` };
+    await this.markSignedOut(id);
     return r.value.removed ? { outcome: 'signed-out', message: `Signed out of ${name}.` } : { outcome: 'nothing', message: `${name} was not signed in; nothing to do.` };
   }
 
@@ -467,7 +522,12 @@ export class ProviderService {
       if (!this.localInstalled()) return { state: 'error', detail: CLAUDE_CODE_NOT_INSTALLED, available: false };
       if (this.status(id) !== 'authenticated') return { state: 'unauthenticated', detail: 'Not authenticated.', available: true };
       const problem = localToolProblem(await this.localState());
-      return problem === null ? { state: 'healthy', detail: `${entry.value.displayName} is signed in on this computer.`, available: true } : { state: 'unauthenticated', detail: problem, available: true };
+      if (problem !== null) return { state: 'unauthenticated', detail: problem, available: true };
+      // PD-PROVIDER-003 clause 1: the catalogue is the tool's, so the check re-reads it as a catalog call would.
+      const models = await this.localModels();
+      const p = await this.persistModels(id, entry.value.displayName, null, null, models);
+      if (!p.ok) return { state: 'error', detail: p.error.headline, available: true };
+      return { state: 'healthy', detail: `${entry.value.displayName} is signed in on this computer; it offers ${countNoun(models.length, 'model')}.`, available: true };
     }
     const method = this.method(id);
     if (method === null) return { state: 'unknown', detail: 'Authentication is managed by model configuration.', available: true };
@@ -618,7 +678,7 @@ export class ProviderService {
     if (problem !== null) { this.recordError(id, problem); return { outcome: 'failed', message: problem }; }
     const saved = await this.deps.credentials.save(id, { access_token: CLAUDE_CODE_MARKER, refresh_token: '', expires_at: 0, account_id: null, extra: { connection: 'local-tool', ...(state.plan ? { plan: state.plan } : {}) } });
     if (!saved.ok) { const message = failureText(saved.error); this.recordError(id, message); return { outcome: 'failed', message }; }
-    const models = claudeCodeModels();
+    const models = await this.localModels();
     const persisted = await this.persistModels(id, name, null, null, models);
     if (!persisted.ok) { await this.deps.credentials.delete(id); const message = `Could not save provider ${id}: ${failureText(persisted.error)}`; this.recordError(id, message); return { outcome: 'failed', message }; }
     this.clearError(id);

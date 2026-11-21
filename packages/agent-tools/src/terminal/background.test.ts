@@ -198,8 +198,12 @@ describe.skipIf(!dash)('OQ-135 through the manager, against the host\'s own dash
       // About 1 aimed `sleep` attempt in 37 lands in the window under load (10, 11 and 10 of about 385 measured on
       // 2026-09-30), but on a quieter host as few as 1 in 60 (5 to 18 of 300 at load 1.9 to 2.1, the same day), and one
       // of the three cases went red at 400 attempts in 4 of 13 runs at load 0.3 to 1.4 (acceptance finding A8, round 4).
-      // 1 500 leave a miss below 1 in 10 000 000 at 1 in 60; a miss costs a few ms, a hit ~250 ms.
-      for (let attempt = 0; attempt < 1_500 && !hit; attempt++) {
+      // 1 500 leave a miss below 1 in 10 000 000 at 1 in 60; a miss costs a few ms, a hit ~250 ms. On a fast host the
+      // window is rarer still: under the whole gate all 1 500 missed inside 2.2 s (2026-11-21,
+      // docs/archive/defects/the-background-sigint-while-dash-starts-cases-go-red-alone-on-a-quiet-linux-host.md), so
+      // the attempts go on past 1 500 until one lands or 90 s have passed, whichever is first.
+      const until = (clocks.monotonic.now() as number) + 90_000;
+      for (let attempt = 0; !hit && (attempt < 1_500 || (clocks.monotonic.now() as number) < until); attempt++) {
         const r = m.start(command, 60);
         if (!r.ok) throw new Error(r.error);
         // The shell's pid, which leads the session's group (the session keeps its process private).
@@ -218,7 +222,7 @@ describe.skipIf(!dash)('OQ-135 through the manager, against the host\'s own dash
       // At least one attempt landed in the window, so the case measured the repair and not only the ordinary delivery.
       expect(hit).toBe(true);
       expect(warnings.some((w) => /never received it \(the shell's vfork window, OQ-135\); SIGINT sent to it( once more)?$/.test(w))).toBe(true);
-    }, 120_000);
+    }, 150_000);
   }
 
   it('a command that catches SIGINT and takes its time to stop is sent it once, and finishes its shutdown', async () => {

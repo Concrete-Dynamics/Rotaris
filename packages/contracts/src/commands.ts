@@ -350,6 +350,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** The pasted key travels INWARD here and nowhere else; `openai-compatible` as providerId means a custom instance from label + URL. */
   z.object({ kind: z.literal('provider.signIn'), providerId: z.string().max(NAME_MAX).min(1), label: z.string().max(NAME_MAX).optional(), baseUrl: z.string().max(PATH_MAX).optional(), apiKey: z.string().max(PATH_MAX), replace: z.boolean().optional(), allowEmpty: z.boolean().optional(), quiet: z.boolean().optional() }),
   /**
+   * REQ-PROVIDER-096/116: an interactive sign-in (device code, browser page) for the asking window's provider. It answers
+   * with the flow's one outcome once the user has finished at the provider; while it waits the window reads the prompt
+   * to show with `provider.authPrompt`, and `provider.authCancel` ends a pending wait early. No credential travels on any of the three.
+   */
+  z.object({ kind: z.literal('provider.authenticate'), providerId: z.string().max(NAME_MAX).min(1), reauthenticate: z.boolean().optional(), allowEmpty: z.boolean().optional() }),
+  z.object({ kind: z.literal('provider.authPrompt') }),
+  z.object({ kind: z.literal('provider.authCancel') }),
+  /**
    * PD-WORKSPACE-010: the first-launch setup. `read` answers the facts the surface derives its step from; `chooseProject`
    * opens REQ-WORKSPACE-009's chooser for the window that asked, or takes the folder the application started in, and
    * remembers the answer; `finish` ends the setup for the installation. No request names a folder: main resolves it.

@@ -24,8 +24,8 @@ export const ReauthPromptSchema = z.object({
   provider: z.object({ id: z.string(), name: z.string() }),
   /**
    * How this build can re-authenticate it: `api-key` offers the masked key field; `unavailable` — a device-code or
-   * browser provider, whose sign-in flows are owed (`packages/providers/src/catalogue.ts`) — states that in
-   * `unavailableReason`; `none` is a provider this application holds no credential for (one configured by model
+   * browser provider, which signs in through the authentication window and not from this prompt (the in-place flow of
+   * REQ-NOTIFY-076 is owed), or one that cannot be signed in to at all — states that in `unavailableReason`; `none` is a provider this application holds no credential for (one configured by model
    * configuration alone), where only switching back is offered.
    */
   method: z.enum(REAUTH_METHODS),

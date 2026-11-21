@@ -163,7 +163,7 @@ describe('the driver addresses persona, approval and terminal windows (docs/arch
   }
 
   it('reads a role selector as a role, and anything else as a main window', () => {
-    expect(['persona:coding-agent', 'approval', 'terminal', 'auth-recovery'].map(namesAuxiliary)).toEqual([true, true, true, true]);
+    expect(['persona:coding-agent', 'approval', 'terminal', 'auth-recovery', 'provider'].map(namesAuxiliary)).toEqual([true, true, true, true, true]);
     expect(['0', '/w', 'w', '/terminal', 'personas'].map(namesAuxiliary)).toEqual([false, false, false, false, false]);
   });
 

@@ -1598,6 +1598,11 @@
 .provider-dialog__field .input { width: 100%; }
 .provider-dialog__hint { margin: 0; font-size: var(--rt-text-sm, 13px); }
 .provider-dialog__confirm { margin: 0; }
+/* REQ-PROVIDER-096/116 — the prompt an interactive sign-in shows while it waits. */
+.provider-dialog__prompt { display: flex; flex-direction: column; gap: var(--rt-space-2); }
+.provider-dialog__prompt p { margin: 0; }
+.provider-dialog__prompt a, .provider-dialog__link a { color: var(--rt-accent-300); }
+.provider-dialog__link { margin: 0; font-size: var(--rt-text-sm); overflow-wrap: anywhere; max-height: 6.5em; overflow: auto; }
 
 /* ── Overview (REQ-SHELL-026; REQ-MONITOR-164..174; language: Card, KPI, Tag, Status dot, Empty state) ── */
 .overview { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); height: 100%; min-height: 0; padding: var(--rt-space-4, 16px) var(--rt-space-5, 20px); overflow: auto; }

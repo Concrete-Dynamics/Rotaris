@@ -91,6 +91,7 @@ export function readModelEntry(name: string, value: unknown, sink: ProblemSink):
   const modelId = r.requiredString('model_id');
   const disableResponses = r.bool('disable_responses_api', false);
   const authProvider = r.stringOrNull('auth_provider');
+  const apiMode = r.vocabularyOrNull('api_mode', API_MODES);
   const entry: ModelEntry = {
     provider: provider ?? '',
     model_id: modelId ?? '',
@@ -99,9 +100,13 @@ export function readModelEntry(name: string, value: unknown, sink: ProblemSink):
     auth_provider: authProvider,
     base_url: r.stringOrNull('base_url'),
     disable_streaming: r.bool('disable_streaming', false),
-    // REQ-CONFIG-084: automatically enabled when the auth provider is copilot.
-    disable_responses_api: disableResponses || authProvider === 'copilot',
-    api_mode: r.vocabularyOrNull('api_mode', API_MODES),
+    // REQ-CONFIG-084: automatically enabled when the auth provider is copilot — except for an entry whose API mode is
+    // stated as `responses`, which is what Copilot's own catalogue advertises for a model it serves on no other route
+    // (REQ-PROVIDER-074; the provider answers such a model on the chat route with `unsupported_api_for_model`). Read
+    // this way pending the open question the two requirements raise against each other; an entry that states the
+    // switch itself is still obeyed.
+    disable_responses_api: disableResponses || (authProvider === 'copilot' && apiMode !== 'responses'),
+    api_mode: apiMode,
     max_input_tokens: r.intOrNull('max_input_tokens', { min: 1 }),
     max_output_tokens: r.intOrNull('max_output_tokens', { min: 1 }),
     context_compression_threshold: r.intOrNull('context_compression_threshold', { min: 1 }),

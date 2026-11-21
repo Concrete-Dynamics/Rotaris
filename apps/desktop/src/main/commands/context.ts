@@ -17,6 +17,7 @@ import type {
   ProcessReply,
   ProposalStatus,
   ProviderDialogPayload,
+  ProviderSignInPrompt,
   ProviderHealthPayload,
   ProviderRow,
   RunHostRequest,
@@ -173,7 +174,11 @@ export interface CommandContext {
   readonly dictationCredential: DictationCredentialDeps;
   readonly healthCache: Map<string, ProviderHealthPayload>;
   readonly providerPayloads: Map<number, { mode: ProviderDialogPayload['mode']; providerId: string | null }>;
-  readonly providerChoices: () => ProviderDialogPayload['choices'];
+  readonly providerChoices: (include?: string | null) => ProviderDialogPayload['choices'];
+  /** REQ-PROVIDER-116: the interactive sign-in each authentication window has pending — its cancellation and the prompt it shows. */
+  readonly providerSignIns: Map<number, { readonly abort: AbortController; prompt: ProviderSignInPrompt | null }>;
+  /** REQ-PROVIDER-116: "prompts open the system browser" — http(s) only, as `shell.openExternal` does. */
+  readonly openSignInPage: (url: string) => void;
   readonly providerRows: () => ProviderRow[];
   readonly presentProvider: (mode: ProviderDialogPayload['mode'], providerId: string | null) => Promise<void>;
   readonly afterProviderChange: () => Promise<void>;

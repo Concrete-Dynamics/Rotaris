@@ -23,8 +23,8 @@ export type AuthRecoveryModel = z.infer<typeof AuthRecoveryModelSchema>;
 
 /**
  * REQ-NOTIFY-076: how this build re-authenticates the provider that failed. `api-key` offers the masked key field and the
- * save-and-retry control. `unavailable` is a device-code or browser provider — whose sign-in flows are owed
- * (`packages/providers/src/catalogue.ts`) — or one the catalogue marks unavailable; `message` says so, and no path sends the
+ * save-and-retry control. `unavailable` is a device-code or browser provider — which signs in through the authentication window and
+ * not from this dialog (the in-place flow is owed) — or one that cannot be signed in to; `message` says so, and no path sends the
  * user to a shell, a terminal or a separate program. `configuration` is a provider this application holds no credential
  * for (one whose key the model configuration carries, REQ-PROVIDER-118/140); `message` says so (OQ-179).
  */

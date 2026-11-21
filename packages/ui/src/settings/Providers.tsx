@@ -53,8 +53,9 @@ export const KEY_PROVIDER_FIRST_SENTENCE = 'This provider signs in with an API k
  * the sentence and left the settings closed, where the sentence is drawn: three of the six built-in rows answered
  * their first control with nothing on screen.
  */
-export function authenticatePress(row: Pick<ProviderRow, 'method' | 'authenticated'>): { readonly kind: 'key-field'; readonly message: string } | { readonly kind: 'flow' } {
-  if (row.method !== 'api-key') return { kind: 'flow' };
+export function authenticatePress(row: Pick<ProviderRow, 'method' | 'authenticated'> & { readonly local?: boolean }): { readonly kind: 'key-field'; readonly message: string } | { readonly kind: 'flow' } {
+  // PD-PROVIDER-002: a provider connected through the locally installed tool has a check to start and no key to enter.
+  if (row.method !== 'api-key' || row.local === true) return { kind: 'flow' };
   return { kind: 'key-field', message: row.authenticated ? KEY_PROVIDER_REPLACE_SENTENCE : KEY_PROVIDER_FIRST_SENTENCE };
 }
 
@@ -112,7 +113,7 @@ function Row({ row, props }: { row: ProviderRow; props: ProvidersCardProps }) {
   };
   const { name: stateName, label: word } = stateWord(row);
   const tone = STATE_TONES[stateName] ?? STATE_TONES.idle;
-  const canKey = row.method === 'api-key';
+  const canKey = row.method === 'api-key' && !row.local;
   const { text: authAction, name: authName } = authenticateWords(row);
   // REQ-PROVIDER-141: a key provider's press moves focus to the key field. The field exists only once the settings are
   // open, so the press asks (`keyFocus`) and the effect answers after the field is in the tree.

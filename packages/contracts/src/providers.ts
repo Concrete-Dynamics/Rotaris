@@ -31,6 +31,8 @@ export const ProviderRowSchema = z.object({
   displayName: z.string(),
   method: z.enum(SIGN_IN_METHOD_NAMES).nullable(),
   methodLabel: z.string(),
+  /** PD-PROVIDER-002: connected through the tool installed on this machine — no key field; Authenticate starts the check. */
+  local: z.boolean(),
   authenticated: z.boolean(),
   status: z.enum(CREDENTIAL_STATUS_NAMES),
   /** REQ-PROVIDER-107: the display mask of a stored value, or null when none is stored. */
@@ -58,6 +60,8 @@ export const ProviderChoiceSchema = z.object({
   /** REQ-PROVIDER-142: shown as coming soon and not selectable. */
   available: z.boolean(),
   unavailabilityReason: z.string().nullable(),
+  /** PD-PROVIDER-002: the sentence the window shows for a provider connected through the locally installed tool; absent otherwise. */
+  localInstruction: z.string().optional(),
 });
 export type ProviderChoice = z.infer<typeof ProviderChoiceSchema>;
 
@@ -83,6 +87,18 @@ export const ProviderSignInResultSchema = z.discriminatedUnion('outcome', [
   z.object({ outcome: z.literal('failed'), message: z.string() }),
 ]);
 export type ProviderSignInResult = z.infer<typeof ProviderSignInResultSchema>;
+
+/**
+ * REQ-PROVIDER-012/096/116: the prompt an interactive sign-in shows while it waits for the user. A device-code prompt
+ * carries the verification address, the code to enter there, the polling interval and how long the code stays valid;
+ * a browser prompt carries the authorization address. Neither is a credential: the code and the address are what the
+ * user is shown, and the tokens the flow ends in never leave main (ADR-0030).
+ */
+export const ProviderSignInPromptSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('device-code'), verificationUri: z.string(), userCode: z.string(), intervalSeconds: z.number().nonnegative(), expiresInSeconds: z.number().nonnegative() }),
+  z.object({ kind: z.literal('browser'), url: z.string(), message: z.string() }),
+]);
+export type ProviderSignInPrompt = z.infer<typeof ProviderSignInPromptSchema>;
 
 export const ProviderActionResultSchema = z.object({ ok: z.boolean(), message: z.string() });
 export type ProviderActionResult = z.infer<typeof ProviderActionResultSchema>;

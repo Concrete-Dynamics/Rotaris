@@ -2,6 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
+import { execFile } from 'node:child_process';
 import { integrationAllowsClose, integrationAllowsUpdate, noWorktreeIntegration } from './integration-guard.js';
 import { askRendererGuard, askUnsavedInTurn, createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, RENDERER_UNSAVED_PROBE_SCRIPT, type CloseGuard, type UnsavedGuardAnswer } from './main-windows.js';
 import { createLiveStateArbiter } from './live-state.js';
@@ -15,18 +16,18 @@ import { createLibraryRevision } from './library.js';
 import { everyHandlerThrows, startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
-import { requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
+import { findExecutable, requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
 import { createImprovementCoordinator } from './improvements.js';
 import { homedir } from 'node:os';
 import { FrameDeliveryLimiter } from './terminal.js';
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
-import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ImprovementActivity, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
+import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type AcknowledgementAction, CHANNEL, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ImprovementActivity, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderSignInPrompt, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater, updateCloseBox } from './updater/updater.js';
 import { createSuccessorWait } from './updater/successor.js';
@@ -36,7 +37,7 @@ import { diagnosticsCommands } from './commands/diagnostics.js'; // REQ-SHELL-16
 import { DiagnosticsCaptures, isExistingDirectory } from './diagnostics.js'; // REQ-STARTUP-129..133, hardening D2, PD-STARTUP-011
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
-import { CATALOGUE, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
+import { CATALOGUE, CLAUDE_CODE_INSTRUCTION, CLAUDE_CODE_NOT_INSTALLED, localToolStateOf, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator, serviceMarkerWriter } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
@@ -371,7 +372,36 @@ async function main(): Promise<void> {
   const credentials = new CredentialStore({ dir: layout.tokens, protector, lock: lockDeps, random, warn: (m) => log(`credential store: ${m}`, 'warn'), info: (m) => log(`credential store: ${m}`) });
   const dictationCredential: DictationCredentialDeps = { dir: layout.dictation, protector, warn: (m) => log(`dictation credential: ${m}`, 'warn') };
   const projectSettings = new ProjectSettingsStore({ path: join(dirs.config, PROJECT_SETTINGS_FILE), lock: lockDeps, timers: clocks.timers, warn: (m) => log(`project settings: ${m}`, 'warn') });
-  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
+  /**
+   * PD-PROVIDER-002: the Claude Code tool the user installed. Whether it is there is read off the search path without
+   * starting anything; what it says of its own sign-in is its `auth status` answer, of which only three facts are kept
+   * (`localToolStateOf`) — the account it names is never logged, stored or sent anywhere.
+   */
+  const claudeCodeInstalled = (): boolean => findExecutable('claude', process.env) !== null;
+  const claudeCodeState = (): Promise<ReturnType<typeof localToolStateOf>> => new Promise((resolve) => {
+    // A fixed command line: nothing of it is read from the environment, and the search path only decides its Windows form.
+    const shim = process.platform === 'win32' && /\.(cmd|bat)$/i.test(findExecutable('claude', process.env) ?? '');
+    const target = shim ? { command: 'cmd.exe', args: ['/d', '/s', '/c', '"claude auth status"'], windowsVerbatimArguments: true } : { command: 'claude', args: ['auth', 'status'], windowsVerbatimArguments: false };
+    const env = { ...process.env };
+    delete env['CLAUDECODE'];
+    delete env['CLAUDE_CODE_ENTRYPOINT'];
+    execFile(target.command, target.args, { env, timeout: 15_000, windowsHide: true, ...(target.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) }, (error, stdout) => {
+      const text = String(stdout).trim();
+      resolve(localToolStateOf(text.startsWith('{') ? text : error && (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : '{}'));
+    });
+  });
+  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, timers: clocks.timers, localTool: { installed: claudeCodeInstalled, state: claudeCodeState }, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
+
+  /**
+   * REQ-NOTIFY-076 as the two recovery surfaces can act on it today: a key-based provider gets its key field. A device-code or
+   * browser provider signs in through its own flow in the authentication window (Settings → Models → Re-authenticate); starting
+   * that flow inside the recovery surfaces themselves is owed, so they say where it is, in the application and nowhere else.
+   */
+  const recoveryMethodOf = (id: string): { readonly method: 'api-key' | 'unavailable' | 'configuration'; readonly message: string } => {
+    const how = providers.reauthentication(id);
+    if (how.method !== 'interactive') return { method: how.method, message: how.message };
+    return { method: 'unavailable', message: `${providers.displayName(id)} signs in on its provider's own page. Re-authenticate it under Settings → Models, then retry here — or choose a model from another provider.` };
+  };
 
   // ADR-0002: one run host for the application's lifetime; one workspace service per open workspace.
   // REQ-MCP-033 / OQ-82: the run host builds the reserved token's launch of this executable, and that launch carries the
@@ -394,13 +424,14 @@ async function main(): Promise<void> {
       return svc.link.request(a, millis(a.kind === 'checkpoint.capture' ? 320_000 : 60_000));
     }
     if (a.kind !== 'credentials.lease') return { kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from the run host` };
-    const { bearers, report } = providers.lease(a.providerIds);
+    // REQ-PROVIDER-067: a credential within the refresh margin is renewed here, before its bearer is handed over.
+    const { bearers, headers, renewable, report } = await providers.lease(a.providerIds);
     /**
      * REQ-PROVIDER-068: the lease's report is the run host's to write — `LeaseReportLog` (`run-host/launch.ts`) says
      * the opening report whole per workspace root, then only what changed. Main wrote its own "credentials leased: …"
      * beside it, so every lease reached the application log twice (PD-MONITOR-002, live-run finding a71-9).
      */
-    return { kind: 'credentials.leased', bearers, report: { authenticated: [...report.authenticated], renewed: [...report.renewed], unresolved: { ...report.unresolved } } };
+    return { kind: 'credentials.leased', bearers, headers, renewable, report: { authenticated: [...report.authenticated], renewed: [...report.renewed], unresolved: { ...report.unresolved } } };
   });
   // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown` (`dispatch.ts`), or Electron tearing the process down at
   // quit, which also reports 0 (measured on a scratch Electron 44.1.1 app: `app.quit()`, `app.exit(0)` and
@@ -952,7 +983,7 @@ async function main(): Promise<void> {
     present: (payload) => { void presentAuthRecovery(payload); },
     close: (sessionId) => closeAuthRecovery(sessionId),
     log: (message) => log(message),
-    reauthentication: (id) => providers.reauthentication(id),
+    reauthentication: (id) => recoveryMethodOf(id),
     reauthenticate: async (id, apiKey) => {
       const r = await providers.reauthenticateWithKey(id, apiKey);
       // `catalog`: the key is stored though its models were not recorded — what depends on the provider is refreshed too.
@@ -999,11 +1030,10 @@ async function main(): Promise<void> {
     describeProvider: (id) => {
       const known = providers.allKnownIds().includes(id);
       const name = known ? providers.displayName(id) : id;
-      const how = known ? providers.reauthentication(id) : { method: 'configuration' as const, message: '' };
+      const how = known ? recoveryMethodOf(id) : { method: 'configuration' as const, message: '' };
       if (how.method === 'api-key') return { provider: { id, name }, method: 'api-key' };
       if (how.method === 'configuration') return { provider: { id, name }, method: 'none' };
-      const signIn = providers.method(id);
-      return { provider: { id, name }, method: 'unavailable', unavailableReason: signIn === 'device-code' || signIn === 'browser-pkce' ? unavailableMethodMessage(name, signIn) : how.message };
+      return { provider: { id, name }, method: 'unavailable', unavailableReason: how.message };
     },
     /** REQ-NOTIFY-078 / REQ-NOTIFY-202: the dialog's key path (`reauthenticateWithKey`) — validated, stored, the refusing stage named. */
     saveKey: async (providerId, apiKey) => {
@@ -1046,17 +1076,38 @@ async function main(): Promise<void> {
   let providerWindow: BrowserWindow | null = null;
   const providerPayloads = new Map<number, { mode: ProviderDialogPayload['mode']; providerId: string | null }>();
   const healthCache = new Map<string, ProviderHealthPayload>();
-  const providerChoices = (): ProviderDialogPayload['choices'] => {
+  // REQ-PROVIDER-116: each authentication window's pending interactive sign-in — closing the window cancels it.
+  const providerSignIns = new Map<number, { readonly abort: AbortController; prompt: ProviderSignInPrompt | null }>();
+  /** REQ-PROVIDER-116: the prompt opens the system browser. The address carries the flow's state, so only its host is logged. */
+  const openSignInPage = (url: string): void => {
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { return; }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return;
+    if (__ROTARIS_SEAMS__ && capturing && process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] !== undefined) { log(`capture: sign-in page ${parsed.host}`); return; }
+    shell.openExternal(parsed.href).then(() => log(`providers: opened the sign-in page at ${parsed.host}`), (cause: unknown) => log(`providers: the sign-in page at ${parsed.host} could not be opened (${cause instanceof Error ? cause.message : String(cause)})`, 'warn'));
+  };
+  /**
+   * REQ-PROVIDER-117: the custom endpoint plus every built-in not yet authenticated. `include` is the provider a window was
+   * opened for (REQ-PROVIDER-116/141): a re-authentication names one that IS authenticated, and it is listed all the same.
+   */
+  const providerChoices = (include: string | null = null): ProviderDialogPayload['choices'] => {
     const custom = CATALOGUE.find((c) => c.id === 'openai-compatible')!;
     const authenticated = new Set(providers.list().filter((r) => r.authenticated).map((r) => r.id));
-    const builtIns = CATALOGUE.filter((c) => c.id !== 'openai-compatible' && c.id !== 'concrete-cloud' && !authenticated.has(c.id));
+    const builtIns = CATALOGUE.filter((c) => c.id !== 'openai-compatible' && c.id !== 'concrete-cloud' && (!authenticated.has(c.id) || c.id === include));
+    // REQ-PROVIDER-036: sign-in surfaces brand the codex provider.
+    const nameOf = (c: (typeof CATALOGUE)[number]): string => (c.id === 'codex' ? `${c.displayName} (Sign in with ChatGPT)` : c.displayName);
     return [
       { id: custom.id, displayName: 'OpenAI-compatible endpoint (custom URL)', method: custom.signInMethod, methodLabel: METHOD_LABELS[custom.signInMethod], hint: destinationHint(custom), defaultBaseUrl: custom.baseUrl, custom: true, available: true, unavailabilityReason: null },
-      ...builtIns.map((c) => ({ id: c.id, displayName: c.displayName, method: c.signInMethod, methodLabel: METHOD_LABELS[c.signInMethod], hint: destinationHint(c), defaultBaseUrl: null, custom: false, available: c.available, unavailabilityReason: c.unavailabilityReason })),
+      ...builtIns.map((c) => ({
+        id: c.id, displayName: nameOf(c), method: c.signInMethod, methodLabel: METHOD_LABELS[c.signInMethod], hint: destinationHint(c), defaultBaseUrl: null, custom: false,
+        // PD-PROVIDER-002: a local-sdk provider is unavailable exactly when its tool is not on the search path, and takes no key.
+        available: c.available && (c.connectionMode !== 'local-sdk' || claudeCodeInstalled()), unavailabilityReason: c.connectionMode === 'local-sdk' && !claudeCodeInstalled() ? CLAUDE_CODE_NOT_INSTALLED : c.unavailabilityReason,
+        ...(c.connectionMode === 'local-sdk' ? { localInstruction: CLAUDE_CODE_INSTRUCTION } : {}),
+      })),
     ];
   };
   const providerRows = (): ProviderRow[] => providers.list().map((r) => ({
-    id: r.id, displayName: r.displayName, method: r.method, methodLabel: r.methodLabel, authenticated: r.authenticated, status: r.status, displayMask: r.maskedKey,
+    id: r.id, displayName: r.displayName, method: r.method, methodLabel: r.methodLabel, authenticated: r.authenticated, status: r.status, displayMask: r.maskedKey, local: r.local,
     baseUrl: r.baseUrl, modelCount: r.modelCount, userDefined: r.userDefined, available: r.available, lastError: r.lastError, health: healthCache.get(r.id) ?? null,
   }));
   const presentProvider = async (mode: ProviderDialogPayload['mode'], providerId: string | null): Promise<void> => {
@@ -1073,7 +1124,8 @@ async function main(): Promise<void> {
     providerWindow = dlg;
     providerPayloads.set(wc, { mode, providerId });
     dlg.setMenuBarVisibility(false);
-    dlg.on('closed', () => { providerPayloads.delete(wc); if (providerWindow === dlg) providerWindow = null; });
+    // REQ-PROVIDER-116: a window closed over a pending sign-in cancels it, so its wait ends early and the listener's port is released.
+    dlg.on('closed', () => { providerSignIns.get(wc)?.abort.abort(); providerPayloads.delete(wc); if (providerWindow === dlg) providerWindow = null; });
     const query = { role: 'provider' };
     try {
       if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
@@ -2029,7 +2081,7 @@ async function main(): Promise<void> {
     pauseWindows, pausePayloads, presentPause, reviewPayloads, authRecovery, authRecoveryPayloads, runFailures,
     measurePersonaPaint, terminalWindowCommand, surface,
     notices, raiseNotice, raiseNoticeKeyed, recoveryFor, configFatal, raiseTransient: (w, kind, title) => raiseTransient(w, kind, title), announceRepairs, updater,
-    providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange, dictationCredential,
+    providers, healthCache, providerPayloads, providerChoices, providerSignIns, openSignInPage, providerRows, presentProvider, afterProviderChange, dictationCredential,
     firstLaunchSetup: onboarding, raiseNoProviderNotice,
     preferences, diagnostics, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey, userDirs: dirs,
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
@@ -2216,6 +2268,8 @@ async function main(): Promise<void> {
         // REQ-NOTIFY-072: the authentication recovery dialog, under the main window it was presented over.
         const recovery = authRecoveryWindow;
         if (recovery && !recovery.win.isDestroyed() && recovery.win.getParentWindow() === candidate.win) found.push({ selector: 'auth-recovery', role: 'auth-recovery', owner, wcId: recovery.win.webContents.id, visible: recovery.win.isVisible(), win: recovery.win });
+        // REQ-PROVIDER-116: the provider authentication window, over the main window it was presented from.
+        if (providerWindow && !providerWindow.isDestroyed() && providerWindow.getParentWindow() === candidate.win) found.push({ selector: 'provider', role: 'provider', owner, wcId: providerWindow.webContents.id, visible: providerWindow.isVisible(), win: providerWindow });
         return found;
       }),
       timers: clocks.timers,

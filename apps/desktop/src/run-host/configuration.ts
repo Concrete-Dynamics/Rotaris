@@ -26,6 +26,9 @@ import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelCli
  * is the slot alias its model resolved through (`resolved_persona_model_tiers`), no longer an environment
  * variable.
  */
+/** The provider family whose models are answered by the locally installed tool, not an endpoint (REQ-PROVIDER-005). */
+export const LOCAL_SDK_PROVIDER = 'claude-code';
+
 export const PROVIDER_BASE_URLS: Readonly<Record<string, string>> = Object.freeze({
   openai: 'https://api.openai.com/v1',
 });
@@ -173,6 +176,8 @@ export function modelRefOf(cfg: LoadedConfiguration, name: string | null, script
   const entry = cfg.models[name];
   if (!entry) return null;
   if (scripted || isScriptedProvider(entry.provider)) return { providerId: entry.provider === '' ? SCRIPTED_PROVIDER : entry.provider, modelId: entry.model_id, dialect: 'chat', acceptsImageInput: entry.accepts_image_input };
+  // PD-PROVIDER-002 / REQ-PROVIDER-005: the local-sdk provider's models have no endpoint, by declaration; the local tool answers them.
+  if (entry.provider === LOCAL_SDK_PROVIDER) return { providerId: entry.provider, modelId: entry.model_id, dialect: 'chat', acceptsImageInput: entry.accepts_image_input };
   const baseUrl = entry.base_url ?? PROVIDER_BASE_URLS[entry.provider];
   if (!baseUrl) return null;
   const dialect = entry.api_mode === 'responses' && !entry.disable_responses_api ? 'responses' : 'chat';
@@ -504,6 +509,16 @@ export interface ConfigureDeps {
   /** ADR-0030: the bearers main leased for this workspace's current run, read per request. */
   readonly bearers: (workspaceRoot: string) => Readonly<Record<string, string>>;
   /**
+   * REQ-PROVIDER-068 / REQ-PROVIDER-070/076: what main has leased since — a run's bearers with every renewal laid over
+   * them, and the request headers a sign-in provider's API needs. Absent in tests and under the scripted dialect.
+   */
+  /**
+   * PD-PROVIDER-002: the client that answers a `claude-code` model through the Claude Code tool installed on this
+   * machine. Absent in tests and under the scripted dialect; with it absent such a model has no client to reach.
+   */
+  readonly claudeCli?: ModelClient;
+  readonly leasedCredentials?: { overlay(run: Readonly<Record<string, string>>): Readonly<Record<string, string>>; headersFor(provider: string): Readonly<Record<string, string>> | undefined };
+  /**
    * ADR-0022 / REQ-SANDBOX-067: the CACHED availability verdict, owned at application lifetime by the
    * run host's one `ConfinementService`. Read synchronously and never probed from here: every path
    * that prepares a run awaits the probe first (REQ-SANDBOX-097) — a run start in `launchSession`, and
@@ -737,12 +752,33 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   const entryAuthProvider = isScripted ? null : entry?.auth_provider ?? null;
   const retrospective = retrospectiveOf(cfg, scripted);
   const retrospectiveAuthProvider = retrospective === null || scripted || isScriptedProvider(retrospective.model.providerId) ? null : cfg.models[retrospective.key]?.auth_provider ?? null;
-  return ok({ authProviders, entryAuthProvider, retrospectiveAuthProvider, complete: (bearers) => {
+  return ok({ authProviders, entryAuthProvider, retrospectiveAuthProvider, complete: (leasedAtStart) => {
+    // Read per request: a bearer main renewed while the run lasts replaces the one the run started with (REQ-PROVIDER-068).
+    const current = (): Readonly<Record<string, string>> => deps.leasedCredentials?.overlay(leasedAtStart) ?? leasedAtStart;
+    const bearers = leasedAtStart;
+    // The sign-in provider behind each model reference, for the headers that provider's API needs (REQ-PROVIDER-070/076).
+    const signInProviderOf = new Map<string, string>();
+    for (const name of Object.keys(cfg.models)) {
+      const ref = modelRefOf(cfg, name, scripted);
+      const provider = cfg.models[name]?.auth_provider;
+      if (ref && provider && !signInProviderOf.has(credentialKey(ref))) signInProviderOf.set(credentialKey(ref), provider);
+    }
+    // The codex subscription endpoint keeps no response and takes the system text as the body's own `instructions`
+    // (REQ-PROVIDER-151: a contract the product consumes; found by the first run against it, ADR-0030's note of 2026-11-20).
+    const responsesShapeFor = (ref: ModelRef): { stateless: boolean; instructionsInBody: boolean } | undefined =>
+      (signInProviderOf.get(credentialKey(ref)) === 'codex' ? { stateless: true, instructionsInBody: true } : undefined);
+    const headersFor = (ref: ModelRef): Readonly<Record<string, string>> | undefined => {
+      const provider = signInProviderOf.get(credentialKey(ref));
+      return provider === undefined ? undefined : deps.leasedCredentials?.headersFor(provider);
+    };
     const runtime = runtimeFromConfiguration(cfg, verdict, deps.sharedQuotaCaps?.() ?? {});
     // The adapter's idle bound (REQ-CONFIG-115) is re-armed from the run host's own timer port, never a global.
-    const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i), timers: deps.clocks.timers, monotonic: deps.clocks.monotonic });
+    const http: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i), headersFor, responsesShapeFor, timers: deps.clocks.timers, monotonic: deps.clocks.monotonic });
+    // PD-PROVIDER-002: a model of the local-sdk provider has no endpoint (REQ-PROVIDER-005); its calls go to the local tool's client.
+    const local = isScripted ? undefined : deps.claudeCli;
+    const client: ModelClient = local === undefined ? http : { stream: (req) => (req.model.providerId === LOCAL_SDK_PROVIDER ? local.stream(req) : http.stream(req)) };
     const backend: AgentBackend = new DefaultAgentBackend(client);
-    const entryCredential = isScripted ? async () => '' : credentialResolver(entry, deps.env, () => bearers);
+    const entryCredential = isScripted ? async () => '' : credentialResolver(entry, deps.env, current);
     const setup: ModelSetup = {
       backend,
       summariser: summariserOf(cfg, scripted),
@@ -768,7 +804,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
         validationRetries: runtime.validationRetries,
         llmResponseTimeoutMs: Math.round(runtime.llmResponseTimeoutS * 1000),
         consecutiveRetryLimit: runtime.consecutiveRetryLimit,
-        credentialFor: credentialFactory(cfg, scripted, deps.env, () => bearers, entryCredential, (m) => warnings.push(m)),
+        credentialFor: credentialFactory(cfg, scripted, deps.env, current, entryCredential, (m) => warnings.push(m)),
       },
     };
     const tier = entryTierOf(cfg);

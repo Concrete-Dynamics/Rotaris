@@ -2,7 +2,7 @@ import { err, millis, ok, type MonotonicClock, type Result, type TimerHandle, ty
 import { APICallError, jsonSchema, Output, RetryError, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRequest, type OutputSpec, type StreamPart, type ToolSpec, type Usage } from './ports.js';
+import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRef, type ModelRequest, type OutputSpec, type StreamPart, type ToolSpec, type Usage } from './ports.js';
 import { createStreamNormaliser, reasoningItemSeparator } from './reasoning.js';
 import { costAskFor, reportedCostExtractor, reportedCostFrom } from './reported-cost.js';
 
@@ -36,10 +36,24 @@ import { costAskFor, reportedCostExtractor, reportedCostFrom } from './reported-
  */
 export type FetchLike = (input: Parameters<typeof fetch>[0], init?: RequestInit) => Promise<Response>;
 
+export interface ResponsesShape {
+  readonly stateless?: boolean;
+  readonly instructionsInBody?: boolean;
+}
+
 export interface AiSdkClientOptions {
   readonly baseUrl: string;
   /** Per-provider headers (e.g. REQ-PROVIDER-070's editor identity), added on every request. */
   readonly headers?: Readonly<Record<string, string>>;
+  /** The headers the provider behind ONE model needs (REQ-PROVIDER-070/076), read per request; never a credential. */
+  readonly headersFor?: (model: ModelRef) => Readonly<Record<string, string>> | undefined;
+  /**
+   * What ONE model's `responses` endpoint requires of the request body beyond the dialect, read per request. A
+   * subscription endpoint keeps no response (`stateless`: the request says `store: false`, and the reasoning a later
+   * turn replays travels in the request, encrypted, instead of by reference) and takes the system text as the body's
+   * own `instructions` rather than as an input message (`instructionsInBody`). Absent for every other endpoint.
+   */
+  readonly responsesShapeFor?: (model: ModelRef) => ResponsesShape | undefined;
   /** Injected for tests; the global fetch otherwise. */
   readonly fetch?: FetchLike;
   /** Observes each request with its secret-bearing headers already redacted (REQ-PROVIDER-131). */
@@ -210,6 +224,7 @@ export class AiSdkModelClient implements ModelClient {
       const credential = await req.resolveCredential();
       const headers = new Headers(init?.headers);
       for (const [k, v] of Object.entries(this.opts.headers ?? {})) headers.set(k, v);
+      for (const [k, v] of Object.entries(this.opts.headersFor?.(req.model) ?? {})) headers.set(k, v);
       for (const [k, v] of Object.entries(req.headers ?? {})) headers.set(k, v);
       if (credential) headers.set('authorization', `Bearer ${credential}`);
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -295,9 +310,15 @@ export class AiSdkModelClient implements ModelClient {
       // REQ-ORCH-010: the structured-output rungs map to the SDK's `output`; a provider rejection surfaces as an error part.
       const output = req.output === undefined ? undefined : req.output.kind === 'json_schema' ? Output.object({ schema: jsonSchema(req.output.schema as Parameters<typeof jsonSchema>[0]) }) : Output.json();
       const { instructions, rest } = splitSystem(req.messages);
+      const shape = req.model.dialect === 'responses' ? this.opts.responsesShapeFor?.(req.model) : undefined;
+      const openaiOptions: Record<string, string | boolean | string[]> = {
+        ...(req.thinking === 'unset' ? {} : { reasoningEffort: req.thinking === 'max' ? 'high' : req.thinking }),
+        ...(shape?.stateless ? { store: false, include: ['reasoning.encrypted_content'] } : {}),
+        ...(shape?.instructionsInBody ? { instructions: instructions ?? '' } : {}),
+      };
       const result = streamText({
-        model, messages: toModelMessages(rest), ...(instructions === undefined ? {} : { instructions }), abortSignal: signal, maxRetries: req.retries, ...(tools ? { tools } : {}), ...(output ? { output } : {}),
-        ...(req.thinking === 'unset' ? {} : { providerOptions: { openai: { reasoningEffort: req.thinking === 'max' ? 'high' : req.thinking } } }),
+        model, messages: toModelMessages(rest), ...(instructions === undefined || shape?.instructionsInBody ? {} : { instructions }), abortSignal: signal, maxRetries: req.retries, ...(tools ? { tools } : {}), ...(output ? { output } : {}),
+        ...(Object.keys(openaiOptions).length === 0 ? {} : { providerOptions: { openai: openaiOptions } }),
       });
       let usage: Usage | null = null;
       // PD-MONITOR-001: the provider's own cost for this request, carried on the `finish-step` part the

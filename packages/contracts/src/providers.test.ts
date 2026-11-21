@@ -31,7 +31,7 @@ describe('ADR-0030 consequence 2: no shape that reaches a renderer has a field n
     expect(offenders).toEqual([]);
   });
   it('a row parses with a display mask and never with a raw value field', () => {
-    const row = { id: 'openai-compatible--openrouter', displayName: 'OpenRouter', method: 'api-key', methodLabel: 'Paste an API key', authenticated: true, status: 'authenticated', displayMask: 'sk****ef', baseUrl: 'https://openrouter.ai/api/v1', modelCount: 3, userDefined: true, available: true, lastError: null, health: null };
+    const row = { id: 'openai-compatible--openrouter', displayName: 'OpenRouter', method: 'api-key', methodLabel: 'Paste an API key', local: false, authenticated: true, status: 'authenticated', displayMask: 'sk****ef', baseUrl: 'https://openrouter.ai/api/v1', modelCount: 3, userDefined: true, available: true, lastError: null, health: null };
     expect(ProviderRowSchema.safeParse(row).success).toBe(true);
     expect(Object.keys(ProviderRowSchema.shape)).not.toContain('accessToken');
   });

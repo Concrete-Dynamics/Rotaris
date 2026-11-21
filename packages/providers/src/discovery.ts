@@ -10,9 +10,9 @@ import { lookupKnownLimits, type KnownLimitsTable } from './limits.data.js';
  * 079/080's known-limits back-fill) and the raw item. Pricing is mapped only for the hosted provider (072),
  * which this build does not sign in to, so every entry carries none.
  *
- * The codex and claude-code strategies of the discovery registry (ADR-0028) are owed; this is the one
- * discoverer, keyed by "every other provider". The codex subscription catalogue's own reasoning-level capture
- * (REQ-PROVIDER-076) stays its own build (PD-CONFIG-007) and is not added here.
+ * This is the discoverer keyed by "every other provider" (REQ-PROVIDER-069). The codex and Copilot strategies of
+ * the discovery registry (ADR-0028) are `discovery-strategies.ts`, and claude-code's static catalogue is
+ * `flows/claude-code.ts` (R-111).
  */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 

@@ -36,6 +36,7 @@ import { randomUUID } from 'node:crypto';
  * the run before it starts (REQ-EVENTS-021, REQ-CONFIG-478).
  */
 import { type RunHost } from './host.js';
+import { LEASE_ASK_MS } from './leased-credentials.js';
 
 /**
  * THE RUN HOST'S DISPATCH — one request in, one reply out, over everything `createRunHost` built.
@@ -73,6 +74,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     skills,
     configure,
     leaseReports,
+    leasedCredentials,
+    endClaudeCli,
     continuationLeaseForSession,
     retrospectiveSetup,
     configuredFor,
@@ -251,8 +254,9 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return launchSession(req, {
         workspaceRoot: s.root, attended: presenters.attended, configuration: configurationDeps, settleConfinement,
         leaseCredentials: async (providers) => {
-          const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credential lease: main did not answer the lease (${e.message})`, 'warn'); return null; });
+          const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(LEASE_ASK_MS)).catch((e: Error) => { log(`credential lease: main did not answer the lease (${e.message})`, 'warn'); return null; });
           const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
+          leasedCredentials.absorb(providers, answer?.kind === 'credentials.leased' ? answer : null);
           // REQ-PROVIDER-068's opening report, said once per workspace root and then only when it changes.
           leaseReports.report(s.root, answer?.kind === 'credentials.leased' ? answer.report : null, (m) => log(m));
           return bearers;
@@ -826,6 +830,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // REQ-WORKSPACE-092/109: the code-intelligence setup's step, and what it started, ended before the host exits — asked
       // first, so its short grace runs beside the rest of the shutdown, and waited for before the exit below.
       const setupEnded = mcp.endSetup();
+      // PD-PROVIDER-002: no Claude Code process this host started outlives it.
+      void endClaudeCli().catch(() => undefined);
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their h.terminal results.
       for (const controller of improvementControllers.values()) controller.abort();
       improvementControllers.clear();

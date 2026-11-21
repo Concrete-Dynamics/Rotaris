@@ -1,4 +1,4 @@
-import { type ProviderDialogPayload, type ProviderSignInResult } from '@rotaris/contracts';
+import { type ProviderDialogPayload, type ProviderSignInPrompt, type ProviderSignInResult } from '@rotaris/contracts';
 import { type CommandContext, type CommandHandlers } from './context.js';
 
 /**
@@ -7,11 +7,24 @@ import { type CommandContext, type CommandHandlers } from './context.js';
  * `afterProviderChange`, which is what re-reads the slots and republishes them.
  */
 export function providersCommands(
-  ctx: Pick<CommandContext, 'afterProviderChange' | 'authRecovery' | 'healthCache' | 'log' | 'presentProvider' | 'providerChoices' | 'providerPayloads' | 'providerRows' | 'providers' | 'raiseNotice' | 'recoveryFor'>,
-): Pick<CommandHandlers, 'providers.list' | 'providers.health' | 'providers.open' | 'provider.payload' | 'provider.signIn' | 'providers.save' | 'providers.validate' | 'providers.signOut' | 'providers.delete' | 'providers.refresh'> {
-  const { afterProviderChange, authRecovery, healthCache, log, presentProvider, providerChoices, providerPayloads, providerRows, providers, raiseNotice, recoveryFor } = ctx;
+  ctx: Pick<CommandContext, 'afterProviderChange' | 'authRecovery' | 'healthCache' | 'log' | 'openSignInPage' | 'presentProvider' | 'providerChoices' | 'providerPayloads' | 'providerRows' | 'providers' | 'providerSignIns' | 'raiseNotice' | 'recoveryFor'>,
+): Pick<CommandHandlers, 'providers.list' | 'providers.health' | 'providers.open' | 'provider.payload' | 'provider.signIn' | 'provider.authenticate' | 'provider.authPrompt' | 'provider.authCancel' | 'providers.save' | 'providers.validate' | 'providers.signOut' | 'providers.delete' | 'providers.refresh'> {
+  const { afterProviderChange, authRecovery, healthCache, log, openSignInPage, presentProvider, providerChoices, providerPayloads, providerRows, providers, providerSignIns, raiseNotice, recoveryFor } = ctx;
   // REQ-NOTIFY-068: a provider's credentials changed, so a pair of it that failed authentication may be offered again.
   const credentialsChanged = (id: string): void => authRecovery.credentialsChanged(id);
+  /** What every sign-in does once it has its one outcome (REQ-PROVIDER-012/142), by key or by the provider's own flow. */
+  const settled = async (providerId: string, outcome: ProviderSignInResult, quiet = false): Promise<void> => {
+    if (outcome.outcome === 'signed-in') {
+      credentialsChanged(outcome.id);
+      // A catalog that answers without a key validated nothing (REQ-PROVIDER-133's gap on a public catalog): health stays unchecked and the notice warns.
+      healthCache.set(outcome.id, outcome.keyValidated ? { state: 'healthy', detail: outcome.message, available: true } : { state: 'unknown', detail: outcome.message, available: true });
+      // PD-WORKSPACE-010: the first-launch setup states the outcome itself, in the step that asked, and passes `quiet`; a key that validated nothing still warns.
+      if (!(quiet && outcome.keyValidated)) raiseNotice(outcome.keyValidated ? 'info' : 'warning', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
+      await afterProviderChange();
+    } else if (outcome.outcome === 'failed') {
+      log(`providers: sign-in failed for ${providerId}: ${outcome.message}`);
+    }
+  };
   return {
     'providers.list': () => {
       return { ok: true, value: providerRows() };
@@ -30,7 +43,7 @@ export function providersCommands(
     'provider.payload': (_req, { senderId }) => {
       const p = providerPayloads.get(senderId);
       if (!p) return { ok: false, code: 'provider.none', headline: 'This window was not opened for a provider sign-in' };
-      const payload: ProviderDialogPayload = { mode: p.mode, providerId: p.providerId, displayName: p.providerId ? providers.displayName(p.providerId) : null, choices: providerChoices() };
+      const payload: ProviderDialogPayload = { mode: p.mode, providerId: p.providerId, displayName: p.providerId ? providers.displayName(p.providerId) : null, choices: providerChoices(p.providerId) };
       return { ok: true, value: payload };
     },
     'provider.signIn': async (req) => {
@@ -38,17 +51,35 @@ export function providersCommands(
       const outcome: ProviderSignInResult = req.providerId === 'openai-compatible'
         ? await providers.addInstance({ label: req.label ?? '', baseUrl: req.baseUrl ?? '', apiKey: req.apiKey, ...(req.replace ? { replace: true } : {}), ...(req.allowEmpty ? { allowEmpty: true } : {}) })
         : await providers.signInWithKey(req.providerId, req.apiKey, req.allowEmpty ?? false);
-      if (outcome.outcome === 'signed-in') {
-        credentialsChanged(outcome.id);
-        // A catalog that answers without a key validated nothing (REQ-PROVIDER-133's gap on a public catalog): health stays unchecked and the notice warns.
-        healthCache.set(outcome.id, outcome.keyValidated ? { state: 'healthy', detail: outcome.message, available: true } : { state: 'unknown', detail: outcome.message, available: true });
-        // PD-WORKSPACE-010: the first-launch setup states the outcome itself, in the step that asked, and passes `quiet`; a key that validated nothing still warns.
-        if (!(req.quiet === true && outcome.keyValidated)) raiseNotice(outcome.keyValidated ? 'info' : 'warning', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
-        await afterProviderChange();
-      } else if (outcome.outcome === 'failed') {
-        log(`providers: sign-in failed for ${req.providerId}: ${outcome.message}`);
-      }
+      await settled(req.providerId, outcome, req.quiet === true);
       return { ok: true, value: outcome };
+    },
+    'provider.authenticate': async (req, { senderId }) => {
+      if (providerSignIns.has(senderId)) return { ok: false, code: 'provider.busy', headline: 'A sign-in is already under way in this window' };
+      const pending: { readonly abort: AbortController; prompt: ProviderSignInPrompt | null } = { abort: new AbortController(), prompt: null };
+      providerSignIns.set(senderId, pending);
+      // REQ-PROVIDER-141: re-authenticating a provider signs it out first; the credentials changed whatever the flow then answers.
+      const hadCredential = providers.status(req.providerId) !== 'unauthenticated';
+      try {
+        const outcome: ProviderSignInResult = await providers.signInInteractive(req.providerId, {
+          reauthenticate: req.reauthenticate ?? false, allowEmpty: req.allowEmpty ?? false, signal: pending.abort.signal,
+          // REQ-PROVIDER-116: the prompt opens the system browser and is shown in the window, which reads it back.
+          prompt: (p) => { pending.prompt = p; openSignInPage(p.kind === 'browser' ? p.url : p.verificationUri); },
+        });
+        if (req.reauthenticate && hadCredential && outcome.outcome !== 'signed-in') { credentialsChanged(req.providerId); healthCache.delete(req.providerId); await afterProviderChange(); }
+        await settled(req.providerId, outcome);
+        return { ok: true, value: outcome };
+      } finally {
+        providerSignIns.delete(senderId);
+      }
+    },
+    'provider.authPrompt': (_req, { senderId }) => {
+      return { ok: true, value: { prompt: providerSignIns.get(senderId)?.prompt ?? null } };
+    },
+    'provider.authCancel': (_req, { senderId }) => {
+      // REQ-PROVIDER-116: consumed by the flow to end a pending device or callback wait early.
+      providerSignIns.get(senderId)?.abort.abort();
+      return { ok: true };
     },
     'providers.save': async (req) => {
       let message = '';

@@ -145,6 +145,7 @@ describe('shutdown ends the code-intelligence setup before the run host exits (R
     let endSetup: () => void = () => undefined;
     const host = {
       log: () => undefined,
+      endClaudeCli: async () => undefined,
       clocks: { timers: { after: () => { order.push('exit scheduled'); } } },
       improvementControllers: new Map(),
       improvementContexts: new Map(),

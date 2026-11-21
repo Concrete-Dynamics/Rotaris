@@ -51,6 +51,9 @@ Part 9 of 13 of [domain 08](../08-requirements-traceability.md), which indexes e
 - **REQ-TRACE-398** — A refused transition SHALL NOT put the board into an error state: a refusal is an answer, not a malfunction. **While a card is being dragged**, a column it cannot reach SHALL be identified in words as well as by a glyph, and never by colour alone.
 
 - **REQ-TRACE-399** — **No path anywhere in the application SHALL persist a delivery state except by calling the engine's transition function**, and **none SHALL install the terminal state while circumventing the completion conditions** — not via a drop, not via a context menu, and not via a bulk operation. A guard test SHALL assert that no module writes the delivery store directly. The terminal state SHALL be unreachable in the interface while the engine reports it cannot be reached, and unreachable without the delivering run's snapshot.
+  > **Narrowed by [`PD-TRACE-002`](../../product/directives/pd-trace-002.md#pd-trace-002), 2026-11-21.** Where a surveyed requirement's own document
+  > declares it done, the pass records it done with the text it was declared done against (clause 5, REQ-ADOPT-045):
+  > the document vouches, and no run's snapshot is asked. The record is still written by the engine's own store.
 
 - **REQ-TRACE-400** — The absence of a forcing control SHALL be documented as a decision rather than an oversight. Entry to the terminal state is granted by completion conditions that the engine evaluates as the transition is attempted; this surface only produces the evidence those conditions consult and adjudicates none of them. A forcing control here would require a completion gate of its own, and any gate the interface owns is a gate the interface is free to relax.
 

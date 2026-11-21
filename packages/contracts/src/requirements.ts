@@ -37,6 +37,8 @@ export interface RequirementRecord {            // one per DECLARED identifier (
   readonly contentHash: string;                 // 16 hex over the whole normalised document
   readonly canonicalHash: string;               // 32 hex, per identifier
   readonly prose: string; readonly isEpic: boolean;
+  /** PD-TRACE-002: read through a surveyed shape. No engine check verifies such a requirement, so it owes no verification (clause 12). */
+  readonly surveyed?: true;
 }
 export interface ParseError { readonly path: string; readonly line?: number; readonly message: string }
 export interface StoreParse {
@@ -87,7 +89,7 @@ export type RelationToken = 'parent' | 'children' | 'derived-from' | 'derived-re
 export type Actor = { readonly kind: 'user'; readonly person: string } | { readonly kind: 'system' };  // REQ-CONFIG-198; constructed only at the interactive boundary (main)
 export interface Reachability { readonly reachable: boolean; readonly consequence?: string; readonly confirm: boolean; readonly reason?: string; readonly glyph: string; readonly reachableFromSource: readonly DeliveryColumn[] }
 export interface Refusal { readonly reason: string; readonly reachable?: readonly DeliveryColumn[] }
-export interface TransitionOutcome { readonly id: ReqId; readonly from: ColumnToken; readonly to: ColumnToken; readonly startsRun: boolean; readonly historyEntry: number }
+export interface TransitionOutcome { readonly id: ReqId; readonly from: ColumnToken; readonly to: ColumnToken; readonly startsRun: boolean; readonly historyEntry: number; /** PD-TRACE-002 clauses 6 to 8: what the change wrote into the requirement's own document, or why it wrote nothing there. */ readonly document?: string }
 
 export interface BoardCard {
   readonly id: ReqId; readonly title: string; readonly column: ColumnToken; readonly returnTo?: DeliveryColumn;
@@ -115,8 +117,20 @@ export interface BoardProjection {
   readonly cards: readonly BoardCard[]; readonly epics: readonly EpicCard[]; readonly queue: DeliveryQueue;
   readonly blocked: readonly { readonly id: ReqId; readonly reason: string; readonly returnTo: DeliveryColumn }[];   // true total = blocked.length
   readonly analysisEnabled: boolean; readonly parseErrors: readonly ParseError[];
+  /** PD-TRACE-002: present when the cards were read through a surveyed shape rather than the built-in layout. */
+  readonly surveyed?: { readonly origin: 'local' | 'repository'; readonly stores: readonly string[] };
 }
-export interface RequirementDetail { readonly card: BoardCard; readonly prose: string; readonly history: readonly { readonly at: string; readonly action: BoardAction; readonly actor: Actor; readonly from: ColumnToken; readonly to: ColumnToken; readonly current: boolean }[] | 'unavailable' | 'reading'; readonly runs: readonly { readonly unit: string; readonly sessionId?: string; readonly branch?: string; readonly worktree?: string; readonly status: string }[]; readonly evidenceDetail: readonly AnnotationSite[]; readonly findings: readonly Finding[] }
+/** PD-TRACE-002 clauses 4 to 7: where a surveyed requirement stands in its document, and what its document states of it. */
+export interface DocumentPlace {
+  readonly document: string; readonly line: number; readonly endLine: number;
+  /** The status word as written, and what the shape says it means; absent where the document has no place for one. */
+  readonly status?: { readonly word: string; readonly delivery?: DeliveryColumn; readonly lifecycle?: Lifecycle };
+  readonly criteria: readonly { readonly text: string; readonly checked: boolean; readonly line: number }[];
+}
+/** Clause 7: what a run reported of one criterion — the agent's word, never a measurement. */
+export interface CriterionClaim { readonly index: number; readonly text: string; readonly checked: boolean; readonly claim: 'met' | 'unmet' | 'unstated'; readonly evidence?: string }
+export type CriterionOutcome = { readonly ok: true; readonly document: string; readonly line: number } | { readonly ok: false; readonly reason: string };
+export interface RequirementDetail { readonly place?: DocumentPlace; readonly card: BoardCard; readonly prose: string; readonly history: readonly { readonly at: string; readonly action: BoardAction | 'document-declared'; readonly actor: Actor; readonly from: ColumnToken; readonly to: ColumnToken; readonly current: boolean }[] | 'unavailable' | 'reading'; readonly runs: readonly { readonly unit: string; readonly sessionId?: string; readonly branch?: string; readonly worktree?: string; readonly status: string }[]; readonly evidenceDetail: readonly AnnotationSite[]; readonly findings: readonly Finding[] }
 
 /**
  * REQ-TRACE-472: what main's two preferences and this launch's own acceptance make of a launch nobody disclosed — `due`
@@ -158,7 +172,18 @@ export type RequirementsCommand =
   // Domain 22 (PD-TRACE-001): the adoption assistant. `adoption` is a read — the comparison on opening (REQ-ADOPT-022);
   // `adopt` is the strip's button — a run (consults a model) or a recording (consults none), REQ-ADOPT-002/003.
   | { readonly name: 'requirements.adoption'; readonly workspace: string }                     // → AdoptionView
-  | { readonly name: 'requirements.adopt'; readonly workspace: string; readonly mode: 'run' | 'record'; readonly writeLayout?: boolean };  // → AdoptionOutcome
+  | { readonly name: 'requirements.adopt'; readonly workspace: string; readonly mode: 'run' | 'record'; readonly writeLayout?: boolean }  // → AdoptionOutcome
+  // PD-TRACE-002: the surveyed shape. `shape` is the read on opening (no model, nothing written); `survey` runs the
+  // read-only agent and ends in a preview, or continues one from the user's answer in words (clause 2); `shape.accept`
+  // records a previewed shape, `shape.record` takes the present state as the new baseline without a model, and
+  // `shape.export` writes the committable file at the repository root (clause 9). `criterion` ticks or unticks one
+  // acceptance criterion in its document (clauses 6 and 7).
+  | { readonly name: 'requirements.shape'; readonly workspace: string }                        // → ShapeView
+  | { readonly name: 'requirements.survey'; readonly workspace: string; readonly token?: string; readonly answer?: string }   // → SurveyOutcome
+  | { readonly name: 'requirements.shape.accept'; readonly workspace: string; readonly token: string }   // → ShapeAcceptOutcome
+  | { readonly name: 'requirements.shape.record'; readonly workspace: string }                 // → ShapeAcceptOutcome
+  | { readonly name: 'requirements.shape.export'; readonly workspace: string }                 // → ShapeExportOutcome
+  | { readonly name: 'requirements.criterion'; readonly workspace: string; readonly id: ReqId; readonly index: number; readonly text: string; readonly checked: boolean };   // → CriterionOutcome
 /** channel 10 */
 export interface RequirementsChanged { readonly workspace: string; readonly generation: number; readonly affected: readonly ReqId[] | null; readonly progress?: ProgressReport }
 
@@ -179,7 +204,15 @@ export const RELATION_TOKENS = ['parent', 'children', 'derived-from', 'derived-r
 
 /** Spec 08 §Identifier format: `<PREFIX>-<digits>`, one uppercase token, no leading zeros, no upper bound. */
 export const REQ_ID_PATTERN = /^[A-Z][A-Z0-9]*-(?:0|[1-9][0-9]*)$/;
-export const ReqIdSchema = z.string().regex(REQ_ID_PATTERN);
+/**
+ * PD-TRACE-002 clause 1: an identifier read through a surveyed shape is the form that shape declares and is taken as
+ * an opaque string — a namespaced prefix (`SYS-AUTH-1`), a zero-padded (`SYS-001`) or a dotted number (`FR-1.2`)
+ * included. What crosses a boundary is still bounded and plain: it opens with a letter, holds letters, digits and
+ * single `-`, `.`, `_` separators, and is at most 80 characters, so it stays safe in a branch name and a path.
+ */
+export const SURVEYED_ID_PATTERN = /^[A-Za-z][A-Za-z0-9]*(?:[-._][A-Za-z0-9]+){1,12}$/;
+export const SURVEYED_ID_MAX = 80;
+export const ReqIdSchema = z.string().max(SURVEYED_ID_MAX).regex(SURVEYED_ID_PATTERN);
 export const DeliveryColumnSchema = z.enum(DELIVERY_COLUMNS);
 export const ColumnTokenSchema = z.enum(COLUMN_TOKENS);
 export const BoardActionSchema = z.enum(BOARD_ACTIONS);
@@ -232,6 +265,13 @@ export const RequirementsCommandSchema = z.discriminatedUnion('name', [
   // Domain 22 (PD-TRACE-001): REQ-ADOPT-028 — no actor and no path; the workspace is main's to replace.
   z.object({ name: z.literal('requirements.adoption'), workspace }),
   z.object({ name: z.literal('requirements.adopt'), workspace, mode: z.enum(['run', 'record']), writeLayout: z.boolean().optional() }),
+  // PD-TRACE-002: no actor and no path cross here either (REQ-ADOPT-028); a token names a preview the service holds.
+  z.object({ name: z.literal('requirements.shape'), workspace }),
+  z.object({ name: z.literal('requirements.survey'), workspace, token: z.string().min(1).max(NAME_MAX).optional(), answer: z.string().max(2_000).optional() }),
+  z.object({ name: z.literal('requirements.shape.accept'), workspace, token: z.string().min(1).max(NAME_MAX) }),
+  z.object({ name: z.literal('requirements.shape.record'), workspace }),
+  z.object({ name: z.literal('requirements.shape.export'), workspace }),
+  z.object({ name: z.literal('requirements.criterion'), workspace, id: reqId, index: z.number().int().min(0).max(999), text: z.string().max(FREE_TEXT_MAX), checked: z.boolean() }),
 ]);
 /** The command as it arrives off the wire (zod's `optional` admits an explicit `undefined`; the seam's type does not). */
 export type RequirementsCommandPayload = z.infer<typeof RequirementsCommandSchema>;
@@ -268,8 +308,31 @@ export function compareReqIds(a: ReqId, b: ReqId): number {
     return 0;
   }
   if (a === b) return 0;
+  // PD-TRACE-002 clause 1: two identifiers of a surveyed shape compare run by run, a digit run by its value, so
+  // `SYS-AUTH-9` stands before `SYS-AUTH-010` and `FR-1.2` before `FR-1.10`; equal runs fall to the code points.
+  if (!pa && !pb) {
+    const ra = a.match(RUNS) ?? [];
+    const rb = b.match(RUNS) ?? [];
+    for (let i = 0; i < Math.min(ra.length, rb.length); i += 1) {
+      const x = ra[i]!;
+      const y = rb[i]!;
+      if (x === y) continue;
+      const dx = /^\d/.test(x);
+      const dy = /^\d/.test(y);
+      if (dx && dy) {
+        // By value without arithmetic: leading zeros aside, the longer run is the greater, and equal lengths compare as text.
+        const nx = x.replace(/^0+(?=\d)/, '');
+        const ny = y.replace(/^0+(?=\d)/, '');
+        if (nx !== ny) return nx.length !== ny.length ? (nx.length < ny.length ? -1 : 1) : nx < ny ? -1 : 1;
+        continue;
+      }
+      return x < y ? -1 : 1;
+    }
+    if (ra.length !== rb.length) return ra.length < rb.length ? -1 : 1;
+  }
   return a < b ? -1 : 1;
 }
+const RUNS = /\d+|\D+/g;
 
 /** The two halves of a well-formed identifier, or undefined for anything else. */
 export function splitReqId(id: string): { readonly prefix: string; readonly number: number } | undefined {
@@ -353,6 +416,8 @@ export interface ReviewPayload {
   readonly column: ColumnToken;
   /** REQ-TRACE-424: not awaiting review (the state named), or awaiting review with no finished run. Present ⇒ the elements are empty. */
   readonly refusal?: string;
+  /** PD-TRACE-002 clause 7: the requirement's acceptance criteria with what the run reported of each; absent where its document lists none. */
+  readonly criteria?: readonly CriterionClaim[];
   readonly claim: {
     readonly summary: string | null;
     readonly risks: readonly string[];

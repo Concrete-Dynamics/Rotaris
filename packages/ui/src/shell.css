@@ -896,7 +896,7 @@
 .settings__skill-entry > .settings__skill-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .settings__skills tr:is(:hover, :focus-within) .settings__skill-description { -webkit-line-clamp: unset; }
 .settings__skill-entry > .settings__skill-path { margin-top: var(--rt-space-1); font-size: var(--rt-text-2xs); }
-/* R-105: the web-search provider choices (now behind "Use a different provider", R-117). Each provider's name is a `.seg-opt` alone on its row, and `.seg-opt`
+/* R-105: the web-search provider choices (now behind "Use a different provider", R-118). Each provider's name is a `.seg-opt` alone on its row, and `.seg-opt`
    is `flex: 1` with centred text, so each name began where its caption's length left it: three names on three edges,
    three captions on three more (the defect note of 2026-11-10). The name takes one column and reads from its left
    edge; the caption follows on one edge and holds the measure. */
@@ -925,7 +925,7 @@
    path line REQ-CONFIG-437 names is one unbroken token bounded to 340 px, so it wraps inside its box rather than
    paying out (`overflow-wrap: anywhere`, the rule the sibling MCP surfaces already carry). */
 [data-mcp-websearch-setup] :is(p, .settings__hint):not(.mono) { max-width: var(--rt-prose-measure); overflow-wrap: anywhere; }
-/* R-117, the web search panel: the explanation control stands at the head's right edge (the page's `.settings__info`
+/* R-118, the web search panel: the explanation control stands at the head's right edge (the page's `.settings__info`
    idiom), and a closed region — the explanation, the other-provider disclosure — is out of the flow and the tab order,
    stated explicitly because an author rule that paints it would otherwise outrank the user agent's own `[hidden]`. The
    status is the dot beside its word (REQ-SHELL-149), and the report under it reads as one block. The disclosure's caret
@@ -2832,6 +2832,20 @@ strong { font-weight: var(--rt-weight-medium); }
 .req-adoption__row .btn, .req-adoption__check { flex: none; }
 .req-adoption__delta, .req-adoption__outcome { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--rt-text-secondary); }
 .req-adoption__label { color: var(--rt-text-tertiary); }
+/* PD-TRACE-002: the survey's preview, under the strip's one line; nothing is recorded until it is accepted. */
+.req-survey { display: flex; flex-direction: column; gap: var(--rt-space-2); padding-block: var(--rt-space-2); min-width: 0; font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.req-survey__lead { margin: 0; color: var(--rt-text-primary); font-size: var(--rt-text-sm); overflow-wrap: anywhere; }
+.req-survey__samples, .req-survey__unread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; }
+.req-survey__sample { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--rt-space-2); min-width: 0; overflow-wrap: anywhere; }
+.req-survey__sample > .card-meta, .req-survey__unread { text-align: start; }
+.req-survey__unread > li { text-align: start; }
+.req-survey__answer { min-height: calc(var(--rt-space-5) * 2); resize: vertical; }
+.req-survey__actions { display: flex; flex-wrap: wrap; gap: var(--rt-space-2); }
+.req-detail__criteria { display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; }
+.req-detail__criterion { min-width: 0; overflow-wrap: anywhere; }
+.req-pane__criteria { display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; }
+.req-pane__criteria-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2); }
+.req-pane__criterion { display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; overflow-wrap: anywhere; }
 /* The live region a screen reader hears uses the adopted `visually-hidden`; the visible words are the state line's. */
 /* The body: the columns area scrolls horizontally (REQ-TRACE-237); the detail is an aside beside it, never over it. */
 .req-body { flex: 1 1 auto; min-height: 0; display: flex; }
@@ -3338,7 +3352,7 @@ table, .mono { font-variant-numeric: tabular-nums; }
 .settings__body :is(.settings__section, .settings__card, .settings__actions) > .settings__action { margin-top: 0; padding: var(--rt-space-2) 0; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 .settings__body .settings__actions, .settings__body .settings__card { gap: 0; }
 .settings__body .settings__card { border-top: 0; padding-top: 0; margin: 0; }
-/* R-117: the Tools page's MCP section stacks four cards — servers, web search, code intelligence, stored secrets — and
+/* R-118: the Tools page's MCP section stacks four cards — servers, web search, code intelligence, stored secrets — and
    with every card's margin at 0 each heading sat on the last line of the card above it. More space above a heading
    than below it: the cards of this section are parted by the section rhythm's step. */
 .settings__body [data-mcp-settings] > .settings__card + .settings__card { margin-top: var(--rt-space-6); }

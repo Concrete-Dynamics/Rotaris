@@ -25,8 +25,10 @@ export interface BoardInput {
   readonly analysisEnabled: boolean;
   readonly inFlight: ReadonlyMap<ReqId, BoardAction>;
   readonly source: { readonly writable: boolean; readonly canCreate: boolean };
+  /** PD-TRACE-002: the cards were read through a surveyed shape; carried onto the projection as it is. */
+  readonly surveyed?: { readonly origin: 'local' | 'repository'; readonly stores: readonly string[] };
 }
-export interface HistoryEntry { readonly at: string; readonly action: BoardAction; readonly actor: Actor; readonly from: ColumnToken; readonly to: ColumnToken; readonly current: boolean; readonly reason: string | null; readonly override: boolean }
+export interface HistoryEntry { readonly at: string; readonly action: BoardAction | 'document-declared'; readonly actor: Actor; readonly from: ColumnToken; readonly to: ColumnToken; readonly current: boolean; readonly reason: string | null; readonly override: boolean }
 export interface RunRecord { readonly id: ReqId; readonly unit: string; readonly sessionId: string | null; readonly status: string; readonly stage: string | null; readonly outcome: string | null; readonly startedAt: string; readonly endedAt: string | null; readonly branch: string | null; readonly worktreePath: string | null; readonly permissions: string }
 /** Part AP — a worktree row (REQ-TRACE-476: the worktrees belonging to a requirement survive a restart and are read back from here). */
 export interface WorktreeRecord { readonly ref: string; readonly unit: string; readonly path: string; readonly branch: string; readonly createdAt: string; readonly kept: boolean }
@@ -54,6 +56,7 @@ export interface DeliveryWriter {
   recordRunEnded: DeliveryTransitions['recordRunEnded'];
   /** Part AP — the pass's move out of the terminal state, and a run row's stage (REQ-TRACE-437, 466). */
   recordSpecificationMoved: DeliveryTransitions['recordSpecificationMoved'];
+  recordDocumentDeclared: DeliveryTransitions['recordDocumentDeclared'];
   recordRunStage: DeliveryTransitions['recordRunStage'];
   /** REQ-TRACE-464: a tree the claim provisioned for a unit no transition provisioned, recorded at once (a restart then takes it over). */
   recordWorktreeProvisioned: DeliveryTransitions['recordWorktreeProvisioned'];
@@ -111,8 +114,9 @@ export function createDeliveryReader(db: StoreHandle, deps: { readonly workspace
       const rows = dal.historyOf(id);
       // The system's run entries are interleaved in the store (REQ-TRACE-405) and reported under `runs`; the detail's
       // history lists the board actions of the closed set, oldest to newest, the current one marked.
-      const actions = rows.filter((r) => (BOARD_ACTIONS as readonly string[]).includes(r.action));
-      return actions.map((r, i) => ({ at: r.at, action: r.action as BoardAction, actor: parseActor(r.actor), from: r.from_state as ColumnToken, to: r.to_state as ColumnToken, current: i === actions.length - 1, reason: r.reason, override: r.override === 1 }));
+      // PD-TRACE-002 clause 5: a move the requirement's own document declared is listed with them — it is why the card stands where it does.
+      const actions = rows.filter((r) => (BOARD_ACTIONS as readonly string[]).includes(r.action) || r.action === 'document-declared');
+      return actions.map((r, i) => ({ at: r.at, action: r.action as HistoryEntry['action'], actor: parseActor(r.actor), from: r.from_state as ColumnToken, to: r.to_state as ColumnToken, current: i === actions.length - 1, reason: r.reason, override: r.override === 1 }));
     },
     runs(id) {
       return dal.runsOf(id).map(runOf);
@@ -155,6 +159,7 @@ export function createDeliveryWriter(reader: DeliveryReader, transitions: Delive
     recordRunStarted: (...args) => transitions.recordRunStarted(...args),
     recordRunEnded: (...args) => transitions.recordRunEnded(...args),
     recordSpecificationMoved: (...args) => transitions.recordSpecificationMoved(...args), // Part AP
+    recordDocumentDeclared: (...args) => transitions.recordDocumentDeclared(...args), // PD-TRACE-002 clause 5
     recordRunStage: (...args) => transitions.recordRunStage(...args), // Part AP
     recordWorktreeProvisioned: (...args) => transitions.recordWorktreeProvisioned(...args), // REQ-TRACE-464: the claim's provisioning of a unit no transition provisioned
     answerBlocker: (...args) => transitions.answerBlocker(...args),

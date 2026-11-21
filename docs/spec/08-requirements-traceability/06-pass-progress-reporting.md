@@ -124,6 +124,8 @@ Part 6 of 13 of [domain 08](../08-requirements-traceability.md), which indexes e
 ### Evidence Indicator
 
 - **REQ-TRACE-258** — Each card SHALL carry an indicator divided into one segment per evidence obligation the requirement owes, ordered as the projection orders them, each segment coloured for that obligation's state: satisfied and verified; recorded but stale or unverified; failing verification; or missing or not owed. The sequence of segment states SHALL equal the sequence of obligation states the projection reports, position for position. The set of obligation kinds SHALL be **closed** and SHALL be exactly these three, in this fixed order: `implementation-trace`, owed where the requirement declares `trace: required`; `covering-test`, owed where it declares `test: required`; and `verification`, owed where the requirement is approved and the workspace declares a check suite. A card therefore carries at most three segments, and how many it carries SHALL be predictable from that requirement's own obligation flags and lifecycle. A fourth kind added to the engine SHALL fail the presentation lookup immediately rather than quietly receiving a fallback segment, exactly as REQ-TRACE-446 requires of blocker kinds.
+  > **Narrowed by [`PD-TRACE-002`](../../product/directives/pd-trace-002.md#pd-trace-002), 2026-11-21.** A requirement read through a surveyed shape owes
+  > no verification, since no check of the toolchain verifies one (clause 12, REQ-ADOPT-044).
 
 - **REQ-TRACE-259** — The indicator SHALL explicitly **not** be a count of annotations, because a count would read as complete for a requirement whose tests fail. A requirement with complete traces but a failing test SHALL render a failing segment, not a wholly satisfied indicator.
 

@@ -1,7 +1,7 @@
 import { SKILLS_DISABLED_MESSAGE, type ImprovementArtifactRecord, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
 import { asSessionId, millis, sessionContentInLog, toIsoUtc, type WorkspaceId } from '@rotaris/kernel';
 import { openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { ADOPTION_ROLE, analyzeImprovement, captureRetrospectiveJob, CATALOGUE, interpretAdoption, relativeTime, timelineId, workspaceUsage } from '@rotaris/engine';
+import { ADOPTION_ROLE, analyzeImprovement, captureRetrospectiveJob, CATALOGUE, interpretAdoption, relativeTime, surveyStep, timelineId, workspaceUsage } from '@rotaris/engine';
 import { renderUnavailability } from '@rotaris/agent-tools';
 import { clearHooksDecision, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { REFS_ASK_BOUND } from './checkpoints.js';
@@ -423,6 +423,28 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // PD-STARTUP-011 / REQ-STARTUP-134: the interpretation is model output — its source, kind and byte length, never its text.
       log(`adoption: interpretation for ${req.workspaceRoot} on ${model.providerId}/${model.modelId}: ${answer.ok ? sessionContentInLog('model output', `the ${ADOPTION_ROLE} role's model`, answer.text) : answer.reason}`, answer.ok ? 'info' : 'warn');
       return answer.ok ? { kind: 'adoption.interpreted', text: answer.text, model: `${model.providerId}/${model.modelId}` } : { kind: 'refused', code: 'adoption.interpretation', headline: 'The model gave no usable interpretation', detail: answer.reason };
+    }
+    case 'survey.step': {
+      /*
+       * PD-TRACE-002 clause 3: one step of the survey, on the model the `requirements-engineer` role resolves to — the
+       * configuration loaded and leased afresh, as the interpretation's is, since no run carries it. No tool is offered:
+       * the answer is one JSON action the workspace service, which can only read, carries out.
+       */
+      const leased = await retrospectiveSetup(req.workspaceRoot);
+      if (leased.kind === 'refused') return leased.reply;
+      if (leased.kind === 'unconfigured') {
+        log(leased.reason, 'warn');
+        return { kind: 'refused', code: 'adoption.no-configuration', headline: 'The workspace configuration could not be loaded', detail: leased.reason };
+      }
+      if (leased.kind === 'no-model') return { kind: 'refused', code: 'adoption.no-model', headline: `No model is configured for the ${ADOPTION_ROLE} role` };
+      const run = leased.setup;
+      const name = run.cfg.personas[ADOPTION_ROLE]?.model ?? null;
+      const model = modelRefOf(run.cfg, name, run.scripted);
+      if (model === null || name === null) return { kind: 'refused', code: 'adoption.no-model', headline: `No model is configured for the ${ADOPTION_ROLE} role` };
+      const answer = await surveyStep(req.messages, { backend: run.model.backend, model, thinking: thinkingOf(run.cfg.models[name]), timers: clocks.timers, credentialFor: run.model.config.credentialFor }, new AbortController().signal);
+      // PD-STARTUP-011 / REQ-STARTUP-134: a step's answer is model output — its source, kind and byte length, never its text.
+      log(`survey: step ${Math.ceil(req.messages.length / 2)} for ${req.workspaceRoot} on ${model.providerId}/${model.modelId}: ${answer.ok ? sessionContentInLog('model output', `the ${ADOPTION_ROLE} role's model`, answer.text) : answer.reason}`, answer.ok ? 'info' : 'warn');
+      return answer.ok ? { kind: 'survey.stepped', text: answer.text, model: `${model.providerId}/${model.modelId}` } : { kind: 'refused', code: 'adoption.interpretation', headline: 'The model gave no usable answer', detail: answer.reason };
     }
     case 'improvement.cancel': {
       improvementControllers.get(req.artifactId)?.abort();

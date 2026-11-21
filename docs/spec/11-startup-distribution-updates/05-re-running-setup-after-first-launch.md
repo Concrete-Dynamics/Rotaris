@@ -35,9 +35,20 @@ Part 5 of 10 of [domain 11](../11-startup-distribution-updates.md), which indexe
 > no request is issued; the sentence reading a copied installed tree as portable no longer governs. Every other
 > clause still does.
 
+> **Narrowed by [`PD-STARTUP-014`](../../product/directives/pd-startup-014.md#pd-startup-014), 2026-11-21.** A packaged build this requirement, PD-STARTUP-004 or PD-STARTUP-013
+> classifies not updatable — the Debian package, a packaged macOS build, a packaged Windows build naming no artifact — still
+> makes the one check against REQ-STARTUP-105's endpoint and offers a newer release by a link to its page; it fetches no
+> asset. A build from a source checkout or a development environment still issues no request.
+
 **REQ-STARTUP-107** — An update SHALL be offered only when all three hold: a latest release exists, its version is strictly newer than the running version, and the release contains the asset for this installation flavour on this platform (installer flavour → the setup artifact; portable → portable; app bundle → disk image; AppImage → AppImage). A release lacking this platform's file offers nothing — a real answer, not an error (never a dead download button).
 
+> **Narrowed by [`PD-STARTUP-014`](../../product/directives/pd-startup-014.md#pd-startup-014), 2026-11-21.** A link-only build's offer names no asset, so this condition does
+> not apply to it; every build that can apply is unchanged.
+
 **REQ-STARTUP-108** — When searching the release feed for the artifact of a given product version, platform key, and artifact kind, an asset SHALL count as a match only when its published `name` equals, character for character, the filename REQ-STARTUP-031 fixes for that combination — same letter case, same separators, same literal version text. Abbreviated, re-cased, re-separated, prefix, suffix, and substring matches SHALL all be rejected. A release offering no asset that matches exactly SHALL be treated as carrying no artifact for this platform, and no update SHALL be offered from it (REQ-STARTUP-107).
+
+> **Narrowed by [`PD-STARTUP-014`](../../product/directives/pd-startup-014.md#pd-startup-014), 2026-11-21.** A link-only build's offer names no asset, so this condition does
+> not apply to it; every build that can apply is unchanged.
 
 **REQ-STARTUP-109** — Version comparison SHALL parse both sides through the release-tag grammar and order them strictly-newer only. The order SHALL be the numeric tuple first, and, where two versions share a tuple, the prerelease rank second: a prerelease of a tuple sorts before the plain release of that same tuple, and among prereleases of one tuple the ranking is `a` before `b` before `rc`, ties within a kind broken by the ascending numeric suffix. A running prerelease is therefore offered the stable release of its own numeric tuple — `1.2.3rc1` is offered `v1.2.3` — which is the intended policy and the only one that lets a prerelease reach the release that supersedes it, since the feed filter stated below would otherwise leave it stranded until the next patch. Newer → offer; equal or older → none; a candidate tag outside the grammar (e.g. `v0.102.0-rc1`, `v0.102`) → none; a running version that does not parse (e.g. `dev`) → none, because the comparison cannot be decided. Draft and prerelease payloads SHALL be filtered out of the feed before comparison, so an installed app is only ever offered stable releases while prerelease artifacts stay available for manual download from the release page.
 
@@ -67,6 +78,10 @@ Part 5 of 10 of [domain 11](../11-startup-distribution-updates.md), which indexe
 
 
 **REQ-STARTUP-117** — Dismissing the update notice SHALL record only that version string (not a general preference): the check still runs next launch; the same version stays silent; any newer version notifies again. Dismissing an unrelated notice SHALL never record a dismissed update version.
+
+> **Narrowed by [`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008) revision 2, 2026-11-21.** Dismissing the download notice or the ready notice
+> of REQ-STARTUP-174 only hides it and records no version (UD-3); dismissing the offer a cancel or a metered connection leaves
+> is governed by the text above.
 
 **REQ-STARTUP-118** — While an update download runs, a non-persistent notice titled `Downloading Rotaris {version}` SHALL show the message `{measured} — verifying against the published checksum when it finishes.` Progress SHALL be reported no more often than once per 1 MiB received (REQ-STARTUP-124). When the release feed states a non-zero size for the asset, `{measured}` SHALL be the received share of that size as a whole-number percentage with the fractional part discarded (the same convention as REQ-STARTUP-092), and SHALL be repainted only when that whole percent changes. When the claimed size is 0, `{measured}` SHALL instead be the whole number of MiB received, rendered as `{N} MB`.
 

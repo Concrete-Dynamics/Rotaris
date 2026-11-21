@@ -7,7 +7,7 @@ import { WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_SERVER, type WebSearchSaveReply, ty
 import type { McpSettingsProps } from './McpSettings.js';
 
 /**
- * THE WEB SEARCH PANEL'S OWN BEHAVIOUR, driven without a window (R-117). The repo mounts no DOM under a test environment
+ * THE WEB SEARCH PANEL'S OWN BEHAVIOUR, driven without a window (R-118). The repo mounts no DOM under a test environment
  * and a static render reaches no event, so this file fakes the two things a press needs: `useState` becomes a cell
  * store a test can seed (cells persist ACROSS draws), and the JSX runtime records every element so a control can be
  * found by its `data-websearch-` attribute and its own handler called. A press is then: draw, invoke the captured

@@ -514,18 +514,15 @@ describe('the empty states\' and the foot\'s sentences (REQ-TRACE-231, REQ-TRACE
     expect(phraseText(UNREAD_SOURCE_HOW)).toMatch(/then re-evaluate\.$/);
   });
 
-  it('states the foot in the reader\'s terms, claims no watcher, and keeps Re-evaluate as the route to a current board (REQ-TRACE-507, UIR-401)', () => {
+  it('states the foot in the reader\'s terms and keeps Re-evaluate as the route to a current board (REQ-TRACE-507, PD-TRACE-002 clause 10)', () => {
     const foot = phraseText(SUBSCRIPTION_SENTENCE);
     expect(foot).not.toMatch(/channel|engine|watcher|subscription/i);
-    // The falsified sentence, kept out: nothing watches the repository (`apps/desktop/src/main/requirements.ts` broadcasts
-    // only from a reply that carries `changed`), so the board does not refresh "as the repository changes".
-    expect(foot).not.toMatch(/as the repository changes|refreshes itself/);
-    // The second falsified sentence, kept out too: a session's writes and the Git view's are made "through Rotaris" and
-    // do not reach the board (`apps/desktop/src/workspace-service/delivery.ts` reads the store again only for the board's
-    // own commands and on a refresh).
-    expect(foot).not.toMatch(/through Rotaris/);
-    expect(foot).toMatch(/^The board updates itself for what is done on it and for the runs it starts\. /);
-    expect(foot).toMatch(/Any other change shows after Re-evaluate, which is always the way to a current board\.$/);
+    // Two earlier sentences were false while nothing watched the repository (UIR-401, UIR-502) and stay out in those
+    // words. Since PD-TRACE-002 clause 10 a watcher in the workspace service reads the board again when a requirement
+    // document changes (`apps/desktop/src/workspace-service/delivery.ts`, `rewatch`), so the foot now says that much.
+    expect(foot).not.toMatch(/as the repository changes|refreshes itself|through Rotaris/);
+    expect(foot).toMatch(/^The board reads itself again when a requirement document changes, and for what is done on it and the runs it starts\. /);
+    expect(foot).toMatch(/Re-evaluate is always the way to a current board\.$/);
   });
 });
 

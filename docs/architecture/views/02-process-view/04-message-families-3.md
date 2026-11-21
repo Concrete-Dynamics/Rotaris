@@ -98,7 +98,7 @@ store without a restart; a delete that found nothing wrote nothing and asks for 
 _search` card (B2, REQ-MCP-111) reads those two and adds one opener of its own: `shell.openConfigFile`** — no path on the
 wire, main resolving the asking window's workspace `agents.yaml` and opening it through the platform opener, bounded as
 `shell.openThirdPartyLicenses` is, so the card can NAME the file REQ-CONFIG-437 requires and offer step 2's edit without
-authoring anything (REQ-CONFIG-350/464). **Since 2026-11-21 (R-117) the card is the `Web search` panel, and adds no
+authoring anything (REQ-CONFIG-350/464). **Since 2026-11-21 (R-118) the card is the `Web search` panel, and adds no
 message:** its **Save and test** press sends `mcp.setSecret`, re-reads, sends `mcp.list` to read the entry the write
 left, and — on an available `web_search` entry configured off — makes the row switch's own durable press
 (`config.setField` `mcp_servers.web_search.enabled: true`, then `mcp.setEnabled`, PD-CONFIG-006 revision 2), then

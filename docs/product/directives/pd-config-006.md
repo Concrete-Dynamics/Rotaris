@@ -4,7 +4,7 @@
 
 ### PD-CONFIG-006 — the MCP Servers row's ON press writes `enabled` for a configured-off server
 
-*Revision 2 (2026-11-21, [R-117](../requests.md#r-117)) — **the web-search panel's Save and test makes the same write**,
+*Revision 2 (2026-11-21, [R-118](../requests.md#r-118)) — **the web-search panel's Save and test makes the same write**,
 at the foot. Revision 1 (2026-11-08, [R-095](../requests.md#r-095)) is the text above it, unchanged.*
 
 Settings › MCP Servers SHALL make a press of ON on an **available** row whose configured value is `false` do what the screen says it
@@ -33,7 +33,7 @@ switch is unchanged.
 
 *Why, and what it costs (revision 2).* The shipped entry is declared `enabled: false` (REQ-CONFIG-181), so a user who had stored the
 key still had to find the row's switch and then the probe — three acts in three places for one intent, which the owner reported as
-awkward. Every harness surveyed for R-117 that asks for a search key treats supplying it as switching search on. What it costs: the press
+awkward. Every harness surveyed for R-118 that asks for a search key treats supplying it as switching search on. What it costs: the press
 that stores a key also writes the configuration file, at the moment it is pressed, and its confirmation says so in the words the row's
 press uses. Revision 1 said nothing this replaces: it gave the write to the row's press alone, and that press keeps it.
 

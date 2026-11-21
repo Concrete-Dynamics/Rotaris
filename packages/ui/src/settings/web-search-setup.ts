@@ -5,7 +5,7 @@ import type { CommandOutcome, CommandRequest, McpHealth, McpListing, McpSecretRo
  * (`web-search-setup.test.ts`, `web-search-press.test.ts`). Everything here is data and functions over props, so every
  * state and every press is testable without a window, and `McpSettings.tsx`'s `WebSearchPanel` only draws it.
  *
- * R-117 (2026-11-21) replaced the four-step card that stood here with one panel: the provider the entry points at, the
+ * R-118 (2026-11-21) replaced the four-step card that stood here with one panel: the provider the entry points at, the
  * key, and the status. The shipped entry now names a real endpoint (`packages/config/src/mcp/defaults.ts`), so for the
  * default the key is all a user supplies; `Save and test` stores it, switches an entry configured off on (PD-CONFIG-006
  * revision 2) and probes it (REQ-MCP-092). Another provider is chosen behind "Use a different provider", which writes
@@ -42,7 +42,7 @@ export interface WebSearchPreset {
 }
 
 /**
- * The providers (R-117; vendor documentation read 2026-11-21). Each takes its key in the url, or needs none — a provider
+ * The providers (R-118; vendor documentation read 2026-11-21). Each takes its key in the url, or needs none — a provider
  * whose key travels only in a header is left out, because the key control satisfies a url placeholder and nothing else
  * (REQ-MCP-088), and a key written into a header would sit in the configuration file as plain text.
  *
@@ -130,7 +130,7 @@ export interface WebSearchFacts {
 }
 
 /**
- * The panel's closed vocabulary of situations (R-117):
+ * The panel's closed vocabulary of situations (R-118):
  *   - `unavailable`, `no-entry`, `other-transport`: nothing the key control can act on, each said in words;
  *   - `needs-key`: the entry's url still carries `${ROTARIS_SEARCH_API_KEY}` and no key is stored;
  *   - `unresolved`: a key is stored (or none is needed) and the url still carries a placeholder nothing resolved;
@@ -203,7 +203,7 @@ export const WEB_SEARCH_OFF = 'The server is off. Turn it on to let agents searc
 
 /**
  * The probe's answer, as the panel states it after a test. REQ-MCP-092's probe connects and lists the server's tools;
- * it runs no search, and a provider may list its tools without checking the key — Tavily does (driven 2026-11-21, R-117:
+ * it runs no search, and a provider may list its tools without checking the key — Tavily does (driven 2026-11-21, R-118:
  * a made-up key answered Healthy). So a Healthy answer on a keyed entry says what it proved and what it did not.
  */
 export function webSearchProbeSentence(health: McpHealth, keyed = false): string {
@@ -399,7 +399,7 @@ export async function pressDeleteWebSearchKey(deps: WebSearchSetupDeps, scope: W
 }
 
 /**
- * PD-CONFIG-013 (R-117 path B): the panel writes the provider the built-in entry reaches — `mcp_servers.web_search.url`,
+ * PD-CONFIG-013 (R-118 path B): the panel writes the provider the built-in entry reaches — `mcp_servers.web_search.url`,
  * that field alone, into the chosen scope through the scoped per-field write (REQ-CONFIG-441). A hosted provider is
  * written as its own url; your own server is the address the user typed, refused here unless it parses as an http or
  * https url with a host. The press writes no key: a provider that takes one reads the key the secrets store holds.

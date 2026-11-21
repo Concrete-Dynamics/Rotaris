@@ -1734,7 +1734,7 @@ function useMcp(): McpSettingsProps {
     onRefresh: () => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); },
     onSecretsServer: (server) => { setSecretsServer(server); },
     setup,
-    // The web search panel's presses (R-117), bound to this window's bridge. The re-read after a write is the listing
+    // The web search panel's presses (R-118), bound to this window's bridge. The re-read after a write is the listing
     // and BOTH secrets views together (B1's write fires main's existing `mcp.reload`, so the row refreshes without a
     // restart), answering its outcome so a refused read reaches the panel as `refreshFailure`. `enable` is the row
     // switch's own durable ON press (PD-CONFIG-006 revision 2): Save and test hands it the freshly listed row.

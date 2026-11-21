@@ -569,6 +569,12 @@ async function main(): Promise<void> {
       // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads),
       // at the level the service gave them and under the same threshold as main's own (PD-MONITOR-002).
       svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
+      // PD-TRACE-002 clause 10: the service's watcher read the board again; every window hears the generation on channel 10,
+      // exactly as it hears one a command moved (REQ-TRACE-334). The workspace named is the canonical one this instance opened.
+      svc.link.onEvent((e) => {
+        if (e.kind !== 'requirements.changed') return;
+        for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, { v: CONTRACT_SCHEMA_VERSION, workspace: key, generation: e.generation, affected: null });
+      });
       // ADR-0002 c.7 / ADR-0058: the service's narrow requests back to main are forwarded to the run host, bounded.
       svc.link.onAsk((a) => {
         switch (a.kind) {
@@ -580,6 +586,8 @@ async function main(): Promise<void> {
           // Domain 22 (PD-TRACE-001), REQ-ADOPT-012: the adoption run's one interpretation, on the host where the model resolves.
           // The service's root is replaced with the canonical one this instance opened it under, as the relay does for a command.
           case 'adoption.interpret': return runHost.request({ kind: 'adoption.interpret', workspaceRoot: key, detection: a.detection }, millis(195_000));
+          // PD-TRACE-002 clause 3: one step of the survey, on the host where the model resolves; the root is the canonical one, as above.
+          case 'survey.step': return runHost.request({ kind: 'survey.step', workspaceRoot: key, messages: a.messages }, millis(195_000));
           // Named so that a kind added to the ask union is routed or refused on purpose (R-091): main routes none of these from a workspace service.
           case 'checkpoint.capture': case 'checkpoint.refs': case 'checkpoint.prune': case 'checkpoint.deleteNamespace': case 'improvements.command': case 'credentials.lease':
           default: return Promise.resolve({ kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from a workspace service` } as ProcessReply);

@@ -4,6 +4,14 @@ Part 6 of 8 of [this document](../background-update-plan.md), which indexes ever
 
 ## 6. What the owner must decide
 
+**Decided 2026-11-21** by the owner ([R-117](../../product/requests.md#r-117)); the rulings are
+[`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008) revision 2's: UD-1 **(b)**, UD-2 (a), UD-3 (a),
+UD-4 (a), UD-5 (a)+(c), UD-6 (a), UD-7 (a), UD-8 (i)+(ii) swap when verified, UD-9 as recommended, UD-10 **(c)** —
+[`PD-SHELL-018`](../../product/directives/pd-shell-018.md#pd-shell-018), UD-11 (a), UD-12 on the spike's evidence. The same
+request brought the AppImage into every stage and added [`PD-STARTUP-014`](../../product/directives/pd-startup-014.md#pd-startup-014)
+(link-only builds), and set the order **Linux first**: Stage 2 and the AppImage half of Stage 4 and 5 before the Windows
+installer's PR-1a and PR-3, which wait for a Windows x64 host. The table below is kept as the options were put.
+
 None of these is decided by this plan, by R-084, or under R-072's delegation: the request reserves them to the owner, and
 the requirement clauses that depend on them say *reserved*. Each names the stage it blocks.
 

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { AdoptionOutcome, AdoptionView, BlockerPayload, BoardAction, BoardProjection, ColumnToken, DeliveryQueue, LaunchPreview, Reachability, RendererBridge, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload } from '@rotaris/contracts';
+import type { AdoptionOutcome, AdoptionView, CriterionOutcome, ShapeAcceptOutcome, ShapeExportOutcome, ShapeView, SurveyOutcome, BlockerPayload, BoardAction, BoardProjection, ColumnToken, DeliveryQueue, LaunchPreview, Reachability, RendererBridge, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload } from '@rotaris/contracts';
 import { commandById, detectPlatform } from '../commands/registry.js';
 import { RequirementsView, type ActOutcome, type BoardPreferenceKey, type BoardPreferences, type DispatchOutcome, type HostResult, type LocationPreviewOutcome, type QueueChange, type RequirementsHost, type SourceWriteOutcome } from './RequirementsView.js';
 
@@ -73,6 +73,13 @@ export function createRequirementsHost({ bridge, workspace, onOpenSession }: Req
     // Domain 22 (PD-TRACE-001): the adoption strip — a read on opening, and the button. No actor and no path cross here (REQ-ADOPT-028).
     readAdoption: () => send<AdoptionView>({ name: 'requirements.adoption' }),
     adopt: (mode: 'run' | 'record', writeLayout: boolean) => send<AdoptionOutcome>({ name: 'requirements.adopt', mode, ...(writeLayout ? { writeLayout: true } : {}) }),
+    // PD-TRACE-002: the survey strip and the criterion's tick. No actor and no path cross here either (REQ-ADOPT-028).
+    readShape: () => send<ShapeView>({ name: 'requirements.shape' }),
+    survey: (token?: string, answer?: string) => send<SurveyOutcome>({ name: 'requirements.survey', ...(token === undefined ? {} : { token }), ...(answer === undefined ? {} : { answer }) }),
+    acceptShape: (token: string) => send<ShapeAcceptOutcome>({ name: 'requirements.shape.accept', token }),
+    recordShape: () => send<ShapeAcceptOutcome>({ name: 'requirements.shape.record' }),
+    exportShape: () => send<ShapeExportOutcome>({ name: 'requirements.shape.export' }),
+    tickCriterion: (id: ReqId, index: number, text: string, checked: boolean) => send<CriterionOutcome>({ name: 'requirements.criterion', id, index, text, checked }),
     onChanged: (listener: (change: RequirementsChanged) => void) => bridge.onRequirementsChanged((p) => listener(p as RequirementsChanged)),
     async readPreferences(): Promise<BoardPreferences> {
       const [text, epic, source, lifecycle, health, priority, sort, axis, blocked, folds] = await Promise.all([

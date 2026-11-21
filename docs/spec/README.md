@@ -18,10 +18,10 @@ how any other implementation achieves it.
   reading (its reference record, `docs/clean-room/reference-record.md`, was removed 2026-10-26)
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **4,015** identifiers across the 20 shipping domains, of which **258** are withdrawn
-  in place, leaving **3,757** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **4,037** identifiers across the 20 shipping domains, of which **258** are withdrawn
+  in place, leaving **3,779** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,459** identifiers in all, **268** of them withdrawn.
+  are not part of the shipping total — **4,481** identifiers in all, **268** of them withdrawn.
   *(Corrected 2026-10-13: this read 3,954, 3,696 and 4,398, with REQ-TOOLS at 192 and REQ-MCP at 117 below. REQ-MCP-118
   of the code-intelligence round and REQ-TOOLS-193 of the OQ-61 round were minted and never counted;
   `tools/symbol-artifact/spec-readme-counts.test.ts` now holds every figure here to the generated artifact.)*
@@ -38,6 +38,10 @@ how any other implementation achieves it.
   [ADR-0067](../architecture/adr/0067-the-loopback-mcp-server-for-external-agents.md). Like R-084's and R-088's they are
   **decided, not derived** and say so at their section's heading; `PD-EVENTS-001` carries what they displace. The amendment
   is in [`resolutions/16-mcp-integration.md`](resolutions/16-mcp-integration.md).)*
+  *(2026-11-21: 4,015, 3,757 and 4,459 became 4,037, 3,779 and 4,481 when REQ-ADOPT-031 to REQ-ADOPT-052 were minted for the
+  surveyed shape, at the owner's ask [R-116](../product/requests.md#r-116). **Decided, not derived**, as the thirty before
+  them; `PD-TRACE-002` carries what they displace. The amendment is in
+  [`resolutions/22-requirements-adoption.md`](resolutions/22-requirements-adoption.md).)*
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
@@ -171,7 +175,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 19 | [Notifications, Error Handling, and Recovery](19-notifications-errors-recovery.md) | `REQ-NOTIFY` | 268 | 4 | secondary |
 | 20 | [Machine-Readable Event Stream, Replay, and Trajectory Export](20-event-history-replay-export.md) | `REQ-EVENTS` | 179 | 39 | secondary |
 | 21 | [UI Performance Benchmark](21-ui-performance-benchmark.md) | `REQ-UIBENCH` | 119 | 14 | peripheral |
-| 22 | [Requirements Adoption Assistant](22-requirements-adoption.md) | `REQ-ADOPT` | 30 | 0 | secondary |
+| 22 | [Requirements Adoption Assistant](22-requirements-adoption.md) | `REQ-ADOPT` | 52 | 0 | secondary |
 
 "Reqs" is the count of identifiers a domain defines; "Withdrawn" is how many of those are withdrawn
 in place, retaining their number while carrying no behavior. Subtracting the second from the first

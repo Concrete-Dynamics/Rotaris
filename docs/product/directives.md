@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and forty-three.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and forty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -190,6 +190,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-SHELL-015](directives/pd-shell-015.md) | six primary views: Mission is not one |
 | [PD-SHELL-016](directives/pd-shell-016.md) | the navigation is a sidebar holding the views and the sessions; the window opens on the Workspace |
 | [PD-SHELL-017](directives/pd-shell-017.md) | the Workspace is one header band and the transcript, between a Run panel and the inspector |
+| [PD-SHELL-018](directives/pd-shell-018.md) | the title bar carries the update's progress and its ready state; the banner can open a release page |
 
 ### STARTUP
 
@@ -208,6 +209,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-STARTUP-011](directives/pd-startup-011.md) | a run directory carries the application log, and a window whose default base cannot be created writes under the per-user data directory |
 | [PD-STARTUP-012](directives/pd-startup-012.md) | a release publishes its SBOM beside its artifacts, signed with them |
 | [PD-STARTUP-013](directives/pd-startup-013.md) | a release publishes for Linux x86_64 beside Windows: an AppImage and a Debian package |
+| [PD-STARTUP-014](directives/pd-startup-014.md) | a packaged build that cannot update itself says a newer release exists and links to it |
 
 ### TOOLS
 

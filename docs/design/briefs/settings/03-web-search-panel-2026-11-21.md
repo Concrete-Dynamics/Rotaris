@@ -1,6 +1,6 @@
 [Settings — brief](../settings.md) › part 3
 
-# The web search panel (R-117)
+# The web search panel (R-118)
 
 The owner found setting up the search key awkward: the Tools page drew a four-step card (choose a provider, paste a
 stanza into the configuration file, paste the key, test), and the shipped entry pointed at `search.rotaris.invalid`,

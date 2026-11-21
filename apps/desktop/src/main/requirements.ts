@@ -40,6 +40,8 @@ const BOUND_BOARD = millis(120_000);
 const BOUND_OTHER = millis(30_000);
 /** Domain 22 (PD-TRACE-001): an adoption run holds one model interpretation of up to 180 s (REQ-ADOPT-027) beside the detection and the writes. */
 const BOUND_ADOPT = millis(240_000);
+/** PD-TRACE-002 clause 3 (REQ-ADOPT-037): a survey is bounded at eight minutes by the service; the relay waits that and a margin for the last step's answer. */
+const BOUND_SURVEY = millis(720_000);
 
 export function actorFor(origin: CommandOrigin, person: () => string): Actor {
   return origin.kind === 'window' ? { kind: 'user', person: person() } : { kind: 'system' };
@@ -52,7 +54,7 @@ export function createRequirementsRelay(deps: RequirementsRelayDeps): { handle(c
       const root = deps.currentWorkspace();
       if (root === undefined) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its requirements' };
       const actor = actorFor(origin, deps.person);
-      const bound = command.name === 'requirements.adopt' ? BOUND_ADOPT : command.name === 'requirements.board' || command.name === 'requirements.refresh' || command.name === 'requirements.adoption' ? BOUND_BOARD : BOUND_OTHER;
+      const bound = command.name === 'requirements.survey' ? BOUND_SURVEY : command.name === 'requirements.adopt' ? BOUND_ADOPT : command.name === 'requirements.shape' || command.name === 'requirements.shape.accept' || command.name === 'requirements.shape.record' ? BOUND_BOARD : command.name === 'requirements.board' || command.name === 'requirements.refresh' || command.name === 'requirements.adoption' ? BOUND_BOARD : BOUND_OTHER;
       const pending = deps.request(root, { kind: 'requirements.command', workspaceRoot: root, command: { ...command, workspace: root }, actor, disclosure: deps.disclosure() }, bound);
       if (pending === undefined) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
       let r: ProcessReply;

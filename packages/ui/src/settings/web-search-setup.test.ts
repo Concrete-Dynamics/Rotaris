@@ -8,7 +8,7 @@ import {
 } from './web-search-setup.js';
 
 /**
- * The web search panel's pure half (R-117): the provider table, the stanza, the situation and the status words, and the
+ * The web search panel's pure half (R-118): the provider table, the stanza, the situation and the status words, and the
  * sentences — each case says the one reason it can fail for.
  */
 const KEY = `\${${WEB_SEARCH_KEY_VARIABLE}}`;
@@ -119,7 +119,7 @@ describe('the sentences (REQ-MCP-110/081, REQ-CONFIG-225/353/437)', () => {
     expect(mcpHealthText({ state: 'healthy', toolCount: 1 })).toBe('Healthy · 1 tool');
     expect(webSearchProbeSentence({ state: 'unreachable' })).toContain('did not answer');
     expect(webSearchProbeSentence({ state: 'healthy', toolCount: 2 })).toBe('The server answered: Healthy · 2 tools.');
-    // A probe lists tools and runs no search; Tavily answered Healthy to a made-up key (R-117), so a keyed Healthy says so.
+    // A probe lists tools and runs no search; Tavily answered Healthy to a made-up key (R-118), so a keyed Healthy says so.
     expect(webSearchProbeSentence({ state: 'healthy', toolCount: 2 }, true)).toContain('checks the key itself when an agent first searches');
     expect(webSearchFileLine('/ws/.rotaris/agents.yaml')).toBe('File: /ws/.rotaris/agents.yaml');
     expect(webSearchFileLine(null)).toContain('not read yet');

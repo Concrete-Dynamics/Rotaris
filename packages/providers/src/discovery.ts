@@ -12,7 +12,7 @@ import { lookupKnownLimits, type KnownLimitsTable } from './limits.data.js';
  *
  * This is the discoverer keyed by "every other provider" (REQ-PROVIDER-069). The codex and Copilot strategies of
  * the discovery registry (ADR-0028) are `discovery-strategies.ts`, and claude-code's static catalogue is
- * `flows/claude-code.ts` (R-110).
+ * `flows/claude-code.ts` (R-111).
  */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 

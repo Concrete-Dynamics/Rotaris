@@ -7,7 +7,7 @@ import { KEY_INSTRUCTION, OAUTH_INSTRUCTION, ProviderDialog } from './ProviderDi
 const choice = (over: Partial<ProviderChoice>): ProviderChoice => ({ id: 'codex', displayName: 'OpenAI Codex (Sign in with ChatGPT)', method: 'browser-pkce', methodLabel: 'Sign in on a browser page', hint: 'Direct provider API — OpenAI, destination: chatgpt.com.', defaultBaseUrl: null, custom: false, available: true, unavailabilityReason: null, ...over });
 const draw = (payload: ProviderDialogPayload): string => renderToStaticMarkup(createElement(ProviderDialog, { payload, onSubmit: async () => ({ outcome: 'cancelled' as const }), onAuthenticate: async () => ({ outcome: 'cancelled' as const }), onClose: () => undefined }));
 
-/** R-110 — REQ-PROVIDER-096/116: the authentication window's resting state for each kind of provider. */
+/** R-111 — REQ-PROVIDER-096/116: the authentication window's resting state for each kind of provider. */
 describe('ui/ProviderDialog — what the window offers before a sign-in starts', () => {
   it('a browser or device-code provider shows the start instruction, no key field, and an enabled Authenticate', () => {
     const html = draw({ mode: 'reauthenticate', providerId: 'codex', displayName: 'OpenAI Codex', choices: [choice({})] });

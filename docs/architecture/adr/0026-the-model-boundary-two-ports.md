@@ -218,7 +218,7 @@ pack at `552d346` before this change, and cut by the activation budget, so its b
 of the pack: [`live-0bc3eee-default-autopsy.md`](../live-runs/live-0bc3eee-default-autopsy.md). The row is in
 [`../first-executions.md`](../first-executions.md).
 
-## Fourth execution — 2026-11-21, the `claude-code` provider, built below the port this record put it above (R-111, PD-PROVIDER-002)
+## Fourth execution — 2026-11-21, the `claude-code` provider, built below the port this record put it above (R-112, PD-PROVIDER-002)
 
 *Recorded under GD-10. The decision's reason for a second backend was falsified by the tool it was written about, and
 is kept here beside what was built.*

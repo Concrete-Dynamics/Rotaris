@@ -111,11 +111,16 @@ delete/refresh`, `provider.payload/signIn`, **`dictation.transcribe` and, since 
 `dictation.setCredential {value}` / `dictation.clearCredential`** ([`PD-CONFIG-010`](../../../product/directives/pd-config-010.md#pd-config-010):
 the endpoint's bearer is stored in main's own protected file under the per-user data directory, written by the set and removed
 by the clear, and every answer carries the masked form alone — `{masked}`, null when nothing is stored — never the value).
+Main also answers the first-launch setup's three commands itself (`onboarding.read`, `onboarding.chooseProject`,
+`onboarding.finish`; PD-WORKSPACE-010): whether the setup is owed is main's, held in `main/onboarding.ts` and the
+main-only preference `onboarding/state`, and no request names a folder. The setup's sign-in is `provider.signIn` with
+`quiet`, which keeps the success notice out of the slot the setup covers.
+
 Main relays a session or hook command to the run host, a workspace or
 config command to the workspace service, and answers preference, theme, **provider** and **dictation** commands itself (the
 credential store and the dictation credential live in main). `provider.signIn` and `dictation.setCredential` are the two
 commands carrying a pasted secret inward; no outcome
-carries one back — the list shows the display mask. **Since 2026-11-20 (R-110) a device-code or browser provider signs
+carries one back — the list shows the display mask. **Since 2026-11-20 (R-111) a device-code or browser provider signs
 in with `provider.authenticate {providerId, reauthenticate?}`**, which main answers with the flow's one outcome once the
 user has finished at the provider (`ProviderService.signInInteractive`; main opens the system browser itself);
 `provider.authPrompt` reads the prompt the asking window shows meanwhile — the verification address and code, or the

@@ -122,7 +122,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
     expect(outputDowngrade([{ type: 'unsupported', feature: 'topK' }], schemaOut)).toBeNull();
     expect(outputDowngrade([{ type: 'unsupported', feature: 'responseFormat' }], { kind: 'json_object' })).toBeNull();
   });
-  it('R-110: a sign-in provider\'s own headers ride on its model\'s requests, and a stateless responses endpoint is asked the way it requires', async () => {
+  it('R-111: a sign-in provider\'s own headers ride on its model\'s requests, and a stateless responses endpoint is asked the way it requires', async () => {
     const seen: { headers: Record<string, string>; body: Record<string, unknown> }[] = [];
     const fake: FetchLike = async (_input, init) => {
       seen.push({ headers: Object.fromEntries(new Headers(init?.headers).entries()), body: JSON.parse(bodyOf(init)) as Record<string, unknown> });

@@ -115,7 +115,9 @@ switch (command) {
       ...(typeof workspace === 'string' ? { workspace } : {}),
       dialect: typeof flag('dialect', 'scripted') === 'string' ? flag('dialect', 'scripted') : 'scripted',
       detached: true,
-      extra,
+      // The driver shows the product as a person meets it: a fresh profile with no `--workspace` opens on the first-launch
+      // setup (PD-WORKSPACE-010). `--env=ROTARIS_CAPTURE_ONBOARDING=off` holds it off, as every proof launch does.
+      extra: { ROTARIS_CAPTURE_ONBOARDING: 'on', ...extra },
       // `--electron-arg=--use-fake-device-for-media-stream`, repeatable: a Chromium switch for this launch, for a device the host has none of.
       electronArgs: argv.filter((a) => a.startsWith('--electron-arg=')).map((a) => a.slice('--electron-arg='.length)),
     });

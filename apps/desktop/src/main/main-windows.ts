@@ -134,6 +134,11 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
   readonly integrationRunning: WorktreeIntegrationRunning;
   readonly activeRunCount: (workspaceId: string) => Promise<number | null>;
   readonly persistWorkspace: (workspace: string) => Promise<void>;
+  /**
+   * PD-WORKSPACE-010: true while the first-launch setup is owed. The setup's first step asks for the project, so a launch
+   * that would have scheduled REQ-SHELL-011's deferred chooser schedules none. Absent reads as false.
+   */
+  readonly setupOwed?: () => boolean;
   readonly raiseTransient: (
     windowId: number,
     kind: 'info' | 'ok' | 'warn' | 'fail',
@@ -565,7 +570,10 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
       return undefined;
     });
     if (startup.persist) await this.dependencies.persistWorkspace(startup.workspace);
-    if (startup.prompt) this.deferProjectOffer(built.wcId, 650);
+    if (startup.prompt) {
+      if (this.dependencies.setupOwed?.()) this.dependencies.log(`the first-launch project chooser for window ${built.wcId} is not scheduled: the setup asks for the project (PD-WORKSPACE-010)`);
+      else this.deferProjectOffer(built.wcId, 650);
+    }
     return this.forSender(built.wcId)!;
   }
 
@@ -617,6 +625,38 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return options.newWindow
       ? this.#addWindow(requester, chosen, 'open-request')
       : this.#replace(requester, chosen);
+  }
+
+  /**
+   * PD-WORKSPACE-010 — the setup's project step. It is `choose` for the window that asked, with the three differences the
+   * setup needs: the folder the application started in may be taken without a chooser (`useCurrent`); a folder that is
+   * already this window's workspace is REMEMBERED and answered as chosen, where `choose` offers a new session and stores
+   * nothing; and a dismissed chooser raises no reminder, because the setup stays on screen and says what it waits for.
+   * A different folder replaces the window exactly as `choose` does (REQ-SHELL-017), gates included.
+   */
+  async chooseForSetup(senderId: number, options: { readonly useCurrent: boolean }): Promise<CommandOutcome> {
+    const requester = this.#liveRecord(senderId);
+    if (!requester) return { ok: false, code: 'window.notMain', headline: 'No main window is open' };
+    requester.questionAnswered = true;
+    requester.deferredOffer?.cancel();
+    requester.deferredOffer = null;
+    const gated = await this.#workspaceOpenGates(requester);
+    if (!gated.ok) return gated.outcome;
+    const current = requester.workspace === '(no workspace)' ? undefined : requester.workspace;
+    if (options.useCurrent && current === undefined) return { ok: false, code: 'workspace.none', headline: 'No folder is open to use as the project' };
+    const chosen = options.useCurrent ? current! : await this.dependencies.chooseProjectFolder(requester.win, undefined);
+    if (chosen === null) return { ok: true, value: { cancelled: true } };
+    const holder = this.#windowHolding(chosen);
+    if (holder?.wcId === requester.wcId) {
+      await this.dependencies.persistWorkspace(chosen);
+      this.dependencies.log(`the setup took ${chosen}, already open in window ${requester.wcId}, as the project (PD-WORKSPACE-010)`);
+      return { ok: true, value: { workspace: chosen, wcId: requester.wcId, kept: true } };
+    }
+    if (holder) {
+      this.#surface(holder);
+      return { ok: true, value: { unchanged: true, workspace: holder.workspace, surfaced: holder.wcId } };
+    }
+    return this.#replace(requester, chosen);
   }
 
   async handOver(handOver: HandOver): Promise<void> {

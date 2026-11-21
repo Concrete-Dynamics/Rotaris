@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { snapshotLayer, type ProjectSnapshot } from './project-settings.js';
 
-/** R-110 — REQ-PROVIDER-082/090/091: what discovery learned about a model's route and availability reaches the configuration layer. */
+/** R-111 — REQ-PROVIDER-082/090/091: what discovery learned about a model's route and availability reaches the configuration layer. */
 describe('the snapshot as a layer: API mode carried through, unavailable models never usable entries', () => {
   const at = '2026-11-20T00:00:00.000Z';
   const model = (id: string, capabilities: Record<string, unknown>) => ({ id, capabilities, limits: {}, pricing: {}, discovered_at: at });

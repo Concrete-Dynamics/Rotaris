@@ -91,6 +91,20 @@ context: a part alone on a page drops its title, a part beside others heads itse
 with no page keeps its first-level title and its explanations open. Setup's three lists are computed in
 `settings/Setup.tsx` from what the other pages already hold.
 
+**A full-window surface over the shell** ([`PD-WORKSPACE-010`](../../../product/directives/pd-workspace-010.md#pd-workspace-010), 2026-11-21: the
+first-launch setup). `FirstRunSetup` (`packages/ui/src/FirstRunSetup.tsx`, styles in `first-run.css`) is mounted by the
+`App` root beside `AppShell`, never inside it: it is `position: fixed` over the window, `role="dialog"` with
+`aria-modal`, which is what holds the shell's chords back (`modalSurfaceOpen`), and it sets `inert` on `.app-shell` while
+it stands. It draws its own `title-bar` with the frame's `WindowControls`, because it covers the shell's. The root reads
+`onboarding.read` before the first paint (`boot`), so a first launch never shows the shell first, and again after each
+act and each configuration change; the surface derives its step from those facts (`stepFor`) and holds none of its own,
+which is why the window `MainWindows.chooseForSetup` builds for a chosen folder opens on the next step. Every act is a
+callback on a path that already exists: `provider.signIn`, `config.save` for a slot, the composer's `setMode` and
+`submitPrompt`. Ownership: whether the setup is owed is main's (`main/onboarding.ts`; the preference `onboarding/state`,
+absent from `PREFERENCE_COMMAND_KEYS`), written at `begin` and at `onboarding.finish` and by nothing else; the step shown
+and the draft are the renderer's, per window and not stored. A proof launch holds the setup off
+(`ROTARIS_CAPTURE_ONBOARDING=off`, `proofIsolationEnv`); `pnpm onboarding-proof` measures it.
+
 **A status-strip item** (worked examples: REQ-SANDBOX-121's sandbox indicator, 2026-10-02; the strip rebuilt to
 REQ-SHELL-038's list, fin10, the same day). The strip's items are **values**: `stripItems(width, facts)` in
 `packages/ui/src/composer.ts` answers them left to right in REQ-SHELL-038's order — the workspace path (the one `link`,

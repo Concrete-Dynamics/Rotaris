@@ -2,11 +2,11 @@ import { captureSupport, startCapture } from './dictation-capture.js';
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createReportingRoot, RenderFaultSeam } from './render-failure.js';
 import { useStore } from 'zustand';
-import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult, type CommandRequest, type DiagnosticsCardState } from '@rotaris/contracts';
+import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult, type CommandRequest, type DiagnosticsCardState, type ModelSlotName, type OnboardingOutcome, type OnboardingView, type PermissionPreset, type ProviderSignInResult } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
-import { dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, settingsPageFor, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted, RUN_PANEL_WIDTH, INSPECTOR_WIDTH, COMPOSER_DEFAULT_HEIGHT } from '@rotaris/ui';
+import { FirstRunSetup, type FirstRunConfig, dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, settingsPageFor, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted, RUN_PANEL_WIDTH, INSPECTOR_WIDTH, COMPOSER_DEFAULT_HEIGHT } from '@rotaris/ui';
 import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
 // ADR-0063 — portable skills: the catalog reader (`askUntilDiscovered`, `bindSkillsReader`, `readWhileMounted`, in the `@rotaris/ui` import above), the Settings tab's props and the composer's commands.
@@ -1186,7 +1186,7 @@ function dispatchNoticeAction(action: NoticeAction): void {
   }
 }
 
-function App({ version, workspace, home, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerAtBoot, circuitBreakerHostOff, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; home: string | undefined; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerAtBoot: boolean; circuitBreakerHostOff: boolean; initialPopOut: boolean }) {
+function App({ initialOnboarding, version, workspace, home, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerAtBoot, circuitBreakerHostOff, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialOnboarding: OnboardingView | null; initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; home: string | undefined; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerAtBoot: boolean; circuitBreakerHostOff: boolean; initialPopOut: boolean }) {
   // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
   const [popOut, setPopOut] = useState(initialPopOut);
   // REQ-CHAT-067 (Part Z): the tool-grouping display preference, default ON, in the desktop preference store;
@@ -1508,6 +1508,47 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
    * opened automatically at most once per workspace open"). The composer gate keeps its own reading of the
    * same pushed state; both read, neither invents.
    */
+  /*
+   * PD-WORKSPACE-010 — the first-launch setup. Main holds whether it is owed and answers the facts its steps are derived
+   * from (`onboarding.read`); this root re-reads them after each act and when the configuration changes, and sends every
+   * act on the path the rest of the window uses: the provider's sign-in, the configuration's writes, the composer's start.
+   */
+  const [onboarding, setOnboarding] = useState<OnboardingView | null>(initialOnboarding);
+  const refreshOnboarding = useCallback(async () => {
+    const r = await bridge.command({ kind: 'onboarding.read' });
+    if (r.ok) setOnboarding((current) => (current === null ? null : r.value as OnboardingView));
+  }, []);
+  const onboardingShown = onboarding !== null;
+  // The read is asked for, never made, inside the effect: its answer sets state from a callback, as `useConfigSnapshot`'s does.
+  useEffect(() => { if (onboardingShown) queueMicrotask(() => { void refreshOnboarding(); }); }, [onboardingShown, stripConfig, refreshOnboarding]);
+  const firstRunConfig = useMemo<FirstRunConfig | null>(() => (stripConfig === null ? null : { slots: Object.fromEntries(stripConfig.slots.map((slot) => [slot.slot, slot.value])), models: stripConfig.models }), [stripConfig]);
+  const chooseSetupProject = useCallback(async (useCurrent: boolean) => {
+    const r = await bridge.command({ kind: 'onboarding.chooseProject', ...(useCurrent ? { useCurrent: true } : {}) });
+    if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+    if ((r.value as { cancelled?: boolean } | undefined)?.cancelled === true) return { ok: true as const, cancelled: true as const };
+    await refreshOnboarding();
+    return { ok: true as const };
+  }, [refreshOnboarding]);
+  const signInForSetup = useCallback(async (req: { providerId: string; label: string; baseUrl: string; apiKey: string; replace: boolean; allowEmpty: boolean }): Promise<ProviderSignInResult | { outcome: 'error'; message: string }> => {
+    const r = await bridge.command({ kind: 'provider.signIn', providerId: req.providerId, ...(req.label === '' ? {} : { label: req.label }), ...(req.baseUrl === '' ? {} : { baseUrl: req.baseUrl }), apiKey: req.apiKey, ...(req.replace ? { replace: true } : {}), ...(req.allowEmpty ? { allowEmpty: true } : {}), quiet: true });
+    if (!r.ok) return { outcome: 'error', message: r.detail ?? r.headline };
+    await refreshOnboarding();
+    return r.value as ProviderSignInResult;
+  }, [refreshOnboarding]);
+  const assignSetupSlot = useCallback(async (slot: ModelSlotName, model: string) => {
+    const r = await bridge.command({ kind: 'config.save', save: { slots: { [slot]: model } } });
+    return r.ok ? { ok: true as const } : { ok: false as const, reason: r.detail ?? r.headline };
+  }, []);
+  const setSetupMode = useCallback((mode: PermissionPreset) => setMode(mode), []);
+  const submitFirstPrompt = useCallback(async (text: string) => {
+    const r = await submitPrompt(text, []);
+    if (r.ok) useShellState.getState().switchView('workspace');
+    return r;
+  }, []);
+  const finishOnboarding = useCallback((outcome: OnboardingOutcome) => {
+    setOnboarding(null);
+    void bridge.command({ kind: 'onboarding.finish', outcome });
+  }, []);
   const initialization = useInitialization();
   const reauth = useReauthPrompt();
   const projectSetup = useShellState((s) => s.projectSetup);
@@ -1572,6 +1613,11 @@ function App({ version, workspace, home, initialTheme, initialReducedMotion, set
         ? <ProjectSetupDialog state={initialization.state} auto={projectSetup === 'auto'} onInitialize={initialization.onInitialize} onSkip={initialization.onSkip} onClose={closeProjectSetup} />
         : undefined}
     />
+    {onboarding !== null && (
+      <FirstRunSetup version={version} home={home} view={onboarding} config={firstRunConfig}
+        windowControls={{ maximized: windowMaximized, onMinimize: () => { void bridge.command({ kind: 'window.minimize' }); }, onToggleMaximize: toggleWindowMaximize, onClose: () => { void bridge.command({ kind: 'window.close' }); } }}
+        onChooseProject={chooseSetupProject} onSignIn={signInForSetup} onAssignSlot={assignSetupSlot} onSetMode={setSetupMode} onSubmit={submitFirstPrompt} onFinish={finishOnboarding} />
+    )}
     {browserOpen && (
       <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)}
         onRefresh={refreshSessions}
@@ -1817,10 +1863,13 @@ async function boot(): Promise<void> {
   const info = hello.ok ? (hello.value as { version: string; workspace: string; home: string | undefined; processes: string[]; circuitBreakerArmed: boolean; circuitBreakerHostOff: boolean }) : { version: '?', workspace: '(no workspace)', home: undefined, processes: [], circuitBreakerArmed: false, circuitBreakerHostOff: false };
   // R-091 (hardening §3.2 row 4): the boundary around the whole shell and the root's error options that report through
   // `notice.report` (`render-failure.tsx`); the fault seam is verification only, compiled out of a packaged build.
+  // PD-WORKSPACE-010: read before the first paint, so a first launch opens on the setup and never flashes the shell first.
+  const onboardingReply = await bridge.command({ kind: 'onboarding.read' });
+  const initialOnboarding = onboardingReply.ok && (onboardingReply.value as OnboardingView).owed ? onboardingReply.value as OnboardingView : null;
   createReportingRoot(document.getElementById('root')!, 'main', bridge.command, reloadThisWindow).render(
     <StrictMode>
       {__ROTARIS_SEAMS__ ? <RenderFaultSeam /> : null}
-      <App version={info.version} workspace={info.workspace} home={info.home} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerAtBoot={info.circuitBreakerArmed} circuitBreakerHostOff={info.circuitBreakerHostOff} initialPopOut={initialPopOut} />
+      <App initialOnboarding={initialOnboarding} version={info.version} workspace={info.workspace} home={info.home} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerAtBoot={info.circuitBreakerArmed} circuitBreakerHostOff={info.circuitBreakerHostOff} initialPopOut={initialPopOut} />
     </StrictMode>,
   );
 }

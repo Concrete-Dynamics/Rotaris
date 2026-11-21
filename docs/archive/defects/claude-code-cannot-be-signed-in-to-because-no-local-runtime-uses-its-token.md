@@ -1,4 +1,4 @@
-## Outcome: repaired 2026-11-21 (R-111, PD-PROVIDER-002)
+## Outcome: repaired 2026-11-21 (R-112, PD-PROVIDER-002)
 
 The provider is connected through the Claude Code tool the user installed and signed in to, and a `claude-code` model is
 answered by that tool started as a subprocess with its own tools switched off and the product's tools served to it
@@ -14,7 +14,7 @@ Agent SDK with the token (REQ-PROVIDER-049) and no conflicting-credential preche
 today could be used by no run, and the provider's three models would still seed the startup slots ahead of every
 other provider's (`claude-code` sorts first among authenticated ids), so every run would start on a model nothing can
 reach. Until the runtime exists the sign-in is refused before anything is stored, and the authentication window lists
-the provider as not selectable with the reason (R-110, 2026-11-20). Before that date the refusal read "signs in with
+the provider as not selectable with the reason (R-111, 2026-11-20). Before that date the refusal read "signs in with
 "Paste an API key", which this build does not provide yet", which named the wrong thing.
 
 ## Specs

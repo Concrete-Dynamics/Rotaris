@@ -13,12 +13,13 @@ export function providersCommands(
   // REQ-NOTIFY-068: a provider's credentials changed, so a pair of it that failed authentication may be offered again.
   const credentialsChanged = (id: string): void => authRecovery.credentialsChanged(id);
   /** What every sign-in does once it has its one outcome (REQ-PROVIDER-012/142), by key or by the provider's own flow. */
-  const settled = async (providerId: string, outcome: ProviderSignInResult): Promise<void> => {
+  const settled = async (providerId: string, outcome: ProviderSignInResult, quiet = false): Promise<void> => {
     if (outcome.outcome === 'signed-in') {
       credentialsChanged(outcome.id);
       // A catalog that answers without a key validated nothing (REQ-PROVIDER-133's gap on a public catalog): health stays unchecked and the notice warns.
       healthCache.set(outcome.id, outcome.keyValidated ? { state: 'healthy', detail: outcome.message, available: true } : { state: 'unknown', detail: outcome.message, available: true });
-      raiseNotice(outcome.keyValidated ? 'info' : 'warning', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
+      // PD-WORKSPACE-010: the first-launch setup states the outcome itself, in the step that asked, and passes `quiet`; a key that validated nothing still warns.
+      if (!(quiet && outcome.keyValidated)) raiseNotice(outcome.keyValidated ? 'info' : 'warning', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
       await afterProviderChange();
     } else if (outcome.outcome === 'failed') {
       log(`providers: sign-in failed for ${providerId}: ${outcome.message}`);
@@ -50,7 +51,7 @@ export function providersCommands(
       const outcome: ProviderSignInResult = req.providerId === 'openai-compatible'
         ? await providers.addInstance({ label: req.label ?? '', baseUrl: req.baseUrl ?? '', apiKey: req.apiKey, ...(req.replace ? { replace: true } : {}), ...(req.allowEmpty ? { allowEmpty: true } : {}) })
         : await providers.signInWithKey(req.providerId, req.apiKey, req.allowEmpty ?? false);
-      await settled(req.providerId, outcome);
+      await settled(req.providerId, outcome, req.quiet === true);
       return { ok: true, value: outcome };
     },
     'provider.authenticate': async (req, { senderId }) => {

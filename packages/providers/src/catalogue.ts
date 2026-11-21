@@ -6,7 +6,7 @@ import { err, failure, ok, type Failure, type Result } from '@rotaris/kernel';
  * the type's answer (`null`), never a placeholder string (REQ-PROVIDER-005: `claude-code` declares neither
  * URL). Nothing in the running product writes any attribute here.
  *
- * Built in Part K with ONE authenticator (`api-key`) and one discoverer (generic HTTP). Since R-110 (2026-11-20)
+ * Built in Part K with ONE authenticator (`api-key`) and one discoverer (generic HTTP). Since R-111 (2026-11-20)
  * `copilot`'s device code and `codex`'s browser PKCE are built (`flows/`), with their discovery strategies
  * (`discovery-strategies.ts`); the hosted provider's OIDC flow is owed and its entry is unavailable. `claude-code`
  * is connected through the Claude Code tool installed on the machine and takes no key (PD-PROVIDER-002).

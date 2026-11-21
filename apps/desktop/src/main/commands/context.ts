@@ -1,3 +1,4 @@
+import { type Onboarding } from '../onboarding.js';
 import type { BrowserWindow, UtilityProcess } from 'electron';
 import type { Clocks } from '@rotaris/kernel';
 import type {
@@ -181,6 +182,10 @@ export interface CommandContext {
   readonly providerRows: () => ProviderRow[];
   readonly presentProvider: (mode: ProviderDialogPayload['mode'], providerId: string | null) => Promise<void>;
   readonly afterProviderChange: () => Promise<void>;
+  /** PD-WORKSPACE-010: whether the first-launch setup is owed, and its one end (`../onboarding.ts`). */
+  readonly firstLaunchSetup: Onboarding;
+  /** REQ-WORKSPACE-152 (3): publishes the no-provider notice when no provider is authenticated; nothing otherwise. */
+  readonly raiseNoProviderNotice: () => void;
 
   // Appearance and the remembered preferences.
   readonly preferences: PreferenceStore;

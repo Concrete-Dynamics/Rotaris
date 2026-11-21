@@ -58,4 +58,4 @@ ask its commercial contact, and this directive is where the answer is recorded.
 > **Supersedes:** REQ-PROVIDER-044, REQ-PROVIDER-045, REQ-PROVIDER-046
 > **Narrows:** REQ-PROVIDER-008, REQ-PROVIDER-049, REQ-PROVIDER-117
 
-*Raised by the owner, 2026-11-21; logged as [R-111](../requests.md#r-111). The owner chose between the two designs and kept the ruling of OQ-17 when asked, the same day.*
+*Raised by the owner, 2026-11-21; logged as [R-112](../requests.md#r-112). The owner chose between the two designs and kept the ruling of OQ-17 when asked, the same day.*

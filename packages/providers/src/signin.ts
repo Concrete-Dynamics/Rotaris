@@ -17,7 +17,7 @@ import { assignSlots } from './slots.js';
  * `openai-compatible--<slug>` instances and the built-in `deepseek`: validate → discover → persist the credential
  * AFTER discovery → upsert the snapshot with rollback → the outcome. `claude-code` (PD-PROVIDER-002) takes no key: it
  * is connected by asking the Claude Code tool installed on this machine whether it is signed in with a subscription,
- * and what is stored for it is a marker, never that tool's credential. The INTERACTIVE methods (R-110): `copilot`'s device code (REQ-PROVIDER-020..027) and
+ * and what is stored for it is a marker, never that tool's credential. The INTERACTIVE methods (R-111): `copilot`'s device code (REQ-PROVIDER-020..027) and
  * `codex`'s browser PKCE on the loopback listener (REQ-PROVIDER-028..034), in REQ-PROVIDER-096's sequence, the
  * credential stored BEFORE discovery (REQ-PROVIDER-097: every discovery outcome leaves it in place). The hosted
  * provider's OIDC flow is owed and its entry is unavailable (REQ-PROVIDER-006). Silent

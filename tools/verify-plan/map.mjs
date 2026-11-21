@@ -59,7 +59,7 @@ export const AREAS = Object.freeze({
   configStartup: {
     title: 'Configuration and startup',
     proofs: [
-      'config-proof', 'init-proof', 'workspace-proof', 'settings-proof',
+      'config-proof', 'init-proof', 'workspace-proof', 'settings-proof', 'onboarding-proof',
       'updater-proof', 'exit-trace-proof', 'portable-proof', 'linux-acceptance-proof',
     ],
     views: [

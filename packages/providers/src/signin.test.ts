@@ -231,7 +231,7 @@ describe('the recovery dialog\'s re-authentication (REQ-NOTIFY-076/077, REQ-NOTI
   });
 });
 
-describe('the interactive sign-in, refresh and the lease (R-110; REQ-PROVIDER-020..034, 057, 058, 067, 096..099)', () => {
+describe('the interactive sign-in, refresh and the lease (R-111; REQ-PROVIDER-020..034, 057, 058, 067, 096..099)', () => {
   const NOW = 1_756_684_800; // the fake wall clock's start, in seconds
   const device = { device_code: 'DC', user_code: 'WXYZ-1234', verification_uri: 'https://github.com/login/device', interval: 5, expires_in: 600 };
   const copilotCatalogue = { data: [

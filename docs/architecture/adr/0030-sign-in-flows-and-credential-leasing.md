@@ -176,7 +176,7 @@ refused. `session.start` already leased every provider the configuration names (
 crosses the process boundary that did not before. **Found: nothing in the leasing** — the defect was in the run
 host's wiring of it, and `configuration.test.ts` now pins two providers each receiving their own bearer.
 
-## Third execution — 2026-11-20, the device-code and browser flows, the listener and the renewing lease (R-110)
+## Third execution — 2026-11-20, the device-code and browser flows, the listener and the renewing lease (R-111)
 
 *Recorded under GD-10. Two things found in the request the subscription endpoint accepts, one in the specification; the
 listener's guarantee held.*

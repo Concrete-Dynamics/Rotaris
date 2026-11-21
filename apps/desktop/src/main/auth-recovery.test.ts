@@ -11,7 +11,7 @@ const facts = (over: Partial<Extract<ProcessReply, { kind: 'session.authRecovery
 });
 
 type Stored = Awaited<ReturnType<AuthRecoveryDeps['reauthenticate']>>;
-function harness(answers: (req: Parameters<AuthRecoveryDeps['request']>[0]) => ProcessReply | Promise<ProcessReply>, store: (id: string, key: string) => Stored = () => ({ ok: true, message: 'Validated scripted.' })) {
+function harness(answers: (req: Parameters<AuthRecoveryDeps['request']>[0]) => ProcessReply | Promise<ProcessReply>, store: (id: string, key: string) => Stored = () => ({ ok: true, message: 'Validated scripted.' }), interactive: { signedIn: boolean } | null = null) {
   const presented: AuthRecoveryPayload[] = [];
   const closed: string[] = [];
   const requests: Parameters<AuthRecoveryDeps['request']>[0][] = [];
@@ -25,7 +25,8 @@ function harness(answers: (req: Parameters<AuthRecoveryDeps['request']>[0]) => P
     present: (p) => presented.push(p),
     close: (sid) => closed.push(sid),
     log: (m) => logged.push(m),
-    reauthentication: (id) => (id === 'copilot' ? { method: 'unavailable', message: 'GitHub Copilot signs in with a code, which this build does not provide yet.' } : { method: 'api-key', message: `Enter a new API key for ${id}.` }),
+    authenticated: async () => interactive?.signedIn ?? false,
+    reauthentication: (id) => interactive !== null ? { method: 'interactive', message: `${id} signs in on its own page. Start its sign-in, complete it at the provider, then confirm here.` } : (id === 'copilot' ? { method: 'unavailable', message: 'GitHub Copilot signs in with a code, which this build does not provide yet.' } : { method: 'api-key', message: `Enter a new API key for ${id}.` }),
     reauthenticate: async (id, key) => { stored.push({ id, key }); return store(id, key); },
     acknowledge: (kind, title, body) => acknowledged.push({ kind, title, ...(body === undefined ? {} : { body }) }),
     clearForRunStart: (sid) => cleared.push(sid),
@@ -154,6 +155,32 @@ describe('main/auth-recovery — the recovery dialog\'s coordinator (REQ-NOTIFY-
     expect(h.closed).toEqual(['S1']);
     expect(h.acknowledged).toEqual([]);
     expect(JSON.stringify(h.logged)).not.toContain('sk-fresh-secret');
+  });
+
+  it('REQ-NOTIFY-076: a provider signed in to by its own flow is confirmed only once it holds an authentication, then the run restarts on the same model', async () => {
+    const state = { signedIn: false };
+    const h = harness((req) => req.kind === 'session.authRecovery' ? facts() : { kind: 'session.authRestarted', sessionId: 'S1', pinned: null }, undefined, state);
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(h.presented[0]!.reauth.method).toBe('interactive');
+    // The confirming control is checked against the provider, never taken on its word.
+    const early = await h.recovery.confirm(h.presented[0]!);
+    expect(early).toMatchObject({ ok: false, message: expect.stringContaining('is not signed in yet') });
+    expect(h.requests.some((r) => r.kind === 'session.authRestart')).toBe(false);
+    // A key has no path for it.
+    expect(await h.recovery.reauthenticate(h.presented[0]!, 'sk-x')).toMatchObject({ ok: false });
+    expect(h.stored).toEqual([]);
+    state.signedIn = true;
+    expect(await h.recovery.confirm(h.presented[0]!)).toEqual({ ok: true });
+    expect(h.requests.at(-1)).toEqual({ kind: 'session.authRestart', sessionId: 'S1', modelKey: null });
+    expect(h.closed).toEqual(['S1']);
+    expect(h.cleared).toEqual(['S1']);
+  });
+
+  it('REQ-NOTIFY-076: the confirming control is not a path for a key-based provider', async () => {
+    const h = harness(() => facts());
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(await h.recovery.confirm(h.presented[0]!)).toMatchObject({ ok: false });
+    expect(h.requests.some((r) => r.kind === 'session.authRestart')).toBe(false);
   });
 
   it('REQ-NOTIFY-076: a blank key, an unavailable method or a key the provider refused is the dialog\'s sentence, nothing restarted', async () => {

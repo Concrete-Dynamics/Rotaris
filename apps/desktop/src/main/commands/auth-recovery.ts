@@ -5,7 +5,7 @@ import type { CommandContext, CommandHandlers } from './context.js';
  * answers. A payload is keyed by the SENDER, as a pause or provider window's is: the dialog asking is not a main window, and
  * what it acts on is the session it was opened for, never one it names. Main holds the dialog (`auth-recovery.ts`).
  */
-export function authRecoveryCommands(ctx: Pick<CommandContext, 'authRecovery' | 'authRecoveryPayloads'>): Pick<CommandHandlers, 'authRecovery.payload' | 'authRecovery.retry' | 'authRecovery.reauthenticate' | 'authRecovery.cancel'> {
+export function authRecoveryCommands(ctx: Pick<CommandContext, 'authRecovery' | 'authRecoveryPayloads'>): Pick<CommandHandlers, 'authRecovery.payload' | 'authRecovery.retry' | 'authRecovery.reauthenticate' | 'authRecovery.confirm' | 'authRecovery.cancel'> {
   const { authRecovery, authRecoveryPayloads } = ctx;
   const none = { ok: false as const, code: 'authRecovery.none', headline: 'This window was not opened for an authentication recovery' };
   return {
@@ -25,6 +25,12 @@ export function authRecoveryCommands(ctx: Pick<CommandContext, 'authRecovery' | 
       if (!p) return none;
       // REQ-NOTIFY-076: the key goes to the provider key store or nowhere; it is never logged (REQ-PROVIDER-131).
       return { ok: true, value: await authRecovery.reauthenticate(p, req.apiKey) };
+    },
+    'authRecovery.confirm': async (_req, { senderId }) => {
+      const p = authRecoveryPayloads.get(senderId);
+      if (!p) return none;
+      // REQ-NOTIFY-076: the confirming control of a provider signed in to by its own flow; main checks the provider, not the claim.
+      return { ok: true, value: await authRecovery.confirm(p) };
     },
     'authRecovery.cancel': (_req, { senderId }) => {
       const p = authRecoveryPayloads.get(senderId);

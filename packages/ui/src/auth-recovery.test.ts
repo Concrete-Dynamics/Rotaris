@@ -42,7 +42,7 @@ describe('ui/auth-recovery — the recovery dialog\'s pure half (REQ-NOTIFY-072.
 });
 
 describe('ui/AuthRecoveryDialog — the drawn dialog (REQ-NOTIFY-072..074, REQ-NOTIFY-080)', () => {
-  type Reauth = { provider: string; providerName: string; method: 'api-key' | 'unavailable' | 'configuration'; message: string };
+  type Reauth = { provider: string; providerName: string; method: 'api-key' | 'interactive' | 'unavailable' | 'configuration'; message: string };
   const KEYED: Reauth = { provider: 'scripted', providerName: 'scripted', method: 'api-key', message: 'Enter a new API key for scripted.' };
   const payload = (models: ReturnType<typeof m>[], reauth: Reauth = KEYED) => ({ sessionId: 'S1', failed: m('alpha', 'scripted', 'alpha', 'scripted'), active: m('alpha', 'scripted', 'alpha', 'scripted'), models, error: `HTTP 401 —   Incorrect API key provided ${'z'.repeat(400)}`, reauth });
   const draw = (models: ReturnType<typeof m>[], reauth: Reauth = KEYED) => renderToStaticMarkup(createElement(AuthRecoveryDialog, { payload: payload(models, reauth), onRetry: async () => ({ ok: true as const }), onReauthenticate: async () => ({ ok: true as const }), onCancel: () => undefined }));
@@ -82,7 +82,20 @@ describe('ui/AuthRecoveryDialog — the drawn dialog (REQ-NOTIFY-072..074, REQ-N
     expect(canSaveKey('sk-x')).toBe(true);
   });
 
-  it('REQ-NOTIFY-076: a device-code or browser provider gets the sentence saying the method is unavailable here, and no key field', () => {
+  it('REQ-NOTIFY-076: a device-code or browser provider gets its own sign-in started in place and the confirming control, and no key field', () => {
+    const host = { onAuthenticate: async () => ({ outcome: 'cancelled' as const }), onSignInPrompt: async () => null, onCancelSignIn: () => undefined };
+    const reauth: Reauth = { provider: 'codex', providerName: 'OpenAI Codex', method: 'interactive', message: 'OpenAI Codex signs in with "Sign in on a browser page". Start its sign-in, complete it at the provider, then confirm here.' };
+    const html = renderToStaticMarkup(createElement(AuthRecoveryDialog, { payload: payload([m('beta', 'scripted-b', 'beta')], reauth), onRetry: async () => ({ ok: true as const }), onReauthenticate: async () => ({ ok: true as const }), onConfirm: async () => ({ ok: true as const }), signIn: host, onCancel: () => undefined }));
+    expect(html).toContain('data-method="interactive"');
+    expect(html).toMatch(/<button[^>]*data-action="start-sign-in"[^>]*>Sign in to OpenAI Codex<\/button>/);
+    expect(html).toMatch(/data-action="confirm-and-retry"[^>]*>Signed in — retry<\/button>/);
+    expect(html).not.toContain('data-testid="auth-recovery-key"');
+    expect(html).not.toMatch(/terminal|shell|command line/i);
+    // Without the host a surface shows the sentence alone and offers nothing it cannot carry out.
+    expect(draw([m('beta', 'scripted-b', 'beta')], reauth)).not.toContain('data-action="start-sign-in"');
+  });
+
+  it('REQ-NOTIFY-076: a provider that cannot be signed in to gets the sentence saying so, and no key field', () => {
     const html = draw([m('beta', 'scripted-b', 'beta')], { provider: 'copilot', providerName: 'GitHub Copilot', method: 'unavailable', message: 'GitHub Copilot signs in with "Code shown here, entered at the provider", which this build does not provide yet, so it cannot be re-authenticated here. Choose a model from another provider instead.' });
     expect(html).toContain('data-method="unavailable"');
     expect(html).toContain('which this build does not provide yet');

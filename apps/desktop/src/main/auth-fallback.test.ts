@@ -11,6 +11,7 @@ interface Extra {
   readonly provider?: ProviderDescription;
   readonly save?: KeySaved;
   readonly applies?: 'next-iteration' | 'next-run' | Error;
+  readonly signedIn?: () => boolean;
 }
 function harness(answer: RestartAnswer | Error = RESTARTED, configured = true, extra: Extra = {}) {
   const acks: { kind: string; title: string; body?: string }[] = [];
@@ -25,6 +26,7 @@ function harness(answer: RestartAnswer | Error = RESTARTED, configured = true, e
     acknowledge: (kind, title, body) => { acks.push({ kind, title, ...(body === undefined ? {} : { body }) }); },
     publishPrompt: (sessionId, prompt) => published.push({ sessionId, prompt }),
     describeProvider: (id) => extra.provider ?? { provider: { id, name: `Provider ${id}` }, method: 'api-key' },
+    signedIn: async () => extra.signedIn?.() ?? true,
     saveKey: async (id, key) => { saved.push({ id, key }); return extra.save ?? { ok: true }; },
     repinPrimary: async (sessionId, p) => { repinned.push({ sessionId, provider: p.provider, model: p.model }); if (extra.applies instanceof Error) throw extra.applies; return { ok: true, applies: extra.applies ?? 'next-iteration' }; },
     restartOnFallback: async (sid) => { restarts.push(sid); if (answer instanceof Error) throw answer; return answer; },
@@ -191,6 +193,20 @@ describe('main/auth-fallback — the non-modal re-authentication prompt (REQ-NOT
     expect(h.published.slice(-2)).toEqual([{ sessionId: 'S1', prompt: null }, { sessionId: 'S2', prompt: null }]);
     expect(h.fallback.fallbackOf('S1')).toBeDefined();
     expect(h.fallback.closeAllPrompts('again')).toBe(0);
+  });
+
+  it('REQ-NOTIFY-076: a provider signed in to by its own flow switches back only once it is signed in, and takes no key', async () => {
+    let signedIn = false;
+    const h = harness(RESTARTED, true, { provider: { provider: { id: 'copilot', name: 'GitHub Copilot' }, method: 'interactive' }, signedIn: () => signedIn });
+    await h.fallback.onAuthenticationFailure('S1', AUTH);
+    expect(h.published.at(-1)!.prompt).toMatchObject({ method: 'interactive', provider: { id: 'copilot' } });
+    expect(await h.fallback.submitPrompt('S1', '')).toMatchObject({ ok: false, message: expect.stringContaining('is not signed in yet') });
+    expect(h.repinned).toEqual([]);
+    expect(await h.fallback.submitPrompt('S1', 'a-key')).toMatchObject({ ok: false });
+    expect(h.saved).toEqual([]);
+    signedIn = true;
+    expect(await h.fallback.submitPrompt('S1', '')).toEqual({ ok: true, applies: 'next-iteration' });
+    expect(h.repinned).toHaveLength(1);
   });
 
   it('a device-code or browser provider takes no key: a typed key is refused with the reason the prompt shows', async () => {

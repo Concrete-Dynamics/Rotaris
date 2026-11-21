@@ -32,6 +32,8 @@ export interface AuthRecoveryDeps {
    * named (`ProviderService.reauthenticateWithKey`); on success the caller has also refreshed what depends on the provider.
    */
   readonly reauthenticate: (providerId: string, apiKey: string) => Promise<{ readonly ok: true; readonly message: string } | { readonly ok: false; readonly stage: 'method' | 'key' | 'validation' | 'storage' | 'catalog'; readonly message: string }>;
+  /** REQ-NOTIFY-076: whether the provider holds a usable authentication now — what the confirming control is checked against. */
+  readonly authenticated: (providerId: string) => Promise<boolean>;
   /** REQ-NOTIFY-077's two error acknowledgements, on the transient stack (REQ-NOTIFY-003). */
   readonly acknowledge: (kind: AcknowledgementKind, title: string, body?: string) => void;
   /**
@@ -172,6 +174,25 @@ export class AuthRecovery {
       return { ok: false, message: `${KEY_NOT_STORED}: ${stored.message}` };
     }
     if (stored.ok) this.deps.log(`authentication recovery: ${provider} re-authenticated (${stored.message})`);
+    return this.restartAfterReauthentication(payload, 'its key is saved');
+  }
+
+  /**
+   * REQ-NOTIFY-076: the control confirming that a provider signed in to by its own flow has been re-authenticated — in
+   * the dialog, where the flow was started in place, or anywhere else. Nothing is taken on the user's word: the provider
+   * must hold a usable authentication now, and then the run restarts with the same prompt on the same model.
+   */
+  async confirm(payload: AuthRecoveryPayload): Promise<AuthRecoveryResult> {
+    const { provider, providerName, method, message } = payload.reauth;
+    if (method !== 'interactive') return { ok: false, message };
+    if (!(await this.deps.authenticated(provider).catch(() => false))) return { ok: false, message: `${providerName} is not signed in yet. Start its sign-in here and complete it at the provider, then confirm.` };
+    this.deps.log(`authentication recovery: ${provider} confirmed re-authenticated by its own sign-in`);
+    return this.restartAfterReauthentication(payload, 'it is signed in');
+  }
+
+  /** The shared end of both re-authentication paths: the provider's refused pairs released, the run restarted on the same model. */
+  private async restartAfterReauthentication(payload: AuthRecoveryPayload, kept: string): Promise<AuthRecoveryResult> {
+    const { provider, providerName } = payload.reauth;
     // REQ-NOTIFY-068: the credentials changed, so the provider's pairs are no longer refused.
     this.credentialsChanged(provider);
     let reply: ProcessReply;
@@ -182,7 +203,7 @@ export class AuthRecovery {
     }
     if (reply.kind !== 'session.authRestarted') {
       const why = reply.kind === 'refused' ? [reply.headline, reply.detail].filter(Boolean).join(': ') : `the run host answered ${reply.kind}`;
-      this.deps.acknowledge('fail', RESTART_AFTER_REAUTH_FAILED, `${providerName} was re-authenticated and its key is saved; ${why}`);
+      this.deps.acknowledge('fail', RESTART_AFTER_REAUTH_FAILED, `${providerName} was re-authenticated and ${kept}; ${why}`);
       return { ok: false, message: `${providerName} was re-authenticated, but the run could not be restarted: ${why}` };
     }
     this.deps.clearForRunStart(payload.sessionId);

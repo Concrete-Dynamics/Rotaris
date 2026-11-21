@@ -3,6 +3,7 @@ import type { AuthRecoveryPayload, AuthRecoveryResult } from '@rotaris/contracts
 import { Button as DesignButton, Input as DesignInput } from './design-system/index.js';
 import { canSaveKey, modelLabel, providerErrorText, radioStep, recoveryModel, recoveryModelList, recoveryTitle } from './auth-recovery.js';
 import { EXCLUDED_MODEL_HINT } from './model-options.js';
+import { InPlaceSignIn, type InPlaceSignInHost } from './sign-in-prompt.js';
 
 /**
  * REQ-NOTIFY-072..077, REQ-NOTIFY-079/080, REQ-MONITOR-147 (the 401 note's parts C and D) — the authentication recovery dialog,
@@ -11,9 +12,10 @@ import { EXCLUDED_MODEL_HINT } from './model-options.js';
  * error collapsed and truncated in the failure text colour; its first path lists models from other providers ahead of the
  * rest, each with its provider, and Retry — disabled while the list is empty — pins the chosen one and restarts the run.
  * Its second path re-authenticates the provider that failed (REQ-NOTIFY-076): for a key-based provider a masked key field
- * with Save and retry, enabled only while the field is non-blank; for a device-code or browser provider — whose flows this
- * build does not provide — and for one whose key the model configuration carries, the sentence saying so. No path directs
- * the user to a shell, a terminal or a separate program.
+ * with Save and retry, enabled only while the field is non-blank; for a device-code or browser provider, and the tool
+ * installed on the machine, that provider's own sign-in started in place — the prompt main holds, a control that ends
+ * the wait — and the control confirming it has been completed, which restarts the run; for one whose key the model
+ * configuration carries, the sentence saying so. No path directs the user to a shell, a terminal or a separate program.
  * Cancel (Escape) closes it and does nothing else: the run stays failed and its notice stays on screen.
  *
  * Structure from the specification; craft from the design material's dialogs (the provider auth and question-stepper
@@ -23,12 +25,17 @@ export interface AuthRecoveryDialogProps {
   readonly payload: AuthRecoveryPayload;
   readonly onRetry: (modelKey: string) => Promise<AuthRecoveryResult>;
   readonly onReauthenticate: (apiKey: string) => Promise<AuthRecoveryResult>;
+  /** REQ-NOTIFY-076: the confirming control of a provider signed in to by its own flow. */
+  readonly onConfirm?: (() => Promise<AuthRecoveryResult>) | undefined;
+  /** The in-place sign-in's commands; absent, an `interactive` provider shows its sentence alone. */
+  readonly signIn?: InPlaceSignInHost | undefined;
   readonly onCancel: () => void;
 }
 
+export const CONFIRM_AND_RETRY_LABEL = 'Signed in — retry';
 export const NO_OTHER_MODEL = 'No other configured model can be chosen: add a model on another provider under Settings → Models, or cancel.';
 
-export function AuthRecoveryDialog({ payload, onRetry, onReauthenticate, onCancel }: AuthRecoveryDialogProps) {
+export function AuthRecoveryDialog({ payload, onRetry, onReauthenticate, onConfirm, signIn, onCancel }: AuthRecoveryDialogProps) {
   const title = recoveryTitle(payload);
   const model = recoveryModel(payload);
   const list = useMemo(() => recoveryModelList(payload.models, model), [payload.models, model]);
@@ -36,6 +43,7 @@ export function AuthRecoveryDialog({ payload, onRetry, onReauthenticate, onCance
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
   const first = useRef<HTMLButtonElement>(null);
   const options = useRef(new Map<string, HTMLButtonElement>());
   // The radio group's keyboard (`radioStep`): the arrow keys, Home and End move the choice and the focus with it.
@@ -49,10 +57,10 @@ export function AuthRecoveryDialog({ payload, onRetry, onReauthenticate, onCance
   useEffect(() => { document.title = title; }, [title]);
   useEffect(() => { first.current?.focus(); }, []);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) { e.preventDefault(); onCancel(); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) { e.preventDefault(); if (signingIn) signIn?.onCancelSignIn(); onCancel(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, onCancel]);
+  }, [busy, onCancel, signingIn, signIn]);
 
   const retry = async () => {
     if (busy || chosen === null) return;
@@ -67,6 +75,14 @@ export function AuthRecoveryDialog({ payload, onRetry, onReauthenticate, onCance
     setBusy(true);
     setError(null);
     const r = await onReauthenticate(apiKey);
+    if (!r.ok) { setError(r.message); setBusy(false); }
+  };
+
+  const confirm = async () => {
+    if (busy || !onConfirm) return;
+    setBusy(true);
+    setError(null);
+    const r = await onConfirm();
     if (!r.ok) { setError(r.message); setBusy(false); }
   };
 
@@ -125,12 +141,18 @@ export function AuthRecoveryDialog({ payload, onRetry, onReauthenticate, onCance
             <DesignButton type="button" className="btn btn-secondary" disabled={busy || !canSaveKey(apiKey)} onClick={() => { void reauthenticate(); }} data-action="save-and-retry">Save and retry</DesignButton>
           </div>
         )}
+        {payload.reauth.method === 'interactive' && signIn !== undefined && onConfirm !== undefined && (
+          <div className="auth-recovery__sign-in">
+            <InPlaceSignIn providerName={payload.reauth.providerName} host={signIn} disabled={busy} onBusy={setSigningIn} onSignedIn={() => { void confirm(); }} />
+            {!signingIn && <DesignButton type="button" className="btn btn-secondary" disabled={busy} title={`Restart the run on the same model, once ${payload.reauth.providerName} is signed in.`} onClick={() => { void confirm(); }} data-action="confirm-and-retry">{CONFIRM_AND_RETRY_LABEL}</DesignButton>}
+          </div>
+        )}
       </section>
       {busy && <p className="text-secondary" role="status" data-busy>Restarting the run…</p>}
       {error && <p className="composer__error" role="alert" data-testid="auth-recovery-failure">{error}</p>}
       <div className="dialog-actions">
-        <DesignButton type="button" className="btn btn-secondary" disabled={busy} onClick={onCancel} title="Escape" data-action="cancel">Cancel</DesignButton>
-        <DesignButton type="button" className="btn btn-primary" disabled={busy || list.length === 0 || chosen === null} onClick={() => { void retry(); }} data-action="retry">Retry</DesignButton>
+        <DesignButton type="button" className="btn btn-secondary" disabled={busy} onClick={() => { if (signingIn) signIn?.onCancelSignIn(); onCancel(); }} title="Escape" data-action="cancel">Cancel</DesignButton>
+        <DesignButton type="button" className="btn btn-primary" disabled={busy || signingIn || list.length === 0 || chosen === null} onClick={() => { void retry(); }} data-action="retry">Retry</DesignButton>
       </div>
     </div>
   );

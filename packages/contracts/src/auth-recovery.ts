@@ -23,12 +23,13 @@ export type AuthRecoveryModel = z.infer<typeof AuthRecoveryModelSchema>;
 
 /**
  * REQ-NOTIFY-076: how this build re-authenticates the provider that failed. `api-key` offers the masked key field and the
- * save-and-retry control. `unavailable` is a device-code or browser provider — which signs in through the authentication window and
- * not from this dialog (the in-place flow is owed) — or one that cannot be signed in to; `message` says so, and no path sends the
- * user to a shell, a terminal or a separate program. `configuration` is a provider this application holds no credential
+ * save-and-retry control. `interactive` is a device-code or browser provider, or the tool installed on the machine: the
+ * dialog starts that provider's own flow in place (`provider.authenticate`, the authentication window's command) and
+ * offers the control confirming it has been completed (`authRecovery.confirm`). `unavailable` is a provider that cannot
+ * be signed in to; `message` says so, and no path sends the user to a shell, a terminal or a separate program. `configuration` is a provider this application holds no credential
  * for (one whose key the model configuration carries, REQ-PROVIDER-118/140); `message` says so (OQ-179).
  */
-export const AUTH_RECOVERY_METHODS = ['api-key', 'unavailable', 'configuration'] as const;
+export const AUTH_RECOVERY_METHODS = ['api-key', 'interactive', 'unavailable', 'configuration'] as const;
 export type AuthRecoveryMethod = (typeof AUTH_RECOVERY_METHODS)[number];
 
 export const AuthRecoveryPayloadSchema = z.object({
@@ -52,13 +53,16 @@ export type AuthRecoveryPayload = z.infer<typeof AuthRecoveryPayloadSchema>;
 /**
  * The dialog's commands. `authRecovery.retry` pins the chosen model and restarts the run (REQ-NOTIFY-074);
  * `authRecovery.reauthenticate` stores the key through the provider key store and restarts (REQ-NOTIFY-076/077) — the key
- * goes to the credential store or nowhere and is never logged (REQ-PROVIDER-131); `authRecovery.cancel` closes the dialog
+ * goes to the credential store or nowhere and is never logged (REQ-PROVIDER-131); `authRecovery.confirm` is the control
+ * confirming that a provider signed in to by its own flow has been re-authenticated — main checks that it holds a usable
+ * authentication, then restarts the run on the same model (REQ-NOTIFY-076); `authRecovery.cancel` closes the dialog
  * and does nothing else (REQ-NOTIFY-080). Each acts on the session the asking window was opened for, never one it names.
  */
 export const AUTH_RECOVERY_COMMAND_SCHEMAS = [
   z.object({ kind: z.literal('authRecovery.payload') }),
   z.object({ kind: z.literal('authRecovery.retry'), modelKey: z.string().max(NAME_MAX).min(1) }),
   z.object({ kind: z.literal('authRecovery.reauthenticate'), apiKey: z.string().max(PATH_MAX) }),
+  z.object({ kind: z.literal('authRecovery.confirm') }),
   z.object({ kind: z.literal('authRecovery.cancel') }),
 ] as const;
 

@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import type { ReauthPrompt as ReauthPromptState, ReauthSubmitResult } from '@rotaris/contracts';
 import { Button as DesignButton, Input as DesignInput } from './design-system/index.js';
+import { InPlaceSignIn, type InPlaceSignInHost } from './sign-in-prompt.js';
 
 /**
  * REQ-NOTIFY-071 / REQ-NOTIFY-078 (the 401 note's part B) — the non-modal re-authentication prompt, opened by main after
@@ -35,6 +36,7 @@ export const REAUTH_SUBMIT_LABEL = 'Re-authenticate';
 export const REAUTH_KEY_LABEL = 'API key';
 export const REAUTH_KEY_HINT = 'Leave it empty if the provider was re-authenticated elsewhere, in Settings › Models for instance.';
 export const REAUTH_ERROR_LABEL = 'The provider answered';
+export const REAUTH_CONFIRM_LABEL = 'Signed in — switch back';
 
 const pair = (p: { readonly provider: string; readonly model: string }): string => `${p.provider}/${p.model}`;
 
@@ -45,6 +47,7 @@ export function reauthCopy(prompt: ReauthPromptState): { readonly title: string;
     body: `${pair(prompt.primary)} could not authenticate. The run continues on the fallback model ${pair(prompt.fallback)}; re-authenticating switches back to ${pair(prompt.primary)} from the next iteration.`,
     method: prompt.method === 'unavailable'
       ? prompt.unavailableReason ?? `${prompt.provider.name} cannot be re-authenticated from here in this build.`
+      : prompt.method === 'interactive' ? `Sign in to ${prompt.provider.name} here, or confirm once it is signed in elsewhere; the run then switches back.`
       : prompt.method === 'none' ? `This application holds no credential for ${prompt.provider.name}; its key comes from the model configuration. Re-authenticate it there, then switch back here.` : null,
   };
 }
@@ -80,15 +83,19 @@ export interface ReauthPromptProps {
   readonly prompt: ReauthPromptState;
   readonly onSubmit: (apiKey: string) => Promise<ReauthSubmitResult>;
   readonly onDismiss: () => Promise<void>;
+  /** REQ-NOTIFY-076: the in-place sign-in's commands for a provider that signs in by its own flow; absent, only the confirmation is offered. */
+  readonly signIn?: InPlaceSignInHost | undefined;
 }
 
-export function ReauthPrompt({ prompt, onSubmit, onDismiss }: ReauthPromptProps) {
+export function ReauthPrompt({ prompt, onSubmit, onDismiss, signIn }: ReauthPromptProps) {
   const titleId = useId();
   const bodyId = useId();
   const hintId = useId();
   const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
+  const interactive = prompt.method === 'interactive';
   const copy = reauthCopy(prompt);
 
   const submit = async (): Promise<void> => {
@@ -119,9 +126,10 @@ export function ReauthPrompt({ prompt, onSubmit, onDismiss }: ReauthPromptProps)
         {prompt.method === 'api-key' ? (
           <DesignInput label={REAUTH_KEY_LABEL} className="input mono" type="password" autoComplete="off" aria-describedby={hintId} value={apiKey} disabled={busy} onChange={(e) => setApiKey(e.currentTarget.value)} data-testid="reauth-key" />
         ) : null}
+        {interactive && signIn !== undefined ? <InPlaceSignIn providerName={prompt.provider.name} host={signIn} disabled={busy} onBusy={setSigningIn} onSignedIn={() => { void submit(); }} /> : null}
         <div className="dialog-actions">
-          <DesignButton type="button" className="btn btn-secondary" disabled={busy} title={`Close this and keep running on ${pair(prompt.fallback)}.`} onClick={() => { void onDismiss(); }} data-action="reauth-keep">{REAUTH_KEEP_LABEL}</DesignButton>
-          <DesignButton type="button" className="btn btn-primary" disabled={busy} title={`Switch back to ${pair(prompt.primary)}${prompt.method === 'api-key' ? ', saving the key typed above' : ''}.`} onClick={() => { void submit(); }} data-action="reauth-submit">{busy ? 'Re-authenticating…' : REAUTH_SUBMIT_LABEL}</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary" disabled={busy} title={`Close this and keep running on ${pair(prompt.fallback)}.`} onClick={() => { if (signingIn) signIn?.onCancelSignIn(); void onDismiss(); }} data-action="reauth-keep">{REAUTH_KEEP_LABEL}</DesignButton>
+          <DesignButton type="button" className="btn btn-primary" disabled={busy || signingIn} title={`Switch back to ${pair(prompt.primary)}${prompt.method === 'api-key' ? ', saving the key typed above' : interactive ? `, once ${prompt.provider.name} is signed in` : ''}.`} onClick={() => { void submit(); }} data-action="reauth-submit">{busy ? 'Re-authenticating…' : interactive ? REAUTH_CONFIRM_LABEL : REAUTH_SUBMIT_LABEL}</DesignButton>
         </div>
         {message !== null ? <p role="alert" className="composer__error reauth-prompt__refused" data-testid="reauth-refused">{message}</p> : null}
       </div>

@@ -70,6 +70,7 @@ export * from './settings/SkillsSettings.js';
 export * from './ProjectSetupDialog.js';
 export * from './FirstRunSetup.js';
 export * from './ReauthPrompt.js'; // REQ-NOTIFY-071/078
+export { InPlaceSignIn, IN_PLACE_SIGN_IN_CANCEL, inPlaceSignInLabel, type InPlaceSignInHost } from './sign-in-prompt.js'; // REQ-NOTIFY-076
 export * from './settings/project-init.js';
 export * from './settings/ProjectSettings.js';
 // REQ-SHELL-128..160: shared adopted-language primitives use explicit aliases

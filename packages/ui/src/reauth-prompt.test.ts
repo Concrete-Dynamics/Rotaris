@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ReauthPrompt as ReauthPromptState } from '@rotaris/contracts';
 import { AppShell } from './AppShell.js';
 import { WorkspaceView } from './WorkspaceView.js';
+import { inPlaceSignInLabel } from './sign-in-prompt.js';
 import { REAUTH_SUBMIT_LABEL, ReauthPrompt, applyReauthPublish, reauthCopy, reauthPromptFor, seedReauthPrompts, type ReauthPrompts } from './ReauthPrompt.js';
 
 const ERROR = 'scripted authentication failure (HTTP 401) — HTTP 401 — Incorrect API key provided';
@@ -39,6 +40,18 @@ describe('the non-modal re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048)'
     const html = render(base);
     expect(html).toMatch(/<input[^>]*type="password"[^>]*data-testid="reauth-key"/);
     expect(html).not.toContain('data-testid="reauth-method"');
+  });
+
+  it('REQ-NOTIFY-076: a provider that signs in by its own flow gets the control that starts it in place and the confirming control, and no key field', () => {
+    const host = { onAuthenticate: async () => ({ outcome: 'cancelled' as const }), onSignInPrompt: async () => null, onCancelSignIn: () => undefined };
+    const html = renderToStaticMarkup(createElement(ReauthPrompt, { prompt: { ...base, provider: { id: 'copilot', name: 'GitHub Copilot' }, method: 'interactive' }, onSubmit: async () => ({ ok: true as const, applies: 'next-iteration' as const }), onDismiss: async () => undefined, signIn: host }));
+    expect(html).toContain('data-method="interactive"');
+    expect(html).not.toContain('type="password"');
+    expect(html).toMatch(/<button[^>]*data-action="start-sign-in"[^>]*>Sign in to GitHub Copilot<\/button>/);
+    expect(html).toMatch(/data-action="reauth-submit"[^>]*>Signed in — switch back<\/button>/);
+    expect(html).toContain('Sign in to GitHub Copilot here, or confirm once it is signed in elsewhere');
+    expect(html).not.toMatch(/terminal|shell|command line|Settings/i);
+    expect(inPlaceSignInLabel('X')).toBe('Sign in to X');
   });
 
   it('a device-code or browser provider is offered no key field and is told the method is unavailable in this build', () => {

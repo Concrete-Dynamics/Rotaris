@@ -10,7 +10,7 @@ import { CONTRACT_SCHEMA_VERSION } from './version.js';
  * Main opens it after a successful fallback restart (REQ-NOTIFY-070) and is the only one that closes it: on the
  * dismissal (the fallback is kept), on a submission that succeeded (REQ-NOTIFY-078), or when it is replaced.
  */
-export const REAUTH_METHODS = ['api-key', 'unavailable', 'none'] as const;
+export const REAUTH_METHODS = ['api-key', 'interactive', 'unavailable', 'none'] as const;
 
 /** A model as the run named it; `modelKey` is its `models:` key (never a credential — ADR-0030 consequence 2's name rule). */
 const PairSchema = z.object({ provider: z.string(), model: z.string(), modelKey: z.string().nullable() });
@@ -23,9 +23,10 @@ export const ReauthPromptSchema = z.object({
   /** The provider whose credentials were refused: its store id and the name the surfaces give it. */
   provider: z.object({ id: z.string(), name: z.string() }),
   /**
-   * How this build can re-authenticate it: `api-key` offers the masked key field; `unavailable` — a device-code or
-   * browser provider, which signs in through the authentication window and not from this prompt (the in-place flow of
-   * REQ-NOTIFY-076 is owed), or one that cannot be signed in to at all — states that in `unavailableReason`; `none` is a provider this application holds no credential for (one configured by model
+   * How this build can re-authenticate it: `api-key` offers the masked key field; `interactive` — a device-code or
+   * browser provider, or the tool installed on the machine — starts that provider's own flow in place
+   * (`provider.authenticate`) and confirms with `reauth.submit` and no key (REQ-NOTIFY-076); `unavailable` — one that
+   * cannot be signed in to at all — states that in `unavailableReason`; `none` is a provider this application holds no credential for (one configured by model
    * configuration alone), where only switching back is offered.
    */
   method: z.enum(REAUTH_METHODS),

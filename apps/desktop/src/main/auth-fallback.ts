@@ -58,7 +58,7 @@ export type FallbackOutcome =
   | { readonly kind: 'generic'; readonly reason: string }
   | { readonly kind: 'stale'; readonly reason: string };
 
-/** How main can re-authenticate a provider in this build — `ReauthPrompt`'s three methods. */
+/** How main can re-authenticate a provider in this build — `ReauthPrompt`'s methods. */
 export type ProviderDescription = Pick<ReauthPrompt, 'provider' | 'method' | 'unavailableReason'>;
 
 /** A key handed to the provider key store: stored, or refused at a named stage (`ReauthenticationOutcome`'s). */
@@ -73,6 +73,8 @@ export interface AuthFallbackDeps {
   readonly describeProvider: (providerIdentity: string) => ProviderDescription;
   /** REQ-NOTIFY-078 / REQ-NOTIFY-202: a supplied key into the provider key store — validated, then stored — or why not. */
   readonly saveKey: (providerId: string, apiKey: string) => Promise<KeySaved>;
+  /** REQ-NOTIFY-076: whether a provider signed in to by its own flow holds a usable authentication now — what its confirmation is checked against. */
+  readonly signedIn: (providerId: string) => Promise<boolean>;
   /** REQ-NOTIFY-078: the run host takes the authentication pin back; where the primary applies from. */
   readonly repinPrimary: (sessionId: string, primary: Pick<ModelPair, 'provider' | 'model'>) => Promise<{ readonly ok: true; readonly applies: 'next-iteration' | 'next-run' } | { readonly ok: false; readonly reason: string }>;
   /** The run channel: the run host pins and restarts, or says why not. A rejection is the channel missing (REQ-NOTIFY-069). */
@@ -206,6 +208,8 @@ export function createAuthFallback(deps: AuthFallbackDeps): AuthFallback {
         // REQ-NOTIFY-068: the credentials changed, so the provider's refused pairs may be offered and retried again.
         deps.credentialsChanged(prompt.provider.id);
       }
+      // REQ-NOTIFY-076: the confirmation of a provider that signs in by its own flow is checked, never taken on its word.
+      if (prompt.method === 'interactive' && !(await deps.signedIn(prompt.provider.id).catch(() => false))) return { ok: false, message: `${prompt.provider.name} is not signed in yet. Start its sign-in here and complete it at the provider, then confirm.` };
       const repinned = await deps.repinPrimary(sessionId, prompt.primary).catch((cause: unknown) => ({ ok: false as const, reason: `the run host did not answer (${String(cause)})` }));
       if (!repinned.ok) {
         // The primary was not re-pinned, so the session is still on the fallback: the bookkeeping stands, and a further

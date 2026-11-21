@@ -303,13 +303,26 @@ export class ProviderService {
     return this.storeKey(id, apiKey, validate);
   }
 
+  /**
+   * REQ-NOTIFY-076: whether `id` holds an authentication a run can use now — what a recovery surface's confirming
+   * control is checked against. A stored credential that has not expired; for the tool installed on the machine, the
+   * marker AND the tool's own answer that it is signed in with a subscription, since the marker alone says only that
+   * the user connected it here.
+   */
+  async usable(id: string): Promise<boolean> {
+    if (this.status(id) !== 'authenticated') return false;
+    return this.localSdk(id) ? localToolProblem(await this.localState()) === null : true;
+  }
+
   /** REQ-NOTIFY-076: the method the recovery dialog offers for `id`, read from the catalogue and the stored family alone. */
   reauthentication(id: string): ReauthenticationMethod {
     const entry = CATALOGUE.find((c) => c.id === id);
     if (entry && !entry.available) return { method: 'unavailable', message: entry.unavailabilityReason ?? `${entry.displayName} is not available.` };
     const method = signInMethodFor(id, this.deps.credentials.load(id)?.extra['provider_family'] ?? null);
     if (method === null) return { method: 'configuration', message: `${MANAGED_BY_CONFIGURATION} Re-authenticate ${this.displayName(id)} by correcting the key its model configuration names, then retry.` };
-    if (method !== 'api-key' || entry?.connectionMode === 'local-sdk') return { method: 'interactive', message: `${this.displayName(id)} signs in with "${METHOD_LABELS[method]}". Start its sign-in, complete it at the provider, then confirm here.` };
+    // PD-PROVIDER-002: the tool installed on the machine is signed in to in that tool; here it is only asked again.
+    if (entry?.connectionMode === 'local-sdk') return { method: 'interactive', message: `${this.displayName(id)} uses the Claude Code tool signed in on this computer. Sign in to Claude Code with your Claude subscription, then check it here.` };
+    if (method !== 'api-key') return { method: 'interactive', message: `${this.displayName(id)} signs in with "${METHOD_LABELS[method]}". Start its sign-in, complete it at the provider, then confirm here.` };
     return { method: 'api-key', message: `Enter a new API key for ${this.displayName(id)}. It is validated with the provider's model catalog endpoint before it is saved.` };
   }
 

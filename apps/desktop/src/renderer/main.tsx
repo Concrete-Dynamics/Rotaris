@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
-import { FirstRunSetup, type FirstRunConfig, dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, settingsPageFor, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted, RUN_PANEL_WIDTH, INSPECTOR_WIDTH, COMPOSER_DEFAULT_HEIGHT } from '@rotaris/ui';
+import { type InPlaceSignInHost, FirstRunSetup, type FirstRunConfig, dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, settingsPageFor, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted, RUN_PANEL_WIDTH, INSPECTOR_WIDTH, COMPOSER_DEFAULT_HEIGHT } from '@rotaris/ui';
 import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
 // ADR-0063 — portable skills: the catalog reader (`askUntilDiscovered`, `bindSkillsReader`, `readWhileMounted`, in the `@rotaris/ui` import above), the Settings tab's props and the composer's commands.
@@ -817,7 +817,21 @@ function useReauthPrompt() {
     // A prompt main no longer holds is closed here too, so a stale one never stands on screen.
     if (!r.ok) setPrompts((held) => applyReauthPublish(held, prompt.sessionId, null));
   }, [prompt]);
-  return { prompt, onSubmit, onDismiss };
+  // REQ-NOTIFY-076: the provider's own sign-in, started in place by the prompt with the authentication window's commands.
+  const providerId = prompt?.provider.id ?? null;
+  const signIn = useMemo((): InPlaceSignInHost | undefined => (providerId === null ? undefined : {
+    onAuthenticate: async () => {
+      const r = await bridge.command({ kind: 'provider.authenticate', providerId, reauthenticate: true, allowEmpty: true, quiet: true });
+      return r.ok ? r.value as ProviderSignInResult : { outcome: 'error', message: r.detail ?? r.headline };
+    },
+    onSignInPrompt: async () => {
+      const r = await bridge.command({ kind: 'provider.authPrompt' });
+      return r.ok ? (r.value as { prompt: ProviderSignInPrompt | null }).prompt : null;
+    },
+    onCancelSignIn: () => { void bridge.command({ kind: 'provider.authCancel' }); },
+    onOpenLink: (url: string) => { void bridge.command({ kind: 'shell.openExternal', url }); },
+  }), [providerId]);
+  return { prompt, onSubmit, onDismiss, signIn };
 }
 
 function useInitialization() {
@@ -1597,7 +1611,7 @@ function App({ initialOnboarding, version, workspace, home, initialTheme, initia
         workspace: <TerminalHostProvider host={terminalHost}><Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} onOpenTrailer={openTrailer}
           // REQ-NOTIFY-071 / ADR-0048: the followed session's re-authentication prompt (REQ-NOTIFY-030), drawn by the Workspace
           // view in its own row beside the continuing run (OQ-181) — in flow, so no control of the window or the view is under it.
-          reauthPrompt={reauth.prompt !== null ? <ReauthPrompt key={reauth.prompt.sessionId} prompt={reauth.prompt} onSubmit={reauth.onSubmit} onDismiss={reauth.onDismiss} /> : null} /></TerminalHostProvider>,
+          reauthPrompt={reauth.prompt !== null ? <ReauthPrompt key={reauth.prompt.sessionId} prompt={reauth.prompt} onSubmit={reauth.onSubmit} onDismiss={reauth.onDismiss} signIn={reauth.signIn} /> : null} /></TerminalHostProvider>,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
         library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,
         requirements: <RequirementsBoard bridge={bridge} workspace={workspace} onOpenSession={openRequirementSession} />, // Part AK2 — the Requirements view, the third since PD-SHELL-015 (REQ-TRACE-230/381): the board over the bridge; the host lives in `ui/requirements/host.tsx`.

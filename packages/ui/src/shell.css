@@ -1601,6 +1601,10 @@
 /* REQ-PROVIDER-096/116 — the prompt an interactive sign-in shows while it waits. */
 .provider-dialog__prompt { display: flex; flex-direction: column; gap: var(--rt-space-2); }
 .provider-dialog__prompt p { margin: 0; }
+/* REQ-NOTIFY-076: a provider's own sign-in started in place by a recovery surface (`InPlaceSignIn`). */
+.sign-in-inline { display: flex; flex-direction: column; align-items: flex-start; gap: var(--rt-space-2); min-width: 0; }
+.sign-in-inline p { margin: 0; }
+.auth-recovery__sign-in { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--rt-space-2); margin-top: var(--rt-space-2); }
 .provider-dialog__prompt a, .provider-dialog__link a { color: var(--rt-accent-300); }
 .provider-dialog__link { margin: 0; font-size: var(--rt-text-sm); overflow-wrap: anywhere; max-height: 6.5em; overflow: auto; }
 

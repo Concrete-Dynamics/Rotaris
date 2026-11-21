@@ -18,3 +18,7 @@ non-modal prompt.
 - `packages/providers/src/signin.ts` — `reauthentication` answers `interactive` for these providers; `signInInteractive` is the flow to start.
 - `packages/contracts/src/auth-recovery.ts`, `packages/contracts/src/reauth.ts` — the two method vocabularies, neither of which has a value for an in-place flow.
 - `packages/ui/src/AuthRecoveryDialog.tsx`, `packages/ui/src/ReauthPrompt.tsx` — the surfaces that would show the prompt and the confirming control.
+
+## Repaired
+
+2026-11-21, on [R-115](../../product/requests.md#r-115): both surfaces start the flow in place with the authentication window's own commands and offer the confirming control; main checks the provider before it restarts or switches back. Seen in the built application through the recovery dialog with the Claude Code tool; the non-modal prompt and a device-code or browser provider were not driven.

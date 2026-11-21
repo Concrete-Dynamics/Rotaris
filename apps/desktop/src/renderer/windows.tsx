@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createReportingRoot, type ReportingRoot } from './render-failure.js';
 import { useStore } from 'zustand';
 import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type AuthRecoveryPayload, type AuthRecoveryResult, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInPrompt, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
-import { Acknowledgements, ApprovalDialog, AuthRecoveryDialog, ArtifactInspector, createTerminalWindowStreams, type ArtifactLoaded, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
+import { type InPlaceSignInHost, Acknowledgements, ApprovalDialog, AuthRecoveryDialog, ArtifactInspector, createTerminalWindowStreams, type ArtifactLoaded, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
 import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, reloadThisWindow, replica, terminalHost, terminalStreams } from './shell.js';
 import { entryOf, useCancelOverlaid, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
 import { followCoalesced } from './coalesced-follow.js';
@@ -102,7 +102,22 @@ export function bootAuthRecovery(): Promise<void> {
     // REQ-NOTIFY-076: the key travels inward to main's provider key store and nowhere else.
     const onReauthenticate = (apiKey: string) => answer({ kind: 'authRecovery.reauthenticate', apiKey });
     const onCancel = () => { void bridge.command({ kind: 'authRecovery.cancel' }); };
-    root.render(<StrictMode><AuthRecoveryDialog payload={payload} onRetry={onRetry} onReauthenticate={onReauthenticate} onCancel={onCancel} /><Acknowledgements store={acknowledgements} /></StrictMode>);
+    // REQ-NOTIFY-076: a provider that signs in by its own flow is signed in to here, by the authentication window's own
+    // commands — main holds the prompt and this window reads it back — and then confirmed.
+    const onConfirm = () => answer({ kind: 'authRecovery.confirm' });
+    const signIn: InPlaceSignInHost = {
+      onAuthenticate: async () => {
+        const c = await bridge.command({ kind: 'provider.authenticate', providerId: payload.reauth.provider, reauthenticate: true, allowEmpty: true, quiet: true });
+        return c.ok ? (c.value as ProviderSignInResult) : { outcome: 'error', message: c.detail ?? c.headline };
+      },
+      onSignInPrompt: async () => {
+        const c = await bridge.command({ kind: 'provider.authPrompt' });
+        return c.ok ? (c.value as { prompt: ProviderSignInPrompt | null }).prompt : null;
+      },
+      onCancelSignIn: () => { void bridge.command({ kind: 'provider.authCancel' }); },
+      onOpenLink: (url: string) => { void bridge.command({ kind: 'shell.openExternal', url }); },
+    };
+    root.render(<StrictMode><AuthRecoveryDialog payload={payload} onRetry={onRetry} onReauthenticate={onReauthenticate} onConfirm={onConfirm} signIn={signIn} onCancel={onCancel} /><Acknowledgements store={acknowledgements} /></StrictMode>);
   });
 }
 

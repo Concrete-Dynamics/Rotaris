@@ -480,6 +480,21 @@ describe('PD-PROVIDER-003 — the tool is asked for its catalogue, the tool conn
     expect(credentials.exists('claude-code')).toBe(false);
   });
 
+  it('REQ-NOTIFY-076: usable is the credential for a key provider, and the marker AND the tool for Claude Code', async () => {
+    let state = ready;
+    const { svc } = service(okCatalogue, { installed: () => true, state: async () => state, models: async () => listed });
+    expect(await svc.usable('claude-code')).toBe(false);
+    expect(await svc.usable('openai-compatible--openrouter')).toBe(false);
+    await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
+    await svc.connectLocalToolIfFound();
+    expect(await svc.usable('openai-compatible--openrouter')).toBe(true);
+    expect(await svc.usable('claude-code')).toBe(true);
+    state = { ...ready, signedIn: false, subscription: false };
+    expect(await svc.usable('claude-code')).toBe(false);
+    expect(svc.reauthentication('claude-code')).toMatchObject({ method: 'interactive', message: expect.stringContaining('uses the Claude Code tool signed in on this computer') });
+    expect(svc.reauthentication('claude-code').message).not.toContain('API key');
+  });
+
   it('connects nothing where the tool is absent, signed out, or not on a subscription', async () => {
     for (const state of [{ ...ready, installed: false }, { ...ready, signedIn: false, subscription: false }, { ...ready, subscription: false }]) {
       const { svc, credentials } = service(okCatalogue, { installed: () => state.installed, state: async () => state });

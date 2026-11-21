@@ -378,15 +378,11 @@ async function main(): Promise<void> {
   const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, timers: clocks.timers, localTool: { installed: claudeCodeInstalled, state: () => claudeCode.state(), models: () => claudeCode.models() }, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
 
   /**
-   * REQ-NOTIFY-076 as the two recovery surfaces can act on it today: a key-based provider gets its key field. A device-code or
-   * browser provider signs in through its own flow in the authentication window (Settings → Models → Re-authenticate); starting
-   * that flow inside the recovery surfaces themselves is owed, so they say where it is, in the application and nowhere else.
+   * REQ-NOTIFY-076 as the two recovery surfaces act on it: a key-based provider gets its key field; a device-code or browser
+   * provider, and the tool installed on the machine, start their own flow in place — the surface sends the authentication
+   * window's own `provider.authenticate` and shows the prompt main holds — and are then confirmed.
    */
-  const recoveryMethodOf = (id: string): { readonly method: 'api-key' | 'unavailable' | 'configuration'; readonly message: string } => {
-    const how = providers.reauthentication(id);
-    if (how.method !== 'interactive') return { method: how.method, message: how.message };
-    return { method: 'unavailable', message: `${providers.displayName(id)} signs in on its provider's own page. Re-authenticate it under Settings → Models, then retry here — or choose a model from another provider.` };
-  };
+  const recoveryMethodOf = (id: string): { readonly method: 'api-key' | 'interactive' | 'unavailable' | 'configuration'; readonly message: string } => providers.reauthentication(id);
 
   // ADR-0002: one run host for the application's lifetime; one workspace service per open workspace.
   // REQ-MCP-033 / OQ-82: the run host builds the reserved token's launch of this executable, and that launch carries the
@@ -950,7 +946,8 @@ async function main(): Promise<void> {
     authRecoveryWindow = { sessionId: payload.sessionId, win: dlg };
     authRecoveryPayloads.set(wc, payload);
     dlg.setMenuBarVisibility(false);
-    dlg.on('closed', () => { authRecoveryPayloads.delete(wc); if (authRecoveryWindow?.win === dlg) authRecoveryWindow = null; });
+    // A sign-in the dialog started in place ends with the dialog, as the authentication window's does.
+    dlg.on('closed', () => { providerSignIns.get(wc)?.abort.abort(); authRecoveryPayloads.delete(wc); if (authRecoveryWindow?.win === dlg) authRecoveryWindow = null; });
     const query = { role: 'auth-recovery' };
     try {
       if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
@@ -969,6 +966,7 @@ async function main(): Promise<void> {
     close: (sessionId) => closeAuthRecovery(sessionId),
     log: (message) => log(message),
     reauthentication: (id) => recoveryMethodOf(id),
+    authenticated: (id) => providers.usable(id),
     reauthenticate: async (id, apiKey) => {
       const r = await providers.reauthenticateWithKey(id, apiKey);
       // `catalog`: the key is stored though its models were not recorded — what depends on the provider is refreshed too.
@@ -1009,7 +1007,7 @@ async function main(): Promise<void> {
     },
     /**
      * REQ-NOTIFY-076's method, as the recovery dialog reads it (`ProviderService.reauthentication`): a key-based provider gets
-     * the key field; a device-code or browser provider — whose flows are owed — is told so in the provider service's words;
+     * the key field; a device-code or browser provider starts its own flow in place and is confirmed with no key;
      * one whose key the model configuration carries (OQ-179) is offered switching back alone.
      */
     describeProvider: (id) => {
@@ -1018,9 +1016,11 @@ async function main(): Promise<void> {
       const how = known ? recoveryMethodOf(id) : { method: 'configuration' as const, message: '' };
       if (how.method === 'api-key') return { provider: { id, name }, method: 'api-key' };
       if (how.method === 'configuration') return { provider: { id, name }, method: 'none' };
+      if (how.method === 'interactive') return { provider: { id, name }, method: 'interactive' };
       return { provider: { id, name }, method: 'unavailable', unavailableReason: how.message };
     },
     /** REQ-NOTIFY-078 / REQ-NOTIFY-202: the dialog's key path (`reauthenticateWithKey`) — validated, stored, the refusing stage named. */
+    signedIn: (providerId) => providers.usable(providerId),
     saveKey: async (providerId, apiKey) => {
       const r = await providers.reauthenticateWithKey(providerId, apiKey);
       // `catalog`: the key IS stored and only its discovered models were not recorded — the credentials changed.

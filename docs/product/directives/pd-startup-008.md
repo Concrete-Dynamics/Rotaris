@@ -4,6 +4,11 @@
 
 ### PD-STARTUP-008 — an update downloads by itself and takes effect at the next start or by `Restart now`
 
+*Revision 2 (2026-11-21, [R-117](../requests.md#r-117)) — **the owner rules UD-1 to UD-12, and the AppImage joins the
+background path**: the "Reserved to the owner" paragraph is replaced by "The owner's rulings", REQ-STARTUP-117,
+REQ-SHELL-114 and REQ-NOTIFY-216 join the Narrows list for UD-3, and the platform sentence of "What is unchanged" is
+replaced. Revision 1's text is kept below where it no longer governs.*
+
 **The directive.** On a supported standalone build, an update the release feed offers SHALL be downloaded in the background
 with no click, shown with its progress and a cancel action, verified, kept as the pending update, verified again from the
 retained bytes, and applied at the next start or when the user chooses `Restart now` — never by a restart, a close, an
@@ -38,17 +43,50 @@ heading. This directive states which derived requirements they displace, and the
 The notice surface's own case — REQ-SHELL-118's download notice and REQ-SHELL-115's action list — is
 [`PD-SHELL-005`](pd-shell-005.md#pd-shell-005)'s, revised for this request rather than narrowed a second time.
 
-**Reserved to the owner.** The decisions UD-1 to UD-12 of
-[`../architecture/background-update-plan.md`](../../architecture/background-update-plan.md) §6 are not taken here, and no
-build implements a clause that names one before it is. A ruling that departs from a requirement this directive does not
-name — REQ-STARTUP-117, REQ-SHELL-114 and REQ-NOTIFY-216 on dismissing (UD-3), REQ-STARTUP-146 and REQ-SHELL-006 should a
-preference be wanted (UD-1) — revises this directive and names it.
+**The owner's rulings (revision 2).** The owner decided UD-1 to UD-12 of
+[`../architecture/background-update-plan.md`](../../architecture/background-update-plan.md) §6 personally on 2026-11-21;
+none is ruled under R-072's delegation. Each fills the clause of REQ-STARTUP-169 to REQ-STARTUP-181 that reserved it:
+
+- **UD-1 (REQ-STARTUP-169).** Where the platform reports the connection as metered, the download SHALL NOT start on its own;
+  the offer is presented as REQ-STARTUP-116 presents it, with `Update now`, and a download the user starts there runs as
+  REQ-STARTUP-169 states. A connection whose cost the platform does not report is treated as not metered. No preference key
+  is added (REQ-STARTUP-146 and REQ-SHELL-006 stand).
+- **UD-2 (REQ-STARTUP-170).** A cancel holds for the process that received it: the notice becomes REQ-STARTUP-116's offer
+  with `Update now`, and no download of that version starts on its own again in that process. The next launch downloads it
+  again. A cancel records nothing (`updates/dismissedVersion` included).
+- **UD-3 (REQ-STARTUP-117, REQ-SHELL-114, REQ-NOTIFY-216).** Dismissing the download notice or the ready notice of
+  REQ-STARTUP-174 only hides it: the download runs on, the pending update stays and the next-start apply follows, and no
+  version is recorded. Waving a version off is done only by dismissing REQ-STARTUP-116's offer — the notice a cancel (UD-2)
+  or a metered connection (UD-1) leaves — and there REQ-STARTUP-117 governs unchanged.
+- **UD-4 (REQ-STARTUP-172, REQ-STARTUP-179).** A transport failure of a download the user did not start is not shown: it
+  is logged and the next launch tries again. Every refusal on authenticity or integrity, and every discard under
+  REQ-STARTUP-172 other than the silent one it names, is shown as REQ-STARTUP-120's notice.
+- **UD-5 (REQ-STARTUP-178).** A pending update yields to the feed: a newer release the feed names is downloaded and, once
+  verified, replaces it; a release the feed names that is older than the pending one discards the pending one.
+- **UD-6 (REQ-STARTUP-173).** While the installed flavour's next-start apply runs, a small non-modal window conveys that
+  Rotaris is being updated, and closes when the installer has been started; the updated application opens after it.
+- **UD-7.** The first main window of the updated version shows one transient acknowledgement conveying the version it was
+  updated to, and nothing persistent.
+- **UD-8 (REQ-STARTUP-173, REQ-STARTUP-175).** The apply is at the next start or by `Restart now`, never at quit. Where the
+  flavour's target can be replaced while the application runs (portable, AppImage), it SHALL be replaced as soon as the
+  pending update is verified.
+- **UD-9 (REQ-STARTUP-177).** An apply that did not complete is retried by at most two launches in all, after which the
+  pending update is discarded. An unapplied pending update is kept until it is applied or superseded, with no time limit. A
+  start with no network applies it (REQ-STARTUP-172 needs none).
+- **UD-10 (REQ-STARTUP-170).** The progress, the cancel and the ready state stay reachable from an indicator in the title
+  bar while another notice holds the banner: [`PD-SHELL-018`](pd-shell-018.md#pd-shell-018).
+- **UD-11 (REQ-STARTUP-176).** No automatic rollback. The portable's and the AppImage's `<name>.old` stays until the
+  replaced artifact has painted, and the recovery by hand is documented with the release.
+- **UD-12.** Decided on the evidence of the over-install interruption spike (the plan's Stage 4), which is brought back to
+  the owner before the installed flavour's next-start apply is enabled.
+
+> **Revision 1 said, and no longer governs:** "Reserved to the owner. The decisions UD-1 to UD-12 of [`../architecture/background-update-plan.md`](../../architecture/background-update-plan.md) §6 are not taken here, and no build implements a clause that names one before it is. A ruling that departs from a requirement this directive does not name — REQ-STARTUP-117, REQ-SHELL-114 and REQ-NOTIFY-216 on dismissing (UD-3), REQ-STARTUP-146 and REQ-SHELL-006 should a preference be wanted (UD-1) — revises this directive and names it."
 
 **What is unchanged.** REQ-STARTUP-105 to REQ-STARTUP-113, REQ-STARTUP-123, REQ-STARTUP-124, REQ-STARTUP-126,
 REQ-STARTUP-167 and REQ-STARTUP-168: one endpoint and no way to disable the check; exact names and the order; the signature
 verified before the manifest is parsed and before any asset byte is fetched; the 1 MiB bound on the small reads and the
 chunked digest; no override. ADR-0054's bespoke updater (Alternative B) stays, and `electron-updater` stays rejected; its
-install-at-quit pattern is not this directive. `PD-STARTUP-001`, IC-3 and IC-8 stand: Windows x64 alone.
+install-at-quit pattern is not this directive. IC-3 and IC-8 stand. *Revision 2:* the background path covers every flavour REQ-STARTUP-125 can apply on a published platform key — the Windows installer and portable and, since [`PD-STARTUP-013`](pd-startup-013.md#pd-startup-013), the Linux AppImage; a build that cannot apply is [`PD-STARTUP-014`](pd-startup-014.md#pd-startup-014)'s. *Revision 1 read:* "`PD-STARTUP-001`, IC-3 and IC-8 stand: Windows x64 alone."
 
 **Why, and what it costs.** The owner wants Rotaris installable from a release and kept current the way current desktop
 assistants are: the new build arrives by itself and is used the next time the application starts, or at once when the user
@@ -62,6 +100,6 @@ behaviour, which nobody has measured (UD-12).
 **Recorded, not built.** Scheduled after the dependency remediation in the stages of the plan; the first execution is owed
 to the stage that builds it.
 
-> **Narrows:** REQ-STARTUP-017, REQ-STARTUP-114, REQ-STARTUP-116, REQ-STARTUP-119, REQ-STARTUP-121, REQ-STARTUP-122, REQ-STARTUP-125, REQ-STARTUP-127, REQ-STARTUP-155, REQ-NOTIFY-044, REQ-NOTIFY-215, REQ-NOTIFY-222
+> **Narrows:** REQ-STARTUP-017, REQ-STARTUP-114, REQ-STARTUP-116, REQ-STARTUP-119, REQ-STARTUP-121, REQ-STARTUP-122, REQ-STARTUP-125, REQ-STARTUP-127, REQ-STARTUP-155, REQ-NOTIFY-044, REQ-NOTIFY-215, REQ-NOTIFY-222, REQ-STARTUP-117, REQ-SHELL-114, REQ-NOTIFY-216
 
-*Raised by the owner, 2026-10-22; logged as [R-084](../requests.md#r-084).*
+*Raised by the owner, 2026-10-22; logged as [R-084](../requests.md#r-084). Revision 2: the owner's rulings, 2026-11-21, [R-117](../requests.md#r-117).*

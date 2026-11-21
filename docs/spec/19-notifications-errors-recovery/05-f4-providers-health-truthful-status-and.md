@@ -46,6 +46,9 @@ Part 5 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
 
 **REQ-NOTIFY-216** — Closing the update notice without choosing is itself the answer that the user is to be reminded at the next launch. The dismissed version is persisted, and only that version is suppressed; a newer version is offered again.
 
+> **Narrowed by [`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008) revision 2, 2026-11-21.** Closing the download or ready notice of a background
+> update only hides it and persists no version (UD-3).
+
 **REQ-NOTIFY-217** — The update notice's identifier is retained, so dismissing an unrelated notice never records a dismissed version. The dismissed version is recorded before the notice is cleared.
 
 **REQ-NOTIFY-218** — Download progress is reported inside the notice that made the offer: its title names the version being downloaded, and its body states the percentage complete and that the download will be verified against the published checksum when it finishes. Where the total size is unknown, downloaded megabytes are stated instead. Progress text is updated only on whole-percent changes where the total size is known, and only on whole-megabyte changes of the amount downloaded where it is not; in either case a final update is published when the download settles, so the last text shown states the amount actually received rather than the last threshold crossed.

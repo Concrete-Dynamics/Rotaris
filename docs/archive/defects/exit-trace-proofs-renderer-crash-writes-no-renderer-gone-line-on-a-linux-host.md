@@ -1,5 +1,14 @@
 ## exit-trace-proof's renderer crash writes no RENDERER GONE line on a Linux host
 
+## Outcome: repaired 2026-11-21 (R-119's branch, `feat/r-117-web-search-setup`)
+
+The harness, not the product. Chromium's namespace sandbox forks each Linux renderer as PID 1 of its own PID
+namespace (`NSpid` ends in 1), and the kernel drops a signal from an ancestor namespace to a namespace init unless it is
+SIGKILL or SIGSTOP; a `kill()` SIGSEGV is `SI_USER` and never forced, so the renderer survived. Reproduced without
+Electron under `unshare --user --pid --fork`: a namespace init survives SIGSEGV and dies of SIGKILL. The proof now sends
+SIGKILL on Linux (Chromium reports `killed`, which main writes at `error` and, since OQ-476, reloads); macOS keeps
+SIGSEGV and Windows `TerminateProcess`. `pnpm exit-trace-proof` green on this host, 2026-11-21.
+
 `pnpm exit-trace-proof` failed 2 of its 37 checks in launch 2 ("crash") on a Linux x86_64 host (Node 26.8.1, a private Xvfb
 at 1600×1000), on 2026-10-22 while R-081's Electron lane ran its proof sweep:
 

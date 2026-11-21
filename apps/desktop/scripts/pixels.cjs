@@ -93,6 +93,48 @@ function textContrast(png, text, dpr) {
   return { ratio: ratio(foreground, background), foreground, background };
 }
 
+/** A computed CSS colour, `rgb(r, g, b)` or `oklch(L C H)`, as sRGB bytes; `null` for any other form (alpha included). */
+function cssColour(value) {
+  const rgb = /^rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)\s*(?:,\s*1\s*)?\)$/.exec(value ?? '');
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  const ok = /^oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)\s*\)$/.exec(value ?? '');
+  if (!ok) return null;
+  const L = Number(ok[1]) / (ok[2] ? 100 : 1), C = Number(ok[3]), h = (Number(ok[4]) * Math.PI) / 180;
+  const a = C * Math.cos(h), b = C * Math.sin(h);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  const encode = (v) => { const c = Math.max(0, Math.min(1, v)); return Math.round(255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055)); };
+  return [encode(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s), encode(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s), encode(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+}
+
+/**
+ * REQ-SHELL-160 (a) for a text drawn only of horizontal rules (a dash placeholder). Its one stroke is about a device
+ * pixel thick; at a fractional scale it straddles two rows, so no single pixel shows the text's colour (125 %: 3.75:1
+ * read for a colour that reads 9.47:1 at 100 % and 150 %). The stroke is read as two vertically adjacent pixels'
+ * summed excess over the painted background, never farther from it than the computed colour; the background stays
+ * the painted one, so a token over the wrong surface, or a dim token, still fails.
+ */
+function ruleContrast(png, text, dpr) {
+  const single = textContrast(png, text, dpr);
+  const ceiling = cssColour(text.color);
+  if (ceiling === null) return single;
+  const background = single.background;
+  const limit = distance(ceiling, background);
+  let foreground = single.foreground;
+  let farthest = distance(foreground, background);
+  const left = Math.max(0, Math.floor(text.rect.x * dpr));
+  const top = Math.max(0, Math.floor(text.rect.y * dpr));
+  const right = Math.min(png.width - 1, Math.ceil((text.rect.x + text.rect.width) * dpr));
+  const bottom = Math.min(png.height - 1, Math.ceil((text.rect.y + text.rect.height) * dpr));
+  for (let y = top; y < bottom; y += 1) for (let x = left; x <= right; x += 1) {
+    const upper = at(png, x, y), lower = at(png, x, y + 1);
+    const summed = [0, 1, 2].map((i) => Math.max(0, Math.min(255, upper[i] + lower[i] - background[i])));
+    const candidate = distance(summed, background) > limit ? [...ceiling, 255] : [...summed, 255];
+    const d = distance(candidate, background);
+    if (d > farthest) { farthest = d; foreground = candidate; }
+  }
+  return { ratio: ratio(foreground, background), foreground, background };
+}
+
 function focusContrast(png, control, dpr, width = 2) {
   const rect = control.rect;
   const left = Math.max(0, Math.floor(rect.x * dpr));
@@ -109,4 +151,4 @@ function focusContrast(png, control, dpr, width = 2) {
   return best;
 }
 
-module.exports = { decodePng, textContrast, focusContrast, ratio, at, modalInside };
+module.exports = { decodePng, textContrast, ruleContrast, cssColour, focusContrast, ratio, at, modalInside };

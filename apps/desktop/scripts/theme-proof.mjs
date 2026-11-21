@@ -31,7 +31,9 @@ import { clipRect, textSample } from './lib/text-sample.mjs';
 import { contrastCoverage } from './lib/contrast-coverage.mjs';
 
 const require = createRequire(import.meta.url);
-const { decodePng, textContrast, focusContrast } = require('./pixels.cjs');
+const { decodePng, textContrast, ruleContrast, focusContrast } = require('./pixels.cjs');
+/** A text drawn only of horizontal rules (hyphens, dashes, minus): no glyph of it has a stem a device pixel wide. */
+const RULES_ONLY = /^[\s\-\u2010-\u2015\u2212]+$/u;
 const THEMES = ['rotaris-dim', 'nocturne', 'high-contrast'];
 const SCALES = [1, 1.25, 1.5, 1.75, 2];
 /** The primary views' roots in the rail's order (PD-SHELL-015: six, Ctrl+1 to Ctrl+6; PD-SHELL-016: Workspace first). */
@@ -251,7 +253,7 @@ for (const theme of selectedThemes) {
         const sample = textSample(text);
         if (sample.skip !== undefined) { skip(sample.skip); continue; }
         coverage.texts.push({ inSurface: text.inSurface === true, skip: null });
-        const measured = textContrast(png, { ...text, rect: sample.rect }, metadata.dpr);
+        const measured = (RULES_ONLY.test(text.text) ? ruleContrast : textContrast)(png, { ...text, rect: sample.rect }, metadata.dpr);
         const weight = Number.parseInt(text.fontWeight, 10) || 400;
         const floor = text.disabled ? 3 : (text.fontSize >= 18 || (text.fontSize >= 14 && weight >= 700)) ? 3 : 4.5;
         contrast.push({ text: text.text.slice(0, 80), ratio: measured.ratio, floor });

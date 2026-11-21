@@ -91,7 +91,9 @@ async function settingsScenario(name, { dictation }, body) {
   try {
     await until(() => driver.eval(`[...document.querySelectorAll('.nav-item')].length`), (n) => n > 0, { what: 'the shell', timeoutMs: 30_000 });
     await driver.chord('Ctrl+6');
-    await driver.waitFor('#dictation-credential', { timeout: 15_000 });
+    // PD-CONFIG-012 clause 2: Settings opens on Setup; the Dictation section stands on the Models page.
+    await driver.click('.nav-list__item[data-settings-page="models"]', { timeoutMs: 15_000 });
+    await driver.waitFor('#dictation-credential', { timeoutMs: 15_000 });
     results[name] = await body(driver);
     await driver.screenshot(join(output, `${name}.png`));
   } finally {

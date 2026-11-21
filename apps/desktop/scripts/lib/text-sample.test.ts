@@ -130,3 +130,41 @@ describe('REQ-SHELL-145: the verdict no longer turns on a sliver (the defect, me
     expect(whole).toBeGreaterThan(read);
   });
 });
+
+describe('ruleContrast — REQ-SHELL-160 (a): a dash whose one stroke straddles two device rows', () => {
+  const { ruleContrast, ratio } = require('../pixels.cjs') as {
+    ruleContrast: (png: Png, text: { rect: Box; color: string }, dpr: number) => { ratio: number };
+    ratio: (a: number[], b: number[]) => number;
+  };
+  const ground = [23, 24, 27];
+  const ink = [188, 189, 194];
+  const dpr = 1.25;
+  // A 12 × 14 CSS px box at (8, 8): device pixels 10..25 across, 10..27 down; the stroke is 10 device pixels long.
+  const dash = { rect: box(8, 8, 12, 14), color: `rgb(${ink.join(', ')})` };
+  const half = (a: number[], b: number[]) => a.map((v, i) => Math.round((v + b[i]!) / 2));
+
+  it('reads the summed stroke, where the single farthest pixel reads under the floor (the 125 % red)', () => {
+    const png = capture(40, 40, ground, [
+      { box: box(12, 18, 10, 1), colour: half(ink, ground) },
+      { box: box(12, 19, 10, 1), colour: half(ink, ground) },
+    ]);
+    expect(textContrast(png, dash, dpr).ratio).toBeLessThan(4.5);
+    const read = ruleContrast(png, dash, dpr).ratio;
+    expect(read).toBeGreaterThan(4.5);
+    expect(read).toBeLessThanOrEqual(ratio(ink, ground) + 1e-9);
+  });
+
+  it('still fails a dim dash: the sum never lends a colour more contrast than its own', () => {
+    const dim = [52, 53, 57];
+    const png = capture(40, 40, ground, [
+      { box: box(12, 18, 10, 1), colour: half(dim, ground) },
+      { box: box(12, 19, 10, 1), colour: half(dim, ground) },
+    ]);
+    expect(ruleContrast(png, { ...dash, color: `rgb(${dim.join(', ')})` }, dpr).ratio).toBeLessThan(4.5);
+  });
+
+  it('caps a stroke thicker than a pixel at the computed colour', () => {
+    const png = capture(40, 40, ground, [{ box: box(12, 18, 10, 2), colour: ink }]);
+    expect(ruleContrast(png, dash, dpr).ratio).toBeCloseTo(ratio(ink, ground));
+  });
+});

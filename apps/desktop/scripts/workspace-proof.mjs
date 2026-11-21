@@ -822,17 +822,22 @@ try {
         while (findDatabases(join(dataDir, 'workspaces')).length === 0 && Date.now() - began < 30_000) await sleep(200);
         const stores = findDatabases(join(dataDir, 'workspaces'));
         const made = oursMade();
-        const electronProfile = existsSync(join(appDirectory, 'rel-config')) ? readdirSync(join(appDirectory, 'rel-config')) : [];
         check('REQ-STARTUP-145: a launch with relative XDG_CONFIG_HOME and XDG_DATA_HOME keeps its per-user state under its home, never under the working directory',
           stores.length === 1 && existsSync(join(dataDir, 'machine-id')) && existsSync(join(dataDir, 'instance.json')) && made.length === 0,
           `${stores.length} store(s) under ${dataDir}; machine-id ${existsSync(join(dataDir, 'machine-id')) ? 'there' : 'missing'}; the product's own made in the working directory: ${JSON.stringify(made)}`);
         await closeAll();
         // Read once the launch has ended: Chromium writes `Local State` as it shuts down, not when it starts.
+        // A system library that takes a relative XDG_CONFIG_HOME as it stands (IBus's `ibus/bus`, measured 2026-11-21;
+        // libpulse's `pulse/cookie` likewise) may write there too; that is neither the product's directory nor Chromium's profile, which is
+        // recognised by its own files or by Electron's `<name>` directory.
+        const relConfig = join(appDirectory, 'rel-config');
+        const underRelConfig = existsSync(relConfig) ? readdirSync(relConfig, { recursive: true }).map(String) : [];
+        const strayProfile = underRelConfig.filter((p) => /(^|[\\/])(Local State|Preferences|Crashpad)$/.test(p) || /^(Electron|rotaris|Rotaris)$/.test(p));
         const chromiumProfile = join(dataDir, 'chromium');
         const profileEntries = existsSync(chromiumProfile) ? readdirSync(chromiumProfile) : [];
         check('REQ-STARTUP-145: Chromium\'s own profile is written below the machine-local data directory, never at $XDG_CONFIG_HOME/<name> under the working directory',
-          electronProfile.length === 0 && !existsSync(join(appDirectory, 'rel-config')) && profileEntries.includes('Local State') && profileEntries.includes('Preferences'),
-          `under rel-config: ${JSON.stringify(electronProfile)}; ${chromiumProfile}: ${JSON.stringify(profileEntries)}`);
+          strayProfile.length === 0 && profileEntries.includes('Local State') && profileEntries.includes('Preferences'),
+          `under rel-config: ${JSON.stringify(underRelConfig)}; ${chromiumProfile}: ${JSON.stringify(profileEntries)}`);
       } finally {
         // Whatever an unrepaired build made in the working directory is not left in the repository.
         for (const name of strays()) if (!before.includes(name)) rmSync(join(appDirectory, name), { recursive: true, force: true });
@@ -1021,15 +1026,18 @@ try {
           && lost.endsWith("→ failure — Code intelligence could not create this project's configuration: the run host exited before the setup finished.")
           && next.includes('→ failure'),
         `run host pid ${host} killed; the lost setup's run ${lostEnded ? `ended ${lostAfter} ms later: ${JSON.stringify(lost.slice(0, 260))}` : 'NEVER ended'}; the queued run ${queuedEnded ? `ended: ${JSON.stringify(next.slice(0, 260))}` : 'NEVER ended'}`);
-      // The queued run's start goes unanswered: REQ-WORKSPACE-093's retryable failure in this task's own words, its summary
-      // the banner's (REQ-WORKSPACE-103), never REQ-WORKSPACE-084's generic "ended without reporting an outcome"
-      // (`docs/archive/defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
+      // The queued run's start goes to a run host that is gone, and since OQ-462 (3) that request is refused at once
+      // (`runHost.gone`) rather than left unanswered: REQ-WORKSPACE-093's retryable failure in this task's own words, its
+      // summary the banner's (REQ-WORKSPACE-103), never REQ-WORKSPACE-084's generic "ended without reporting an outcome"
+      // (`docs/archive/defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`). The
+      // unanswered start itself is `initialization.test.ts`'s.
       await s.driver.useWindow('init-queued');
       const queuedRead = await s.driver.command({ kind: 'initialization.read' });
       await s.driver.useWindow();
       const queuedTask = queuedRead?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
-      check('REQ-WORKSPACE-084 / REQ-WORKSPACE-093 / REQ-WORKSPACE-103: a setup start the run host never answers fails retryably in REQ-WORKSPACE-093\'s summary, not as a task with no outcome',
-        queuedEnded && next.includes("→ failure — Code intelligence could not complete this project's setup: the run host did not answer the setup's start (")
+      check('REQ-WORKSPACE-084 / REQ-WORKSPACE-093 / REQ-WORKSPACE-103: a setup start sent to a run host that is gone fails retryably in REQ-WORKSPACE-093\'s summary, not as a task with no outcome',
+        queuedEnded && /the run host refused code-intelligence-setup's setup start [^\n]*\(runHost\.gone: /.test(log)
+          && next.includes("→ failure — Code intelligence could not complete this project's setup: The run host has stopped; no run can start until the application is restarted")
           && !/ended without reporting an outcome/.test(log) && queuedTask?.retryable === true
           && queuedTask?.summary === 'Code intelligence setup did not complete for this project. It runs again the next time this workspace is opened.',
         `the queued run ${queuedEnded ? `ended: ${JSON.stringify(next.slice(0, 260))}` : 'NEVER ended'}; its report reads retryable ${String(queuedTask?.retryable)}, summary ${JSON.stringify(queuedTask?.summary ?? null)}${/ended without reporting an outcome/.test(log) ? '; the log says "ended without reporting an outcome"' : ''}`);

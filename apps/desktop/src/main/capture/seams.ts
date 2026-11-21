@@ -667,6 +667,9 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
         if (!el) return 'no such control';
         const wanted = ${JSON.stringify(step.arg ?? '')};
         if (el instanceof HTMLSelectElement) {
+          // A disabled select, or one without the wanted option, keeps its value: say so rather than "chosen".
+          if (el.disabled) return 'disabled';
+          if (![...el.options].some((o) => o.value === wanted)) return 'no such option';
           const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
           setter.call(el, wanted);
           el.dispatchEvent(new Event('change', { bubbles: true }));

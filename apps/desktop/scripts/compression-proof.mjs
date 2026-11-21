@@ -256,7 +256,8 @@ const s6 = scenario('root-and-child', ['  threshold_percentage: 60', '  preserve
   const RUN_WIDE = '2 compressions across the run.';
   const r = await launch('root-and-child', s6, {
     ROTARIS_SCRIPT: 'glob,glob,glob,tokens:900,wait:3000,delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'glob,glob,glob,tokens:900,answer', ROTARIS_CAPTURE_PROMPT: 'the root and a child fill their contexts',
-    ROTARIS_CAPTURE_CLICKS: '.inspector__body:not(.inspector__body--empty) .inspector__actions .btn>>Pop out@~60000',
+    // PD-SHELL-017: the shown agent's actions stand in the inspector's foot, which is drawn only while an agent is shown.
+    ROTARIS_CAPTURE_CLICKS: '.inspector__foot .inspector__actions .btn>>Pop out@~60000',
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: `[data-testid="persona-compressions"]>>${RUN_WIDE}@~60000;;[data-testid="persona-agent-name"]@~60000`,
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '3000',
     ROTARIS_CAPTURE_PROBE: '[data-testid="inspector-name"];;[data-testid="inspector-compressions"];;[data-testid="inspector-meta"]',

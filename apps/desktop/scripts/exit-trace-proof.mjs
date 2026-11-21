@@ -17,7 +17,7 @@
  *                `error`, and not "main ended it" (`ChildrenEndedByMain`, `exit.ts`: only a kill main sent itself is
  *                `info`). Main still answers, and (OQ-462, ruled 2026-11-01) the person is told: ONE error notice "The run
  *                host stopped" with a dismiss and no action, and a submit after it is refused at once with the draft kept.
- *                Then the main window's renderer is crashed with SIGSEGV: main writes
+ *                Then the main window's renderer is crashed (SIGSEGV; SIGKILL on Linux): main writes
  *                `RENDERER GONE (<reason>, exit <n>) for <its URL>` at `error`. On Windows (R-091, hardening §3.2 row 5)
  *                main then reloads the window once and raises "This window stopped and was reloaded"; a second crash
  *                within the 60 s bound is left as it is, the notice saying so, and no reload loop follows. The application's quit (`app.quit()`,
@@ -160,13 +160,18 @@ function renderersOf(mainPid) {
   return all.filter((p) => ours.has(p.pid) && p.pid !== mainPid && /--type=renderer\b/.test(p.command));
 }
 /**
- * Crashes the given renderers from outside: SIGSEGV on POSIX; on Windows `TerminateProcess` with `STATUS_ACCESS_VIOLATION`
+ * Crashes the given renderers from outside: SIGSEGV on macOS; on Linux SIGKILL, because Chromium's namespace sandbox forks
+ * each renderer as PID 1 of a new PID namespace (`/proc/<pid>/status` NSpid ends in 1), and the kernel drops every signal
+ * from an ancestor namespace to a namespace init except SIGKILL and SIGSTOP, so an `SI_USER` SIGSEGV never arrives as a
+ * crash (docs/archive/defects/exit-trace-proofs-renderer-crash-writes-no-renderer-gone-line-on-a-linux-host.md); Chromium
+ * reports the SIGKILL `killed`. On Windows `TerminateProcess` with `STATUS_ACCESS_VIOLATION`
  * (0xC0000005) as the exit status, which Chromium reports as `crashed` — what a renderer that faulted reports. Node's
  * `process.kill` on Windows terminates with exit 1, which Chromium reports as `killed`.
  */
 function crashRenderers(renderers) {
   if (!WINDOWS) {
-    for (const r of renderers) { try { process.kill(r.pid, 'SIGSEGV'); } catch { /* gone already */ } }
+    const signal = process.platform === 'linux' ? 'SIGKILL' : 'SIGSEGV';
+    for (const r of renderers) { try { process.kill(r.pid, signal); } catch { /* gone already */ } }
     return;
   }
   if (renderers.length === 0) return;
@@ -246,7 +251,8 @@ const results = {};
   const renderers = renderersOf(started.child.pid);
   check('the launch has a renderer to crash', renderers.length >= 1, renderers.map((r) => r.pid).join(', ') || 'none');
   const before = goneAtError(logOf(started)).length;
-  // SIGSEGV on POSIX; on Windows, which cannot send it, `TerminateProcess` with an access violation's status, which Chromium
+  // SIGKILL on Linux (a sandboxed renderer is its PID namespace's init and drops an outside SIGSEGV), SIGSEGV on macOS; on
+  // Windows, which cannot send it, `TerminateProcess` with an access violation's status, which Chromium
   // reads as `crashed` (a plain `process.kill` there is exit 1, `killed`, which until OQ-476 main did not reload; the `kill`
   // launch reads it now) — a renderer lost from outside either way.
   crashRenderers(renderers);
@@ -259,7 +265,7 @@ const results = {};
    * stayed open and blank. Main now reloads it ONCE within `RENDERER_RELOAD_BOUND_MS` (60 s) and raises a persistent error
    * notice naming the reason and the exit code; a second loss inside the bound leaves the window as it is, and the notice
    * says so. Read on Windows, where the crash above is `crashed`; on a Linux host the renderer's loss is not produced at all
-   * (docs/defects/exit-trace-proofs-renderer-crash-writes-no-renderer-gone-line-on-a-linux-host.md), and macOS is not run.
+   * (docs/archive/defects/exit-trace-proofs-renderer-crash-writes-no-renderer-gone-line-on-a-linux-host.md), and macOS is not run.
    */
   if (WINDOWS) {
     const reloadLines = () => mainLines(logOf(started)).filter((l) => /^main window \d+ reloaded: its renderer was lost \(crashed, exit -?\d+\)/.test(l.message));

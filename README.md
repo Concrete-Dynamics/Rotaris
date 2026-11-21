@@ -119,22 +119,22 @@ missing, as it is in a new Git worktree, `node node_modules/electron/install.js`
 
 ## Status
 
-Rotaris is **pre-release**. The version it declares is `0.1.0rc6` (`apps/desktop/package.json`).
+Rotaris is **pre-release**. The version it declares is `0.1.0rc7` (`apps/desktop/package.json`).
 
-**What is published.** `v0.1.0rc6` is a release candidate for **Windows x64** — a setup installer and a portable
+**What is published.** `v0.1.0rc7` is a release candidate for **Windows x64** — a setup installer and a portable
 executable — and **Linux x86_64** — an AppImage and a Debian package
 ([`PD-STARTUP-013`](docs/product/directives/pd-startup-013.md#pd-startup-013)) — with a CycloneDX SBOM for each platform,
 `SHA256SUMS.txt` and its signature, built, signed and drafted by the tag workflow (`.github/workflows/release.yml`). It
-follows `v0.1.0rc5` of 2026-11-20 and four candidates before it. It carries a first launch that opens on a setup
-([`PD-WORKSPACE-010`](docs/product/directives/pd-workspace-010.md#pd-workspace-010)), the sign-ins of GitHub Copilot
-and OpenAI Codex, and a Claude subscription run through the Claude Code tool signed in on the computer
-([`PD-PROVIDER-002`](docs/product/directives/pd-provider-002.md#pd-provider-002)).
+follows `v0.1.0rc6` of 2026-11-21 and five candidates before it. It is the first to update itself: on the portable and the AppImage a newer release
+downloads in the background and installs at the next start or by `Restart now`, and a build that cannot update links to
+the release ([`PD-STARTUP-008`](docs/product/directives/pd-startup-008.md#pd-startup-008)). It also carries the surveyed
+Requirements view ([`PD-TRACE-002`](docs/product/directives/pd-trace-002.md#pd-trace-002)).
 
 Three things a reader should know about it:
 
 - **It is shown as GitHub's latest release, not flagged as a pre-release**, by the owner's choice, so that the
   download link and the in-app updater — both read `releases/latest`, which skips flagged pre-releases — find it
-  ([R-103](docs/product/requests.md#r-103), as for `v0.1.0rc2` to `v0.1.0rc5`; the same reading for `v0.1.0rc1` is
+  ([R-103](docs/product/requests.md#r-103), as for `v0.1.0rc2` to `v0.1.0rc6`; the same reading for `v0.1.0rc1` is
   [this note](docs/defects/the-published-rc1-release-is-marked-stable.md)).
 - **The release gate's clean-machine check was not performed for it.** No artifact was launched on a clean,
   offline machine before publication; the Debian package was installed nowhere
@@ -160,7 +160,7 @@ Three things a reader should know about it:
   [`PD-STARTUP-001`](docs/product/directives/pd-startup-001.md#pd-startup-001)). Nothing in the application is removed or
   disabled there. The proofs are run from source on Windows and on Linux.
 
-**What stands between `v0.1.0rc6` and `v0.1.0`**, from
+**What stands between `v0.1.0rc7` and `v0.1.0`**, from
 [`docs/architecture/first-release-plan.md`](docs/architecture/first-release-plan.md):
 
 - **The release gate** ([§5](docs/architecture/first-release-plan/06-5-the-release-gate.md#5-the-release-gate)): the installer and the

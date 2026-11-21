@@ -7,10 +7,10 @@ import type { Flavour } from './classify.js';
  * goes through `StrategyFiles`, so each step's observable results are decided with fakes here and the real
  * operations on a Windows host are the port's (`electron.ts`).
  *
- * PD-STARTUP-001: only the installer and the portable strategies are built. The disk-image and AppImage strategies
- * wait for the directive's withdrawal; until then an offer for either flavour cannot arise (no such asset is
- * published), and were one to reach `applyUpdate` it fails with one sentence naming the directive, leaving what is
- * installed byte-for-byte what it was (REQ-STARTUP-126).
+ * PD-STARTUP-001: the disk-image strategy waits for the directive's withdrawal; until then an offer for that flavour
+ * cannot arise (no such asset is published), and were one to reach `applyUpdate` it fails with one sentence naming the
+ * directive, leaving what is installed byte-for-byte what it was (REQ-STARTUP-126). The installer, the portable and,
+ * since PD-STARTUP-013, the AppImage strategies are built.
  */
 export interface StrategyFiles {
   pathKind(path: string): Promise<'file' | 'directory' | 'absent'>;
@@ -68,8 +68,11 @@ const sibling = (target: string, suffix: string): string => {
   const { dir, name, sep } = splitPath(target);
   return dir === '' ? `${name}${suffix}` : `${dir}${sep}${name}${suffix}`;
 };
-/** REQ-STARTUP-125/115: the portable's backup name, `<name>.old` beside the artifact. */
-export const portableBackupPath = (target: string): string => sibling(target, '.old');
+/**
+ * REQ-STARTUP-125/115: the backup name, `<name>.old` beside the artifact — the portable's, and since UD-11
+ * (PD-STARTUP-008 revision 2) the AppImage's too.
+ */
+export const artifactBackupPath = (target: string): string => sibling(target, '.old');
 /** Where the verified file is placed beside the target before the swap. */
 export const portableIncomingPath = (target: string): string => sibling(target, '.update');
 
@@ -107,7 +110,7 @@ export async function applyPortable(target: string, verifiedFile: string, files:
     return { ok: false, sentence: NO_TARGET_SENTENCE };
   }
   const incoming = portableIncomingPath(target);
-  const backup = portableBackupPath(target);
+  const backup = artifactBackupPath(target);
   const holder = dir === '' ? '.' : dir;
   try {
     await files.copyFile(verifiedFile, incoming);
@@ -169,7 +172,7 @@ export async function applyPortable(target: string, verifiedFile: string, files:
  */
 async function putPreviousBack(target: string, holder: string, files: StrategyFiles, error: unknown): Promise<ApplyOutcome> {
   const incoming = portableIncomingPath(target);
-  const backup = portableBackupPath(target);
+  const backup = artifactBackupPath(target);
   try {
     await files.copyFile(backup, incoming);
     await files.flushFile(incoming);
@@ -193,18 +196,23 @@ export const appImageIncomingPath = (target: string): string => {
 
 /**
  * AppImage → the verified file is first placed next to the target as the hidden sibling `.{name}.update`, on the
- * target's filesystem, left with mode `0755`, flushed, and then moved onto the AppImage's path in one rename — while
- * the application being replaced is still running, the target being the file the launch started from (`$APPIMAGE`)
- * and never the image mounted from it (REQ-STARTUP-106, REQ-STARTUP-125). On a failure the sibling is removed and the
- * step reports; the target was either never touched or holds the whole new file, since a rename is one step.
+ * target's filesystem, left with mode `0755` and flushed; any previous backup is deleted, the target is copied to
+ * `<name>.old` beside it and flushed; and the sibling is then moved onto the AppImage's path in one rename — while the
+ * application being replaced is still running, the target being the file the launch started from (`$APPIMAGE`) and never
+ * the image mounted from it (REQ-STARTUP-106, REQ-STARTUP-125).
  *
- * No backup is taken, unlike the portable: the clause names none, and a POSIX rename onto a file replaces it atomically,
- * so the path names a complete executable throughout — the previous one until the rename, the new one after it. The
- * new file's bytes are flushed before the rename relies on them. The directory is flushed after it, best effort: a
- * power loss before that reaches the medium leaves the previous AppImage at the path, which is a complete executable
- * and an update not yet taken, not a failure of this step.
+ * The backup is UD-11's (PD-STARTUP-008 revision 2, R-117): "The portable's and the AppImage's `<name>.old` stays until the
+ * replaced artifact has painted, and the recovery by hand is documented with the release" — REQ-STARTUP-176's backup,
+ * which the clause of REQ-STARTUP-125 does not name and the ruling adds. It is a copy (Node's `copyFile` keeps the source's
+ * mode, so the backup stays startable by hand), taken exclusively as the portable's is (`copyAside`). A POSIX rename onto a
+ * file replaces it atomically, so the path names a complete executable throughout — the previous one until the rename, the
+ * new one after it. Every copy is flushed before the rename relies on it. On a failure before the rename the sibling and
+ * this attempt's own backup are removed and the step reports; the target was never touched. The directory is flushed
+ * after the rename, best effort: a power loss before that reaches the medium leaves the previous AppImage at the path,
+ * which is a complete executable and an update not yet taken, not a failure of this step.
  *
- * Built 2026-11-17 for PD-STARTUP-013, which publishes the AppImage; until then the selection refused this flavour.
+ * Built 2026-11-17 for PD-STARTUP-013, which publishes the AppImage; until then the selection refused this flavour. The
+ * backup since 2026-11-21 (UD-11).
  */
 export async function applyAppImage(target: string, verifiedFile: string, files: StrategyFiles): Promise<ApplyOutcome> {
   const fail = (error: unknown): ApplyOutcome => ({ ok: false, sentence: `could not install the update at ${target}: ${messageOf(error)}` });
@@ -214,17 +222,42 @@ export async function applyAppImage(target: string, verifiedFile: string, files:
     return { ok: false, sentence: NO_TARGET_SENTENCE };
   }
   const incoming = appImageIncomingPath(target);
+  const backup = artifactBackupPath(target);
+  const holder = dir === '' ? '.' : dir;
   try {
     await files.copyFile(verifiedFile, incoming);
     await files.makeExecutable(incoming);
     await files.flushFile(incoming);
-    await files.rename(incoming, target);
   } catch (error) {
-    // Nothing reached the target's path: a rename that fails moved nothing. The sibling is this attempt's own.
+    // Nothing reached the target's path. The sibling is this attempt's own.
     await files.removeFile(incoming).catch(() => undefined);
     return fail(error);
   }
-  await files.flushDirectory(dir === '' ? '.' : dir).catch(() => undefined);
+  try {
+    await files.removeFile(backup);
+  } catch (error) {
+    await files.removeFile(incoming).catch(() => undefined);
+    return fail(error);
+  }
+  try {
+    await files.copyAside(target, backup);
+    await files.flushFile(backup);
+    await files.flushDirectory(holder);
+  } catch (error) {
+    // A file that appeared at the backup name since it was removed is not this attempt's, and stays.
+    if (!destinationExisted(error)) await files.removeFile(backup).catch(() => undefined);
+    await files.removeFile(incoming).catch(() => undefined);
+    return fail(error);
+  }
+  try {
+    await files.rename(incoming, target);
+  } catch (error) {
+    // A rename that fails moved nothing: the target still holds the previous bytes.
+    await files.removeFile(backup).catch(() => undefined);
+    await files.removeFile(incoming).catch(() => undefined);
+    return fail(error);
+  }
+  await files.flushDirectory(holder).catch(() => undefined);
   return { ok: true, outcome: 'replaced', message: REPLACED_MESSAGE };
 }
 
@@ -254,17 +287,38 @@ export async function applyUpdate(flavour: Flavour, target: string, verifiedFile
 }
 
 /**
- * REQ-STARTUP-115 — before the network round trip, a leftover `<name>.old` beside the ARTIFACT is deleted: for the
- * portable flavour only. A deletion failure is tolerated silently and retried on a later launch; a directory that
- * cannot be reached (the medium removed, or read-only) is nothing to do rather than a failure. Answers what happened,
- * for the log line and nothing else.
+ * REQ-STARTUP-115, REQ-STARTUP-176 — a leftover `<name>.old` beside the ARTIFACT is deleted: for the portable flavour and,
+ * since UD-11 (PD-STARTUP-008 revision 2), the AppImage, the two that keep one. The caller decides WHEN: `settleAtLaunch`
+ * calls it once per launch, after the launch's first main window was shown, and only where no pending update still holds
+ * the backup — so it is never the backup of a replacement whose artifact has not yet been launched. A deletion failure is
+ * tolerated silently and retried on a later launch; a directory that cannot be reached (the medium removed, or read-only)
+ * is nothing to do rather than a failure. Answers what happened, for the log line and nothing else.
  */
-export async function cleanupPortableBackup(flavour: Flavour, target: string, files: StrategyFiles): Promise<'removed' | 'nothing' | 'kept'> {
-  if (flavour !== 'portable') return 'nothing';
-  const backup = portableBackupPath(target);
+export async function cleanupArtifactBackup(flavour: Flavour, target: string, files: StrategyFiles): Promise<'removed' | 'nothing' | 'kept'> {
+  if (flavour !== 'portable' && flavour !== 'appimage') return 'nothing';
+  const backup = artifactBackupPath(target);
   try {
     if ((await files.pathKind(backup)) !== 'file') return 'nothing';
     await files.removeFile(backup);
+    return 'removed';
+  } catch {
+    return 'kept';
+  }
+}
+
+/**
+ * REQ-STARTUP-178, REQ-STARTUP-176 — the swap's own sibling beside the artifact (`<name>.update` for the portable,
+ * `.{name}.update` for the AppImage) is left only by a process ended inside the swap; it is never needed by another
+ * process, so a launch removes it with the update path's other leftovers. The caller calls it once per launch, before any
+ * install can start. A removal that fails is retried at a later launch and not reported. Answers what happened, for the
+ * log line.
+ */
+export async function cleanupIncomingSibling(flavour: Flavour, target: string, files: StrategyFiles): Promise<'removed' | 'nothing' | 'kept'> {
+  if (flavour !== 'portable' && flavour !== 'appimage') return 'nothing';
+  const incoming = flavour === 'portable' ? portableIncomingPath(target) : appImageIncomingPath(target);
+  try {
+    if ((await files.pathKind(incoming)) !== 'file') return 'nothing';
+    await files.removeFile(incoming);
     return 'removed';
   } catch {
     return 'kept';

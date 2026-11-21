@@ -98,7 +98,11 @@ by the installer's run; and a never-bricks guarantee for that flavour that rests
 behaviour, which nobody has measured (UD-12).
 
 **Recorded, not built.** Scheduled after the dependency remediation in the stages of the plan; the first execution is owed
-to the stage that builds it.
+to the stage that builds it. *Built in part, 2026-11-21 (R-117, the plan's PR-2):* the pending update's store, its
+launch-time cleanup, UD-5's and UD-9's rules and REQ-STARTUP-172's revalidation, with the click flow still triggering
+everything; UD-8 and UD-11 for the AppImage. Executed over fakes and, for REQ-STARTUP-173's last sentence, in the built
+application ([`first-executions`](../../architecture/first-executions/39-the-register-38.md)); not yet against a released
+artifact.
 
 > **Narrows:** REQ-STARTUP-017, REQ-STARTUP-114, REQ-STARTUP-116, REQ-STARTUP-119, REQ-STARTUP-121, REQ-STARTUP-122, REQ-STARTUP-125, REQ-STARTUP-127, REQ-STARTUP-155, REQ-NOTIFY-044, REQ-NOTIFY-215, REQ-NOTIFY-222, REQ-STARTUP-117, REQ-SHELL-114, REQ-NOTIFY-216
 

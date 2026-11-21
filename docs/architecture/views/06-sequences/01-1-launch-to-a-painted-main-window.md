@@ -191,8 +191,9 @@ sequenceDiagram
   M->>F: GET SHA256SUMS.txt, then SHA256SUMS.txt.sig
   M->>M: verify the signature against the compiled-in key set — BEFORE parsing (REQ-STARTUP-122/167); empty set → refused, nothing downloaded
   M->>M: parse the manifest (REQ-STARTUP-113)
-  M->>F: GET the one asset, redirects followed, into <temp>/rotaris-update-…/ in 1 MiB chunks, never past a non-zero stated size (REQ-STARTUP-169); progress repainted per whole percent
+  M->>F: GET the one asset, redirects followed, into <data>/updates/<version>/<asset>.partial in 1 MiB chunks, never past a non-zero stated size (REQ-STARTUP-169, REQ-STARTUP-171 since 2026-11-21); progress repainted per whole percent
   M->>M: digest verified, case-insensitively, with REQ-STARTUP-123's sentences
+  M->>M: kept as the pending update — manifest and signature bytes beside it, .partial renamed, pending.json written last and atomically (REQ-STARTUP-171); a pending update of another version removed (UD-5)
   alt portable: place and flush .update, copy aside and flush .old, rename onto the target in one step; the directory flushes either side do nothing on Windows, the one host that classifies as portable (REQ-STARTUP-125, PD-STARTUP-008, REQ-STARTUP-176)
     M->>M: "Update installed" + Restart now (REQ-STARTUP-119)
     R->>M: update.restart

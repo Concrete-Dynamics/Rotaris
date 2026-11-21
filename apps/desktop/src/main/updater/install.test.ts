@@ -1,10 +1,12 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { formatChecksumManifest } from '@rotaris/release-naming';
-import type { DownloadProgress, DownloadSink } from './download.js';
+import type { DownloadProgress } from './download.js';
 import type { Offer } from './feed.js';
 import { RELEASE_SIGNING_KEYS } from './keys.js';
-import { formatHandOffRecord, hashMismatchSentence, isStagingDirectory, noHashSentence, noManifestSentence, noSignatureSentence, parseHandOffRecord, recordHandOff, removeHandedOffStaging, runInstall, untrustedSignatureSentence, type HandOffRecordFile, type InstallContext, type NetworkResponse, type StagingArea, type UpdateNetwork } from './install.js';
+import { formatHandOffRecord, hashMismatchSentence, isStagingDirectory, noHashSentence, noManifestSentence, noSignatureSentence, parseHandOffRecord, removeHandedOffStaging, runInstall, untrustedSignatureSentence, type HandOffRecordFile, type InstallContext, type NetworkResponse, type UpdateNetwork } from './install.js';
+import { memoryDisk, plantPending } from './memory-disk.test-support.js';
+import { parsePendingRecord, PENDING_RECORD_NAME, type PendingRecord } from './pending.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 
 const ASSET = 'Rotaris-0.2.0-windows-x64-portable.exe';
@@ -52,39 +54,16 @@ const offer = (over: Partial<Offer> = {}): Offer => ({
   ...over,
 });
 
-/** An in-memory staging area recording every directory it made and every file it holds. */
+/** `<data>/updates` on an in-memory disk (REQ-STARTUP-171); the version's directory is where the download lands. */
+const ROOT = '/home/u/.local/share/rotaris/updates';
+const DIR = `${ROOT}/0.2.0`;
+const NOW = '2026-11-21T12:00:00.000Z';
 function stagingArea(options: { writeFails?: boolean; createFails?: boolean; removeFails?: boolean } = {}) {
-  const dirs = new Set<string>();
-  const files = new Map<string, Buffer>();
-  let n = 0;
-  const area: StagingArea = {
-    create: async () => {
-      if (options.createFails) throw new Error('EACCES: temp is not writable');
-      const dir = `/tmp/rotaris-update-${++n}`;
-      dirs.add(dir);
-      return dir;
-    },
-    join: (dir, name) => `${dir}/${name}`,
-    open: async (path) => {
-      const parts: Uint8Array[] = [];
-      files.set(path, Buffer.alloc(0));
-      const sink: DownloadSink & { close(): Promise<void> } = {
-        write: async (chunk) => {
-          if (options.writeFails) throw new Error('ENOSPC: no space left on device');
-          parts.push(chunk);
-          files.set(path, Buffer.concat(parts));
-        },
-        close: async () => undefined,
-      };
-      return sink;
-    },
-    removeFile: async (path) => { files.delete(path); },
-    removeDirectory: async (dir) => {
-      if (options.removeFails) throw new Error('EPERM: operation not permitted');
-      dirs.delete(dir);
-    },
-  };
-  return { area, dirs, files };
+  const disk = memoryDisk({ root: ROOT });
+  if (options.writeFails) disk.failAt('append', 'ENOSPC: no space left on device');
+  if (options.createFails) disk.failAt('mkdir', 'EACCES: the data directory is not writable');
+  if (options.removeFails) { for (let i = 0; i < 8; i += 1) disk.failAt('rmdir', 'EPERM: operation not permitted'); }
+  return { area: disk.area, disk, tree: () => disk.tree(), record: () => { const t = disk.text(`${ROOT}/${PENDING_RECORD_NAME}`); return t === null ? null : parsePendingRecord(t); } };
 }
 
 function targetVolume(initial: Record<string, string> = { [TARGET]: 'v0.1.0' }) {
@@ -108,29 +87,38 @@ function context(release: ReturnType<typeof published>, staging: ReturnType<type
   const spawned: string[] = [];
   const spawn: StrategySpawn = { spawnDetached: async (exe) => { spawned.push(exe); } };
   const ctx: InstallContext = {
-    flavour: 'portable', target: TARGET, network: release.network, staging: staging.area, files: volume.port, spawn,
-    onProgress: (p) => progress.push(p), keys: [release.pair.pem], ...over,
+    flavour: 'portable', target: TARGET, network: release.network, updates: staging.area, files: volume.port, spawn,
+    onProgress: (p) => progress.push(p), keys: [release.pair.pem], runningVersion: '0.1.0', now: () => NOW, ...over,
   };
   return { ctx, progress, spawned };
 }
 
 describe('the install sequence — REQ-STARTUP-122', () => {
-  it('runs strictly: manifest and signature fetched, the signature verified, the manifest parsed, the asset streamed to staging, the digest verified, then applied', async () => {
+  it('runs strictly: manifest and signature fetched, the signature verified, the manifest parsed, the asset streamed into the pending directory, the digest verified, kept, then applied', async () => {
     const release = published();
     const staging = stagingArea();
     const volume = targetVolume();
     const { ctx, progress } = context(release, staging, volume);
     const result = await runInstall(offer(), ctx);
-    expect(result).toEqual({ ok: true, applied: { ok: true, outcome: 'replaced', message: 'The update is installed. Restart Rotaris to run it.' } });
+    const pending: PendingRecord = {
+      version: '0.2.0', flavour: 'portable', platformKey: 'windows-x64', asset: { name: ASSET, size: payload.byteLength, sha256: digest },
+      state: 'swapped', downloadedBy: '0.1.0', verifiedAt: NOW, applyAttempts: 0,
+    };
+    expect(result).toEqual({ ok: true, applied: { ok: true, outcome: 'replaced', message: 'The update is installed. Restart Rotaris to run it.' }, pending });
     // The order of the network round trips is the requirement's: manifest, signature, and only then the asset.
     expect(release.requests).toEqual(['https://github.com/x/sums', 'https://github.com/x/sig', 'https://github.com/x/asset']);
-    // Streamed into a fresh `rotaris-update-` directory, 1 MiB at a time, with a final settle report.
+    // Streamed into `<data>/updates/<version>/<asset>.partial`, 1 MiB at a time, with a final settle report.
     expect(progress).toEqual([{ bytesSoFar: 1_048_576, claimedTotal: payload.byteLength }, { bytesSoFar: payload.byteLength, claimedTotal: payload.byteLength }]);
-    // The verified file was placed beside the target and the swap performed; staging is gone afterwards.
-    expect(volume.ops[0]).toBe(`copy:/tmp/rotaris-update-1/${ASSET}→${TARGET}.update`);
-    expect(volume.files.get(TARGET)).toBe(`copy of /tmp/rotaris-update-1/${ASSET}`);
-    expect(staging.dirs.size).toBe(0);
-    expect(staging.files.size).toBe(0);
+    expect(staging.disk.ops).toContain(`open:${DIR}/${ASSET}.partial`);
+    // The verified file was placed beside the target from the pending directory and the swap performed (UD-8).
+    expect(volume.ops[0]).toBe(`copy:${DIR}/${ASSET}→${TARGET}.update`);
+    expect(volume.files.get(TARGET)).toBe(`copy of ${DIR}/${ASSET}`);
+    // REQ-STARTUP-171: kept as the pending update — the exact manifest and signature bytes beside the asset, the record.
+    expect(staging.tree()).toEqual(['0.2.0/Rotaris-0.2.0-windows-x64-portable.exe', '0.2.0/SHA256SUMS.txt', '0.2.0/SHA256SUMS.txt.sig', 'pending.json']);
+    expect(staging.disk.files.get(`${DIR}/SHA256SUMS.txt`)).toEqual(release.manifest);
+    expect(staging.disk.files.get(`${DIR}/SHA256SUMS.txt.sig`)).toEqual(release.signature);
+    expect(staging.disk.files.get(`${DIR}/${ASSET}`)).toEqual(payload);
+    expect(staging.record()).toEqual(pending);
   });
 
   it('a release publishing no checksum file is refused with the fixed sentence before any request is made', async () => {
@@ -167,7 +155,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     expect(result).toEqual({ ok: false, stage: 'signature', sentence: untrustedSignatureSentence('0.2.0', false) });
     expect(untrustedSignatureSentence('0.2.0', false)).toBe('the checksum file of release 0.2.0 was not published by a holder of a key this build trusts; nothing was downloaded and nothing was installed — obtain the release from the release page instead');
     expect(release.requests).not.toContain('https://github.com/x/asset');
-    expect(staging.dirs.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
   });
 
   it('with no keys injected the compiled-in set governs: a release signed by a key the build does not carry is refused, nothing downloaded', async () => {
@@ -179,7 +167,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const result = await runInstall(offer(), production);
     expect(result).toEqual({ ok: false, stage: 'signature', sentence: untrustedSignatureSentence('0.2.0', false) });
     expect(release.requests).toEqual(['https://github.com/x/sums', 'https://github.com/x/sig']);
-    expect(staging.dirs.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
   });
 
   it('with an injected EMPTY set (every key withdrawn) every manifest is refused with one sentence saying so, and nothing is downloaded', async () => {
@@ -190,7 +178,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     expect(result).toEqual({ ok: false, stage: 'signature', sentence: untrustedSignatureSentence('0.2.0', true) });
     expect(untrustedSignatureSentence('0.2.0', true)).toContain('(this build carries no verification key)');
     expect(release.requests).toEqual(['https://github.com/x/sums', 'https://github.com/x/sig']);
-    expect(staging.dirs.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
   });
 
   it('a manifest altered after signing does not verify, so its parser is never reached (a tampered digest cannot be accepted)', async () => {
@@ -210,8 +198,8 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const { ctx } = context(release, staging, volume);
     expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'digest', sentence: noHashSentence(ASSET) });
     expect(noHashSentence(ASSET)).toBe(`no published hash for ${ASSET}; the download was discarded`);
-    expect(staging.files.size).toBe(0);
-    expect(staging.dirs.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
+    expect(staging.tree()).toEqual([]);
     expect(volume.ops).toEqual([]);
   });
 
@@ -223,7 +211,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const { ctx } = context(release, staging, volume);
     expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'digest', sentence: hashMismatchSentence(ASSET, wrong, digest) });
     expect(hashMismatchSentence('n', 'e', 'a')).toBe('n does not match the published hash (expected e, got a); the download was discarded and nothing was installed');
-    expect(staging.files.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
     expect(volume.ops).toEqual([]);
     // Upper-case digest in the manifest still matches: the parser lower-cases and the comparison ignores case.
     const upper = published({ manifestEntries: [{ name: ASSET, sha256: digest.toUpperCase() }] });
@@ -234,20 +222,20 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const release = published();
     const staging = stagingArea({ writeFails: true });
     const { ctx } = context(release, staging, targetVolume());
-    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'download', sentence: `could not write the download to /tmp/rotaris-update-1/${ASSET}: ENOSPC: no space left on device` });
-    expect(staging.files.size).toBe(0);
-    expect(staging.dirs.size).toBe(0);
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'download', sentence: `could not write the download to ${DIR}/${ASSET}.partial: ENOSPC: no space left on device` });
+    expect(staging.tree()).toEqual([]);
+    expect(staging.tree()).toEqual([]);
   });
 
-  it('a download that ends early, a non-200 asset response, and an unmakeable staging directory each fail with one sentence and leave nothing behind', async () => {
+  it('a download that ends early, a non-200 asset response, and an unmakeable pending directory each fail with one sentence and leave nothing behind', async () => {
     const early = published({ bodyFails: true });
     const s1 = stagingArea();
     expect(await runInstall(offer(), context(early, s1, targetVolume()).ctx)).toEqual({ ok: false, stage: 'download', sentence: `the download of ${ASSET} ended early: ECONNRESET` });
-    expect(s1.dirs.size).toBe(0);
+    expect(s1.tree()).toEqual([]);
     const status = published({ assetStatus: 302 });
     expect(await runInstall(offer(), context(status, stagingArea(), targetVolume()).ctx)).toEqual({ ok: false, stage: 'download', sentence: `could not download ${ASSET}: HTTP 302` });
     const nostaging = published();
-    expect(await runInstall(offer(), context(nostaging, stagingArea({ createFails: true }), targetVolume()).ctx)).toMatchObject({ ok: false, stage: 'download', sentence: expect.stringContaining('staging directory') });
+    expect(await runInstall(offer(), context(nostaging, stagingArea({ createFails: true }), targetVolume()).ctx)).toMatchObject({ ok: false, stage: 'download', sentence: `could not make the directory ${DIR} for the download: EACCES: the data directory is not writable` });
   });
 
   it('a transfer longer than the size the feed states is ended and refused with its own sentence, discards what it wrote and installs nothing (REQ-STARTUP-169, REQ-STARTUP-179)', async () => {
@@ -259,8 +247,8 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const { ctx, progress } = context(release, staging, volume);
     expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'download', sentence: `${ASSET} is larger than the ${payload.byteLength} bytes the release feed states for it; the download was ended and discarded, and nothing was installed` });
     expect(progress.every((p) => p.bytesSoFar <= payload.byteLength)).toBe(true);
-    expect(staging.files.size).toBe(0);
-    expect(staging.dirs.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
+    expect(staging.tree()).toEqual([]);
     expect(volume.ops).toEqual([]);
     expect(volume.files.get(TARGET)).toBe('v0.1.0');
   });
@@ -272,8 +260,8 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const { ctx } = context(release, staging, targetVolume(), { signal: controller.signal, onProgress: () => controller.abort() });
     const result = await runInstall(offer(), ctx);
     expect(result).toEqual({ ok: false, stage: 'download', sentence: `the download of ${ASSET} was abandoned before it finished` });
-    expect(staging.files.size).toBe(0);
-    expect(staging.dirs.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
+    expect(staging.tree()).toEqual([]);
   });
 
   it('an apply failure reports the strategy\'s sentence, and the installation is byte-for-byte what it was (REQ-STARTUP-126)', async () => {
@@ -285,25 +273,30 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const { ctx } = context(release, staging, volume, { files });
     expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'apply', sentence: 'this Rotaris was not installed from a released artifact' });
     expect(volume.ops).toEqual([]);
-    expect(staging.dirs.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
   });
 
-  it('the installer flavour hands off with quit required and leaves the setup executable in staging for the installer', async () => {
+  it('the installer flavour hands off with quit required, from the pending directory, counting the attempt before the setup starts (REQ-STARTUP-178, UD-9)', async () => {
     const setup = 'Rotaris-0.2.0-windows-x64-setup.exe';
     const release = published({ manifestEntries: [{ name: setup, sha256: digest }] });
     const staging = stagingArea();
-    const { ctx, spawned } = context(release, staging, targetVolume(), { flavour: 'installer', target: 'C:\\Users\\u\\AppData\\Local\\Rotaris' });
+    const recordAtSpawn: (PendingRecord | null)[] = [];
+    const spawned: string[] = [];
+    const spawn: StrategySpawn = { spawnDetached: async (exe) => { recordAtSpawn.push(staging.record()); spawned.push(exe); } };
+    const { ctx } = context(release, staging, targetVolume(), { flavour: 'installer', target: 'C:\\Users\\u\\AppData\\Local\\Rotaris', spawn });
     const result = await runInstall(offer({ asset: { name: setup, url: 'https://github.com/x/asset', size: payload.byteLength } }), ctx);
-    expect(result).toEqual({ ok: true, applied: { ok: true, outcome: 'handed-off', quitRequired: true, message: 'Rotaris will close so the installer can replace it.' } });
-    expect(spawned).toEqual([`/tmp/rotaris-update-1/${setup}`]);
-    expect(staging.dirs.has('/tmp/rotaris-update-1')).toBe(true);
+    expect(result).toMatchObject({ ok: true, applied: { ok: true, outcome: 'handed-off', quitRequired: true, message: 'Rotaris will close so the installer can replace it.' }, pending: { state: 'applying', applyAttempts: 1 } });
+    expect(spawned).toEqual([`${DIR}/${setup}`]);
+    expect(recordAtSpawn).toEqual([expect.objectContaining({ state: 'applying', applyAttempts: 1, flavour: 'installer' })]);
+    // The installer runs from the pending directory, which stays for it (removed by the updated build's first launch).
+    expect(staging.tree()).toContain(`0.2.0/${setup}`);
   });
 
   /*
    * OQ-86 (ruled 2026-10-06 by R-071; fin21's repair round 1): `beforeApply` is the last moment before the installer is
    * started — asked only once the download is verified, and a false answer discards it and starts nothing.
    */
-  it('beforeApply is asked after the digest is verified and before the installer starts; declined, staging is discarded and nothing is spawned', async () => {
+  it('beforeApply is asked after the digest is verified and before the installer starts; declined, the pending update is discarded and nothing is spawned', async () => {
     const setup = 'Rotaris-0.2.0-windows-x64-setup.exe';
     const release = published({ manifestEntries: [{ name: setup, sha256: digest }] });
     const staging = stagingArea();
@@ -317,8 +310,8 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     // Asked once, after all three round trips (manifest, signature, asset).
     expect(asked).toEqual([3]);
     expect(spawned).toEqual([]);
-    expect(staging.dirs.size).toBe(0);
-    expect(staging.files.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
+    expect(staging.tree()).toEqual([]);
   });
 
   it('beforeApply is never asked when the download does not verify', async () => {
@@ -338,52 +331,90 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const { ctx, spawned } = context(release, staging, targetVolume(), { flavour: 'installer', signal: abort.signal, beforeApply: async () => { abort.abort(); return true; } });
     expect(await runInstall(offer({ asset: { name: setup, url: 'https://github.com/x/asset', size: payload.byteLength } }), ctx)).toMatchObject({ ok: false, stage: 'download' });
     expect(spawned).toEqual([]);
-    expect(staging.dirs.size).toBe(0);
+    expect(staging.tree()).toEqual([]);
   });
 });
 
-describe('the installer hand-off\'s staging directory — REQ-STARTUP-178', () => {
-  const SETUP = 'Rotaris-0.2.0-windows-x64-setup.exe';
-  const setupOffer = (): Offer => offer({ asset: { name: SETUP, url: 'https://github.com/x/asset', size: payload.byteLength } });
+describe('the verified download kept as the pending update — REQ-STARTUP-171, REQ-STARTUP-178, UD-5', () => {
+  const earlier = (version: string): PendingRecord => ({
+    version, flavour: 'portable', platformKey: 'windows-x64', asset: { name: `Rotaris-${version}-windows-x64-portable.exe`, size: 0, sha256: 'b'.repeat(64) },
+    state: 'verified', downloadedBy: '0.1.0', verifiedAt: NOW, applyAttempts: 0,
+  });
 
+  it('the partial is renamed to the asset only after the digest matched, and the record is written last, atomically', async () => {
+    const staging = stagingArea();
+    const { ctx } = context(published(), staging, targetVolume());
+    await runInstall(offer(), ctx);
+    const ops = staging.disk.ops;
+    const renamedAt = ops.indexOf(`rename:${DIR}/${ASSET}.partial→${DIR}/${ASSET}`);
+    const lastAppend = ops.map((o, i) => (o.startsWith('append:') ? i : -1)).reduce((a, b) => Math.max(a, b));
+    expect(renamedAt).toBeGreaterThan(lastAppend);
+    expect(ops.indexOf(`write:${DIR}/SHA256SUMS.txt`)).toBeLessThan(renamedAt);
+    expect(ops.indexOf(`write:${DIR}/SHA256SUMS.txt.sig`)).toBeLessThan(renamedAt);
+    const tmp = ops.indexOf(`write:${ROOT}/pending.json.tmp`);
+    expect(tmp).toBeGreaterThan(renamedAt);
+    expect(ops[tmp + 1]).toBe(`rename:${ROOT}/pending.json.tmp→${ROOT}/pending.json`);
+  });
+
+  it('a record that cannot be written discards the verified download, installs nothing, and says so in one sentence', async () => {
+    const staging = stagingArea();
+    staging.disk.failAt(`write:${ROOT}/pending.json.tmp`, 'ENOSPC: no space left on device');
+    const volume = targetVolume();
+    const { ctx } = context(published(), staging, volume);
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'retain', sentence: `could not keep the verified download of ${ASSET} in ${DIR}: ENOSPC: no space left on device; it was discarded and nothing was installed` });
+    expect(staging.tree()).toEqual([]);
+    expect(volume.ops).toEqual([]);
+  });
+
+  it('a pending update of another version stays while this one downloads and fails, and is replaced once this one is verified (UD-5)', async () => {
+    const failing = stagingArea();
+    plantPending(failing.disk, earlier('0.1.5'), Buffer.from('v0.1.5'));
+    const wrong = published({ manifestEntries: [{ name: ASSET, sha256: 'a'.repeat(64) }] });
+    expect(await runInstall(offer(), context(wrong, failing, targetVolume()).ctx)).toMatchObject({ ok: false, stage: 'digest' });
+    expect(failing.record()?.version).toBe('0.1.5');
+    expect(failing.tree()).toEqual(['0.1.5/Rotaris-0.1.5-windows-x64-portable.exe', '0.1.5/SHA256SUMS.txt', '0.1.5/SHA256SUMS.txt.sig', 'pending.json']);
+
+    const replacing = stagingArea();
+    plantPending(replacing.disk, earlier('0.1.5'), Buffer.from('v0.1.5'));
+    expect(await runInstall(offer(), context(published(), replacing, targetVolume()).ctx)).toMatchObject({ ok: true });
+    expect(replacing.record()?.version).toBe('0.2.0');
+    expect(replacing.tree().filter((p) => p.startsWith('0.1.5/'))).toEqual([]);
+  });
+
+  it('a pending update of the same version is discarded before it is downloaded again', async () => {
+    const staging = stagingArea();
+    plantPending(staging.disk, { ...earlier('0.2.0'), asset: { name: ASSET, size: 0, sha256: digest } }, payload);
+    staging.disk.plant(`${DIR}/${ASSET}.partial`, 'an earlier attempt');
+    const bodyFails = published({ bodyFails: true });
+    expect(await runInstall(offer(), context(bodyFails, staging, targetVolume()).ctx)).toMatchObject({ ok: false, stage: 'download' });
+    expect(staging.tree()).toEqual([]);
+  });
+
+  it('an installer that cannot be started discards the pending update, record and files', async () => {
+    const setup = 'Rotaris-0.2.0-windows-x64-setup.exe';
+    const staging = stagingArea();
+    const spawn: StrategySpawn = { spawnDetached: async () => { throw new Error('EACCES: cannot execute'); } };
+    const { ctx } = context(published({ manifestEntries: [{ name: setup, sha256: digest }] }), staging, targetVolume(), { flavour: 'installer', target: 'C:\\Rotaris', spawn });
+    expect(await runInstall(offer({ asset: { name: setup, url: 'https://github.com/x/asset', size: payload.byteLength } }), ctx)).toMatchObject({ ok: false, stage: 'apply' });
+    expect(staging.tree()).toEqual([]);
+  });
+});
+
+describe('an earlier build\'s installer hand-off record — REQ-STARTUP-178 (honoured, no longer written)', () => {
   /** The record's file, in memory; `fails` names the operation that rejects. */
-  function recordFile(initial: string | null, fails: 'read' | 'write' | null = null) {
+  function recordFile(initial: string | null, fails: 'read' | null = null) {
     let text = initial;
     const port: HandOffRecordFile = {
       read: async () => { if (fails === 'read') throw new Error('EACCES'); return text; },
-      write: async (t) => { if (fails === 'write') throw new Error('ENOSPC: no space left on device'); text = t; },
       clear: async () => { text = null; },
     };
     return { port, text: () => text };
   }
-
-  it('beforeHandOff is given the staging directory after beforeApply allowed and before the installer starts', async () => {
-    const release = published({ manifestEntries: [{ name: SETUP, sha256: digest }] });
-    const staging = stagingArea();
-    const events: string[] = [];
-    const spawn: StrategySpawn = { spawnDetached: async (exe) => { events.push(`spawn:${exe}`); } };
-    const { ctx } = context(release, staging, targetVolume(), {
-      flavour: 'installer', target: 'C:\\Users\\u\\AppData\\Local\\Rotaris', spawn,
-      beforeApply: async () => { events.push('beforeApply'); return true; },
-      beforeHandOff: async (dir) => { events.push(`beforeHandOff:${dir}`); },
-    });
-    expect(await runInstall(setupOffer(), ctx)).toMatchObject({ ok: true, applied: { outcome: 'handed-off' } });
-    expect(events).toEqual(['beforeApply', 'beforeHandOff:/tmp/rotaris-update-1', `spawn:/tmp/rotaris-update-1/${SETUP}`]);
-  });
-
-  it('a beforeHandOff that rejects does not stop the hand-off; a declined beforeApply never reaches it', async () => {
-    const release = published({ manifestEntries: [{ name: SETUP, sha256: digest }] });
-    const { ctx, spawned } = context(release, stagingArea(), targetVolume(), { flavour: 'installer', beforeHandOff: async () => { throw new Error('ENOSPC'); } });
-    expect(await runInstall(setupOffer(), ctx)).toMatchObject({ ok: true });
-    expect(spawned).toHaveLength(1);
-
-    let reached = 0;
-    const declined = context(published({ manifestEntries: [{ name: SETUP, sha256: digest }] }), stagingArea(), targetVolume(), {
-      flavour: 'installer', beforeApply: async () => false, beforeHandOff: async () => { reached += 1; },
-    });
-    expect(await runInstall(setupOffer(), declined.ctx)).toMatchObject({ ok: false, stage: 'declined' });
-    expect(reached).toBe(0);
-  });
+  /** The earlier build's staging directories, by name. */
+  function legacyDirs(removeFails = false) {
+    const dirs = new Set<string>();
+    return { dirs, area: { removeDirectory: async (dir: string) => { if (removeFails) throw new Error('EPERM: operation not permitted'); dirs.delete(dir); } } };
+  }
 
   it('only a `rotaris-update-` directory with a parent is a staging directory; a record naming anything else is no record', () => {
     expect(isStagingDirectory('/tmp/rotaris-update-AbC123')).toBe(true);
@@ -397,21 +428,10 @@ describe('the installer hand-off\'s staging directory — REQ-STARTUP-178', () =
     expect(parseHandOffRecord('null')).toBeNull();
   });
 
-  it('recordHandOff writes the record, removes the directory an earlier record named, and never rejects', async () => {
-    const staging = stagingArea();
-    staging.dirs.add('/tmp/rotaris-update-old');
-    const file = recordFile(formatHandOffRecord({ version: '0.2.0', staging: '/tmp/rotaris-update-old' }));
-    expect(await recordHandOff(file.port, staging.area, { version: '0.2.0', staging: '/tmp/rotaris-update-new' })).toBe('recorded');
-    expect(staging.dirs.has('/tmp/rotaris-update-old')).toBe(false);
-    expect(parseHandOffRecord(file.text()!)).toEqual({ version: '0.2.0', staging: '/tmp/rotaris-update-new' });
-    expect(await recordHandOff(recordFile(null, 'write').port, staging.area, { version: '0.2.0', staging: '/tmp/rotaris-update-new' })).toBe('not-recorded');
-    expect(await recordHandOff(recordFile(null, 'read').port, staging.area, { version: '0.2.0', staging: '/tmp/rotaris-update-new' })).toBe('recorded');
-  });
-
   it('removeHandedOffStaging: nothing without a record, removed at the recorded or a newer version, not yet at an older one, kept when the removal fails, a bad record discarded', async () => {
     const at = (dir: string) => formatHandOffRecord({ version: '0.2.0', staging: dir });
     const run = async (text: string | null, running: string, removeFails = false) => {
-      const staging = stagingArea({ removeFails });
+      const staging = legacyDirs(removeFails);
       staging.dirs.add('/tmp/rotaris-update-9');
       const file = recordFile(text);
       const outcome = await removeHandedOffStaging(file.port, staging.area, running);
@@ -424,6 +444,6 @@ describe('the installer hand-off\'s staging directory — REQ-STARTUP-178', () =
     expect(await run(at('/tmp/rotaris-update-9'), '0.2.0', true)).toEqual({ outcome: 'kept', dirs: ['/tmp/rotaris-update-9'], text: at('/tmp/rotaris-update-9') });
     expect(await run(JSON.stringify({ schema: 1, version: '0.2.0', staging: '/home/u' }), '0.2.0')).toEqual({ outcome: 'discarded', dirs: ['/tmp/rotaris-update-9'], text: null });
     const unreadable = recordFile(at('/tmp/rotaris-update-9'), 'read');
-    expect(await removeHandedOffStaging(unreadable.port, stagingArea().area, '0.2.0')).toBe('nothing');
+    expect(await removeHandedOffStaging(unreadable.port, legacyDirs().area, '0.2.0')).toBe('nothing');
   });
 });

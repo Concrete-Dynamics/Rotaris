@@ -345,7 +345,7 @@ export const PROOFS = [
   {
     id: 'updater-proof',
     area: 'Configuration and startup',
-    summary: 'the updater on the one path a development host can execute, and the two artifact variables\' isolation',
+    summary: 'the updater on the one path a development host can execute, a planted pending update left byte-for-byte, and the two artifact variables\' isolation',
     neighbours: ['settings-proof', 'part-j-proof', 'portable-proof', 'linux-acceptance-proof'],
     requires: [],
     platforms: ALL_HOSTS,

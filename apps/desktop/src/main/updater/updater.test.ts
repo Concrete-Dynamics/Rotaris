@@ -5,9 +5,10 @@ import { formatChecksumManifest } from '@rotaris/release-naming';
 import type { AppLogLevel } from '../app-log.js';
 import { createNoticeStore, type NoticeRecord } from '../notices.js';
 import type { Classification } from './classify.js';
-import type { DownloadSink } from './download.js';
 import { FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, SUMMARY_FALLBACK } from './feed.js';
-import { formatHandOffRecord, parseHandOffRecord, type HandOffRecordFile, type NetworkResponse, type StagingArea, type UpdateNetwork } from './install.js';
+import { formatHandOffRecord, parseHandOffRecord, type HandOffRecordFile, type NetworkResponse, type UpdateNetwork } from './install.js';
+import { memoryDisk, plantPending } from './memory-disk.test-support.js';
+import { parsePendingRecord, PENDING_RECORD_NAME, type PendingRecord } from './pending.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 import { passFailedSentence } from './successor.js';
 import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, RETURN_TO_WINDOW, TRY_AGAIN, UPDATE_DECLINED, UPDATE_DECLINED_INTEGRATION, UPDATE_DECLINED_UNSAVED, UPDATE_NOW, mustAskAtHandOff, updateCloseBox, updateCloseDetail, updateCloseMessage, type UpdaterDeps } from './updater.js';
@@ -70,38 +71,26 @@ function server(options: FeedOptions = {}) {
   return { pair, network, requests, release: () => releaseHold?.() };
 }
 
+/** `<data>/updates` on an in-memory disk (REQ-STARTUP-171): the download lands in `<ROOT>/<version>/`. */
+const ROOT = '/home/u/.local/share/rotaris/updates';
 function stagingArea(options: { removeFails?: boolean } = {}) {
-  const files = new Map<string, Buffer>();
-  const dirs = new Set<string>();
-  let n = 0;
-  const area: StagingArea = {
-    create: async () => { const d = `/tmp/rotaris-update-${++n}`; dirs.add(d); return d; },
-    join: (dir, name) => `${dir}/${name}`,
-    open: async (path) => {
-      const parts: Uint8Array[] = [];
-      files.set(path, Buffer.alloc(0));
-      const sink: DownloadSink & { close(): Promise<void> } = { write: async (c) => { parts.push(c); files.set(path, Buffer.concat(parts)); }, close: async () => undefined };
-      return sink;
-    },
-    removeFile: async (p) => { files.delete(p); },
-    removeDirectory: async (d) => {
-      if (options.removeFails) throw new Error('EBUSY: resource busy or locked');
-      dirs.delete(d);
-    },
+  const disk = memoryDisk({ root: ROOT });
+  // An earlier build's installer directory that cannot be removed (Windows: a process still runs from it).
+  if (options.removeFails) { for (let i = 0; i < 4; i += 1) disk.failAt(/^rmdir:\/tmp\/rotaris-update-/, 'EBUSY: resource busy or locked'); }
+  return {
+    area: disk.area, disk, dirs: disk.dirs, tree: () => disk.tree(),
+    record: (): PendingRecord | null => { const t = disk.text(`${ROOT}/${PENDING_RECORD_NAME}`); return t === null ? null : parsePendingRecord(t); },
   };
-  return { area, files, dirs };
 }
 
-/** REQ-STARTUP-178: the hand-off record's file, in memory; `spawnedAtWrite` is how many processes had started when it was written. */
-function handOffFile(initial: string | null, spawned: readonly string[]) {
+/** REQ-STARTUP-178: an earlier build's hand-off record file, in memory (nothing writes it any more). */
+function handOffFile(initial: string | null) {
   let text = initial;
-  const spawnedAtWrite: number[] = [];
   const port: HandOffRecordFile = {
     read: async () => text,
-    write: async (t) => { spawnedAtWrite.push(spawned.length); text = t; },
     clear: async () => { text = null; },
   };
-  return { port, spawnedAtWrite, text: () => text, record: () => (text === null ? null : parseHandOffRecord(text)) };
+  return { port, text: () => text, record: () => (text === null ? null : parseHandOffRecord(text)) };
 }
 
 function volume(initial: Record<string, string>) {
@@ -148,7 +137,7 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
       spawned.push(exe);
     },
   };
-  const handOff = handOffFile(options.handOff ?? null, spawned);
+  const handOff = handOffFile(options.handOff ?? null);
   const started: string[] = [];
   let closed = 0;
   const asked: string[] = [];
@@ -164,9 +153,9 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
   const deps: UpdaterDeps = {
     classification: options.classification ?? portable,
     runningVersion: options.running ?? '0.1.0',
-    network: srv.network, staging: staging.area, files: vol.port, spawn, handOffRecord: handOff.port, keys,
+    network: srv.network, updates: staging.area, files: vol.port, spawn, handOffRecord: handOff.port, keys,
     dismissedVersion: { read: () => dismissed, write: async (v) => { dismissed = v; } },
-    notices, log, timers: clock.timers,
+    notices, log, timers: clock.timers, wall: clock.wall,
     startSuccessor: async (target) => {
       started.push(target);
       if (options.successor === 'fails') throw new Error('EACCES: cannot execute');
@@ -378,7 +367,7 @@ describe('the download reported into the same notice — REQ-STARTUP-118, REQ-ST
     expect(h.notices.current()).toMatchObject({ id: 1, severity: 'success', title: INSTALLED_TITLE, message: 'The update is installed. Restart Rotaris to run it.', persistent: true, action: { label: RESTART_NOW, action: { kind: 'restart' } } });
     expect(h.notices.current()?.action?.disabled).toBeUndefined();
     expect(h.updater.state()).toMatchObject({ kind: 'applied', noticeId: 1 });
-    expect(h.vol.files.get(TARGET)).toBe(`copy of /tmp/rotaris-update-1/${PORTABLE}`);
+    expect(h.vol.files.get(TARGET)).toBe(`copy of ${ROOT}/0.2.0/${PORTABLE}`);
   });
 
   it('the downloading face: `Downloading Rotaris {version}`, `{measured} — verifying against the published checksum when it finishes.`, not persistent, the action disabled', async () => {
@@ -422,7 +411,7 @@ describe('the applied outcomes — REQ-STARTUP-119, REQ-STARTUP-120, REQ-STARTUP
     const h = harness({ classification: installer });
     await h.updater.activate({ windowId: 1 });
     expect(await h.updater.install()).toEqual({ ok: true, value: { outcome: 'handed-off', quitRequired: true } });
-    expect(h.spawned).toEqual([`/tmp/rotaris-update-1/${SETUP}`]);
+    expect(h.spawned).toEqual([`${ROOT}/0.2.0/${SETUP}`]);
     expect(h.notices.current()).toMatchObject({ id: 1, severity: 'success', title: FINISH_TITLE, message: 'Rotaris will close so the installer can replace it.', persistent: true });
     expect(h.notices.current()?.action).toBeUndefined();
     expect(h.closed()).toBe(0);
@@ -432,8 +421,8 @@ describe('the applied outcomes — REQ-STARTUP-119, REQ-STARTUP-120, REQ-STARTUP
     expect(h.closed()).toBe(1);
     // A hand-off cannot be restarted into (REQ-STARTUP-121: Restart now is on Update installed alone).
     expect(await h.updater.restart()).toMatchObject({ ok: false, code: 'update.notApplied' });
-    // The installer runs from staging, which is left for it.
-    expect(h.staging.dirs.size).toBe(1);
+    // The installer runs from the pending update's directory, which is left for it (REQ-STARTUP-178).
+    expect(h.staging.tree()).toContain(`0.2.0/${SETUP}`);
   });
 
   it('an install failure becomes the persistent error notice `Update not installed` in place, the sentence as its detail, with `Try again` — and the record is written before it is rendered', async () => {
@@ -468,47 +457,114 @@ describe('the applied outcomes — REQ-STARTUP-119, REQ-STARTUP-120, REQ-STARTUP
   });
 });
 
-describe('the installer hand-off\'s staging directory — REQ-STARTUP-178', () => {
-  const handedOff = (version: string, staging: string): string => formatHandOffRecord({ version, staging });
+describe('the pending update in the click flow — REQ-STARTUP-171, REQ-STARTUP-176, REQ-STARTUP-178 (PD-STARTUP-008, R-117)', () => {
+  const pendingOf = (over: Partial<PendingRecord> = {}): PendingRecord => ({
+    version: '0.2.0', flavour: 'portable', platformKey: 'windows-x64', asset: { name: PORTABLE, size: 0, sha256: digest },
+    state: 'swapped', downloadedBy: '0.1.0', verifiedAt: '2025-09-01T00:00:00.000Z', applyAttempts: 0, ...over,
+  });
 
-  it('is recorded, with the version it installs, before the setup starts — and the process that handed off never removes it', async () => {
+  it('the installer runs from <data>/updates/<version>/ with the record saying `applying`, and the process that handed off removes nothing', async () => {
     const h = harness({ classification: installer });
     await h.updater.activate({ windowId: 1 });
     await h.updater.install();
-    expect(h.spawned).toEqual([`/tmp/rotaris-update-1/${SETUP}`]);
-    expect(h.handOff.record()).toEqual({ version: '0.2.0', staging: '/tmp/rotaris-update-1' });
-    expect(h.handOff.spawnedAtWrite).toEqual([0]);
-    // A later window's check in the same process is not the updated build's first launch.
+    expect(h.spawned).toEqual([`${ROOT}/0.2.0/${SETUP}`]);
+    expect(h.staging.record()).toMatchObject({ version: '0.2.0', flavour: 'installer', platformKey: 'windows-x64', state: 'applying', applyAttempts: 1, downloadedBy: '0.1.0', verifiedAt: '2025-09-01T00:00:00.000Z' });
+    // A later window's check in the same process finds its own pending update, and leaves it.
     await h.updater.activate({ windowId: 2 });
-    expect(h.staging.dirs.has('/tmp/rotaris-update-1')).toBe(true);
-    expect(h.handOff.record()).not.toBeNull();
+    expect(h.staging.tree()).toEqual([`0.2.0/${SETUP}`, '0.2.0/SHA256SUMS.txt', '0.2.0/SHA256SUMS.txt.sig', 'pending.json']);
   });
 
-  it('the updated build\'s first check removes it and clears the record, before the network round trip, and reports nothing', async () => {
+  it('the portable: the record says `swapped`, and the pending files and the backup stay in the process that swapped (UD-8, UD-11)', async () => {
+    const h = harness();
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(h.staging.record()).toMatchObject({ version: '0.2.0', state: 'swapped' });
+    await h.updater.activate({ windowId: 2 });
+    expect(h.staging.tree()).toContain(`0.2.0/${PORTABLE}`);
+    expect(h.vol.files.get(`${TARGET}.old`)).toBe('v0.1.0');
+  });
+
+  it('the updated build\'s first check removes the pending update, its files and the backup, before the network round trip (REQ-STARTUP-176, REQ-STARTUP-178)', async () => {
+    const h = harness({ running: '0.2.0', volumeFiles: { [TARGET]: 'v0.2.0', [`${TARGET}.old`]: 'v0.1.0' } });
+    plantPending(h.staging.disk, pendingOf(), payload);
+    expect(await h.updater.activate({ windowId: 1 })).toBe('none');
+    expect(h.staging.tree()).toEqual([]);
+    expect(h.vol.files.has(`${TARGET}.old`)).toBe(false);
+    expect(h.logged).toContain('info: update check: the pending update 0.2.0 was removed — Rotaris 0.2.0 runs, so it was applied (REQ-STARTUP-178)');
+    // Before the feed request: the first network round trip comes after every removal.
+    expect(h.logged.findIndex((l) => l.includes('GET https://'))).toBeGreaterThan(h.logged.findIndex((l) => l.includes('was applied')));
+  });
+
+  it('a launch still running the older version keeps a `swapped` pending update and its backup: the replaced artifact has not been launched', async () => {
+    const h = harness({ running: '0.1.0', volumeFiles: { [TARGET]: 'v0.2.0', [`${TARGET}.old`]: 'v0.1.0' } });
+    plantPending(h.staging.disk, pendingOf(), payload);
+    await h.updater.activate({ windowId: 1 });
+    expect(h.staging.record()).toMatchObject({ version: '0.2.0', state: 'swapped' });
+    expect(h.vol.files.get(`${TARGET}.old`)).toBe('v0.1.0');
+  });
+
+  it('a pending update for another installation flavour, or one whose installer was started UD-9\'s two times, is discarded', async () => {
+    const other = harness();
+    plantPending(other.staging.disk, pendingOf({ flavour: 'installer', asset: { name: SETUP, size: 0, sha256: digest }, state: 'verified' }), payload);
+    await other.updater.activate({ windowId: 1 });
+    expect(other.staging.tree()).toEqual([]);
+    const spent = harness({ classification: installer, feed: { version: '0.1.0' } });
+    plantPending(spent.staging.disk, pendingOf({ flavour: 'installer', asset: { name: SETUP, size: 0, sha256: digest }, state: 'applying', applyAttempts: 2 }), payload);
+    await spent.updater.activate({ windowId: 1 });
+    expect(spent.staging.tree()).toEqual([]);
+    expect(spent.logged.some((l) => l.includes('its apply attempts are spent (UD-9)'))).toBe(true);
+  });
+
+  it('UD-5: a release the feed names older than the pending update discards it; the same version keeps it', async () => {
+    const withdrawn = harness({ classification: installer, feed: { version: '0.1.5' } });
+    plantPending(withdrawn.staging.disk, pendingOf({ flavour: 'installer', asset: { name: SETUP, size: 0, sha256: digest }, state: 'verified' }), payload);
+    await withdrawn.updater.activate({ windowId: 1 });
+    expect(withdrawn.staging.tree()).toEqual([]);
+    expect(withdrawn.logged.some((l) => l.includes('(UD-5, REQ-STARTUP-178)'))).toBe(true);
+    const same = harness({ classification: installer, feed: { version: '0.2.0' } });
+    plantPending(same.staging.disk, pendingOf({ flavour: 'installer', asset: { name: SETUP, size: 0, sha256: digest }, state: 'verified' }), payload);
+    await same.updater.activate({ windowId: 1 });
+    expect(same.staging.record()?.version).toBe('0.2.0');
+  });
+
+  it('a build classified not updatable, and a demo window, leave the pending record and its files exactly as they found them (REQ-STARTUP-173)', async () => {
+    for (const [classification, demo] of [[dev, false], [portable, true]] as const) {
+      const h = harness({ classification });
+      const record = plantPending(h.staging.disk, pendingOf({ state: 'verified' }), payload);
+      h.staging.disk.plant(`${ROOT}/0.3.0/${PORTABLE}.partial`, 'partial');
+      const before = new Map([...h.staging.disk.files].map(([k, v]) => [k, Buffer.from(v)]));
+      await h.updater.activate({ windowId: 1, demo });
+      expect(h.staging.disk.ops).toEqual([]);
+      expect(new Map(h.staging.disk.files)).toEqual(before);
+      expect(h.staging.record()).toEqual(record);
+    }
+  });
+});
+
+describe('an earlier build\'s installer hand-off record — REQ-STARTUP-178 (honoured, no longer written)', () => {
+  const handedOff = (version: string, staging: string): string => formatHandOffRecord({ version, staging });
+
+  it('the updated build\'s first check removes the directory it names and clears the record, before the network round trip, and reports nothing', async () => {
     const h = harness({ classification: installer, running: '0.2.0', handOff: handedOff('0.2.0', '/tmp/rotaris-update-9') });
     h.staging.dirs.add('/tmp/rotaris-update-9');
-    await h.updater.activate({ windowId: 1 });
+    expect(await h.updater.activate({ windowId: 1 })).toBe('none');
     expect(h.staging.dirs.has('/tmp/rotaris-update-9')).toBe(false);
     expect(h.handOff.text()).toBeNull();
     expect(h.notices.current()).toBeNull();
-    expect(h.logged).toContain('info: update check: the installer hand-off\'s staging directory was removed (REQ-STARTUP-178)');
-    expect(h.logged.findIndex((l) => l.includes('REQ-STARTUP-178'))).toBeLessThan(h.logged.findIndex((l) => l.includes(FEED_ENDPOINT)));
+    expect(h.logged).toContain('info: update check: an earlier build\'s installer hand-off staging directory was removed (REQ-STARTUP-178)');
   });
 
-  it('a launch of a newer version removes it too: the same or a newer version running supersedes it', async () => {
-    const h = harness({ classification: installer, running: '0.3.0', feed: { version: '0.3.0' }, handOff: handedOff('0.2.0', '/tmp/rotaris-update-9') });
-    h.staging.dirs.add('/tmp/rotaris-update-9');
-    await h.updater.activate({ windowId: 1 });
-    expect(h.staging.dirs.size).toBe(0);
-    expect(h.handOff.text()).toBeNull();
-  });
-
-  it('a launch still running the older version (the installer cancelled, failed or still open) removes nothing', async () => {
-    const h = harness({ classification: installer, running: '0.1.0', handOff: handedOff('0.2.0', '/tmp/rotaris-update-9') });
-    h.staging.dirs.add('/tmp/rotaris-update-9');
-    await h.updater.activate({ windowId: 1 });
-    expect(h.staging.dirs.has('/tmp/rotaris-update-9')).toBe(true);
-    expect(h.handOff.record()).toEqual({ version: '0.2.0', staging: '/tmp/rotaris-update-9' });
+  it('a launch of a newer version removes it too; one still running the older version removes nothing', async () => {
+    const newer = harness({ classification: installer, running: '0.3.0', feed: { version: '0.3.0' }, handOff: handedOff('0.2.0', '/tmp/rotaris-update-9') });
+    newer.staging.dirs.add('/tmp/rotaris-update-9');
+    await newer.updater.activate({ windowId: 1 });
+    expect(newer.staging.dirs.has('/tmp/rotaris-update-9')).toBe(false);
+    expect(newer.handOff.text()).toBeNull();
+    const older = harness({ classification: installer, running: '0.1.0', handOff: handedOff('0.2.0', '/tmp/rotaris-update-9') });
+    older.staging.dirs.add('/tmp/rotaris-update-9');
+    await older.updater.activate({ windowId: 1 });
+    expect(older.staging.dirs.has('/tmp/rotaris-update-9')).toBe(true);
+    expect(older.handOff.record()).toEqual({ version: '0.2.0', staging: '/tmp/rotaris-update-9' });
   });
 
   it('a removal that fails keeps the record for a later launch and is not reported', async () => {
@@ -518,39 +574,7 @@ describe('the installer hand-off\'s staging directory — REQ-STARTUP-178', () =
     await h.updater.activate({ windowId: 1 });
     expect(h.handOff.text()).toBe(record);
     expect(h.notices.current()).toBeNull();
-    expect(h.logged).toContain('info: update check: the installer hand-off\'s staging directory was left for a later launch (REQ-STARTUP-178)');
-    // The next launch retries.
-    const next = harness({ classification: installer, running: '0.2.0', handOff: h.handOff.text()! });
-    next.staging.dirs.add('/tmp/rotaris-update-9');
-    await next.updater.activate({ windowId: 1 });
-    expect(next.staging.dirs.size).toBe(0);
-    expect(next.handOff.text()).toBeNull();
-  });
-
-  it('a new hand-off supersedes an earlier record: the directory it named is removed and the record names the new one', async () => {
-    const h = harness({ classification: installer, handOff: handedOff('0.2.0', '/tmp/rotaris-update-earlier') });
-    h.staging.dirs.add('/tmp/rotaris-update-earlier');
-    await h.updater.activate({ windowId: 1 });
-    await h.updater.install();
-    expect([...h.staging.dirs]).toEqual(['/tmp/rotaris-update-1']);
-    expect(h.handOff.record()).toEqual({ version: '0.2.0', staging: '/tmp/rotaris-update-1' });
-  });
-
-  it('an installer that cannot be started discards its staging and clears the record naming it', async () => {
-    const h = harness({ classification: installer, spawnFails: true });
-    await h.updater.activate({ windowId: 1 });
-    expect(await h.updater.install()).toMatchObject({ ok: false, code: 'update.apply' });
-    expect(h.staging.dirs.size).toBe(0);
-    expect(h.handOff.text()).toBeNull();
-  });
-
-  it('the portable flavour records nothing: its apply copies the verified file out of staging and removes staging at once', async () => {
-    const h = harness();
-    await h.updater.activate({ windowId: 1 });
-    await h.updater.install();
-    expect(h.staging.dirs.size).toBe(0);
-    expect(h.handOff.spawnedAtWrite).toEqual([]);
-    expect(h.handOff.text()).toBeNull();
+    expect(h.logged).toContain('info: update check: an earlier build\'s installer hand-off staging directory was left for a later launch (REQ-STARTUP-178)');
   });
 
   it('a build classified not updatable leaves the record and its directory as they are', async () => {
@@ -679,7 +703,7 @@ describe('`Restart now` — REQ-STARTUP-121', () => {
     expect(h.srv.requests.some((r) => r.url.endsWith(SETUP))).toBe(true);
     expect(h.spawned).toEqual([]);
     // The verified download is discarded; the offer is back in the same notice with its action.
-    expect(h.staging.dirs.size).toBe(0);
+    expect(h.staging.tree()).toEqual([]);
     expect(h.notices.current()).toMatchObject({ id: 1, title: offerTitle('0.2.0'), action: { label: UPDATE_NOW } });
     expect(h.updater.state().kind).toBe('offered');
     expect(h.updater.inFlight()).toBe(false);
@@ -912,7 +936,7 @@ describe('the unsaved-settings guard at the update\'s closes — OQ-311, REQ-SHE
     expect(h.reads()).toBe(1);
     expect(h.asked).toEqual([]);
     expect(h.spawned).toEqual([]);
-    expect(h.staging.dirs.size).toBe(0);
+    expect(h.staging.tree()).toEqual([]);
     expect(h.notices.current()).toMatchObject({ id: 1, title: offerTitle('0.2.0'), action: { label: UPDATE_NOW } });
     expect(h.updater.state().kind).toBe('offered');
     expect(h.updater.inFlight()).toBe(false);
@@ -1042,7 +1066,7 @@ describe('guard (2) at the update\'s closes — OQ-361, REQ-SHELL-119 guard (2),
     expect(h.spawned).toEqual([]);
     // Stopped before the run count was re-read at the hand-off: only the click's read happened.
     expect(h.reads()).toBe(1);
-    expect(h.staging.dirs.size).toBe(0);
+    expect(h.staging.tree()).toEqual([]);
     expect(h.notices.current()).toMatchObject({ id: 1, title: offerTitle('0.2.0'), action: { label: UPDATE_NOW } });
     expect(h.updater.state().kind).toBe('offered');
     h.clock.advance(INSTALLER_AUTO_CLOSE_MS * 10);

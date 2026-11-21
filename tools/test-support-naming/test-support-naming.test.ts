@@ -33,6 +33,8 @@ const APP = join(ROOT, 'apps', 'desktop');
 const PRODUCT_NOT_YET_REACHED: Readonly<Record<string, string>> = {
   'packages/workspace/src/traceability/consumer.ts':
     'the traceability consumer, built "as far as the product reaches" (Part AJ2, REQ-TRACE-176/181/182/183/500) and not yet wired to an entry',
+  'apps/desktop/src/main/updater/revalidate.ts':
+    'REQ-STARTUP-172\'s revalidation of the pending update, built with the pending store (PD-STARTUP-008, R-117; the background-update plan\'s PR-2) and called by no launch until the next-start apply and `Restart now` of a later stage',
   // `apps/desktop/scripts/lib/platform-targets.mjs` was the second entry: the Linux and macOS packaging targets,
   // prepared and unattempted (R-080, PD-STARTUP-001, IC-3). ADR-0066 wired them for the Linux key —
   // `scripts/lib/package-platform.mjs` imports `preparedConfiguration` — so the exception is gone, as its own rule says.

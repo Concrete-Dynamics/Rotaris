@@ -101,7 +101,13 @@ newer one notifies again. Never a list, and recorded by that notice alone. — `
 
 **Staging**:
 The fresh temporary directory, its name prefixed `rotaris-update-`, an asset is streamed into and verified in
-before anything of the installation is touched. — `REQ-STARTUP-122`, `REQ-STARTUP-124`
+before anything of the installation is touched. — `REQ-STARTUP-122`, `REQ-STARTUP-124`; narrowed by
+`PD-STARTUP-008`: the download is kept as the **pending update** instead.
+
+**Pending update**:
+A verified download kept in the per-user data directory with the exact manifest and signature bytes that authorised
+it, described by one record, verified again before it is applied, and applied at the next start or by `Restart now`.
+— `REQ-STARTUP-171`, `REQ-STARTUP-172`
 
 **Hand-off**:
 An apply outcome in which the application yields to another installer — the setup executable, or the

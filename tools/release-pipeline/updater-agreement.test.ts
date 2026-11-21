@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseChecksumManifest } from '@rotaris/release-naming';
 import { selectOffer, type FeedAsset } from '../../apps/desktop/src/main/updater/feed.js';
-import { runInstall, type InstallContext, type NetworkResponse, type StagingArea } from '../../apps/desktop/src/main/updater/install.js';
+import { runInstall, type InstallContext, type NetworkResponse } from '../../apps/desktop/src/main/updater/install.js';
+import { memoryDisk } from '../../apps/desktop/src/main/updater/memory-disk.test-support.js';
 import type { StrategyFiles } from '../../apps/desktop/src/main/updater/strategies.js';
 import { runPipelineCommand } from './cli.mjs';
 import { keyFingerprint } from './signing.mjs';
@@ -65,17 +66,8 @@ function served(name: string): NetworkResponse {
 
 function installContext(keys: readonly string[]) {
   const requests: string[] = [];
-  const staged = new Map<string, Buffer>();
-  const staging: StagingArea = {
-    create: async () => '/staging/rotaris-update-1',
-    join: (d, n) => `${d}/${n}`,
-    open: async (path) => {
-      const parts: Uint8Array[] = [];
-      return { write: async (c) => { parts.push(c); staged.set(path, Buffer.concat(parts)); }, close: async () => undefined };
-    },
-    removeFile: async (p) => { staged.delete(p); },
-    removeDirectory: async () => undefined,
-  };
+  // REQ-STARTUP-171: the per-user `updates` directory the download lands in and the pending update is kept in.
+  const updates = memoryDisk().area;
   const volume = new Map<string, string>([[TARGET, 'v0.1.0']]);
   const files: StrategyFiles = {
     makeExecutable: async () => undefined, pathKind: async (p) => (volume.has(p) ? 'file' : 'absent'),
@@ -90,11 +82,13 @@ function installContext(keys: readonly string[]) {
     flavour: 'portable',
     target: TARGET,
     network: { get: async (url) => { requests.push(url); return served(url.slice(url.lastIndexOf('/') + 1)); } },
-    staging,
+    updates,
     files,
     spawn: { spawnDetached: async () => undefined },
     onProgress: () => undefined,
     keys,
+    runningVersion: '0.1.0',
+    now: () => '2026-11-21T12:00:00.000Z',
   };
   return { ctx, requests, volume };
 }

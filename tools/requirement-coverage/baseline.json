@@ -855,7 +855,7 @@
       ]
     },
     "STARTUP": {
-      "uncited": 73,
+      "uncited": 67,
       "requirements": [
         "REQ-STARTUP-008",
         "REQ-STARTUP-009",
@@ -885,7 +885,6 @@
         "REQ-STARTUP-068",
         "REQ-STARTUP-069",
         "REQ-STARTUP-070",
-        "REQ-STARTUP-071",
         "REQ-STARTUP-072",
         "REQ-STARTUP-073",
         "REQ-STARTUP-074",
@@ -922,12 +921,7 @@
         "REQ-STARTUP-153",
         "REQ-STARTUP-154",
         "REQ-STARTUP-170",
-        "REQ-STARTUP-171",
-        "REQ-STARTUP-172",
-        "REQ-STARTUP-173",
         "REQ-STARTUP-174",
-        "REQ-STARTUP-175",
-        "REQ-STARTUP-177",
         "REQ-STARTUP-180",
         "REQ-STARTUP-181"
       ]

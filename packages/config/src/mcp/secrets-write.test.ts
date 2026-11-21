@@ -290,7 +290,7 @@ describe('REQ-MCP-082/088/111 + REQ-CONFIG-225/371: the stored key is what the p
     const stored = load();
     const after = stored.ok ? stored.value.mcp.servers['web_search'] : null;
     expect(after?.unresolved).toEqual([]);
-    expect((after?.description.transport === 'http' ? after.description.url : '')).toContain('key=sk-live-7');
+    expect((after?.description.transport === 'http' ? after.description.url : '')).toContain('tavilyApiKey=sk-live-7');
     // And the read side lists it under the scope it was written to (REQ-MCP-083).
     const read = readSecretsFile(file, 'workspace');
     expect(read.value).toEqual([{ server: 'web_search', key: 'ROTARIS_SEARCH_API_KEY', value: 'sk-live-7', scope: 'workspace' }]);

@@ -16,7 +16,9 @@ describe('B2 wiring: the guided card\'s presses reach this window\'s bridge', ()
     const main = source('main.tsx');
     // Round-3 Minor: the re-read answers its OUTCOME (`readAfterWebSearchWrite`), so a refused read reaches the card
     // as words instead of resolving as a refresh that never happened.
-    expect(main).toContain('webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: readAfterWebSearchWrite })');
+    expect(main).toContain('webSearchSetup: bindWebSearchSetup({ command: (req) => bridge.command(req), read: readAfterWebSearchWrite, enable: (row) => pressMcpToggle(');
+    // PD-CONFIG-006 revision 2: Save and test switches the server on through the row's OWN durable press, never a copy of it.
+    expect(main).toMatch(/enable: \(row\) => pressMcpToggle\(\{[^}]*\}[^)]*\}, row, true\)/);
     expect(main).toContain('const readAfterWebSearchWrite = useCallback(async () => {');
     expect(main).toContain('for (const r of answers) if (!r.ok) return { ok: false as const, message: r.message };');
     // The binder is imported from the package that owns the presses, never re-derived here.

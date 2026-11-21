@@ -1,7 +1,7 @@
 ## Three sentences on the MCP Servers category draw Markdown backticks as written
 
 Found on 2026-11-11 while repairing the same defect on the Requirements board's empty states (UIR-310 of that day's
-critique, [the requirements-board brief](../design/briefs/requirements-board.md)); not repaired here, since the round
+critique, [the requirements-board brief](../../design/briefs/requirements-board.md)); not repaired here, since the round
 was bounded to the surfaces the critique named. Read in the source, not driven.
 
 Three sentences of Settings › MCP Servers hold a name between Markdown backticks and are drawn as plain text, so the
@@ -24,3 +24,10 @@ transcript's one renderer (`.claude/rules/ui-surfaces.md`).
 
 - `packages/ui/src/settings/McpSettings.tsx` — the two card statements.
 - `packages/ui/src/settings/web-search-setup.ts` — `WEB_SEARCH_NO_ENTRY`.
+
+## Repaired
+
+2026-11-21, under [R-117](../../product/requests.md#r-117). The web search panel that replaced the guided card no longer
+says "`Set up web search`" or "`web_search` … `mcp_servers`" in backticks: its sentences name the server and the key
+in plain words. The Configured servers card's statement draws `enabled: true` as `<code className="mono">`, the form
+the Stored secrets card already uses for `secrets.yaml`.

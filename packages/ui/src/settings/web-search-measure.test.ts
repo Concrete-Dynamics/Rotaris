@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
- * C3 and C7 on the guided `Set up web search` card (UI review of PR #76, 2026-11-09).
+ * C3 and C7 on the web search panel (the guided card until R-117) (UI review of PR #76, 2026-11-09).
  *
  * The review measured the card's key field at **1003.36 px** at 1400×900 (603 px at 1000×680) — the card's whole
  * content width, for a value a short key fills — while `--rt-field-min` is **140 px**; and its prose at the same
@@ -33,7 +33,7 @@ describe('C3 — the guided card\'s key field is sized from the token, never fro
 
   it('ships no key-field width of its own in the JSX, so the stylesheet is the one place the field is sized', () => {
     const source = readFileSync(new URL('./McpSettings.tsx', import.meta.url), 'utf8');
-    expect(source).toContain('className="input settings__key-field"');
+    expect(source).toContain('className="input mono settings__key-field"');
   });
 });
 

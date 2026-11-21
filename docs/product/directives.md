@@ -58,7 +58,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CONFIG-003](directives/pd-config-003.md) | the Runtime category's two timeouts: the per-agent timeout as a third delegation limit, in minutes, and the improvement analysis timeout, in seconds |
 | [PD-CONFIG-004](directives/pd-config-004.md) | the Display category's Transcript heading holds the tool-verbosity slider and the reasoning switch |
 | [PD-CONFIG-005](directives/pd-config-005.md) | the Models category also holds the dictation model |
-| [PD-CONFIG-006](directives/pd-config-006.md) | the MCP Servers row's ON press writes `enabled` for a configured-off server |
+| [PD-CONFIG-006](directives/pd-config-006.md) | the MCP Servers row's ON press writes `enabled` for a configured-off server, and so does the web-search panel's Save and test (revision 2) |
 | [PD-CONFIG-007](directives/pd-config-007.md) | the reasoning vocabulary is what the models bring, and `off` and `xhigh` are levels |
 | [PD-CONFIG-008](directives/pd-config-008.md) | the Settings category list stands under four headings |
 | [PD-CONFIG-009](directives/pd-config-009.md) | the providers card draws one filled control, the add-endpoint action in its head |

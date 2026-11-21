@@ -1,147 +1,144 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import type { CommandOutcome, CommandRequest, McpHealth } from '@rotaris/contracts';
+import type { CommandOutcome, CommandRequest, McpServerRow } from '@rotaris/contracts';
 import {
-  bindWebSearchSetup, pressCheckWebSearch, pressDeleteWebSearchKey, pressGetWebSearchKey, pressOpenWebSearchFile, pressStoreWebSearchKey, webSearchPreset,
-  EMPTY_KEY_REFUSAL, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_SERVER,
+  bindWebSearchSetup, pressCheckWebSearch, pressDeleteWebSearchKey, pressEnableAndTest, pressGetWebSearchKey, pressOpenWebSearchFile, pressSaveAndTest,
+  webSearchPreset, EMPTY_KEY_REFUSAL, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_SERVER,
 } from './web-search-setup.js';
 
 /**
- * THE WIRING — the command kinds a press of the guided card SENDS (REQ-MCP-110/111 with REQ-MCP-092, REQ-CHAT-076,
- * REQ-CONFIG-437). A helper-level case is not enough by itself; this drives the same handler set the card is handed
- * (`bindWebSearchSetup`, which is what `useMcp` spreads into the props) and asserts each press's request, its order and
- * its re-read. Each case states the ONE reason it can fail for.
+ * THE PRESSES — what each act of the web search panel SENDS, in order (REQ-MCP-110/111, REQ-MCP-092, REQ-CHAT-076,
+ * REQ-CONFIG-437, PD-CONFIG-006 revision 2). This drives the handler set the panel is handed (`bindWebSearchSetup`, what
+ * `useMcp` spreads into the props). Each case states the ONE reason it can fail for.
  */
-const recorder = (answers: (req: CommandRequest) => CommandOutcome) => {
+const row = (over: Partial<McpServerRow> = {}): McpServerRow => ({
+  name: WEB_SEARCH_SERVER, type: 'http', line: 'https://mcp.tavily.com/mcp/?tavilyApiKey=***', origin: 'default',
+  enabled: false, overridden: false, available: true, availabilityDetail: '', unresolved: [], expectedKeys: [], ...over,
+});
+const recorder = (answers: (req: CommandRequest) => CommandOutcome, listed: McpServerRow | null = row()) => {
+  const log: string[] = [];
   const sent: CommandRequest[] = [];
-  let reads = 0;
-  const deps = { command: async (req: CommandRequest) => { sent.push(req); return answers(req); }, read: async () => { reads += 1; return { ok: true as const }; } };
-  return { deps, sent, reads: () => reads };
+  const enabled: McpServerRow[] = [];
+  const deps = {
+    command: async (req: CommandRequest) => {
+      sent.push(req); log.push(req.kind);
+      if (req.kind === 'mcp.list') return { ok: true as const, value: { configFile: '/ws/agents.yaml', rows: listed === null ? [] : [listed] } };
+      return answers(req);
+    },
+    read: async () => { log.push('read'); return { ok: true as const }; },
+    enable: async (r: McpServerRow) => { log.push('enable'); enabled.push(r); return { ok: true, message: 'web_search enabled' }; },
+  };
+  return { deps, sent, log, enabled };
 };
-const masked = (scope: 'Workspace' | 'Global' = 'Workspace') => ({ ok: true as const, value: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope, masked: '***', removed: false } });
+const stored = { ok: true as const, value: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace', masked: '***', removed: false } };
+const healthy = { ok: true as const, value: [{ name: WEB_SEARCH_SERVER, health: { state: 'healthy', toolCount: 2 } }] };
+const answer = (req: CommandRequest): CommandOutcome => req.kind === 'mcp.setSecret' || req.kind === 'mcp.unsetSecret' ? stored : req.kind === 'mcp.probe' ? healthy : { ok: true, value: null };
 
-describe('the presses the guided card sends (REQ-MCP-110/111)', () => {
-  it('Store the key sends one mcp.setSecret with the card\'s server, the key variable, the value INWARD and the chosen scope, then re-reads — fails if the server, the key name, the scope or the value does not cross exactly as REQ-MCP-111 and REQ-CONFIG-463 fix them', async () => {
-    const { deps, sent, reads } = recorder(() => masked());
-    const r = await pressStoreWebSearchKey(deps, 'sk-live-123', 'workspace');
-    expect(r.ok).toBe(true);
-    expect(r.ok === true && r.refreshFailure).toBeNull();
-    expect(sent).toEqual([{ kind: 'mcp.setSecret', server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, value: 'sk-live-123', scope: 'workspace' }]);
-    expect(reads()).toBe(1);
+describe('Save and test (REQ-MCP-111 with PD-CONFIG-006 revision 2)', () => {
+  it('stores the key, re-reads, lists afresh, switches the configured-off entry on through the row\'s own press, probes, and re-reads — fails if a step is skipped or reordered', async () => {
+    const r = recorder(answer);
+    const reply = await pressSaveAndTest(r.deps, ' tvly-123 ', 'global');
+    expect(r.log).toEqual(['mcp.setSecret', 'read', 'mcp.list', 'enable', 'mcp.probe', 'read']);
+    expect(r.sent[0]).toEqual({ kind: 'mcp.setSecret', server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, value: 'tvly-123', scope: 'global' });
+    expect(r.enabled[0]?.name).toBe(WEB_SEARCH_SERVER);
+    expect(reply).toEqual({ ok: true, lines: ['Key stored (Workspace), value ***.', 'Switched on: enabled: true is written to the configuration file.', 'The server answered: Healthy · 2 tools. The provider checks the key itself when an agent first searches.'], health: { state: 'healthy', toolCount: 2 }, refreshFailure: null });
   });
 
-  it('an empty value is refused HERE and sends nothing (REQ-MCP-084/110) — fails if an empty store reaches main or the refusal is not the fixed sentence', async () => {
-    const { deps, sent, reads } = recorder(() => masked());
-    const r = await pressStoreWebSearchKey(deps, '', 'workspace');
-    expect(r).toEqual({ ok: false, message: EMPTY_KEY_REFUSAL });
-    expect(sent).toEqual([]);
-    expect(reads()).toBe(0);
+  it('an entry already on is not written — fails if a stored key rewrites enabled on a server that is on', async () => {
+    const r = recorder(answer, row({ enabled: true }));
+    await pressSaveAndTest(r.deps, 'k', 'workspace');
+    expect(r.log).toEqual(['mcp.setSecret', 'read', 'mcp.list', 'mcp.probe', 'read']);
   });
 
-  it('a refused write keeps main\'s own words, sends no re-read and no second command — fails if a refusal is swallowed, re-read anyway, or retried', async () => {
-    const { deps, sent, reads } = recorder(() => ({ ok: false, code: 'mcp.secret.empty-value', headline: 'The secret could not be stored', detail: '/ws/.rotaris/secrets.yaml: the value is empty' }));
-    const r = await pressStoreWebSearchKey(deps, 'x', 'workspace');
-    expect(r).toEqual({ ok: false, message: '/ws/.rotaris/secrets.yaml: the value is empty' });
-    expect(sent.map((s) => s.kind)).toEqual(['mcp.setSecret']);
-    expect(reads()).toBe(0);
+  it('an entry switched off for this session is left as it is and not probed — fails if the panel overrides the row\'s session switch', async () => {
+    const r = recorder(answer, row({ enabled: true, overridden: true }));
+    const reply = await pressSaveAndTest(r.deps, 'k', 'workspace');
+    expect(r.log).not.toContain('enable');
+    expect(r.log).not.toContain('mcp.probe');
+    expect(reply.ok && reply.lines.at(-1)).toContain('switched off for this session');
   });
 
-  it('a rejected re-read after a STANDING write is answered as words, never a rejection (round-2 Major 2): the outcome travels, the failure travels beside it, and the press resolves — fails if the helper awaits `deps.read()` unguarded, which would strand the card\'s in-flight state', async () => {
-    const sent: CommandRequest[] = [];
-    const deps = { command: async (req: CommandRequest) => { sent.push(req); return masked(); }, read: async () => { throw new Error('Render frame was disposed'); } };
-    let rejected: unknown;
-    let r: Awaited<ReturnType<typeof pressStoreWebSearchKey>> | undefined;
-    try { r = await pressStoreWebSearchKey(deps, 'sk-live-123', 'workspace'); } catch (e) { rejected = e; }
-    expect(rejected).toBeUndefined();
-    expect(r?.ok).toBe(true);
-    expect(r?.ok === true && r.outcome.masked).toBe('***');
-    expect(r?.ok === true && r.refreshFailure).toBe('Render frame was disposed');
-    expect(sent).toHaveLength(1);
-    // The delete shares the shape: its re-read is total too.
-    const del = await pressDeleteWebSearchKey(deps, 'workspace');
-    expect(del.ok).toBe(true);
-    expect(del.ok === true && del.refreshFailure).toBe('Render frame was disposed');
+  it('a url the key does not resolve is reported and nothing is enabled or probed (REQ-CONFIG-225) — fails if a broken entry is switched on', async () => {
+    const r = recorder(answer, row({ unresolved: ['OTHER'] }));
+    const reply = await pressSaveAndTest(r.deps, 'k', 'workspace');
+    expect(r.log).toEqual(['mcp.setSecret', 'read', 'mcp.list', 'read']);
+    expect(reply.ok).toBe(false);
+    expect(!reply.ok && reply.message).toContain('${OTHER}');
+    expect(reply.lines).toEqual(['Key stored (Workspace), value ***.']);
   });
 
-  it('a refused re-read does not throw but is not swallowed either: the resolved {ok:false} travels as words to refreshFailure (round-3 Minor) — fails if the helper reads only a THROWN failure and reports a stale view as refreshed', async () => {
-    const sent: CommandRequest[] = [];
-    const deps = { command: async (req: CommandRequest) => { sent.push(req); return masked(); }, read: async () => ({ ok: false as const, message: 'Open a workspace first' }) };
-    const r = await pressStoreWebSearchKey(deps, 'sk-live-123', 'workspace');
-    expect(r.ok).toBe(true);
-    expect(r.ok === true && r.outcome.masked).toBe('***');
-    expect(r.ok === true && r.refreshFailure).toBe('Open a workspace first');
-    // The delete shares the shape: its re-read observes its outcome too.
-    const del = await pressDeleteWebSearchKey(deps, 'workspace');
-    expect(del.ok).toBe(true);
-    expect(del.ok === true && del.refreshFailure).toBe('Open a workspace first');
-    expect(sent).toHaveLength(2);
+  it('an empty or blank value is refused here and sends nothing (REQ-MCP-084/110) — fails if an empty store reaches main', async () => {
+    const r = recorder(answer);
+    expect(await pressSaveAndTest(r.deps, '   ', 'workspace')).toEqual({ ok: false, message: EMPTY_KEY_REFUSAL, lines: [] });
+    expect(r.log).toEqual([]);
   });
 
-  it('Delete the stored key sends one mcp.unsetSecret with the scope and re-reads — fails if the delete uses setSecret, names another scope, or leaves the listing stale', async () => {
-    const { deps, sent, reads } = recorder(() => masked('Global'));
-    const r = await pressDeleteWebSearchKey(deps, 'global');
-    expect(r.ok).toBe(true);
-    expect(sent).toEqual([{ kind: 'mcp.unsetSecret', server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'global' }]);
-    expect(reads()).toBe(1);
+  it('a refused write keeps main\'s words and goes no further — fails if a refused store is followed by an enable', async () => {
+    const r = recorder((req) => req.kind === 'mcp.setSecret' ? { ok: false, code: 'x', headline: 'Refused', detail: 'disk full' } : answer(req));
+    expect(await pressSaveAndTest(r.deps, 'k', 'workspace')).toEqual({ ok: false, message: 'disk full', lines: [] });
+    expect(r.log).toEqual(['mcp.setSecret']);
   });
 
-  it('Get a key sends the EXISTING shell.openExternal with the preset\'s page, and nothing when the preset names none (REQ-CHAT-076) — fails if a deep link bypasses the one guarded opener or a null page is still sent', async () => {
-    const { deps, sent } = recorder(() => ({ ok: true, value: {} }));
-    const tavily = webSearchPreset('tavily')!;
-    expect(await pressGetWebSearchKey(deps, tavily)).toEqual({ ok: true });
-    expect(sent).toEqual([{ kind: 'shell.openExternal', url: tavily.keyPage }]);
-    sent.length = 0;
-    const searx = webSearchPreset('searxng')!;
-    const r = await pressGetWebSearchKey(deps, searx);
-    expect(r.ok).toBe(false);
-    expect(sent).toEqual([]);
+  it('a refused enable is reported with what already stood — fails if the stored key is not said beside the refusal', async () => {
+    const r = recorder(answer);
+    const deps = { ...r.deps, enable: async () => ({ ok: false, message: 'the file is read-only' }) };
+    const reply = await pressSaveAndTest(deps, 'k', 'workspace');
+    expect(reply).toEqual({ ok: false, message: 'the file is read-only', lines: ['Key stored (Workspace), value ***.'] });
   });
 
-  it('Open the file sends shell.openConfigFile and carries no path (REQ-CONFIG-350/464/437) — fails if the renderer names a path or reaches another opener', async () => {
-    const { deps, sent } = recorder(() => ({ ok: true, value: { path: '/ws/.rotaris/agents.yaml' } }));
-    expect(await pressOpenWebSearchFile(deps)).toEqual({ ok: true });
-    expect(sent).toEqual([{ kind: 'shell.openConfigFile' }]);
+  it('a re-read that fails after a standing write travels as refreshFailure, never as a rejection — fails if the stale view goes unsaid', async () => {
+    const r = recorder(answer);
+    const deps = { ...r.deps, read: async () => ({ ok: false as const, message: 'the listing timed out' }) };
+    const reply = await pressSaveAndTest(deps, 'k', 'workspace');
+    expect(reply.ok && reply.refreshFailure).toBe('the listing timed out');
+  });
+});
+
+describe('the other presses', () => {
+  it('Turn on and test is the enable step and the probe, without a store — fails if it writes a secret', async () => {
+    const r = recorder(answer);
+    const reply = await pressEnableAndTest(r.deps);
+    expect(r.log).toEqual(['mcp.list', 'enable', 'mcp.probe', 'read']);
+    expect(reply.ok).toBe(true);
   });
 
-  it('Check status sends the EXISTING single-server probe with the server\'s name (REQ-MCP-092) — fails if it probes every server or names none', async () => {
-    const { deps, sent } = recorder(() => ({ ok: true, value: [{ name: WEB_SEARCH_SERVER, health: { state: 'healthy', toolCount: 3 } }] }));
-    expect(await pressCheckWebSearch(deps)).toEqual({ state: 'healthy', toolCount: 3 });
-    expect(sent).toEqual([{ kind: 'mcp.probe', name: WEB_SEARCH_SERVER }]);
+  it('Delete sends one mcp.unsetSecret in the scope named and re-reads — fails if it names another scope', async () => {
+    const r = recorder(answer);
+    const reply = await pressDeleteWebSearchKey(r.deps, 'global');
+    expect(r.sent).toEqual([{ kind: 'mcp.unsetSecret', server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'global' }]);
+    expect(r.log).toEqual(['mcp.unsetSecret', 'read']);
+    expect(reply.ok).toBe(true);
   });
 
-  it('a probe refusal answers unreachable with the refusal\'s own detail (REQ-CONFIG-353) — fails if a refused probe is thrown or answered healthy', async () => {
-    const { deps } = recorder(() => ({ ok: false, code: 'mcp.unreachable', headline: 'The MCP server could not be probed', detail: 'connect ECONNREFUSED' }));
-    expect(await pressCheckWebSearch(deps)).toEqual({ state: 'unreachable', detail: 'connect ECONNREFUSED' });
+  it('Test sends the single-server probe, and a refusal answers Unreachable with its words (REQ-MCP-092, REQ-CONFIG-353) — fails if a refused probe reads healthy', async () => {
+    const r = recorder(answer);
+    expect(await pressCheckWebSearch(r.deps)).toEqual({ state: 'healthy', toolCount: 2 });
+    expect(r.sent).toEqual([{ kind: 'mcp.probe', name: WEB_SEARCH_SERVER }]);
+    const refused = recorder(() => ({ ok: false, code: 'x', headline: 'No', detail: 'gone' }));
+    expect(await pressCheckWebSearch(refused.deps)).toEqual({ state: 'unreachable', detail: 'gone' });
   });
 
-  it('the handler set the card is handed is exactly these five presses (what useMcp spreads in) — fails if the card gains a press this set does not carry, or the set gains one the card has no control for', async () => {
-    const { deps, sent } = recorder((req) => req.kind === 'mcp.probe' ? { ok: true, value: [] } : masked());
-    const handlers = bindWebSearchSetup(deps);
-    expect(Object.keys(handlers).sort()).toEqual(['onDeleteKey', 'onGetKey', 'onOpenFile', 'onProbe', 'onStoreKey']);
-    await handlers.onOpenFile();
-    await handlers.onGetKey(webSearchPreset('tavily')!);
-    await handlers.onStoreKey('k', 'workspace');
-    await handlers.onDeleteKey('workspace');
-    await handlers.onProbe();
-    expect(sent.map((s) => s.kind)).toEqual(['shell.openConfigFile', 'shell.openExternal', 'mcp.setSecret', 'mcp.unsetSecret', 'mcp.probe']);
+  it('Get a key opens the provider\'s page through shell.openExternal, and nothing for a provider without one (REQ-CHAT-076) — fails if a page is opened another way', async () => {
+    const r = recorder(answer);
+    await pressGetWebSearchKey(r.deps, webSearchPreset('tavily')!);
+    expect(r.sent).toEqual([{ kind: 'shell.openExternal', url: 'https://app.tavily.com/home' }]);
+    expect((await pressGetWebSearchKey(r.deps, webSearchPreset('exa')!)).ok).toBe(false);
+    expect(r.sent).toHaveLength(1);
+  });
 
-    // The card's own source draws no control outside this set: each data-websearch action maps to one handler above.
-    const source = readFileSync(new URL('./McpSettings.tsx', import.meta.url), 'utf8');
-    expect(source).toContain('props.webSearchSetup.onStoreKey(');
-    expect(source).toContain('props.webSearchSetup.onDeleteKey(');
-    expect(source).toContain('props.webSearchSetup.onOpenFile()');
-    expect(source).toContain('props.webSearchSetup.onGetKey(');
-    expect(source).toContain('props.webSearchSetup.onProbe()');
-    // REQ-CONFIG-350/464: the card sends no write of the declaration — the only commands it reaches are the five above.
-    expect(source).not.toContain("'config.setField'");
-    expect(source).not.toContain("'mcp.setEnabled'");
+  it('Open the file sends shell.openConfigFile and names no path (REQ-CONFIG-437) — fails if the renderer names a path', async () => {
+    const r = recorder(answer);
+    await pressOpenWebSearchFile(r.deps);
+    expect(r.sent).toEqual([{ kind: 'shell.openConfigFile' }]);
   });
 
   it('a throwing bridge is answered as a refusal, never an unhandled rejection (ADR-0019) — fails if a gone channel rejects out of a click handler', async () => {
-    const deps = { command: async (): Promise<CommandOutcome> => { throw new Error('Render frame was disposed'); }, read: async () => ({ ok: true as const }) };
-    const r: McpHealth = await pressCheckWebSearch(deps);
-    expect(r.state).toBe('unreachable');
-    const stored = await pressStoreWebSearchKey(deps, 'k', 'workspace');
-    expect(stored.ok).toBe(false);
+    const deps = { command: async () => { throw new Error('channel closed'); }, read: async () => ({ ok: true as const }), enable: async () => ({ ok: true, message: '' }) };
+    expect(await pressSaveAndTest(deps, 'k', 'workspace')).toEqual({ ok: false, message: 'channel closed', lines: [] });
+    expect(await pressCheckWebSearch(deps)).toEqual({ state: 'unreachable', detail: 'channel closed' });
+  });
+
+  it('the handler set the panel is handed is exactly these six presses — fails if a press is added or dropped without the panel knowing', () => {
+    const set = bindWebSearchSetup(recorder(answer).deps);
+    expect(Object.keys(set).sort()).toEqual(['onDeleteKey', 'onEnableAndTest', 'onGetKey', 'onOpenFile', 'onProbe', 'onSaveAndTest']);
   });
 });

@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543, OQ-549 – OQ-557; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542, OQ-544 – OQ-548 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543, OQ-549 – OQ-551; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542, OQ-544 – OQ-548, OQ-552 – OQ-557 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
 
 - OQ-523 — Is a `--rt-viz-2` persona label one stop from `--rt-run` a “state colour” under PD-CHAT-005?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-523)
 - OQ-524 — Is Workspace compact mode measured by the view's own width or by the viewport, when REQ-SHELL-059 and REQ-MONITOR-051 name different ones?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-524)
@@ -73,62 +73,9 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 
 **What decides it.** Either REQ-CONFIG-084's switch yields to a stated or discovered `responses` mode (the reading built), or it holds and a Copilot model with no chat route is recorded `no_supported_route` under REQ-PROVIDER-073, which REQ-PROVIDER-074's own route table would then have to say. Not ruled here: the builder is not the orchestrator.
 
-<a id="oq-552"></a>
-
-**OQ-552 — How does the download notice leave the banner when nothing replaces it — the user's dismissal of UD-3, or a background transport failure UD-4 keeps silent?** *(PD-STARTUP-008 revision 2 UD-3 and UD-4, PD-SHELL-005 revision 2, REQ-STARTUP-118, REQ-STARTUP-179, REQ-NOTIFY-040, REQ-SHELL-150. Raised 2026-11-21 by the `design-ui` brief of the update's surfaces ([`title-bar-and-rail.md`](../../design/briefs/title-bar-and-rail.md) §10 item 2), for [R-117](../../product/requests.md#r-117).)*
-
-**What is open.** UD-3 says "dismissing the download notice … only hides it", which presumes a dismiss control. PD-SHELL-005 revision 2 and REQ-STARTUP-118 keep the download notice **not persistent**, and REQ-NOTIFY-040 gives a non-persistent notice no dismiss control and only two exits: replacement and a run-start clear. UD-4 hides a transport failure of a download the user did not start, so the notice that showed its progress has no outcome face to become, and no exit: it would keep a stale figure (REQ-SHELL-150).
-
-**What the build proceeds under.** The download notice stays non-persistent, with no Dismiss (PD-SHELL-005); a silent transport failure replaces it in place with REQ-STARTUP-116's offer and `Update now`, as a cancel does (UD-2), and the next launch downloads again (UD-4).
-
-**What decides it.** Either the download notice becomes persistent while it runs, so UD-3's dismissal has a control and REQ-STARTUP-118's "non-persistent" is narrowed; or UD-3's "download notice" is read as the ready notice alone. And, separately, the face a silent transport failure leaves: the offer (the reading built), or a clear that REQ-NOTIFY-040 would have to admit. Not ruled here: the writer is not the orchestrator.
-
-<a id="oq-553"></a>
-
-**OQ-553 — Once the portable or the AppImage has been replaced in place on verification (UD-8), is its ready notice REQ-STARTUP-119's `Update installed` or REQ-STARTUP-174's ready notice?** *(REQ-STARTUP-119 as PD-STARTUP-008 narrows it, REQ-STARTUP-173, REQ-STARTUP-174, UD-8. Raised 2026-11-21 by the same brief, §10 item 3.)*
-
-**What is open.** REQ-STARTUP-174 applies "once a pending update has been verified — or, where REQ-STARTUP-173 permits, already applied in place" and words the notice as a version "that it will be installed the next time Rotaris starts". UD-8 now swaps the portable's and the AppImage's target as soon as it is verified, so that sentence is false there. REQ-STARTUP-119's narrowing keeps "the in-place replacement's `Update installed` with `Restart now`".
-
-**What the build proceeds under.** An in-place flavour shows `Update installed` with `Restart now` and a message that the version runs at the next start (the brief's §6 row 3′); the installed flavour shows REQ-STARTUP-174's ready notice.
-
-**What decides it.** One reading of REQ-STARTUP-174's "or … already applied in place": the ready notice with words that fit an applied update, or REQ-STARTUP-119's title for that case. Not ruled here.
-
-<a id="oq-554"></a>
-
-**OQ-554 — Which update transitions take the banner back from another notice: the ready state, the offer a cancel from the title-bar indicator leaves, a failure?** *(PD-SHELL-018, PD-STARTUP-008 UD-2, UD-4 and UD-10, REQ-NOTIFY-024, REQ-STARTUP-174, REQ-STARTUP-179, REQ-STARTUP-150. Raised 2026-11-21 by the same brief, §10 item 5.)*
-
-**What is open.** The banner holds one notice and the newest replaces it (REQ-NOTIFY-024). PD-SHELL-018 adds the indicator so the progress, the cancel and the restart stay reachable "while another notice holds" the slot, which reads as the update not taking it back. REQ-STARTUP-174 says the update notice "SHALL become" the ready notice, REQ-STARTUP-179 that a failed apply is "always visible", and UD-2 that a cancel's notice "becomes" the offer. The updater as built publishes a fresh notice when its own was replaced (`show` in `apps/desktop/src/main/updater/updater.ts`), so each transition would push out whatever the user was reading.
-
-**What the build proceeds under.** Progress never re-takes the banner (it is the indicator's). A failure the requirements make visible publishes, replacing what stands. The ready state and the offer after a cancel from the indicator do not publish while another notice holds the slot: the indicator shows ready, and the cancel's own press is the user's acknowledgement.
-
-**What decides it.** Per transition: publish and replace, or leave the slot and let the indicator carry it. Not ruled here.
-
-<a id="oq-555"></a>
-
-**OQ-555 — Does REQ-STARTUP-120's `Try again` stand on an integrity refusal that REQ-STARTUP-179 says is not retried for that release by the same process?** *(REQ-STARTUP-120, REQ-STARTUP-123, REQ-STARTUP-179, UD-4. Raised 2026-11-21 by the same brief, §10 item 7.)*
-
-**What is open.** UD-4 shows every refusal on authenticity or integrity as REQ-STARTUP-120's notice, whose action is `Try again` and whose message says "You can try again". REQ-STARTUP-179 says such a refusal "SHALL NOT be retried for that release by the same process". Whether a press of `Try again` is the retry 179 forbids, or 179 forbids only an automatic one, is not said.
-
-**What the build proceeds under.** `Try again` is offered on a transport failure the user sees and on a failed `Restart now` or next-start apply; on an integrity refusal the notice keeps REQ-STARTUP-120's title and message and carries no action.
-
-**What decides it.** Either 179 binds the product's own retries only, and `Try again` stands everywhere; or it binds the user's too, and REQ-STARTUP-120's message and action are narrowed for an integrity refusal. Not ruled here.
-
-<a id="oq-556"></a>
-
-**OQ-556 — Is "open the page of an available release" a member of REQ-NOTIFY-044's action vocabulary, which PD-SHELL-018 does not name?** *(PD-SHELL-018, PD-STARTUP-014, REQ-SHELL-115, REQ-NOTIFY-044 as PD-STARTUP-008 narrows it. Raised 2026-11-21 by the same brief, §10 item 8.)*
-
-**What is open.** PD-SHELL-018 adds the action to REQ-SHELL-115's closed list. REQ-NOTIFY-044 states the same vocabulary from the notice side, and PD-STARTUP-008 narrowed it with one member and "No other action is added, and the closed property … still govern[s]". `NoticeActionSchema` (`packages/contracts/src/notices.ts`) implements both lists as one union, so the member cannot be added to one and not the other.
-
-**What the build proceeds under.** The member is added once, parameterless, with main holding and validating the page (PD-STARTUP-014), and REQ-NOTIFY-044 is read as narrowed by the same case.
-
-**What decides it.** A back-pointer on REQ-NOTIFY-044 naming PD-SHELL-018 (a revision of the directive's Narrows list), or a ruling that the two lists differ. Not ruled here.
-
-<a id="oq-557"></a>
-
-**OQ-557 — Do the notice banner and the acknowledgement stack take a row in `docs/design/README.md` §7, so a brief of their states has a slug?** *(REQ-SHELL-112, REQ-SHELL-114, G1 of §4.2, `design-ui` step 1, OQ-545's precedent. Raised 2026-11-21 by the same brief, §10 item 9.)*
-
-**What is open.** §7 has no row for the banner (G1) or for the acknowledgement stack; the title bar's row names only the acknowledgement's one action. `design-ui` step 1 stops on a surface with no row. The update's surfaces are carried in the title bar's brief (`title-bar-and-rail`), where only the indicator belongs.
-
-**What the build proceeds under.** The brief stands at `docs/design/briefs/title-bar-and-rail.md` and covers the update's faces of the notice and the acknowledgement beside the indicator.
-
-**What decides it.** A §7 row "Notice banner, acknowledgements" (mockup section `toast` for the second, none for the first), whose brief the update's faces would move to; or the title bar's row extended to name both. Not ruled here.
+- OQ-552 — How does the download notice leave the banner when nothing replaces it — the user's dismissal of UD-3, or a background transport failure …; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-552)
+- OQ-553 — Once the portable or the AppImage has been replaced in place on verification (UD-8), is its ready notice REQ-STARTUP-119's Update …; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-553)
+- OQ-554 — Which update transitions take the banner back from another notice: the ready state, the offer a cancel from the title-bar indicator leaves, …; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-554)
+- OQ-555 — Does REQ-STARTUP-120's `Try again` stand on an integrity refusal that REQ-STARTUP-179 says is not retried for that release by the same …; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-555)
+- OQ-556 — Is "open the page of an available release" a member of REQ-NOTIFY-044's action vocabulary, which PD-SHELL-018 does not name?; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-556)
+- OQ-557 — Do the notice banner and the acknowledgement stack take a row in `docs/design/README.md` §7, so a brief of their states has a slug?; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-557)

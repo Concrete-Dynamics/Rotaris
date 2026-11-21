@@ -8,6 +8,12 @@ Part 2 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
 
 > **Narrowed by [`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008), 2026-10-22.** The vocabulary gains one action: cancel the running update download
 > (REQ-STARTUP-170). No other action is added, and the closed property and every other clause still govern.
+> *2026-11-21:* [`PD-SHELL-018`](../../product/directives/pd-shell-018.md#pd-shell-018) revision 2 adds, by a disjoint case, the action that opens an available
+> release's page (OQ-556); "no other action" is this directive's own case, the cancel.
+
+> **Narrowed by [`PD-SHELL-018`](../../product/directives/pd-shell-018.md#pd-shell-018) revision 2, 2026-11-21.** The vocabulary gains one action: open the page of an
+> available release, with no parameter, main holding the page and checking it as PD-STARTUP-014 states (OQ-556). No other
+> action is added, and the closed property and every other clause still govern.
   > **Extended by [`PD-SHELL-001`](../../product/directives/pd-shell-001.md#pd-shell-001) revision 2, 2026-10-13.** An action naming a
   > workspace surfaces the main window holding it, else adds one for it on PD-SHELL-001's add terms (no gate, nothing
   > asked, nothing closed), and opens its surface there.

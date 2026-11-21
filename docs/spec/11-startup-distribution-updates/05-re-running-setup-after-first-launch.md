@@ -75,6 +75,9 @@ Part 5 of 10 of [domain 11](../11-startup-distribution-updates.md), which indexe
 > **Narrowed by [`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008), 2026-10-22.** On a build that downloads in the background (REQ-STARTUP-169) an
 > offered version that is neither waved off nor cancelled is not presented with `Update now` before its download: the
 > notice that appears is the download's. The waved-off rule and the title still govern.
+> *Revision 3, 2026-11-21 (OQ-554):* the offer a cancel leaves is published only while the update notice is current (in
+> place) or no notice holds the slot, and the offer a silent transport failure leaves only in place; otherwise it does
+> not appear, and the version downloads again at the next launch.
 
 
 **REQ-STARTUP-117** — Dismissing the update notice SHALL record only that version string (not a general preference): the check still runs next launch; the same version stays silent; any newer version notifies again. Dismissing an unrelated notice SHALL never record a dismissed update version.
@@ -85,6 +88,10 @@ Part 5 of 10 of [domain 11](../11-startup-distribution-updates.md), which indexe
 
 **REQ-STARTUP-118** — While an update download runs, a non-persistent notice titled `Downloading Rotaris {version}` SHALL show the message `{measured} — verifying against the published checksum when it finishes.` Progress SHALL be reported no more often than once per 1 MiB received (REQ-STARTUP-124). When the release feed states a non-zero size for the asset, `{measured}` SHALL be the received share of that size as a whole-number percentage with the fractional part discarded (the same convention as REQ-STARTUP-092), and SHALL be repainted only when that whole percent changes. When the claimed size is 0, `{measured}` SHALL instead be the whole number of MiB received, rendered as `{N} MB`.
 
+> **Narrowed by [`PD-SHELL-005`](../../product/directives/pd-shell-005.md#pd-shell-005) revision 3, 2026-11-21.** The download notice is persistent for the whole of the
+> transfer and the verification, so UD-3's dismissal has its control; dismissing it only hides it and records no version
+> (OQ-552). The title, the message, the cadence and the repaint rule still govern.
+
 **REQ-STARTUP-119** — Applied outcomes: an in-place replacement → persistent success notice titled `Update installed` with the strategy's message and a `Restart now` action; a hand-off → persistent success notice titled `Finish the update` with the message and no action; when the hand-off requires quitting (Windows installer), the window SHALL auto-close after a 1200 ms single delay.
 
 > **Narrowed by [`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008), 2026-10-22.** After a verified background download the installed flavour shows
@@ -93,6 +100,11 @@ Part 5 of 10 of [domain 11](../11-startup-distribution-updates.md), which indexe
 
 
 **REQ-STARTUP-120** — Install failure SHALL raise a persistent error notice titled `Update not installed`, message `Rotaris is unchanged. You can try again or download the release manually.`, with the technical reason (e.g. the checksum-mismatch sentence) available as details and a `Try again` action that re-runs the install with the held offer. The installed bytes SHALL be untouched.
+
+> **Narrowed by [`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008) revision 3, 2026-11-21.** For a refusal on authenticity or integrity, and every
+> discard UD-4 shows, the message is `Rotaris is unchanged. You can download the release manually.` and the notice carries
+> no action, since REQ-STARTUP-179 forbids retrying that release in the same process (OQ-555). The title, the details, the
+> untouched installation and every other failure's message and `Try again` still govern.
 
 **REQ-STARTUP-121** — A `Restart now` action SHALL be offered on the `Update installed` notice and on no other notice, so it is unreachable after a hand-off outcome (REQ-STARTUP-119). Choosing it SHALL leave the user with the updated installation running and with exactly one instance of the application running (REQ-STARTUP-161). The restart is a hand-over of the running instance rather than a second launch, and it is the one case in which this product starts the application while an instance is running: the successor SHALL NOT be handed back to the instance that started it and SHALL NOT surface that instance's windows (REQ-STARTUP-162, REQ-STARTUP-164). In this order: the updated installation is started first; the record of REQ-STARTUP-161 passes from the current instance to the successor rather than being released for anyone to claim; the current window closes only after the successor has started; and the successor keeps running once the current process has exited. A launch arriving during the hand-over SHALL be handed to whichever of the two holds the record at that moment and SHALL never start a third process. When the successor cannot be started, nothing SHALL close — the current instance keeps the record and its window stays open and accepts input as before — and the failure SHALL surface through the `Update not installed` notice of REQ-STARTUP-120.
 

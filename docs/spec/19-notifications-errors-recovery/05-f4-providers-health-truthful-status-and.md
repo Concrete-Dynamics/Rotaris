@@ -59,11 +59,19 @@ Part 5 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
 
 **REQ-NOTIFY-221** — A failed update publishes a persistent error notice stating that the update was not installed, that the application is unchanged, and that the user can try again or download the release manually, with copyable detail and a retry action.
 
+> **Narrowed by [`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008) revision 3, 2026-11-21.** A refusal on authenticity or integrity, and every
+> discard UD-4 shows, states that the update was not installed, that the application is unchanged and that the user can
+> download the release manually, with copyable detail and no retry action (REQ-STARTUP-179; OQ-555). Every other failed
+> update still governs as written.
+
 **REQ-NOTIFY-222** — A completed update publishes a persistent success notice. Where the application can restart itself, that notice offers a restart action. Where an external installer must take over, the notice states instead that the installer will finish the update, and the window closes on its own 1200 ms after the notice appears, with no user action. Where a restart the user asked for does not happen, the failure notice of REQ-NOTIFY-221 is published in its place.
 
 > **Narrowed by [`PD-STARTUP-008`](../../product/directives/pd-startup-008.md#pd-startup-008), 2026-10-22.** Where an external installer must take over, the downloaded update
 > publishes REQ-STARTUP-174's persistent notice with the restart action, and the window does not close on its own; the
 > installer runs at the next start or when the user restarts. The in-place case and the failed-restart case still govern.
+> *Revision 3, 2026-11-21 (OQ-554):* on every flavour the ready notice is published by the update notice becoming it while
+> it is the current notice; where it is not, nothing is published and the title-bar indicator of PD-SHELL-018 carries it.
+> The in-place notice is titled `Update installed` (OQ-553). The failed-restart case still governs.
 
 ### G2. Window chrome and attention state
 

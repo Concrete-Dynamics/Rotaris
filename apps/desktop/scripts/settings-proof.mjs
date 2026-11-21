@@ -394,7 +394,9 @@ const display = await launch('display', workspace, local, preferences, {
     '[data-testid="auto-collapse-tools"]@1600',
     '[data-testid="group-tools"]@1900',
     '[data-testid="show-reasoning"]@2050', // N71 (2026-10-13) — REQ-CHAT-167's switch, a third desktop preference
-    '[data-testid="show-tool-results"]@2200',
+    // After the result cap is chosen at 2600: hiding the results disables that select, and the capture seam no longer
+    // sets a disabled select (it answers `disabled`, 2026-11-21).
+    '[data-testid="show-tool-results"]@2800',
     '.save-bar .btn-primary>>Save@4200',
   ].join(';;'),
   ROTARIS_CAPTURE_SELECT: '[data-testid="tool-result-lines"]>>20@2600;;[data-testid="tool-input-lines"]>>unlimited@3000',

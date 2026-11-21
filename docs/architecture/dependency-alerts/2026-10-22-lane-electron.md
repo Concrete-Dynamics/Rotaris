@@ -53,7 +53,7 @@ All of it ran on Linux x86_64 with Node 26.8.1 and pnpm 11.9.0.
   - `terminal-proof`, 121 of 122: `live.headerCommand` read an elided label. The echo command is
     `node "<checkout>/.proof/terminal-proof/out/echo.cjs"`, and from this worktree's path it is 92 characters, where the
     label elides past 90 (`packages/ui/src/terminal/labels.ts`). The open note is
-    [`terminal-proofs-header-check-ignores-the-command-labels-90-character-elision.md`](../../defects/terminal-proofs-header-check-ignores-the-command-labels-90-character-elision.md).
+    [`terminal-proofs-header-check-ignores-the-command-labels-90-character-elision.md`](../../archive/defects/terminal-proofs-header-check-ignores-the-command-labels-90-character-elision.md).
     The failure depends on the length of the checkout path, not on Electron.
   - `exit-trace-proof`, 35 of 37: after the proof's `SIGSEGV` to the renderer, main wrote no `RENDERER GONE` line. It
     failed the same two checks on untouched `b0d1b3ff` under Electron 44.1.1, run alone, and again on this tree. The

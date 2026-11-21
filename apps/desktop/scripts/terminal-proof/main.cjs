@@ -510,7 +510,12 @@ app.whenReady().then(async () => {
     const readyOnGrid = await until(async () => { const st = await state(LIVE); return st.stream.grid && st.stream.grid.lines.some((l) => l.startsWith('READY')) ? st : null; }, 8_000);
     expect('live.readyPainted', readyOnGrid !== null, readyOnGrid ? readyOnGrid.stream.grid.lines.slice(0, 3) : null);
     expect('live.previewFollows', readyOnGrid !== null && readyOnGrid.stream.preview && readyOnGrid.stream.preview.lines.some((l) => l.startsWith('READY')) && (await attr('[data-testid="term-preview"]', 'data-stream-id')) === LIVE, readyOnGrid ? readyOnGrid.stream.preview : null);
-    expect('live.headerCommand', (await text('[data-testid="term-command"]')) === `$ ${echoCommand}` && (await text('[data-testid="term-outcome"]')) === 'running', await text('[data-testid="term-command"]'));
+    // REQ-SHELL-087: the header elides the command at 90 characters (`commandLabel`) and keeps the whole one in its
+    // tooltip; the command's length is the tree's path's, so a long checkout path elides it
+    // (docs/archive/defects/terminal-proofs-header-check-ignores-the-command-labels-90-character-elision.md).
+    const commandChars = Array.from(echoCommand.replace(/\s+/gu, ' ').trim());
+    const shownCommand = commandChars.length <= 90 ? commandChars.join('') : `${commandChars.slice(0, 89).join('')}…`;
+    expect('live.headerCommand', (await text('[data-testid="term-command"]')) === `$ ${shownCommand}` && (await attr('[data-testid="term-command"]', 'title')) === `$ ${echoCommand}` && (await text('[data-testid="term-outcome"]')) === 'running', await text('[data-testid="term-command"]'));
     // ── REQ-SHELL-100/106: the grid's geometry reached the PTY and came back in the stream's meta ──────────────
     const reported = await until(async () => { const st = await state(LIVE); const last = st.log.resize.filter((r) => r.streamId === LIVE).at(-1); return last && st.stream.meta && st.stream.meta.cols === last.cols && st.stream.meta.rows === last.rows ? { last, meta: [st.stream.meta.cols, st.stream.meta.rows], grid: [st.stream.grid.cols, st.stream.grid.rows] } : null; }, 5_000);
     expect('live.metaFollowsReportedGeometry', reported !== null && reported.grid[0] === reported.last.cols && reported.grid[1] === reported.last.rows, reported ?? (await state(LIVE)).log.resize);

@@ -1109,6 +1109,7 @@
     "defects/summary-md-terminal-failures-and-timeouts-read-short-past-the-cap-with-no-flag.md": "12185658f0a1a2ff828161e89c7e6194b00c739fdfafb5995b9b0241f9597b9c",
     "defects/summary-md-tool-errors-line-counts-one-outcome-bucket-not-every-tool-error.md": "5649e321f5335f2e872a8aea8241a24f6765e9789ccd3520c8610b61d8799fdf",
     "defects/switching-the-board-to-a-hundred-epic-columns-costs-a-long-task-over-the-budget-under-load.md": "307e21fcb6276e44419e521ec58ae9ca77dcaec30baf00d6d6a3fcde86f25da2",
+    "defects/terminal-proofs-header-check-ignores-the-command-labels-90-character-elision.md": "b35861fc7d9ceb635301e3bcd175333e41950a0974c73fe0a074facd22859a7e",
     "defects/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md": "8c65368810e0c3f81dba2ee1ac05b986f14460b50f1d95f0abc4ca4df1723981",
     "defects/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md": "39fea143603ca7e3dffe61f5d7f5cbd9fbe7c8aa0fd0c0b92a212c2040fc7e2e",
     "defects/terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md": "3632e5daca33ba4fffcbfb3ee08f3c1609cb267a52961744ac0c2ed4018bf18b",

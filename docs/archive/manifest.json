@@ -587,6 +587,8 @@
     "architecture/owner-decisions/12-rulings-after-the-gate-2026-09-27.md#esc-37": "5dd5eebf1f53cba11ed2f10fc85b42583d8cde5180dbc1671a8a16ca2f52296b",
     "architecture/owner-decisions/13-escalations-after-the-gate-2026-09-28.md": "9aac0e9723760d34da23b70f2248fd99316a72cee472419fa12d1816c8e7a60d",
     "architecture/owner-decisions/13-escalations-after-the-gate-2026-09-28.md#esc-42": "ed6fc4db58abe798c80b727a07815d0a20eba4c8c2d60dc5bd665a3a7fc1db03",
+    "architecture/owner-decisions/15-escalations-after-the-gate-2026-10-22.md": "f296d3f2b9fa3076857da0b362df5ee62b7a9a5d317d9e876219e2ab14bd3cfa",
+    "architecture/owner-decisions/15-escalations-after-the-gate-2026-10-22.md#esc-43": "88522f0a98aee788aa789cb953f648bc08190583c7d356313b6dc7e7424443ef",
     "defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md": "c34c8e7254cc74e34a887ec46250f8e86e9f51d996c3919fa1cc5c123b4c13cc",
     "defects/a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md": "f6b72246c992322145d1d74e3e34a996df098c476ddb9d180ac175d9442e751e",
     "defects/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md": "eededbb3f6579796f1fbc4963eba6e359c33d0c2122848349ed28d80418d4e59",

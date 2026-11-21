@@ -32,7 +32,7 @@ Part 5 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
 
 **REQ-NOTIFY-211** — Only standalone packaged builds check for an update; an installation made by a package manager does not check.
 
-**REQ-NOTIFY-212** — The application checks once per launch against the vendor's published release feed and abandons the check after at most 10 seconds. Where the network cannot be reached, or the feed has not answered within that time, startup is unaffected: no notice, no acknowledgement and no error appears, nothing waits on the check, and the user is asked nothing.
+**REQ-NOTIFY-212** — The application checks each time a main window is shown, as REQ-STARTUP-114 counts it, against the vendor's published release feed and abandons the check after at most 10 seconds. Where the network cannot be reached, or the feed has not answered within that time, startup is unaffected: no notice, no acknowledgement and no error appears, nothing waits on the check, and the user is asked nothing.
 
 **REQ-NOTIFY-213** — A non-success or malformed response, a missing release and a rate-limited request included, is logged, and nothing the user can see is disrupted.
 
@@ -53,7 +53,7 @@ Part 5 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
 
 **REQ-NOTIFY-218** — Download progress is reported inside the notice that made the offer: its title names the version being downloaded, and its body states the percentage complete and that the download will be verified against the published checksum when it finishes. Where the total size is unknown, downloaded megabytes are stated instead. Progress text is updated only on whole-percent changes where the total size is known, and only on whole-megabyte changes of the amount downloaded where it is not; in either case a final update is published when the download settles, so the last text shown states the amount actually received rather than the last threshold crossed.
 
-**REQ-NOTIFY-219** — A downloaded update is installed only after its SHA-256 digest has been compared with the digest published for that release in `SHA256SUMS.txt` and the two match. Where they differ, the update stops, the installed application is left exactly as it was, and the failure is reported under REQ-NOTIFY-221. No signature is verified: a matching digest establishes that the download is the published file and nothing about who published it.
+**REQ-NOTIFY-219** — A downloaded update is installed only after the signature over `SHA256SUMS.txt` has been verified against a key the running build carries, before that file is parsed and before any byte of the update is fetched (REQ-STARTUP-167, REQ-STARTUP-122), and the download's SHA-256 digest has then been compared with the digest that file lists for it and the two match. Where either check fails, the update stops, the installed application is left exactly as it was, and the failure is reported under REQ-NOTIFY-221. The signature establishes who published the checksum file; the digest, that the download is the file it lists.
 
 **REQ-NOTIFY-220** — Installation follows the package flavour: a portable Linux bundle is replaced in place; a portable Windows executable is moved aside and the new one put in its place; an installed Windows build launches its installer and the application exits; a macOS disk image is mounted and revealed for the user to complete the move.
 

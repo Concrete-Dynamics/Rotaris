@@ -55,3 +55,26 @@ OQ 4 (provider-row wording, resolved by the message-text decision rather than by
 > statements: only the second publishes a notice, and the other three are read on surfaces reached
 > without an action. `REQ-NOTIFY-044`'s citation discipline is unchanged — the provider name is the
 > catalog's (`REQ-NOTIFY-210`), not a fourth list held here.
+
+
+> ## Amendment, 2026-11-21 — ESC-43: the update requirements swept to domain 11
+>
+> **The defect this closes.** ESC-8's signed manifest and SR-1's several windows were applied to domain 11 and never reached
+> §G1 here. `REQ-NOTIFY-219` still said "No signature is verified", against `REQ-STARTUP-167`, and `REQ-NOTIFY-212` still
+> counted one check per launch, against `REQ-STARTUP-114`'s one per window activation. The updater has followed domain 11 since
+> 2026-09-28.
+>
+> **The amendment.** Both requirements are corrected in place to domain 11's text, as ESC-8's sweep would have done: the
+> signature is verified before the checksum file is parsed and before any byte of the update is fetched, then the digest is
+> compared; and the check runs each time a main window is shown. Nothing else in §G1 changes, and no directive is needed: the
+> record is corrected, not departed from.
+>
+> **Ruled** by the model under the owner's explicit delegation ("you rule esc 43", [R-120](../../../product/requests.md#r-120)),
+> option (1) of [ESC-43](../../../archive/architecture/owner-decisions/15-escalations-after-the-gate-2026-10-22.md#esc-43).
+>
+> **The text replaced.** `REQ-NOTIFY-212` read "checks once per launch"; `REQ-NOTIFY-219` read: "A downloaded update is
+> installed only after its SHA-256 digest has been compared with the digest published for that release in `SHA256SUMS.txt`
+> and the two match. Where they differ, the update stops, the installed application is left exactly as it was, and the
+> failure is reported under REQ-NOTIFY-221. No signature is verified: a matching digest establishes that the download is the
+> published file and nothing about who published it."
+

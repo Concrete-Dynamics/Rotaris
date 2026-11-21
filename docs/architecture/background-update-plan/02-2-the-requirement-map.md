@@ -41,7 +41,7 @@ narrowed requirement carries its back-pointer.
 | REQ-SHELL-118 (+ `PD-SHELL-005` r1) | download notice: disabled action, apply follows in one sequence | **narrowed again**: cancel action enabled; no apply after the download | PD-SHELL-005 r2 |
 | REQ-SHELL-119, 121, 124 | the guards; clean shutdown | **kept**; 174 and 175 rely on them | — |
 | REQ-NOTIFY-044, 215, 222 | action vocabulary; offer with an install action; installer auto-close | **narrowed** | PD-STARTUP-008 (10–12) |
-| REQ-NOTIFY-219, 212 | "no signature is verified"; "once per launch" | **contradict domain 11** today, independent of R-084 | raised as [ESC-43](../owner-decisions/15-escalations-after-the-gate-2026-10-22.md#esc-43) |
+| REQ-NOTIFY-219, 212 | "no signature is verified"; "once per launch" | **contradict domain 11** today, independent of R-084 | raised as [ESC-43](../../archive/architecture/owner-decisions/15-escalations-after-the-gate-2026-10-22.md#esc-43) |
 
 New, in one line each: **169** the download starts on its own, bounded by the stated size; **170** progress and cancel;
 **171** the pending update and its one record; **172** verified again before any apply; **173** it takes effect at the

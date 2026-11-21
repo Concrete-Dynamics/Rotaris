@@ -31,6 +31,7 @@ import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type Acknowledgem
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater, updateCloseBox } from './updater/updater.js';
 import { createSuccessorWait } from './updater/successor.js';
+import { openBounded } from './open-folder.js';
 import { classifyThisInstallation, createUpdaterPorts, readConnectionCost, successorArguments, successorEndpointFromArgv } from './updater/electron.js';
 import { updateCommands } from './commands/update.js';
 import { diagnosticsCommands } from './commands/diagnostics.js'; // REQ-SHELL-163, REQ-STARTUP-129
@@ -729,7 +730,15 @@ async function main(): Promise<void> {
    * network, the disk or a process; everything else is decided in its tests.
    */
   const updaterPorts = createUpdaterPorts(layout.updates);
-  const classification = await classifyThisInstallation(launchArtifact);
+  /*
+   * VERIFICATION ONLY (`updater-proof`'s link-only stage, PD-STARTUP-014): with the driver listening and
+   * `ROTARIS_UPDATE_AS_PACKAGED=1`, the classification reads this launch as packaged, so the real classifier decides it — on
+   * Linux with no `APPIMAGE`, the Debian package's link-only case — and the proof counts the requests that leave. It moves
+   * no endpoint (REQ-STARTUP-111); a packaged bundle compiles the branch out (`__ROTARIS_SEAMS__`).
+   */
+  const classifyAsPackaged = __ROTARIS_SEAMS__ && Boolean(process.env['ROTARIS_DRIVER']) && process.env['ROTARIS_UPDATE_AS_PACKAGED'] === '1';
+  const classification = await classifyThisInstallation(launchArtifact, classifyAsPackaged);
+  if (classifyAsPackaged) log(`driver: the update classification reads this launch as packaged (ROTARIS_UPDATE_AS_PACKAGED) → ${classification.updatable ? classification.flavour : classification.notifiable ? 'link-only' : 'not updatable'}`, 'warn');
   const updater = createUpdater({
     classification,
     runningVersion: productVersion(),
@@ -741,6 +750,11 @@ async function main(): Promise<void> {
     // PD-SHELL-018, channel 17: the title-bar indicator's phase, to every window on the relay, before the notice changes.
     publishState: (state) => { relay.broadcast(CHANNEL.updateState, { v: CONTRACT_SCHEMA_VERSION, ...state }); },
     log: (level, message) => log(message, level),
+    /*
+     * PD-STARTUP-014 / OQ-556: the link-only offer's page, already checked by the updater, in the default browser — bounded
+     * as every opener is (`open-folder.ts`: an opener that cannot be launched may never answer, REQ-SHELL-040).
+     */
+    openPage: (url) => openBounded(url, (u) => shell.openExternal(u).then(() => ''), clocks.timers, 'the default browser'),
     timers: clocks.timers,
     wall: clocks.wall,
     /**

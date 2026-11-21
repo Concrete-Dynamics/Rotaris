@@ -72,8 +72,10 @@ export function NoticeBanner({ notice, onAcknowledge, onAction }: NoticeBannerPr
               cannot be started twice, and its accessible description says why. `action.disabled` carries that
               description (contracts `notices.ts`); nothing else about the control changes, and no other notice
               sets it. The description is also the tooltip, so a pointer user reads the same sentence.
+              `open-release-page` (PD-STARTUP-014) carries `ph-arrow-square-out` after its label, the language's mark for an
+              action that leaves the application for the browser (the notice-banner brief §6 row 5; `McpSettings.tsx`'s "Get a key").
             */
-            <DesignButton key={actionKey} type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} ui={{ id: 'notice-action', relations: [] }} disabled={notice.action.disabled !== undefined} aria-disabled={notice.action.disabled !== undefined ? true : undefined} aria-description={notice.action.disabled} title={notice.action.disabled} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}</DesignButton>
+            <DesignButton key={actionKey} type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} ui={{ id: 'notice-action', relations: [] }} disabled={notice.action.disabled !== undefined} aria-disabled={notice.action.disabled !== undefined ? true : undefined} aria-description={notice.action.disabled} title={notice.action.disabled} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}{notice.action.action.kind === 'open-release-page' && <>{' '}<i className="ph ph-arrow-square-out" aria-hidden="true" /></>}</DesignButton>
           )}
           {notice.persistent && (
             <DesignButton type="button" className="btn btn-ghost notice__dismiss" aria-label={`Dismiss this ${word.toLowerCase()}`} ui={{ id: 'notice-dismiss', relations: notice.action ? [{ kind: 'align-y', target: 'notice-action', edge: 'middle' }] : [] }} onClick={() => onAcknowledge?.(notice.id)}>Dismiss</DesignButton>

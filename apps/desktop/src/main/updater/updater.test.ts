@@ -115,7 +115,7 @@ function volume(initial: Record<string, string>) {
 
 const portable: Classification = { updatable: true, flavour: 'portable', target: TARGET };
 const installer: Classification = { updatable: true, flavour: 'installer', target: INSTALL_DIR };
-const dev: Classification = { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
+const dev: Classification = { updatable: false, notifiable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
 
 function harness(options: { cost?: 'metered' | 'not-metered' | 'unknown' | 'throws'; classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' | 'hold' | readonly boolean[]; runs?: readonly (number | null | 'throws')[]; unsaved?: boolean | 'throws' | readonly boolean[]; integrating?: boolean | 'throws' | readonly boolean[]; handOff?: string; stagingRemoveFails?: boolean; spawnFails?: boolean } = {}) {
   const srv = server(options.feed);
@@ -160,6 +160,8 @@ function harness(options: { cost?: 'metered' | 'not-metered' | 'unknown' | 'thro
     network: srv.network, updates: staging.area, files: vol.port, spawn, handOffRecord: handOff.port, keys,
     dismissedVersion: { read: () => dismissed, write: async (v) => { dismissed = v; } },
     notices, log, timers: clock.timers, wall: clock.wall,
+    // PD-STARTUP-014's opener: an updatable build never reaches it (`updater.link-only.test.ts` holds its cases).
+    openPage: async () => { throw new Error('an updatable build opened a release page'); },
     startSuccessor: async (target) => {
       started.push(target);
       if (options.successor === 'fails') throw new Error('EACCES: cannot execute');

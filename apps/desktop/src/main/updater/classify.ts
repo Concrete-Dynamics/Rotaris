@@ -34,6 +34,15 @@ import type { ArtifactKind } from '@rotaris/release-naming';
  * A build that is not packaged — the source tree, `pnpm dev`, every proof — is classified not updatable: no check is
  * performed, and the process issues no request to the endpoint and none to any release-asset URL (REQ-STARTUP-150).
  *
+ * **Link-only** (PD-STARTUP-014, R-117, the plan's Stage 3): a PACKAGED build REQ-STARTUP-106 classifies not updatable is
+ * still `notifiable` — it performs REQ-STARTUP-114's one check against the one endpoint and nothing else, and offers a
+ * newer release as a link to its page, never an asset. The directive names three: a Linux build with no `APPIMAGE` (the
+ * Debian package, PD-STARTUP-013); a packaged macOS build, inside a `.app` bundle or not, until a macOS artifact is
+ * published and its apply has had its first execution (PD-STARTUP-001, IC-3) — which is why the `app-bundle` flavour is
+ * not produced while that holds; and a packaged Windows build that names no artifact (PD-STARTUP-004). A packaged build of
+ * any other platform has no released artifact at all (REQ-STARTUP-031) and stays silent. The development and source-tree
+ * case is never notifiable: no variable and no packaging fact makes it send anything.
+ *
  * The two variables are named in `@rotaris/platform` (`artifact-environment.ts`), because main takes them out of its own
  * environment before it starts any child: `env` here is what main read at that moment, never `process.env`, so the
  * classification sees the launch's own values and no child of this launch inherits them (REQ-STARTUP-147).
@@ -57,7 +66,15 @@ export type Classification =
       /** REQ-STARTUP-125's target: the file (portable, AppImage) or the directory (installed tree, bundle) the apply step acts on. */
       readonly target: string;
     }
-  | { readonly updatable: false; readonly reason: string };
+  /**
+   * `notifiable`: PD-STARTUP-014's link-only build — the one check, and a newer release offered as its page; false, no request
+   * at all (REQ-STARTUP-106, REQ-STARTUP-150).
+   */
+  | { readonly updatable: false; readonly notifiable: boolean; readonly reason: string };
+
+/** PD-STARTUP-014's link-only classification: packaged, not updatable, and still checked. */
+export type LinkOnly = Extract<Classification, { updatable: false }> & { readonly notifiable: true };
+export const isLinkOnly = (c: Classification): c is LinkOnly => !c.updatable && c.notifiable;
 
 export interface ClassificationFacts {
   readonly platform: NodeJS.Platform;
@@ -104,7 +121,7 @@ export function classifyInstallation(facts: ClassificationFacts): Classification
   // Not a flavour test, and nothing overrides it: a build that is not a released standalone artifact is not updatable
   // whatever its environment says, and issues no request (REQ-STARTUP-106, REQ-STARTUP-150).
   if (!facts.packaged) {
-    return { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
+    return { updatable: false, notifiable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
   }
   const appImage = facts.env[APPIMAGE_VARIABLE];
   if (facts.platform === 'linux' && appImage !== undefined && appImage !== '') {
@@ -113,10 +130,13 @@ export function classifyInstallation(facts: ClassificationFacts): Classification
     return { updatable: true, flavour: 'appimage', target: appImage };
   }
   if (facts.platform === 'darwin') {
+    // PD-STARTUP-014: link-only until a macOS artifact is published and its apply has had its first execution; until then
+    // no `.dmg` exists for the bundle flavour to match (PD-STARTUP-001, IC-3), so the flavour test is not reached.
     const bundle = enclosingBundle(facts.execPath);
-    return bundle === null
-      ? { updatable: false, reason: 'a macOS build running outside a .app bundle is not a released artifact (REQ-STARTUP-106)' }
-      : { updatable: true, flavour: 'app-bundle', target: bundle };
+    return {
+      updatable: false, notifiable: true,
+      reason: `a packaged macOS build ${bundle === null ? 'running outside a .app bundle' : `in ${bundle}`}: no macOS artifact is published and its apply has had no first execution (PD-STARTUP-001, IC-3), so it is link-only (PD-STARTUP-014)`,
+    };
   }
   if (facts.platform === 'win32') {
     const published = facts.env[PORTABLE_ARTIFACT_VARIABLE];
@@ -128,9 +148,13 @@ export function classifyInstallation(facts: ClassificationFacts): Classification
       return { updatable: true, flavour: 'portable', target: published };
     }
     return {
-      updatable: false,
-      reason: `a packaged Windows build outside the installer's InstallDir with no ${PORTABLE_ARTIFACT_VARIABLE} naming the artifact it started from — the payload run directly, or an installed tree copied elsewhere (ADR-0054's reading; OQ-84)`,
+      updatable: false, notifiable: true,
+      reason: `a packaged Windows build outside the installer's InstallDir with no ${PORTABLE_ARTIFACT_VARIABLE} naming the artifact it started from — the payload run directly, or an installed tree copied elsewhere (ADR-0054's reading; OQ-84), so it is link-only (PD-STARTUP-014)`,
     };
   }
-  return { updatable: false, reason: `a packaged ${facts.platform} build with no ${APPIMAGE_VARIABLE} is not one of the released artifacts (REQ-STARTUP-031, REQ-STARTUP-106)` };
+  if (facts.platform === 'linux') {
+    // The Debian package (PD-STARTUP-013): the package manager owns its files, so nothing is applied to them.
+    return { updatable: false, notifiable: true, reason: `a packaged Linux build with no ${APPIMAGE_VARIABLE} — the Debian package, whose files the package manager owns (PD-STARTUP-013) — so it is link-only (PD-STARTUP-014)` };
+  }
+  return { updatable: false, notifiable: false, reason: `a packaged ${facts.platform} build, for which no artifact is released (REQ-STARTUP-031, REQ-STARTUP-106)` };
 }

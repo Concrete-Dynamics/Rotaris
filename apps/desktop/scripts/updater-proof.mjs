@@ -49,6 +49,15 @@
  * there must have the same name and the same SHA-256, and no file may have appeared. A development launch resolves the same
  * per-user directories an installed build does (`packages/platform/src/dirs.ts`), which is why it is measured here.
  *
+ * A third launch measures PD-STARTUP-014's link-only build (R-117, the plan's Stage 3): a packaged build classified not
+ * updatable that still checks. A development host cannot be the Debian package, so the launch carries the driver and
+ * `ROTARIS_UPDATE_AS_PACKAGED=1`, a verification-only reading (`index.ts`, compiled out of a packaged bundle) that hands the
+ * REAL classifier `packaged: true`; on Linux with `APPIMAGE` empty that is the Debian package's case. It moves no endpoint
+ * (REQ-STARTUP-111): the request goes to the real feed host through the same proxy sink, which refuses it, so the check
+ * fails silently (REQ-STARTUP-110). The sink must record EXACTLY ONE connection, `CONNECT api.github.com:443`, and the log
+ * one `update check:` line naming the link-only build and the endpoint, then its silent failure — nothing else: no asset
+ * host, no release page, no notice. On another platform the stage reads what that platform's packaged build is.
+ *
  * The first launch carries no workspace, so it opens the directory it runs in (REQ-SHELL-010 (c)): a directory of the
  * proof's own, emptied before it and in no repository (`lib/working-directory.mjs`), which it is asserted to have opened.
  * Until plan `loc1` it ran in `apps/desktop`, opened the checkout and set up code intelligence in the product's source
@@ -228,11 +237,80 @@ check('the scripted run\'s terminal call wrote its shell\'s environment (the lau
 check('the tool\'s shell carries neither APPIMAGE nor ROTARIS_PORTABLE_ARTIFACT, although the launch was started with both (REQ-STARTUP-106, REQ-STARTUP-147)', terminalEnvironment !== null && !has('APPIMAGE') && !has('ROTARIS_PORTABLE_ARTIFACT'), terminalEnvironment === null ? '(not written)' : `APPIMAGE ${has('APPIMAGE') ? 'PRESENT' : 'absent'}, ROTARIS_PORTABLE_ARTIFACT ${has('ROTARIS_PORTABLE_ARTIFACT') ? 'PRESENT' : 'absent'}`);
 check('and it still carries the launch\'s other variables — the take removes those two names and nothing else', has('ROTARIS_APP_LOG_LEVEL') && has('ROTARIS_INTENT_SCRIPT'), terminalEnvironment === null ? '(not written)' : `ROTARIS_APP_LOG_LEVEL ${has('ROTARIS_APP_LOG_LEVEL') ? 'present' : 'ABSENT'}, ROTARIS_INTENT_SCRIPT ${has('ROTARIS_INTENT_SCRIPT') ? 'present' : 'ABSENT'}`);
 
+/**
+ * Stage 3 — PD-STARTUP-014's link-only build: one feed request and nothing else. A fresh sink, so its record is this
+ * launch's alone; `APPIMAGE` is set EMPTY, which names no file (`classify.ts`), so an operator's AppImage-hosted shell
+ * cannot turn the launch into the AppImage flavour.
+ */
+const linkOnlyRoot = join(output, 'link-only');
+const linkOnlyConnections = [];
+const linkOnlySink = createServer((socket) => {
+  const entry = { at: new Date().toISOString(), firstLine: '' };
+  linkOnlyConnections.push(entry);
+  socket.setEncoding('utf8');
+  socket.once('data', (chunk) => { entry.firstLine = String(chunk).split(/\r?\n/)[0] ?? ''; socket.end('HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n'); });
+  socket.on('error', () => undefined);
+});
+await new Promise((resolve) => linkOnlySink.listen(0, '127.0.0.1', resolve));
+const linkOnlyNetLog = join(linkOnlyRoot, 'netlog.json');
+mkdirSync(linkOnlyRoot, { recursive: true });
+const linkOnlyWorking = emptyWorkingDirectory(join(linkOnlyRoot, 'working-directory'));
+const linkOnlyUpdates = join(dataDirFor(join(linkOnlyRoot, 'local')), 'updates');
+let linkOnlyLog = '';
+const linkOnly = await startApp({
+  root: linkOnlyRoot,
+  cwd: linkOnlyWorking,
+  electronArgs: [`--proxy-server=127.0.0.1:${linkOnlySink.address().port}`, `--log-net-log=${linkOnlyNetLog}`],
+  extra: { ROTARIS_APP_LOG_LEVEL: 'info', ROTARIS_UPDATE_AS_PACKAGED: '1', APPIMAGE: '', ROTARIS_PORTABLE_ARTIFACT: '' },
+});
+try {
+  await linkOnly.driver.waitFor('.app-shell', { timeoutMs: 60_000 });
+  // The check's own end is the line that says it failed silently (or offered); wait for it, bounded, never a fixed sleep.
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    linkOnlyLog = readFileSync(linkOnly.logFile, 'utf8');
+    if (/update check failed silently|update check: nothing to offer|update check: Rotaris .* is available|this build is not updatable/.test(linkOnlyLog) || Date.now() > deadline) break;
+    await sleep(200);
+  }
+  // Time for any request that WOULD follow the feed's to reach the sink, then the ordinary quit.
+  await sleep(1_500);
+  await linkOnly.driver.quit();
+  linkOnly.driver.close();
+  const exited = Date.now() + 30_000;
+  while (Date.now() < exited) {
+    try { process.kill(linkOnly.child.pid, 0); } catch { break; }
+    await sleep(200);
+  }
+  linkOnlyLog = readFileSync(linkOnly.logFile, 'utf8');
+} finally {
+  try { process.kill(linkOnly.child.pid); } catch { /* already gone */ }
+  await new Promise((resolve) => linkOnlySink.close(() => resolve()));
+}
+const linkOnlyLines = linkOnlyLog.split('\n');
+const linkOnlyCheckLines = linkOnlyLines.filter((l) => l.includes('update check: ') || l.includes('update check failed'));
+const linkOnlyRequestLine = linkOnlyLines.filter((l) => /update check: window \d+, a link-only build \(.*\), GET https:\/\/api\.github\.com\/repos\/Concrete-Dynamics\/Rotaris\/releases\/latest \(REQ-STARTUP-105, PD-STARTUP-014\)/.test(l));
+const linkOnlySeamLine = linkOnlyLines.find((l) => l.includes('ROTARIS_UPDATE_AS_PACKAGED')) ?? '';
+const linkOnlyFiles = [];
+const walkFiles = (dir, prefix) => { if (!existsSync(dir)) return; for (const name of readdirSync(dir).sort()) { const path = join(dir, name); if (statSync(path).isDirectory()) walkFiles(path, `${prefix}${name}/`); else linkOnlyFiles.push(`${prefix}${name}`); } };
+walkFiles(linkOnlyUpdates, '');
+const linkOnlyNetLogUrls = existsSync(linkOnlyNetLog) ? [...new Set([...readFileSync(linkOnlyNetLog, 'utf8').matchAll(/"url":"((?:https?|wss?):[^"]*)"/g)].map((m) => m[1]))] : [];
+if (process.platform === 'linux') {
+  check('link-only: the verification reading made the real classifier answer the Debian package\'s case (PD-STARTUP-013, PD-STARTUP-014)', /→ link-only$/.test(linkOnlySeamLine.trim()), linkOnlySeamLine.trim() || '(no line)');
+  check('link-only: exactly one `update check:` request line, naming the link-only build and the one endpoint (REQ-STARTUP-105, PD-STARTUP-014)', linkOnlyRequestLine.length === 1, linkOnlyRequestLine[0] ?? linkOnlyCheckLines.join(' / ') ?? '(none)');
+  check('link-only: the proxy sink recorded EXACTLY ONE connection, the feed host\'s — the one request and nothing else (PD-STARTUP-014)', linkOnlyConnections.length === 1 && /^CONNECT api\.github\.com:443 /.test(linkOnlyConnections[0].firstLine), `${linkOnlyConnections.length} connection(s): ${linkOnlyConnections.map((c) => c.firstLine || '(no request line)').join(' | ') || '(none)'}; net-log URLs: ${linkOnlyNetLogUrls.join(' | ') || '(none)'}`);
+  check('link-only: the refused feed is a silent check failure, at info, and nothing else is written of the update (REQ-STARTUP-110)', linkOnlyLines.filter((l) => /^\[main [^\]]+\] info\s+update check failed silently: /.test(l)).length === 1 && !/update (install|download|release page|restart)|pending update/.test(linkOnlyLog), linkOnlyCheckLines.join(' / ') || '(none)');
+  check('link-only: no notice was raised by the check (REQ-STARTUP-110)', !/notice #\d+|is available/.test(linkOnlyCheckLines.join('\n')), linkOnlyCheckLines.join(' / ') || '(none)');
+  check('link-only: nothing was written under the launch\'s updates directory — no settlement, no download (REQ-STARTUP-173)', linkOnlyFiles.length === 0, linkOnlyFiles.length === 0 ? `${linkOnlyUpdates}: no file` : linkOnlyFiles.join(', '));
+  check('link-only: the launch quit cleanly after the check', /quit: exiting with status 0/.test(linkOnlyLog), linkOnlyLines.filter((l) => l.includes('quit:')).join(' / '));
+} else {
+  check('link-only: (not Linux) the verification reading names what this platform\'s packaged build is', linkOnlySeamLine !== '', linkOnlySeamLine.trim() || '(no line)');
+}
+
 const appeared = setupResidue(app).filter((name) => !residueBefore.includes(name));
 check('no launch opened the checkout: its `apps/desktop` gained no code-intelligence setup residue while the proof ran', appeared.length === 0, appeared.length === 0 ? `before ${JSON.stringify(residueBefore)}, after the same` : `${appeared.join(' and ')} appeared in ${app}`);
 
 writeFileSync(join(output, 'proxy-record.json'), `${JSON.stringify(connections, null, 2)}\n`);
-writeFileSync(join(output, 'report.json'), `${JSON.stringify({ at: new Date().toISOString(), proxyPort: port, plantedPendingUpdate: { directory: updatesDirectory, before: plantedBefore, after: plantedAfter }, environment: { APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE }, checkLines, requestLines, terminalEnvironment: terminalEnvironment === null ? null : { APPIMAGE: has('APPIMAGE'), ROTARIS_PORTABLE_ARTIFACT: has('ROTARIS_PORTABLE_ARTIFACT'), ROTARIS_APP_LOG_LEVEL: has('ROTARIS_APP_LOG_LEVEL') }, connections: connections.length, githubConnections: githubConnections.length, netLogUrls, checks }, null, 2)}\n`);
+writeFileSync(join(output, 'report.json'), `${JSON.stringify({ at: new Date().toISOString(), proxyPort: port, plantedPendingUpdate: { directory: updatesDirectory, before: plantedBefore, after: plantedAfter }, environment: { APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE }, checkLines, requestLines, linkOnly: { seamLine: linkOnlySeamLine, checkLines: linkOnlyCheckLines, connections: linkOnlyConnections, netLogUrls: linkOnlyNetLogUrls, updatesFiles: linkOnlyFiles }, terminalEnvironment: terminalEnvironment === null ? null : { APPIMAGE: has('APPIMAGE'), ROTARIS_PORTABLE_ARTIFACT: has('ROTARIS_PORTABLE_ARTIFACT'), ROTARIS_APP_LOG_LEVEL: has('ROTARIS_APP_LOG_LEVEL') }, connections: connections.length, githubConnections: githubConnections.length, netLogUrls, checks }, null, 2)}\n`);
 const failed = checks.filter((c) => !c.pass).length;
 console.log(`\n${checks.length - failed}/${checks.length} checks passed; evidence in ${output}`);
 if (!existsSync(started.logFile)) console.log('(no application log was written)');

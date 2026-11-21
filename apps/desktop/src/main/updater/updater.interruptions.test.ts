@@ -64,6 +64,7 @@ function launch(disk: MemoryDisk, version: string, kill?: string) {
     classification: appimage, runningVersion: version, network: server(disk, kill), updates: disk.area, files: disk.strategy,
     spawn: { spawnDetached: async () => undefined }, handOffRecord: { read: async () => null, clear: async () => undefined }, keys: [KEY],
     dismissedVersion: { read: () => undefined, write: async () => undefined }, notices, log: (level, message) => { logged.push(`${level}: ${message}`); },
+    openPage: async () => { throw new Error('an updatable build opened a release page'); },
     timers: clock.timers, wall: clock.wall, startSuccessor: async () => undefined, closeWindows: () => undefined, activeRuns: async () => 0,
     confirmClose: async () => true, confirmUnsaved: async () => true, integrationAllows: async () => true,
     // UD-1: a metered connection keeps these launches on the offer and its `Update now`, the click this file interrupts.

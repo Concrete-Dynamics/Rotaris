@@ -9,12 +9,13 @@ import { UPDATE_FACES, updatedToTitle, type Face } from './updater.js';
  * so the update's surfaces are reached in a built application by publishing the updater's OWN faces (`UPDATE_FACES`) into
  * the notice store and the same channel-17 publisher the title-bar indicator reads. It never touches the feed, the
  * download, the pending update or the apply, and it changes nothing the updater holds: a press of the indicator's or the
- * notice's action reaches the real updater, which answers that nothing runs.
+ * notice's action reaches the real updater, which answers that nothing runs — `Open release page` on the link-only faces
+ * (PD-STARTUP-014) included, which the updater answers with its stale-press log line, since it holds no link-only offer.
  *
  * Reached only from the driver (`driver.ts`'s `updateFace` op), which main starts only under `__ROTARIS_SEAMS__` and
  * `ROTARIS_DRIVER`; a packaged bundle holds neither (`electron.vite.config.ts`).
  */
-export const UPDATE_FACE_NAMES = ['offer', 'downloading', 'downloading-unsized', 'ready', 'failed', 'refused', 'acknowledgement', 'none'] as const;
+export const UPDATE_FACE_NAMES = ['offer', 'downloading', 'downloading-unsized', 'ready', 'failed', 'refused', 'link-only', 'link-only-withheld', 'acknowledgement', 'none'] as const;
 export type UpdateFaceName = (typeof UPDATE_FACE_NAMES)[number];
 
 export interface FaceSeamDeps {
@@ -75,6 +76,12 @@ export function createFaceSeam(deps: FaceSeamDeps): FaceSeam {
         case 'refused':
           deps.publishState(state);
           noticeId = await put(UPDATE_FACES.refused(hashMismatchSentence(SAMPLE_ASSET, 'a'.repeat(64), 'b'.repeat(64))));
+          break;
+        case 'link-only':
+        case 'link-only-withheld':
+          // Row 5 (PD-STARTUP-014): the indicator has nothing to draw for a link-only build; `-withheld` is the refused page.
+          deps.publishState(state);
+          noticeId = await put(UPDATE_FACES.linkOnly({ version, summary: SAMPLE_SUMMARY }, face === 'link-only'));
           break;
         case 'acknowledgement':
           deps.notices.acknowledge('ok', updatedToTitle(version));

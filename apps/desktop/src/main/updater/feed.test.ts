@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { exactAsset, FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, parseLatestRelease, releaseSummary, selectOffer, SUMMARY_LIMIT, type LatestRelease } from './feed.js';
+import { checkReleasePage, exactAsset, FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, parseLatestRelease, RELEASE_PAGE_HOST, RELEASE_PAGE_MAX_LENGTH, releaseSummary, selectLinkOffer, selectOffer, SUMMARY_LIMIT, type LatestRelease } from './feed.js';
 
-const release = (over: Partial<{ tag_name: unknown; draft: unknown; prerelease: unknown; body: unknown; assets: unknown }> = {}) => JSON.stringify({
+const release = (over: Partial<{ tag_name: unknown; draft: unknown; prerelease: unknown; body: unknown; assets: unknown; html_url: unknown }> = {}) => JSON.stringify({
   tag_name: 'v0.2.0',
+  html_url: 'https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0',
   draft: false,
   prerelease: false,
   body: '## Changes\n\n- Faster startup\n',
@@ -89,7 +90,7 @@ describe('the offer rule — REQ-STARTUP-107, REQ-STARTUP-108, REQ-STARTUP-109',
       { name: 'Rotaris-0.2.0-windows-x64-setup', url: 'u', size: 1 },
     ];
     expect(exactAsset(assets, 'Rotaris-0.2.0-windows-x64-setup.exe')).toBeNull();
-    expect(selectOffer({ version: '0.2.0', body: '', assets }, '0.1.0', 'installer')).toBeNull();
+    expect(selectOffer({ version: '0.2.0', body: '', assets, page: null }, '0.1.0', 'installer')).toBeNull();
     expect(exactAsset([...assets, { name: 'Rotaris-0.2.0-windows-x64-setup.exe', url: 'yes', size: 1 }], 'Rotaris-0.2.0-windows-x64-setup.exe')?.url).toBe('yes');
   });
 
@@ -133,5 +134,128 @@ describe('the banner summary — REQ-STARTUP-112', () => {
     expect(releaseSummary('')).toBe('');
     expect(releaseSummary('## Changes\n\n### heading\n| a | b |\n> quote\n```\nfence\n```\n')).toBe('');
     expect(releaseSummary('- \n*   \n')).toBe('');
+  });
+});
+
+const PAGE = 'https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0';
+const refused = (value: unknown): string => {
+  const c = checkReleasePage(value);
+  if (c.ok) throw new Error(`accepted ${JSON.stringify(value)} as ${c.url}`);
+  return c.reason;
+};
+
+describe('the release page of a link-only offer — PD-STARTUP-014, OQ-556', () => {
+  it('reads html_url as the feed states it, and null when it is absent or not a string', () => {
+    expect(parsed(release()).page).toBe(PAGE);
+    expect(parsed(release({ html_url: undefined })).page).toBeNull();
+    expect(parsed(release({ html_url: 42 })).page).toBeNull();
+    expect(parsed(release({ html_url: { href: PAGE } })).page).toBeNull();
+  });
+
+  it('accepts an https page of the feed repository on its own host, under its releases path, and answers it as serialised', () => {
+    expect(RELEASE_PAGE_HOST).toBe('github.com');
+    expect(checkReleasePage(PAGE)).toEqual({ ok: true, url: PAGE });
+    expect(checkReleasePage('https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.1.0rc5')).toEqual({ ok: true, url: 'https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.1.0rc5' });
+    // The default port is no port (OQ-556: "no port but the default"); WHATWG drops it from what is opened.
+    expect(checkReleasePage('https://github.com:443/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toEqual({ ok: true, url: PAGE });
+  });
+
+  it('refuses http and every other scheme', () => {
+    expect(refused('http://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/http, not https/);
+    expect(refused('javascript://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/not https/);
+    expect(refused('file:///Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/not https|not on|not an absolute|not of/);
+    expect(refused('//github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/not an absolute/);
+    expect(refused('github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/not an absolute/);
+  });
+
+  it('refuses another host, the API host included, and a host that only starts or ends like it', () => {
+    expect(refused('https://api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest')).toMatch(/on api\.github\.com, not github\.com/);
+    expect(refused('https://evil.example/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/not github\.com/);
+    expect(refused('https://github.com.evil.example/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/not github\.com/);
+    expect(refused('https://notgithub.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/not github\.com/);
+    expect(refused('https://gist.github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/not github\.com/);
+    expect(refused('https://github.com./Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/not github\.com/);
+  });
+
+  it('refuses another repository, another owner, and a spelling of either that is not the feed\'s own', () => {
+    expect(refused('https://github.com/Concrete-Dynamics/Other/releases/tag/v0.2.0')).toMatch(/not of Concrete-Dynamics\/Rotaris/);
+    expect(refused('https://github.com/someone/Rotaris/releases/tag/v0.2.0')).toMatch(/not of/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris-legacy/releases/tag/v0.2.0')).toMatch(/not of/);
+    expect(refused('https://github.com/concrete-dynamics/rotaris/releases/tag/v0.2.0')).toMatch(/not of/);
+    expect(refused('https://github.com/Concrete-Dynamics/releases/tag/v0.2.0')).toMatch(/not of|outside/);
+  });
+
+  it('refuses a path outside /releases/, and the releases index itself', () => {
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris')).toMatch(/outside/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/issues/1')).toMatch(/outside \/Concrete-Dynamics\/Rotaris\/releases\//);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releasesX/tag/v0.2.0')).toMatch(/outside/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases')).toMatch(/does not name one release/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/')).toMatch(/does not name one release/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/tag//v0.2.0')).toMatch(/does not name one release/);
+  });
+
+  it('refuses user information, empty or not', () => {
+    expect(refused('https://user@github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/user information/);
+    expect(refused('https://user:secret@github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/user information/);
+    expect(refused('https://@github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/user information/);
+    expect(refused('https://github.com@evil.example/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/user information/);
+  });
+
+  it('refuses any port but the default', () => {
+    expect(refused('https://github.com:8443/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/port 8443/);
+    expect(refused('https://github.com:80/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/port 80/);
+    // An empty port is the default one, serialised away like `:443`.
+    expect(checkReleasePage('https://github.com:/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toEqual({ ok: true, url: PAGE });
+  });
+
+  it('refuses traversal, encoded or written out, before the parser can resolve it into an accepted path', () => {
+    // WHATWG resolves `..` and `%2e%2e` segments, so each of these would otherwise parse to a path that looks fine or one
+    // that leaves the repository; every one is refused as written.
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/%2e%2e/%2e%2e/Other/releases/tag/v1')).toMatch(/percent-encoded/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/..%2F..%2FOther')).toMatch(/percent-encoded/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/%2E%2E')).toMatch(/percent-encoded/);
+    expect(refused('https://github.com/%43oncrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/percent-encoded/);
+    expect(refused('https://github.com/Other/x/../../Concrete-Dynamics/Rotaris/releases/tag/v0.2.0')).toMatch(/dot segment/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0/..')).toMatch(/dot segment/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/./tag/v0.2.0')).toMatch(/dot segment/);
+    expect(refused('https://github.com\\Concrete-Dynamics\\Rotaris\\releases\\tag\\v0.2.0')).toMatch(/backslash/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0\\..\\..')).toMatch(/backslash/);
+  });
+
+  it('refuses a query, a fragment, whitespace and control characters', () => {
+    expect(refused(`${PAGE}?redirect=https://evil.example`)).toMatch(/query or a fragment/);
+    expect(refused(`${PAGE}#x`)).toMatch(/query or a fragment/);
+    expect(refused(`${PAGE}?`)).toMatch(/query or a fragment/);
+    expect(refused(` ${PAGE}`)).toMatch(/whitespace or a control/);
+    expect(refused(`${PAGE}\n`)).toMatch(/whitespace or a control/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0\u0000')).toMatch(/control/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v 0.2.0')).toMatch(/whitespace/);
+  });
+
+  it('refuses a value too long to be a release page, and one that is no string at all', () => {
+    const long = `https://github.com/Concrete-Dynamics/Rotaris/releases/tag/${'v'.repeat(RELEASE_PAGE_MAX_LENGTH)}`;
+    expect(refused(long)).toMatch(new RegExp(`over ${RELEASE_PAGE_MAX_LENGTH}`));
+    const exactly = `https://github.com/Concrete-Dynamics/Rotaris/releases/tag/${'v'.repeat(RELEASE_PAGE_MAX_LENGTH - PAGE.length + 'v0.2.0'.length)}`;
+    expect(exactly.length).toBe(RELEASE_PAGE_MAX_LENGTH);
+    expect(checkReleasePage(exactly).ok).toBe(true);
+    for (const value of [null, undefined, '', 42, {}, [PAGE]]) expect(refused(value)).toMatch(/states no page/);
+  });
+
+  it('refuses a segment outside the release-name characters', () => {
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0;x')).toMatch(/does not name one release/);
+    expect(refused("https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0'")).toMatch(/does not name one release/);
+    expect(refused('https://github.com/Concrete-Dynamics/Rotaris/releases/tag/é')).toMatch(/does not name one release|percent-encoded/);
+  });
+});
+
+describe('the link-only offer — PD-STARTUP-014, REQ-STARTUP-109', () => {
+  it('offers a strictly newer release with its summary and page, and matches no asset', () => {
+    expect(selectLinkOffer(parsed(release({ assets: [] })), '0.1.0')).toEqual({ version: '0.2.0', summary: 'Faster startup', page: PAGE });
+    expect(selectLinkOffer(parsed(release({ html_url: undefined })), '0.1.0')).toEqual({ version: '0.2.0', summary: 'Faster startup', page: null });
+  });
+
+  it('offers nothing for the same or an older version', () => {
+    expect(selectLinkOffer(parsed(release()), '0.2.0')).toBeNull();
+    expect(selectLinkOffer(parsed(release()), '0.3.0')).toBeNull();
   });
 });

@@ -101,3 +101,23 @@ describe('REQ-NOTIFY-043 — the download notice\'s meter (the notice-banner bri
     expect(html).toContain('notice__dismiss');
   });
 });
+
+describe('PD-STARTUP-014 — the link-only notice\'s action (the notice-banner brief §6 row 5)', () => {
+  const notice = (over: Partial<Notice>): Notice => ({ id: 2, severity: 'info', title: 'Rotaris 0.2.0 is available', message: 'Faster startup', detail: '', persistent: true, sessionId: '', action: { label: 'Open release page', action: { kind: 'open-release-page' } }, ...over });
+
+  it('draws `Open release page` with the arrow that marks leaving for the browser after it, hidden from the accessible name', () => {
+    const html = renderToStaticMarkup(createElement(NoticeBanner, { notice: notice({}) }));
+    expect(html).toContain('data-action="open-release-page"');
+    expect(html).toMatch(/Open release page <i class="ph ph-arrow-square-out" aria-hidden="true"><\/i><\/button>/);
+    expect(html).toContain('notice__dismiss');
+  });
+
+  it('draws no action where the page was refused, and no arrow on any other action', () => {
+    const { action: _withheld, ...rest } = notice({});
+    const withheld = renderToStaticMarkup(createElement(NoticeBanner, { notice: rest }));
+    expect(withheld).not.toContain('data-action=');
+    expect(withheld).toContain('notice__dismiss');
+    const offer = renderToStaticMarkup(createElement(NoticeBanner, { notice: notice({ action: { label: 'Update now', action: { kind: 'install-update' } } }) }));
+    expect(offer).not.toContain('ph-arrow-square-out');
+  });
+});

@@ -62,8 +62,9 @@ async function readInstallDir(): Promise<string | null> {
  * `artifact` is what main took out of its environment at its first statement (`takeArtifactVariables`), before any
  * child was started — never `process.env`, which no longer carries either variable by the time this runs.
  */
-export async function classifyThisInstallation(artifact: ArtifactVariables): Promise<Classification> {
-  const packaged = app.isPackaged;
+export async function classifyThisInstallation(artifact: ArtifactVariables, asPackaged = false): Promise<Classification> {
+  // `asPackaged`: the verification-only reading `index.ts` passes under the driver alone (`updater-proof`'s link-only stage).
+  const packaged = app.isPackaged || asPackaged;
   const installDir = packaged ? await readInstallDir() : null;
   return classifyInstallation({ platform: process.platform, packaged, execPath: process.execPath, env: artifact, installDir });
 }

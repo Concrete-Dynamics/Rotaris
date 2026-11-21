@@ -51,8 +51,11 @@ sequenceDiagram
       M->>R: notices.report — warning, keyed once per run: could not prepare, the per-user data directory, every launch costs this
     end
     M->>M: updater.activate(window) — REQ-STARTUP-043/114
-    alt not updatable (a source-tree or development launch, a payload run without its launcher) or a demo window
+    alt not updatable and not link-only (a source-tree or development launch) or a demo window
       M->>M: one application-log line at info; NO request (REQ-STARTUP-106/057/150)
+    else link-only — the .deb, packaged macOS, a packaged Windows build naming no artifact (PD-STARTUP-014, since 2026-11-21)
+      M-->>M: GET the one endpoint, 10 s, Accept header — and nothing else: no settlement, no asset (REQ-STARTUP-105/173)
+      Note over M: a strictly newer release, not waved off → the offer's title and summary with Open release page<br/>(open-release-page; the page checked, else no action, OQ-556); a failure one log line (REQ-STARTUP-110)
     else a released artifact, no operation in flight
       M->>M: first check of the launch only — delete a portable's leftover <name>.old (REQ-STARTUP-115)
       M-->>M: GET the one endpoint, 10 s, Accept header (REQ-STARTUP-105)

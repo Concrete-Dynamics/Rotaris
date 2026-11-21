@@ -135,12 +135,12 @@ describe('the pipeline\'s release, installed by the updater (REQ-STARTUP-122, RE
     const feed: FeedAsset[] = readdirSync(assets).map((name) => ({ name, url: `https://example.invalid/${name}`, size: readFileSync(join(assets, name)).byteLength }));
     expect(feed.map((a) => a.name)).toContain(SBOM);
     for (const [flavour, name] of [['portable', PORTABLE], ['installer', SETUP]] as const) {
-      const chosen = selectOffer({ version: VERSION, body: '', assets: feed }, '0.1.0', flavour);
+      const chosen = selectOffer({ version: VERSION, body: '', assets: feed, page: null }, '0.1.0', flavour);
       expect(chosen?.asset.name).toBe(name);
       expect(chosen?.manifest?.name).toBe('SHA256SUMS.txt');
       expect(chosen?.signature?.name).toBe('SHA256SUMS.txt.sig');
     }
-    const selected = selectOffer({ version: VERSION, body: '', assets: feed }, '0.1.0', 'portable')!;
+    const selected = selectOffer({ version: VERSION, body: '', assets: feed, page: null }, '0.1.0', 'portable')!;
     const { ctx, requests, volume } = installContext([key.publicPem]);
     const result = await runInstall(selected, ctx);
     expect(result.ok).toBe(true);

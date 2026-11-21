@@ -45,6 +45,9 @@ export const FORBIDDEN = [
   // fin43's review: main's two seams not named `ROTARIS_CAPTURE_*`, the rows proof's renderer role and the initialization
   // proof's registered task.
   'ROTARIS_ROWS_PROOF', 'ROTARIS_INIT_TEST_TASK',
+  // PD-STARTUP-014 (2026-11-21, R-117): updater-proof's link-only stage reads a development launch as packaged, so a shipped
+  // build must not carry the read that would let a variable decide its update classification (REQ-STARTUP-106).
+  'ROTARIS_UPDATE_AS_PACKAGED',
   // fin44: the packaged probe's neighbours it does not use (`package.mjs` sets its three alone) — the wait, whose `js:` form
   // evaluates an expression in the renderer as `_EVAL_AT` does, the last view, the probes and the prompt's delay — and the
   // children's two home seams, which redirected a shipped build's skill and instruction discovery. Each is read behind

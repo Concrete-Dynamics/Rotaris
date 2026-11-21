@@ -8,7 +8,7 @@ import type { CommandContext, CommandHandlers } from './context.js';
  * (REQ-STARTUP-114) and answers with a `CommandOutcome`; the renderer sends no version, no asset name and no URL, so
  * a window cannot install anything main did not itself offer (REQ-STARTUP-108, REQ-STARTUP-111).
  */
-export function updateCommands(ctx: Pick<CommandContext, 'updater'>): Pick<CommandHandlers, 'update.install' | 'update.restart' | 'update.cancel' | 'update.state'> {
+export function updateCommands(ctx: Pick<CommandContext, 'updater'>): Pick<CommandHandlers, 'update.install' | 'update.restart' | 'update.cancel' | 'update.state' | 'update.openReleasePage'> {
   return {
     'update.install': () => ctx.updater.install(),
     'update.restart': () => ctx.updater.restart(),
@@ -20,5 +20,11 @@ export function updateCommands(ctx: Pick<CommandContext, 'updater'>): Pick<Comma
     'update.cancel': () => ctx.updater.cancel(),
     // PD-SHELL-018 (R-117): channel 17's payload as it stands, for a window that mounts after a download started.
     'update.state': async () => ({ ok: true, value: ctx.updater.updateState() }),
+    /*
+     * PD-STARTUP-014, PD-SHELL-018 revision 2 (OQ-556; R-117): the link-only offer's `open-release-page`. The updater holds the
+     * page with the offer and checks it again here; the window names nothing. A failed opening raises REQ-SHELL-040's
+     * transient error from main, so the renderer shows nothing of its own.
+     */
+    'update.openReleasePage': () => ctx.updater.openReleasePage(),
   };
 }

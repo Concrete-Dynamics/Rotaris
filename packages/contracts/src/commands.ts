@@ -256,6 +256,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * download draws the indicator at once.
    */
   z.object({ kind: z.literal('update.state') }),
+  /**
+   * PD-STARTUP-014, PD-SHELL-018 revision 2 (OQ-556; R-117): the link-only offer's `open-release-page` action. It carries
+   * nothing: main holds the page beside the offer, checks it at the press and opens it in the default browser, so no address
+   * crosses from a renderer. A press with no such offer held is a log line and nothing else.
+   */
+  z.object({ kind: z.literal('update.openReleasePage') }),
   /** REQ-SESSION-201: main supplies the dialogs and nothing else; the work runs in the workspace service (ADR-0002 c.7). */
   z.object({ kind: z.literal('workspace.backup') }),
   z.object({ kind: z.literal('workspace.restore') }),

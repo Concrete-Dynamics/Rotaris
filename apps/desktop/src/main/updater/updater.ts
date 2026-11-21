@@ -3,10 +3,10 @@ import { isStrictlyNewer } from '@rotaris/release-naming';
 import { millis, toIsoUtc, type Millis, type TimerHandle, type Timers, type WallClock } from '@rotaris/kernel';
 import type { AppLogLevel } from '../app-log.js';
 import type { NoticePatch, NoticeStore } from '../notices.js';
-import type { Classification } from './classify.js';
+import { isLinkOnly, type Classification, type LinkOnly } from './classify.js';
 import { measuredLabel, messageOf, type DownloadProgress } from './download.js';
 import type { ConnectionCost } from './metered.js';
-import { FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, parseLatestRelease, selectOffer, SUMMARY_FALLBACK, type Offer } from './feed.js';
+import { checkReleasePage, FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, parseLatestRelease, selectLinkOffer, selectOffer, SUMMARY_FALLBACK, type FeedParse, type LinkOffer, type Offer } from './feed.js';
 import { removeHandedOffStaging, runInstall, type HandOffRecordFile, type UpdateNetwork } from './install.js';
 import { discardPending, loadPending, settleAtLaunch, yieldToFeed, type LaunchSettlement, type UpdatesArea } from './pending.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
@@ -64,6 +64,13 @@ import type { StrategyFiles, StrategySpawn } from './strategies.js';
  *    process (REQ-STARTUP-179).
  *  - UD-7: the first check of a launch that finds the pending update applied — this build is the version it installed — puts
  *    one `Updated to Rotaris {version}` acknowledgement in the window that asked.
+ *  - PD-STARTUP-014 (R-117, the plan's Stage 3): a LINK-ONLY build — packaged, classified not updatable and `notifiable`
+ *    (`classify.ts`) — performs the same one check against the same endpoint and nothing else: no launch-time settlement,
+ *    no pending update, no asset. A strictly newer release raises the offer's title and summary with `Open release page`
+ *    (`open-release-page`, PD-SHELL-018 revision 2), whose page is the feed's `html_url`, held beside the offer and checked
+ *    by `checkReleasePage` when the face is drawn and again at the press (OQ-556); a page refused there is logged and the
+ *    notice carries no action. Dismissing it waves the version off (REQ-STARTUP-117); a check failure is silent
+ *    (REQ-STARTUP-110). The title-bar indicator has nothing to draw for it (`phase: 'none'`).
  *  - REQ-STARTUP-111: nothing here reads a configuration value, a preference other than the dismissed version, or an
  *    environment variable; the endpoint is `feed.ts`'s constant. There is no way in to turn the check off.
  */
@@ -92,6 +99,10 @@ export const CANCEL_DOWNLOAD = 'Cancel download';
 export const installedInPlaceMessage = (version: string): string => `Rotaris ${version} has been downloaded, verified and installed. It runs the next time Rotaris starts, or now with Restart now.`;
 /** UD-7 (PD-SHELL-018 "The acknowledgement"): the one transient the first window of an updated version shows. */
 export const updatedToTitle = (version: string): string => `Updated to Rotaris ${version}`;
+/** PD-STARTUP-014's action, labelled by the notice-banner brief §6 row 5 (the arrow after it is the banner's, `Notice.tsx`). */
+export const OPEN_RELEASE_PAGE = 'Open release page';
+/** REQ-SHELL-040's transient error when the default browser does not open the release page; its body names the address. */
+export const RELEASE_PAGE_NOT_OPENED = 'The release page could not be opened';
 /** REQ-STARTUP-170: a cancel ends the transfer within this bound of its activation. */
 export const CANCEL_BOUND_MS = 2_000;
 /** UD-8: the flavours whose target is replaced while the application runs, and so the ones whose download starts by itself. */
@@ -128,6 +139,11 @@ export interface UpdaterDeps {
    */
   readonly publishState: (state: UpdateState) => void;
   readonly log: (level: AppLogLevel, message: string) => void;
+  /**
+   * PD-STARTUP-014 / OQ-556: open a checked release page in the default browser (`shell.openExternal`, bounded). Answers
+   * whether it opened; a refusal or a browser that never answers is a reason, which REQ-SHELL-040's transient error names.
+   */
+  readonly openPage: (url: string) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }>;
   readonly timers: Timers;
   /** The pending record's `verifiedAt` (REQ-STARTUP-171). */
   readonly wall: WallClock;
@@ -269,6 +285,8 @@ export type ActivationOutcome = 'not-updatable' | 'demo' | 'refused' | 'failed' 
 export type UpdaterState =
   | { readonly kind: 'idle' }
   | { readonly kind: 'offered'; readonly offer: Offer; readonly noticeId: number | null }
+  /** PD-STARTUP-014: a link-only build's offer, its page kept as the feed stated it (OQ-556). */
+  | { readonly kind: 'link-offered'; readonly offer: LinkOffer; readonly noticeId: number | null }
   /** REQ-STARTUP-169/170: a download runs — the transfer and the verification. `userStarted`: by `Update now` or `Try again`. */
   | { readonly kind: 'downloading'; readonly offer: Offer; readonly noticeId: number | null; readonly measured: string; readonly userStarted: boolean }
   | { readonly kind: 'failed'; readonly offer: Offer; readonly noticeId: number | null }
@@ -287,6 +305,12 @@ export interface Updater {
    * operation of REQ-STARTUP-114. Resolves once the transfer has ended, or after REQ-STARTUP-170's 2 s bound.
    */
   cancel(): Promise<CommandOutcome>;
+  /**
+   * PD-STARTUP-014, PD-SHELL-018 revision 2 (OQ-556): `open-release-page` — open the page held with the current link-only
+   * offer, checked again here. With no such offer it writes one log line and does nothing; an opening that fails raises
+   * REQ-SHELL-040's transient error naming the address.
+   */
+  openReleasePage(): Promise<CommandOutcome>;
   /** REQ-STARTUP-116/117: called by main BEFORE a notice is cleared; records the version only when that notice is the offer (UD-3). */
   noticeDismissed(noticeId: number): Promise<void>;
   /** Channel 17's payload as it stands, for `update.state` (a window that mounts later). */
@@ -340,6 +364,14 @@ export const UPDATE_FACES = Object.freeze({
   }),
   /** Row 4′: a refusal on authenticity or integrity — no action, never retried for that release by this process (OQ-555). */
   refused: (sentence: string): Face => ({ severity: 'error', title: NOT_INSTALLED_TITLE, message: REFUSED_MESSAGE, detail: sentence, persistent: true, action: null, progress: null }),
+  /**
+   * Row 5: link-only (PD-STARTUP-014) — row 1's title and message with `Open release page`, or with no action where the page
+   * was refused (the brief's §4, "link-only page refused"). Its Dismiss waves the version off, as row 1's does.
+   */
+  linkOnly: (offer: Pick<LinkOffer, 'version' | 'summary'>, withAction: boolean): Face => ({
+    severity: 'info', title: offerTitle(offer.version), message: offer.summary !== '' ? offer.summary : SUMMARY_FALLBACK, detail: '', persistent: true,
+    action: withAction ? { label: OPEN_RELEASE_PAGE, action: { kind: 'open-release-page' } } : null, progress: null,
+  }),
 });
 
 /**
@@ -441,6 +473,51 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     if (settled.pending !== null) deps.log('info', `update check: a pending update ${settled.pending.version} (${settled.pending.state}) is kept (REQ-STARTUP-171)`);
   };
 
+  /** REQ-STARTUP-105's one request and REQ-STARTUP-110's structural half: the latest release, or the reason it is not. */
+  const fetchLatest = async (): Promise<FeedParse> => {
+    abort = new AbortController();
+    let body: string;
+    try {
+      const response = await deps.network.get(FEED_ENDPOINT, { accept: FEED_ACCEPT, timeoutMs: FEED_TIMEOUT_MS, signal: abort.signal });
+      if (response.status !== 200) return { ok: false, reason: `HTTP ${response.status}` };
+      body = await readText(response.body);
+    } catch (cause) {
+      return { ok: false, reason: messageOf(cause) };
+    }
+    return parseLatestRelease(body);
+  };
+
+  /**
+   * PD-STARTUP-014: a link-only build's check — the one request, and nothing else. No launch-time settlement (REQ-STARTUP-173:
+   * a build classified not updatable leaves a pending update exactly as it found it), no asset, no download. A strictly newer
+   * release that is not waved off raises the link-only face; its page is checked here (OQ-556), and a refusal is logged and
+   * withholds the action.
+   */
+  const linkCheck = async (windowId: number, linkOnly: LinkOnly): Promise<ActivationOutcome> => {
+    deps.log('info', `update check: window ${windowId}, a link-only build (${linkOnly.reason}), GET ${FEED_ENDPOINT} (REQ-STARTUP-105, PD-STARTUP-014)`);
+    const parsed = await fetchLatest();
+    if (!parsed.ok) return silently(parsed.reason);
+    const offer = selectLinkOffer(parsed.release, deps.runningVersion);
+    if (offer === null) {
+      deps.log('info', `update check: nothing to offer (latest ${parsed.release.version}, running ${deps.runningVersion}, link-only; REQ-STARTUP-109)`);
+      return 'none';
+    }
+    if (deps.dismissedVersion.read() === offer.version) {
+      deps.log('info', `update check: Rotaris ${offer.version} was waved off earlier; the offer is silently ignored (REQ-STARTUP-116)`);
+      return 'dismissed';
+    }
+    if (state.kind === 'link-offered' && state.offer.version === offer.version && deps.notices.current()?.id === state.noticeId) {
+      deps.log('info', `update check: Rotaris ${offer.version} is already offered on notice #${state.noticeId}`);
+      return 'already-offered';
+    }
+    const page = checkReleasePage(offer.page);
+    if (!page.ok) deps.log('warn', `update check: the release page the feed states for Rotaris ${offer.version} is refused — ${page.reason}; the offer is shown with no action (PD-STARTUP-014, OQ-556)`);
+    const noticeId = await show(null, UPDATE_FACES.linkOnly(offer, page.ok), 'publish');
+    enter({ kind: 'link-offered', offer, noticeId });
+    deps.log('info', `update check: Rotaris ${offer.version} is available; offered ${page.ok ? `with ${OPEN_RELEASE_PAGE} (${page.url})` : 'with no action'} on notice #${noticeId}; nothing is matched, downloaded or applied (PD-STARTUP-014)`);
+    return 'offered';
+  };
+
   const check = async (windowId: number, updatable: Extract<Classification, { updatable: true }>): Promise<ActivationOutcome> => {
     // REQ-STARTUP-176/178 and REQ-STARTUP-115 are LAUNCH-time: once per process, before the first round trip, after the
     // first main window was shown. Run again at a later window's check it would find this process's own replacement —
@@ -462,17 +539,8 @@ export function createUpdater(deps: UpdaterDeps): Updater {
         deps.log('info', `update check: an earlier build's installer hand-off staging directory was ${what} (REQ-STARTUP-178)`);
       }
     }
-    abort = new AbortController();
     deps.log('info', `update check: window ${windowId}, ${updatable.flavour} flavour, GET ${FEED_ENDPOINT} (REQ-STARTUP-105)`);
-    let body: string;
-    try {
-      const response = await deps.network.get(FEED_ENDPOINT, { accept: FEED_ACCEPT, timeoutMs: FEED_TIMEOUT_MS, signal: abort.signal });
-      if (response.status !== 200) return silently(`HTTP ${response.status}`);
-      body = await readText(response.body);
-    } catch (cause) {
-      return silently(messageOf(cause));
-    }
-    const parsed = parseLatestRelease(body);
+    const parsed = await fetchLatest();
     if (!parsed.ok) return silently(parsed.reason);
     // UD-5: a release the feed names older than the pending update — withdrawn — discards it. A newer one is downloaded
     // and replaces it once verified (`runInstall`).
@@ -757,7 +825,7 @@ export function createUpdater(deps: UpdaterDeps): Updater {
         deps.log('info', `update check: window ${windowId} is a demo window; no request is made (REQ-STARTUP-057, REQ-STARTUP-114)`);
         return 'demo';
       }
-      if (!classification.updatable) {
+      if (!classification.updatable && !isLinkOnly(classification)) {
         deps.log('info', `update check: this build is not updatable — ${classification.reason}; no request is made (REQ-STARTUP-106)`);
         return 'not-updatable';
       }
@@ -765,8 +833,10 @@ export function createUpdater(deps: UpdaterDeps): Updater {
         deps.log('info', `update check: window ${windowId} refused — another update operation is in flight (REQ-STARTUP-114)`);
         return 'refused';
       }
-      const updatable = classification;
-      return guard(() => check(windowId, updatable));
+      const current = classification;
+      if (isLinkOnly(current)) return guard(() => linkCheck(windowId, current));
+      if (!current.updatable) return 'not-updatable';
+      return guard(() => check(windowId, current));
     },
     async install() {
       const refused = (): CommandOutcome | null => {
@@ -840,9 +910,33 @@ export function createUpdater(deps: UpdaterDeps): Updater {
       if (outcome === 'elapsed') deps.log('warn', `update cancel: the download of Rotaris ${version} had not ended ${CANCEL_BOUND_MS} ms after the cancel (REQ-STARTUP-170)`);
       return { ok: true, value: { cancelled: true, ended: outcome === 'ended' } };
     },
+    async openReleasePage() {
+      if (state.kind !== 'link-offered') {
+        // OQ-556: a press for an offer this process no longer holds — dismissed, replaced, or never raised (the face seam's).
+        deps.log('info', `update release page: pressed with no link-only offer held (${state.kind}); nothing is opened (OQ-556)`);
+        return { ok: true, value: { opened: false, reason: 'no link-only offer is held' } };
+      }
+      const { version } = state.offer;
+      // OQ-556: checked again at the press, from the value kept beside the offer — never an address from a renderer.
+      const page = checkReleasePage(state.offer.page);
+      if (!page.ok) {
+        deps.log('warn', `update release page: the page held for Rotaris ${version} is refused — ${page.reason}; nothing is opened (PD-STARTUP-014, OQ-556)`);
+        return { ok: true, value: { opened: false, reason: page.reason } };
+      }
+      const opened = await deps.openPage(page.url).catch((cause: unknown) => ({ ok: false as const, reason: messageOf(cause) }));
+      if (!opened.ok) {
+        // REQ-SHELL-040: never silent — the transient error says the page did not open and names the address attempted.
+        const detail = `${page.url} — ${opened.reason}`;
+        deps.log('warn', `update release page: ${detail} (REQ-SHELL-040)`);
+        deps.notices.acknowledge('fail', RELEASE_PAGE_NOT_OPENED, detail);
+        return { ok: false, code: 'update.releasePage', headline: RELEASE_PAGE_NOT_OPENED, detail };
+      }
+      deps.log('info', `update release page: opened ${page.url} for Rotaris ${version} in the default browser (PD-STARTUP-014)`);
+      return { ok: true, value: { opened: true, url: page.url } };
+    },
     async noticeDismissed(noticeId) {
       if (state.kind === 'idle' || state.noticeId !== noticeId || deps.notices.current()?.id !== noticeId) return;
-      if (state.kind !== 'offered') {
+      if (state.kind !== 'offered' && state.kind !== 'link-offered') {
         // UD-3 (OQ-552): dismissing the download notice, the ready notice or a failure only hides it — the download runs on,
         // the pending update stays and its apply follows, and no version is recorded. The indicator carries the state.
         deps.log('info', `update notice #${noticeId} dismissed in its ${state.kind} face: hidden only, nothing recorded (UD-3)`);

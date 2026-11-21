@@ -1174,9 +1174,10 @@ function dispatchNoticeAction(action: NoticeAction): void {
       void bridge.command({ kind: 'update.cancel' });
       return;
     case 'open-release-page':
-      // PD-SHELL-018 revision 2 (OQ-556): the link-only offer's action, whose behaviour is the plan's Stage 3 (PD-STARTUP-014).
-      // No notice carries it yet; a press is logged here and nothing else (seams §6).
-      console.warn('notice action "open-release-page" pressed: opening a release page is not built yet (PD-STARTUP-014)');
+      // PD-SHELL-018 revision 2 (OQ-556), PD-STARTUP-014 (R-117, the plan's Stage 3): the link-only offer's action. Main holds
+      // the release's page beside the offer, checks it at the press and opens it in the default browser; this window names no
+      // address. A press with no offer held is main's log line; a failed opening is main's transient error (REQ-SHELL-040).
+      void bridge.command({ kind: 'update.openReleasePage' });
       return;
     case 'retry-run':
       // REQ-NOTIFY-045 (OQ-178): the draft as the window last published it, else as stored (REQ-NOTIFY-066), else the

@@ -25,7 +25,7 @@
  *   pnpm app:drive webPreferences [--window=approval]   (the security keys the window was built with, read back; R-091)
  *   pnpm app:drive useWindow persona:coding-agent       (every later command acts on that window; no argument: the active main window)
  *   pnpm app:drive probe "#approval-title" --window=approval    (--window= on any command: that window, for that command alone)
- *   pnpm app:drive updateFace downloading [--version=0.2.0]   (R-117: offer|downloading|downloading-unsized|ready|failed|refused|acknowledgement|none — the updater's own faces, nothing fetched)
+ *   pnpm app:drive updateFace downloading [--version=0.2.0]   (R-117: offer|downloading|downloading-unsized|ready|failed|refused|link-only|link-only-withheld|acknowledgement|none — the updater's own faces, nothing fetched)
  *   pnpm app:drive log [--tail=40]
  *   pnpm app:drive stop            (the application's quit: the windows closed, no guard asked, then the run host's shutdown)
  *   pnpm app:drive stop --crash    (the immediate exit: a live run is left as a crash leaves it)

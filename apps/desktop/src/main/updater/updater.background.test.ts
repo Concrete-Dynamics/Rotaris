@@ -120,6 +120,7 @@ function harness(options: Options = {}) {
     connectionCost: async () => { if (options.cost === 'throws') throw new Error('no answer'); return options.cost ?? 'not-metered'; },
     publishState: (state) => { states.push(state); wire.push(`state:${state.phase}${state.measured === undefined ? '' : `:${state.measured}`}`); },
     log: (level, message) => { logged.push(`${level}: ${message}`); },
+    openPage: async () => { throw new Error('an updatable build opened a release page'); },
     timers: clock.timers, wall: clock.wall,
     startSuccessor: async () => { if (options.successorFails) throw new Error('EACCES: cannot execute'); },
     closeWindows: () => undefined, activeRuns: async () => 0, confirmClose: async () => true, confirmUnsaved: async () => true, integrationAllows: async () => true,

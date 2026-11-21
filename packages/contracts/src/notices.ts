@@ -98,8 +98,8 @@ export const NoticeActionSchema = z.discriminatedUnion('kind', [
   /**
    * PD-SHELL-018 revision 2 (OQ-556, ruled 2026-11-21 under R-072): open the page of an available release, offered only on
    * PD-STARTUP-014's link-only notice. No parameter: main keeps the page beside the offer and checks it at the press, so no
-   * address crosses from a renderer. Its behaviour is the plan's Stage 3; until then the dispatcher logs a press and does
-   * nothing (seams §6: "a member whose target is not built is logged there and nothing else").
+   * address crosses from a renderer. Dispatched as `update.openReleasePage` since the plan's Stage 3 (PD-STARTUP-014,
+   * 2026-11-21), which the dispatcher only logged until then.
    */
   z.object({ kind: z.literal('open-release-page') }),
 ]);

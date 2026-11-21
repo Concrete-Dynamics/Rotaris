@@ -33,6 +33,11 @@ export interface LatestRelease {
   readonly version: string;
   readonly body: string;
   readonly assets: readonly FeedAsset[];
+  /**
+   * The release's own page as the feed states it (`html_url`), unchecked: a string, or null when the field is absent or not
+   * a string. Only a link-only offer reads it (PD-STARTUP-014), and only through `checkReleasePage`.
+   */
+  readonly page: string | null;
 }
 
 export type FeedParse = { readonly ok: true; readonly release: LatestRelease } | { readonly ok: false; readonly reason: string };
@@ -72,7 +77,8 @@ export function parseLatestRelease(body: string): FeedParse {
       assets.push({ name: a['name'], url: a['browser_download_url'], size });
     }
   }
-  return { ok: true, release: { version, body: typeof release['body'] === 'string' ? release['body'] : '', assets } };
+  const page = typeof release['html_url'] === 'string' ? release['html_url'] : null;
+  return { ok: true, release: { version, body: typeof release['body'] === 'string' ? release['body'] : '', assets, page } };
 }
 
 /** What a check holds once a release is offered: everything the install step later needs, resolved once. */
@@ -133,4 +139,79 @@ export function releaseSummary(body: string): string {
     return [...text].length > SUMMARY_LIMIT ? `${[...text].slice(0, SUMMARY_LIMIT - 1).join('')}…` : text;
   }
   return '';
+}
+
+/**
+ * PD-STARTUP-014 and OQ-556's ruling — the host that serves the feed repository's pages. The feed itself is the API host
+ * (`FEED_ENDPOINT`); the release's page is on the repository's own host, and nowhere else.
+ */
+export const RELEASE_PAGE_HOST = 'github.com';
+/** The longest page address accepted. A release page of this repository is under a hundred characters. */
+export const RELEASE_PAGE_MAX_LENGTH = 512;
+/** One path segment of a release page: letters, digits and `.`, `_`, `+`, `-`, never `.` or `..` alone. */
+const PAGE_SEGMENT = /^[A-Za-z0-9._+-]+$/;
+
+export type ReleasePageCheck = { readonly ok: true; readonly url: string } | { readonly ok: false; readonly reason: string };
+
+/**
+ * PD-STARTUP-014: the release's page is opened only if it is an `https` page of the feed's own repository on the host that
+ * serves it. OQ-556's ruling spells that out — an `https` address on that host, under the feed repository's releases path,
+ * with no user information and no port but the default — and this is it, pure, so every refusal is decided in a test. The
+ * answer's `url` is the parsed address as WHATWG serialises it, which is what is opened; a refusal's `reason` is for the one
+ * log line, never a surface.
+ *
+ * Stricter than the ruling's letter where the letter leaves room for a trick, each a refusal: any `%` (no percent-encoding,
+ * so no encoded `/`, `\` or `.` segment reaches the host), a backslash, whitespace or a control character, a `.` or `..`
+ * segment in the text as written (the parser would resolve it away before the path is read), a query or a fragment, and an
+ * address longer than `RELEASE_PAGE_MAX_LENGTH`. The repository's owner and name are compared exactly as `FEED_REPOSITORY`
+ * spells them; the path must name something below `/releases/`, not the releases index itself.
+ */
+export function checkReleasePage(value: unknown, repository: { readonly owner: string; readonly repo: string } = FEED_REPOSITORY, host: string = RELEASE_PAGE_HOST): ReleasePageCheck {
+  if (typeof value !== 'string' || value === '') return { ok: false, reason: 'the feed states no page for the release' };
+  if (value.length > RELEASE_PAGE_MAX_LENGTH) return { ok: false, reason: `the page address is ${value.length} characters, over ${RELEASE_PAGE_MAX_LENGTH}` };
+  if ([...value].some((ch) => { const code = ch.codePointAt(0)!; return code <= 0x20 || (code >= 0x7f && code <= 0x9f); })) return { ok: false, reason: 'the page address carries whitespace or a control character' };
+  if (value.includes('\\')) return { ok: false, reason: 'the page address carries a backslash' };
+  if (value.includes('%')) return { ok: false, reason: 'the page address is percent-encoded' };
+  const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)/.exec(value);
+  if (scheme === null) return { ok: false, reason: 'the page address is not an absolute web address' };
+  if (scheme[2]!.includes('@')) return { ok: false, reason: 'the page address carries user information' };
+  if (scheme[3]!.split('/').some((segment) => segment === '.' || segment === '..')) return { ok: false, reason: 'the page address carries a dot segment' };
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return { ok: false, reason: 'the page address does not parse' };
+  }
+  if (parsed.protocol !== 'https:') return { ok: false, reason: `the page address is ${parsed.protocol.replace(':', '')}, not https` };
+  if (parsed.username !== '' || parsed.password !== '') return { ok: false, reason: 'the page address carries user information' };
+  if (parsed.hostname !== host) return { ok: false, reason: `the page is on ${parsed.hostname}, not ${host}` };
+  // WHATWG drops the scheme's default port, so `:443` reads as none here and any other stays.
+  if (parsed.port !== '') return { ok: false, reason: `the page address names port ${parsed.port}` };
+  if (parsed.search !== '' || parsed.hash !== '' || value.includes('?') || value.includes('#')) return { ok: false, reason: 'the page address carries a query or a fragment' };
+  const segments = parsed.pathname.split('/').slice(1);
+  if (segments[0] !== repository.owner || segments[1] !== repository.repo) return { ok: false, reason: `the page is not of ${repository.owner}/${repository.repo}` };
+  if (segments[2] !== 'releases') return { ok: false, reason: `the page is outside /${repository.owner}/${repository.repo}/releases/` };
+  const below = segments.slice(3);
+  if (below.length === 0 || below.some((segment) => !PAGE_SEGMENT.test(segment) || segment === '.' || segment === '..')) {
+    return { ok: false, reason: `the page does not name one release below /${repository.owner}/${repository.repo}/releases/` };
+  }
+  return { ok: true, url: parsed.href };
+}
+
+/**
+ * PD-STARTUP-014's offer: what a link-only build holds once the feed names a release strictly newer than the running one
+ * (REQ-STARTUP-109; drafts and prereleases are already a check failure in `parseLatestRelease`). No asset is matched —
+ * REQ-STARTUP-107's and REQ-STARTUP-108's asset conditions do not apply — and the page is kept as the feed stated it, checked
+ * here for the face and again at the press (OQ-556).
+ */
+export interface LinkOffer {
+  readonly version: string;
+  readonly summary: string;
+  /** `html_url` as the feed stated it; `checkReleasePage` decides whether it is opened. */
+  readonly page: string | null;
+}
+
+export function selectLinkOffer(release: LatestRelease, runningVersion: string): LinkOffer | null {
+  if (!isStrictlyNewer(release.version, runningVersion)) return null;
+  return { version: release.version, summary: releaseSummary(release.body), page: release.page };
 }

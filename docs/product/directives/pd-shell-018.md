@@ -49,6 +49,14 @@ the give-way is `…/<last segment>` of the full path; at 1000×680 with no impr
 steps to the label-less and icon forms only when the chip would go below that floor (measured with stand-ins for the busiest
 state). **Not executed:** the open-release-page action (Stage 3), a screen reader's announcements, a released artifact.
 
+**Built, 2026-11-21 (R-117, the plan's Stage 3): `open-release-page`; first executed.** The member relays the parameterless
+`update.openReleasePage`; main opens the page it holds beside PD-STARTUP-014's link-only offer, checked again at the press, and
+a press with no such offer held writes one log line and nothing else (OQ-556); a failed opening is REQ-SHELL-040's transient
+error naming the address. The banner draws `ph-arrow-square-out` after its label (the notice-banner brief §6 row 5). Executed
+over fakes and in the built application (the face seam's link-only faces, a press answered by the stale-press line); the
+`review-ui` critic, iteration 1, found the glyph 0.70 px off the label's centre line, the focus ring inside the control, and
+one low finding the brief already records (§10 item 3). **Not executed:** the browser opening for real.
+
 > **Extends:** REQ-SHELL-033
 > **Narrows:** REQ-SHELL-115, REQ-NOTIFY-044
 

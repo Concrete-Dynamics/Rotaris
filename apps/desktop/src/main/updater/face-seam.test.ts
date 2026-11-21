@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { UpdateStateSchema, type UpdateState } from '@rotaris/contracts';
 import { createNoticeStore } from '../notices.js';
 import { createFaceSeam, UPDATE_FACE_NAMES } from './face-seam.js';
-import { CANCEL_DOWNLOAD, INSTALLED_TITLE, NOT_INSTALLED_TITLE, offerTitle, REFUSED_MESSAGE, updatedToTitle } from './updater.js';
+import { CANCEL_DOWNLOAD, INSTALLED_TITLE, NOT_INSTALLED_TITLE, offerTitle, OPEN_RELEASE_PAGE, REFUSED_MESSAGE, updatedToTitle } from './updater.js';
 
 /** The verification-only face seam (R-117): the updater's own faces, into the notice store and channel 17, nothing else. */
 function seam() {
@@ -30,6 +30,17 @@ describe('the update face seam — the title-bar and notice-banner briefs §11',
     expect(h.acks).toEqual([updatedToTitle('0.3.0')]);
     for (const state of h.states) expect(UpdateStateSchema.safeParse(state).success).toBe(true);
     expect(UPDATE_FACE_NAMES).toContain('downloading-unsized');
+  });
+
+  it('publishes the link-only face with its action, and with the action withheld, and no indicator for either (PD-STARTUP-014)', async () => {
+    const h = seam();
+    const shown = await h.seam.show('link-only', '0.3.0');
+    expect(shown.state.phase).toBe('none');
+    expect(h.notices.current()).toMatchObject({ severity: 'info', title: offerTitle('0.3.0'), persistent: true, action: { label: OPEN_RELEASE_PAGE, action: { kind: 'open-release-page' } } });
+    await h.seam.show('link-only-withheld', '0.3.0');
+    expect(h.notices.current()).toMatchObject({ title: offerTitle('0.3.0') });
+    expect(h.notices.current()?.action).toBeUndefined();
+    for (const state of h.states) expect(state.phase).toBe('none');
   });
 
   it('refuses a face it does not know', async () => {

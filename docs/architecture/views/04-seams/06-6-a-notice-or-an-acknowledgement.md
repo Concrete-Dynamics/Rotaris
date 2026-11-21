@@ -84,9 +84,13 @@ Invariants:
   renderer asks main for a log line by that sibling path; it still raises a persistent notice only by asking main.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.
 - **An action is dispatched in one place**, `dispatchNoticeAction` in `apps/desktop/src/renderer/main.tsx`; a member
-  whose target is not built is logged there and nothing else (since 2026-11-21 `open-release-page`, PD-SHELL-018 revision 2,
-  whose behaviour is the plan's Stage 3; `cancel-update` relays `update.cancel`, from the banner and the title-bar indicator
-  alike, REQ-SHELL-115). `retry-run` has its target since 2026-10-02 (REQ-NOTIFY-045,
+  whose target is not built is logged there and nothing else. `cancel-update` relays `update.cancel`, from the banner and the
+  title-bar indicator alike (REQ-SHELL-115); `open-release-page` (PD-SHELL-018 revision 2, OQ-556) relays
+  `update.openReleasePage` since the plan's Stage 3 (2026-11-21, PD-STARTUP-014): main holds the page beside the link-only
+  offer, checks it again at the press (`checkReleasePage`, `updater/feed.ts`) and opens it through the bounded
+  `shell.openExternal`; a press with no such offer held is one log line, and a failed opening is REQ-SHELL-040's transient
+  error from main, so the arm itself shows nothing. A new member whose target lives in main takes the same shape: a
+  parameterless command, the value held where the notice was raised, never an address or a path from the window. `retry-run` has its target since 2026-10-02 (REQ-NOTIFY-045,
   `retryRun` in `apps/desktop/src/renderer/session-actions.ts`, reading the draft the composer last published through
   `composerDraft` in `shell.ts`); no failure notice carries it yet (OQ-178). A blank draft is the engine's to retry
   (`session.retry`, `Sessions.retry`, since 2026-10-02): the last submitted prompt is read over every row with

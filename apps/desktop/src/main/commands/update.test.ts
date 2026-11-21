@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UpdateStateSchema } from '@rotaris/contracts';
+import { CommandRequestSchema, UpdateStateSchema } from '@rotaris/contracts';
 import type { CommandAt } from './context.js';
 import { updateCommands } from './update.js';
 import type { Updater } from '../updater/updater.js';
@@ -29,5 +29,16 @@ describe('the update commands — REQ-STARTUP-116, REQ-STARTUP-120, REQ-STARTUP-
     expect(await handlers['update.cancel']({ kind: 'update.cancel' }, at)).toEqual({ ok: true, value: { cancelled: true, ended: true } });
     expect(await handlers['update.state']({ kind: 'update.state' }, at)).toEqual({ ok: true, value: state });
     expect(UpdateStateSchema.safeParse(state).success).toBe(true);
+  });
+
+  it('relay `update.openReleasePage` to the updater, carrying no address (PD-STARTUP-014, OQ-556)', async () => {
+    let pressed = 0;
+    const updater = { openReleasePage: async () => { pressed += 1; return { ok: true as const, value: { opened: true, url: 'https://github.com/Concrete-Dynamics/Rotaris/releases/tag/v0.2.0' } }; } } as unknown as Updater;
+    const handlers = updateCommands({ updater });
+    expect(await handlers['update.openReleasePage']({ kind: 'update.openReleasePage' }, at)).toMatchObject({ ok: true, value: { opened: true } });
+    expect(pressed).toBe(1);
+    // The member has no field a window could name a page with: an address sent beside it is dropped by the schema.
+    const parsed = CommandRequestSchema.parse({ kind: 'update.openReleasePage', url: 'https://evil.example/' });
+    expect(parsed).toEqual({ kind: 'update.openReleasePage' });
   });
 });

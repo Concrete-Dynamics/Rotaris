@@ -32,6 +32,29 @@ one more action in REQ-SHELL-115's closed list ([`PD-SHELL-018`](pd-shell-018.md
 
 **Recorded, not built.** The first execution is owed to the stage that builds it (the plan's Stage 3).
 
+**Built, 2026-11-21 (R-117, the plan's Stage 3); first executed.** The classification (`updater/classify.ts`) answers a
+packaged build that cannot update itself `notifiable` — the Debian package, a packaged macOS build in a `.app` bundle or not,
+a packaged Windows build naming no artifact — and every other not-updatable build silent. The updater's link-only check
+makes the one request and nothing else: no launch-time settlement, no pending update, no asset, no metered probe; a strictly
+newer release raises `Rotaris {version} is available` with the summary and `Open release page` (`open-release-page`,
+PD-SHELL-018 revision 2), and no title-bar indicator. The page is `html_url`, checked by `feed.ts`'s `checkReleasePage` when the
+face is drawn and again at the press (OQ-556's terms: `https`, `github.com`, under `/Concrete-Dynamics/Rotaris/releases/`, no
+user information, no port but the default); a refusal is one `warn` line and the notice carries no action. Executed over
+fakes (`updater.link-only.test.ts`, `feed.test.ts`, `classify.test.ts`), and in the built application on the Linux agent host:
+`updater-proof`'s third launch, read as packaged by a driver-only seam, classified itself as the Debian package's case and the
+proxy sink recorded exactly one connection, `CONNECT api.github.com:443`, which it refused, then one silent-failure line and no
+file under `<data>/updates/`; the face was drawn through the driver's face seam and pressed, and the press, with no offer held,
+wrote its one line. The packaged tree `pnpm package` produced (`linux-unpacked`, no `APPIMAGE`: the Debian package's case)
+was launched once against the real feed: it classified itself link-only, made its one request, and offered nothing, the
+feed's latest being `0.1.0rc6`, the version it ran. **Decided here, not by the record:** a packaged macOS build in a bundle is link-only too, the directive
+naming "a packaged macOS build" without exception, so the `app-bundle` flavour is not produced until a macOS artifact exists;
+a packaged build of a platform no artifact is released for stays silent; the check is stricter than OQ-556's letter — no
+percent-encoding, backslash, dot segment, query, fragment or whitespace, owner and repository compared as spelled, at most
+512 characters, and something below `/releases/` named — each a refusal; an `openExternal` that never answers is bounded at
+5 s as every opener is (`open-folder.ts`). **Not executed:** a real feed answering a newer release to a packaged build (no
+endpoint may be moved, REQ-STARTUP-111; the next published release does it), the default browser actually opening, macOS and
+Windows, an installed `.deb`.
+
 > **Narrows:** REQ-STARTUP-106, REQ-STARTUP-107, REQ-STARTUP-108
 
 Its case on REQ-STARTUP-106 is the link-only build's check and its one request; on REQ-STARTUP-107 and REQ-STARTUP-108, an

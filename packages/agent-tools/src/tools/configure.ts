@@ -33,8 +33,12 @@ export interface ConfigurationPort {
 
 const configureSchema = z.object({
   operation: z.enum(CONFIGURE_OPERATIONS),
-  /** A dotted path into `agents.yaml`: `runtime.max_iterations`, `personas.coding-agent.model`, `skills.enabled`. */
-  key: z.string().min(1).max(CONFIG_KEY_PATH_MAX),
+  /**
+   * A dotted path into `agents.yaml`: `runtime.max_iterations`, `personas.coding-agent.model`, `skills.enabled`. Named
+   * `setting`, not `key`: the approval dialog masks an argument whose name reads as a secret's, and `key` does — the first
+   * execution showed the user `key=***` for the one argument the dialog exists to show (2026-11-22).
+   */
+  setting: z.string().min(1).max(CONFIG_KEY_PATH_MAX),
   /** `set` only: the value, as YAML would hold it — a string, a number, a boolean, a list or a mapping. */
   value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.unknown()), z.record(z.string(), z.unknown())]).optional(),
   /** `set` only: `workspace` (the default) or `global`, which reaches every workspace and always asks the user. */
@@ -43,9 +47,9 @@ const configureSchema = z.object({
 export type ConfigureArgs = z.infer<typeof configureSchema>;
 
 const DESCRIPTION = [
-  'Read or change Rotaris\'s own configuration (agents.yaml) by key. The file tools never write .rotaris/ — use this.',
+  'Read or change Rotaris\'s own configuration (agents.yaml) by setting name. The file tools never write .rotaris/ — use this.',
   'Operations: read (the effective value and the file that states it), explain (what kind of key it is and how a change is approved), set (write one key).',
-  'A key is a dotted path: models.<name>.temperature, personas.<role>.model, runtime.max_iterations, skills.enabled, display.show_tool_inputs.',
+  'The setting is a dotted path: models.<name>.temperature, personas.<role>.model, runtime.max_iterations, skills.enabled, display.show_tool_inputs.',
   'set writes the workspace scope unless scope is global. A change takes effect at the next run, not the current one.',
   'Keys that decide what a run may do (permission mode, sandbox, network, hooks, tool servers, a role\'s tools) always ask the user first. Credentials are never accessible.',
 ].join(' ');
@@ -66,9 +70,9 @@ export function configureTool(port: ConfigurationPort): ToolExecutor<ConfigureAr
     name: 'configure',
     description: DESCRIPTION,
     schema: configureSchema,
-    label: (args) => `${args.operation} ${args.key}${args.operation === 'set' ? ` (${args.scope ?? 'workspace'})` : ''}`,
+    label: (args) => `${args.operation} ${args.setting}${args.operation === 'set' ? ` (${args.scope ?? 'workspace'})` : ''}`,
     async execute(args) {
-      const key = args.key.trim();
+      const key = args.setting.trim();
       const klass = configKeyClass(key);
       if (configKeySegments(key) === null || klass === 'unknown') {
         return errorObservation(`Unknown configuration key: ${key}. A key is a dotted path from one of the top-level keys: default_persona, the model slots (small_model, medium_model, large_model, …), models, personas, runtime, compressor, circuit_breaker, display, transcript, skills, instructions, checkpoints, requirements, dictation, mcp_servers, hooks.`);

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { configKeyClass, configureSetAlwaysAsks } from '@rotaris/contracts';
-import { buildPolicy, evaluate, permissionRequest, PolicyContext, type EvaluationEnv } from '../policy.js';
+import { argumentSummary, buildPolicy, evaluate, permissionRequest, PolicyContext, type EvaluationEnv } from '../policy.js';
 import { configureTool, type ConfigurationPort } from './configure.js';
 import { checkFence, pathRuleFor, protectedWriteRefusal } from './fence.js';
 import type { ToolContext } from './types.js';
@@ -47,12 +47,12 @@ describe('the key classes (PD-CONFIG-014 clause 4)', () => {
 
 describe('the gate rules on configure before any grant (PD-CONFIG-014 clauses 3 and 4)', () => {
   const env: EvaluationEnv = { attended: true, workspaceRoot: '/ws', resolvePath: (p) => p, publicTool: () => true };
-  const set = (key: string, scope?: string) => permissionRequest('configure', 'orchestrator', { operation: 'set', key, value: 'x', ...(scope ? { scope } : {}) });
+  const set = (key: string, scope?: string) => permissionRequest('configure', 'orchestrator', { operation: 'set', setting: key, value: 'x', ...(scope ? { scope } : {}) });
 
   it('read and explain are never gated', () => {
     const policy = buildPolicy({ preset: 'restricted', workspaceRoot: '/ws' });
-    expect(evaluate(policy, [], permissionRequest('configure', 'orchestrator', { operation: 'read', key: 'runtime.permission_mode' }), env).decision).toBe('allow');
-    expect(evaluate(policy, [], permissionRequest('configure', 'orchestrator', { operation: 'explain', key: 'hooks' }), env).decision).toBe('allow');
+    expect(evaluate(policy, [], permissionRequest('configure', 'orchestrator', { operation: 'read', setting: 'runtime.permission_mode' }), env).decision).toBe('allow');
+    expect(evaluate(policy, [], permissionRequest('configure', 'orchestrator', { operation: 'explain', setting: 'hooks' }), env).decision).toBe('allow');
   });
 
   it('an authority set asks even under autonomous, and a session grant does not pre-approve it', () => {
@@ -76,6 +76,10 @@ describe('the gate rules on configure before any grant (PD-CONFIG-014 clauses 3 
     expect(ordinary.decision).toBe('allow');
   });
 
+  it('the dialog shows the setting: its argument name is not masked as a secret\'s', () => {
+    expect(argumentSummary(set('runtime.permission_mode'))).toContain('setting=runtime.permission_mode');
+  });
+
   it('an MCP tool offered under the name is not ruled as the public tool', () => {
     const policy = buildPolicy({ preset: 'autonomous', workspaceRoot: '/ws' });
     expect(evaluate(policy, [], set('hooks'), { ...env, publicTool: () => false }).ruleId).not.toBe('builtin:configure-authority');
@@ -85,20 +89,20 @@ describe('the gate rules on configure before any grant (PD-CONFIG-014 clauses 3 
 describe('the configure executor (PD-CONFIG-014 clauses 1 and 5)', () => {
   it('reads a value with the file that states it', async () => {
     const tool = configureTool(fakePort({ medium_model: 'local' }));
-    const obs = await tool.execute({ operation: 'read', key: 'medium_model' }, ctx);
+    const obs = await tool.execute({ operation: 'read', setting: 'medium_model' }, ctx);
     expect(obs.isError).toBe(false);
     expect(obs.text).toContain('medium_model = "local"');
     expect(obs.text).toContain('workspace');
   });
 
   it('explains the class', async () => {
-    const obs = await configureTool(fakePort()).execute({ operation: 'explain', key: 'runtime.sandbox_mode' }, ctx);
+    const obs = await configureTool(fakePort()).execute({ operation: 'explain', setting: 'runtime.sandbox_mode' }, ctx);
     expect(obs.text).toContain('authority key');
   });
 
   it('sets one key in the workspace scope by default and says it applies at the next run', async () => {
     const port = fakePort({ medium_model: 'a' });
-    const obs = await configureTool(port).execute({ operation: 'set', key: 'medium_model', value: 'b' }, ctx);
+    const obs = await configureTool(port).execute({ operation: 'set', setting: 'medium_model', value: 'b' }, ctx);
     expect(port.writes).toEqual([{ key: 'medium_model', scope: 'workspace', value: 'b' }]);
     expect(obs.text).toContain('"a" → "b"');
     expect(obs.text).toContain('next run');
@@ -107,16 +111,16 @@ describe('the configure executor (PD-CONFIG-014 clauses 1 and 5)', () => {
   it('refuses a credential, an unknown key and a set with no value, writing nothing', async () => {
     const port = fakePort();
     const tool = configureTool(port);
-    expect((await tool.execute({ operation: 'set', key: 'models.x.api_key', value: 'sk' }, ctx)).isError).toBe(true);
-    expect((await tool.execute({ operation: 'read', key: 'models.x.api_key' }, ctx)).isError).toBe(true);
-    expect((await tool.execute({ operation: 'set', key: 'no_such_key', value: 1 }, ctx)).isError).toBe(true);
-    expect((await tool.execute({ operation: 'set', key: 'medium_model' }, ctx)).isError).toBe(true);
+    expect((await tool.execute({ operation: 'set', setting: 'models.x.api_key', value: 'sk' }, ctx)).isError).toBe(true);
+    expect((await tool.execute({ operation: 'read', setting: 'models.x.api_key' }, ctx)).isError).toBe(true);
+    expect((await tool.execute({ operation: 'set', setting: 'no_such_key', value: 1 }, ctx)).isError).toBe(true);
+    expect((await tool.execute({ operation: 'set', setting: 'medium_model' }, ctx)).isError).toBe(true);
     expect(port.writes).toEqual([]);
   });
 
   it('reports a refused write as an error', async () => {
     const port: ConfigurationPort = { read: () => ({ value: undefined, scope: 'default', file: null }), write: () => Promise.resolve({ ok: false, error: 'the configuration would not load' }) };
-    const obs = await configureTool(port).execute({ operation: 'set', key: 'runtime.max_iterations', value: -1 }, ctx);
+    const obs = await configureTool(port).execute({ operation: 'set', setting: 'runtime.max_iterations', value: -1 }, ctx);
     expect(obs.isError).toBe(true);
     expect(obs.text).toContain('would not load');
   });

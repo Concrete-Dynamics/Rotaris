@@ -435,7 +435,7 @@ export function evaluate(policy: Policy, approvals: readonly SessionApproval[], 
       if (op === 'read' || op === 'explain') {
         return { decision: 'allow', ruleId: 'builtin:configure-read', source: 'builtin', reason: `'configure ${op}' reads the saved configuration and is never gated.`, description: 'configuration read' };
       }
-      const key = typeof req.args['key'] === 'string' ? req.args['key'] : '';
+      const key = typeof req.args['setting'] === 'string' ? req.args['setting'] : '';
       const scope = typeof req.args['scope'] === 'string' ? req.args['scope'] : undefined;
       if (configureSetAlwaysAsks(key, scope)) {
         const to: Decision = env.attended ? 'ask' : 'deny';

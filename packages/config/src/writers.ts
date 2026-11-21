@@ -1,5 +1,5 @@
 import { readFileSync, rmSync } from 'node:fs';
-import { isMap, isNode, type Document, type Node, type YAMLMap } from 'yaml';
+import { isMap, isNode, isScalar, type Document, type Node, type YAMLMap } from 'yaml';
 import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type DesktopSaveRuntimeKey, type DictationConfigView } from '@rotaris/contracts';
 import { err, millis, ok, type Result, type Timers } from '@rotaris/kernel';
 import { replaceDocument, replaceDocumentSync, type RetryLadder } from '@rotaris/platform';
@@ -199,6 +199,13 @@ export async function writeConfigKey(file: string, segments: readonly string[], 
     if (segments[0] === 'runtime' && segments.length === 2) {
       const problems = validateRuntimeField(segments[1]!, value);
       if (problems.length > 0) return err({ code: 'invalid', file, fault: `${problems[0]!.path}: ${problems[0]!.message}` });
+    }
+    // A scalar replacing a scalar keeps its node, so the comment written on that line stays with it (REQ-CONFIG-252): the
+    // first execution replaced the node and lost `permission_mode: autonomous # keep`'s comment (2026-11-22).
+    if (isScalar(beforeNode) && (value === null || typeof value !== 'object')) {
+      beforeNode.value = value;
+      const r = await commit(file, doc, deps.timers);
+      return r.ok ? ok({ ...r.value, stated, before, previousText }) : r;
     }
     let patch: unknown = value;
     for (let i = segments.length - 1; i >= 0; i -= 1) patch = { [segments[i]!]: patch };

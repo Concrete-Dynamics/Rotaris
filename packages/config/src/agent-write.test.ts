@@ -41,6 +41,10 @@ describe('writeConfigKey (PD-CONFIG-014 clause 2)', () => {
     expect(text).toContain('# keep me');
     expect(text).toContain('max_depth: 4 # inline');
     expect(text).toContain('max_iterations: 25');
+    // A scalar replaced in place keeps the comment on its line.
+    writeFileSync(s.wsFile, 'runtime:\n  permission_mode: autonomous # keep\n');
+    await writeConfigKey(s.wsFile, ['runtime', 'permission_mode'], 'restricted');
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  permission_mode: restricted # keep\n');
     expect(text).toContain('medium_model: a');
   });
 

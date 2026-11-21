@@ -62,7 +62,8 @@ const ASK: readonly string[] = ['ask_questions'];
  * removes what a prerequisite leaves unmet (REQ-TOOLS-004). The engine's persona table reads its tool lists from here.
  */
 export const BUILT_IN_ROLE_TOOLS: Readonly<Record<BuiltInRoleName, readonly string[]>> = Object.freeze({
-  orchestrator: [...READ_TOOLS, ...WRITE_TOOLS, 'terminal', ...DELEGATION, ...ASK],
+  // PD-CONFIG-014: the entry role is the one that talks to the user, so it is the one that changes the configuration.
+  orchestrator: [...READ_TOOLS, ...WRITE_TOOLS, 'terminal', ...DELEGATION, ...ASK, 'configure'],
   'requirements-engineer': READ_TOOLS,
   'codebase-analyst': READ_TOOLS,
   librarian: READ_TOOLS,

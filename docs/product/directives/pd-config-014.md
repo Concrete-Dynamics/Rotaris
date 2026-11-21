@@ -4,7 +4,8 @@
 
 ### PD-CONFIG-014 — an agent changes Rotaris's own configuration through one tool, never through a file write
 
-*Minted 2026-11-21, not yet built.*
+*Revision 2, 2026-11-22, [R-121](../requests.md#r-121): built; clause 3 asks rather than refuses, and REQ-TOOLS-001's
+registry gains the tool's name. Clause 7's Undo and clause 4's prior value in the dialog are not built yet (below).*
 
 1. **One tool.** A run SHALL be offered one configuration tool, `configure`, with three operations: `read` (the effective
    value of a named key and the scope it came from), `explain` (what a named key does and which values it takes) and
@@ -16,8 +17,13 @@
    followed by the configuration reload and the announcement that the screens already hear. The value SHALL be
    validated against the key's own rules before anything is written; a value the load would reject is refused with the
    reason and writes nothing.
-3. **Scope.** `set` SHALL target the workspace's `agents.yaml` unless the user asked, in the run that makes the change,
-   for the global scope; a global `set` with no such ask is refused, naming the workspace scope as the way.
+3. **Scope** — revision 2. `set` SHALL target the workspace's `agents.yaml` unless it names the global scope, and a global
+   `set` SHALL always ask the user, in every permission mode, as an authority key does (clause 4): the user's answer is the
+   ask, since a model's own claim that the user asked is not one the product can check.
+
+   > Revision 1 said, and no longer governs: "`set` SHALL target the workspace's `agents.yaml` unless the user asked, in
+   > the run that makes the change, for the global scope; a global `set` with no such ask is refused, naming the workspace
+   > scope as the way."
 4. **Two classes of key.** Every key SHALL belong to exactly one class, stated in one place the tool and the screens read:
    - **ordinary** — what a run does within the authority it already has: models and their parameters, personas, skills
      enabled or disabled, the instruction files' overrides, display and transcript settings. A `set` of one is approved
@@ -46,7 +52,7 @@ OpenCode give dedicated commands (`/create-rule`, `cline mcp add`) and schemas. 
 agent may write freely and the surface that decides its own authority are kept apart, and the second is gated however
 the run is configured. Rotaris already had half of that: REQ-SANDBOX-056 keeps `.rotaris` read-only to a confined
 command so that it cannot "write the configuration that governs a later run". The file tools did not share that fence
-([the defect note](../../defects/the-file-tools-write-into-rotaris-and-git-that-the-sandbox-keeps-read-only.md)), so a
+([the defect note](../../archive/defects/the-file-tools-write-into-rotaris-and-git-that-the-sandbox-keeps-read-only.md)), so a
 run could already rewrite its own configuration as raw YAML, unvalidated and approved as any file edit. A dedicated tool
 gives the change a schema, a scope and an approval point, and lets the file tools close the route REQ-SANDBOX-056
 meant closed. What it costs: an agent can no longer edit `.rotaris/` by hand at all — a file there that `configure`
@@ -55,12 +61,22 @@ change made by `configure` waits for the next run. The two choices left open whe
 [R-098](../requests.md#r-098)'s standing delegation: the global scope only on the user's ask (an agent in one workspace
 should not change every other), and tool servers counted as authority (an entry is a command the product will execute).
 
+REQ-TOOLS-001 is narrowed in one case, stated exhaustively: its registry holds `configure` beside the nineteen names it
+lists, declaring that the tool reads workspace files and neither writes them nor runs commands (the write is the
+workspace service's), and the built-in `orchestrator` role declares it. Every other clause of the requirement governs.
 REQ-TOOLS-130 is narrowed in one case, stated exhaustively: with the outside-workspace opt-out on, a file tool's write
 to a path under the global configuration directory is still refused (clause 6). Every other path the opt-out admits it
 still admits.
 
-> **Narrows:** REQ-TOOLS-130
+> **Narrows:** REQ-TOOLS-001, REQ-TOOLS-130
 > **Extends:** REQ-CONFIG-441, REQ-TOOLS-129, REQ-SANDBOX-056
+
+**What is built, and what is owed (revision 2).** Built: clauses 1 to 6, the tool, the one writer with the load that
+restores a refused value, the classes, the gate's ruling, the next-run timing and the closed file tools. Clause 7 is
+built in part: the gate's decision on every `set` reaches the permission audit trail as any decision does, and the tool's
+result row in the transcript carries the key, the scope, the value before and the value after. **Owed:** the row's
+Undo control, and the approval dialog's naming of the value the key holds now (it names the key, the scope and the value
+proposed, from the call's own arguments). Both are a drawn surface, and wait for that surface's own design pass.
 
 *Raised by the owner, 2026-11-21, in conversation ("rotaris needs to be able to change its own configuration via
 workspace", then "Yes, log it" over the plan); logged as [R-121](../requests.md#r-121). Minted by the agent that drafted

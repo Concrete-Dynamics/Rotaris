@@ -78,6 +78,11 @@ Invariants:
   `DelegationPort` request (`agent-tools/tools/delegation.ts`), `DelegateRequest` (`engine/children/delegation.ts`), and
   `IterationChildren.delegate`'s admission, before `ChildLedger.spawn`, with a refusal `rejected` and no record. A field the
   child's record keeps is a store column (§3) and a `SpawnInput` field carried by `ChildLedger.spawn` into `ChildInsert`.
+- **A tool the gate rules on by its own arguments** has its ruling in `policy.ts`'s `evaluate`, before the session approvals
+  and the rules, so no grant or preset reaches it: `configure` ([`PD-CONFIG-014`](../../../product/directives/pd-config-014.md#pd-config-014))
+  is allowed for `read`/`explain`, always asks for a `set` of an authority key or in the global scope (denied with no one to
+  ask), and otherwise falls through to the mode. The key classes are `contracts/src/configuration-keys.ts`, read by the gate,
+  the executor and the workspace service alike.
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](../06-sequences/02-2-a-permission-approval-end-to-end.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress

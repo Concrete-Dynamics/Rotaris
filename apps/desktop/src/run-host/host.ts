@@ -18,6 +18,7 @@ import { SkillHost } from './skills.js'; // ADR-0063
 import { captureAfterRun, dalWhileOpen } from './improvement-capture.js';
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, postRunAnalystOf, restingCatalogueOf, type ConfiguredRun } from './configuration.js';
 import { reloadWorkspaceConfiguration } from './mcp-reload.js';
+import { configurationPort } from './configure-port.js';
 import { leasedSetup, leaseForContinuation, LeaseReportLog, type LeasedSetup } from './launch.js';
 import { LeasedCredentials, LEASE_ASK_MS } from './leased-credentials.js';
 import { ClaudeCliModelClient } from './claude-cli/client.js';
@@ -489,6 +490,9 @@ export function createRunHost() {
       quitting: () => presenters.quitting,
       // Verification only, compiled out of a packaged build: PD-TOOLS-013 revision 2 (a) through the run host (`throw-on-abort.ts`).
       throwOnAbort: throwOnAbortTools,
+      // PD-CONFIG-014: the global configuration directory is closed to the file tools, and `configure` is the way in.
+      globalConfigDir: configDir,
+      configuration: (workspaceRoot) => configurationPort({ globalDir: configDir, workspaceRoot, ask, reload: (root) => { reloadConfiguration(root); }, log }),
       runtime: () => configuredRuns.get(ctx.sessionId)?.runtime ?? configureRunFallback(),
       personas: () => configuredRuns.get(ctx.sessionId)?.personas ?? null,
       // REQ-WORKSPACE-059 (ADR-0063): the cataloged skill directories as additional READ roots, so an agent can

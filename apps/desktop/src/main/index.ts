@@ -406,6 +406,22 @@ async function main(): Promise<void> {
       if (!svc) return { kind: 'refused', code: 'workspace.none', headline: `no workspace service is running for ${a.workspaceRoot}` };
       return svc.link.request(a, millis(a.kind === 'checkpoint.capture' ? 320_000 : 60_000));
     }
+    /*
+     * PD-CONFIG-014 clause 2: the `configure` tool's write. The run host never writes a configuration file, so main relays
+     * it to the workspace service of that root — the one writer — and announces the reloaded snapshot as a Settings write
+     * is announced (`config:changed`), so the screen shows the new value without a restart (clause 5).
+     */
+    if (a.kind === 'config.agentWrite') {
+      const root = canonicalPath(a.workspaceRoot);
+      const svc = services.get(root);
+      if (!svc) return { kind: 'refused', code: 'workspace.none', headline: `no workspace service is running for ${a.workspaceRoot}` };
+      const r = await svc.link.request({ ...a, workspaceRoot: root }, millis(30_000));
+      if (r.kind === 'config.agentWritten') {
+        void configAnnouncer(mainWindows, services, configFatal)(root, r.snapshot);
+        log(`configuration key ${a.key} written by an agent for ${root}`);
+      }
+      return r;
+    }
     if (a.kind !== 'credentials.lease') return { kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from the run host` };
     // REQ-PROVIDER-067: a credential within the refresh margin is renewed here, before its bearer is handed over.
     const { bearers, headers, renewable, report } = await providers.lease(a.providerIds);
@@ -591,7 +607,7 @@ async function main(): Promise<void> {
           // PD-TRACE-002 clause 3: one step of the survey, on the host where the model resolves; the root is the canonical one, as above.
           case 'survey.step': return runHost.request({ kind: 'survey.step', workspaceRoot: key, messages: a.messages }, millis(195_000));
           // Named so that a kind added to the ask union is routed or refused on purpose (R-091): main routes none of these from a workspace service.
-          case 'checkpoint.capture': case 'checkpoint.refs': case 'checkpoint.prune': case 'checkpoint.deleteNamespace': case 'improvements.command': case 'credentials.lease':
+          case 'checkpoint.capture': case 'checkpoint.refs': case 'checkpoint.prune': case 'checkpoint.deleteNamespace': case 'improvements.command': case 'credentials.lease': case 'config.agentWrite':
           default: return Promise.resolve({ kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from a workspace service` } as ProcessReply);
         }
       });

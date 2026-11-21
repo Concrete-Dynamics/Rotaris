@@ -3,7 +3,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { toIsoUtc, type Clocks, type WallClock } from '@rotaris/kernel';
 import { presetRank, resolvePreset, restrictionsAllow, TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
-  askQuestionsTool, buildPolicy, directWorkBundle, grantsOn, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
+  askQuestionsTool, buildPolicy, configureTool, type ConfigurationPort, directWorkBundle, grantsOn, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { aliasesAmong, BUILT_IN_PERSONAS, delegationTargetsFor, EMPTY_MCP_EVIDENCE, isNativeFileWritingTool, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
@@ -222,6 +222,14 @@ export interface ToolPortDeps {
    * executor rejects once its call's signal aborts (`throw-on-abort.ts`). Absent or empty in the product and in a test.
    */
   readonly throwOnAbort?: ReadonlySet<string> | undefined;
+  /** PD-CONFIG-014 clause 6: the global configuration directory, which no file-tool write reaches. Absent in a test. */
+  readonly globalConfigDir?: string | undefined;
+  /**
+   * PD-CONFIG-014: the `configure` tool's port for a workspace — the saved configuration read, and the one write, which
+   * main relays to the workspace service. Absent (a test, a build with no main to ask): the tool has no executor and is
+   * removed from every persona (REQ-TOOLS-004).
+   */
+  readonly configuration?: ((workspaceRoot: string) => ConfigurationPort) | undefined;
 }
 
 /** REQ-TOOLS-104/106: the backend by presence alone; the PTY factory loaded once. Null when no shell exists on the host. */
@@ -310,7 +318,7 @@ function backgroundAttribution(writer: SessionWriter, sessionId: string, taskId:
 const NO_NAMES: ReadonlySet<string> = new Set();
 
 /** The executors this build registers (decision 3 of the plan, plus `fetch` since Part N); the registry removes any other declared name (REQ-TOOLS-004). */
-function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todoExecutor: ToolExecutor, attribution?: BackgroundAttribution): Map<string, ToolExecutor> {
+function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todoExecutor: ToolExecutor, attribution?: BackgroundAttribution, baseRoot?: string): Map<string, ToolExecutor> {
   /*
    * REQ-CONFIG-468 and REQ-WORKSPACE-059: the additional read-only roots and the cataloged skill directories
    * reach the fence, which is built PER PORT from this run's configuration.
@@ -325,7 +333,8 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
    * tool. Invisible until now because the key's default is empty; the first value that differs is the skill
    * directories, which a rescan changes and which REQ-WORKSPACE-069 requires to govern agents built after it.
    */
-  const fence = { workspaceRoot: root, allowOutsideWorkspace: runtime.allowOutsideWorkspace, additionalReadOnlyRoots: [...runtime.additionalReadOnlyRoots, ...(deps.skillReadRoots?.(root) ?? [])] };
+  // PD-CONFIG-014 clause 6: the global configuration directory is a protected write root whatever the opt-out says.
+  const fence = { workspaceRoot: root, allowOutsideWorkspace: runtime.allowOutsideWorkspace, additionalReadOnlyRoots: [...runtime.additionalReadOnlyRoots, ...(deps.skillReadRoots?.(root) ?? [])], protectedWriteRoots: deps.globalConfigDir === undefined ? [] : [deps.globalConfigDir] };
   let state = deps.fileStates.get(root);
   if (!state) { state = new FileToolState(); deps.fileStates.set(root, state); }
   /*
@@ -343,6 +352,8 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
     // ADR-0023: the policy is read per call from the saved files (REQ-SANDBOX-038); the gate resolved any `ask` before execution (REQ-TOOLS-091).
     fetchTool({ policy: deps.egress(root), timers: deps.clocks.timers }),
   ];
+  // PD-CONFIG-014: the configuration lives in the BASE workspace's `.rotaris/`, so the port is the base root's, never a worktree's.
+  if (deps.configuration && baseRoot !== undefined) list.push(configureTool(deps.configuration(baseRoot)));
   /*
    * ADR-0022's terminal enforcement point. REQ-SANDBOX-093: the specification is resolved AFRESH for
    * each call, from the issuing run's configuration and the conversation's actual working directory,
@@ -503,7 +514,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // discharged with it.
   const shellLimits = deps.configured?.(ctx.workspaceRoot)?.cfg.runtime;
   if (deps.terminal && shellLimits) deps.terminal.setBackgroundLimits({ maxSessions: shellLimits.shell_max_background_sessions, timeoutS: shellLimits.shell_background_timeout });
-  const executors = executorsFor(root, deps, runtime, watchedTodo, ctx.parentId === undefined ? undefined : backgroundAttribution(ctx.writer, ctx.sessionId, ctx.parentId));
+  const executors = executorsFor(root, deps, runtime, watchedTodo, ctx.parentId === undefined ? undefined : backgroundAttribution(ctx.writer, ctx.sessionId, ctx.parentId), ctx.workspaceRoot);
   // ADR-0036: the configured persona over the built-in table; the built-in table alone when no configuration resolved.
   const resolver = deps.personas(ctx.workspaceRoot);
   const persona = resolver?.resolve(ctx.persona)?.persona ?? BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;

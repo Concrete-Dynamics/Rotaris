@@ -39,7 +39,9 @@ Part 2 of 2 of [the state-ownership view](../05-state-ownership.md), which holds
   notice, preference, theme and credential process, and nothing else durable.
 - **Only the workspace service migrates the store** (W-02), refusing first one failing `quick_check` (C1); only it spawns Git. The run host asks main,
   which asks the service.
-- **The run host never writes a configuration file** and never reads `tokens/`. It receives leases.
+- **The run host never writes a configuration file** and never reads `tokens/`. It receives leases. The `configure` tool
+  ([`PD-CONFIG-014`](../../../product/directives/pd-config-014.md#pd-config-014)) asks main (`config.agentWrite`), which asks the service; no file tool writes `.rotaris/`,
+  `.git/` or the global configuration directory (the fence's `protectedWriteRoots`).
 - **A renderer owns nothing durable.** It touches no file, no store and no credential, and it does not even
   navigate — a link asks main (`shell.openExternal`).
 - **A per-workspace preference key is minted by main** from the workspace that window opened, so a window

@@ -40,6 +40,8 @@ export const DECLARATIONS: Readonly<Record<PublicToolName, Declaration>> = Objec
   artifact_read: d(false, false, false),
   artifact_list: d(false, false, false),
   artifact_write: d(false, false, false),
+  // PD-CONFIG-014: reads the saved configuration; its one write goes through the workspace service, never a file tool.
+  configure: d(true, false, false),
 });
 
 /** REQ-TOOLS-007: the read-only class, exactly. */

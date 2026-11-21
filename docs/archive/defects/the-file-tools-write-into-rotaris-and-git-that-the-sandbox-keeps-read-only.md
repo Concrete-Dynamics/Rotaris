@@ -1,5 +1,10 @@
 ## The file tools write into `.rotaris/` and `.git/`, which the sandbox keeps read-only
 
+**Outcome: repaired 2026-11-22 (R-121, `PD-CONFIG-014` clause 6).** `checkFence` refuses a write under the workspace's
+`.rotaris/` and `.git/` (`protectedWriteRefusal`, compared under the platform's path rule) and under the global
+configuration directory (`FenceConfig.protectedWriteRoots`, filled by the run host) whatever the opt-out says; the
+refusal for `.rotaris/` names the `configure` tool. Reads are unchanged. Held by `packages/agent-tools/src/tools/configure.test.ts`.
+
 The one workspace-boundary check the file tools share (`checkFence`) admits every write whose real path lies inside the
 workspace root, and nothing beneath it is excepted. So `write_file` and `edit_file` can rewrite
 `<workspace>/.rotaris/agents.yaml` (the configuration a later run resolves, as raw YAML with no validation) and can
@@ -18,7 +23,7 @@ No requirement states that the file tools may or may not write there, so none is
 REQ-SANDBOX-056's stated reason is defeated: a confined command "must therefore never be able to install a repository
 hook that would later run outside confinement, nor to write the configuration that governs a later run" — and a file
 tool in the same run can do both. REQ-TOOLS-129 is the check that would carry the exception.
-[`PD-CONFIG-014`](../product/directives/pd-config-014.md#pd-config-014) clause 6 decides the repair (R-121): the file
+[`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014) clause 6 decides the repair (R-121): the file
 tools refuse those paths and name the `configure` tool.
 
 ## Relevant files

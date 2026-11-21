@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { isMap, isNode, type Document, type Node, type YAMLMap } from 'yaml';
 import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type DesktopSaveRuntimeKey, type DictationConfigView } from '@rotaris/contracts';
 import { err, millis, ok, type Result, type Timers } from '@rotaris/kernel';
@@ -165,6 +165,61 @@ export async function writeConfigFields(file: string, patch: PlainMap, deps: Wri
   }
   overlayDocument(opened.value.doc, patch);
   return commit(file, opened.value.doc, deps.timers);
+}
+
+/** PD-CONFIG-014: what `writeConfigKey` found and wrote — the key's stated value before, and the file's text before. */
+export interface KeyWriteOutcome extends WriteOutcome {
+  /** Whether the file stated the key before the write. */
+  readonly stated: boolean;
+  /** The stated value before the write, as plain data; undefined where `stated` is false. */
+  readonly before: unknown;
+  /** The file's text before the write, or null where there was no file: what a refused load restores. */
+  readonly previousText: string | null;
+}
+
+/**
+ * PD-CONFIG-014 clause 2: one key of one `agents.yaml`, through the scoped per-field path (REQ-CONFIG-441) — the key's
+ * segments become a one-path patch overlaid per field, so comments, order and every other key stay as they are; `value`
+ * undefined REMOVES the key instead (an Undo of a key the file did not state). An unparseable file is refused unwritten
+ * (REQ-CONFIG-442), and a `runtime:` value is validated on assignment (REQ-CONFIG-111), as `writeConfigFields` does.
+ */
+export async function writeConfigKey(file: string, segments: readonly string[], value: unknown, deps: WriterDeps = {}): Promise<Result<KeyWriteOutcome, WriteRefusal>> {
+  if (segments.length === 0) return err({ code: 'invalid', file, fault: 'no key was named' });
+  let previousText: string | null;
+  try { previousText = readFileSync(file, 'utf8'); } catch { previousText = null; }
+  const opened = openDocument(file);
+  if (!opened.ok) return opened;
+  const doc = opened.value.doc;
+  const stated = doc.hasIn(segments as string[]);
+  const beforeNode = stated ? doc.getIn(segments as string[], true) : undefined;
+  const before = beforeNode === undefined ? undefined : isNode(beforeNode) ? plainOf(beforeNode) : beforeNode;
+  if (value === undefined) {
+    if (stated) doc.deleteIn(segments as string[]);
+  } else {
+    if (segments[0] === 'runtime' && segments.length === 2) {
+      const problems = validateRuntimeField(segments[1]!, value);
+      if (problems.length > 0) return err({ code: 'invalid', file, fault: `${problems[0]!.path}: ${problems[0]!.message}` });
+    }
+    let patch: unknown = value;
+    for (let i = segments.length - 1; i >= 0; i -= 1) patch = { [segments[i]!]: patch };
+    // A value that is itself a mapping REPLACES what the key held rather than overlaying it, so a set states exactly what
+    // it names: the overlay is per field above the key and whole at it.
+    if (stated && isMap(beforeNode) && value !== null && typeof value === 'object' && !Array.isArray(value)) doc.deleteIn(segments as string[]);
+    overlayDocument(doc, patch as PlainMap);
+  }
+  const r = await commit(file, doc, deps.timers);
+  return r.ok ? ok({ ...r.value, stated, before, previousText }) : r;
+}
+
+/** PD-CONFIG-014 clause 2: put a file back exactly as `writeConfigKey` found it, after a load refused what it wrote. */
+export async function restoreConfigText(file: string, previousText: string | null, deps: WriterDeps = {}): Promise<Result<void, WriteRefusal>> {
+  if (previousText === null) {
+    try { rmSync(file, { force: true }); return ok(undefined); } catch (cause) { return err({ code: 'write-failed', file, fault: String(cause) }); }
+  }
+  const r = deps.timers
+    ? await replaceDocument(file, previousText, { mode: CONFIG_FILE_MODE, createParent: true, ladder: CONFIG_WRITE_LADDER, timers: deps.timers })
+    : replaceDocumentSync(file, previousText, { mode: CONFIG_FILE_MODE, createParent: true });
+  return r.ok ? ok(undefined) : err({ code: 'write-failed', file, fault: r.error.detail ?? r.error.headline });
 }
 
 /** REQ-LIBRARY-009/063: gate proposals use the running verifier-section schema and the scoped config writer. */

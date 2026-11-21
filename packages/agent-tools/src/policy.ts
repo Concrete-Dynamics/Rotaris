@@ -1,5 +1,5 @@
 import { clipValue, isSecretLookingName, redact, textOf } from '@rotaris/kernel';
-import { type Decision, type DecisionSource, type PermissionPreset, presetRank, resolvePreset } from '@rotaris/contracts';
+import { configKeyClass, configureSetAlwaysAsks, type Decision, type DecisionSource, type PermissionPreset, presetRank, resolvePreset } from '@rotaris/contracts';
 import { isRemoteUrl } from './egress.js';
 import { canonicalToolName, META_TOOL_NAMES, NETWORK_CLASS, READ_ONLY_CLASS } from './registry.js';
 import { decompose, escalationMatcherFires, patternMatcherFires, pipeToShellMatcherFires, type Segment, tokenizePattern } from './scanner.js';
@@ -423,6 +423,25 @@ export function evaluate(policy: Policy, approvals: readonly SessionApproval[], 
   try {
     if (META_TOOL_NAMES.has(req.toolName.toLowerCase())) {
       return { decision: 'allow', ruleId: 'builtin:meta-tool', source: 'builtin', reason: `'${req.toolName}' is a loop-control tool and is never gated.`, description: 'loop-control tool' };
+    }
+    /*
+     * PD-CONFIG-014 clauses 3 and 4: the `configure` tool's own ruling, BEFORE the session approvals and the rules, so no
+     * grant, preset or rule reaches it. `read` and `explain` only read the saved configuration and are allowed; a `set` of
+     * an authority key, or any `set` in the global scope, always asks the user — and with no one to ask is denied, never
+     * handed to the headless policy. Any other `set` falls through to the mode in effect, as a file write does.
+     */
+    if (req.toolName === 'configure' && env.publicTool(req.toolName)) {
+      const op = req.args['operation'];
+      if (op === 'read' || op === 'explain') {
+        return { decision: 'allow', ruleId: 'builtin:configure-read', source: 'builtin', reason: `'configure ${op}' reads the saved configuration and is never gated.`, description: 'configuration read' };
+      }
+      const key = typeof req.args['key'] === 'string' ? req.args['key'] : '';
+      const scope = typeof req.args['scope'] === 'string' ? req.args['scope'] : undefined;
+      if (configureSetAlwaysAsks(key, scope)) {
+        const to: Decision = env.attended ? 'ask' : 'deny';
+        const what = configKeyClass(key) === 'authority' ? `'${key}' decides what a later run may do` : `the global scope reaches every workspace`;
+        return { decision: to, ruleId: 'builtin:configure-authority', source: 'builtin', reason: `Changing the configuration: ${what}, so the user is always asked${to === 'deny' ? ', and no one is there to ask' : ''}.`, description: 'a configuration change the user always approves' };
+      }
     }
     validatePolicy(policy);
     let laterPaths: readonly string[] | 'none' | 'unresolvable' | undefined;

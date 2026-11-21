@@ -11,7 +11,7 @@ import { RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { DISPLAY_DEFAULTS } from './display-section.js';
 import { renderFatal } from './validate.js';
 import { discoverInstructionFiles, WORKSPACE_INSTRUCTION_FILE_NAMES } from './instructions.js';
-import { saveDesktop, writeConfigFields, type DesktopSave, type RoleEdit, type RoleFieldEdits, type WriteRefusal } from './writers.js';
+import { restoreConfigText, saveDesktop, writeConfigFields, writeConfigKey, type DesktopSave, type RoleEdit, type RoleFieldEdits, type WriteRefusal } from './writers.js';
 
 /**
  * ADR-0037 Tier A, the workspace service's side: read the projection the Settings screen consumes
@@ -182,4 +182,28 @@ export async function commitConfigFields(globalDir: string, workspaceRoot: strin
   const r = await writeConfigFields(scope === 'global' ? files.global.agents : files.workspace.agents, patch, { timers });
   if (!r.ok) return { ok: false, refusal: r.error };
   return { ok: true, snapshot: readSnapshot(globalDir, workspaceRoot, undefined, env) };
+}
+
+/** PD-CONFIG-014: the `configure` write's outcome — the key's prior state, the file, and the snapshot after. */
+export type AgentCommitResult =
+  | { readonly ok: true; readonly file: string; readonly stated: boolean; readonly before: unknown; readonly snapshot: ConfigSnapshot }
+  | { readonly ok: false; readonly refusal: WriteRefusal };
+
+/**
+ * PD-CONFIG-014 clause 2: one key written for the `configure` tool, then the load again — and a value the load refuses is
+ * not left standing: the file is put back exactly as it was and the write is refused with the load's own report
+ * (REQ-CONFIG-478), so an agent can never leave a workspace whose configuration does not load.
+ */
+export async function commitAgentConfigKey(globalDir: string, workspaceRoot: string, scope: 'workspace' | 'global', segments: readonly string[], value: unknown, timers: Timers, env: InstructionSnapshotEnv = {}): Promise<AgentCommitResult> {
+  const files = scopeFiles(globalDir, workspaceRoot);
+  const file = scope === 'global' ? files.global.agents : files.workspace.agents;
+  const w = await writeConfigKey(file, segments, value, { timers });
+  if (!w.ok) return { ok: false, refusal: w.error };
+  const loaded = loadConfiguration({ globalDir, workspaceRoot });
+  if (!loaded.ok) {
+    const restored = await restoreConfigText(file, w.value.previousText, { timers });
+    const fault = `the configuration would not load with that value, so nothing was kept — ${renderFatal(loaded.error)}`;
+    return { ok: false, refusal: { code: 'invalid', file, fault: restored.ok ? fault : `${fault} Restoring the file failed too: ${restored.error.fault}` } };
+  }
+  return { ok: true, file, stated: w.value.stated, before: w.value.before, snapshot: readSnapshot(globalDir, workspaceRoot, undefined, env) };
 }

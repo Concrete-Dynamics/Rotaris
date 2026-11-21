@@ -1,5 +1,6 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { PROTECTED_SUBPATHS } from '../confinement/spec.js';
 
 /**
  * REQ-TOOLS-129/130/132: the ONE workspace-boundary check. A relative path resolves against the
@@ -14,6 +15,34 @@ export interface FenceConfig {
   readonly allowOutsideWorkspace: boolean;
   /** REQ-TOOLS-132: `runtime.additional_read_only_roots`, absolute paths. */
   readonly additionalReadOnlyRoots: readonly string[];
+  /**
+   * PD-CONFIG-014 clause 6: directories outside the workspace that no file-tool write reaches whatever the opt-out
+   * says — the global configuration directory. Reading them is unchanged.
+   */
+  readonly protectedWriteRoots?: readonly string[];
+}
+
+/** PD-CONFIG-014 clause 6: the name a file tool is told to use instead of writing Rotaris's own configuration. */
+export const CONFIGURATION_TOOL_NAME = 'configure';
+
+/**
+ * PD-CONFIG-014 clause 6: the refusal for a write under one of the workspace's protected names (REQ-SANDBOX-056's two,
+ * `PROTECTED_SUBPATHS`) or under a protected root, or null. `rel` is workspace-relative POSIX, compared under `rule`.
+ */
+export function protectedWriteRefusal(rel: string | null, resolved: string, protectedRoots: readonly string[], rule: PathRule = PLATFORM_PATH_RULE): string | null {
+  if (rel !== null) {
+    const head = pathKey(rel.split('/', 1)[0] ?? '', rule);
+    for (const name of PROTECTED_SUBPATHS) {
+      if (head !== pathKey(name, rule)) continue;
+      return name === '.rotaris'
+        ? `Path '${rel}' is Rotaris's own configuration directory, which the file tools never write. Change a setting with the ${CONFIGURATION_TOOL_NAME} tool.`
+        : `Path '${rel}' is inside the repository's .git directory, which the file tools never write.`;
+    }
+  }
+  for (const root of protectedRoots) {
+    if (isInside(realPathOf(root), resolved, rule)) return `Path '${resolved}' is Rotaris's global configuration directory, which the file tools never write. Change a setting with the ${CONFIGURATION_TOOL_NAME} tool.`;
+  }
+  return null;
 }
 
 export type FenceVerdict =
@@ -114,6 +143,10 @@ export function checkFence(cfg: FenceConfig, input: string, access: 'read' | 'wr
   const resolved = realPathOf(candidate);
   const inside = isInside(rootReal, resolved, rule);
   const rel = inside ? relPosix(rootReal, resolved) : resolved;
+  if (access === 'write') {
+    const refused = protectedWriteRefusal(inside ? rel : null, resolved, cfg.protectedWriteRoots ?? [], rule);
+    if (refused !== null) return { ok: false, resolved, message: refused };
+  }
   if (inside) return { ok: true, resolved, rel: rel === '' ? '.' : rel, inside: true, readOnlyRoot: false };
   const underReadOnly = cfg.additionalReadOnlyRoots.some((r) => isInside(realPathOf(r), resolved, rule));
   if (underReadOnly && access === 'read') return { ok: true, resolved, rel, inside: false, readOnlyRoot: true };

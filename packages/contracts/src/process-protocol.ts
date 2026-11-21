@@ -7,6 +7,7 @@ import { McpHealthSchema, McpListingSchema, McpSecretWriteOutcomeSchema, McpSecr
 import { ConfinementVerdictSchema } from './confinement.js';
 import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
+import { CONFIG_KEY_PATH_MAX, CONFIGURE_SCOPES } from './configuration-keys.js'; // PD-CONFIG-014
 import { ImageAttachmentInputSchema, SessionSnapshotSchema, TerminalFrameSchema, TimelineSeveritySchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 import { TERMINAL_COMMAND_SCHEMAS, TerminalStreamMetaSchema } from './terminal.js';
 import { ControlRequestSchema, ControlResultSchema, PLAN_DECISIONS } from './control.js';
@@ -83,6 +84,17 @@ export const ADOPTION_DETECTION_MAX = 200_000;
 /** PD-TRACE-002 clause 3: one survey message and one survey conversation, bounded as they cross. */
 export const SURVEY_MESSAGE_MAX = 240_000;
 export const SURVEY_MESSAGES_MAX = 200;
+
+/**
+ * PD-CONFIG-014: one key of one scope's `agents.yaml`, written for the `configure` tool — `value` absent removes the key
+ * (an Undo of a key the file did not state). The run host asks; main relays to the workspace service, the only writer.
+ */
+const ConfigAgentWriteFields = {
+  workspaceRoot: z.string().min(1),
+  scope: z.enum(CONFIGURE_SCOPES),
+  key: z.string().min(1).max(CONFIG_KEY_PATH_MAX),
+  value: z.unknown().optional(),
+};
 
 export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   /**
@@ -430,6 +442,8 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.read'), workspaceRoot: z.string() }),
   z.object({ kind: z.literal('config.save'), workspaceRoot: z.string(), save: DesktopSaveSchema }),
   z.object({ kind: z.literal('config.setField'), workspaceRoot: z.string(), scope: z.enum(CONFIG_SCOPES).optional(), patch: z.record(z.string(), z.unknown()) }),
+  /** PD-CONFIG-014 clause 2: the `configure` tool's write, validated by a load before it stands (the file is restored when the load refuses it). */
+  z.object({ kind: z.literal('config.agentWrite'), ...ConfigAgentWriteFields }),
   /**
    * REQ-MCP-110/111's write half (ADR-0034 part S's owed side): store (or replace) and delete ONE stored secret, in
    * the scope the request names (`workspace` when none, REQ-CONFIG-463). The workspace service is the only writer of
@@ -525,7 +539,9 @@ export const ServiceAskSchema = z.discriminatedUnion('kind', [
    * PD-TRACE-002 clause 3: one step of the survey — the conversation the workspace service holds, answered on the model
    * the `requirements-engineer` role resolves to. The answer is one JSON action, untrusted, carried out by the service.
    */
-  z.object({ kind: z.literal('survey.step'), workspaceRoot: z.string().min(1), messages: z.array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(SURVEY_MESSAGE_MAX) })).min(1).max(SURVEY_MESSAGES_MAX) }),
+/** PD-CONFIG-014: the `configure` tool's write, relayed by main to the workspace service of that root and announced (`config:changed`). */
+  z.object({ kind: z.literal('config.agentWrite'), ...ConfigAgentWriteFields }),
+    z.object({ kind: z.literal('survey.step'), workspaceRoot: z.string().min(1), messages: z.array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(SURVEY_MESSAGE_MAX) })).min(1).max(SURVEY_MESSAGES_MAX) }),
 ]);
 export type ServiceAsk = z.infer<typeof ServiceAskSchema>;
 export const ServiceAskEnvelopeSchema = z.object({ v, ask: id, request: ServiceAskSchema });
@@ -558,6 +574,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.usage'), tokens: z.number().int().nonnegative(), cost: z.string().nullable() }),
   z.object({ kind: z.literal('session.resumed'), sessionId: z.string() }),
   z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
+  /** PD-CONFIG-014 clauses 2 and 7: the `configure` write's answer — the file, what the key held before (absent: unstated), and the reloaded snapshot. */
+  z.object({ kind: z.literal('config.agentWritten'), file: z.string(), scope: z.enum(CONFIGURE_SCOPES), key: z.string(), stated: z.boolean(), before: z.unknown().optional(), snapshot: ConfigSnapshotSchema }),
   z.object({ kind: z.literal('session.continued'), sessionId: z.string(), resumed: z.boolean(), messageLimit: z.number().int().nullable() }),
   /** REQ-NOTIFY-078: whether the primary applies from the live run's next iteration or from the next run. */
   z.object({ kind: z.literal('session.primaryRepinned'), sessionId: z.string(), applies: z.enum(['next-iteration', 'next-run']) }),

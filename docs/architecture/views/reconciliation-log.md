@@ -14,7 +14,9 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
-Last reconciled with the code: **2026-11-21**
+Last reconciled with the code: **2026-11-22**
+
+**An agent changes Rotaris's own configuration through `configure` (R-121; [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014); 2026-11-22).** `02-process-view/05-message-families-4.md`: the run host's asks gain `config.agentWrite`, relayed by main to the workspace service (`config.agentWritten`), and the service's requests list it. `05-state-ownership/02-durable-and-the-rules.md`: the run-host rule names the tool's route and the file tools' closed paths. `04-seams/04-4-a-tool.md`: an invariant for a tool the gate rules on by its own arguments.
 
 **The capture seam's select step says when it chose nothing (2026-11-21).** A disabled `<select>`, or one without the option, answers `disabled` or `no such option`, not `chosen`. Verification only; no view changes.
 **The web search panel writes the provider (R-119 path B; [`PD-CONFIG-013`](../../product/directives/pd-config-013.md#pd-config-013); REQ-CONFIG-350/464 narrowed; 2026-11-21).** `02-process-view/04-message-families-3.md`: the panel's paragraph adds the Use <provider> press, an existing `config.setField` of `mcp_servers.web_search.url` alone. No message, process or file is added.

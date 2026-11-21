@@ -32,3 +32,5 @@ export * from './tools/delegation.js';
 export * from './tools/artifacts.js';
 /** Part AC: `ask_questions` and its wait registry — the user-prompt channel (REQ-TOOLS-157/158, REQ-CHAT-092..096). */
 export * from './tools/questions.js';
+/** PD-CONFIG-014: the `configure` tool — Rotaris's own configuration by key, never by a file write. */
+export * from './tools/configure.js';

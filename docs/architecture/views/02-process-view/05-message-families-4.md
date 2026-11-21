@@ -122,7 +122,11 @@ forbids a notice leaving on a timer), `acknowledgement.publish` (REQ-MCP-044's w
 `log {level, message}` (a line for the application log, below), `ready`. **The run host's
 asks back to main** (on the `ServiceAsk` envelope): `credentials.lease {providerIds}` (ADR-0030), answered
 `credentials.leased {bearers, report}` — the only message in the product that carries a credential value, and it never
-crosses a renderer boundary — and the three checkpoint asks of the paragraph above, relayed to the workspace service.
+crosses a renderer boundary — the three checkpoint asks of the paragraph above, relayed to the workspace service, and
+(since 2026-11-22, [`PD-CONFIG-014`](../../../product/directives/pd-config-014.md#pd-config-014)) `config.agentWrite {workspaceRoot, scope, key, value?}`, the `configure`
+tool's one write: main relays it to the workspace service of that root, which re-checks the key's class, writes the key
+through the scoped per-field path, loads again and restores the file when the load refuses it, answering
+`config.agentWritten {file, scope, key, stated, before?, snapshot}`; main announces the snapshot on `config:changed`.
 
 **Main ↔ workspace service.** Since 2026-09-09: `prompts.roots.read` → `prompts.roots` (Part AO, above), `requirements.command` → `requirements.result` (Part AK) and `traceability.operate`/`traceability.cancel` → `traceability.result`/`traceability.cancelled` (Part AJ), listed above. Requests: `workspace.open/close/backup/restore.assess/restore.perform`
 (`workspace.open` writes the starter `<workspace>/.rotaris/agents.yaml` when it is absent or blank, once the store is open
@@ -147,7 +151,7 @@ then opens as an absent place opens; `workspace-service/store-establish.ts`; sin
 an optional `held: 'missing' | 'corrupt'` and `establishable` the damaged store's `report`, the `store-corrupt` notice carries
 the same action, and `workspace.restore.assess` is admitted under it with `heldCorrupt`, its perform's decisions with
 `targetUnreadable`, and `RestoreAssessment.target.unreadable {report}` and the refusal `store-sound` saying what was found),
-`config.read/save/setField/bootstrap`, `repository.read`, `git.view`, `worktree.*`, `checkpoint.capture/refs/preview/
+`config.read/save/setField/agentWrite/bootstrap`, `repository.read`, `git.view`, `worktree.*`, `checkpoint.capture/refs/preview/
 restore/prune` (Part P), `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002 c.7) —
 `runHost.refuseRuns/renewLease/closeStore/release/reopen` — are forwarded by main to the run host; the two children never
 talk directly.

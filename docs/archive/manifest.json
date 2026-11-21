@@ -1200,6 +1200,7 @@
     "defects/the-exit-trace-crash-handlers-were-never-fired-in-a-built-app.md": "0c2b6511dced63535f74b1e1d93bb9b34a972c3284141fdbea92fba4fb3e260a",
     "defects/the-expanded-plan-gate-gives-the-whole-loss-to-the-plan-when-a-notice-shares-the-window.md": "3adf8af6c3ff11e33fe0b0a9571a168ab24d2042edf9d278b1439e4ce628e46a",
     "defects/the-faults-stall-check-does-not-assert-the-stall-issue-throttle.md": "d62d21020933d76571ab4c5a50319322e431ff4b33b2b4033ad76fc35c37c18f",
+    "defects/the-file-tools-write-into-rotaris-and-git-that-the-sandbox-keeps-read-only.md": "61c7bae67e4f800b0593deb52182641b9a7990b688ec35cd16b0d4ec47f3e55b",
     "defects/the-final-step-belt-ends-a-working-child-as-succeeded-with-no-final-response.md": "025122e13841925c47a29222410da3c96ea1be3a874c3397db7ec322c290bcbe",
     "defects/the-folded-blocked-rail-breaks-its-label-inside-the-word.md": "9784ae0cf2b12c23c9597c614292215621815919019819776625895875f017af",
     "defects/the-follow-up-payloads-recent-iterations-read-timeline-entries-nothing-writes.md": "d1119541b3059dad4219dda20cd657f3b3dc19fe46e43d424008d6b65a16682b",

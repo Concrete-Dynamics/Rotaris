@@ -1,9 +1,9 @@
-import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnvelopeSchema, WorkspaceServiceRequestSchema, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { configKeyClass, configKeyClassSentence, configKeySegments, CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnvelopeSchema, WorkspaceServiceRequestSchema, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { countNoun, fileStamp, millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, holdMessagesFor, injectChildFault, superviseUtilityProcess } from '@rotaris/platform';
 import { walCheckpointBeforeClose, walCheckpoint, establishWorkspaceId, forgetSpelling, IDLE_WAL_CHECKPOINT_MS, IdleWalCheckpoint, readWorkspaceId, REFUSAL_LEASE_MS, workspaceIdFile, type WalCheckpointResult, type ResolvedStore, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
-import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
+import { bootstrapConfigFile, commitAgentConfigKey, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
 import { deliveryServiceFor } from './delivery.js'; // Part AK
@@ -234,6 +234,17 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       if (!r.ok) return { kind: 'refused', code: `config.${r.refusal.code}`, headline: 'The settings could not be saved', detail: `${r.refusal.file}: ${r.refusal.fault}` };
       log(`configuration saved: ${req.workspaceRoot}`);
       return { kind: 'config.snapshot', snapshot: r.snapshot };
+    }
+    case 'config.agentWrite': {
+      // PD-CONFIG-014 clauses 2 and 4: the class is checked again here, the one writer, so no caller can reach a credential
+      // or a key the configuration does not define, whatever asked; the load decides whether the value may stand.
+      const segments = configKeySegments(req.key);
+      const klass = configKeyClass(req.key);
+      if (segments === null || klass === 'never' || klass === 'unknown') return { kind: 'refused', code: 'config.invalid', headline: 'The setting could not be written', detail: `${req.key}: ${configKeyClassSentence(klass)}` };
+      const r = await commitAgentConfigKey(dirs.config, req.workspaceRoot, req.scope, segments, req.value, clocks.timers, instructionEnv());
+      if (!r.ok) return { kind: 'refused', code: `config.${r.refusal.code}`, headline: 'The setting could not be written', detail: `${r.refusal.file}: ${r.refusal.fault}` };
+      log(`configuration key ${req.key} ${req.value === undefined ? 'removed' : 'written'} for the configure tool (${req.scope}): ${r.file}`);
+      return { kind: 'config.agentWritten', file: r.file, scope: req.scope, key: req.key, stated: r.stated, ...(r.stated ? { before: r.before } : {}), snapshot: r.snapshot };
     }
     case 'config.setField': {
       const r = await commitConfigFields(dirs.config, req.workspaceRoot, req.scope, req.patch, clocks.timers, instructionEnv());

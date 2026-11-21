@@ -78,7 +78,7 @@ project-setup banner names — surfaced, or since revision 3 added for it — wh
 (`projectInit.ready`), held on its record until then; `session:focus` (channel 16,
 2026-10-14, PD-SHELL-001 revision 3) is `{sessionId}`, to ONE main window, the one holding the workspace a `focus-session`
 notice names, which focuses the session through its own load (`session.resume`, as its session browser would) — sent by
-`MainWindows`' `deliver` once the window's renderer has said it listens (`session.focusReady`), held on its record until then; `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
+`MainWindows`' `deliver` once the window's renderer has said it listens (`session.focusReady`), held on its record until then; `update:state` (channel 17, 2026-11-21, PD-SHELL-018, R-117) is `{phase, version?, measured?, inPlace?, noticeId}`, the updater's phase for the title-bar indicator, to EVERY window on the relay, emitted before the update notice changes for the same transition and on every repaint of `{measured}`; a window that mounts later reads `update.state`; `config:changed` repopulates every main window **and its family** — its persona windows and its terminal
 window (`configFamily`) — from **its own** workspace's snapshot (`announceConfig`, `main/config-broadcast.ts`): the families
 of the windows holding the written workspace take the reloaded snapshot, every other family its own workspace's, read again
 from its service. *Corrected 2026-10-03 (fin10's repair round): every window was sent the written workspace's snapshot, so a

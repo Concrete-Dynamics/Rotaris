@@ -8,6 +8,7 @@ import { useShellState } from './shell-state.js';
 import { Acknowledgements } from './Acknowledgements.js';
 import { NoticeBanner } from './Notice.js';
 import { ImprovementActivity } from './ImprovementActivity.js';
+import { UpdateIndicator } from './UpdateIndicator.js';
 import { WindowControls } from './WindowControls.js';
 import { CommandPalette } from './commands/CommandPalette.js';
 import { KeyboardHelp } from './commands/KeyboardHelp.js';
@@ -163,6 +164,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
   const paletteOpen = useShellState((s) => s.paletteOpen);
   const helpOpen = useShellState((s) => s.helpOpen);
   const improvementAnalysis = useShellState((s) => s.improvementAnalysis);
+  const updateState = useShellState((s) => s.updateState);
   const closePalette = useShellState((s) => s.closePalette);
   const closeKeyboardHelp = useShellState((s) => s.closeKeyboardHelp);
   const ctx = useCommandContext();
@@ -194,6 +196,11 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
         {/* REQ-LIBRARY-125: the title-bar indicator, present only while an analysis runs. REQ-SHELL-033's order is
             kept — the session control stays last — and no control is disabled while it shows. */}
         <ImprovementActivity active={improvementAnalysis.active} pass={improvementAnalysis.pass} placement="title-bar" />
+        {/* PD-SHELL-018 (R-117): the update indicator, after the improvement-analysis indicator and before the Sessions
+            control and the window controls (the title-bar brief §3), present while a download runs and while a verified
+            update waits, whatever notice holds the banner (UD-10). Its action is the notice's own member, dispatched by
+            the same root. */}
+        <UpdateIndicator state={updateState} currentNoticeId={notice?.id ?? null} onAction={onAction} workspacePath={workspacePath} />
         {onOpenSessions && <DesignButton type="button" className="btn btn-ghost title-bar__sessions" onClick={onOpenSessions}>Sessions</DesignButton>}
         {windowControls && <WindowControls {...windowControls} />}
       </header>

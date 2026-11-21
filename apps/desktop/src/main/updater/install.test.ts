@@ -124,7 +124,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
   it('a release publishing no checksum file is refused with the fixed sentence before any request is made', async () => {
     const release = published();
     const { ctx } = context(release, stagingArea(), targetVolume());
-    expect(await runInstall(offer({ manifest: null }), ctx)).toEqual({ ok: false, stage: 'manifest', sentence: noManifestSentence('0.2.0') });
+    expect(await runInstall(offer({ manifest: null }), ctx)).toEqual({ ok: false, stage: 'manifest', kind: 'refusal', sentence: noManifestSentence('0.2.0') });
     expect(noManifestSentence('0.2.0')).toBe('release 0.2.0 publishes no checksum file; refusing to install an unverifiable download');
     expect(release.requests).toEqual([]);
   });
@@ -133,16 +133,16 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const release = published();
     const { ctx } = context(release, stagingArea(), targetVolume());
     const result = await runInstall(offer({ signature: null }), ctx);
-    expect(result).toEqual({ ok: false, stage: 'signature', sentence: noSignatureSentence('0.2.0') });
+    expect(result).toEqual({ ok: false, stage: 'signature', kind: 'refusal', sentence: noSignatureSentence('0.2.0') });
     expect(release.requests).toEqual([]);
   });
 
   it('a failed manifest fetch fails with `could not read the checksum file: HTTP <status>`, and a failed signature fetch the same way', async () => {
     const m = published({ manifestStatus: 404 });
-    expect(await runInstall(offer(), context(m, stagingArea(), targetVolume()).ctx)).toEqual({ ok: false, stage: 'manifest', sentence: 'could not read the checksum file: HTTP 404' });
+    expect(await runInstall(offer(), context(m, stagingArea(), targetVolume()).ctx)).toEqual({ ok: false, stage: 'manifest', kind: 'transport', sentence: 'could not read the checksum file: HTTP 404' });
     expect(m.requests).toEqual(['https://github.com/x/sums']);
     const s = published({ signatureStatus: 503 });
-    expect(await runInstall(offer(), context(s, stagingArea(), targetVolume()).ctx)).toEqual({ ok: false, stage: 'signature', sentence: 'could not read the signature over the checksum file: HTTP 503' });
+    expect(await runInstall(offer(), context(s, stagingArea(), targetVolume()).ctx)).toEqual({ ok: false, stage: 'signature', kind: 'transport', sentence: 'could not read the signature over the checksum file: HTTP 503' });
     expect(s.requests).toEqual(['https://github.com/x/sums', 'https://github.com/x/sig']);
   });
 
@@ -152,7 +152,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const other = keyPair();
     const { ctx } = context(release, staging, targetVolume(), { keys: [other.pem] });
     const result = await runInstall(offer(), ctx);
-    expect(result).toEqual({ ok: false, stage: 'signature', sentence: untrustedSignatureSentence('0.2.0', false) });
+    expect(result).toEqual({ ok: false, stage: 'signature', kind: 'refusal', sentence: untrustedSignatureSentence('0.2.0', false) });
     expect(untrustedSignatureSentence('0.2.0', false)).toBe('the checksum file of release 0.2.0 was not published by a holder of a key this build trusts; nothing was downloaded and nothing was installed — obtain the release from the release page instead');
     expect(release.requests).not.toContain('https://github.com/x/asset');
     expect(staging.tree()).toEqual([]);
@@ -165,7 +165,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const { ctx } = context(release, staging, targetVolume());
     const { keys: _injected, ...production } = ctx;
     const result = await runInstall(offer(), production);
-    expect(result).toEqual({ ok: false, stage: 'signature', sentence: untrustedSignatureSentence('0.2.0', false) });
+    expect(result).toEqual({ ok: false, stage: 'signature', kind: 'refusal', sentence: untrustedSignatureSentence('0.2.0', false) });
     expect(release.requests).toEqual(['https://github.com/x/sums', 'https://github.com/x/sig']);
     expect(staging.tree()).toEqual([]);
   });
@@ -175,7 +175,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const staging = stagingArea();
     const { ctx } = context(release, staging, targetVolume(), { keys: [] });
     const result = await runInstall(offer(), ctx);
-    expect(result).toEqual({ ok: false, stage: 'signature', sentence: untrustedSignatureSentence('0.2.0', true) });
+    expect(result).toEqual({ ok: false, stage: 'signature', kind: 'refusal', sentence: untrustedSignatureSentence('0.2.0', true) });
     expect(untrustedSignatureSentence('0.2.0', true)).toContain('(this build carries no verification key)');
     expect(release.requests).toEqual(['https://github.com/x/sums', 'https://github.com/x/sig']);
     expect(staging.tree()).toEqual([]);
@@ -196,7 +196,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const staging = stagingArea();
     const volume = targetVolume();
     const { ctx } = context(release, staging, volume);
-    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'digest', sentence: noHashSentence(ASSET) });
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'digest', kind: 'refusal', sentence: noHashSentence(ASSET) });
     expect(noHashSentence(ASSET)).toBe(`no published hash for ${ASSET}; the download was discarded`);
     expect(staging.tree()).toEqual([]);
     expect(staging.tree()).toEqual([]);
@@ -209,7 +209,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const staging = stagingArea();
     const volume = targetVolume();
     const { ctx } = context(release, staging, volume);
-    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'digest', sentence: hashMismatchSentence(ASSET, wrong, digest) });
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'digest', kind: 'refusal', sentence: hashMismatchSentence(ASSET, wrong, digest) });
     expect(hashMismatchSentence('n', 'e', 'a')).toBe('n does not match the published hash (expected e, got a); the download was discarded and nothing was installed');
     expect(staging.tree()).toEqual([]);
     expect(volume.ops).toEqual([]);
@@ -222,7 +222,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const release = published();
     const staging = stagingArea({ writeFails: true });
     const { ctx } = context(release, staging, targetVolume());
-    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'download', sentence: `could not write the download to ${DIR}/${ASSET}.partial: ENOSPC: no space left on device` });
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'download', kind: 'local', sentence: `could not write the download to ${DIR}/${ASSET}.partial: ENOSPC: no space left on device` });
     expect(staging.tree()).toEqual([]);
     expect(staging.tree()).toEqual([]);
   });
@@ -230,10 +230,10 @@ describe('the install sequence — REQ-STARTUP-122', () => {
   it('a download that ends early, a non-200 asset response, and an unmakeable pending directory each fail with one sentence and leave nothing behind', async () => {
     const early = published({ bodyFails: true });
     const s1 = stagingArea();
-    expect(await runInstall(offer(), context(early, s1, targetVolume()).ctx)).toEqual({ ok: false, stage: 'download', sentence: `the download of ${ASSET} ended early: ECONNRESET` });
+    expect(await runInstall(offer(), context(early, s1, targetVolume()).ctx)).toEqual({ ok: false, stage: 'download', kind: 'transport', sentence: `the download of ${ASSET} ended early: ECONNRESET` });
     expect(s1.tree()).toEqual([]);
     const status = published({ assetStatus: 302 });
-    expect(await runInstall(offer(), context(status, stagingArea(), targetVolume()).ctx)).toEqual({ ok: false, stage: 'download', sentence: `could not download ${ASSET}: HTTP 302` });
+    expect(await runInstall(offer(), context(status, stagingArea(), targetVolume()).ctx)).toEqual({ ok: false, stage: 'download', kind: 'transport', sentence: `could not download ${ASSET}: HTTP 302` });
     const nostaging = published();
     expect(await runInstall(offer(), context(nostaging, stagingArea({ createFails: true }), targetVolume()).ctx)).toMatchObject({ ok: false, stage: 'download', sentence: `could not make the directory ${DIR} for the download: EACCES: the data directory is not writable` });
   });
@@ -245,7 +245,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const staging = stagingArea();
     const volume = targetVolume();
     const { ctx, progress } = context(release, staging, volume);
-    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'download', sentence: `${ASSET} is larger than the ${payload.byteLength} bytes the release feed states for it; the download was ended and discarded, and nothing was installed` });
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'download', kind: 'refusal', sentence: `${ASSET} is larger than the ${payload.byteLength} bytes the release feed states for it; the download was ended and discarded, and nothing was installed` });
     expect(progress.every((p) => p.bytesSoFar <= payload.byteLength)).toBe(true);
     expect(staging.tree()).toEqual([]);
     expect(staging.tree()).toEqual([]);
@@ -259,7 +259,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     const staging = stagingArea();
     const { ctx } = context(release, staging, targetVolume(), { signal: controller.signal, onProgress: () => controller.abort() });
     const result = await runInstall(offer(), ctx);
-    expect(result).toEqual({ ok: false, stage: 'download', sentence: `the download of ${ASSET} was abandoned before it finished` });
+    expect(result).toEqual({ ok: false, stage: 'download', kind: 'abandoned', sentence: `the download of ${ASSET} was abandoned before it finished` });
     expect(staging.tree()).toEqual([]);
     expect(staging.tree()).toEqual([]);
   });
@@ -271,7 +271,7 @@ describe('the install sequence — REQ-STARTUP-122', () => {
     // The directory is there and the artifact is not: no released-artifact target.
     const files: StrategyFiles = { ...volume.port, pathKind: async (p) => (p === 'E:' ? 'directory' : 'absent') };
     const { ctx } = context(release, staging, volume, { files });
-    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'apply', sentence: 'this Rotaris was not installed from a released artifact' });
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'apply', kind: 'local', sentence: 'this Rotaris was not installed from a released artifact' });
     expect(volume.ops).toEqual([]);
     expect(staging.tree()).toEqual([]);
   });
@@ -361,7 +361,7 @@ describe('the verified download kept as the pending update — REQ-STARTUP-171, 
     staging.disk.failAt(`write:${ROOT}/pending.json.tmp`, 'ENOSPC: no space left on device');
     const volume = targetVolume();
     const { ctx } = context(published(), staging, volume);
-    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'retain', sentence: `could not keep the verified download of ${ASSET} in ${DIR}: ENOSPC: no space left on device; it was discarded and nothing was installed` });
+    expect(await runInstall(offer(), ctx)).toEqual({ ok: false, stage: 'retain', kind: 'local', sentence: `could not keep the verified download of ${ASSET} in ${DIR}: ENOSPC: no space left on device; it was discarded and nothing was installed` });
     expect(staging.tree()).toEqual([]);
     expect(volume.ops).toEqual([]);
   });

@@ -38,6 +38,8 @@ const bridge: RendererBridge = Object.freeze({
   onProjectInitOpen: subscribe(CHANNEL.projectInitOpen),
   // Channel 16 — focus a notice's session in the window holding its workspace (PD-SHELL-001 revision 3, OQ-292).
   onSessionFocus: subscribe(CHANNEL.sessionFocus),
+  // Channel 17 — the updater's phase for the title-bar indicator (PD-SHELL-018, R-117).
+  onUpdateState: subscribe(CHANNEL.updateState),
 });
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

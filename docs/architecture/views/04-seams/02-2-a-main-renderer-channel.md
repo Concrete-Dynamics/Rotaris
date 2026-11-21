@@ -4,7 +4,15 @@ Part 2 of 8 of [the seams](../04-seams.md), which indexes every part.
 
 ## 2. A main → renderer channel
 
-Sixteen exist. A seventeenth is a real decision — ask whether an existing one carries it first. The sixteenth,
+Seventeen exist. An eighteenth is a real decision — ask whether an existing one carries it first. The seventeenth,
+`update:state` (2026-11-21, PD-SHELL-018, R-117; ruled under R-072 in `docs/design/briefs/title-bar-and-rail.md` §10 item 1),
+was taken because the title-bar update indicator must stand exactly while ANOTHER notice holds the slot, when `notice:current`
+no longer carries the update; it follows `improvement:activity`'s shape — an app-wide state to every window, sent through
+the relay (`relay.broadcast`), with a read command (`update.state`) a window sends once after subscribing — and carries the
+update notice's retained identifier rather than a "current" flag, so main re-emits nothing when an unrelated notice is
+published. The publisher is the updater's `publishState` port (`main/updater/updater.ts`), wired in `index.ts`; the
+subscriber is `renderer/main.tsx` into the shell store (`setUpdateState`), drawn by `packages/ui/src/UpdateIndicator.tsx`.
+The sixteenth,
 `session:focus` (2026-10-14, PD-SHELL-001 revision 3, OQ-292), was taken for the same reason as the fifteenth: a
 `focus-session` notice is pressed in any window and the session must be focused in the window holding its workspace, whose
 renderer alone owns the replica that follows a session. A request to ONE window that may still be loading — a window the

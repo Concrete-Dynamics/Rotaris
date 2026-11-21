@@ -68,6 +68,7 @@ async function harness(paints: 'at-once' | 'never' = 'at-once', auxiliary: () =>
     monotonic: clock,
     log: () => undefined,
     command: (_request, target) => { commanded.push(target.webContents.id); return Promise.resolve({ ok: true }); },
+    updateFace: async (face, version) => ({ face, version }),
     commandThrowing: (request, target, cause) => { thrown.push({ request, window: target.webContents.id, cause }); return Promise.resolve({ ok: false, code: 'command.failed', headline: 'The command failed' }); },
     deferProjectOffer: (target) => { deferred.push(target.webContents.id); },
     quit: () => { ended.push('quit'); },

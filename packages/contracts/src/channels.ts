@@ -54,6 +54,10 @@ export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
  * 16. session:focus         — main → ONE main window, the one holding a session's workspace: focus that session there
  *     (PD-SHELL-001 revision 3, OQ-292 — a `focus-session` notice action, activated in any window; held for an added window
  *     until its renderer reports `session.focusReady`)
+ * 17. update:state          — main → every main window: the updater's phase for the title-bar indicator — downloading or
+ *     ready, with the version and REQ-STARTUP-118's `{measured}` — whatever notice holds the banner (PD-SHELL-018, UD-10;
+ *     ruled 2026-11-21 under R-072 by the title-bar brief's §10 item 1, for R-117). A window that mounts later reads it with
+ *     `update.state`. No address, path or URL crosses.
  *
  * Channels 1 and 2 share ONE per-session counter (REQ-MONITOR-214), stamped in
  * the run host by the projection owner at publication. Main relays it
@@ -81,6 +85,7 @@ export const CHANNEL = {
   displayChanged: 'display:changed', // REQ-CHAT-167 / REQ-CONFIG-403: a stored display preference, to every window
   projectInitOpen: 'project-init:open', // PD-WORKSPACE-005 revision 3 (OQ-294): open Settings › Project in the window reached for it
   sessionFocus: 'session:focus', // PD-SHELL-001 revision 3 (OQ-292): focus a notice's session in the window holding its workspace
+  updateState: 'update:state', // PD-SHELL-018 (R-117): the update's phase for the title-bar indicator, to every main window
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -558,6 +563,29 @@ export type ProjectInitOpen = z.infer<typeof ProjectInitOpenSchema>;
 export const SessionFocusSchema = z.object({ v: schemaVersion, sessionId });
 export type SessionFocus = z.infer<typeof SessionFocusSchema>;
 
+/**
+ * Channel 17 — PD-SHELL-018 (R-117; the title-bar brief §3.1, ruled under R-072): the updater's phase as the title-bar
+ * indicator draws it. `downloading` from the moment a download of REQ-STARTUP-169 starts until it ends (the transfer and the
+ * verification, REQ-STARTUP-170); `ready` while a verified pending update waits (REQ-STARTUP-174), `inPlace` where the
+ * target was already replaced (UD-8, OQ-553); `none` at every other time. `measured` is REQ-STARTUP-118's exact figure, the
+ * one the notice's message carries. `noticeId` is the update notice's retained identifier (REQ-NOTIFY-217), or null: the
+ * renderer compares it with `notice:current`'s to decide whether the indicator announces a phase change itself, so main
+ * re-emits nothing when another notice is published. Main owns every fact here; the renderer draws and dispatches.
+ */
+export const UPDATE_PHASES = ['none', 'downloading', 'ready'] as const;
+export const UpdateStateSchema = z.object({
+  phase: z.enum(UPDATE_PHASES),
+  version: z.string().max(NAME_MAX).min(1).optional(),
+  measured: z.string().max(NAME_MAX).min(1).optional(),
+  inPlace: z.boolean().optional(),
+  noticeId: z.number().int().positive().nullable(),
+});
+export type UpdateState = z.infer<typeof UpdateStateSchema>;
+export const UpdateStatePublishSchema = UpdateStateSchema.extend({ v: schemaVersion });
+export type UpdateStatePublish = z.infer<typeof UpdateStatePublishSchema>;
+/** The phase at rest: no download runs and no verified update waits. */
+export const UPDATE_STATE_NONE: UpdateState = Object.freeze({ phase: 'none', noticeId: null });
+
 /** Channel 12 (Part AS, ADR-0064): the whole initialization state, whichever view a window is showing. */
 export const InitializationStatePublishSchema = InitializationStateSchema.extend({ v: schemaVersion });
 export type InitializationStatePublish = z.infer<typeof InitializationStatePublishSchema>;
@@ -578,6 +606,7 @@ export const CHANNEL_SCHEMAS = {
   [CHANNEL.displayChanged]: DisplayChangedSchema, // REQ-CHAT-167, REQ-CONFIG-403
   [CHANNEL.projectInitOpen]: ProjectInitOpenSchema, // PD-WORKSPACE-005 revision 2 (OQ-262)
   [CHANNEL.sessionFocus]: SessionFocusSchema, // PD-SHELL-001 revision 3 (OQ-292)
+  [CHANNEL.updateState]: UpdateStatePublishSchema, // PD-SHELL-018 (R-117)
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

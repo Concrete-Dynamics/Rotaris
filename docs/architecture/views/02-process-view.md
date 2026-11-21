@@ -49,7 +49,7 @@ flowchart LR
   RPE --> P
   RT --> P
   P -- "CHANNEL.command<br/>CommandRequest / CommandOutcome" --> M
-  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>requirements:changed · improvement:activity<br/>initialization:state · reauth:prompt<br/>theme:changed · config:changed<br/>display:changed · project-init:open" --> P
+  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>requirements:changed · improvement:activity<br/>initialization:state · reauth:prompt<br/>theme:changed · config:changed<br/>display:changed · project-init:open<br/>session:focus · update:state" --> P
   M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
   M -- "WorkspaceServiceRequest → ProcessReply<br/>ServiceAsk ← (forwarded to the run host)" --> WS
   RHst --> DB

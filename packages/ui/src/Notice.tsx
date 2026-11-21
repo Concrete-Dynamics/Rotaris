@@ -1,6 +1,9 @@
 import { SEVERITY_GLYPHS, type Notice, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
 import { markMotionStart } from './motion.js';
-import { Button as DesignButton } from './design-system/index.js';
+import { Button as DesignButton, layoutContractAttributes, MeterBar, type UiLayoutContract } from './design-system/index.js';
+
+/** The notice-banner brief §8: the meter contained in the text column it spans. */
+const METER_LAYOUT: UiLayoutContract = { id: 'notice-meter', relations: [{ kind: 'containment' }] };
 
 /**
  * ADR-0049 / REQ-SHELL-114 / REQ-SHELL-116 — the ONE persistent notice, an inline banner under the title bar.
@@ -12,6 +15,8 @@ import { Button as DesignButton } from './design-system/index.js';
  * REQ-NOTIFY-040: the dismiss control appears exactly where the notice is persistent. Nothing leaves on a timer.
  * REQ-NOTIFY-258 / REQ-SHELL-149: the severity word is in the accessible name, so the state is never colour alone.
  * REQ-SHELL-115: the one action is a member of the closed vocabulary; the root dispatches it.
+ * REQ-NOTIFY-043 (R-117): where the notice carries `progress` — the update's download with a stated size — a meter spans the
+ * text column under the message; its accessible name is the figure in words (`{percent}% downloaded`, the brief's §6).
  */
 export const SEVERITY_WORDS: Readonly<Record<NoticeSeverity, string>> = { info: 'Notice', success: 'Success', warning: 'Warning', error: 'Error' };
 
@@ -23,6 +28,12 @@ export interface NoticeBannerProps {
 
 export function NoticeBanner({ notice, onAcknowledge, onAction }: NoticeBannerProps) {
   const word = SEVERITY_WORDS[notice.severity];
+  /*
+   * Review-ui UIR-U01 (R-117): the action is keyed by whether it restarts, so when the update notice's `Cancel download`
+   * becomes `Restart now` the restart is a new control — a press begun on the cancel cannot land on it, and the focus does not
+   * carry over to it. `Cancel download` → `Update now` stays one control (the notice-banner brief §5).
+   */
+  const actionKey = notice.action?.action.kind === 'restart' ? 'restart' : 'action';
   return (
     <div
       ref={(element) => { if (element) markMotionStart(element); }}
@@ -38,6 +49,7 @@ export function NoticeBanner({ notice, onAcknowledge, onAction }: NoticeBannerPr
       <div className="notice__text">
         <span className="notice__headline" data-testid="notice-title">{notice.title}</span>
         {notice.message !== '' && <span className="notice__message text-secondary" data-testid="notice-message">{notice.message}</span>}
+        {notice.progress !== undefined && <MeterBar className="notice__meter" tone="accent" value={notice.progress} max={100} label={`${notice.progress}% downloaded`} data-testid="notice-meter" {...layoutContractAttributes(METER_LAYOUT)} />}
         {notice.detail !== '' && (
           <details className="notice__details">
             <summary>Details</summary>
@@ -61,7 +73,7 @@ export function NoticeBanner({ notice, onAcknowledge, onAction }: NoticeBannerPr
               description (contracts `notices.ts`); nothing else about the control changes, and no other notice
               sets it. The description is also the tooltip, so a pointer user reads the same sentence.
             */
-            <DesignButton type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} ui={{ id: 'notice-action', relations: [] }} disabled={notice.action.disabled !== undefined} aria-disabled={notice.action.disabled !== undefined ? true : undefined} aria-description={notice.action.disabled} title={notice.action.disabled} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}</DesignButton>
+            <DesignButton key={actionKey} type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} ui={{ id: 'notice-action', relations: [] }} disabled={notice.action.disabled !== undefined} aria-disabled={notice.action.disabled !== undefined ? true : undefined} aria-description={notice.action.disabled} title={notice.action.disabled} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}</DesignButton>
           )}
           {notice.persistent && (
             <DesignButton type="button" className="btn btn-ghost notice__dismiss" aria-label={`Dismiss this ${word.toLowerCase()}`} ui={{ id: 'notice-dismiss', relations: notice.action ? [{ kind: 'align-y', target: 'notice-action', edge: 'middle' }] : [] }} onClick={() => onAcknowledge?.(notice.id)}>Dismiss</DesignButton>

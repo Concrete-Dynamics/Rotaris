@@ -51,6 +51,8 @@ export interface ReportInput {
   /** REQ-NOTIFY-040: whether a dismiss control is offered. Default true. */
   readonly persistent?: boolean;
   readonly action?: { readonly label: string; readonly action: NoticeAction } | undefined;
+  /** REQ-NOTIFY-043: the optional meter, a whole percent; only the update's download face sets it (R-117). */
+  readonly progress?: number;
   /** REQ-NOTIFY-028: empty or absent means the focused run. */
   readonly sessionId?: string;
   /** REQ-NOTIFY-224: once per key within this application session. */
@@ -71,6 +73,8 @@ export interface NoticePatch {
   readonly detail?: string;
   readonly persistent?: boolean;
   readonly action?: Notice['action'] | null;
+  /** REQ-NOTIFY-043's meter (R-117): a whole percent; `null` removes it, absent keeps it. */
+  readonly progress?: number | null;
 }
 
 export interface NoticeStore {
@@ -134,6 +138,7 @@ export function createNoticeStore(deps: NoticeStoreDeps): NoticeStore {
           id, severity: input.severity, title: input.title, message: input.message ?? '', detail: input.detail ?? '',
           persistent: input.persistent ?? true, sessionId: input.sessionId ?? '',
           ...(input.action === undefined ? {} : { action: input.action }),
+          ...(input.progress === undefined ? {} : { progress: input.progress }),
         };
         await record(notice);
         set(notice);
@@ -144,10 +149,11 @@ export function createNoticeStore(deps: NoticeStoreDeps): NoticeStore {
     update(noticeId, patch) {
       return enqueue(async () => {
         if (current === null || current.id !== noticeId) return false;
-        const { action, ...fields } = patch;
-        const { action: previousAction, ...rest } = current;
+        const { action, progress, ...fields } = patch;
+        const { action: previousAction, progress: previousProgress, ...rest } = current;
         const next: Notice = {
           ...rest,
+          ...(progress === null ? {} : progress === undefined ? (previousProgress === undefined ? {} : { progress: previousProgress }) : { progress }),
           ...(fields.severity === undefined ? {} : { severity: fields.severity }),
           ...(fields.title === undefined ? {} : { title: fields.title }),
           ...(fields.message === undefined ? {} : { message: fields.message }),

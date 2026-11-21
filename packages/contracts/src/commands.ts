@@ -243,6 +243,19 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    */
   z.object({ kind: z.literal('update.install') }),
   z.object({ kind: z.literal('update.restart') }),
+  /**
+   * PD-STARTUP-008 item 1 and UD-2, REQ-STARTUP-170 (R-117): cancel the update download that is running — the
+   * `cancel-update` notice action, pressed on the download notice or on the title-bar indicator (PD-SHELL-018). It carries
+   * nothing: main holds the one download. It is not an update operation of REQ-STARTUP-114 and is never refused while a
+   * download runs; it answers once the transfer has ended, within REQ-STARTUP-170's 2 s, or with nothing to cancel.
+   */
+  z.object({ kind: z.literal('update.cancel') }),
+  /**
+   * PD-SHELL-018 (R-117): the updater's phase as channel 17 (`update:state`) carries it, read once by a window that mounts
+   * after a download started — after it subscribes, as `improvements.activity` is read — so a window opened during a
+   * download draws the indicator at once.
+   */
+  z.object({ kind: z.literal('update.state') }),
   /** REQ-SESSION-201: main supplies the dialogs and nothing else; the work runs in the workspace service (ADR-0002 c.7). */
   z.object({ kind: z.literal('workspace.backup') }),
   z.object({ kind: z.literal('workspace.restore') }),
@@ -537,6 +550,8 @@ export interface RendererBridge {
   readonly onProjectInitOpen: (fn: (p: unknown) => void) => () => void;
   /** Channel 16 (PD-SHELL-001 revision 3, OQ-292): main asks THIS window, which holds a session's workspace, to focus that session. */
   readonly onSessionFocus: (fn: (p: unknown) => void) => () => void;
+  /** Channel 17 (PD-SHELL-018, R-117): the updater's phase for the title-bar indicator — downloading, ready or none. */
+  readonly onUpdateState: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;
 

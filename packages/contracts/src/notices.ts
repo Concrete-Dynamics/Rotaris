@@ -88,6 +88,20 @@ export const NoticeActionSchema = z.discriminatedUnion('kind', [
    */
   z.object({ kind: z.literal('open-hook-review'), workspace: z.string().min(1) }),
   z.object({ kind: z.literal('open-provider-sign-in'), provider: z.string().min(1).optional() }),
+  /**
+   * PD-STARTUP-008 item 10 and PD-SHELL-005 revision 2 (R-084; R-117): the one member REQ-NOTIFY-044 and REQ-SHELL-115 gain
+   * for the background download — cancel the update download that is running. No parameter: main holds the one download
+   * (REQ-STARTUP-177), so a window names nothing. The download notice and the title-bar indicator (PD-SHELL-018) dispatch the
+   * same member, one identifier and one result from either place (REQ-SHELL-115).
+   */
+  z.object({ kind: z.literal('cancel-update') }),
+  /**
+   * PD-SHELL-018 revision 2 (OQ-556, ruled 2026-11-21 under R-072): open the page of an available release, offered only on
+   * PD-STARTUP-014's link-only notice. No parameter: main keeps the page beside the offer and checks it at the press, so no
+   * address crosses from a renderer. Its behaviour is the plan's Stage 3; until then the dispatcher logs a press and does
+   * nothing (seams §6: "a member whose target is not built is logged there and nothing else").
+   */
+  z.object({ kind: z.literal('open-release-page') }),
 ]);
 export type NoticeAction = z.infer<typeof NoticeActionSchema>;
 export type NoticeActionKind = NoticeAction['kind'];
@@ -101,6 +115,11 @@ export type NoticeActionKind = NoticeAction['kind'];
  * `Update now` action DISABLED for the length of the download, "so the same download cannot be started twice, and its
  * accessible description SHALL say why it is disabled". The value is that description; its presence is the disabled
  * state. No other notice sets it, and it widens no vocabulary: the action member is the same closed union.
+ *
+ * `progress` (2026-11-21, R-117; REQ-NOTIFY-043, the notice-banner brief §3.1): the optional measured progress the banner
+ * draws as a meter under its text — a whole percent, 0 to 100. Only the update's download face sets it, and only while the
+ * feed states the asset's size (REQ-STARTUP-118's `{N} MB` form carries none); it leaves with the notice. It is the
+ * notice's payload, not `update:state`'s, so a notice that is not the update's never carries the updater's state.
  */
 export const NoticeSchema = z.object({
   id: z.number().int().positive(),
@@ -110,6 +129,7 @@ export const NoticeSchema = z.object({
   detail: z.string(),
   persistent: z.boolean(),
   action: z.object({ label: z.string().min(1), action: NoticeActionSchema, disabled: z.string().min(1).optional() }).optional(),
+  progress: z.number().int().min(0).max(100).optional(),
   sessionId: z.string(),
 });
 export type Notice = z.infer<typeof NoticeSchema>;

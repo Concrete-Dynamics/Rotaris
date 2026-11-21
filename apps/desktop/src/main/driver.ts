@@ -93,6 +93,11 @@ export interface DriverDeps {
   /** Verification only: arm REQ-SHELL-011's deferred offer for the selected main window. */
   deferProjectOffer: (win: BrowserWindow, delayMs: number) => void;
   /**
+   * Verification only (R-117, the title-bar and notice-banner briefs §11): publish one of the updater's own faces into the
+   * notice store and channel 17 (`updater/face-seam.ts`), never touching the feed, the download or the apply.
+   */
+  updateFace: (face: string, version?: string) => Promise<unknown>;
+  /**
    * The application's quit — `app.quit()`, a quit that starts outside any window: every main window closed in PD-ORCH-005
    * clause 9's all-or-none order with no close guard asked (OQ-298: no person's close, so unsaved settings stay unsaved), then
    * `window-all-closed` asks the run host and each workspace service to `shutdown`, so a live run comes to rest as PD-ORCH-005
@@ -121,6 +126,8 @@ interface Request {
   chord?: string;
   /** A4: which window an op acts on, and what `useWindow` selects for the ops after it — a main or an auxiliary one. */
   window?: string;
+  /** `updateFace` only: the version the face names (default `0.2.0`). */
+  version?: string;
   /** `quit` only: the immediate exit rather than the application's quit. */
   immediate?: boolean;
   enter?: boolean;
@@ -570,6 +577,9 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         deps.deferProjectOffer(win, request.delayMs ?? 650);
         return { windowId: win.webContents.id, delayMs: request.delayMs ?? 650 };
       }
+      case 'updateFace':
+        // The update's faces through the verification-only face seam (R-117): `text` names the face.
+        return deps.updateFace(request.text ?? '', request.version);
       case 'quit':
         /**
          * The application's quit unless the immediate exit is asked for

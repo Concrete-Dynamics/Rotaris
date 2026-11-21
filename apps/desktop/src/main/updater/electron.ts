@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { constants as fsConstants, createReadStream, createWriteStream, promises as fsp } from 'node:fs';
 import { join } from 'node:path';
 import { app, net } from 'electron';
@@ -7,6 +7,7 @@ import type { DownloadSink } from './download.js';
 import { classifyInstallation, parseInstallDir, type Classification } from './classify.js';
 import { flushDirectory, flushFile } from './flush.js';
 import type { HandOffRecordFile, NetworkResponse, UpdateNetwork } from './install.js';
+import { METERED_QUERY_TIMEOUT_MS, NM_METERED_ARGS, parseNetworkManagerMetered, type ConnectionCost } from './metered.js';
 import { LEGACY_HANDOFF_RECORD_NAME, type UpdatesArea } from './pending.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 
@@ -65,6 +66,27 @@ export async function classifyThisInstallation(artifact: ArtifactVariables): Pro
   const packaged = app.isPackaged;
   const installDir = packaged ? await readInstallDir() : null;
   return classifyInstallation({ platform: process.platform, packaged, execPath: process.execPath, env: artifact, installDir });
+}
+
+/**
+ * UD-1 (PD-STARTUP-008, R-117): whether the platform reports the connection as metered. Linux asks NetworkManager over the
+ * system bus with `gdbus`, bounded by `METERED_QUERY_TIMEOUT_MS` (Node's own `timeout` ends the child); no `gdbus`, no
+ * NetworkManager, a timeout or an answer this build does not recognise is `unknown`, which the updater reads as not metered.
+ * Windows answers `unknown` for now: its connection cost is a WinRT API (`NetworkInformation`'s `ConnectionCost`) Electron
+ * does not expose, and reaching it from main is its own piece of work; macOS publishes no release (IC-3). Measured on the
+ * Linux agent host, 2026-11-21: `(<uint32 4>,)`, guess-no, in a few milliseconds.
+ */
+export function readConnectionCost(): Promise<ConnectionCost> {
+  if (process.platform !== 'linux') return Promise.resolve('unknown');
+  return new Promise((resolve) => {
+    try {
+      execFile('gdbus', [...NM_METERED_ARGS], { timeout: METERED_QUERY_TIMEOUT_MS, windowsHide: true, encoding: 'utf8' }, (error, stdout) => {
+        resolve(error ? 'unknown' : parseNetworkManagerMetered(stdout));
+      });
+    } catch {
+      resolve('unknown');
+    }
+  });
 }
 
 export interface UpdaterPorts {

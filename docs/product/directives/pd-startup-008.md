@@ -145,6 +145,22 @@ everything; UD-8 and UD-11 for the AppImage. Executed over fakes and, for REQ-ST
 application ([`first-executions`](../../architecture/first-executions/39-the-register-38.md)); not yet against a released
 artifact.
 
+*Built in part, 2026-11-21 (R-117, the plan's Stage 2; first executed):* the automatic download on the portable and the
+AppImage (REQ-STARTUP-169, with UD-1's metered skip read from NetworkManager's `Metered` over `gdbus`, UD-5's yield and UD-2's
+and UD-4's hold for the process), `update.cancel` (REQ-STARTUP-170), the faces and publishing rules of items 13 to 15 and of
+PD-SHELL-005 revision 3, UD-3's hide-only Dismiss (pinned: no `updates/dismissedVersion`), UD-7's acknowledgement and
+REQ-STARTUP-180's disclosure. Executed over fakes (`updater/updater.background.test.ts`: the cancel within REQ-STARTUP-170's
+2 s with every byte removed, each row of the notice-banner brief §4.1) and in the built application on the Linux agent host
+through the driver's verification-only face seam, which publishes the updater's own faces and moves no endpoint
+(REQ-STARTUP-111). **Found by building it:** a cancel arriving after the last byte but before the pending update was kept would
+have been verified and applied — `runInstall` now ends there and discards; and the click flow's `Dismiss` of `Update not
+installed` recorded the version as waved off, which the brief's §3.1 confines to the offer. **Decided here, not by the
+record:** the installer flavour keeps the click flow (no automatic download) until its next-start apply exists (Stage 3/PR-3),
+since a verified installer can only be applied by starting it; a local failure of a background download (the disk, the
+apply step) is shown with `Try again`, UD-4 silencing transport failures alone; Windows reports the connection's cost as
+unknown. **Not executed:** against a released artifact or a real feed (REQ-STARTUP-181), a metered connection on a real host,
+Windows.
+
 > **Narrows:** REQ-STARTUP-017, REQ-STARTUP-114, REQ-STARTUP-116, REQ-STARTUP-119, REQ-STARTUP-121, REQ-STARTUP-122, REQ-STARTUP-125, REQ-STARTUP-127, REQ-STARTUP-155, REQ-NOTIFY-044, REQ-NOTIFY-215, REQ-NOTIFY-222, REQ-STARTUP-117, REQ-SHELL-114, REQ-NOTIFY-216, REQ-STARTUP-174, REQ-STARTUP-120, REQ-NOTIFY-221
 
 *Raised by the owner, 2026-10-22; logged as [R-084](../requests.md#r-084). Revision 2: the owner's rulings, 2026-11-21, [R-117](../requests.md#r-117).*

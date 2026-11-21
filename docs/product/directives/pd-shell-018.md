@@ -34,6 +34,21 @@ the bar is clipped; and one more member of a closed action list.
 
 **Recorded, not built.** The first execution is owed to the plan's Stage 2 (the indicator) and Stage 3 (the action).
 
+**Built in part, 2026-11-21 (R-117, the plan's Stage 2): the indicator and the acknowledgement; first executed.** The
+indicator is `packages/ui/src/UpdateIndicator.tsx`, drawn after the improvement-analysis indicator and before Sessions, fed by
+channel 17 (`update:state`) and the `update.state` read; its action is the notice's own member (`cancel-update`, `restart`).
+The acknowledgement is UD-7's `Updated to Rotaris {version}`, raised by the first check of a launch that finds its pending
+update applied. Executed over fakes (`updater.background.test.ts`, `update-indicator.test.ts`) and in the built application
+on the Linux agent host through the driver's verification-only face seam (`updater/face-seam.ts`): present downloading and
+ready, absent at rest, standing while another notice holds the banner and after a Dismiss; `.title-bar` never overflowed at
+1400, 1180, 1080 and 1000 px. **Found, and repaired before landing** (the `review-ui` critic, iteration 1): the action was one
+control relabelled from `Cancel` to `Restart now` under the focus and the pointer, so a press aimed at cancelling could restart
+— it is now keyed by its member, in the indicator and on the banner; focus fell to `body` when the indicator left after a
+cancel — it now moves to Sessions, else the first window control, measured. **A reading, not ruled:** the chip's "floor" of
+the give-way is `…/<last segment>` of the full path; at 1000×680 with no improvement indicator the full form stands, and it
+steps to the label-less and icon forms only when the chip would go below that floor (measured with stand-ins for the busiest
+state). **Not executed:** the open-release-page action (Stage 3), a screen reader's announcements, a released artifact.
+
 > **Extends:** REQ-SHELL-033
 > **Narrows:** REQ-SHELL-115, REQ-NOTIFY-044
 

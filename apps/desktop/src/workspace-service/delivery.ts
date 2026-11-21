@@ -1,12 +1,14 @@
-import type { Actor, BlockerPayload, BoardAction, BoardCard, BoardProjection, DisclosureState, Reachability, ReqId, RequirementDetail, RequirementRecord, RequirementsCommandPayload, ReviewPayload, RunClaim, RunLaunchPreview, RunPermissions, RunReaped, RunSettled, StandingDisclosure, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import type { Actor, BlockerPayload, CriterionOutcome, ProcessReply, ServiceAsk, BoardAction, BoardCard, BoardProjection, DisclosureState, Reachability, ReqId, RequirementDetail, RequirementRecord, RequirementsCommandPayload, ReviewPayload, RunClaim, RunLaunchPreview, RunPermissions, RunReaped, RunSettled, StandingDisclosure, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
 import { SYSTEM_ONLY_REQUIREMENTS_COMMANDS } from '@rotaris/contracts'; // Part AP
-import { asSessionId, err, millis, toIsoUtc, type Clocks, type Result } from '@rotaris/kernel';
+import { asSessionId, err, millis, toIsoUtc, type Clocks, type Millis, type Result } from '@rotaris/kernel';
 import { StoreDal, type ResolvedStore } from '@rotaris/store';
 // Part AP (the names from `ACTION_CLASS` on in the `@rotaris/workspace` import below) — runs from the board, the queue and the source write (spec 08 §Runs Started from the Board, §Delivery Queue, §Editing and Creating Requirements; ADR-0041's second execution).
 import { assertWriterDeclares, createDeliveryReader, createDeliveryWriter, createQueueSettings, createTransitions, reapStaleRuns, type BoardInput, type DeliveryReader, type DeliveryWriter, type ReapResult, type RequirementNow, ACTION_CLASS, appendEpicIndexRow, checkRepositoryForRuns, composeRequirementDocument, createLocation, documentWritable, editRequirementDocument, epicIndexLink, invokeGit, nextIdentifier, probeSourceWritability, provisionUnitWorktree, readOnlySentence, readSourceText, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slugOf, takeOverUnitWorktree, unconfiguredReason, unitIdFor, WAITING_ON_PERSON, writeSourceDocument, type ProvisionArgs, type ProvisionedWorktree, type RepositoryForRuns, type TakeOverArgs } from '@rotaris/workspace';
 import { readSavedConfiguration, commitConfigFields, renderFatal, REQUIREMENTS_DEFAULTS, validateRequirementsPatch, type RequirementsSection } from '@rotaris/config';
 import { resolveUserDirs } from '@rotaris/platform';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, watch, type FSWatcher } from 'node:fs';
+import { createShapeHost, type ShapePass } from './shape.js';
+import { criteriaPromptTail, parseCriteriaClaims } from '@rotaris/workspace';
 import { join } from 'node:path';
 
 /**
@@ -46,6 +48,10 @@ export interface DeliveryServiceDeps {
   readonly configDir?: string;
   /** Part AP — the two Git units a launch needs (REQ-TRACE-498's repository rows, REQ-GIT-137/140's provisioning); the real ones through ADR-0038's helper when absent, a fake in a test. */
   readonly git?: RunGitPort;
+  /** PD-TRACE-002 clause 3: the service's narrow request to main, which forwards a survey step to the run host. Absent, a survey is refused. */
+  readonly ask?: (request: ServiceAsk, bound: Millis) => Promise<ProcessReply>;
+  /** PD-TRACE-002 clause 10: told when the watcher saw the repository change and the board was read again, so main can publish the generation. */
+  readonly onChanged?: (generation: number) => void;
 }
 /** Part AP — what the service asks of Git for a launch; both are `runs.ts` units over ADR-0038's one helper. */
 export interface RunGitPort {
@@ -92,6 +98,9 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   let stopped = false;
   let reaped: readonly ReapResult[] | undefined;
   let refreshing: Promise<number> | undefined;
+  /** PD-TRACE-002: the pass through the surveyed shape, held while the board is drawn from it. */
+  let shapePass: ShapePass | undefined;
+  const shapeHost = createShapeHost(workspaceRoot, { ask: deps.ask ?? (async () => ({ kind: 'refused', code: 'ask.unavailable', headline: 'This workspace service cannot reach a model' })), clocks, now: () => toIsoUtc(clocks.wall.instant()), log });
   const inFlight = new Map<ReqId, BoardAction>();
   const now = () => toIsoUtc(clocks.wall.instant());
 
@@ -186,7 +195,9 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
       settings: { ...reader.queue(), stopped }, held, armed, claimed, stalled, undisclosed, unconfigured: configFault,
     });
   };
-  const source = () => (parse === undefined ? { writable: false, canCreate: false, reason: 'No requirement store is open.' } : probeSourceWritability(workspaceRoot, parse.layout.storeDir));
+  /** PD-TRACE-002 clause 6: a surveyed requirement's title and prose are edited in its own document, and none is created from the board. */
+  const SURVEYED_SOURCE = 'These requirements are read through the surveyed shape: their text is edited in their own documents, and the board writes only a status word and a criterion\'s tick there.';
+  const source = () => (parse === undefined ? { writable: false, canCreate: false, reason: 'No requirement store is open.' } : shapePass !== undefined ? { writable: false, canCreate: false, reason: SURVEYED_SOURCE } : probeSourceWritability(workspaceRoot, parse.layout.storeDir));
   /** The unit a card in `ready` is launched as: its `Units` fact counts the runs begun, and the next one is that count plus one. */
   const unitOfCard = (card: BoardCard | undefined): string => unitIdFor(Number(card?.facts.find((f) => f.label === 'Units')?.value ?? '0'));
   /**
@@ -353,7 +364,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
         stalled.delete(id);
       }
       const wt = l.worktree!;
-      return { id, unit: l.unit, worktree: { ref: wt.ref, path: wt.path, branch: wt.branch, baseBranch: wt.baseBranch, baseRevision: wt.baseRevision }, prompt: runPromptFor(record, l.unit, l.instructions), permissions: permissionsOf(l) };
+      return { id, unit: l.unit, worktree: { ref: wt.ref, path: wt.path, branch: wt.branch, baseBranch: wt.baseBranch, baseRevision: wt.baseRevision }, prompt: runPromptFor(record, l.unit, l.instructions, criteriaPromptTail((shapePass === undefined ? undefined : shapeHost.place(shapePass, id))?.criteria ?? [])), permissions: permissionsOf(l) };
     }
     return null;
   };
@@ -389,8 +400,10 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     const units = runs.map((r) => ({ unit: r.unit, ...(r.sessionId === null ? {} : { sessionId: r.sessionId }), status: r.status, ...(r.outcome === null ? {} : { outcome: r.outcome }), startedAt: r.startedAt, ...(r.endedAt === null ? {} : { endedAt: r.endedAt }), permissions: r.permissions }));
     const st = reader.state(id);
     const snapshot = { snapshotHash: st.snapshotHash, snapshotAt: st.snapshotAt };
+    const criteria = (shapePass === undefined ? undefined : shapeHost.place(shapePass, id))?.criteria ?? [];
     return {
       id, title: record?.title ?? id, column: card.column,
+      ...(criteria.length === 0 ? {} : { criteria: parseCriteriaClaims(summary, criteria) }),
       claim: {
         summary, risks: risksOf(summary),
         completion: { claimed, statement: !claimed ? `The agent made no completion claim: the run ended ${finished.outcome ?? finished.status}.` : contradicted ? 'The agent claimed completion; measurement contradicted it.' : 'The agent claimed completion; the claim stands unmeasured.' },
@@ -404,6 +417,43 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     };
   };
   /** The files the work modified: the unit's commits against the base it branched from where that is still known, plus what is uncommitted in its tree; each path once. */
+  /**
+   * PD-TRACE-002 clauses 6 to 8: what a delivery change writes into a surveyed requirement's own document — the status
+   * word of the project's vocabulary the new state maps to, and, on an acceptance, the tick of each criterion the run
+   * reported met. An acceptance of a board run is written in that run's worktree and committed there as one commit
+   * citing the identifier, so it merges with the code that earned it; every other change is written to the working tree
+   * and left uncommitted. A write refused (the file changed underneath, the place moved) changes nothing in the
+   * document and is said on the action's result; the delivery change itself stands, in the delivery store.
+   */
+  const writeBackAfter = async (id: ReqId, action: BoardAction, to: string): Promise<string | undefined> => {
+    const pass = shapePass;
+    if (pass === undefined) return undefined;
+    const place = shapeHost.place(pass, id);
+    if (place === undefined) return undefined;
+    const mapped = to === 'blocked' ? undefined : shapeHost.statusWord(pass, id, to as Exclude<BoardCard['column'], 'blocked'>);
+    const status = mapped !== undefined && mapped !== place.status?.word ? mapped : undefined;
+    let ticks: { index: number; text: string; checked: boolean }[] = [];
+    let root: string | undefined;
+    if (action === 'accept') {
+      const finished = [...reader.runs(id)].reverse().find((r) => r.status !== 'running');
+      const session = finished === undefined || finished.sessionId === null ? undefined : new StoreDal(db).getSession(asSessionId(finished.sessionId));
+      ticks = parseCriteriaClaims(session?.summary_text ?? null, place.criteria).filter((c) => c.claim === 'met' && !c.checked).map((c) => ({ index: c.index, text: c.text, checked: true }));
+      if (finished !== undefined && finished.worktreePath !== null && existsSync(finished.worktreePath)) root = finished.worktreePath;
+    }
+    if (status === undefined && ticks.length === 0) return undefined;
+    const w = shapeHost.write(pass, id, { ...(status === undefined ? {} : { status }), ticks }, root);
+    if (!w.ok) { log(`requirements: ${id} write-back refused: ${w.reason}`, 'warn'); return `The document was not written: ${w.reason}`; }
+    if (!w.changed) return undefined;
+    const what = [status === undefined ? '' : `status ${JSON.stringify(status)}`, ticks.length === 0 ? '' : `${ticks.length} ${ticks.length === 1 ? 'criterion' : 'criteria'} ticked`].filter((x) => x !== '').join(', ');
+    if (root === undefined) { log(`requirements: ${id} written back to ${w.document} (${what}), uncommitted`); return `Wrote ${what} to ${w.document}; the change is uncommitted in the working tree.`; }
+    const git = async (args: readonly string[]) => invokeGit({ args, workspaceRoot: root, timeoutMs: millis(20_000), timers: clocks.timers, clock: clocks.monotonic }).catch(() => null);
+    const added = await git(['add', '--', w.document]);
+    const committed = added !== null && added.outcome === 'exited' && added.status === 0 ? await git(['commit', '--only', '-m', `docs(${id}): the accepted criteria and status of ${id}`, '--', w.document]) : null;
+    if (committed === null || committed.outcome !== 'exited' || committed.status !== 0) { log(`requirements: ${id} written back to ${w.document} in ${root} (${what}); the commit failed and the change is uncommitted there`, 'warn'); return `Wrote ${what} to ${w.document} in the run's worktree; it could not be committed there and is uncommitted.`; }
+    log(`requirements: ${id} written back to ${w.document} in ${root} (${what}), committed on the run's branch`);
+    return `Wrote ${what} to ${w.document} and committed it on the run's branch.`;
+  };
+
   const changedFilesOf = async (worktree: string | null, baseRevision: string | null): Promise<ReviewPayload['measurement']['changedFiles']> => {
     if (worktree === null || !existsSync(worktree)) return [];
     const run = async (args: readonly string[]) => { const r = await invokeGit({ args, workspaceRoot: worktree, timeoutMs: millis(15_000), timers: clocks.timers, clock: clocks.monotonic }).catch(() => null); return r !== null && r.outcome === 'exited' && r.status === 0 ? r.stdout : ''; };
@@ -493,6 +543,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     // REQ-TRACE-346: reported by the pass, never deduced. No pass in this build analyses anything, so it is false and said so.
     analysisEnabled: false,
     inFlight,
+    ...(shapePass === undefined ? {} : { surveyed: { origin: shapePass.origin, stores: shapePass.shape.stores.map((x) => x.dir) } }),
     source: (({ writable, canCreate }) => ({ writable, canCreate }))(source()), // Part AP: REQ-TRACE-435/444 — the store directory's writability by this account, probed at every projection
   });
   /** REQ-TRACE-348: one immutable value per generation; the generation moves BEFORE the value is computed so the value carries it. */
@@ -525,6 +576,15 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
           if (!v.ok) log(`requirements verify failed: ${JSON.stringify(v.error)}`, 'warn');
         }
       }
+      // PD-TRACE-002 clause 4: a workspace whose built-in layout reads no requirement is read through its accepted shape,
+      // and the projection takes that as it takes a store. A store the built-in layout reads keeps domain 08 in full.
+      shapePass = undefined;
+      if (parse === undefined || parse.records.length === 0) {
+        const read = shapeHost.pass(generation + 1);
+        if (read.kind === 'read') { shapePass = read.pass; parse = read.pass.parse; parseFailure = undefined; report = read.pass.report; }
+        // An accepted shape that cannot be used is stated on the board as a configuration that could not be read, never drawn around.
+        else if (read.kind === 'unreadable') { if (parseFailure === undefined) parseFailure = { kind: 'configuration', path: read.origin === 'repository' ? 'rotaris-requirements-shape.json' : '.rotaris/requirements-shape.json', cause: read.reason }; log(`requirements: the accepted shape cannot be used (${read.origin}): ${read.reason}`, 'warn'); }
+      }
       // REQ-TRACE-476: the restart reap runs once, after the first parse, so the settling entries carry the hash of that instant.
       if (reaped === undefined) {
         reaped = reapStaleRuns(reader, writer, new Set(), (id) => nowOf(id)?.canonicalHash);
@@ -532,6 +592,18 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
       }
       // Part AP — REQ-TRACE-407/437: a delivered requirement whose text moved is moved out of the terminal state by the pass, through the normal evaluation.
       if (parse !== undefined) for (const r of parse.records) { const n = nowOf(r.id); if (n !== undefined) { const m = writer.recordSpecificationMoved(r.id, { now: n }); if (m.ok && m.value.historyEntry !== 0) log(`requirements: ${r.id} moved ${m.value.from} → ${m.value.to} (specification changed since it was accepted)`); } }
+      // PD-TRACE-002 clause 5: the document is the source of truth where it has a place. A requirement resting in backlog,
+      // needs-update or done whose document declares another of the three is recorded there, after the pass's own evaluation.
+      if (shapePass !== undefined) {
+        for (const q of shapeHost.declared(shapePass)) {
+          if (q.delivery !== 'backlog' && q.delivery !== 'needs-update' && q.delivery !== 'done') continue;
+          const n = nowOf(q.id);
+          if (n === undefined) continue;
+          const m = writer.recordDocumentDeclared(q.id, q.delivery, q.word, { now: n });
+          if (m.ok && m.value.historyEntry !== 0) log(`requirements: ${q.id} moved ${m.value.from} → ${m.value.to} (its document declares ${JSON.stringify(q.word)})`);
+        }
+        shapeHost.remember(shapePass);
+      }
       // Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`: every pass that parses gives each
       // card resting in `ready` with NO launch held (a restart lost it; nothing else leaves a candidate without one) the
       // tree its release recorded, undisclosed — the queue's release records the disclosure; an unattended workspace needs
@@ -545,10 +617,57 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
         const resting = reader.board(input()).cards.filter((card) => card.column === 'ready' && !launches.has(card.id) && !inFlight.has(card.id));
         await Promise.all(resting.map(async (card) => { const failed = await recoverLaunch(card, 'undisclosed', { onlyIfAbsent: true }); if (failed !== undefined) stalled.set(card.id, failed); }));
       }
+      rewatch();
       return rebuild();
     })().finally(() => { refreshing = undefined; });
     return refreshing;
   };
+  /**
+   * PD-TRACE-002 clause 10: the board stays current by itself. A watcher on the store directories and the shape's files
+   * reads the board again, debounced, when a document changes by any hand; each re-read is the model-free pass above.
+   * A watcher that could not be set up, or that failed, is stated (`watching` on the strip's read) and the re-evaluation
+   * control stays the guaranteed route (REQ-TRACE-342, REQ-TRACE-507). The watch is set on what the LAST pass read, so a
+   * shape accepted later is watched from the pass that first reads it.
+   */
+  const WATCH_DEBOUNCE_MS = 400;
+  let watchers: FSWatcher[] = [];
+  let watchedKey = '';
+  let watching = false;
+  let watchTimer: { cancel(): void } | undefined;
+  const onRepositoryChange = (): void => {
+    watchTimer?.cancel();
+    watchTimer = clocks.timers.after(millis(WATCH_DEBOUNCE_MS), () => {
+      watchTimer = undefined;
+      if (current === undefined) return;
+      void refresh().then((g) => { deps.onChanged?.(g); }, (e: unknown) => { log(`requirements: the watcher's re-read failed: ${e instanceof Error ? e.message : String(e)}`, 'warn'); });
+    });
+  };
+  const rewatch = (): void => {
+    const paths = shapePass !== undefined ? shapeHost.watched(shapePass) : parse !== undefined ? [parse.layout.storeDir, ...shapeHost.watched(undefined)] : shapeHost.watched(undefined);
+    const key = paths.join('\u0000');
+    if (key === watchedKey && watching) return;
+    for (const w of watchers) { try { w.close(); } catch { /* already closed */ } }
+    watchers = [];
+    watchedKey = key;
+    let failed = false;
+    // The repository root is watched without recursion for the two files a shape or a layout lives in; a store directory with it.
+    const add = (target: string, recursive: boolean, only?: ReadonlySet<string>): void => {
+      if (!existsSync(target)) return;
+      try {
+        const w = watch(target, { recursive, persistent: false }, (_event, name) => { if (only === undefined || (typeof name === 'string' && only.has(name))) onRepositoryChange(); });
+        w.on('error', (e) => { watching = false; log(`requirements: the repository watcher stopped (${e instanceof Error ? e.message : String(e)}); Re-evaluate reads the board`, 'warn'); });
+        watchers.push(w);
+      } catch (e) {
+        failed = true;
+        log(`requirements: ${target} could not be watched (${e instanceof Error ? e.message : String(e)}); Re-evaluate reads the board`, 'warn');
+      }
+    };
+    const files = new Set(paths.filter((p) => !p.includes('/') && p.endsWith('.json')));
+    add(workspaceRoot, false, files);
+    for (const p of paths) if (!files.has(p)) add(join(workspaceRoot, p), true);
+    watching = !failed && watchers.length > 0;
+  };
+
   const ensure = async (): Promise<BoardProjection> => {
     if (current === undefined) await refresh();
     return current!;
@@ -559,7 +678,9 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     const card = board.cards.find((c) => c.id === id);
     if (card === undefined) return undefined;
     const record = parse?.records.find((r) => r.id === id);
+    const place = shapePass === undefined ? undefined : shapeHost.place(shapePass, id);
     return {
+      ...(place === undefined ? {} : { place }),
       card,
       prose: record?.prose ?? '',
       history: reader.history(id),
@@ -629,12 +750,15 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
               const created = nowOf(made.id);
               if (created !== undefined) await writer.transition(made.id, 'create', actor, { now: created }, { payload: { summary: `created at ${made.location} by accepting a proposal on the review of ${command.id}` } });
             }
+            // PD-TRACE-002 clauses 6 to 8: the document is written after the delivery change committed; a document written in the
+            // workspace is read again so the card carries what its document now states.
+            const wrote = r.value.from !== r.value.to || command.action === 'accept' ? await writeBackAfter(command.id, command.action, r.value.to) : undefined;
             // Persist before publish: the commit is behind us; the generation moves now and main publishes after this reply.
-            const g = rebuild();
+            const g = wrote === undefined ? rebuild() : await refresh();
             log(`requirements: ${command.id} ${command.action} ${r.value.from} → ${r.value.to} by ${actor.kind === 'user' ? `user ${actor.person}` : 'system'} (entry ${r.value.historyEntry}, generation ${g})`);
             // Part AP — REQ-TRACE-463: the reason nothing started rides on the action's result rather than being dropped.
             const stall = stalled.get(command.id);
-            return { value: stall === undefined ? r : { ...r, value: { ...r.value, dispatch: stall } }, changed: { generation: g, affected: made === undefined ? [command.id] : null } };
+            return { value: stall === undefined && wrote === undefined ? r : { ...r, value: { ...r.value, ...(stall === undefined ? {} : { dispatch: stall }), ...(wrote === undefined ? {} : { document: wrote }) } }, changed: { generation: g, affected: made === undefined ? [command.id] : null } };
           } finally {
             inFlight.delete(command.id);
           }
@@ -829,7 +953,8 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
           if (run === undefined) return { value: { settled: false, reason: `No running unit is recorded for session ${command.sessionId}.` } satisfies RunSettled };
           const n = nowOf(run.id) ?? { id: run.id, canonicalHash: '', lifecycle: 'approved' as const, isEpic: false };
           const r = writer.recordRunEnded(run.id, run.unit, command.outcome, command.detail, { now: n });
-          const g = rebuild();
+          // PD-TRACE-002 clause 10: a run's end reads a surveyed workspace again — its documents are where its state is stated.
+          const g = shapePass !== undefined ? await refresh() : rebuild();
           log(`requirements: ${run.id} unit ${run.unit} ended ${command.outcome}: ${command.detail} (generation ${g})`);
           return { value: { settled: r.ok, id: run.id, unit: run.unit, ...(r.ok ? { to: r.value.to } : { reason: r.error.reason }) } satisfies RunSettled, changed: { generation: g, affected: [run.id] } };
         }
@@ -863,6 +988,40 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
         case 'requirements.blocker': {
           await ensure();
           return { value: blockerPayload(command.id) };
+        }
+        // PD-TRACE-002: the surveyed shape. The read and the survey move no generation (a preview records nothing); an
+        // accept, a recording that follows an import, and a tick read the board again, and main publishes after the reply.
+        case 'requirements.shape': {
+          await ensure();
+          const native = shapePass === undefined && parse !== undefined && parse.records.length > 0;
+          return { value: shapeHost.view(shapePass, native, watching) };
+        }
+        case 'requirements.survey':
+          return { value: await shapeHost.survey(command.token, command.answer) };
+        case 'requirements.shape.accept': {
+          const r = shapeHost.accept(command.token);
+          if (!r.ok) return { value: r };
+          const g = await refresh();
+          return { value: r, changed: { generation: g, affected: null } };
+        }
+        case 'requirements.shape.record': {
+          const r = shapeHost.record();
+          if (!r.ok) return { value: r };
+          const g = await refresh();
+          return { value: r, changed: { generation: g, affected: null } };
+        }
+        case 'requirements.shape.export':
+          return { value: shapeHost.exportShape() };
+        case 'requirements.criterion': {
+          await ensure();
+          const refuse = (reason: string): DeliveryAnswer => ({ value: { ok: false, reason } satisfies CriterionOutcome });
+          if (shapePass === undefined) return refuse('Acceptance criteria are ticked on requirements read through a surveyed shape; nothing was written.');
+          // Clause 8: a tick made outside a run is written to the working tree and left uncommitted.
+          const w = shapeHost.write(shapePass, command.id, { ticks: [{ index: command.index, text: command.text, checked: command.checked }] });
+          if (!w.ok) return refuse(w.reason);
+          log(`requirements: ${command.id} criterion ${command.index + 1} ${command.checked ? 'ticked' : 'unticked'} in ${w.document}${w.changed ? '' : ' (already so)'} by ${actor.kind === 'user' ? `user ${actor.person}` : 'system'}`);
+          const g = await refresh();
+          return { value: { ok: true, document: w.document, line: w.lines[0] ?? 0 } satisfies CriterionOutcome, changed: { generation: g, affected: [command.id] } };
         }
         // Domain 22 (PD-TRACE-001): answered by `adoption.ts` before this service is reached; never the delivery store's.
         case 'requirements.adoption':

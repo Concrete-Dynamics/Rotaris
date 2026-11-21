@@ -213,3 +213,50 @@ _Avoid_: baseline (that word is REQ-TRACE-121's three debt files)
 **Comparison** (on opening):
 The read that names the requirements new, changed and removed since the record. — `REQ-ADOPT-022`, `REQ-ADOPT-023`
 _Avoid_: diff, sync
+
+### The surveyed shape (domain 22, PD-TRACE-002)
+
+**Shape**:
+A repository's own requirement form in one validated format: its stores, how a requirement is written in each, where
+its status and its criteria stand, the form of an identifier, and the roots in which identifiers are cited. —
+`REQ-ADOPT-031`, `REQ-ADOPT-032`
+_Avoid_: schema, template, adapter (the **adapter** is REQ-ADOPT-011's and reads one capture)
+
+**Store** (of a shape):
+One directory of requirement documents and the definition its requirements are written by. A shape has one to eight.
+— `REQ-ADOPT-031`
+
+**Survey**:
+The bounded, read-only reading of a repository by an agent that ends in a proposed shape. It starts only on the
+user's press and records nothing. — `REQ-ADOPT-036` to `REQ-ADOPT-039`
+_Avoid_: scan, import, adoption run (that is REQ-ADOPT-011's)
+
+**Draft** (shape):
+The shape the detection pass alone implies, derived by script before the agent is asked; what the agent improves, and
+what is previewed where it gave nothing better. — `REQ-ADOPT-036`, `REQ-ADOPT-039`
+
+**Preview**:
+What a survey ends in: the proposed shape with what it extracted and what it could not read. Nothing is recorded
+until it is accepted. — `REQ-ADOPT-039`, `REQ-ADOPT-041`
+
+**Shape record**:
+The accepted shape with each document's and identifier's hash and what the shape left unread on that day, kept in the
+workspace scope directory. — `REQ-ADOPT-041`
+
+**Criterion**:
+One acceptance criterion of a requirement, written in its document as a task-list item: its text, and whether it is
+ticked. — `REQ-ADOPT-034`
+_Avoid_: checklist item, task, condition (a **completion condition** is REQ-TRACE-399's)
+
+**Status word**:
+The word a requirement's own document states its status in, of the project's vocabulary, which the shape maps to a
+lifecycle, a delivery state, or both. — `REQ-ADOPT-034`, `REQ-ADOPT-045`
+
+**Write-back**:
+The two writes the board makes into a surveyed document — a status word and a criterion's mark — and no other. —
+`REQ-ADOPT-046`
+_Avoid_: sync, save, update
+
+**Drift**:
+What fits the accepted shape less than on the day its record was written. It keeps the board and offers a survey. —
+`REQ-ADOPT-052`

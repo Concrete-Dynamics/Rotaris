@@ -270,11 +270,12 @@ export function scheduleQueue(input: ScheduleInput): ScheduleOutput {
 // ---- the prompt a unit run receives (REQ-TRACE-387, 423) ----
 
 /** The specification snapshot the run works from, with the user's send-back instructions where a run follows one (REQ-TRACE-423). */
-export function runPromptFor(record: Pick<RequirementRecord, 'id' | 'title' | 'prose'>, unit: string, instructions?: string): string {
+export function runPromptFor(record: Pick<RequirementRecord, 'id' | 'title' | 'prose'>, unit: string, instructions?: string, criteria: string = ''): string {
   const head = `Implement ${record.id} — ${record.title} (unit ${unit}).`;
   const body = record.prose.trim() === '' ? '(The requirement carries no prose beyond its title.)' : record.prose.trim();
   const tail = instructions !== undefined && instructions.trim() !== '' ? `\n\nInstructions from the reviewer of the previous run:\n${instructions.trim()}` : '';
-  return `${head}\n\nSpecification:\n${body}${tail}\n\nWork only inside this worktree; the specification above is the snapshot this run is measured against.`;
+  // PD-TRACE-002 clause 7: `criteria` is the tail `criteriaPromptTail` words — the criteria to meet and the report to end with.
+  return `${head}\n\nSpecification:\n${body}${tail}${criteria}\n\nWork only inside this worktree; the specification above is the snapshot this run is measured against.`;
 }
 
 // ---- the source: writability, the composer, the editor, the location (REQ-TRACE-434..444, 498) ----

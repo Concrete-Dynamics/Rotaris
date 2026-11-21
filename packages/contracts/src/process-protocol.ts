@@ -80,6 +80,9 @@ export type InitialTodo = z.infer<typeof InitialTodoSchema>;
 
 /** REQ-ADOPT-012: the detection result as it travels to the interpretation, bounded so a large workspace cannot flood the channel. */
 export const ADOPTION_DETECTION_MAX = 200_000;
+/** PD-TRACE-002 clause 3: one survey message and one survey conversation, bounded as they cross. */
+export const SURVEY_MESSAGE_MAX = 240_000;
+export const SURVEY_MESSAGES_MAX = 200;
 
 export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   /**
@@ -274,6 +277,11 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * detection result as JSON text; the answer is untrusted and validated by the service, never here.
    */
   z.object({ kind: z.literal('adoption.interpret'), workspaceRoot: z.string().min(1), detection: z.string().min(2).max(ADOPTION_DETECTION_MAX) }),
+  /**
+   * PD-TRACE-002 clause 3: one step of the survey — the conversation the workspace service holds, answered on the model
+   * the `requirements-engineer` role resolves to. The answer is one JSON action, untrusted, carried out by the service.
+   */
+  z.object({ kind: z.literal('survey.step'), workspaceRoot: z.string().min(1), messages: z.array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(SURVEY_MESSAGE_MAX) })).min(1).max(SURVEY_MESSAGES_MAX) }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
   /**
    * Part AL — the live terminal (ADR-0021): main relays the seven `terminal.*` commands as they arrive, shape for shape,
@@ -513,6 +521,11 @@ export const ServiceAskSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('improvements.command'), workspaceRoot: z.string(), command: ImprovementCommandSchema }),
   /** Domain 22 (PD-TRACE-001): the adoption run's interpretation, forwarded by main to the run host (REQ-ADOPT-012). */
   z.object({ kind: z.literal('adoption.interpret'), workspaceRoot: z.string().min(1), detection: z.string().min(2).max(ADOPTION_DETECTION_MAX) }),
+  /**
+   * PD-TRACE-002 clause 3: one step of the survey — the conversation the workspace service holds, answered on the model
+   * the `requirements-engineer` role resolves to. The answer is one JSON action, untrusted, carried out by the service.
+   */
+  z.object({ kind: z.literal('survey.step'), workspaceRoot: z.string().min(1), messages: z.array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(SURVEY_MESSAGE_MAX) })).min(1).max(SURVEY_MESSAGES_MAX) }),
 ]);
 export type ServiceAsk = z.infer<typeof ServiceAskSchema>;
 export const ServiceAskEnvelopeSchema = z.object({ v, ask: id, request: ServiceAskSchema });
@@ -643,6 +656,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('improvement.analyzed'), artifact: ImprovementArtifactSchema }),
   /** Domain 22 (PD-TRACE-001): the interpretation's text — its first JSON object, or the raw answer — and the model it came from; untrusted. */
   z.object({ kind: z.literal('adoption.interpreted'), text: z.string(), model: z.string() }),
+  /** PD-TRACE-002 clause 3: one survey step's answer — its first JSON object, or the raw answer — and the model it came from; untrusted. */
+  z.object({ kind: z.literal('survey.stepped'), text: z.string(), model: z.string() }),
   /** PD-LIBRARY-002: the captured retrospective, handed straight to the coordinator main already owns. */
   z.object({ kind: z.literal('retrospective.captured'), job: ImprovementAnalysisJobSchema }),
   // Part AJ
@@ -717,6 +732,8 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
    * it: a step must be visible "at the moment that step finishes", which a poll can only approximate.
    */
   z.object({ kind: z.literal('mcp.setupStatus'), status: McpSetupStatusSchema }),
+  /** PD-TRACE-002 clause 10: the workspace service read the board again because the repository changed under its watcher; main publishes the generation on channel 10. */
+  z.object({ kind: z.literal('requirements.changed'), workspaceRoot: z.string().min(1), generation: z.number().int().nonnegative() }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

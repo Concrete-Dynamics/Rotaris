@@ -27,6 +27,7 @@ export interface ProjectionInput {
   readonly analysisEnabled: boolean;
   readonly inFlight: ReadonlyMap<ReqId, BoardAction>;
   readonly source: { readonly writable: boolean; readonly canCreate: boolean };
+  readonly surveyed?: { readonly origin: 'local' | 'repository'; readonly stores: readonly string[] };
 }
 
 /** REQ-TRACE-288: the priority order, then everything else after the last of them, deterministically. */
@@ -49,7 +50,8 @@ export function owedObligations(r: RequirementRecord, report: VerificationReport
   if (r.traceRequired) owed.push('implementation-trace');
   if (r.testRequired) owed.push('covering-test');
   // The suite's existence is not in the seam; the report's presence is the nearest fact this projection has. Stated, not guessed at further.
-  if (r.status === 'approved' && report !== undefined) owed.push('verification');
+  // PD-TRACE-002 clause 12: a requirement read through a surveyed shape is verified by no engine check, so none is owed.
+  if (r.status === 'approved' && report !== undefined && r.surveyed !== true) owed.push('verification');
   return owed;
 }
 export function evidenceStateOf(e: RequirementEvidence, o: Obligation) {
@@ -193,6 +195,7 @@ export function projectBoard(input: ProjectionInput): BoardProjection {
     blocked,
     analysisEnabled: input.analysisEnabled,
     parseErrors,
+    ...(input.surveyed === undefined ? {} : { surveyed: input.surveyed }),
   };
   return deepFreeze(projection);
 }

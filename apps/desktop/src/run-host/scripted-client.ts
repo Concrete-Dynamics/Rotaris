@@ -461,6 +461,37 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         return;
       }
       /**
+       * PD-TRACE-002 clause 3: the survey, recognised by its own system text. Stateless over the conversation it is
+       * handed: with no measurement behind it, it proposes the shape the quoted detection's first candidate implies;
+       * once a proposal has been measured, it finishes. `ROTARIS_SURVEY_SCRIPT` (verification only): `garbage` (prose on
+       * every step), `refused` (a proposal carrying an unknown key, every time), `look` (one `list` before proposing).
+       */
+      if (/^You survey a software repository/.test(system)) {
+        const want = ((__ROTARIS_SEAMS__ ? process.env['ROTARIS_SURVEY_SCRIPT'] : undefined) ?? '').trim();
+        const users = req.messages.filter((m) => m.role === 'user').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join(''));
+        const last = users[users.length - 1] ?? '';
+        log(`scripted survey step: ${want === '' ? 'propose, then finish' : want}`);
+        // It improves the draft the opening quotes, as the prompt asks: the draft's stores, each given a status place.
+        const quoted = /<draft>\n([\s\S]*?)\n<\/draft>/.exec(firstUserText)?.[1] ?? '{}';
+        let draft: { stores?: { dir: string; definition: string; criteria: boolean }[]; identifier?: string; implRoots?: string[]; testRoots?: string[] } = {};
+        try { draft = JSON.parse(quoted) as typeof draft; } catch { /* answered below with a store that reads nothing */ }
+        const status = { pattern: '^\\s*(?:[-*]\\s+)?\\**Status\\**:\\**\\s*(?<status>[A-Za-z][A-Za-z ]*?)\\s*$', words: [{ word: 'Todo', delivery: 'backlog' }, { word: 'In Progress', delivery: 'running' }, { word: 'In Review', delivery: 'review' }, { word: 'Done', delivery: 'done' }, { word: 'Draft', lifecycle: 'draft' }] };
+        const shape = { version: 1, stores: (draft.stores ?? [{ dir: 'docs', definition: '^(?<id>REQ-\\d+)', criteria: true }]).map((x) => ({ ...x, status })), identifier: draft.identifier ?? 'REQ-\\d+', implRoots: draft.implRoots ?? [], testRoots: draft.testRoots ?? [], obligations: 'optional', notes: 'scripted survey' };
+        const c = draft.stores?.[0];
+        // The opening carries the draft's own measurement; a proposal of this client's has run once it is told so.
+        const measured = users.some((u) => u.startsWith('Your proposal ran.'));
+        const looked = users.some((u) => u.includes('<result>'));
+        const answer = want === 'garbage' ? 'The requirements are probably in docs.'
+          : want === 'refused' ? JSON.stringify({ action: 'propose', shape: { ...shape, write_to: 'docs/out.md' } })
+            : measured && !/<answer>/.test(last) ? JSON.stringify({ action: 'finish' })
+              : want === 'look' && !looked ? JSON.stringify({ action: 'list', path: c?.dir ?? '.' })
+                : JSON.stringify({ action: 'propose', shape });
+        yield ok<StreamPart>({ kind: 'text', delta: answer });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 20 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
+      /**
        * PD-LIBRARY-002 (ADR-0065): the improvement analyst, BOTH passes, recognised by its own system text
        * rather than by a role, because `analystSystem` is the only thing that tells them apart on the wire.
        *

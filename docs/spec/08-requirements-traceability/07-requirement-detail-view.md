@@ -50,6 +50,8 @@ Part 7 of 13 of [domain 08](../08-requirements-traceability.md), which indexes e
 - **REQ-TRACE-288** — The priority order SHALL be exactly `Critical`, `High`, `Normal`, `Low`, and a card whose priority is not one of those SHALL rank **after** the last of them, deterministically — never randomly.
 
 - **REQ-TRACE-289** — Identifier ordering SHALL be digit-run aware, so that `<PREFIX>-9` sorts before `<PREFIX>-10`, which lexicographic ordering gets wrong. There SHALL be **one** implementation of this ordering shared by the engine and the board rather than two that agree by luck.
+  > **Narrowed by [`PD-TRACE-002`](../../product/directives/pd-trace-002.md#pd-trace-002), 2026-11-21.** Two identifiers of a surveyed shape, which the
+  > pattern here does not hold, are ordered run by run, a run of digits by its value (clause 1, REQ-ADOPT-031).
 
 - **REQ-TRACE-290** — Filtering SHALL offer exactly six dimensions: free text, epic, source, lifecycle, health and priority. A filter is active when any dimension is non-empty.
   - Free text SHALL match case-insensitively as a **substring** of either the identifier or the title.

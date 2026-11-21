@@ -26,3 +26,12 @@ status: decided
 >
 > The layer rule of [`../README.md`](../README.md) (requirements are derived from the behavioural target) does not
 > hold for these identifiers; each says so at the domain's heading, as REQ-STARTUP-169 to REQ-STARTUP-181 do.
+
+> **2026-11-21 — REQ-ADOPT-031 to REQ-ADOPT-052 minted** at the owner's ask, logged as
+> [R-116](../../product/requests.md#r-116), under [`PD-TRACE-002`](../../product/directives/pd-trace-002.md#pd-trace-002):
+> the surveyed shape, the survey that proposes it, the board read through it, the two writes into a surveyed document
+> and the watcher. Decided, not derived, as REQ-ADOPT-001 to REQ-ADOPT-030 are. They narrow REQ-ADOPT-008, REQ-ADOPT-012,
+> REQ-ADOPT-017, REQ-ADOPT-018, REQ-ADOPT-027 and REQ-ADOPT-029 through that directive, each of which keeps its text and
+> carries its back-pointer; the adapter and its record (REQ-ADOPT-011 to REQ-ADOPT-025) stand and are no longer what
+> the strip offers.
+

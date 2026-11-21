@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AdoptionOutcome, AdoptionView, BlockerPayload, BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, DeliveryQueue, EpicCard, LaunchPreview, PaneKey, Reachability, Refusal, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload, TransitionOutcome } from '@rotaris/contracts';
+import type { AdoptionOutcome, AdoptionView, CriterionOutcome, ShapeAcceptOutcome, ShapeExportOutcome, ShapeView, SurveyOutcome, BlockerPayload, BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, DeliveryQueue, EpicCard, LaunchPreview, PaneKey, Reachability, Refusal, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload, TransitionOutcome } from '@rotaris/contracts';
 import { COLUMN_TOKENS, DELIVERY_COLUMNS, HEALTH_TOKENS } from '@rotaris/contracts';
 import { AXES, AXIS_DRAGGABLE, EMPTY_AXIS_SENTENCE, EMPTY_COLUMN_SENTENCE, EMPTY_FILTER, SORT_ORDERS, absoluteMoment, axisOf, columnLabel, columnsFor, describeFilter, distribute, emptinessFolds, filterActive, filterCards, foldDecision, parseFolds, relativeAge, serializeFolds, sortCards, sortOrderOf, type BoardFilter, type GroupingAxis, type SortOrder } from '@rotaris/ui-core';
 import { ConfirmDialog } from '../ConfirmDialog.js';
 import { formatChord, type KeyboardPlatform } from '../commands/registry.js';
 import { BlockedStrip } from './BlockedStrip.js';
 import { AdoptionStrip } from './AdoptionStrip.js';
+import { ShapeStrip } from './ShapeStrip.js';
 import { RequirementCard } from './Card.js';
 import { Column } from './Column.js';
 import { DetailPanel } from './DetailPanel.js';
@@ -75,6 +76,8 @@ export type BoardPreferenceKey = 'requirements/filter/text' | 'requirements/filt
 export interface BoardPreferences { readonly filter: BoardFilter; readonly sort: string; readonly axis: string; readonly blockedColumn: boolean; readonly folds: string }
 
 /** The surrounding application, faked in tests: the bridge's commands, the channel-10 subscription, the preference store, the clock and the chord in force. */
+/** PD-TRACE-002 clause 10: the least time between two re-reads a regained focus starts. */
+export const FOCUS_REREAD_MS = 10_000;
 export interface RequirementsHost {
   readonly workspace: string;
   readBoard(): Promise<HostResult<BoardProjection>>;
@@ -105,6 +108,16 @@ export interface RequirementsHost {
    */
   readAdoption?: () => Promise<HostResult<AdoptionView>>;
   adopt?: (mode: 'run' | 'record', writeLayout: boolean) => Promise<HostResult<AdoptionOutcome>>;
+  /**
+   * PD-TRACE-002: the survey strip's commands and the criterion's tick. Optional as the adoption pair is; where the
+   * shape read is offered the survey strip is drawn in the adoption strip's place.
+   */
+  readShape?: () => Promise<HostResult<ShapeView>>;
+  survey?: (token?: string, answer?: string) => Promise<HostResult<SurveyOutcome>>;
+  acceptShape?: (token: string) => Promise<HostResult<ShapeAcceptOutcome>>;
+  recordShape?: () => Promise<HostResult<ShapeAcceptOutcome>>;
+  exportShape?: () => Promise<HostResult<ShapeExportOutcome>>;
+  tickCriterion?: (id: ReqId, index: number, text: string, checked: boolean) => Promise<HostResult<CriterionOutcome>>;
   readPreferences(): Promise<BoardPreferences>;
   writePreference(key: BoardPreferenceKey, value: string): void;
   /** REQ-TRACE-250: the clock is injected; the board reads none of its own. */
@@ -490,6 +503,8 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
       return { ok: false, reason: refusal.reason };
     }
     clearFeedback(id);
+    // PD-TRACE-002 clauses 6 to 8: what the change wrote into the requirement's own document, or why it wrote nothing there, in the service's words.
+    if (r.value.value.document !== undefined) addFeedback(id, [r.value.value.document]);
     // Part R2 — REQ-TRACE-463/478: the move is recorded; the coordinator then starts whatever the scheduler offers
     // now, and where nothing began for THIS requirement the reason is reported on the action's result rather than
     // dropped. The service puts its own stall sentence on the outcome; the coordinator's abandonment carries one too.
@@ -533,6 +548,16 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     void host.readDetail(id).then((r) => { if (r.ok && latest.current.detailId === id) setDetail(r.value); });
   }, [host]);
   const closeDetail = useCallback(() => { setDetailId(null); setDetail(null); const el = openerRef.current; openerRef.current = null; requestAnimationFrame(() => el?.focus()); }, []);
+  /** PD-TRACE-002 clauses 6 and 7: a tick is written into the document; a refusal is said on the card, and the detail is read again either way. */
+  const tickCriterion = useCallback((id: ReqId, index: number, text: string, checked: boolean) => {
+    if (host.tickCriterion === undefined) return;
+    void host.tickCriterion(id, index, text, checked).then((r) => {
+      if (!r.ok) addFeedback(id, [r.reason]);
+      else if (!r.value.ok) addFeedback(id, [r.value.reason]);
+      else clearFeedback(id);
+      void host.readDetail(id).then((d) => { if (d.ok && latest.current.detailId === id) setDetail(d.value); });
+    });
+  }, [host, addFeedback, clearFeedback]);
   const openEvidence = useCallback((id: ReqId) => {
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSelected(id); setEvidenceId(id);
@@ -591,6 +616,19 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     setColumnFocus(target.dataset['column'] ?? null);
   }, []);
 
+  // PD-TRACE-002 clause 10: the board reads itself again when the window regains focus — the net under the watcher, for
+  // a change made while the application stood behind another. Silent, model-free, and at most once in ten seconds.
+  const focusRead = useRef(0);
+  useEffect(() => {
+    const onFocus = () => {
+      const at = Date.now();
+      if (latest.current.board === null || at - focusRead.current < FOCUS_REREAD_MS) return;
+      focusRead.current = at;
+      void host.refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [host]);
   const reevaluate = useCallback(() => {
     setEvaluating(true);
     void host.refresh().then((r) => { setEvaluating(false); if (!r.ok) setError(r.reason); });
@@ -975,7 +1013,9 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
         {error !== null && board !== null && <p className="req-status req-status--error" role="alert" data-testid="req-error-inline">{PROJECTION_UNAVAILABLE}: {error} The last good board stays on screen. <DesignButton type="button" className="btn btn-link" onClick={reevaluate}>{REEVALUATE_LABEL}</DesignButton></p>}
         {notice !== null && <p className="req-status" role="status" data-testid="req-notice">{notice} <DesignButton type="button" className="btn btn-link" onClick={() => setNotice(null)}>Dismiss</DesignButton></p>}
       </header>
-      {host.readAdoption !== undefined && host.adopt !== undefined && <AdoptionStrip armed={board !== null} readAdoption={host.readAdoption} adopt={host.adopt} />}
+      {host.readShape !== undefined && host.survey !== undefined && host.acceptShape !== undefined && host.recordShape !== undefined && host.exportShape !== undefined
+        ? <ShapeStrip armed={board !== null} generation={board?.generation ?? 0} readShape={host.readShape} survey={host.survey} acceptShape={host.acceptShape} recordShape={host.recordShape} exportShape={host.exportShape} />
+        : host.readAdoption !== undefined && host.adopt !== undefined && <AdoptionStrip armed={board !== null} readAdoption={host.readAdoption} adopt={host.adopt} />}
       {board !== null && <BlockedStrip blocked={board.blocked} onResume={(id) => { const c = board.cards.find((x) => x.id === id); if (c) void requestMove(id, c.returnTo ?? 'backlog'); }} onNavigate={revealCard} onFilterToBlocked={() => setFilter((f) => ({ ...f, health: 'blocked' }))} />}
       <div className="req-body">
         {body}
@@ -984,6 +1024,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
             card={detailCard} detail={detail} board={board} now={now} localOffsetMinutes={host.localOffsetMinutes}
             onClose={closeDetail} onNavigate={open} onOpenEvidence={openEvidence} onOpenSession={host.openSession}
             onOpenPane={(key) => openPane(key, detailCard.id)} onOpenGraph={openGraph}
+            onTickCriterion={host.tickCriterion === undefined ? undefined : tickCriterion}
           />
         )}
         {/* Part R2 — the pane host: one of REQ-TRACE-375's five keys at a time, each built on first use and reused.

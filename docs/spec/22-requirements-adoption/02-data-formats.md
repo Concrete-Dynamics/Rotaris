@@ -59,3 +59,49 @@ The model's answer, one JSON object with exactly these keys; any other key is a 
 `{ state, record?, detection?, unreadable?, delta? }` — `state` is `not-adopted`, `adopted` or `unreadable`; `delta`
 is `{ newIds[], changedIds[], removedIds[], documentsAdded[], documentsChanged[], documentsRemoved[] }`, each list
 sorted by REQ-TRACE-289's identifier order or by path (REQ-ADOPT-023).
+
+### The shape
+
+One JSON object with exactly these keys (REQ-ADOPT-031, REQ-ADOPT-032). It is what a survey proposes, what the shape
+record holds, and the whole content of `rotaris-requirements-shape.json` (REQ-ADOPT-042).
+
+| Key | Value |
+|---|---|
+| `version` | `1` |
+| `stores[]` | 1 to 8 of `{ dir, definition, criteria, status? }` — `dir` a repository-relative directory; `definition` a regular expression applied to one line, with the named group `id` and optionally `title`; `criteria` whether task-list items in a requirement's text are its criteria; `status` `{ pattern, words[] }`, `pattern` carrying the named group `status`, each word `{ word, lifecycle?, delivery? }` with at least one of the two |
+| `identifier` | a regular expression matching one whole identifier wherever it is written |
+| `implRoots`, `testRoots` | lists of at most 24 repository-relative directories |
+| `obligations` | `optional` or `required` (REQ-ADOPT-044) |
+| `notes` | a string of at most 500 characters, recorded and never executed |
+
+### The shape record
+
+`.rotaris/requirements-shape.json` (REQ-ADOPT-041), written atomically:
+
+```json
+{
+  "version": 1,
+  "acceptedAt": "2026-11-21T12:00:00.000Z",
+  "how": "survey",
+  "shape": { "version": 1, "stores": [{ "dir": "docs/stories", "definition": "^###\\s+(?<id>US-\\d+)\\s+(?<title>.+)$", "criteria": true }], "identifier": "US-\\d+", "implRoots": ["src"], "testRoots": ["tests"], "obligations": "optional", "notes": "" },
+  "documents": [{ "path": "docs/stories/auth.md", "contentHash": "0123456789abcdef", "identifiers": ["US-1", "US-2"] }],
+  "requirements": [{ "id": "US-1", "document": "docs/stories/auth.md", "canonicalHash": "0123456789abcdef0123456789abcdef" }],
+  "baseline": { "mentioned": 0, "empty": 1, "duplicates": 0, "malformed": 0 }
+}
+```
+
+`how` is `survey` (an accepted preview), `record` (REQ-ADOPT-041's recording) or `import` (the first recording through
+a repository's shape file). `baseline` is what the shape left unread on that day; drift is what exceeds it
+(REQ-ADOPT-052). The status words already taken (REQ-ADOPT-045) are kept beside it in
+`.rotaris/requirements-status-seen.json`, one word per identifier.
+
+### The survey's actions and its preview
+
+Each step's answer is one JSON object (REQ-ADOPT-037): `{ "action": "list", "path" }`, `{ "action": "read", "path",
+"from", "lines" }` (at most 120 lines), `{ "action": "grep", "pattern", "path" }` (at most 60 lines returned),
+`{ "action": "propose", "shape" }` or `{ "action": "finish" }`.
+
+The preview (REQ-ADOPT-039) is `{ token, shape, count, stores[], samples[], unread[], rounds, model }` — `stores[]`
+`{ dir, documents, requirements, withStatus, withCriteria }`; `samples[]` at most six of `{ id, title, document, line,
+status?, criteria }`; `unread[]` sentences; `model` the model that proposed it, or `scripted draft`.
+

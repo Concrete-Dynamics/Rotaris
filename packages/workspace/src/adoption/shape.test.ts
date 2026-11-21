@@ -170,6 +170,11 @@ describe('an identifier of a surveyed shape crosses a boundary and sorts (clause
   it('sorts digit runs by value', () => {
     expect(['SYS-AUTH-010', 'FR-1.10', 'SYS-AUTH-009', 'FR-1.2'].sort(compareReqIds)).toEqual(['FR-1.2', 'FR-1.10', 'SYS-AUTH-009', 'SYS-AUTH-010']);
   });
+  it('titles a long run of tabs at once (CodeQL 249)', () => {
+    const started = performance.now();
+    expect(titleOf(`US-1 x${'\t'.repeat(15_000)}y`, 4)).toMatch(/^x/);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
   it('titles a definition line by what follows the identifier', () => {
     expect(titleOf('| **FR-3** | Export a report | high |', 10)).toBe('Export a report | high');
     expect(titleOf('### SYS-1: Short.', 9)).toBe('Short.');

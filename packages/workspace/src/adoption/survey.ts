@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import type { CandidateStore, DetectionResult, ProgressReport, RequirementsShape, ShapeMeasurement, ShapeStore, SurveyPreview } from '@rotaris/contracts';
 import { SHAPE_STORES_MAX } from '@rotaris/contracts';
@@ -97,7 +97,15 @@ export function surveyRead(root: string, action: Record<string, unknown>): strin
     }
     case 'read': {
       let text: string;
-      try { if (!statSync(real).isFile()) return `refused: ${rel} is not a file`; text = normaliseLineEndings(decodeUtf8(readFileSync(real).subarray(0, GREP_FILE_BYTES))); } catch { return `refused: ${rel} cannot be read`; }
+      // One descriptor: what is checked to be a file is what is read (CodeQL 250, a check-then-use race).
+      let fd: number | undefined;
+      try {
+        fd = openSync(real, 'r');
+        if (!fstatSync(fd).isFile()) return `refused: ${rel} is not a file`;
+        const buf = Buffer.alloc(GREP_FILE_BYTES);
+        const got = readSync(fd, buf, 0, GREP_FILE_BYTES, 0);
+        text = normaliseLineEndings(decodeUtf8(buf.subarray(0, got)));
+      } catch { return `refused: ${rel} cannot be read`; } finally { if (fd !== undefined) closeSync(fd); }
       const lines = text.split('\n');
       const from = Math.max(1, Number.isInteger(action['from']) ? (action['from'] as number) : 1);
       const count = Math.min(READ_LINES_CAP, Math.max(1, Number.isInteger(action['lines']) ? (action['lines'] as number) : 80));

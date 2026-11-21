@@ -1,6 +1,6 @@
 /** PD-TRACE-002 clause 7 (REQ-ADOPT-049): the criteria a run is given, and the claims the review reads back. */
 import { describe, expect, it } from 'vitest';
-import { criteriaPromptTail, parseCriteriaClaims } from './criteria.js';
+import { criteriaPromptTail, parseCriteriaClaims, readClaimLine } from './criteria.js';
 
 const CRITERIA = [{ text: 'rejects a bad password', checked: false, line: 9 }, { text: 'accepts a good one', checked: true, line: 10 }, { text: 'locks after five failures', checked: false, line: 11 }];
 
@@ -34,3 +34,19 @@ describe('the claims read out of a run\'s summary', () => {
     expect(parseCriteriaClaims('Acceptance criteria\n9. met — x\n', CRITERIA).every((c) => c.claim === 'unstated')).toBe(true);
   });
 });
+
+describe('a report line is read in time linear in its length (CodeQL 247, 248)', () => {
+  it('reads both forms', () => {
+    expect(readClaimLine('3. unmet — no lockout')).toEqual({ n: 3, word: 'unmet', rest: 'no lockout' });
+    expect(readClaimLine('- [met] rejects a bad password')).toEqual({ n: undefined, word: 'met', rest: 'rejects a bad password' });
+    expect(readClaimLine('2. accepts a good one — not met — broke')).toEqual({ n: 2, word: 'not met', rest: 'accepts a good one broke' });
+    expect(readClaimLine('metadata is fine')).toBeNull();
+  });
+  it('passes over a long run of tabs at once', () => {
+    const started = performance.now();
+    expect(readClaimLine(`1.${'\t'.repeat(3_990)}x`)).toBeNull();
+    expect(parseCriteriaClaims(`Acceptance criteria\n${'1.'.padEnd(200_000, '\t')}`, CRITERIA).every((c) => c.claim === 'unstated')).toBe(true);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});
+

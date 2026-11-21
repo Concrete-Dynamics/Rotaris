@@ -70,12 +70,27 @@ describe('the first-launch setup (PD-WORKSPACE-010)', () => {
     expect(repository).toContain('Choose another folder…');
   });
 
-  it('lists the catalogue as one radio group and disables a provider whose sign-in this build lacks, saying so', () => {
+  it('offers a provider that signs in by its own flow or through the local tool, each said in its own words, where the root carries that sign-in (R-111, R-112)', () => {
+    const choices: OnboardingView['providers']['choices'] = [...CHOICES,
+      { id: 'codex', displayName: 'OpenAI Codex', method: 'browser-pkce', methodLabel: 'Sign in on a browser page', hint: '', defaultBaseUrl: null, custom: false, available: true, unavailabilityReason: null },
+      { id: 'claude-code', displayName: 'Claude Code (subscription)', method: 'api-key', methodLabel: 'Paste an API key', hint: '', defaultBaseUrl: null, custom: false, available: true, unavailabilityReason: null, localInstruction: 'Rotaris will use the Claude Code tool.' },
+    ];
+    const html = renderToStaticMarkup(createElement(FirstRunSetup, {
+      version: '0.1.0', home: '/home/ada', view: { ...view({ chosen: true }), providers: { authenticated: [], choices } }, config: null,
+      onChooseProject: ok, onSignIn: async () => ({ outcome: 'cancelled' as const }), onAuthenticate: async () => ({ outcome: 'cancelled' as const }), onAssignSlot: ok, onSetMode: ok, onSubmit: ok, onFinish: () => undefined,
+    }));
+    expect(html).not.toMatch(/data-choice="(copilot|codex|claude-code)"[^>]*disabled/);
+    expect(html).toContain('Sign in with a code at the provider');
+    expect(html).toContain('Sign in on a browser page');
+    expect(html).toContain('Your subscription, through Claude Code on this computer');
+  });
+
+  it('lists the catalogue as one radio group and disables a provider whose sign-in the surface cannot carry, saying so', () => {
     const html = render(view({ chosen: true }));
     expect(html).toContain('role="radiogroup"');
     expect((html.match(/role="radio"/g) ?? []).length).toBe(CHOICES.length);
     expect(html).toMatch(/data-choice="copilot"[^>]*disabled/);
-    expect(html).toContain('Sign-in is not in this build yet');
+    expect(html).toContain('Sign-in is not available here');
     expect(html).toContain('type="password"');
   });
 

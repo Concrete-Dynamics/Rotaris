@@ -354,7 +354,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * with the flow's one outcome once the user has finished at the provider; while it waits the window reads the prompt
    * to show with `provider.authPrompt`, and `provider.authCancel` ends a pending wait early. No credential travels on any of the three.
    */
-  z.object({ kind: z.literal('provider.authenticate'), providerId: z.string().max(NAME_MAX).min(1), reauthenticate: z.boolean().optional(), allowEmpty: z.boolean().optional() }),
+  z.object({ kind: z.literal('provider.authenticate'), providerId: z.string().max(NAME_MAX).min(1), reauthenticate: z.boolean().optional(), allowEmpty: z.boolean().optional(), quiet: z.boolean().optional() }),
   z.object({ kind: z.literal('provider.authPrompt') }),
   z.object({ kind: z.literal('provider.authCancel') }),
   /**

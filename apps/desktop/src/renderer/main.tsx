@@ -2,7 +2,7 @@ import { captureSupport, startCapture } from './dictation-capture.js';
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createReportingRoot, RenderFaultSeam } from './render-failure.js';
 import { useStore } from 'zustand';
-import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult, type CommandRequest, type DiagnosticsCardState, type ModelSlotName, type OnboardingOutcome, type OnboardingView, type PermissionPreset, type ProviderSignInResult } from '@rotaris/contracts';
+import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult, type CommandRequest, type DiagnosticsCardState, type ModelSlotName, type OnboardingOutcome, type OnboardingView, type PermissionPreset, type ProviderSignInPrompt, type ProviderSignInResult } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
@@ -1535,6 +1535,19 @@ function App({ initialOnboarding, version, workspace, home, initialTheme, initia
     await refreshOnboarding();
     return r.value as ProviderSignInResult;
   }, [refreshOnboarding]);
+  // PD-WORKSPACE-010 clause 3 with REQ-PROVIDER-096: a provider's own sign-in, started from the setup's model step.
+  const authenticateForSetup = useCallback(async (req: { providerId: string; allowEmpty: boolean }): Promise<ProviderSignInResult | { outcome: 'error'; message: string }> => {
+    const r = await bridge.command({ kind: 'provider.authenticate', providerId: req.providerId, ...(req.allowEmpty ? { allowEmpty: true } : {}), quiet: true });
+    if (!r.ok) return { outcome: 'error', message: r.detail ?? r.headline };
+    await refreshOnboarding();
+    return r.value as ProviderSignInResult;
+  }, [refreshOnboarding]);
+  const signInPromptForSetup = useCallback(async (): Promise<ProviderSignInPrompt | null> => {
+    const r = await bridge.command({ kind: 'provider.authPrompt' });
+    return r.ok ? (r.value as { prompt: ProviderSignInPrompt | null }).prompt : null;
+  }, []);
+  const cancelSetupSignIn = useCallback((): void => { void bridge.command({ kind: 'provider.authCancel' }); }, []);
+  const openSetupLink = useCallback((url: string): void => { void bridge.command({ kind: 'shell.openExternal', url }); }, []);
   const assignSetupSlot = useCallback(async (slot: ModelSlotName, model: string) => {
     const r = await bridge.command({ kind: 'config.save', save: { slots: { [slot]: model } } });
     return r.ok ? { ok: true as const } : { ok: false as const, reason: r.detail ?? r.headline };
@@ -1616,7 +1629,7 @@ function App({ initialOnboarding, version, workspace, home, initialTheme, initia
     {onboarding !== null && (
       <FirstRunSetup version={version} home={home} view={onboarding} config={firstRunConfig}
         windowControls={{ maximized: windowMaximized, onMinimize: () => { void bridge.command({ kind: 'window.minimize' }); }, onToggleMaximize: toggleWindowMaximize, onClose: () => { void bridge.command({ kind: 'window.close' }); } }}
-        onChooseProject={chooseSetupProject} onSignIn={signInForSetup} onAssignSlot={assignSetupSlot} onSetMode={setSetupMode} onSubmit={submitFirstPrompt} onFinish={finishOnboarding} />
+        onChooseProject={chooseSetupProject} onSignIn={signInForSetup} onAuthenticate={authenticateForSetup} onSignInPrompt={signInPromptForSetup} onCancelSignIn={cancelSetupSignIn} onOpenLink={openSetupLink} onAssignSlot={assignSetupSlot} onSetMode={setSetupMode} onSubmit={submitFirstPrompt} onFinish={finishOnboarding} />
     )}
     {browserOpen && (
       <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)}

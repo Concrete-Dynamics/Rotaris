@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { ChatMessage, ModelRequest, StreamPart, ToolSpec } from '@rotaris/model';
 import { ClaudeCliModelClient, credentialConflict, failureOf, openingContent, renderHistory, WAITING_SESSION_IDLE_MS, type CliLaunch, type CliProcess } from './client.js';
+import { launchTargetOf } from './launch.js';
 import { LoopbackToolBridge, type BridgeSessionHandlers, type ToolBridge } from './tool-bridge.js';
 
 /** A process that says what the test tells it to, and records what it was started with and told. */
@@ -220,5 +221,16 @@ describe('the tool bridge (PD-PROVIDER-002 clause 3)', () => {
     reg.release();
     expect((await post({ jsonrpc: '2.0', id: 4, method: 'tools/list' })).status).toBe(404);
     await bridge.close();
+  });
+});
+
+describe('how the tool is started (PD-PROVIDER-002 clause 1)', () => {
+  const args = ['-p', '--tools', '', '--model', 'haiku', '--system-prompt-file', 'instructions-ab12.txt', '--allowedTools', 'mcp__rotaris'];
+  it('passes the arguments as they are when no shell reads them', () => {
+    expect(launchTargetOf('claude', args, false)).toEqual({ command: 'claude', args });
+  });
+  it('writes a command shim\'s line without escaping, and refuses an argument the interpreter would read as syntax', () => {
+    expect(launchTargetOf('claude', args, true)).toEqual({ command: 'cmd.exe', args: ['/d', '/s', '/c', '"claude -p --tools "" --model haiku --system-prompt-file instructions-ab12.txt --allowedTools mcp__rotaris"'], windowsVerbatimArguments: true });
+    for (const hostile of ['a b', 'a&calc', 'a"b', 'a|b', '%PATH%', 'a^b', 'a>b', '(x)', 'a\\b']) expect(() => launchTargetOf('claude', ['--model', hostile], true)).toThrow(/command interpreter/);
   });
 });

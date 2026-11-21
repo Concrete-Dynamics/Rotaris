@@ -16,7 +16,7 @@ import { createLibraryRevision } from './library.js';
 import { everyHandlerThrows, startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
-import { findExecutable, fixedLaunchOf, requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
+import { findExecutable, requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
 import { createImprovementCoordinator } from './improvements.js';
@@ -372,7 +372,9 @@ async function main(): Promise<void> {
    */
   const claudeCodeInstalled = (): boolean => findExecutable('claude', process.env) !== null;
   const claudeCodeState = (): Promise<ReturnType<typeof localToolStateOf>> => new Promise((resolve) => {
-    const target = fixedLaunchOf('claude', ['auth', 'status'], process.env);
+    // A fixed command line: nothing of it is read from the environment, and the search path only decides its Windows form.
+    const shim = process.platform === 'win32' && /\.(cmd|bat)$/i.test(findExecutable('claude', process.env) ?? '');
+    const target = shim ? { command: 'cmd.exe', args: ['/d', '/s', '/c', '"claude auth status"'], windowsVerbatimArguments: true } : { command: 'claude', args: ['auth', 'status'], windowsVerbatimArguments: false };
     const env = { ...process.env };
     delete env['CLAUDECODE'];
     delete env['CLAUDE_CODE_ENTRYPOINT'];

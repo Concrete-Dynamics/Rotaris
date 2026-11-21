@@ -51,7 +51,7 @@ const DESCRIPTION = [
   'Operations: read (the effective value and the file that states it), explain (what kind of key it is and how a change is approved), set (write one key).',
   'The setting is a dotted path: models.<name>.temperature, personas.<role>.model, runtime.max_iterations, skills.enabled, display.show_tool_inputs.',
   'set writes the workspace scope unless scope is global. A change takes effect at the next run, not the current one.',
-  'Keys that decide what a run may do (permission mode, sandbox, network, hooks, tool servers, a role\'s tools) always ask the user first. Credentials are never accessible.',
+  'For keys that decide what a run may do (permission mode, sandbox, network, hooks, tool servers, a role\'s tools), and for the global scope, Rotaris itself shows the user an approval dialog when you call set: call set directly and do not ask the user beforehand. Credentials are never accessible.',
 ].join(' ');
 
 function rendered(value: unknown): string {
@@ -82,7 +82,7 @@ export function configureTool(port: ConfigurationPort): ToolExecutor<ConfigureAr
         const r = port.read(key);
         if ('error' in r) return errorObservation(`The configuration could not be read: ${r.error}`);
         const head = `${key} = ${rendered(r.value)} — ${where(r)}.`;
-        return observation(args.operation === 'read' ? head : `${head}\n${configKeyClassSentence(klass)} A set writes the workspace scope unless scope is global (which always asks), and takes effect at the next run.`);
+        return observation(args.operation === 'read' ? head : `${head}\n${configKeyClassSentence(klass)}${klass === 'authority' ? ' Rotaris shows that approval itself when set is called; do not ask beforehand.' : ''} A set writes the workspace scope unless scope is global (which is also approved by the user), and takes effect at the next run.`);
       }
       if (args.value === undefined) return errorObservation('set needs a value. To see what the key holds now, use read.');
       const scope = args.scope ?? 'workspace';

@@ -145,7 +145,14 @@ const CAP = 20;
 
 /** The title a definition line gives when the pattern names none: what follows the identifier, without its markup, to the first sentence end. */
 export function titleOf(line: string, idEnd: number): string {
-  let t = line.slice(idEnd).replace(/^[\s*_`:|\-—–.)\]]+/, '').replace(/[\s|*_`]+$/, '').replace(/\*\*|__|`/g, '');
+  // Trimmed by scanning, not by an end-anchored run, which backtracks polynomially on a long run of tabs (CodeQL 249).
+  const LEAD = ' \t*_`:|-—–.)]';
+  const TRAIL = ' \t|*_`';
+  let a = idEnd;
+  while (a < line.length && LEAD.includes(line[a]!)) a += 1;
+  let b = line.length;
+  while (b > a && TRAIL.includes(line[b - 1]!)) b -= 1;
+  let t = line.slice(a, b).replace(/\*\*|__|`/g, '');
   const stop = /[.!?](?:\s|$)/.exec(t);
   if (stop !== null && stop.index >= 12) t = t.slice(0, stop.index + 1);
   return t.length > TITLE_MAX ? `${t.slice(0, TITLE_MAX - 1).trimEnd()}…` : t;

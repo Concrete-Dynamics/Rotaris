@@ -410,6 +410,8 @@ describe('REQ-MCP-010/014 — the shipped defaults', () => {
     const ws = SHIPPED_MCP_SERVERS['web_search'] as Record<string, unknown>;
     expect(ws).toMatchObject({ type: 'http', request_timeout: 600, enabled: false });
     expect(String(ws['url'])).toContain('${ROTARIS_SEARCH_API_KEY}');
+    // R-119: a real endpoint, so the stored key alone is enough; the old `search.rotaris.invalid` example never answered.
+    expect(String(ws['url'])).toBe('https://mcp.tavily.com/mcp/?tavilyApiKey=${ROTARIS_SEARCH_API_KEY}');
     const br = SHIPPED_MCP_SERVERS['browser'] as { command: string; args: string[]; enabled: boolean };
     expect(br.command).toBe('npx');
     expect(br.args[0]).toBe('-y');

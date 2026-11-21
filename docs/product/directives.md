@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and forty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and forty-six.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -59,13 +59,14 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CONFIG-003](directives/pd-config-003.md) | the Runtime category's two timeouts: the per-agent timeout as a third delegation limit, in minutes, and the improvement analysis timeout, in seconds |
 | [PD-CONFIG-004](directives/pd-config-004.md) | the Display category's Transcript heading holds the tool-verbosity slider and the reasoning switch |
 | [PD-CONFIG-005](directives/pd-config-005.md) | the Models category also holds the dictation model |
-| [PD-CONFIG-006](directives/pd-config-006.md) | the MCP Servers row's ON press writes `enabled` for a configured-off server |
+| [PD-CONFIG-006](directives/pd-config-006.md) | the MCP Servers row's ON press writes `enabled` for a configured-off server, and so does the web-search panel's Save and test (revision 2) |
 | [PD-CONFIG-007](directives/pd-config-007.md) | the reasoning vocabulary is what the models bring, and `off` and `xhigh` are levels |
 | [PD-CONFIG-008](directives/pd-config-008.md) | the Settings category list stands under four headings |
 | [PD-CONFIG-009](directives/pd-config-009.md) | the providers card draws one filled control, the add-endpoint action in its head |
 | [PD-CONFIG-010](directives/pd-config-010.md) | the dictation endpoint's bearer is a stored credential, typed into the field |
 | [PD-CONFIG-011](directives/pd-config-011.md) | what stands first inside a Settings category, and what stands once: providers before slots, one role column, the playbook catalogue closed, a skill as one entry |
 | [PD-CONFIG-012](directives/pd-config-012.md) | the Settings view is Setup and twelve pages in run order, and a page is a ledger: explanations behind a control, origin as a glyph, a setting found by name |
+| [PD-CONFIG-013](directives/pd-config-013.md) | the web search panel writes the provider it is pointed at: `mcp_servers.web_search.url`, that field alone |
 
 ### EVENTS
 

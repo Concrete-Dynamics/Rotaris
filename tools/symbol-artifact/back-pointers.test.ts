@@ -154,7 +154,8 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
     expect(narrowed('REQ-SESSION-136')).toEqual(['PD-SESSION-003', 'PD-TOOLS-013']);
     // PD-SHELL-010 (OQ-297, HR1, R-072, 2026-10-14) narrows gate (1) as a third directive beside these two.
     expect(narrowed('REQ-SHELL-021')).toEqual(['PD-SHELL-001', 'PD-SHELL-009', 'PD-SHELL-010']);
-    expect(narrowed('REQ-CONFIG-464')).toEqual(['PD-CONFIG-001', 'PD-WORKSPACE-002']);
+    // PD-CONFIG-013 (R-119, 2026-11-21) narrows the tool-server half: one field of the web_search entry, disjoint from both.
+    expect(narrowed('REQ-CONFIG-464')).toEqual(['PD-CONFIG-001', 'PD-CONFIG-013', 'PD-WORKSPACE-002']);
     expect(narrowed('REQ-CONFIG-256')).toEqual(['PD-CONFIG-003', 'PD-WORKSPACE-002']);
     // PD-CONFIG-006 (R-095, 2026-11-08) narrows a THIRD, disjoint case beside these two: an ON press on an available,
     // configured-off tool server writes `mcp_servers.<name>.enabled` — the Runtime timeouts (PD-CONFIG-003) and the

@@ -3,22 +3,26 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ConfigSnapshot, McpHealth, McpListing, McpSecretRow, McpSecretsView, McpServerRow } from '@rotaris/contracts';
 import { McpSettings, type McpSettingsProps } from './McpSettings.js';
-import { WEB_SEARCH_ABOUT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_NOT_WRITTEN_BY_US, WEB_SEARCH_SERVER, WEB_SEARCH_SHIPPED_URL, WEB_SEARCH_TAKE_EFFECT } from './web-search-setup.js';
+import { SettingsPageContext } from './page.js';
+import { WEB_SEARCH_ABOUT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_SERVER } from './web-search-setup.js';
 
 /**
- * THE GUIDED CARD'S STATES, rendered (the design brief §4/§10's table; `renderToStaticMarkup` as `skills-fatal.test.ts`).
- * Every case asserts what the state must SHOW and what it must NOT (the forbidden sentence), and states the ONE reason it
- * can fail for. REQ-SHELL-149: each state is text; REQ-MCP-110: the field never carries a stored value; REQ-CONFIG-350/464:
- * the card hands over the stanza and names the file and authors no server; REQ-CONFIG-424/478: with no service or a fatal
- * load the card draws its empty state and the controls are disabled.
+ * THE WEB SEARCH PANEL'S STATES, rendered (R-119; `renderToStaticMarkup` as `skills-fatal.test.ts`). Each case asserts
+ * what the state must show and what it must not, and states the one reason it can fail for. REQ-SHELL-149: each state is
+ * text; REQ-MCP-110: the field never carries a stored value; REQ-CONFIG-424/478: with no service or a fatal load nothing
+ * is pressable; §1.7: one filled control in every state.
  */
+const KEY = `\${${WEB_SEARCH_KEY_VARIABLE}}`;
 const row = (over: Partial<McpServerRow> = {}): McpServerRow => ({
-  name: WEB_SEARCH_SERVER, type: 'http', line: 'https://x/mcp', origin: 'default',
-  enabled: true, overridden: false, available: true, availabilityDetail: '', unresolved: [], expectedKeys: [], ...over,
+  name: WEB_SEARCH_SERVER, type: 'http', line: `https://mcp.tavily.com/mcp/?tavilyApiKey=${KEY}`, origin: 'default',
+  enabled: false, overridden: false, available: false, availabilityDetail: '', unresolved: [WEB_SEARCH_KEY_VARIABLE], expectedKeys: [], ...over,
 });
+/** The shipped default once its key is stored: the url resolves, the entry ships enabled: false. */
+const keyed = (over: Partial<McpServerRow> = {}): McpServerRow => row({ line: 'https://mcp.tavily.com/mcp/?tavilyApiKey=***', unresolved: [], available: true, ...over });
 const listing = (rows: McpServerRow[]): McpListing => ({ configFile: '/ws/.rotaris/agents.yaml', rows });
-const keyRow = (scope: 'Workspace' | 'Global' = 'Workspace', masked = '***'): McpSecretRow => ({ server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, masked, scope });
+const keyRow = (scope: 'Workspace' | 'Global' = 'Workspace'): McpSecretRow => ({ server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, masked: '***', scope });
 const secrets = (rows: McpSecretRow[]): McpSecretsView => ({ servers: [WEB_SEARCH_SERVER], rows, expected: [], server: null });
+const inert = async () => ({ ok: false as const, message: 'not pressed here', lines: [] });
 
 const props = (over: Partial<McpSettingsProps> = {}): McpSettingsProps => ({
   listing: listing([row()]), loading: false, error: null, health: {}, probing: false,
@@ -27,145 +31,162 @@ const props = (over: Partial<McpSettingsProps> = {}): McpSettingsProps => ({
   secrets: secrets([]), webSearchSecrets: secrets([]), onSecretsServer: () => undefined, setup: null,
   onSetupStart: async () => ({ ok: true, message: '' }), onSetupCancel: async () => undefined,
   webSearchSetup: {
+    onSaveAndTest: inert, onEnableAndTest: inert, onUseProvider: inert,
+    onDeleteKey: async () => ({ ok: false as const, message: 'not pressed here' }),
+    onProbe: async () => ({ state: 'unknown' as const }),
     onOpenFile: async () => ({ ok: true as const }),
     onGetKey: async () => ({ ok: true as const }),
-    onStoreKey: async () => ({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: '***', removed: false }, refreshFailure: null }),
-    onDeleteKey: async () => ({ ok: true as const, outcome: { server: WEB_SEARCH_SERVER, key: WEB_SEARCH_KEY_VARIABLE, scope: 'Workspace' as const, masked: null, removed: false }, refreshFailure: null }),
-    onProbe: async () => ({ state: 'unknown' as const }),
   },
   ...over,
 });
 const render = (over: Partial<McpSettingsProps> = {}): string => renderToStaticMarkup(createElement(McpSettings, props(over)));
+const panel = (html: string): string => html.slice(html.indexOf('data-mcp-websearch-setup'), html.indexOf('data-mcp-setup'));
 const health = (h: McpHealth): Record<string, McpHealth> => ({ [WEB_SEARCH_SERVER]: h });
+const fills = (html: string): number => (panel(html).match(/btn-primary/g) ?? []).length;
 
-describe('the guided Set up web search card — every state of the brief\'s table', () => {
-  it('nothing done yet (fresh): the four steps, the shipped stanza as an example, an empty masked field, Unknown, and no stored-key sentences — fails if the shipped default renders as a working server, a pre-filled field, or a hidden step', () => {
-    const html = render({ secrets: null, health: health({ state: 'unknown' }) });
-    expect(html).toContain('data-mcp-websearch-setup');
-    expect(html).toContain('data-websearch-situation="fresh"');
-    expect(html).toContain('Choose your search provider');
-    expect(html).toContain('Put this in your configuration file');
-    expect(html).toContain('Paste the key');
-    expect(html).toContain('Test it');
-    expect(html).toContain('example — replace the host');
-    expect(html).toContain(WEB_SEARCH_SHIPPED_URL.replace(/&/g, '&amp;'));
-    expect(html).toContain('type="password"');
-    expect(html).toContain('value=""');
-    // The masked field is never pre-filled (REQ-MCP-110), so no stored-value sentence stands where nothing is stored.
-    expect(html).not.toContain('Storing again replaces it');
-    expect(html).toContain('Unknown');
+describe('the web search panel, state by state', () => {
+  it('the shipped default with no key: Tavily, a key link, an empty password field, Save and test as the one fill, "Needs a key" — fails if the first run asks for anything but the key', () => {
+    const html = render();
+    const p = panel(html);
+    expect(p).toContain('data-websearch-situation="needs-key"');
+    expect(p).toContain('data-websearch-provider="tavily"');
+    expect(p).toContain('>Tavily<');
+    expect(p).toContain('data-websearch-get-key');
+    expect(p).toContain('Paste your key');
+    expect(p).toContain('Save and test');
+    expect(p).toContain('Needs a key');
+    expect(fills(html)).toBe(1);
+    expect(p).toMatch(/btn-primary[^"]*"[^>]*data-websearch-save/);
+    // The stanza is not in front of the user: it waits behind its disclosure, closed.
+    expect(p).toMatch(/<button[^>]*aria-expanded="false"[^>]*data-websearch-other-control/);
+    expect(p).toMatch(/id="websearch-other"[^>]*hidden/);
   });
 
-  it('a user\'s own url with no key yet (needs-key): step 2 stands down and says the declaration stands — fails if the card hands over a stanza for an entry the file already declares', () => {
-    const html = render({ listing: listing([row({ origin: 'yaml', unresolved: [WEB_SEARCH_KEY_VARIABLE] })]), secrets: secrets([]) });
-    expect(html).toContain('data-websearch-situation="needs-key"');
-    expect(html).toContain('Your declaration stands');
-    expect(html).not.toContain('data-websearch-stanza');
+  it('a stored key on an entry still configured off: the mask, Replace and test, Delete, "Off", and Turn on and test as the one fill — fails if the panel implies the key alone turned search on', () => {
+    const html = render({ listing: listing([keyed()]), webSearchSecrets: secrets([keyRow()]) });
+    const p = panel(html);
+    expect(p).toContain('data-websearch-situation="off"');
+    expect(p).toContain('Stored in the Workspace scope, value <span class="mono" data-mask="true">***</span>');
+    expect(p).toContain('Replace and test');
+    expect(p).toContain('data-websearch-delete');
+    expect(p).toContain('>Off<');
+    expect(p).toContain('Turn on and test');
+    expect(fills(html)).toBe(1);
+    expect(p).toMatch(/btn-primary[^"]*"[^>]*data-websearch-enable/);
   });
 
-  it('a key stored but the entry still enabled:false says the file still needs enabled: true (REQ-MCP-115) — fails if the card implies the key alone turns the server on', () => {
-    const html = render({ listing: listing([row({ enabled: false })]), secrets: secrets([keyRow()]), webSearchSecrets: secrets([keyRow()]) });
-    expect(html).toContain('data-websearch-situation="needs-enabled"');
-    expect(html).toContain('enabled: true');
-    expect(html).toContain('stays off until the file says so');
+  it('on and healthy: the health in words with the tool count, Test as the one fill — fails if a working panel keeps asking for setup', () => {
+    const html = render({ listing: listing([keyed({ enabled: true })]), webSearchSecrets: secrets([keyRow()]), health: health({ state: 'healthy', toolCount: 3 }) });
+    const p = panel(html);
+    expect(p).toContain('data-websearch-situation="ready"');
+    expect(p).toContain('Healthy · 3 tools');
+    expect(fills(html)).toBe(1);
+    expect(p).toMatch(/btn-primary[^"]*"[^>]*data-websearch-check/);
+    expect(p).not.toContain('Needs a key');
   });
 
-  it('everything working collapses steps 1–3 to a one-line summary with a Change action — fails if the finished state stays permanent furniture', () => {
-    const html = render({ secrets: secrets([keyRow()]), webSearchSecrets: secrets([keyRow()]), health: health({ state: 'healthy', toolCount: 2 }) });
-    expect(html).toContain('data-websearch-situation="ready"');
-    expect(html).toContain('data-websearch-summary');
-    expect(html).toContain('Change');
-    expect(html).not.toContain('data-websearch-stanza');
-    // Step 4 stays reachable (the test action is the point of the finished state).
-    expect(html).toContain('data-websearch-check');
-    expect(html).toContain('Healthy · 2 tools');
+  it('unreachable: the status says so and the server\'s own detail is kept — fails if the failure is drawn by colour alone', () => {
+    const p = panel(render({ listing: listing([keyed({ enabled: true })]), webSearchSecrets: secrets([keyRow()]), health: health({ state: 'unreachable', detail: '401 Unauthorized' }) }));
+    expect(p).toContain('data-websearch-situation="failing"');
+    expect(p).toContain('>Unreachable<');
+    expect(p).toContain('401 Unauthorized');
   });
 
-  it('a wrong endpoint: step 4 says Unreachable with the server\'s own detail, and never the working summary — fails if the unreachable detail is dropped or the state claims success', () => {
-    const html = render({ secrets: secrets([keyRow()]), webSearchSecrets: secrets([keyRow()]), health: health({ state: 'unreachable', detail: 'connect ECONNREFUSED 127.0.0.1:9' }) });
-    expect(html).toContain('data-websearch-situation="wrong-endpoint"');
-    expect(html).toContain('Unreachable');
-    expect(html).toContain('connect ECONNREFUSED 127.0.0.1:9');
-    expect(html).not.toContain('data-websearch-summary');
+  it('a keyless provider (Exa) shows no key field and offers the test — fails if a provider that needs no key asks for one', () => {
+    const p = panel(render({ listing: listing([row({ line: 'https://mcp.exa.ai/mcp', unresolved: [], available: true, enabled: true, origin: 'yaml' })]) }));
+    expect(p).toContain('data-websearch-provider="exa"');
+    expect(p).not.toContain('data-websearch-key-field');
+    expect(p).toContain('data-websearch-check');
   });
 
-  it('a key already stored shows only the mask, never a value, and the field is still empty (REQ-MCP-110/081) — fails if the stored value or mask is put into the field', () => {
-    const html = render({ secrets: secrets([keyRow('Global', '***')]), webSearchSecrets: secrets([keyRow('Global', '***')]) });
-    expect(html).toContain('data-websearch-situation="stored"');
-    expect(html).toContain('Storing again replaces it');
-    expect(html).toContain('data-mask');
-    expect(html).toContain('value=""');
-    expect(html).toContain('Delete the stored key');
-    // The mask is the one mask; nothing echoes a value the card was never given.
-    expect(html.match(/value="\*\*\*"/)).toBeNull();
+  it('an entry pointing at a host the table does not know is "Your own server" and names its host — fails if an unknown endpoint is passed off as Tavily', () => {
+    const p = panel(render({ listing: listing([row({ line: `https://search.example.org/mcp?key=${KEY}`, origin: 'yaml' })]) }));
+    expect(p).toContain('data-websearch-provider="other"');
+    expect(p).toContain('Your own server');
+    expect(p).toContain('search.example.org');
+    expect(p).not.toContain('data-websearch-get-key');
   });
 
-  it('a web_search entry of another transport says the key control belongs to the http default and points at the file — fails if a stdio entry renders the key step', () => {
-    const html = render({ listing: listing([row({ type: 'stdio', line: 'npx -y something' })]), secrets: null, webSearchSecrets: null });
-    expect(html).toContain('data-websearch-situation="other-transport"');
-    expect(html).toContain('This key control belongs to the shipped http default');
-    expect(html).not.toContain('data-websearch-key-field');
+  it('a stored key that leaves a placeholder unresolved says which and how to fix it (REQ-CONFIG-225) — fails if the panel asks again for a key it holds', () => {
+    const p = panel(render({ listing: listing([row({ unresolved: ['OTHER_VAR'] })]), webSearchSecrets: secrets([keyRow()]) }));
+    expect(p).toContain('data-websearch-situation="unresolved"');
+    expect(p).toContain('${OTHER_VAR}');
+    expect(p).not.toContain('Needs a key');
   });
 
-  it('Minor 2 (rework round 1): a chooser filtered to another server does not blank the card\'s stored-key state — the card reads its OWN view, and its delete action stays — fails if the card is fed the chooser\'s rows', () => {
-    // The chooser's view names another server and holds no web_search row; the card's own view holds the key.
-    const chooser: McpSecretsView = { servers: ['other'], rows: [{ server: 'other', key: 'TOKEN', masked: '***', scope: 'Workspace' }], expected: [], server: 'other' };
-    const html = render({ secrets: chooser, webSearchSecrets: secrets([keyRow()]) });
-    expect(html).toContain('data-websearch-situation="stored"');
-    expect(html).toContain('Storing again replaces it');
-    expect(html).toContain('data-websearch-delete');
-    // And the reverse: the card's view holding no key means no stored state, whatever the chooser shows.
-    const empty = render({ secrets: chooser, webSearchSecrets: secrets([]) });
-    expect(empty).toContain('data-websearch-situation="fresh"');
-    expect(empty).not.toContain('Delete the stored key');
+  it('a session override reads as off for this session and points at the row\'s switch (REQ-MCP-115) — fails if the panel offers to override the row', () => {
+    const p = panel(render({ listing: listing([keyed({ enabled: true, overridden: true })]), webSearchSecrets: secrets([keyRow()]) }));
+    expect(p).toContain('switched off for this session');
+    expect(p).not.toContain('data-websearch-enable');
   });
 
-  it('no web_search entry at all renders the empty state naming the file (REQ-CONFIG-437) — fails if the card appears for a server the file does not declare', () => {
-    const html = render({ listing: listing([row({ name: 'browser', type: 'stdio' })]), secrets: secrets([]) });
-    expect(html).toContain('data-websearch-situation="no-entry"');
-    expect(html).toContain('No `web_search` entry is configured');
-    expect(html).toContain('File: /ws/.rotaris/agents.yaml');
-    expect(html).not.toContain('data-websearch-presets');
+  it('another transport says the key field does not apply and draws none — fails if a stdio entry renders the key field', () => {
+    const p = panel(render({ listing: listing([row({ type: 'stdio', line: 'npx -y some-search', unresolved: [] })]) }));
+    expect(p).toContain('data-websearch-situation="other-transport"');
+    expect(p).toContain('stdio server');
+    expect(p).not.toContain('data-websearch-key-field');
   });
 
-  it('a fatal load draws the report and no controls (REQ-CONFIG-478) — fails if the card offers the flow over a configuration that did not load', () => {
+  it('a chooser filtered to another server does not blank the panel\'s stored key — fails if the panel reads the chooser\'s view', () => {
+    const chooser: McpSecretsView = { servers: [WEB_SEARCH_SERVER, 'browser'], rows: [], expected: [], server: 'browser' };
+    const p = panel(render({ listing: listing([keyed()]), secrets: chooser, webSearchSecrets: secrets([keyRow()]) }));
+    expect(p).toContain('data-websearch-stored');
+    expect(p).toContain('data-websearch-delete');
+  });
+
+  it('no web_search entry renders the empty state naming the file, with Open the file as its fill (REQ-CONFIG-437) — fails if the panel guides a server the file does not declare', () => {
+    const html = render({ listing: listing([row({ name: 'browser', type: 'stdio' })]) });
+    const p = panel(html);
+    expect(p).toContain('data-websearch-situation="no-entry"');
+    expect(p).toContain('No web_search entry is configured');
+    expect(p).toContain('File: /ws/.rotaris/agents.yaml');
+    expect(fills(html)).toBe(1);
+    expect(p).not.toContain('data-websearch-key-field');
+  });
+
+  it('a fatal load draws the report and no controls (REQ-CONFIG-478) — fails if the panel offers the key over a configuration that did not load', () => {
     const fatal = { loadOk: false, fatal: '/w/.rotaris/agents.yaml: bad indentation', files: { workspace: '/w/.rotaris/agents.yaml', global: '/g/agents.yaml' } } as unknown as ConfigSnapshot;
-    const html = render({ fatal });
-    expect(html).toContain('data-websearch-situation="unavailable"');
-    expect(html).toContain('Configuration could not be loaded');
-    expect(html).toContain('bad indentation');
-    expect(html).not.toContain('data-websearch-store');
+    const p = panel(render({ fatal }));
+    expect(p).toContain('data-websearch-situation="unavailable"');
+    expect(p).toContain('bad indentation');
+    expect(p).not.toContain('data-websearch-key-field');
+    expect(p).not.toContain('<button');
   });
 
-  it('no configuration service (the listing read\'s refusal) renders the refusal and no controls (REQ-CONFIG-424) — fails if the card stays pressable while nothing can be read or written', () => {
-    const html = render({ error: 'Open a workspace first', listing: null, loading: false });
-    expect(html).toContain('data-websearch-situation="unavailable"');
-    expect(html).toContain('Open a workspace first');
-    expect(html).not.toContain('data-websearch-store');
+  it('no configuration service renders the refusal and no controls (REQ-CONFIG-424) — fails if the panel stays pressable while nothing can be written', () => {
+    const p = panel(render({ error: 'Open a workspace first', listing: null }));
+    expect(p).toContain('data-websearch-situation="unavailable"');
+    expect(p).toContain('Open a workspace first');
+    expect(p).not.toContain('<button');
   });
 
-  it('step 2 states in words that this is a file edit the screen does not make (REQ-CONFIG-350/464) — fails if the boundary sentence disappears or the screen claims to write the declaration', () => {
-    const html = render({ secrets: null });
-    expect(html).toContain('Open the file');
-    expect(html).toContain('File: /ws/.rotaris/agents.yaml');
-    // The card writes no url or enabled (REQ-CONFIG-350/464): its only write commands are the secret ones.
-    expect(html).not.toContain('writes enabled: true');
-    // The boundary sentence itself moved behind the head's info control (stepper/inline-help change, 2026-11-09):
-    // its claim is unchanged, only its fundstelle — it is read in the about region, word for word.
-    expect(WEB_SEARCH_ABOUT).toContain(WEB_SEARCH_NOT_WRITTEN_BY_US);
+  it('the explanation is closed until asked for, and open with the page\'s "show every explanation" (PD-CONFIG-012 clause 4) — fails if the prose stands in front of the field', () => {
+    const closed = panel(renderToStaticMarkup(createElement(SettingsPageContext.Provider, { value: { title: 'section', explain: false } }, createElement(McpSettings, props()))));
+    expect(closed).toMatch(/<button[^>]*aria-expanded="false"[^>]*data-websearch-about-control/);
+    expect(closed).toMatch(/id="websearch-about"[^>]*hidden/);
+    const open = panel(renderToStaticMarkup(createElement(SettingsPageContext.Provider, { value: { title: 'section', explain: true } }, createElement(McpSettings, props()))));
+    expect(open).not.toContain('data-websearch-about-control');
+    for (const sentence of WEB_SEARCH_ABOUT) expect(open).toContain(sentence);
   });
 
-  it('step 3 says a stored secret takes effect on the next load and that the row refreshes with it — fails if the take-effect sentence is missing', () => {
-    const html = render({ secrets: null });
-    expect(WEB_SEARCH_ABOUT).toContain(WEB_SEARCH_TAKE_EFFECT);
-    expect(WEB_SEARCH_TAKE_EFFECT).toContain('takes effect on the next configuration load');
-    expect(WEB_SEARCH_TAKE_EFFECT).toContain('the row above refreshes with it');
-    expect(html).not.toContain('data-websearch-take-effect');
+  it('the key field is the one password field, with no autofill — fails if a second, unmasked control for the key appears', () => {
+    const p = panel(render());
+    expect(p.match(/type="password"/g)).toHaveLength(1);
+    expect(p).toMatch(/autoComplete="off"|autocomplete="off"/);
   });
 
-  it('the key field carries no autofill hook and no second control for the key — fails if a second, unmasked control for the key appears', () => {
-    const html = render({ secrets: null });
-    expect(html.match(/type="password"/g)).toHaveLength(1);
-    expect(html).toMatch(/autoComplete="off"|autocomplete="off"/);
+  it('the provider disclosure offers a press that writes the chosen provider, and marks the one in use (PD-CONFIG-013) — fails if choosing a provider is still only a stanza', () => {
+    const p = panel(render());
+    expect(p).toContain('data-websearch-use');
+    expect(p).toContain('Tavily is in use');
+    expect(p).toContain('writes its address to the configuration file');
+    expect(p).toContain('Or declare the entry yourself:');
+    expect(p).not.toContain('data-websearch-own-url');
+  });
+
+  it('a keyless provider with a key still stored says the key is not sent to it — fails if a stored key reads as one Exa uses', () => {
+    const p = panel(render({ listing: listing([row({ line: 'https://mcp.exa.ai/mcp', unresolved: [], available: true, enabled: true, origin: 'yaml' })]), webSearchSecrets: secrets([keyRow()]) }));
+    expect(p).toContain('Exa searches without a key, so the stored key is not sent to it.');
+    expect(fills(render({ listing: listing([row({ line: 'https://mcp.exa.ai/mcp', unresolved: [], available: true, enabled: true, origin: 'yaml' })]), webSearchSecrets: secrets([keyRow()]) }))).toBe(1);
   });
 });

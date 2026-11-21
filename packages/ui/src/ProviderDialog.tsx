@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProviderChoice, ProviderDialogPayload, ProviderSignInPrompt, ProviderSignInResult } from '@rotaris/contracts';
+import { OAUTH_INSTRUCTION, SignInPromptView, signInKindOf, useSignInPrompt } from './sign-in-prompt.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect } from './design-system/index.js';
 
 /**
@@ -28,11 +29,9 @@ export interface ProviderDialogProps {
   readonly onClose: () => void;
 }
 
-export const PKCE_PROMPT = "Your browser should have opened automatically. If it didn't, open this link to complete authentication:";
-const PROMPT_POLL_MS = 400;
 
 export const KEY_INSTRUCTION = 'Enter the provider API key. It will be validated with the provider\'s model catalog endpoint before it is saved.';
-export const OAUTH_INSTRUCTION = 'Start authentication. Rotaris will open or display the provider\'s official sign-in flow here.';
+export { OAUTH_INSTRUCTION, PKCE_PROMPT } from './sign-in-prompt.js';
 export const BUSY_AUTH = 'Authenticating and checking provider health…';
 export const BUSY_ADD = 'Validating endpoint and discovering models…';
 
@@ -50,25 +49,11 @@ export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, on
   const [noModels, setNoModels] = useState<{ retries: number } | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const keyInput = useRef<HTMLInputElement>(null);
-  const [prompt, setPrompt] = useState<ProviderSignInPrompt | null>(null);
   const [waiting, setWaiting] = useState(false);
-  const local = choice?.localInstruction !== undefined;
-  const interactive = choice !== null && choice.available && (choice.method !== 'api-key' || local);
-
+  const local = choice !== null && signInKindOf(choice) === 'local';
+  const interactive = choice !== null && choice.available && signInKindOf(choice) !== 'key';
   // REQ-PROVIDER-116: while the provider's flow waits for the user, the prompt main holds is read back and shown.
-  useEffect(() => {
-    if (!waiting || !onPrompt) return;
-    let live = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const read = async (): Promise<void> => {
-      const p = await onPrompt().catch(() => null);
-      if (!live) return;
-      if (p !== null) setPrompt(p);
-      timer = setTimeout(() => { void read(); }, PROMPT_POLL_MS);
-    };
-    void read();
-    return () => { live = false; if (timer !== null) clearTimeout(timer); };
-  }, [waiting, onPrompt]);
+  const prompt = useSignInPrompt(waiting, onPrompt);
 
   const cancel = (): void => {
     if (waiting) onCancelSignIn?.();
@@ -91,16 +76,14 @@ export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, on
   const submit = async (opts: { replace?: boolean; allowEmpty?: boolean } = {}) => {
     if (!choice || busy) return;
     if (!choice.available) { setError(choice.unavailabilityReason ?? 'This provider is not available.'); return; }
-    if (choice.method !== 'api-key' || choice.localInstruction !== undefined) {
+    if (signInKindOf(choice) !== 'key') {
       if (!onAuthenticate) { setError(`${choice.displayName} signs in with "${choice.methodLabel}", which this window cannot start.`); return; }
       setBusy(true);
       setWaiting(true);
-      setPrompt(null);
       setError(null);
       const r = await onAuthenticate({ providerId: choice.id, reauthenticate: payload.mode === 'reauthenticate', allowEmpty: opts.allowEmpty ?? false });
       setBusy(false);
       setWaiting(false);
-      setPrompt(null);
       if (r.outcome === 'signed-in') { setDone(r.message); return; }
       if (r.outcome === 'no-models') { setNoModels((n) => ({ retries: n?.retries ?? 0 })); return; }
       if (r.outcome === 'cancelled') { onClose(); return; }
@@ -176,19 +159,7 @@ export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, on
         </label>
       )}
       {interactive && !prompt && <p className="text-secondary" data-instruction={local ? 'local' : 'flow'}>{local ? choice.localInstruction : OAUTH_INSTRUCTION}</p>}
-      {interactive && prompt?.kind === 'device-code' && (
-        <div className="provider-dialog__prompt" role="status" data-prompt="device-code">
-          <p className="dialog-body">Open <a href={prompt.verificationUri} onClick={(e) => { e.preventDefault(); onOpenLink?.(prompt.verificationUri); }}>{prompt.verificationUri}</a> and enter code <strong className="mono" data-user-code>{prompt.userCode}</strong>.</p>
-          <p className="text-secondary">The code stays valid for {Math.max(1, Math.round(prompt.expiresInSeconds / 60))} minutes; Rotaris checks every {prompt.intervalSeconds} seconds whether you have entered it.</p>
-        </div>
-      )}
-      {interactive && prompt?.kind === 'browser' && (
-        <div className="provider-dialog__prompt" role="status" data-prompt="browser">
-          <p className="dialog-body">{prompt.message}</p>
-          <p className="text-secondary">{PKCE_PROMPT}</p>
-          <p className="provider-dialog__link"><a href={prompt.url} onClick={(e) => { e.preventDefault(); onOpenLink?.(prompt.url); }}>{prompt.url}</a></p>
-        </div>
-      )}
+      {interactive && prompt && <SignInPromptView prompt={prompt} onOpenLink={onOpenLink} />}
       {confirm && (
         <DesignCard className="card provider-dialog__confirm" role="alertdialog" aria-label="Confirm replacement">
           <p className="card-body">{confirm.message}</p>

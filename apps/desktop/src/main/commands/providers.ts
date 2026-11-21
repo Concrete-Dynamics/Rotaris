@@ -67,7 +67,7 @@ export function providersCommands(
           prompt: (p) => { pending.prompt = p; openSignInPage(p.kind === 'browser' ? p.url : p.verificationUri); },
         });
         if (req.reauthenticate && hadCredential && outcome.outcome !== 'signed-in') { credentialsChanged(req.providerId); healthCache.delete(req.providerId); await afterProviderChange(); }
-        await settled(req.providerId, outcome);
+        await settled(req.providerId, outcome, req.quiet === true);
         return { ok: true, value: outcome };
       } finally {
         providerSignIns.delete(senderId);

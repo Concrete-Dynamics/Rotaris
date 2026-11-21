@@ -206,3 +206,5 @@
 }
 /* A note under the act belongs to the act: the stuck row's foot padding is the last row's alone. */
 .first-run__pane > .first-run__actions:not(:last-child) { padding-bottom: 0; }
+/* PD-WORKSPACE-010 clause 3 with REQ-PROVIDER-096: the place a provider's own sign-in stands while it waits. */
+.first-run__flow { margin-top: var(--rt-space-5); animation: first-run-arrive var(--rt-duration-slow) var(--rt-ease-out) both; }

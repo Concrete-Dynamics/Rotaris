@@ -49,6 +49,17 @@ entries are dead ends in the setup as they are in the authentication window; and
 (`ROTARIS_CAPTURE_ONBOARDING=off`, compiled out of a packaged build), so the proofs measure the product as it stands after
 the setup and only `onboarding-proof` measures the setup.
 
+**Revision 2 — 2026-11-21 ([R-113](../requests.md#r-113)): the model step carries every sign-in the product has.** The
+owner asked for the provider sign-in in the onboarding once device-code, browser and local-tool sign-in existed
+(R-111, R-112). Clause 3's model step now starts those in place as it starts a key's: a provider that signs in at the
+provider shows its prompt — the code to enter, or the page that opened — in the step, with a control that ends the
+wait; `claude-code` shows that the Claude Code tool on the computer is used and asks it
+([`PD-PROVIDER-002`](pd-provider-002.md#pd-provider-002)). The prompt and its reading are one piece shared with the
+authentication window (`packages/ui/src/sign-in-prompt.tsx`), which pays part of the cost named below: the two
+surfaces no longer hold two copies of it. The "dead ends" sentence below described the build of that day and no longer
+holds; a provider is still listed unavailable, with its reason, where it is (the hosted provider is not listed, and
+`claude-code` where its tool is not installed).
+
 > **Narrows:** REQ-WORKSPACE-152, REQ-WORKSPACE-141, REQ-WORKSPACE-007
 >
 > **Extends:** REQ-WORKSPACE-135

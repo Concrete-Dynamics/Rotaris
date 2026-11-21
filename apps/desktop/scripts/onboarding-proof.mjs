@@ -96,7 +96,13 @@ const ON = { ROTARIS_CAPTURE_ONBOARDING: 'on', ROTARIS_CAPTURE_PROJECT_FOLDER: p
     check('the chosen folder is remembered', typeof stored['workspace/lastOpened'] === 'string' && stored['workspace/lastOpened'].endsWith('atlas-billing'), String(stored['workspace/lastOpened']));
     const radios = await d.eval(`[...document.querySelectorAll('.first-run [role=radiogroup] [role=radio]')].map((r) => ({ id: r.dataset.choice, disabled: r.disabled, checked: r.getAttribute('aria-checked') }))`);
     check('the model step lists the catalogue as one radio group with one choice checked', Array.isArray(radios) && radios.length >= 3 && radios.filter((/** @type {any} */ r) => r.checked === 'true').length === 1, JSON.stringify(radios));
-    check('a provider whose sign-in this build lacks is listed and unavailable', radios.some((/** @type {any} */ r) => r.id === 'copilot' && r.disabled) && radios.some((/** @type {any} */ r) => r.id === 'openai-compatible' && !r.disabled));
+    // R-111: device-code and browser sign-in are carried by the step itself, so those entries are offered; nothing is pressed
+    // that would reach a provider.
+    check('a provider that signs in by its own flow is offered beside the key providers', radios.some((/** @type {any} */ r) => r.id === 'copilot' && !r.disabled) && radios.some((/** @type {any} */ r) => r.id === 'codex' && !r.disabled) && radios.some((/** @type {any} */ r) => r.id === 'openai-compatible' && !r.disabled), JSON.stringify(radios));
+    await d.click('.first-run [data-choice=copilot]');
+    const flow = await d.eval(`({ flow: document.querySelector('.first-run [data-sign-in=flow]') !== null, key: document.querySelector('#first-run-key') !== null, connect: document.querySelector('.first-run [data-action=connect]')?.disabled === false })`);
+    check('choosing it shows its sign-in in place: no key field, and Connect enabled', flow.flow === true && flow.key === false && flow.connect === true, JSON.stringify(flow));
+    await d.click('.first-run [data-choice=openai-compatible]');
     const fits = await d.eval(`(() => { const a = document.querySelector('.first-run'); return a.scrollWidth <= a.clientWidth && document.documentElement.scrollWidth <= innerWidth; })()`);
     check('the surface does not scroll sideways', fits === true);
   } finally { await end(run); }

@@ -126,7 +126,7 @@ user has finished at the provider (`ProviderService.signInInteractive`; main ope
 `provider.authPrompt` reads the prompt the asking window shows meanwhile — the verification address and code, or the
 authorization address — and `provider.authCancel` ends the pending wait early, as closing the window does. None of the
 three carries a credential in either direction. For `claude-code` (PD-PROVIDER-002, 2026-11-21) the same command asks the
-Claude Code tool installed on the machine whether it is signed in, shows no prompt, and stores a marker. The run host's `credentials.lease` ask is answered after any renewal it
+Claude Code tool installed on the machine whether it is signed in, shows no prompt, and stores a marker. The first-launch setup's model step sends the same three commands, with `quiet` as its `provider.signIn` does (R-113). The run host's `credentials.lease` ask is answered after any renewal it
 needed (REQ-PROVIDER-067), with `headers` (what a provider's API needs beside the bearer, REQ-PROVIDER-070/076) and
 `renewable` (the leased credentials that carry an expiry) beside the bearers; the run host asks again every 60 seconds
 while a run is live (REQ-PROVIDER-068). A sign-in that succeeds asks the workspace service

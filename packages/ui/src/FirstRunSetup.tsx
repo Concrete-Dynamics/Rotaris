@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { PERMISSION_PRESETS, type ModelSlotName, type OnboardingOutcome, type OnboardingView, type PermissionPreset, type ProviderChoice, type ProviderSignInResult } from '@rotaris/contracts';
+import { PERMISSION_PRESETS, type ModelSlotName, type OnboardingOutcome, type OnboardingView, type PermissionPreset, type ProviderChoice, type ProviderSignInPrompt, type ProviderSignInResult } from '@rotaris/contracts';
+import { SignInPromptView, signInKindOf, useSignInPrompt } from './sign-in-prompt.js';
 import { Button as DesignButton, Input as DesignInput, SearchableSelect, SegmentedControl, SendPill, StatusDot, TextArea as DesignTextArea } from './design-system/index.js';
 import { layoutContractAttributes, type UiLayoutContract } from './design-system/layout-contract.js';
 import { markMotionStart } from './motion.js';
@@ -97,6 +98,15 @@ export interface FirstRunSetupProps {
   /** Opens the folder chooser, or takes the folder the application started in. A different folder replaces the window. */
   readonly onChooseProject: (useCurrent: boolean) => Promise<Result | { readonly ok: true; readonly cancelled: true }>;
   readonly onSignIn: (req: { providerId: string; label: string; baseUrl: string; apiKey: string; replace: boolean; allowEmpty: boolean }) => Promise<ProviderSignInResult | { outcome: 'error'; message: string }>;
+  /**
+   * REQ-PROVIDER-096 in place (PD-WORKSPACE-010 clause 3): a provider that signs in by its own flow — a code entered at
+   * the provider, a browser page — or through the tool installed on this machine. It answers when the flow has its
+   * outcome; meanwhile the step shows the prompt `onSignInPrompt` reads, and `onCancelSignIn` ends the wait.
+   */
+  readonly onAuthenticate?: ((req: { providerId: string; allowEmpty: boolean }) => Promise<ProviderSignInResult | { outcome: 'error'; message: string }>) | undefined;
+  readonly onSignInPrompt?: (() => Promise<ProviderSignInPrompt | null>) | undefined;
+  readonly onCancelSignIn?: (() => void) | undefined;
+  readonly onOpenLink?: ((url: string) => void) | undefined;
   readonly onAssignSlot: (slot: ModelSlotName, model: string) => Promise<Result>;
   readonly onSetMode: (mode: PermissionPreset) => Promise<Result>;
   /** Starts the first run with this prompt, on the composer's own path. */
@@ -109,7 +119,7 @@ const FIRST_RUN_LAYOUT: UiLayoutContract = { id: 'first-run', relations: [{ kind
 const FIRST_RUN_ASK_LAYOUT: UiLayoutContract = { id: 'first-run.ask', relations: [{ kind: 'containment', target: 'first-run' }] };
 const FIRST_RUN_STAGE_LAYOUT: UiLayoutContract = { id: 'first-run.stage', relations: [{ kind: 'containment', target: 'first-run' }] };
 
-export function FirstRunSetup({ version, home, view, config, windowControls, onChooseProject, onSignIn, onAssignSlot, onSetMode, onSubmit, onFinish }: FirstRunSetupProps) {
+export function FirstRunSetup({ version, home, view, config, windowControls, onChooseProject, onSignIn, onAuthenticate, onSignInPrompt, onCancelSignIn, onOpenLink, onAssignSlot, onSetMode, onSubmit, onFinish }: FirstRunSetupProps) {
   const [step, setStep] = useState<FirstRunStep>(() => stepFor(view));
   const [leaving, setLeaving] = useState<OnboardingOutcome | null>(null);
   const [mode, setMode] = useState<PermissionPreset>(FIRST_RUN_MODE);
@@ -204,7 +214,7 @@ export function FirstRunSetup({ version, home, view, config, windowControls, onC
           </ol>
           <div className="first-run__pane" key={step} data-pane={step}>
             {step === 'project' && <ProjectStep titleId={titleId} heading={heading} view={view} home={home} onChoose={onChooseProject} onContinue={() => setStep('model')} />}
-            {step === 'model' && <ModelStep titleId={titleId} heading={heading} view={view} config={config} onSignIn={onSignIn} onAssignSlot={onAssignSlot} onBusy={setConnecting} onContinue={() => setStep('prompt')} onBack={() => setStep('project')} />}
+            {step === 'model' && <ModelStep titleId={titleId} heading={heading} view={view} config={config} onSignIn={onSignIn} onAuthenticate={onAuthenticate} onSignInPrompt={onSignInPrompt} onCancelSignIn={onCancelSignIn} onOpenLink={onOpenLink} onAssignSlot={onAssignSlot} onBusy={setConnecting} onContinue={() => setStep('prompt')} onBack={() => setStep('project')} />}
             {step === 'prompt' && <PromptStep titleId={titleId} heading={heading} project={project} mode={mode} onMode={setMode} text={draft} onText={setDraft} leaving={leaving !== null} onBack={() => setStep('model')}
               onOpen={async () => {
                 const written = await onSetMode(mode);
@@ -311,7 +321,7 @@ function ProjectStep({ titleId, heading, view, home, onChoose, onContinue }: Ste
   </>);
 }
 
-function ModelStep({ titleId, heading, view, config, onSignIn, onAssignSlot, onBusy, onContinue, onBack }: StepProps & { view: OnboardingView; config: FirstRunConfig | null; onSignIn: FirstRunSetupProps['onSignIn']; onAssignSlot: FirstRunSetupProps['onAssignSlot']; onBusy: (busy: boolean) => void; onContinue: () => void; onBack: () => void }) {
+function ModelStep({ titleId, heading, view, config, onSignIn, onAuthenticate, onSignInPrompt, onCancelSignIn, onOpenLink, onAssignSlot, onBusy, onContinue, onBack }: StepProps & { view: OnboardingView; config: FirstRunConfig | null; onSignIn: FirstRunSetupProps['onSignIn']; onAuthenticate: FirstRunSetupProps['onAuthenticate']; onSignInPrompt: FirstRunSetupProps['onSignInPrompt']; onCancelSignIn: FirstRunSetupProps['onCancelSignIn']; onOpenLink: FirstRunSetupProps['onOpenLink']; onAssignSlot: FirstRunSetupProps['onAssignSlot']; onBusy: (busy: boolean) => void; onContinue: () => void; onBack: () => void }) {
   const authenticated = view.providers.authenticated;
   // The form is shown while nothing is connected, and again when another provider is asked for.
   const [another, setAnother] = useState(false);
@@ -330,9 +340,30 @@ function ModelStep({ titleId, heading, view, config, onSignIn, onAssignSlot, onB
   const groupId = useId();
 
   const pick = (c: ProviderChoice) => { setChoice(c); setBaseUrl(c.defaultBaseUrl ?? ''); setFieldErrors({}); setError(null); setAsk(null); };
-  const usable = choice !== null && choice.available && choice.method === 'api-key';
+  /** A choice is open when it is available and this surface can carry its sign-in: a key always, a flow where the root wired one. */
+  const offered = (c: ProviderChoice): boolean => c.available && (signInKindOf(c) === 'key' || onAuthenticate !== undefined);
+  const kind = choice === null ? 'key' : signInKindOf(choice);
+  const usable = choice !== null && offered(choice);
+  // REQ-PROVIDER-116: while the provider's own flow waits for the person, the prompt main holds is read back and shown.
+  const [waiting, setWaiting] = useState(false);
+  const prompt = useSignInPrompt(waiting, onSignInPrompt);
+  // A flow left pending when the step goes away is ended, so its wait does not outlive the surface that asked.
+  const waitingRef = useRef(false);
+  useEffect(() => { waitingRef.current = waiting; }, [waiting]);
+  useEffect(() => () => { if (waitingRef.current) onCancelSignIn?.(); }, [onCancelSignIn]);
   const submit = async (opts: { replace?: boolean; allowEmpty?: boolean } = {}) => {
     if (!choice || !usable || busy) return;
+    if (kind !== 'key') {
+      if (!onAuthenticate) return;
+      setBusy(true); onBusy(true); setWaiting(true); setError(null); setAsk(null);
+      const r = await onAuthenticate({ providerId: choice.id, allowEmpty: opts.allowEmpty ?? false });
+      setBusy(false); onBusy(false); setWaiting(false);
+      if (r.outcome === 'signed-in') { setAnother(false); return; }
+      if (r.outcome === 'no-models') { setAsk({ kind: 'no-models', message: 'The provider answered, and listed no models.' }); return; }
+      if (r.outcome === 'cancelled') return;
+      setError(r.message);
+      return;
+    }
     const errs: { label?: string; baseUrl?: string; apiKey?: string } = {};
     if (choice.custom && label.trim() === '') errs.label = 'A name is required.';
     if (choice.custom && baseUrl.trim() === '') errs.baseUrl = 'An endpoint URL is required.';
@@ -351,7 +382,7 @@ function ModelStep({ titleId, heading, view, config, onSignIn, onAssignSlot, onB
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') { e.preventDefault(); void submit(); } };
   const onRadioKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft'].includes(e.key) || choice === null) return;
-    const open = choices.filter((c) => c.available && c.method === 'api-key');
+    const open = choices.filter(offered);
     const at = open.findIndex((c) => c.id === choice.id);
     const next = open[(at + (e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : open.length - 1)) % open.length];
     if (!next) return;
@@ -400,22 +431,30 @@ function ModelStep({ titleId, heading, view, config, onSignIn, onAssignSlot, onB
   }
 
   return (<>
-    <StepHead titleId={titleId} heading={heading} title="Connect a model">A run needs one provider. Rotaris reads which models your key reaches and assigns them for you.</StepHead>
+    <StepHead titleId={titleId} heading={heading} title="Connect a model">A run needs one provider. Rotaris reads which models your sign-in reaches and assigns them for you.</StepHead>
     <div className="first-run__choices" role="radiogroup" aria-labelledby={groupId} onKeyDown={onRadioKey}>
       <span id={groupId} className="visually-hidden">Provider</span>
       {choices.map((c) => {
-        const open = c.available && c.method === 'api-key';
+        const open = offered(c);
+        const how = signInKindOf(c);
         const selected = choice?.id === c.id;
         return (
           <DesignButton key={c.id} className="first-run__choice" role="radio" aria-checked={selected} data-choice={c.id} tabIndex={selected ? 0 : -1} disabled={!open || busy} onClick={() => pick(c)}>
             <span className="first-run__radio" aria-hidden="true" />
             <span className="first-run__choice-name">{c.custom ? 'OpenAI-compatible endpoint' : c.displayName}</span>
-            <span className="first-run__choice-how">{open ? (c.custom ? 'Any server that speaks the OpenAI API' : /subscription/i.test(c.displayName) ? 'API key, not the subscription sign-in' : 'API key') : c.available ? 'Sign-in is not in this build yet' : c.unavailabilityReason ?? 'Not available yet'}</span>
+            <span className="first-run__choice-how">{open ? (c.custom ? 'Any server that speaks the OpenAI API' : how === 'local' ? 'Your subscription, through Claude Code on this computer' : how === 'flow' ? (c.method === 'device-code' ? 'Sign in with a code at the provider' : 'Sign in on a browser page') : 'API key') : c.available ? 'Sign-in is not available here' : c.unavailabilityReason ?? 'Not available yet'}</span>
           </DesignButton>
         );
       })}
     </div>
-    {choice && usable && (
+    {choice && usable && kind !== 'key' && (
+      <div className="first-run__flow" data-sign-in={kind}>
+        {prompt
+          ? <SignInPromptView prompt={prompt} onOpenLink={onOpenLink} />
+          : <p className="first-run__field-note">{kind === 'local' ? choice.localInstruction : `${choice.hint} Connect opens the provider's own sign-in; Rotaris stores what the provider returns on this machine and never sees your password.`}</p>}
+      </div>
+    )}
+    {choice && usable && kind === 'key' && (
       <div className="first-run__fields">
         {choice.custom && (<>
           <div className="first-run__field">
@@ -449,11 +488,12 @@ function ModelStep({ titleId, heading, view, config, onSignIn, onAssignSlot, onB
     )}
     {error && <p className="composer__error" role="alert" data-outcome="failed">{error}</p>}
     <div className="first-run__actions">
-      <DesignButton variant="primary" data-action="connect" disabled={busy || !usable} onClick={() => { void submit(); }}>{busy ? 'Connecting…' : 'Connect'}</DesignButton>
+      <DesignButton variant="primary" data-action="connect" disabled={busy || !usable} onClick={() => { void submit(); }}>{busy ? (waiting ? 'Waiting for sign-in…' : 'Connecting…') : 'Connect'}</DesignButton>
+      {waiting && <DesignButton variant="secondary" data-action="cancel-sign-in" onClick={() => onCancelSignIn?.()}>Cancel sign-in</DesignButton>}
       {authenticated.length > 0
         ? <DesignButton variant="ghost" data-action="cancel-add" disabled={busy} onClick={() => setAnother(false)}>Cancel</DesignButton>
         : <DesignButton variant="ghost" data-action="back" disabled={busy} onClick={onBack}>Back</DesignButton>}
-      {busy && <span className="first-run__busy" role="status"><StatusDot state="run" pulse />Checking the key and reading the model list</span>}
+      {busy && <span className="first-run__busy" role="status"><StatusDot state="run" pulse />{waiting ? (kind === 'local' ? 'Asking Claude Code whether it is signed in' : 'Waiting for you to finish at the provider') : 'Checking the key and reading the model list'}</span>}
     </div>
   </>);
 }

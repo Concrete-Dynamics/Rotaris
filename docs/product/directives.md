@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and forty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and forty-two.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -239,6 +239,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | Directive | What it decides |
 |---|---|
 | [PD-TRACE-001](directives/pd-trace-001.md) | an adoption assistant, separate from the toolchain, detects a project's requirement layout and records what it found |
+| [PD-TRACE-002](directives/pd-trace-002.md) | a surveyed repository's requirements are drawn as cards in the shape an agent proposed, and its documents are written where they have a place for it |
 
 ### WORKSPACE
 

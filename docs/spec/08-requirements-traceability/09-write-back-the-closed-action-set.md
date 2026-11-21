@@ -5,6 +5,8 @@ Part 9 of 13 of [domain 08](../08-requirements-traceability.md), which indexes e
 ### Write-Back: The Closed Action Set
 
 - **REQ-TRACE-382** — The board SHALL have exactly **one write path**, carrying a **closed** set of fourteen actions, closed deliberately so that a completeness sweep over the action set is possible: `release`, `return`, `accept`, `rerun`, `send-back`, `reject`, `hold`, `resume`, `answer-blocker`, `edit`, `create`, `accept-proposal`, `accept-change-work`, `keep-worktree`. Labels SHALL be rendered by replacing hyphens with spaces and capitalising as a sentence.
+  > **Narrowed by [`PD-TRACE-002`](../../product/directives/pd-trace-002.md#pd-trace-002), 2026-11-21.** The set gains the tick of one acceptance
+  > criterion in a surveyed document (clauses 6 and 7); the one write path and its closure are otherwise unchanged.
 
 - **REQ-TRACE-383** — Action classification SHALL be:
   - **changes state** — all fourteen except `keep-worktree`, which explicitly does nothing and reports as much; each of the other thirteen writes a record;

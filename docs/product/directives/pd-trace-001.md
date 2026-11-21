@@ -41,6 +41,10 @@ built from the specification alone, which offers no detection at all.
 
 > **Narrows:** REQ-TRACE-155
 
+> **Since 2026-11-21 [`PD-TRACE-002`](pd-trace-002.md#pd-trace-002) replaces three things said here:** clause 2's one
+> model interpretation, the cost paragraph's "is still not drawn on the board", and "never alters a requirement
+> document" for the two writes it names. Clauses 1, 3 and 4 stand.
+
 *Raised by the owner, 2026-10-29; logged as [R-088](../requests.md#r-088). Mints REQ-ADOPT-001 to REQ-ADOPT-030 at
 the owner's ask (domain 22, decided, not derived).*
 

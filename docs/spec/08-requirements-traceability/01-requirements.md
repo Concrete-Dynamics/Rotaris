@@ -69,6 +69,9 @@ Part 1 of 13 of [domain 08](../08-requirements-traceability.md), which indexes e
 ### Identifier Scheme
 
 - **REQ-TRACE-022** — A requirement identifier SHALL be the project's identifier prefix, a hyphen, and one or more decimal digits, and nothing else. The prefix SHALL be one uppercase token, fixed for the project and identical on every requirement in the store. Numbers SHALL be written without leading zeros and SHALL have no upper bound. A `req-id` value of any other shape SHALL be a parse error naming the document and the value rejected. The prefix SHALL be declared by the `id_prefix` key of the layout configuration (REQ-TRACE-039), whose default is `REQ`; it SHALL NOT be inferred from the documents, because inferring it from the first document scanned would make a typographical error in that one document silently redefine what every other document must say.
+  > **Narrowed by [`PD-TRACE-002`](../../product/directives/pd-trace-002.md#pd-trace-002), 2026-11-21.** For a workspace read through a surveyed shape the
+  > identifier is the form that shape declares — a namespaced prefix, a zero-padded or a dotted number included — and
+  > is taken as an opaque string. A store the built-in layout reads keeps this requirement in full.
 
 - **REQ-TRACE-023** — Identifiers SHALL be globally unique across the whole store. A repeat SHALL produce an error naming the identifier and both claiming documents, and the later claimant SHALL be dropped; because the scan is path-sorted, "first" is deterministic.
 

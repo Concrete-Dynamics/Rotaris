@@ -732,11 +732,12 @@ async function main(): Promise<void> {
   const updater = createUpdater({
     classification,
     runningVersion: productVersion(),
-    network: updaterPorts.network, staging: updaterPorts.staging, files: updaterPorts.files, spawn: updaterPorts.spawn, handOffRecord: updaterPorts.handOffRecord,
+    network: updaterPorts.network, updates: updaterPorts.updates, files: updaterPorts.files, spawn: updaterPorts.spawn, handOffRecord: updaterPorts.handOffRecord,
     dismissedVersion: { read: () => preferences.read('updates/dismissedVersion'), write: (version) => preferences.write('updates/dismissedVersion', version) },
     notices,
     log: (level, message) => log(message, level),
     timers: clocks.timers,
+    wall: clocks.wall,
     /**
      * REQ-STARTUP-121: the successor is the updated installation itself, started with the sentinel and this instance's
      * hand-over endpoint (`successorArguments`). The promise settles when `onRecordPassed` fires — the record has been

@@ -41,6 +41,14 @@
  * rather than from `/proc/<pid>/environ`, because Chromium rewrites its processes' title over the region that file
  * reads, so it shows neither the variables a utility process started with nor their absence.
  *
+ * The same launch measures REQ-STARTUP-173's last sentence (PD-STARTUP-008, R-117): a build classified not updatable never
+ * applies a pending update and leaves the record and its files exactly as it found them. Before it starts, a pending update
+ * is planted under the launch's own per-user data directory (`<data>/updates/`, REQ-STARTUP-171) — a record, its version
+ * directory with the manifest, the signature and the asset, plus what an updatable launch's cleanup would remove (another
+ * version's `.partial`, the record's temporary file, an earlier build's hand-off record) — and after the quit every file
+ * there must have the same name and the same SHA-256, and no file may have appeared. A development launch resolves the same
+ * per-user directories an installed build does (`packages/platform/src/dirs.ts`), which is why it is measured here.
+ *
  * The first launch carries no workspace, so it opens the directory it runs in (REQ-SHELL-010 (c)): a directory of the
  * proof's own, emptied before it and in no repository (`lib/working-directory.mjs`), which it is asserted to have opened.
  * Until plan `loc1` it ran in `apps/desktop`, opened the checkout and set up code intelligence in the product's source
@@ -50,12 +58,13 @@
  *
  * Evidence: `.proof/updater-proof/` — the application log, the proxy record, the net-log and `report.json`.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { startApp } from './lib/driver.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
-import { app, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
+import { app, buildDesktop, cleanEnvironment, dataDirFor, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
 import { assertOpened, emptyWorkingDirectory, setupResidue } from './lib/working-directory.mjs';
 
 const output = evidenceDirectory('updater-proof');
@@ -88,6 +97,42 @@ const netLog = join(output, 'netlog.json');
 // The launch carries no workspace, so it opens where it runs: here, never the checkout's `apps/desktop`.
 const workingDirectory = emptyWorkingDirectory(join(output, 'working-directory'));
 const residueBefore = setupResidue(app);
+
+/**
+ * REQ-STARTUP-173's last sentence: a pending update planted where the launch's own data directory puts it (`startApp`
+ * isolates the launch at `<output>/local`). The version is far ahead of any the build declares, so an updatable build
+ * would hold it; the asset is the one this host's flavour would select (REQ-STARTUP-108).
+ */
+const updatesDirectory = join(dataDirFor(join(output, 'local')), 'updates');
+const PLANTED_VERSION = '9.9.9';
+const plantedFlavour = process.platform === 'win32' ? { flavour: 'portable', platformKey: 'windows-x64', asset: `Rotaris-${PLANTED_VERSION}-windows-x64-portable.exe` } : { flavour: 'appimage', platformKey: 'linux-x86_64', asset: `Rotaris-${PLANTED_VERSION}-linux-x86_64.AppImage` };
+const plantedAsset = Buffer.alloc(65_536, 7);
+mkdirSync(join(updatesDirectory, PLANTED_VERSION), { recursive: true });
+mkdirSync(join(updatesDirectory, '9.9.10'), { recursive: true });
+writeFileSync(join(updatesDirectory, PLANTED_VERSION, 'SHA256SUMS.txt'), `${createHash('sha256').update(plantedAsset).digest('hex')}  ${plantedFlavour.asset}\n`);
+writeFileSync(join(updatesDirectory, PLANTED_VERSION, 'SHA256SUMS.txt.sig'), Buffer.alloc(64, 1));
+writeFileSync(join(updatesDirectory, PLANTED_VERSION, plantedFlavour.asset), plantedAsset);
+writeFileSync(join(updatesDirectory, 'pending.json'), `${JSON.stringify({ schema: 1, version: PLANTED_VERSION, flavour: plantedFlavour.flavour, platformKey: plantedFlavour.platformKey, asset: { name: plantedFlavour.asset, size: plantedAsset.byteLength, sha256: createHash('sha256').update(plantedAsset).digest('hex') }, state: 'verified', downloadedBy: '0.1.0', verifiedAt: '2026-11-21T12:00:00.000Z', applyAttempts: 0 }, null, 2)}\n`);
+writeFileSync(join(updatesDirectory, '9.9.10', `Rotaris-9.9.10.partial`), 'an interrupted download');
+writeFileSync(join(updatesDirectory, 'pending.json.tmp'), '{');
+writeFileSync(join(updatesDirectory, 'installer-handoff.json'), `${JSON.stringify({ schema: 1, version: PLANTED_VERSION, staging: join(output, 'rotaris-update-planted') })}\n`);
+/** Every file under the updates directory: its relative name, size, SHA-256 and modification time. */
+const snapshotUpdates = () => {
+  const out = {};
+  const walk = (dir, prefix) => {
+    if (!existsSync(dir)) return;
+    for (const name of readdirSync(dir).sort()) {
+      const path = join(dir, name);
+      const stat = statSync(path);
+      if (stat.isDirectory()) walk(path, `${prefix}${name}/`);
+      else out[`${prefix}${name}`] = { size: stat.size, sha256: createHash('sha256').update(readFileSync(path)).digest('hex'), mtimeMs: stat.mtimeMs };
+    }
+  };
+  walk(updatesDirectory, '');
+  return out;
+};
+const plantedBefore = snapshotUpdates();
+
 const started = await startApp({
   root: output,
   cwd: workingDirectory,
@@ -138,6 +183,10 @@ check('no line records a request to the feed endpoint (REQ-STARTUP-150)', reques
 check('the proxy sink saw no connection for github.com — no update request left the process (REQ-STARTUP-106)', githubConnections.length === 0, `${connections.length} connection(s) in all${connections.length > 0 ? `: ${connections.map((c) => c.firstLine || '(no request line)').join(' | ')}` : ''}`);
 check('the proxy sink saw NO connection at all from launch to first paint and an orderly quit — the runtime makes no request of its own (REQ-STARTUP-160, REQ-SHELL-005)', connections.length === 0, connections.length === 0 ? `0 connections; the net-log names ${netLogUrls.length} http(s) URL(s)` : `${connections.map((c) => c.firstLine || '(no request line)').join(' | ')}; net-log URLs: ${netLogUrls.join(' | ') || '(none)'}`);
 check('the launch quit cleanly after the check (REQ-STARTUP-046: nothing was in flight to wait for)', /quit: exiting with status 0/.test(log), lines.filter((l) => l.includes('quit:')).join(' / '));
+const plantedAfter = snapshotUpdates();
+const plantedChanged = [...new Set([...Object.keys(plantedBefore), ...Object.keys(plantedAfter)])].filter((name) => JSON.stringify(plantedBefore[name]) !== JSON.stringify(plantedAfter[name]));
+check('a not-updatable launch leaves a planted pending update — the record, its files, and what an updatable launch would clean — byte-for-byte as it found them (REQ-STARTUP-173, REQ-STARTUP-171)', Object.keys(plantedBefore).length === 7 && plantedChanged.length === 0, plantedChanged.length === 0 ? `${Object.keys(plantedAfter).length} file(s) under ${updatesDirectory}, each the same size, digest and modification time` : `changed, removed or added: ${plantedChanged.join(', ')}`);
+check('no log line says the launch touched the update path\'s files (REQ-STARTUP-173)', !/pending update|updates directory|backup beside the artifact/.test(lines.filter((l) => l.includes('update check: ')).join('\n')), checkLines.join(' / '));
 let openedOwn;
 try { openedOwn = { ok: true, detail: assertOpened(log, workingDirectory, 'the first launch') }; } catch (cause) { openedOwn = { ok: false, detail: cause instanceof Error ? cause.message : String(cause) }; }
 check('the launch with no workspace argument opened its own empty working directory, never the checkout (REQ-SHELL-010 (c))', openedOwn.ok, openedOwn.detail);
@@ -183,7 +232,7 @@ const appeared = setupResidue(app).filter((name) => !residueBefore.includes(name
 check('no launch opened the checkout: its `apps/desktop` gained no code-intelligence setup residue while the proof ran', appeared.length === 0, appeared.length === 0 ? `before ${JSON.stringify(residueBefore)}, after the same` : `${appeared.join(' and ')} appeared in ${app}`);
 
 writeFileSync(join(output, 'proxy-record.json'), `${JSON.stringify(connections, null, 2)}\n`);
-writeFileSync(join(output, 'report.json'), `${JSON.stringify({ at: new Date().toISOString(), proxyPort: port, environment: { APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE }, checkLines, requestLines, terminalEnvironment: terminalEnvironment === null ? null : { APPIMAGE: has('APPIMAGE'), ROTARIS_PORTABLE_ARTIFACT: has('ROTARIS_PORTABLE_ARTIFACT'), ROTARIS_APP_LOG_LEVEL: has('ROTARIS_APP_LOG_LEVEL') }, connections: connections.length, githubConnections: githubConnections.length, netLogUrls, checks }, null, 2)}\n`);
+writeFileSync(join(output, 'report.json'), `${JSON.stringify({ at: new Date().toISOString(), proxyPort: port, plantedPendingUpdate: { directory: updatesDirectory, before: plantedBefore, after: plantedAfter }, environment: { APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE }, checkLines, requestLines, terminalEnvironment: terminalEnvironment === null ? null : { APPIMAGE: has('APPIMAGE'), ROTARIS_PORTABLE_ARTIFACT: has('ROTARIS_PORTABLE_ARTIFACT'), ROTARIS_APP_LOG_LEVEL: has('ROTARIS_APP_LOG_LEVEL') }, connections: connections.length, githubConnections: githubConnections.length, netLogUrls, checks }, null, 2)}\n`);
 const failed = checks.filter((c) => !c.pass).length;
 console.log(`\n${checks.length - failed}/${checks.length} checks passed; evidence in ${output}`);
 if (!existsSync(started.logFile)) console.log('(no application log was written)');

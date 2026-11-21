@@ -49,3 +49,26 @@ describe("the portable swap's real ports flush, and flush with the real implemen
     await expect(flushDirectory(absent, 'linux')).rejects.toThrow();
   });
 });
+
+describe("the pending update's real port — REQ-STARTUP-171 (PD-STARTUP-008, R-117)", () => {
+  /** The text of `createUpdaterPorts`'s `updates` port object. */
+  const updatesPort = (): string => {
+    const start = source.indexOf('updates: {');
+    expect(start, "electron.ts has no 'updates: {' port object").toBeGreaterThan(0);
+    const end = source.indexOf('files: {', start);
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end);
+  };
+
+  it('lives under the per-user updates directory and never the platform\'s temporary one', () => {
+    expect(updatesPort()).toMatch(/root: updatesDir,/);
+    expect(source).not.toMatch(/\btmpdir\b|mkdtemp/);
+  });
+
+  it('every write a later step relies on is flushed before it resolves: the whole-file writes, the partial\'s sink, and the directory', () => {
+    const port = updatesPort();
+    expect(port).toMatch(/writeFile: \(path, bytes\) => fsp\.writeFile\(path, bytes, \{ flush: true \}\)/);
+    expect(port).toMatch(/createWriteStream\(path, \{ flags: 'wx', flush: true \}\)/);
+    expect(port).toMatch(boundTo('flushDirectory'));
+  });
+});

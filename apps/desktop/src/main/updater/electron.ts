@@ -1,13 +1,13 @@
 import { spawn } from 'node:child_process';
-import { constants as fsConstants, createWriteStream, promises as fsp } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { constants as fsConstants, createReadStream, createWriteStream, promises as fsp } from 'node:fs';
 import { join } from 'node:path';
 import { app, net } from 'electron';
 import type { ArtifactVariables } from '@rotaris/platform';
 import type { DownloadSink } from './download.js';
 import { classifyInstallation, parseInstallDir, type Classification } from './classify.js';
 import { flushDirectory, flushFile } from './flush.js';
-import type { HandOffRecordFile, NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
+import type { HandOffRecordFile, NetworkResponse, UpdateNetwork } from './install.js';
+import { LEGACY_HANDOFF_RECORD_NAME, type UpdatesArea } from './pending.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 
 /**
@@ -69,7 +69,7 @@ export async function classifyThisInstallation(artifact: ArtifactVariables): Pro
 
 export interface UpdaterPorts {
   readonly network: UpdateNetwork;
-  readonly staging: StagingArea;
+  readonly updates: UpdatesArea;
   readonly files: StrategyFiles;
   readonly spawn: StrategySpawn;
   readonly handOffRecord: HandOffRecordFile;
@@ -77,7 +77,7 @@ export interface UpdaterPorts {
 
 /** `updatesDir` is `dataLayout`'s `updates`, under the per-user data directory (REQ-STARTUP-145), never the temporary one. */
 export function createUpdaterPorts(updatesDir: string): UpdaterPorts {
-  const handOffFile = join(updatesDir, 'installer-handoff.json');
+  const handOffFile = join(updatesDir, LEGACY_HANDOFF_RECORD_NAME);
   return {
     network: {
       /**
@@ -104,12 +104,31 @@ export function createUpdaterPorts(updatesDir: string): UpdaterPorts {
         return result;
       },
     },
-    staging: {
-      // REQ-STARTUP-122: a fresh temporary directory whose name is prefixed `rotaris-update-`.
-      create: () => fsp.mkdtemp(join(tmpdir(), 'rotaris-update-')),
+    /**
+     * REQ-STARTUP-171: the pending update and the download in flight, under `<data>/updates/` and never the platform's
+     * temporary directory (PD-STARTUP-008, narrowing REQ-STARTUP-122's fresh `rotaris-update-` directory). Every write that
+     * a later step relies on reaches the medium before it resolves: `writeFile` and the partial's sink are flushed
+     * (`flush: true`, fsync before close), and `flushDirectory` is `flush.ts`'s.
+     */
+    updates: {
+      root: updatesDir,
       join: (dir, name) => join(dir, name),
+      list: (dir) => fsp.readdir(dir).catch((cause: NodeJS.ErrnoException) => { if (cause.code === 'ENOENT') return []; throw cause; }),
+      makeDirectory: async (dir) => { await fsp.mkdir(dir, { recursive: true }); },
+      readFile: (path) => fsp.readFile(path).catch((cause: NodeJS.ErrnoException) => { if (cause.code === 'ENOENT') return null; throw cause; }),
+      readStream: (path) => createReadStream(path),
+      fileSize: async (path) => {
+        try {
+          const stat = await fsp.stat(path);
+          return stat.isFile() ? stat.size : null;
+        } catch {
+          return null;
+        }
+      },
+      writeFile: (path, bytes) => fsp.writeFile(path, bytes, { flush: true }),
       open: async (path) => {
-        const stream = createWriteStream(path, { flags: 'wx' });
+        // Exclusive: the caller removed an earlier attempt's partial first, so a file here is not this attempt's.
+        const stream = createWriteStream(path, { flags: 'wx', flush: true });
         await new Promise<void>((resolve, reject) => { stream.once('open', () => resolve()); stream.once('error', reject); });
         const sink: DownloadSink & { close(): Promise<void> } = {
           write: (chunk) => new Promise<void>((resolve, reject) => { stream.write(chunk, (error) => (error ? reject(error) : resolve())); }),
@@ -117,6 +136,8 @@ export function createUpdaterPorts(updatesDir: string): UpdaterPorts {
         };
         return sink;
       },
+      rename: (from, to) => fsp.rename(from, to),
+      flushDirectory: (dir) => flushDirectory(dir),
       removeFile: (path) => fsp.rm(path, { force: true }),
       removeDirectory: (dir) => fsp.rm(dir, { recursive: true, force: true }),
     },
@@ -155,15 +176,9 @@ export function createUpdaterPorts(updatesDir: string): UpdaterPorts {
         child.once('spawn', () => { child.unref(); resolve(); });
       }),
     },
+    // The installer hand-off record an earlier build wrote (`removeHandedOffStaging`); nothing writes it any more.
     handOffRecord: {
       read: () => fsp.readFile(handOffFile, 'utf8').catch(() => null),
-      // REQ-STARTUP-178: written atomically — a same-directory temporary file, flushed, then renamed over the record.
-      write: async (text) => {
-        await fsp.mkdir(updatesDir, { recursive: true });
-        const incoming = `${handOffFile}.tmp`;
-        await fsp.writeFile(incoming, text, { encoding: 'utf8', flush: true });
-        await fsp.rename(incoming, handOffFile);
-      },
       clear: () => fsp.rm(handOffFile, { force: true }),
     },
   };

@@ -1,13 +1,14 @@
 import type { CommandOutcome, Notice, NoticeSeverity } from '@rotaris/contracts';
 import { isStrictlyNewer } from '@rotaris/release-naming';
-import { millis, type Millis, type TimerHandle, type Timers } from '@rotaris/kernel';
+import { millis, toIsoUtc, type Millis, type TimerHandle, type Timers, type WallClock } from '@rotaris/kernel';
 import type { AppLogLevel } from '../app-log.js';
 import type { NoticePatch, NoticeStore } from '../notices.js';
 import type { Classification } from './classify.js';
 import { measuredLabel, messageOf, type DownloadProgress } from './download.js';
 import { FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, parseLatestRelease, selectOffer, SUMMARY_FALLBACK, type Offer } from './feed.js';
-import { recordHandOff, removeHandedOffStaging, runInstall, type HandOffRecordFile, type StagingArea, type UpdateNetwork } from './install.js';
-import { cleanupPortableBackup, type StrategyFiles, type StrategySpawn } from './strategies.js';
+import { removeHandedOffStaging, runInstall, type HandOffRecordFile, type UpdateNetwork } from './install.js';
+import { discardPending, loadPending, settleAtLaunch, yieldToFeed, type LaunchSettlement, type UpdatesArea } from './pending.js';
+import type { StrategyFiles, StrategySpawn } from './strategies.js';
 
 /**
  * THE UPDATER — the main-process module ADR-0054 decided and first-release-plan.md §4.6 ruled into the first
@@ -20,9 +21,11 @@ import { cleanupPortableBackup, type StrategyFiles, type StrategySpawn } from '.
  *    `activate` from `MainWindows`' post-show hook); one operation — check or install — in flight at a time, a second
  *    refused. REQ-STARTUP-106/150: a build classified not updatable performs no check and issues no request; the one
  *    line it writes is the application log's. REQ-STARTUP-057: a demo window, the same.
- *  - REQ-STARTUP-115: the portable's leftover `<name>.old` is deleted before the network round trip.
- *  - REQ-STARTUP-178: the installer hand-off's staging directory is recorded before the setup starts and removed by the
- *    first check of the updated build, in the same launch-time step.
+ *  - REQ-STARTUP-171/176/178, REQ-STARTUP-115 (PD-STARTUP-008, R-117): a verified download is kept as the pending update
+ *    under `<data>/updates/` (`pending.ts`). The first check of a launch, before the network round trip, settles what the
+ *    update path left: a pending update the running version has reached is removed with its files, and the portable's or
+ *    AppImage's `<name>.old` with it — the replaced artifact has now painted; partials and superseded downloads go
+ *    (`settleAtLaunch`). A release the feed names older than the pending one discards it (UD-5, `yieldToFeed`).
  *  - REQ-STARTUP-105/107..110/112: the feed request, the offer rule, the silent failure, the summary (`feed.ts`).
  *  - REQ-STARTUP-116/117/146: the offer notice; `updates/dismissedVersion`, written only when THAT notice is dismissed
  *    and read at every check; the same version stays silent, any newer version notifies again.
@@ -73,10 +76,11 @@ export interface UpdaterDeps {
   /** REQ-STARTUP-007's running version, `dev` when the metadata declares none. */
   readonly runningVersion: string;
   readonly network: UpdateNetwork;
-  readonly staging: StagingArea;
+  /** REQ-STARTUP-171: `<data>/updates`, where the download is streamed and the pending update kept; main's alone. */
+  readonly updates: UpdatesArea;
   readonly files: StrategyFiles;
   readonly spawn: StrategySpawn;
-  /** REQ-STARTUP-178: the record of the installer hand-off's staging directory, in the per-user data directory. */
+  /** REQ-STARTUP-178: the installer hand-off record an earlier build wrote, honoured so its directory is removed. */
   readonly handOffRecord: HandOffRecordFile;
   /** The key set to verify against; production passes nothing and gets the compiled-in set (`keys.ts`). */
   readonly keys?: readonly string[];
@@ -85,6 +89,8 @@ export interface UpdaterDeps {
   readonly notices: UpdaterNotices;
   readonly log: (level: AppLogLevel, message: string) => void;
   readonly timers: Timers;
+  /** The pending record's `verifiedAt` (REQ-STARTUP-171). */
+  readonly wall: WallClock;
   /**
    * REQ-STARTUP-121: start the updated installation from `target` as the successor and resolve once the instance record
    * has passed to it; reject when it cannot be started. No timeout of its own (ADR-0055): a successor that never
@@ -312,19 +318,33 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     return 'failed';
   };
 
+  /** One `info` line per thing the launch-time step did; nothing when it found nothing (PD-MONITOR-002). */
+  const logSettlement = (settled: LaunchSettlement): void => {
+    if (settled.readAsAbsent !== null) deps.log('info', `update check: the pending update record read as none (${settled.readAsAbsent}); it and its files were removed (REQ-STARTUP-171)`);
+    if (settled.discarded !== null) {
+      const { version, why, outcome } = settled.discarded;
+      const reason = why === 'applied' ? `Rotaris ${deps.runningVersion} runs, so it was applied` : why === 'other-installation' ? 'it was downloaded for another installation flavour or platform' : 'its apply attempts are spent (UD-9)';
+      deps.log('info', `update check: the pending update ${version} was ${outcome === 'removed' ? 'removed' : 'left in part for a later launch'} — ${reason} (REQ-STARTUP-178)`);
+    }
+    if (settled.backup !== 'nothing') deps.log('info', `update check: the previous update's backup beside the artifact was ${settled.backup === 'removed' ? 'removed' : 'left for a later launch'} (REQ-STARTUP-115, REQ-STARTUP-176)`);
+    if (settled.incoming !== 'nothing') deps.log('info', `update check: an interrupted replacement's file beside the artifact was ${settled.incoming === 'removed' ? 'removed' : 'left for a later launch'} (REQ-STARTUP-178)`);
+    if (settled.swept.length > 0) deps.log('info', `update check: removed what no pending update names under the updates directory: ${settled.swept.join(', ')} (REQ-STARTUP-178)`);
+    if (settled.pending !== null) deps.log('info', `update check: a pending update ${settled.pending.version} (${settled.pending.state}) is kept (REQ-STARTUP-171)`);
+  };
+
   const check = async (windowId: number, updatable: Extract<Classification, { updatable: true }>): Promise<ActivationOutcome> => {
-    // REQ-STARTUP-115's cleanup is LAUNCH-time: once per process, before the first round trip. Run again at a later
-    // window's check it would delete the backup this process's own apply made moments earlier, which is not "left by
-    // a previous update" — the previous update is the one a later launch finds.
-    const cleaned = cleanedThisLaunch ? 'nothing' : await cleanupPortableBackup(updatable.flavour, updatable.target, deps.files);
-    // REQ-STARTUP-178, on the same launch-time terms: never a later window's check, which in the process that handed off
-    // would find its own installer's directory.
-    const handedOff = cleanedThisLaunch ? 'nothing' : await removeHandedOffStaging(deps.handOffRecord, deps.staging, deps.runningVersion);
-    cleanedThisLaunch = true;
-    if (cleaned !== 'nothing') deps.log('info', `update check: the previous update's backup beside the artifact was ${cleaned === 'removed' ? 'removed' : 'left for a later launch'} (REQ-STARTUP-115)`);
-    if (handedOff !== 'nothing') {
-      const what = handedOff === 'removed' ? 'removed' : handedOff === 'kept' ? 'left for a later launch' : handedOff === 'not-yet' ? 'kept: the version it installs is not running yet' : 'not readable, and the record was cleared';
-      deps.log('info', `update check: the installer hand-off's staging directory was ${what} (REQ-STARTUP-178)`);
+    // REQ-STARTUP-176/178 and REQ-STARTUP-115 are LAUNCH-time: once per process, before the first round trip, after the
+    // first main window was shown. Run again at a later window's check it would find this process's own replacement —
+    // its `<name>.old`, its pending files — which belong to the launch that runs the replaced artifact.
+    if (!cleanedThisLaunch) {
+      cleanedThisLaunch = true;
+      logSettlement(await settleAtLaunch(deps.updates, deps.files, updatable, deps.runningVersion));
+      // An earlier build's installer hand-off record, honoured on the same terms (REQ-STARTUP-178).
+      const handedOff = await removeHandedOffStaging(deps.handOffRecord, deps.updates, deps.runningVersion);
+      if (handedOff !== 'nothing') {
+        const what = handedOff === 'removed' ? 'removed' : handedOff === 'kept' ? 'left for a later launch' : handedOff === 'not-yet' ? 'kept: the version it installs is not running yet' : 'not readable, and the record was cleared';
+        deps.log('info', `update check: an earlier build's installer hand-off staging directory was ${what} (REQ-STARTUP-178)`);
+      }
     }
     abort = new AbortController();
     deps.log('info', `update check: window ${windowId}, ${updatable.flavour} flavour, GET ${FEED_ENDPOINT} (REQ-STARTUP-105)`);
@@ -338,6 +358,13 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     }
     const parsed = parseLatestRelease(body);
     if (!parsed.ok) return silently(parsed.reason);
+    // UD-5: a release the feed names older than the pending update — withdrawn — discards it. A newer one is downloaded
+    // and replaces it once verified (`runInstall`).
+    const pending = (await loadPending(deps.updates)).record;
+    if (pending !== null && yieldToFeed(pending, parsed.release.version) === 'withdrawn') {
+      const outcome = await discardPending(deps.updates, pending.version);
+      deps.log('info', `update check: the pending update ${pending.version} is newer than the latest release ${parsed.release.version}, which the feed now names; it was ${outcome === 'removed' ? 'discarded' : 'discarded in part, the rest left for a later launch'} (UD-5, REQ-STARTUP-178)`);
+    }
     const offer = selectOffer(parsed.release, deps.runningVersion, updatable.flavour);
     if (offer === null) {
       deps.log('info', `update check: nothing to offer (latest ${parsed.release.version}, running ${deps.runningVersion}, ${updatable.flavour} flavour; REQ-STARTUP-107)`);
@@ -380,27 +407,18 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     deps.log('info', `update install: Rotaris ${offer.version} (${offer.asset.name}) — REQ-STARTUP-122's sequence begins`);
     let declinedBy: HandOffDecline = UPDATE_DECLINED;
     const result = await runInstall(offer, {
-      flavour: updatable.flavour, target: updatable.target, network: deps.network, staging: deps.staging, files: deps.files, spawn: deps.spawn,
+      flavour: updatable.flavour, target: updatable.target, network: deps.network, updates: deps.updates, files: deps.files, spawn: deps.spawn,
       onProgress, signal: abort.signal, ...(deps.keys === undefined ? {} : { keys: deps.keys }),
+      runningVersion: deps.runningVersion, now: () => toIsoUtc(deps.wall.instant()),
       // OQ-86: the installer's hand-off closes the windows, and the download ran for as long as it took — a run begun
       // meanwhile is asked about here, immediately before the installer is started. OQ-311: so is a window's unsaved
       // settings, first, since a window may have become dirty while the download ran; OQ-361: then guard (2), since an
       // integration may have been admitted meanwhile.
-      // REQ-STARTUP-178: the setup runs from staging, so the directory is recorded before it starts, for the updated
-      // build's first launch to remove.
       ...(updatable.flavour === 'installer'
-        ? {
-          beforeApply: async () => { const declined = await confirmAtHandOff('install', click, true); if (declined !== null) declinedBy = declined; return declined === null; },
-          beforeHandOff: async (staging: string) => {
-            const recorded = await recordHandOff(deps.handOffRecord, deps.staging, { version: offer.version, staging });
-            deps.log(recorded === 'recorded' ? 'info' : 'warn', `update install: the installer's staging directory ${staging} was ${recorded === 'recorded' ? 'recorded for the updated build to remove' : 'not recorded; nothing will remove it'} (REQ-STARTUP-178)`);
-          },
-        }
+        ? { beforeApply: async () => { const declined = await confirmAtHandOff('install', click, true); if (declined !== null) declinedBy = declined; return declined === null; } }
         : {}),
     });
     await repaint;
-    // An installer that could not be started had its staging discarded, so the record naming it is cleared with it.
-    if (!result.ok && result.stage === 'apply' && updatable.flavour === 'installer') await deps.handOffRecord.clear().catch(() => undefined);
     if (!result.ok && result.stage === 'declined') {
       // Declining keeps the update offered: the offer's face comes back in the same notice, and nothing was started.
       noticeId = await show(noticeId, offerFace(offer));
@@ -416,12 +434,12 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     if (result.applied.outcome === 'replaced') {
       noticeId = await show(noticeId, installedFace(result.applied.message));
       state = { kind: 'applied', offer, noticeId };
-      deps.log('info', `update install: Rotaris ${offer.version} replaced ${updatable.target}; Restart now is offered (REQ-STARTUP-119)`);
+      deps.log('info', `update install: Rotaris ${offer.version} replaced ${updatable.target}; the pending update is ${result.pending.state} and its backup kept until the replaced artifact paints; Restart now is offered (REQ-STARTUP-119, REQ-STARTUP-176)`);
       return { ok: true, value: { outcome: 'replaced' } };
     }
     noticeId = await show(noticeId, handedOffFace(result.applied.message));
     state = { kind: 'handed-off', offer, noticeId };
-    deps.log('info', `update install: handed off to ${result.applied.quitRequired ? 'the installer; the window closes after the single 1200 ms delay' : 'the platform'} (REQ-STARTUP-119)`);
+    deps.log('info', `update install: handed off to ${result.applied.quitRequired ? 'the installer; the window closes after the single 1200 ms delay' : 'the platform'}; it runs from the pending update, ${result.pending.state}, which the updated build's first launch removes (REQ-STARTUP-119, REQ-STARTUP-178)`);
     if (result.applied.quitRequired && autoClose === null) {
       // OQ-311, OQ-361: all three guards (unsaved settings, guard (2)'s integration, the run box) were asked immediately
       // before the installer started; the auto-close is programmatic and asks nothing (REQ-NOTIFY-057).

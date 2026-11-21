@@ -110,7 +110,11 @@ export function dataLayout(dirs: UserDirs, platform: NodeJS.Platform = process.p
   return {
     workspaces: join(dirs.data, 'workspaces'),
     instanceRecord: join(dirs.data, 'instance.json'),
-    /** The updater's per-user records (REQ-STARTUP-178): today the installer hand-off's, `installer-handoff.json`. */
+    /**
+     * The update path's per-user directory (REQ-STARTUP-171, REQ-STARTUP-178; PD-STARTUP-008): the pending update's record
+     * `pending.json` and its `<version>/` directory (the exact manifest and signature bytes, the verified asset, a download's
+     * `.partial` while it runs), and an earlier build's `installer-handoff.json` until the cleanup removes it. Main's alone.
+     */
     updates: join(dirs.data, 'updates'),
     machineId: join(dirs.data, 'machine-id'),
     // REQ-PROVIDER-014 fixes `tokens/`; the name reserved here before the store was built was `credentials`,

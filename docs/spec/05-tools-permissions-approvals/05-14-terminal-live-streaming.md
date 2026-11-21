@@ -33,7 +33,11 @@ Part 5 of 9 of [domain 05](../05-tools-permissions-approvals.md), which indexes 
 
 **REQ-TOOLS-129** — A central workspace-boundary check governs file access: relative paths resolve against the workspace root; the candidate is resolved to its real path (following symlinks and junctions, so a link that escapes the root resolves outside and is rejected); a path outside the root fails with `Path '<resolved>' is outside workspace root '<root>'` unless the outside-workspace opt-out is enabled.
 
+> **Extended by [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014), 2026-11-21.** The check above still governs; the directive adds that a file tool's write under the workspace's `.rotaris/` or `.git/` is refused although the path is inside the root, naming the `configure` tool for the former.
+
 **REQ-TOOLS-130** — The opt-out is `runtime.allow_outside_workspace` (default false). It is set through the layered YAML configuration surface or through the confirmed desktop control of REQ-TOOLS-191, and by no other means: no launch-time override, no per-run flag, no environment variable ever turns it on. It governs the file tools and the permission gate's workspace-root scoping.
+
+> **Narrowed by [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014), 2026-11-21.** The opt-out still governs, except that a file tool's write under the global configuration directory is refused with the opt-out on.
 
 **REQ-TOOLS-131** — The desktop status strip always shows a file-access flag: `workspace-scoped` normally, `outside-workspace!` when the opt-out is on, with tooltip/accessible text explaining whether agents may read and write outside the workspace folder.
 

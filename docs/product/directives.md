@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and forty-six.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and forty-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -67,6 +67,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CONFIG-011](directives/pd-config-011.md) | what stands first inside a Settings category, and what stands once: providers before slots, one role column, the playbook catalogue closed, a skill as one entry |
 | [PD-CONFIG-012](directives/pd-config-012.md) | the Settings view is Setup and twelve pages in run order, and a page is a ledger: explanations behind a control, origin as a glyph, a setting found by name |
 | [PD-CONFIG-013](directives/pd-config-013.md) | the web search panel writes the provider it is pointed at: `mcp_servers.web_search.url`, that field alone |
+| [PD-CONFIG-014](directives/pd-config-014.md) | an agent changes Rotaris's own configuration through one `configure` tool: typed keys, the scoped per-field writer, authority keys always asked, the file tools closed to `.rotaris/` and `.git/` |
 
 ### EVENTS
 

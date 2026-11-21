@@ -39,7 +39,7 @@ export interface ScriptedCallRecord {
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
  * the script variable (`…_SCRIPT`) names the orchestrator's steps, comma-separated, one per model call, and
  * the child script variable (`…_CHILD_SCRIPT`) every child's. `glob`, `read`, `write`, `writeinfer`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
- * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `continue:<persona>:<name>` a delegation taking up the newest continuation offer
+ * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `readfile:<path>` a `read_file` of that path (PD-CHAT-016); `continue:<persona>:<name>` a delegation taking up the newest continuation offer
  * the conversation was told (`offeredTaskId`, PD-ORCH-004 revisions 3 and 4); `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
@@ -842,8 +842,11 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         : closing
           ? { name: 'todo', args: { operation: 'replace', phases: closing.phases.map((p) => ({ id: p.id, name: p.name, tasks: p.tasks.map((t) => ({ id: t.id, name: t.name, state: 'COMPLETED' })) })) } }
           : null;
-      // fetch:<url> — everything after the first `fetch:` is the URL (the fetch proof's step).
-      const tool = dynamic ?? (step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } } : TOOL_STEPS[step]);
+      // fetch:<url> — everything after the first `fetch:` is the URL (the fetch proof's step). readfile:<path> — a `read_file` of
+      // that path, the skills proof's agent read of a catalogued SKILL.md (PD-CHAT-016).
+      const tool = dynamic ?? (step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } }
+        : step.startsWith('readfile:') ? { name: 'read_file', args: { path: step.slice('readfile:'.length) } }
+        : TOOL_STEPS[step]);
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
         yield ok<StreamPart>({ kind: 'text', delta: `Calling ${tool.name}. ` });
         yield ok<StreamPart>({ kind: 'tool-call', callId, name: tool.name, argsDelta: JSON.stringify(tool.args) });

@@ -1,4 +1,4 @@
-import { stepsPhrase, type ApprovalPayload, type QuestionPrompt, type TranscriptRow } from '@rotaris/contracts';
+import { parseSkillLoadMarker, stepsPhrase, type ApprovalPayload, type QuestionPrompt, type TranscriptRow } from '@rotaris/contracts';
 import { DIFF_LINE_CAP, GROUP_BLOB_CAP, THINKING_STALE_SECONDS } from './constants.js';
 import type { ActivitySegment, DisplayRow, OutcomeCounts, TrailerRow } from './types.js';
 
@@ -278,6 +278,13 @@ function agentKey(row: TranscriptRow): string {
  */
 function closesEveryRun(row: TranscriptRow): boolean { return row.kind === 'user' || agentKey(row) === ''; }
 
+/**
+ * PD-CHAT-016 clause 6: a skill-load marker is drawn where it stands and ends NO run — not every run, as a row naming no
+ * agent would, and not its own agent's, as any other row of that agent would. The activity line it interrupts keeps
+ * counting across it, and because a run sits at its earliest member, the marker draws beneath that line.
+ */
+function passesThroughRuns(row: TranscriptRow): boolean { return row.kind === 'system' && parseSkillLoadMarker(row.body) !== null; }
+
 /** PD-CHAT-004: the activity word a member contributes — `reasoning`, or REQ-CHAT-064's family word. */
 function segmentLabel(row: TranscriptRow): string {
   return isReasoningRow(row) ? REASONING_SEGMENT : familyOf(row.toolName ?? row.body);
@@ -492,6 +499,7 @@ function foldRuns(rows: readonly TranscriptRow[], groupTools: boolean, showReaso
       run.members.push(row);
       continue;
     }
+    if (passesThroughRuns(row)) { slots.push({ row }); continue; }
     if (closesEveryRun(row)) open.clear(); else open.delete(agentKey(row));
     slots.push({ row });
   }
@@ -616,6 +624,7 @@ function cleanCut(rows: readonly TranscriptRow[], b: number, o: Pick<ProjectOpti
     thinking.saw(raw);
     if (repeat) continue;
     const row = settle(raw, o.running);
+    if (passesThroughRuns(row)) continue;
     if (closesEveryRun(row)) break;
     const key = agentKey(row);
     if (!runnable(row, o.showReasoning)) { closedAbove.add(key); continue; }
@@ -631,6 +640,7 @@ function cleanCut(rows: readonly TranscriptRow[], b: number, o: Pick<ProjectOpti
     // below it.
     if (isUnstampedThinking(raw) && repeatsReasoning(raw, lastThinkingOf(rows, i, thinkingAgent(raw)))) continue;
     const row = settle(raw, o.running);
+    if (passesThroughRuns(row)) continue;
     if (closesEveryRun(row)) break;
     const key = agentKey(row);
     if (!runnable(row, o.showReasoning)) { reach.delete(key); continue; }

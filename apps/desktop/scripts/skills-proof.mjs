@@ -33,6 +33,9 @@
  *                        a link (REQ-CHAT-076). The run host logs the row it wrote.
  *   1d. listing-reopen — the same session reopened from the session browser in a new launch: the row is still
  *                        there, read back from the store, and nothing was listed again.
+ *   1e. marker         — PD-CHAT-016: a scripted agent reads `home-skill`'s SKILL.md twice (outside the workspace, through
+ *                        the skill read root) and then `/kept` is typed: exactly two skill-load markers, the agent's and
+ *                        "by you", and the run host logs the force-load as marked.
  *
  * Evidence under `.proof/skills-proof/`: one PNG and one log per launch, plus `results.json`.
  * `--skip-build` skips the build.
@@ -67,6 +70,8 @@ const PROBES = [
   '[data-testid="row-system"] [data-testid="skill-listing"]',
   '[data-testid="skill-listing-entry"]',
   '[data-testid="skill-listing-entry"] .md__link',
+  // PD-CHAT-016: the skill-load marker, inside the system notice that carries it.
+  '[data-testid="row-system"] [data-testid="skill-load-marker"]',
 ];
 
 const results = [];
@@ -255,6 +260,29 @@ if (reread[0].data['data-count'] !== listed[0].data['data-count'] || reread[0].d
 if (!listingReopen.log.includes(`capture: opened session "${listingSession}" from the browser`)) fail(`the launch did not reopen session ${listingSession}`);
 if (/skills: listed \d+ skill/.test(listingReopen.log)) fail('the reopened launch listed the skills again instead of reading the saved row');
 results.push({ launch: 'listing-reopen', session: listingSession, count: reread[0].data['data-count'] });
+
+// ── 1e. the skill-load marker — PD-CHAT-016 ──────────────────────────────────────────────────────────────
+// The scripted orchestrator reads home-skill's SKILL.md twice (clause 2: one marker for the agent's run);
+// then `/kept` force-loads a skill, which marks "by you" and shows no toast (clause 4).
+const homeSkillFile = join(scratch.home, '.agents', 'skills', 'home-skill', 'SKILL.md');
+const markerWait = `js:document.querySelectorAll('[data-testid="row-system"] [data-testid="skill-load-marker"]').length >= 2`;
+const markerLaunch = await launch('marker', workspace, {
+  ROTARIS_SCRIPT: `readfile:${homeSkillFile},readfile:${homeSkillFile},answer`,
+  ROTARIS_CAPTURE_PROMPT: 'Use the home skill.',
+  ROTARIS_CAPTURE_TYPE: '/kept>>composer@9000',
+  ROTARIS_CAPTURE_WAIT: markerWait,
+  ROTARIS_CAPTURE_WAIT_MS: '45000',
+  ROTARIS_CAPTURE_AFTER_MS: '900',
+}, 180_000);
+const markers = rows(markerLaunch.probes, '[data-testid="row-system"] [data-testid="skill-load-marker"]');
+if (markers.length !== 2) fail(`the launch drew ${markers.length} skill-load markers, not the agent's one and the user's one: ${JSON.stringify(markers.map((m) => m.data))}`);
+const byAgent = markers.find((m) => m.data['data-skill'] === 'home-skill');
+const byUser = markers.find((m) => m.data['data-skill'] === 'kept');
+if (!byAgent || byAgent.data['data-by'] === 'you' || (byAgent.data['data-by'] ?? '') === '') fail(`the agent's read of home-skill was not marked as the agent's: ${JSON.stringify(markers.map((m) => m.data))}`);
+if (!byUser || byUser.data['data-by'] !== 'you') fail(`the force-load of kept was not marked "by you": ${JSON.stringify(markers.map((m) => m.data))}`);
+if (!byAgent.text.startsWith('Skill loaded') || !byAgent.text.includes('home-skill')) fail(`the agent's marker reads ${JSON.stringify(byAgent.text)}`);
+if (!markerLaunch.log.includes("skills: 'kept' force-load marked in session")) fail('the run host did not log the force-load as marked');
+results.push({ launch: 'marker', markers: markers.map((m) => ({ text: m.text, ...m.data })) });
 
 // ── 2. policy ───────────────────────────────────────────────────────────────────────────────────────
 /*

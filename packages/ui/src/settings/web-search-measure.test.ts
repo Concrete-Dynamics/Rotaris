@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
- * C3 and C7 on the web search panel (the guided card until R-118) (UI review of PR #76, 2026-11-09).
+ * C3 and C7 on the web search panel (the guided card until R-119) (UI review of PR #76, 2026-11-09).
  *
  * The review measured the card's key field at **1003.36 px** at 1400×900 (603 px at 1000×680) — the card's whole
  * content width, for a value a short key fills — while `--rt-field-min` is **140 px**; and its prose at the same

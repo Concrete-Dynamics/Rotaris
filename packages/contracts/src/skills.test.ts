@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  clipSkillDescription, parseSkillListing, skillListing, skillListingBody, skillListingCountText,
-  SKILL_LISTING_DESCRIPTION_CAP, type SkillRow,
+  clipSkillDescription, parseSkillListing, parseSkillLoadMarker, skillListing, skillListingBody, skillListingCountText,
+  skillLoadMarkerBody, SKILL_LISTING_DESCRIPTION_CAP, type SkillRow,
 } from './skills.js';
 
 const row = (over: Partial<SkillRow> = {}): SkillRow => ({
@@ -100,5 +100,32 @@ describe('REQ-CHAT-162 — one row text, written once and read back by the rende
   it('a path holding a line break cannot be carried unambiguously, and the row falls back to text rather than lying', () => {
     const body = skillListingBody(skillListing([row({ path: '/odd\npath/SKILL.md' })]));
     expect(parseSkillListing(body)).toBeNull();
+  });
+});
+
+describe('PD-CHAT-016 — the skill-load marker', () => {
+  it('says which skill and which agent loaded it, as one sentence', () => {
+    expect(skillLoadMarkerBody('impeccable', { kind: 'agent', agent: 'Planner' })).toBe('Skill loaded: impeccable — by Planner');
+    expect(skillLoadMarkerBody('impeccable', { kind: 'user' })).toBe('Skill loaded: impeccable — by you');
+  });
+  it('flattens a line break so the row is always one line', () => {
+    expect(skillLoadMarkerBody('a\nb', { kind: 'agent', agent: 'Lead\n Dev' })).toBe('Skill loaded: a b — by Lead Dev');
+  });
+  it('parses back into its parts, each at its offset in the body', () => {
+    const body = skillLoadMarkerBody('pdf-tools', { kind: 'agent', agent: 'Planner' });
+    const m = parseSkillLoadMarker(body)!;
+    expect(m.skill.text).toBe('pdf-tools');
+    expect(body.slice(m.skill.start, m.skill.start + m.skill.text.length)).toBe('pdf-tools');
+    expect(m.by.text).toBe('Planner');
+    expect(body.slice(m.by.start)).toBe('Planner');
+    expect(m.byUser).toBe(false);
+    expect(parseSkillLoadMarker(skillLoadMarkerBody('pdf-tools', { kind: 'user' }))!.byUser).toBe(true);
+  });
+  it('is null for every other system row', () => {
+    expect(parseSkillLoadMarker('Context compressed for Planner — budget')).toBeNull();
+    expect(parseSkillLoadMarker('Skill loaded: ')).toBeNull();
+    expect(parseSkillLoadMarker('Skill loaded: x — by ')).toBeNull();
+    expect(parseSkillLoadMarker('Skill loaded: x — by y\nmore')).toBeNull();
+    expect(parseSkillLoadMarker(skillListingBody(skillListing([row()])))).toBeNull();
   });
 });

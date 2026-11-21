@@ -261,7 +261,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
      */
     forceLoadSkill: async (name) => {
       const r = await bridge.command({ kind: 'skills.forceLoad', name });
-      return r.ok ? { ok: true as const } : { ok: false as const, reason: r.detail ?? r.headline };
+      // PD-CHAT-016 clause 4: `marked` — the load wrote its marker into the followed session, so no toast follows.
+      return r.ok ? { ok: true as const, marked: (r.value as { marked?: boolean } | undefined)?.marked === true } : { ok: false as const, reason: r.detail ?? r.headline };
     },
     /*
      * REQ-CHAT-162 — `/skill <path>`. The same command main answers for the Settings action, with the path
@@ -271,8 +272,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     loadSkillFile: async (path) => {
       const r = await bridge.command({ kind: 'skills.loadFile', path });
       if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
-      const outcome = r.value as { cancelled: boolean; name?: string };
-      return outcome.name === undefined ? { ok: false as const, reason: 'The skill was not loaded.' } : { ok: true as const, name: outcome.name };
+      const outcome = r.value as { cancelled: boolean; name?: string; marked?: boolean };
+      return outcome.name === undefined ? { ok: false as const, reason: 'The skill was not loaded.' } : { ok: true as const, name: outcome.name, marked: outcome.marked === true };
     },
     /*
      * REQ-CHAT-162 — `/skills`. Main names the followed session (a window following none is refused there, OQ-67);
@@ -1734,7 +1735,7 @@ function useMcp(): McpSettingsProps {
     onRefresh: () => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); },
     onSecretsServer: (server) => { setSecretsServer(server); },
     setup,
-    // The web search panel's presses (R-118), bound to this window's bridge. The re-read after a write is the listing
+    // The web search panel's presses (R-119), bound to this window's bridge. The re-read after a write is the listing
     // and BOTH secrets views together (B1's write fires main's existing `mcp.reload`, so the row refreshes without a
     // restart), answering its outcome so a refused read reaches the panel as `refreshFailure`. `enable` is the row
     // switch's own durable ON press (PD-CONFIG-006 revision 2): Save and test hands it the freshly listed row.

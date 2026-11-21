@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
@@ -119,7 +119,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   let portClock = new FakeClock();
   /** PD-ORCH-005 clause 9: the presenter fact as the quit leaves it — no window, the quit under way. */
   const presence = { attended: true, quitting: false };
-  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence' | 'hooks' | 'pendingQuestionsOfSession' | 'pendingApprovalsOfSession'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
+  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence' | 'hooks' | 'pendingQuestionsOfSession' | 'pendingApprovalsOfSession'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}, portDeps: Pick<ToolPortDeps, 'skillAt'> = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin, surface.tools ?? null));
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
@@ -133,6 +133,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
       nextSequence: () => 1, fileStates: new Map(), terminal: null,
       egress: () => permissivePolicyRead,
       quitting: () => presence.quitting,
+      ...portDeps,
       // A stand-in MCP host whose one server offers the given executors (ADR-0034's surface, without a server process).
       ...(surface.mcp ? {
         mcp: { prepare: async () => undefined, surfaceFor: () => ({ persona: 'coding-agent', active: [], dropped: [] }), section: () => '', executorsFor: () => [...(surface.mcp ?? [])] } as unknown as McpHost,
@@ -260,6 +261,34 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     const written = await port.dispatch(call('src/ui/view.ts'), new AbortController().signal);
     expect(written.status).toBe('ok');
     expect(asked).toEqual(['src/api/users.ts', 'src/ui/view.ts']);
+  });
+
+  it('PD-CHAT-016: a settled read of a catalogued SKILL.md marks the skill once per agent per port, and nothing else does', async () => {
+    mkdirSync(join(dir, 'skills', 'alpha'), { recursive: true });
+    writeFileSync(join(dir, 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: A.\n---\nALPHA\n');
+    writeFileSync(join(dir, 'skills', 'alpha', 'notes.md'), 'sibling\n');
+    const skillFile = realpathSync(join(dir, 'skills', 'alpha', 'SKILL.md'));
+    const skillAt = (path: string) => { try { return realpathSync(path) === skillFile ? 'alpha' : null; } catch { return null; } };
+    const read = (port: ReturnType<typeof portFor>, id: string, path: string, name = 'read_file') =>
+      port.dispatch({ callId: id, name, rawArgs: JSON.stringify({ path }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
+    const markers = () => dal.residentRows(asSessionId('S1')).filter((r) => r.kind === 'system');
+
+    const port = portFor(null, 'autonomous', {}, { tools: '[read_file, haet_read]' }, { skillAt });
+    expect((await read(port, 'r1', 'skills/alpha/SKILL.md')).status).toBe('ok');
+    expect((await read(port, 'r2', join(dir, 'skills', 'alpha', 'SKILL.md'), 'haet_read')).status).toBe('ok');
+    expect((await read(port, 'r3', 'skills/alpha/notes.md')).status).toBe('ok');
+    expect((await read(port, 'r4', 'skills/beta/SKILL.md')).status).not.toBe('ok');
+    expect(markers().map((r) => [r.body, r.name, r.persona, r.settled])).toEqual([['Skill loaded: alpha — by coding-agent', 'coding-agent', 'coding-agent', 1]]);
+
+    // A later run builds a new port for the agent: the same read marks again (clause 2).
+    const next = portFor(null, 'autonomous', {}, { tools: '[read_file]' }, { skillAt });
+    expect((await read(next, 'r5', 'skills/alpha/SKILL.md')).status).toBe('ok');
+    expect(markers()).toHaveLength(2);
+
+    // With no skill host, no read is a skill's load.
+    const bare = portFor(null, 'autonomous', {}, { tools: '[read_file]' });
+    expect((await read(bare, 'r6', 'skills/alpha/SKILL.md')).status).toBe('ok');
+    expect(markers()).toHaveLength(2);
   });
 
   it('PD-ORCH-005 clause 9 through the port: a rest withdraws the approval a call waits on, and the call reaches the turn marked interrupted', async () => {

@@ -8,7 +8,7 @@ import { CODE_INTELLIGENCE_TOKEN } from './commands.js';
  *   - `web_search`: http, Tavily's hosted MCP endpoint (`WEB_SEARCH_DEFAULT_URL`), the URL carrying
  *     `${ROTARIS_SEARCH_API_KEY}` as Tavily's own `tavilyApiKey` parameter (substituted per REQ-MCP-088), `request_timeout`
  *     600, `enabled: false`. Until 2026-11-21 the url named `search.rotaris.invalid`, an example host that could never
- *     answer, so no user had search without declaring an entry of their own (R-118); a real endpoint makes the stored
+ *     answer, so no user had search without declaring an entry of their own (R-119); a real endpoint makes the stored
  *     key alone sufficient, which is what REQ-MCP-111 asks of the key control.
  *   - `browser`: stdio `npx -y @playwright/mcp@0.0.80 --headless` — the Playwright MCP server (Apache-2.0), pinned to an
  *     exact MAJOR.MINOR.PATCH (never a range or a tag), headless selected; `enabled: false`. The setup manifest of
@@ -27,7 +27,7 @@ import { CODE_INTELLIGENCE_TOKEN } from './commands.js';
  * No other field is set on any of the three (REQ-MCP-010).
  */
 export const WEB_SEARCH_KEY_VARIABLE = 'ROTARIS_SEARCH_API_KEY' as const;
-/** R-118: the shipped search endpoint — Tavily's hosted MCP server, which takes its API key in the url. */
+/** R-119: the shipped search endpoint — Tavily's hosted MCP server, which takes its API key in the url. */
 export const WEB_SEARCH_DEFAULT_URL = `https://mcp.tavily.com/mcp/?tavilyApiKey=\${${WEB_SEARCH_KEY_VARIABLE}}`;
 export const BROWSER_PACKAGE = '@playwright/mcp' as const;
 export const BROWSER_PACKAGE_VERSION = '0.0.80' as const;

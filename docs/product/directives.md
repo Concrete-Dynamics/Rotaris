@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and forty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and forty-six.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -48,6 +48,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-CHAT-013](directives/pd-chat-013.md) | a tool call held for approval reads `waiting`, not `running` |
 | [PD-CHAT-014](directives/pd-chat-014.md) | a pending question states the bound on its wait, and a timed-out question states how long it waited |
 | [PD-CHAT-015](directives/pd-chat-015.md) | the transcript is the run's conversation and its threads, and a row is a turn with one left edge |
+| [PD-CHAT-016](directives/pd-chat-016.md) | a skill entering an agent's context is marked in the transcript, once per agent per run |
 
 ### CONFIG
 

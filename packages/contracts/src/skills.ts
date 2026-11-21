@@ -292,6 +292,8 @@ export const SkillLoadOutcomeSchema = z.object({
   /** The normalized name of the skill that was loaded; absent when the chooser was dismissed. */
   name: z.string().optional(),
   state: SkillsStateSchema.optional(),
+  /** PD-CHAT-016 clause 4: the load wrote its skill-load marker into the followed session's transcript. */
+  marked: z.boolean().optional(),
 });
 export type SkillLoadOutcome = z.infer<typeof SkillLoadOutcomeSchema>;
 
@@ -299,3 +301,45 @@ export type SkillLoadOutcome = z.infer<typeof SkillLoadOutcomeSchema>;
 export const SKILLS_DISABLED_MESSAGE = 'Skills are disabled. Enable them in Settings.';
 /** REQ-WORKSPACE-073 / REQ-CHAT-034's toast. */
 export const skillLoadedToast = (name: string): string => `Skill loaded for the next prompt: ${name}`;
+
+/**
+ * PD-CHAT-016 — the skill-load marker: the system-notice row that marks a skill entering an agent's context, with who
+ * loaded it. Its text is the sentence it says — `Skill loaded: <name> — by <agent name>`, or `— by you` for the user's
+ * force-load — so the trajectory export and a transcript search read it as written; the renderer recognises the row by
+ * this shape (REQ-CHAT-162's listing is the precedent) and draws it as one quiet line.
+ */
+export type SkillLoadedBy = { readonly kind: 'agent'; readonly agent: string } | { readonly kind: 'user' };
+const SKILL_LOAD_PREFIX = 'Skill loaded: ';
+const SKILL_LOAD_BY = ' — by ';
+const SKILL_LOAD_BY_USER = 'you';
+
+/** PD-CHAT-016 clause 3: the marker's text. A line break in either part is flattened, so the row is always one line. */
+export function skillLoadMarkerBody(skill: string, by: SkillLoadedBy): string {
+  const flat = (t: string) => t.replace(/\s+/g, ' ').trim();
+  return `${SKILL_LOAD_PREFIX}${flat(skill)}${SKILL_LOAD_BY}${by.kind === 'user' ? SKILL_LOAD_BY_USER : flat(by.agent)}`;
+}
+
+/** A parsed marker: each part with its offset in the body, so a search match can be drawn inside the part it falls in. */
+export interface ParsedSkillLoadMarker {
+  readonly lead: SkillListingSpan;
+  readonly skill: SkillListingSpan;
+  readonly by: SkillListingSpan;
+  readonly byUser: boolean;
+}
+
+/** PD-CHAT-016: the marker's text taken apart, or `null` for any other system row. */
+export function parseSkillLoadMarker(body: string): ParsedSkillLoadMarker | null {
+  if (!body.startsWith(SKILL_LOAD_PREFIX) || body.includes('\n')) return null;
+  const at = body.lastIndexOf(SKILL_LOAD_BY);
+  if (at <= SKILL_LOAD_PREFIX.length) return null;
+  const skill = body.slice(SKILL_LOAD_PREFIX.length, at);
+  const byStart = at + SKILL_LOAD_BY.length;
+  const by = body.slice(byStart);
+  if (skill.trim() === '' || by.trim() === '') return null;
+  return {
+    lead: { text: 'Skill loaded', start: 0 },
+    skill: { text: skill, start: SKILL_LOAD_PREFIX.length },
+    by: { text: by, start: byStart },
+    byUser: by === SKILL_LOAD_BY_USER,
+  };
+}

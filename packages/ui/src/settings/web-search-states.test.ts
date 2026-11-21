@@ -7,7 +7,7 @@ import { SettingsPageContext } from './page.js';
 import { WEB_SEARCH_ABOUT, WEB_SEARCH_KEY_VARIABLE, WEB_SEARCH_SERVER } from './web-search-setup.js';
 
 /**
- * THE WEB SEARCH PANEL'S STATES, rendered (R-118; `renderToStaticMarkup` as `skills-fatal.test.ts`). Each case asserts
+ * THE WEB SEARCH PANEL'S STATES, rendered (R-119; `renderToStaticMarkup` as `skills-fatal.test.ts`). Each case asserts
  * what the state must show and what it must not, and states the one reason it can fail for. REQ-SHELL-149: each state is
  * text; REQ-MCP-110: the field never carries a stored value; REQ-CONFIG-424/478: with no service or a fatal load nothing
  * is pressable; §1.7: one filled control in every state.

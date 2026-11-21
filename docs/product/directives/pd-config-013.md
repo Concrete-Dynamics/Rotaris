@@ -25,7 +25,7 @@ instruction files' overrides); this case — one field of one tool-server entry 
 
 **Why, and what it costs.** The owner asked for the search setup to stop being awkward and chose, of the two paths put
 to them, both: the shipped default made to work with a key alone (no directive), then this. Every harness surveyed for
-R-118 that offers a choice of search provider makes it a setting, not a file edit; the stanza to copy by hand was the
+R-119 that offers a choice of search provider makes it a setting, not a file edit; the stanza to copy by hand was the
 pattern they avoid. REQ-CONFIG-350's reason — a tool server's declaration carries a command line or an address and is
 reviewed as configuration — is met narrowly rather than dropped: the screen writes one address, of the one entry the
 product ships for this purpose, from a list it shows or from an address the user typed, and the write lands in the
@@ -36,4 +36,4 @@ written by it; the line now has one named exception, and the panel says in words
 > **Extends:** REQ-MCP-111
 
 *Raised by the owner, 2026-11-21, in conversation ("A, then B", over a plan whose path B was this); logged as
-[R-118](../requests.md#r-118). Minted by the agent that built it (`claude-opus-5-5`).*
+[R-119](../requests.md#r-119). Minted by the agent that built it (`claude-opus-5-5`).*

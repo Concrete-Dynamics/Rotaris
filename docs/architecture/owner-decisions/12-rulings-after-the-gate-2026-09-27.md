@@ -9,6 +9,9 @@ each recommendation as written in `first-release-plan.md` §2.1 and §3.1. Each 
 already built, so the rulings change requirement text and no behaviour.*
 
 - ESC-37, ESC-38, ESC-39 — the three portable-skill escalations; ruled 2026-09-27; [archived](../../archive/architecture/owner-decisions/12-rulings-after-the-gate-2026-09-27.md#esc-37)
+  - **ESC-37 revised by the owner, 2026-11-21 ([R-118](../../product/requests.md#r-118)).** "No in-context indicator … anywhere"
+    no longer forbids an event row: [`PD-CHAT-016`](../../product/directives/pd-chat-016.md#pd-chat-016) marks a skill's load in the
+    transcript. No standing per-skill indicator and no composer chip exist; the rest of the ruling stands.
 
 ### OQ-64 — an instruction override suppresses its base only while it is switched on, ruled
 

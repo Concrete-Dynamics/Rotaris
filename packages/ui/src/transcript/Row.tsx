@@ -1,5 +1,5 @@
 import { createContext, useContext, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { parseSkillListing, type ImageAttachment, type ParsedSkillListing, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
+import { parseSkillListing, parseSkillLoadMarker, type ImageAttachment, type ParsedSkillListing, type ParsedSkillLoadMarker, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
 import { Markdown } from '../markdown/Markdown.js';
 import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
@@ -383,6 +383,13 @@ function blockRole(d: DisplayRow): string {
 
 const isToolRow = (d: DisplayRow): boolean => d.shape === 'row' && d.row.kind === 'tool';
 const isDiffRow = (d: DisplayRow): boolean => d.shape === 'row' && d.row.kind === 'diff';
+/** PD-CHAT-016: a skill-load marker, the system row recognised by its text (`parseSkillLoadMarker`). */
+const isSkillLoadMarkerRow = (d: DisplayRow): boolean => d.shape === 'row' && d.row.kind === 'system' && parseSkillLoadMarker(d.row.body) !== null;
+/**
+ * A row that belongs to the turn it stands in: it draws no heading of its own and the agent's next row is not a new
+ * block. An edit diff (PD-CHAT-015) and a skill-load marker (PD-CHAT-016 clause 6, as the fold already reads it).
+ */
+const standsInTurn = (d: DisplayRow): boolean => isDiffRow(d) || isSkillLoadMarkerRow(d);
 /** PD-CHAT-015: the lines of an edit diff drawn before the reader asks for the rest — its heading line and five of the change. */
 export const DIFF_PREVIEW_LINES = 6;
 
@@ -424,13 +431,13 @@ export function placementsFrom(previous: Placed | null, display: readonly Displa
     }
   }
   // PD-CHAT-015: an edit diff belongs to the turn it stands in — it draws no heading of its own and the agent's next
-  // row is not a new block — so the role "above" is read past any diff rows.
+  // row is not a new block — so the role "above" is read past any diff rows. PD-CHAT-016: and past a skill-load marker.
   let before = first - 1;
-  while (before >= 0 && isDiffRow(display[before]!)) before -= 1;
+  while (before >= 0 && standsInTurn(display[before]!)) before -= 1;
   let above = before >= 0 ? blockRole(display[before]!) : '';
   for (let i = first; i < display.length; i += 1) {
     const d = display[i]!;
-    if (isDiffRow(d) && above !== '') { places.push({ blockStart: false, recentTool: recent.has(i) }); continue; }
+    if (standsInTurn(d) && above !== '') { places.push({ blockStart: false, recentTool: recent.has(i) }); continue; }
     const role = blockRole(d);
     places.push({ blockStart: i === 0 || role !== above || d.shape === 'trailer', recentTool: recent.has(i) });
     above = role;
@@ -666,6 +673,25 @@ function SkillListingBlock({ listing, match, onOpenLink }: { listing: ParsedSkil
           ))}
         </ol>
       )}
+    </div>
+  );
+}
+
+/**
+ * PD-CHAT-016 — the skill-load marker: one quiet line in the system notice's rule — `Skill loaded`, the skill's name, who
+ * loaded it — never wrapping; the name and the agent elide before the line would, and the row's whole sentence is its
+ * title. Every part is drawn through `PlainText` at its offset in the body, so a search match lands in the part it is in.
+ */
+const SKILL_LOAD_LAYOUT = { id: 'skill-load-marker', relations: [{ kind: 'text-fit', axis: 'x' }] } satisfies UiLayoutContract;
+
+function SkillLoadMarkerLine({ marker, body, match, onOpenLink }: { marker: ParsedSkillLoadMarker; body: string; match: RowRenderProps['match']; onOpenLink: ((href: string) => void) | undefined }) {
+  const field = (span: SkillListingSpan) => <PlainText text={span.text} match={spanMatch(match, span)} onOpenLink={onOpenLink} />;
+  return (
+    <div className="row__body skill-load" data-testid="skill-load-marker" data-skill={marker.skill.text} data-by={marker.byUser ? 'you' : marker.by.text} title={body} {...layoutContractAttributes(SKILL_LOAD_LAYOUT)}>
+      <span className="skill-load__lead">{field(marker.lead)}</span>
+      <span className="skill-load__name mono">{field(marker.skill)}</span>
+      {/* A flex item drops its leading space, so the separator's gap is the span's padding, not its text. */}
+      <span className="skill-load__by">{FACT_SEPARATOR.trim()} by {field(marker.by)}</span>
     </div>
   );
 }
@@ -931,8 +957,10 @@ export function Row(p: RowProps) {
   const markdown = isMessageRow(row);
   // REQ-CHAT-162: a system notice whose text is the `/skills` listing is drawn as the listing.
   const listing = row.kind === 'system' ? parseSkillListing(row.body) : null;
+  // PD-CHAT-016: a system notice whose text is a skill-load marker is drawn as the marker.
+  const marker = row.kind === 'system' && listing === null ? parseSkillLoadMarker(row.body) : null;
   return (
-    <article {...common} className={`row row--${row.kind}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
+    <article {...common} className={`row row--${row.kind}${marker !== null ? ' row--skill-load' : ''}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
       <div className="row__grid">
         <Attribution row={row} place={place} />
         <div className="row__main">
@@ -940,6 +968,8 @@ export function Row(p: RowProps) {
             ? <Markdown source={row.body} onOpenLink={surface.openLink} className="row__body row__body--md" testId="row-markdown" />
             : listing !== null
               ? <SkillListingBlock listing={listing} match={match} onOpenLink={surface.openLink} />
+              : marker !== null
+                ? <SkillLoadMarkerLine marker={marker} body={row.body} match={match} onOpenLink={surface.openLink} />
               : row.kind === 'diff'
                 ? <DiffBody body={row.body} expanded={expanded || match !== null} onToggle={p.onToggle} match={match} onOpenLink={surface.openLink} />
                 : <div className="row__body"><PlainText text={row.body} match={match} onOpenLink={surface.openLink} /></div>}

@@ -1061,6 +1061,29 @@ describe('PD-CHAT-004 — the activity line', () => {
       .toBe(JSON.stringify(projectDisplay(options(grown))));
   });
 
+  it('PD-CHAT-016 clause 6: a skill-load marker splits no activity line — its own agent\'s or another\'s — and draws beneath it', () => {
+    const marker = (index: number, over: Partial<TranscriptRow> = {}) => row(index, { kind: 'system', body: 'Skill loaded: alpha — by orchestrator', ...over });
+    const helper = { name: 'helper', persona: 'coding-agent' };
+    const rows = [row(0, { kind: 'user', name: '', persona: '' }), tool(1, 'read_file'), tool(2, 'grep', helper), marker(3), tool(4, 'read_file'), tool(5, 'grep', helper), tool(6, 'list_dir')];
+    const display = projectDisplay(options(rows));
+    expect(display.map((d) => d.shape)).toEqual(['row', 'group', 'group', 'row']);
+    expect(asGroup(display[1]).members.map((m) => m.index)).toEqual([1, 4, 6]);
+    expect(asGroup(display[2]).members.map((m) => m.index)).toEqual([2, 5]);
+    expect(asRow(display[3]).row.index).toBe(3);
+    // The user's force-load names no agent, and still closes nothing.
+    const byYou = [...rows.slice(0, 3), marker(3, { body: 'Skill loaded: alpha — by you', name: '', persona: '' }), ...rows.slice(4)];
+    expect(projectDisplay(options(byYou)).map((d) => d.shape)).toEqual(['row', 'group', 'group', 'row']);
+    // Any other system row still ends every run.
+    const other = [...rows.slice(0, 3), marker(3, { body: 'Context compressed for orchestrator — budget', name: '', persona: '' }), ...rows.slice(4)];
+    expect(projectDisplay(options(other)).map((d) => d.shape)).toEqual(['row', 'row', 'row', 'row', 'group', 'row']);
+    // The incremental path reads the marker as the fold does, at every cut.
+    const whole = projectDisplay(options(rows));
+    for (let from = 1; from < rows.length; from += 1) {
+      const seeded = projectDisplay(options(rows.slice(0, from)));
+      expect(JSON.stringify(projectDisplay(options(rows), { previous: seeded, from }))).toBe(JSON.stringify(whole));
+    }
+  });
+
   it('REQ-CHAT-167 on keeps reasoning OUT of the run, which is what keeps TranscriptPane\'s expansion shortcut sound', () => {
     const display = projectDisplay(options(alternating, { showReasoning: true }));
     expect(display.map((d) => d.shape)).toEqual(['row', 'group', 'row', 'group']);

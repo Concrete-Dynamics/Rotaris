@@ -111,6 +111,12 @@ normalized name, scope, trigger keywords, clipped description and `SKILL.md` pat
 with the session. It carries no in-context indicator. — `REQ-CHAT-162`
 _Avoid_: skill catalog (the model-facing block — [Workspace](../workspace/CONTEXT.md)'s term)
 
+**Skill-load marker**:
+The system-notice row that marks a skill entering an agent's context — the agent's read of its catalogued `SKILL.md`,
+or the user's [force-load](../workspace/CONTEXT.md) — saying which skill and who loaded it; once per agent per run, saved
+with the session. It records an event, not a present state. — `PD-CHAT-016`
+_Avoid_: banner (the update banner's word), notice (the persistent notice slot's), in-context indicator
+
 **Transcript**:
 The live rendering of a session's rows. There is exactly one transcript store, on disk or anywhere
 else, and the transcript projects from it. — `REQ-CHAT-165`, `REQ-CHAT` transcript model and

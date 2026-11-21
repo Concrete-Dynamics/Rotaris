@@ -20,7 +20,7 @@ import {
  * The "Configured servers" card lists EVERY configured server, disabled ones included, with the four-state health as
  * text beside the indicator, the `{name} · {type}` label, the masked muted line, the origin word and the toggle; the
  * header's "Check status" probes sequentially through the run host; the secrets card is the READ side, and since
- * 2026-11-09 the WRITE side of REQ-MCP-110/111 is built — the `Web search` panel below (R-118) stores,
+ * 2026-11-09 the WRITE side of REQ-MCP-110/111 is built — the `Web search` panel below (R-119) stores,
  * replaces and deletes the built-in server's key through `mcp.setSecret`/`mcp.unsetSecret` (B1).
  *
  * ADR-0035 (Part T): the "Code intelligence" card carries REQ-MCP-112's action for THIS workspace — "Set up code
@@ -205,7 +205,7 @@ function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null;
 }
 
 /**
- * THE WEB SEARCH PANEL (R-118, 2026-11-21) — REQ-MCP-111's dedicated key control with REQ-MCP-110's add, replace and
+ * THE WEB SEARCH PANEL (R-119, 2026-11-21) — REQ-MCP-111's dedicated key control with REQ-MCP-110's add, replace and
  * delete and its scope choice, REQ-MCP-092's single-server probe with REQ-CONFIG-353's vocabulary as TEXT beside the
  * indicator (REQ-SHELL-149), and PD-CONFIG-006 revision 2's one-press enable. It replaced a four-step card: what a user
  * of the shipped default does is paste a key and press one button, so the panel is three ledger rows — the provider the

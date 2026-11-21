@@ -27,7 +27,7 @@ transcript's one renderer (`.claude/rules/ui-surfaces.md`).
 
 ## Repaired
 
-2026-11-21, under [R-118](../../product/requests.md#r-118). The web search panel that replaced the guided card no longer
+2026-11-21, under [R-119](../../product/requests.md#r-119). The web search panel that replaced the guided card no longer
 says "`Set up web search`" or "`web_search` … `mcp_servers`" in backticks: its sentences name the server and the key
 in plain words. The Configured servers card's statement draws `enabled: true` as `<code className="mono">`, the form
 the Stored secrets card already uses for `secrets.yaml`.

@@ -37,5 +37,11 @@ exists for. Opening the board is a read: nothing is written and no model is cons
 
 | Part | Sections | Requirements it defines |
 |---|---|---|
-| [01](22-requirements-adoption/01-requirements.md) | The surface; The detection pass; The adapter; Executing and recording; The comparison on opening; Progress and refusal | REQ-ADOPT-001 – REQ-ADOPT-030 (30) |
-| [02](22-requirements-adoption/02-data-formats.md) | Data & Formats; The detection result; The interpretation; The adoption record; The comparison | — |
+| [01](22-requirements-adoption/01-requirements.md) | The surface; The detection pass; The adapter; Executing and recording; The comparison on opening; Progress and refusal; The surveyed shape; The survey; The board through a shape; Write-back; Staying current | REQ-ADOPT-001 – REQ-ADOPT-052 (52) |
+| [02](22-requirements-adoption/02-data-formats.md) | Data & Formats; The detection result; The interpretation; The adoption record; The comparison; The shape; The shape record; The survey's actions and its preview | — |
+
+Since 2026-11-21 ([`PD-TRACE-002`](../product/directives/pd-trace-002.md#pd-trace-002), [R-116](../product/requests.md#r-116))
+the domain also holds the **surveyed shape**: a repository's own requirement form, proposed by a bounded read-only
+agent, previewed and accepted, through which every extracted requirement is drawn as a card, and under which a
+document's status word and acceptance criteria are read and written back (REQ-ADOPT-031 to REQ-ADOPT-052).
+

@@ -1,7 +1,7 @@
 ## The requirements board hears of no change made outside its own commands, and nothing watches the repository
 
 Found on 2026-11-11 by the critiques of the Requirements board's foot (UIR-401 and UIR-502,
-[the requirements-board brief](../design/briefs/requirements-board.md)) while its sentence was being reworded; read in
+[the requirements-board brief](../../design/briefs/requirements-board.md)) while its sentence was being reworded; read in
 the source, not driven. Not repaired: the foot now says what holds, and a watcher is a mechanism of its own.
 
 The board is told of a change on one channel, and that channel is written from two places only: main's relay
@@ -26,3 +26,15 @@ route to a current board", which is what the build has in the watcher's place.
 - `apps/desktop/src/main/requirements.ts`, `apps/desktop/src/main/requirements-runs.ts` — the two senders.
 - `apps/desktop/src/workspace-service/delivery.ts` — `refresh`, and where it is called.
 - `packages/ui/src/requirements/model.ts` — `SUBSCRIPTION_SENTENCE`, which states the limit to the reader.
+
+## Repaired 2026-11-21 (PD-TRACE-002 clause 10, REQ-ADOPT-051)
+
+The workspace service now watches the store directory (of the built-in layout or of every store of the accepted
+shape), the shape file and the layout file, and reads the board again 400 ms after the last change it saw; main
+publishes the generation on channel 10 (`rewatch` and `onRepositoryChange` in
+`apps/desktop/src/workspace-service/delivery.ts`; the `requirements.changed` event). The board is also read again when
+the window regains focus and when a run started from the board ends. The measurement this note named was taken on the
+built application: a status word edited in a document from outside moved its card with nothing pressed, and
+`apps/desktop/src/workspace-service/surveyed-board.test.ts` holds it. Where the watch cannot be set or stops, the
+survey strip says the board is not watching, and Re-evaluate stays the guaranteed route. The foot's sentence
+(`SUBSCRIPTION_SENTENCE`) says what now holds.

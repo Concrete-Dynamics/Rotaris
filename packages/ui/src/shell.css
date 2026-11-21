@@ -2842,6 +2842,20 @@ strong { font-weight: var(--rt-weight-medium); }
 .req-adoption__row .btn, .req-adoption__check { flex: none; }
 .req-adoption__delta, .req-adoption__outcome { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--rt-text-secondary); }
 .req-adoption__label { color: var(--rt-text-tertiary); }
+/* PD-TRACE-002: the survey's preview, under the strip's one line; nothing is recorded until it is accepted. */
+.req-survey { display: flex; flex-direction: column; gap: var(--rt-space-2); padding-block: var(--rt-space-2); min-width: 0; font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.req-survey__lead { margin: 0; color: var(--rt-text-primary); font-size: var(--rt-text-sm); overflow-wrap: anywhere; }
+.req-survey__samples, .req-survey__unread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; }
+.req-survey__sample { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--rt-space-2); min-width: 0; overflow-wrap: anywhere; }
+.req-survey__sample > .card-meta, .req-survey__unread { text-align: start; }
+.req-survey__unread > li { text-align: start; }
+.req-survey__answer { min-height: calc(var(--rt-space-5) * 2); resize: vertical; }
+.req-survey__actions { display: flex; flex-wrap: wrap; gap: var(--rt-space-2); }
+.req-detail__criteria { display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; }
+.req-detail__criterion { min-width: 0; overflow-wrap: anywhere; }
+.req-pane__criteria { display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; }
+.req-pane__criteria-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2); }
+.req-pane__criterion { display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; overflow-wrap: anywhere; }
 /* The live region a screen reader hears uses the adopted `visually-hidden`; the visible words are the state line's. */
 /* The body: the columns area scrolls horizontally (REQ-TRACE-237); the detail is an aside beside it, never over it. */
 .req-body { flex: 1 1 auto; min-height: 0; display: flex; }

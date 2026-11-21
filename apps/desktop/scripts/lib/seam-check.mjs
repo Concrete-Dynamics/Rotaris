@@ -62,6 +62,8 @@ export const FORBIDDEN = [
   // Domain 22 (PD-TRACE-001, 2026-10-30): the adoption interpretation's own script, which chooses the answer the
   // adoption assistant composes its layout from. Read behind `__ROTARIS_SEAMS__`; a packaged build must not answer it.
   'ROTARIS_ADOPTION_SCRIPT',
+  // PD-TRACE-002 (2026-11-21): the survey's own script, which chooses the scripted surveyor's steps. Behind `__ROTARIS_SEAMS__` likewise.
+  'ROTARIS_SURVEY_SCRIPT',
   // fin46 (OQ-312, ruled 2026-10-14 under R-072): the scripted client itself, by the log line only it writes. A packaged build
   // answers no `provider: scripted` entry, so the client is compiled out with the seams and its module is not emitted
   // (docs/archive/defects/a-packaged-build-answers-a-scripted-provider-entry-with-the-scripted-client.md).

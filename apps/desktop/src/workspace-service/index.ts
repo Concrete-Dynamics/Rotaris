@@ -349,7 +349,7 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
         return { kind: 'requirements.result', value: await adoptionRun(req.workspaceRoot, req.command.mode, req.command.writeLayout === true, ask, clocks, log) };
       }
       const { engineFor } = await import('./traceability.js');
-      const r = await deliveryServiceFor(open, { workspaceRoot: req.workspaceRoot, engine: engineFor(clocks, log), clocks, log }).handle(req.command, req.actor, req.disclosure);
+      const r = await deliveryServiceFor(open, { workspaceRoot: req.workspaceRoot, engine: engineFor(clocks, log), clocks, log, ask, onChanged: (generation) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'requirements.changed', workspaceRoot: req.workspaceRoot, generation } }) }).handle(req.command, req.actor, req.disclosure);
       return { kind: 'requirements.result', value: r.value, ...(r.changed === undefined ? {} : { changed: r.changed }) };
     }
     // Part AJ

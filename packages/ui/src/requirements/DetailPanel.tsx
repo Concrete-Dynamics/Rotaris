@@ -2,7 +2,7 @@ import { useEffect, useId } from 'react';
 import type { BoardCard, BoardProjection, RelationToken, ReqId, RequirementDetail } from '@rotaris/contracts';
 import { RELATION_TOKENS } from '@rotaris/contracts';
 import { HEALTH_DERIVATION_SENTENCE, HEALTH_GLOSS, RELATION_LABEL, absoluteMoment, columnLabel, evidenceSegments, executionLine, relativeAge } from '@rotaris/ui-core';
-import { Button as DesignButton, Tag as DesignTag } from '../design-system/index.js';
+import { Button as DesignButton, Checkbox as DesignCheckbox, Tag as DesignTag } from '../design-system/index.js';
 
 /**
  * Part AK2 — the requirement detail view (REQ-TRACE-271..280, 276/277): exactly five sections, every one built on
@@ -37,6 +37,8 @@ export interface DetailPanelProps {
   readonly onOpenPane?: ((key: 'review' | 'blockers' | 'editor') => void) | undefined;
   /** Part R2 — REQ-TRACE-322: centre the relationship graph on this requirement. */
   readonly onOpenGraph?: ((id: ReqId) => void) | undefined;
+  /** PD-TRACE-002 clauses 6 and 7: tick or untick one acceptance criterion in the requirement's own document; absent, the criteria are read and not written. */
+  readonly onTickCriterion?: ((id: ReqId, index: number, text: string, checked: boolean) => void) | undefined;
 }
 
 export const DETAIL_SECTIONS = ['requirement', 'relations', 'execution', 'traceability', 'verification'] as const;
@@ -47,12 +49,15 @@ export const SECTION_EMPTY: Readonly<Record<(typeof DETAIL_SECTIONS)[number], st
   traceability: 'No implementation site or test site references this requirement, and it owes no evidence.',
   verification: 'No verification result, build result or requirement-check finding is recorded for this requirement.',
 });
+/** PD-TRACE-002 clause 6: what the board writes into a surveyed document, said where an edit control would stand. */
+export const SURVEYED_EDIT_SENTENCE = 'Read from its own document through the surveyed shape. The board writes a status word and a criterion\'s tick there; its title and text are edited in the file.';
+export const NO_STATUS_PLACE = 'The document has no place for a status; the delivery state is kept by the board.';
 export const HISTORY_UNAVAILABLE = 'Source history was not reported for this requirement, so the delivery history is what can be shown; whether the source keeps revisions is not known here.';
 export const HISTORY_READING = 'The history is being read…';
 export const HISTORY_NONE = 'No delivery action has been recorded for this requirement yet; the current revision is its only one.';
 const RELATION_NO_SOURCE: readonly RelationToken[] = ['supersedes', 'superseded-by', 'depends-on', 'blocks', 'refines', 'refined-by', 'conflicts-with', 'related-to'];
 
-export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onClose, onNavigate, onOpenEvidence, onOpenSession, onOpenPane, onOpenGraph }: DetailPanelProps) {
+export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onClose, onNavigate, onOpenEvidence, onOpenSession, onOpenPane, onOpenGraph, onTickCriterion }: DetailPanelProps) {
   const titleId = useId();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); } };
@@ -73,6 +78,8 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
   const lastChange = card.facts.find((f) => f.label === 'Last change')?.value;
   const relationsByKind = RELATION_TOKENS.map((kind) => ({ kind, ids: card.relations.filter((r) => r.kind === kind).map((r) => r.id) })).filter((g) => g.ids.length > 0);
   const history = detail === null ? 'reading' : detail.history;
+  const place = detail?.place;
+  const surveyed = board.surveyed !== undefined;
 
   return (
     <aside className="req-detail" data-testid="req-detail" data-req={card.id} role="dialog" aria-labelledby={titleId} aria-description={`Source ${card.sourcePath}. Hash not carried by the board value.`}>
@@ -99,7 +106,7 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
               into the source was "Part AP's and not built in this version"; Part AP built it and Part R2 hosts it, so
               that reason is falsified and is recorded as such in ADR-0041's third execution rather than kept here. */}
           {onOpenPane !== undefined && board.source.kind === 'store' && board.source.writable && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-edit" onClick={() => onOpenPane('editor')} aria-label={`Edit ${card.id} in its own source document`}>Edit</DesignButton>}
-          <span className="card-meta" data-testid="req-detail-editable">{board.source.kind === 'store' && board.source.writable ? 'Editable in place: the edit is written into this requirement\'s own source document.' : `Read-only here: this account cannot write into the requirement source, so ${card.id} is changed by editing ${card.sourcePath} directly and re-evaluating.`}</span>
+          <span className="card-meta" data-testid="req-detail-editable">{surveyed ? SURVEYED_EDIT_SENTENCE : board.source.kind === 'store' && board.source.writable ? 'Editable in place: the edit is written into this requirement\'s own source document.' : `Read-only here: this account cannot write into the requirement source, so ${card.id} is changed by editing ${card.sourcePath} directly and re-evaluating.`}</span>
         </div>
       </div>
       <div className="req-detail__body">
@@ -108,7 +115,8 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
           {detail === null ? <p className="req-detail__empty">{HISTORY_READING}</p> : detail.prose.trim() === '' ? <p className="req-detail__empty">{SECTION_EMPTY.requirement}</p> : <p className="req-detail__prose">{detail.prose}</p>}
           <dl className="req-detail__grid">
             <dt>Source</dt><dd className="mono">{card.sourceKey === '' ? 'unset' : card.sourceKey}</dd>
-            <dt>Path</dt><dd className="mono">{card.sourcePath}</dd>
+            <dt>Path</dt><dd className="mono" data-testid="req-detail-path">{card.sourcePath}{place === undefined ? '' : `:${place.line}${place.endLine > place.line ? `–${place.endLine}` : ''}`}</dd>
+            {place !== undefined && (<><dt>Document status</dt><dd data-testid="req-detail-document-status">{place.status === undefined ? NO_STATUS_PLACE : `${place.status.word}${place.status.delivery !== undefined ? ` — the shape reads it as ${columnLabel(place.status.delivery).toLowerCase()}` : place.status.lifecycle !== undefined ? ` — the shape reads it as ${place.status.lifecycle}` : ' — a word the shape gives no meaning'}`}</dd></>)}
             <dt>Hash</dt><dd>The board value does not carry the current hash; the engine compares it on every action (REQ-TRACE-402).</dd>
             <dt>Lifecycle</dt><dd>{card.lifecycle}</dd>
             <dt>Delivery</dt><dd>{columnLabel(card.column)}{card.returnTo ? ` (returns to ${columnLabel(card.returnTo)})` : ''}</dd>
@@ -118,6 +126,14 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
             <dt>Kind</dt><dd>{card.kind}{isEpic ? ', an epic' : ''}</dd>
             {lastChange !== undefined && (<><dt>Last change</dt><dd>{relativeAge(lastChange, now)} · {absoluteMoment(lastChange, localOffsetMinutes)}</dd></>)}
           </dl>
+          {place !== undefined && place.criteria.length > 0 && (
+            <div className="req-detail__criteria" data-testid="req-detail-criteria" role="group" aria-label={`Acceptance criteria of ${card.id}`}>
+              <span className="card-meta">Acceptance criteria — {place.criteria.filter((c) => c.checked).length} of {place.criteria.length} ticked in the document</span>
+              {place.criteria.map((c, i) => (
+                <DesignCheckbox key={`${c.line}-${i}`} className="check req-detail__criterion" data-testid="req-detail-criterion" checked={c.checked} disabled={onTickCriterion === undefined} onChange={(e) => onTickCriterion?.(card.id, i, c.text, e.currentTarget.checked)} label={c.text} title={`${card.sourcePath}:${c.line}`} />
+              ))}
+            </div>
+          )}
           {card.blocker && <p className="req-alert req-alert--stopped"><span className="req-alert__glyph" aria-hidden="true">■</span>Blocked ({card.blocker.kind}): {card.blocker.reason}</p>}
         </section>
         <section className="req-detail__section" data-testid="req-section" data-section="relations" aria-label="Relations">

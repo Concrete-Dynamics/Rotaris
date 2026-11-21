@@ -4,6 +4,7 @@ import { ConfirmDialog } from '../../ConfirmDialog.js';
 import { CLAIM_ATTRIBUTION, CLAIM_HEADING, MEASUREMENT_ATTRIBUTION, MEASUREMENT_HEADING, RELOAD_REVIEW, REVIEW_BUSY, REVIEW_READING, WORK_HEADING, actionLabel, decidedNotice, followDecision, proposalConsequence, reviewDecisions, type DecisionResult, type ProposalOffer, reviewElementDescription, reviewElements, type ReviewElement, type ReviewLink } from './presentation.js';
 import { Button as DesignButton, Tag as DesignTag, TextArea as DesignTextArea } from '../../design-system/index.js';
 import { decidedNoticeShown, type DecidedNotice } from './review-reads.js';
+import { CLAIM_WORD, criteriaAcceptSentence } from '../shape-model.js';
 
 /**
  * Part AP — the review pane (spec 08 §Review Surface, REQ-TRACE-417..426). Structure from the specification: the
@@ -97,6 +98,22 @@ export function ReviewPane(p: ReviewPaneProps) {
         <>
           {/* REQ-TRACE-419: the top-of-surface sentence on a completion claim. */}
           <p className="req-pane__lead" data-testid="req-pane-review-completion">{payload.claim.completion.statement}</p>
+          {/* PD-TRACE-002 clause 7: the agent proposes, the review confirms — each criterion with what the run reported of it. */}
+          {payload.criteria !== undefined && payload.criteria.length > 0 && (
+            <section className="req-pane__criteria" data-testid="req-pane-review-criteria" aria-label="Acceptance criteria">
+              <h3 className="req-pane__kicker">Acceptance criteria</h3>
+              <p className="req-pane__attribution">What the agent reported of each. A report is the agent's word, not a measurement.</p>
+              <ul className="req-pane__criteria-list">
+                {payload.criteria.map((c) => (
+                  <li key={c.index} className="req-pane__criterion" data-claim={c.claim}>
+                    <span className="req-pane__label">{c.checked ? '☑' : '☐'} {c.text}</span>
+                    <span className="req-pane__line">{CLAIM_WORD[c.claim]}{c.evidence !== undefined ? ` — ${c.evidence}` : ''}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="req-pane__attribution" data-testid="req-pane-review-criteria-accept">{criteriaAcceptSentence(payload.criteria)}</p>
+            </section>
+          )}
           <div className="req-pane__sides">
             {side('claim', CLAIM_HEADING, CLAIM_ATTRIBUTION)}
             {side('measurement', MEASUREMENT_HEADING, MEASUREMENT_ATTRIBUTION)}
@@ -118,7 +135,7 @@ export function ReviewPane(p: ReviewPaneProps) {
       {waiting !== null && <p className="req-pane__notice" role="status" data-testid="req-pane-review-waiting">{waiting}</p>}
       {refusal !== null && <p className="req-pane__notice req-pane__notice--error" role="alert" data-testid="req-pane-review-refused">{refusal}</p>}
       {pending !== null && pending !== 'send-back' && (
-        <ConfirmDialog title={`${labelOf(pending)} ${p.id}`} body={p.consequenceOf(pending)} confirmLabel={labelOf(pending)} destructive={pending === 'reject'} busy={inFlight} onConfirm={() => { void decide(pending); }} onCancel={() => setPending(null)} testId="req-pane-review-confirm" />
+        <ConfirmDialog title={`${labelOf(pending)} ${p.id}`} body={pending === 'accept' && criteriaAcceptSentence(payload?.criteria) !== null ? `${p.consequenceOf(pending)} ${criteriaAcceptSentence(payload?.criteria)}` : p.consequenceOf(pending)} confirmLabel={labelOf(pending)} destructive={pending === 'reject'} busy={inFlight} onConfirm={() => { void decide(pending); }} onCancel={() => setPending(null)} testId="req-pane-review-confirm" />
       )}
       {offer !== null && (
         // REQ-TRACE-429/431: the acceptance is the write, confirmed like the review's other decisions and never by the

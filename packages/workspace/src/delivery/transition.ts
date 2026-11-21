@@ -296,6 +296,13 @@ export interface DeliveryTransitions {
   recordRunEnded(id: ReqId, unit: string, outcome: 'completed' | 'failed' | 'interrupted' | 'cancelled', detail: string, ctx: TransitionContext): TransitionResult;
   /** Part AP — REQ-TRACE-407/437: the pass's own move OUT of the terminal state when the accepted hash no longer matches; nothing when it does. */
   recordSpecificationMoved(id: ReqId, ctx: TransitionContext): TransitionResult;
+  /**
+   * PD-TRACE-002 clause 5: the document is the source of truth where it has a place. A requirement RESTING in backlog,
+   * needs-update or done whose own document declares another of those three is recorded there, by the system, with the
+   * word that declared it. A requirement released, running, under review or blocked is the delivery pipeline's and is
+   * left as it is; one declared done is recorded with the text it was declared done against, as an acceptance is.
+   */
+  recordDocumentDeclared(id: ReqId, declared: 'backlog' | 'needs-update' | 'done', word: string, ctx: TransitionContext): TransitionResult;
   /** Part AP — REQ-TRACE-466/477: the stage a live unit reports (`waiting on a person`, or null); a run-row fact, no delivery state. */
   recordRunStage(id: ReqId, unit: string, stage: string | null): void;
   /**
@@ -427,6 +434,22 @@ export function createTransitions(db: StoreHandle, deps: { readonly wall: WallCl
       const detail = `Specification changed since it was accepted (accepted ${short(s.acceptedHash)}, now ${short(ctx.now.canonicalHash)}).`;
       const d: Decision = { from: TERMINAL, to: 'needs-update', startsRun: false, writes: true, next: { ...s, column: 'needs-update' }, reason: detail, answersBlockers: false };
       return { ok: true, value: commit(id, d, 'specification-moved', { kind: 'system' }, ctx.now.canonicalHash, stamp) };
+    },
+    recordDocumentDeclared(id, declared, word, ctx) {
+      const state = currentState(id);
+      if (!state.ok) return state;
+      const s = state.value;
+      const resting = s.column === FIRST || s.column === 'needs-update' || s.column === TERMINAL;
+      const unchanged = { ok: true as const, value: { id, from: s.column, to: s.column, startsRun: false, historyEntry: 0 } };
+      if (!resting || s.column === declared || inFlight.has(id)) return unchanged;
+      // A requirement the board accepted and whose text then moved is needs-update by the pass's own evaluation
+      // (REQ-TRACE-407); its document still saying done does not undo that.
+      if (declared === TERMINAL && s.column === 'needs-update' && s.acceptedHash !== null && s.acceptedHash !== ctx.now.canonicalHash) return unchanged;
+      const stamp = at();
+      const hash = ctx.now.canonicalHash;
+      const next: DeliveryState = declared === TERMINAL ? { ...s, column: TERMINAL, acceptedHash: hash, acceptedAt: stamp, snapshotHash: s.snapshotHash ?? hash, snapshotAt: s.snapshotAt ?? stamp } : { ...s, column: declared };
+      const d: Decision = { from: s.column, to: declared, startsRun: false, writes: true, next, reason: `Its document declares ${JSON.stringify(word)}.`, answersBlockers: false };
+      return { ok: true, value: commit(id, d, 'document-declared', { kind: 'system' }, hash, stamp) };
     },
     recordRunStage(id, unit, stage) {
       dal.setRunStage(id, unit, stage);

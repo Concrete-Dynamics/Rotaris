@@ -193,7 +193,10 @@ export const AWAITING_JUDGEMENT_NONE = 'Awaiting judgement: none — this pass r
  * updates itself when a change is made through Rotaris", was still too wide: a session's own writes and the Git
  * view's are made through the application and do not reach the board (UIR-502).
  */
-export const SUBSCRIPTION_SENTENCE: readonly Phrase[] = ['The board updates itself for what is done on it and for the runs it starts. Any other change shows after ', { whole: 'Re-evaluate' }, ', which is always the way to a current board.'];
+// Its fourth, since PD-TRACE-002 clause 10 built the watcher: the board reads itself again when a requirement document
+// changes by any hand. Where the watcher could not be set up or stopped, the survey strip says so, and the sentence
+// here keeps the guaranteed route (REQ-TRACE-342, REQ-TRACE-507).
+export const SUBSCRIPTION_SENTENCE: readonly Phrase[] = ['The board reads itself again when a requirement document changes, and for what is done on it and the runs it starts. ', { whole: 'Re-evaluate' }, ' is always the way to a current board.'];
 export const PROJECTION_UNAVAILABLE = 'The board could not be read';
 export const READING_LABEL = 'Reading the board…';
 /** REQ-TRACE-397: a refusal persists and can be acted on — the dismiss control's name. */

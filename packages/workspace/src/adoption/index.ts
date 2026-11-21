@@ -7,3 +7,8 @@ export * from './detect.js';
 export * from './adapter.js';
 export * from './record.js';
 export * from './run.js';
+export * from './shape.js';
+export * from './shape-record.js';
+export * from './survey.js';
+export * from './writeback.js';
+export * from './criteria.js';

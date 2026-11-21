@@ -226,7 +226,12 @@ try {
   for (const name of ['microphone', 'clipboard-write', 'camera', 'geolocation']) states[name] = await ask(`navigator.permissions.query({ name: '${name}' }).then((s) => s.state)`);
   const notification = await ask('Notification.requestPermission()');
   check('OQ-459: the own page is granted the microphone and the clipboard write, and nothing else it asked', states.microphone === 'granted' && states['clipboard-write'] === 'granted' && states.camera === 'denied' && states.geolocation === 'denied' && notification === 'denied', `${JSON.stringify(states)}; Notification ${notification}`);
-  check('OQ-459: a display capture and a camera are refused to the own page', display === 'NotAllowedError' && camera === 'NotAllowedError', `getDisplayMedia ${display}; getUserMedia(video) ${camera}`);
+  // A host with no camera answers `NotFoundError` before any permission is asked, so that answer is read as a refusal only
+  // where the page enumerates no video input; the permission query above already reads `camera: denied` on every host
+  // (docs/archive/defects/driver-proof-reads-a-missing-camera-as-a-camera-the-policy-did-not-refuse.md).
+  const videoInputs = await d.eval(`navigator.mediaDevices.enumerateDevices().then((l) => l.filter((x) => x.kind === 'videoinput').length, (e) => e.name)`);
+  const cameraRefused = camera === 'NotAllowedError' || (camera === 'NotFoundError' && videoInputs === 0);
+  check('OQ-459: a display capture and a camera are refused to the own page', display === 'NotAllowedError' && cameraRefused, `getDisplayMedia ${display}; getUserMedia(video) ${camera}${camera === 'NotFoundError' ? ` with ${videoInputs} video input(s) enumerated — no camera on this host, the refusal rests on the permission query` : ''}`);
   const devices = await d.eval(`Promise.all([navigator.hid?.getDevices(), navigator.serial?.getPorts(), navigator.usb?.getDevices()].map((p) => (p ?? Promise.resolve([])).then((l) => l.length, (e) => e.name)))`);
   note('OQ-459: devices the page already holds (HID, serial, USB)', JSON.stringify(devices));
 

@@ -972,6 +972,7 @@
     "defects/drive-workspace-inside-the-checkout-wrote-scratch-state.md": "95238d04d5d42cf0713cf7c1b04b3b77ccca7b7d6224cfe5a81366d8147b7d76",
     "defects/driver-proof-can-type-before-the-composer-holds-focus.md": "e1b6e763d9607571564944670fe488e08383cd6d84541c568dc33d4ace42e7e5",
     "defects/driver-proof-clicks-pop-out-at-a-box-the-notice-banner-moves.md": "d2cc408c2a0c54b2a7cf5da508fb140f6f45725ba6646becf184f377c9302911",
+    "defects/driver-proof-reads-a-missing-camera-as-a-camera-the-policy-did-not-refuse.md": "fad81ee04707030ba974a39fc093ce999088cde61deb5dc3b943a2cacbca8dbd",
     "defects/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md": "4a8fbe914155bad00d2fe8fab76890f9c0e281311bd7a266118aaefc8f739754",
     "defects/electrons-own-profile-is-written-outside-the-per-user-directories.md": "401aa34b526b4b430a8c58d6862a70ae4396f2f99bbe63277ac2b32413f57275",
     "defects/ensure-bundles-build-shows-no-progress-and-fails-past-spawnsyncs-buffer.md": "9143f879cb27d3c1adc9006e5321336738935aea5a0aaac34572b12006b61c0b",

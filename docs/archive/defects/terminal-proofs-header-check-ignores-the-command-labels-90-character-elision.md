@@ -1,5 +1,11 @@
 ## terminal-proof's header check ignores the command label's 90-character elision
 
+## Outcome: repaired 2026-11-21 (R-119's landing branch)
+
+Met again in R-119's landing tree, `Rotaris-wt-feat-r-119-web-search-land-land`, whose path made the command longer than
+90 characters. The check now expects the header's text elided as `commandLabel` elides it (90 characters, the last the
+ellipsis) and the tooltip (`title`) to carry the whole command, as REQ-SHELL-087 says.
+
 Seen 2026-10-21 by the reviewer of plan loc1's bundle `loc1-terminal-kill`, running `terminal-proof` in its landing tree
 `C:/dev/Rotaris-crw-wt-integ-loc1-loc1-terminalkill` at `edd65901` (Windows 11 ARM64, build 26200, Node 24.18.0 arm64,
 Electron 44.1.1 arm64, pwsh 7.6.6), in every run there (four): `live.headerCommand` red, the header reading

@@ -57,6 +57,13 @@ export const NETWORK_DISCLOSURE = {
   /** REQ-STARTUP-105, REQ-STARTUP-111, REQ-STARTUP-114. */
   updates: 'A supported standalone build asks the product\'s release endpoint whether a newer release exists, once each time one '
     + 'of its windows is activated. This check cannot be turned off.',
+  /**
+   * REQ-STARTUP-180 (PD-STARTUP-008; R-117): the background download, and UD-1's metered skip. No host is named
+   * (REQ-STARTUP-160).
+   */
+  download: 'When that endpoint names a newer release, a supported standalone build downloads it in the background from the host '
+    + 'that serves the release\'s files, and installs it the next time Rotaris starts or when you restart it. On a connection the '
+    + 'system reports as metered, it is not downloaded until you choose Update now.',
   /** REQ-STARTUP-160's third statement. */
   exposure: 'Like any connection, these requests can reveal ordinary connection metadata, such as your IP address, to the hosts '
     + 'they reach. They never carry your project files, your prompt text or your provider credentials.',
@@ -167,6 +174,7 @@ export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses, 
         <h2 className="settings__heading" id="about-network-heading">Network activity</h2>
         <p className="about__value" data-testid="network-disclosure-statement">{NETWORK_DISCLOSURE.setup}</p>
         <p className="about__value" data-testid="network-disclosure-statement">{NETWORK_DISCLOSURE.updates}</p>
+        <p className="about__value" data-testid="network-disclosure-statement">{NETWORK_DISCLOSURE.download}</p>
         <p className="about__value" data-testid="network-disclosure-statement">{NETWORK_DISCLOSURE.exposure}</p>
       </section>
 

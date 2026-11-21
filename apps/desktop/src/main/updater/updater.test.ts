@@ -1,6 +1,7 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { FakeClock, millis } from '@rotaris/kernel';
+import type { UpdateState } from '@rotaris/contracts';
 import { formatChecksumManifest } from '@rotaris/release-naming';
 import type { AppLogLevel } from '../app-log.js';
 import { createNoticeStore, type NoticeRecord } from '../notices.js';
@@ -11,7 +12,7 @@ import { memoryDisk, plantPending } from './memory-disk.test-support.js';
 import { parsePendingRecord, PENDING_RECORD_NAME, type PendingRecord } from './pending.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
 import { passFailedSentence } from './successor.js';
-import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, RETURN_TO_WINDOW, TRY_AGAIN, UPDATE_DECLINED, UPDATE_DECLINED_INTEGRATION, UPDATE_DECLINED_UNSAVED, UPDATE_NOW, mustAskAtHandOff, updateCloseBox, updateCloseDetail, updateCloseMessage, type UpdaterDeps } from './updater.js';
+import { CANCEL_DOWNLOAD, createUpdater, downloadingMessage, installedInPlaceMessage, REFUSED_MESSAGE, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, RETURN_TO_WINDOW, TRY_AGAIN, UPDATE_DECLINED, UPDATE_DECLINED_INTEGRATION, UPDATE_DECLINED_UNSAVED, UPDATE_NOW, mustAskAtHandOff, updateCloseBox, updateCloseDetail, updateCloseMessage, type UpdaterDeps } from './updater.js';
 
 const PORTABLE = 'Rotaris-0.2.0-windows-x64-portable.exe';
 const SETUP = 'Rotaris-0.2.0-windows-x64-setup.exe';
@@ -34,6 +35,8 @@ interface FeedOptions {
   readonly fails?: string;
   /** Hold the feed response until `release()` is called. */
   readonly hold?: boolean;
+  /** The asset answers this status instead of its bytes (a transport failure of the download). */
+  readonly assetStatus?: number;
 }
 
 /** A release server: the feed, the manifest, the signature and one asset, all by URL, every request recorded. */
@@ -63,6 +66,7 @@ function server(options: FeedOptions = {}) {
       if (url.endsWith('/SHA256SUMS.txt.sig')) return one(signature);
       if (url.endsWith(`/${PORTABLE}`) || url.endsWith(`/${SETUP}`)) {
         if (o.signal?.aborted) throw new Error('aborted');
+        if (options.assetStatus !== undefined) return { status: options.assetStatus, body: (async function* () { /* none */ })() };
         return one(payload);
       }
       throw new Error(`unexpected ${url}`);
@@ -113,7 +117,7 @@ const portable: Classification = { updatable: true, flavour: 'portable', target:
 const installer: Classification = { updatable: true, flavour: 'installer', target: INSTALL_DIR };
 const dev: Classification = { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
 
-function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' | 'hold' | readonly boolean[]; runs?: readonly (number | null | 'throws')[]; unsaved?: boolean | 'throws' | readonly boolean[]; integrating?: boolean | 'throws' | readonly boolean[]; handOff?: string; stagingRemoveFails?: boolean; spawnFails?: boolean } = {}) {
+function harness(options: { cost?: 'metered' | 'not-metered' | 'unknown' | 'throws'; classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string>; confirm?: boolean | 'throws' | 'hold' | readonly boolean[]; runs?: readonly (number | null | 'throws')[]; unsaved?: boolean | 'throws' | readonly boolean[]; integrating?: boolean | 'throws' | readonly boolean[]; handOff?: string; stagingRemoveFails?: boolean; spawnFails?: boolean } = {}) {
   const srv = server(options.feed);
   const clock = new FakeClock();
   const logged: string[] = [];
@@ -150,7 +154,7 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
   const runs = options.runs ?? [0];
   let reads = 0;
   const keys = options.keys === 'empty' ? [] : options.keys === 'other' ? [keyPair().pem] : [srv.pair.pem];
-  const deps: UpdaterDeps = {
+  const deps: Omit<UpdaterDeps, 'connectionCost' | 'publishState'> = {
     classification: options.classification ?? portable,
     runningVersion: options.running ?? '0.1.0',
     network: srv.network, updates: staging.area, files: vol.port, spawn, handOffRecord: handOff.port, keys,
@@ -201,8 +205,22 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
       return !((integrating as boolean | undefined) ?? false);
     },
   };
-  const updater = createUpdater(deps);
-  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, handOff, started, asked, unsavedAsked, integrationAsked, order, held, reads: () => reads, closed: () => closed, dismissed: () => dismissed };
+  // UD-1: the connection is METERED unless a test says otherwise, so the click flow's cases below run the offer and its
+  // `Update now` as UD-1 leaves them; the automatic download is `updater.background.test.ts`'s.
+  const states: UpdateState[] = [];
+  const acknowledged: string[] = [];
+  const store = notices;
+  // Delegating at each call, so a test that replaces `h.notices.update` to watch the patches is watching the updater's.
+  const withAcks: UpdaterDeps['notices'] = {
+    report: (input) => store.report(input), update: (id, patch) => store.update(id, patch), current: () => store.current(),
+    acknowledge: (kind, title) => { acknowledged.push(`${kind}:${title}`); store.acknowledge(kind, title); },
+  };
+  const updater = createUpdater({
+    ...deps, notices: withAcks,
+    connectionCost: async () => { if (options.cost === 'throws') throw new Error('no answer'); return options.cost ?? 'metered'; },
+    publishState: (state) => { states.push(state); },
+  });
+  return { updater, srv, clock, logged, recorded, broadcasts, notices, staging, vol, spawned, handOff, started, asked, unsavedAsked, integrationAsked, order, held, states, acknowledged, reads: () => reads, closed: () => closed, dismissed: () => dismissed };
 }
 
 describe('activation — REQ-STARTUP-106, REQ-STARTUP-114, REQ-STARTUP-057, REQ-STARTUP-150', () => {
@@ -342,7 +360,7 @@ describe('activation — REQ-STARTUP-106, REQ-STARTUP-114, REQ-STARTUP-057, REQ-
 });
 
 describe('the download reported into the same notice — REQ-STARTUP-118, REQ-STARTUP-124, REQ-SHELL-118', () => {
-  it('keeps the notice\'s identity, takes the downloading title and message, disables the action with its description, and repaints only when the whole percent changes', async () => {
+  it('keeps the notice\'s identity, takes the downloading title and message with the cancel, and repaints only when the whole percent changes (PD-SHELL-005 rev. 2/3)', async () => {
     const h = harness();
     await h.updater.activate({ windowId: 1 });
     const faces: { title: string; message: string; disabled: string | undefined; persistent: boolean }[] = [];
@@ -364,26 +382,29 @@ describe('the download reported into the same notice — REQ-STARTUP-118, REQ-ST
     // 2,500,000 bytes in 1 MiB chunks: 41 %, 83 %, 100 % — one repaint per whole-percent change, never more.
     const messages = h.broadcasts.length;
     expect(messages).toBeGreaterThanOrEqual(5);
-    expect(h.notices.current()).toMatchObject({ id: 1, severity: 'success', title: INSTALLED_TITLE, message: 'The update is installed. Restart Rotaris to run it.', persistent: true, action: { label: RESTART_NOW, action: { kind: 'restart' } } });
+    // OQ-553: replaced in place, the ready notice is `Update installed` with the ruled message and `Restart now`.
+    expect(h.notices.current()).toMatchObject({ id: 1, severity: 'success', title: INSTALLED_TITLE, message: installedInPlaceMessage('0.2.0'), persistent: true, action: { label: RESTART_NOW, action: { kind: 'restart' } } });
+    expect(h.notices.current()?.progress).toBeUndefined();
     expect(h.notices.current()?.action?.disabled).toBeUndefined();
     expect(h.updater.state()).toMatchObject({ kind: 'applied', noticeId: 1 });
     expect(h.vol.files.get(TARGET)).toBe(`copy of ${ROOT}/0.2.0/${PORTABLE}`);
   });
 
-  it('the downloading face: `Downloading Rotaris {version}`, `{measured} — verifying against the published checksum when it finishes.`, not persistent, the action disabled', async () => {
+  it('the downloading face: `Downloading Rotaris {version}`, `{measured} — verifying against the published checksum when it finishes.`, persistent, `Cancel download`, the meter in whole percent (PD-SHELL-005 rev. 3, REQ-NOTIFY-043)', async () => {
     const h = harness({ feed: { hold: false } });
     await h.updater.activate({ windowId: 1 });
     // Hold the asset by watching the first repaint: the first face after install() starts is the 0 % one.
     const observed: string[] = [];
     const original = h.notices.update.bind(h.notices);
     (h.notices as { update: typeof h.notices.update }).update = async (id, patch) => {
-      observed.push(JSON.stringify({ id, title: patch.title, message: patch.message, persistent: patch.persistent, disabled: patch.action === null || patch.action === undefined ? null : patch.action.disabled }));
+      observed.push(JSON.stringify({ id, title: patch.title, message: patch.message, persistent: patch.persistent, action: patch.action === null || patch.action === undefined ? null : patch.action, progress: patch.progress }));
       return original(id, patch);
     };
     await h.updater.install();
-    expect(observed[0]).toBe(JSON.stringify({ id: 1, title: downloadingTitle('0.2.0'), message: downloadingMessage('0%'), persistent: false, disabled: DOWNLOAD_IN_PROGRESS }));
+    expect(observed[0]).toBe(JSON.stringify({ id: 1, title: downloadingTitle('0.2.0'), message: downloadingMessage('0%'), persistent: true, action: { label: CANCEL_DOWNLOAD, action: { kind: 'cancel-update' } }, progress: 0 }));
     expect(observed.slice(1, 4).map((o) => JSON.parse(o).message)).toEqual([downloadingMessage('41%'), downloadingMessage('83%'), downloadingMessage('100%')]);
-    expect(DOWNLOAD_IN_PROGRESS).toBe('The download is in progress; the same download cannot be started twice.');
+    expect(observed.slice(1, 4).map((o) => JSON.parse(o).progress)).toEqual([41, 83, 100]);
+    expect(CANCEL_DOWNLOAD).toBe('Cancel download');
   });
 
   it('with a claimed size of 0 the measured figure is whole MiB, `{N} MB`', async () => {
@@ -391,9 +412,12 @@ describe('the download reported into the same notice — REQ-STARTUP-118, REQ-ST
     await h.updater.activate({ windowId: 1 });
     const messages: string[] = [];
     const original = h.notices.update.bind(h.notices);
-    (h.notices as { update: typeof h.notices.update }).update = async (id, patch) => { if (patch.message !== undefined) messages.push(patch.message); return original(id, patch); };
+    const progresses: (number | null | undefined)[] = [];
+    (h.notices as { update: typeof h.notices.update }).update = async (id, patch) => { if (patch.message !== undefined) messages.push(patch.message); progresses.push(patch.progress); return original(id, patch); };
     await h.updater.install();
     expect(messages.slice(0, 3)).toEqual([downloadingMessage('0 MB'), downloadingMessage('1 MB'), downloadingMessage('2 MB')]);
+    // REQ-NOTIFY-043: no size stated, no meter — the `{N} MB` figure is the message's alone.
+    expect(progresses.every((p) => p === undefined || p === null)).toBe(true);
   });
 
   it('when the offer notice was replaced meanwhile, the download is reported on a fresh notice rather than nowhere', async () => {
@@ -425,12 +449,14 @@ describe('the applied outcomes — REQ-STARTUP-119, REQ-STARTUP-120, REQ-STARTUP
     expect(h.staging.tree()).toContain(`0.2.0/${SETUP}`);
   });
 
-  it('an install failure becomes the persistent error notice `Update not installed` in place, the sentence as its detail, with `Try again` — and the record is written before it is rendered', async () => {
+  it('a refusal on authenticity becomes the persistent error notice `Update not installed` in place, the sentence as its detail and NO action (OQ-555) — and the record is written before it is rendered', async () => {
     const h = harness({ keys: 'empty' });
     await h.updater.activate({ windowId: 1 });
     const result = await h.updater.install();
     expect(result).toMatchObject({ ok: false, code: 'update.signature', headline: NOT_INSTALLED_TITLE });
-    expect(h.notices.current()).toMatchObject({ id: 1, severity: 'error', title: NOT_INSTALLED_TITLE, message: NOT_INSTALLED_MESSAGE, persistent: true, action: { label: TRY_AGAIN, action: { kind: 'install-update' } } });
+    expect(h.notices.current()).toMatchObject({ id: 1, severity: 'error', title: NOT_INSTALLED_TITLE, message: REFUSED_MESSAGE, persistent: true });
+    expect(h.notices.current()?.action).toBeUndefined();
+    expect(REFUSED_MESSAGE).toBe('Rotaris is unchanged. You can download the release manually.');
     expect(h.notices.current()?.detail).toContain('this build carries no verification key');
     expect(h.recorded).toHaveLength(1);
     expect(h.recorded[0]).toMatchObject({ noticeId: 1, severity: 'error', title: NOT_INSTALLED_TITLE });
@@ -441,14 +467,25 @@ describe('the applied outcomes — REQ-STARTUP-119, REQ-STARTUP-120, REQ-STARTUP
     expect(h.logged.some((l) => l.startsWith('warn: update install: signature step failed'))).toBe(true);
   });
 
-  it('`Try again` re-runs the install with the held offer', async () => {
+  it('a transport failure of a download the user started is `Update not installed` with `Try again`, which re-runs the install with the held offer (REQ-STARTUP-120)', async () => {
+    const h = harness({ feed: { assetStatus: 503 } });
+    await h.updater.activate({ windowId: 1 });
+    expect(await h.updater.install()).toMatchObject({ ok: false, code: 'update.download' });
+    expect(h.updater.state().kind).toBe('failed');
+    expect(h.notices.current()).toMatchObject({ id: 1, severity: 'error', title: NOT_INSTALLED_TITLE, message: NOT_INSTALLED_MESSAGE, action: { label: TRY_AGAIN, action: { kind: 'install-update' } } });
+    // The same offer, tried again — here it fails the same way, which is what a retry against the same release does.
+    expect(await h.updater.install()).toMatchObject({ ok: false, code: 'update.download' });
+    expect(h.srv.requests.filter((r) => r.url.endsWith('/SHA256SUMS.txt'))).toHaveLength(2);
+  });
+
+  it('a refused release is never retried by the same process, by `Update now` or by a later check (REQ-STARTUP-179, OQ-555)', async () => {
     const h = harness({ keys: 'other' });
     await h.updater.activate({ windowId: 1 });
-    expect(await h.updater.install()).toMatchObject({ ok: false });
-    expect(h.updater.state().kind).toBe('failed');
-    // The same offer, tried again — here it fails the same way, which is what a retry against the same release does.
     expect(await h.updater.install()).toMatchObject({ ok: false, code: 'update.signature' });
-    expect(h.srv.requests.filter((r) => r.url.endsWith('/SHA256SUMS.txt'))).toHaveLength(2);
+    expect(await h.updater.install()).toMatchObject({ ok: false, code: 'update.refused' });
+    await h.notices.dismiss();
+    expect(await h.updater.activate({ windowId: 2 })).toBe('withheld');
+    expect(h.srv.requests.filter((r) => r.url.endsWith('/SHA256SUMS.txt'))).toHaveLength(1);
   });
 
   it('install is refused with no held offer, and for a build that cannot update itself', async () => {
@@ -609,12 +646,12 @@ describe('dismissing the offer — REQ-STARTUP-116, REQ-STARTUP-117, REQ-SHELL-1
     expect(h.updater.state().kind).toBe('offered');
   });
 
-  it('dismissing the failure notice the offer became records the version too (it is still the update notice)', async () => {
+  it('dismissing the failure notice the offer became only hides it and records nothing (the notice-banner brief §3.1: rows 4 and 4′ hide)', async () => {
     const h = harness({ keys: 'empty' });
     await h.updater.activate({ windowId: 1 });
     await h.updater.install();
     await h.updater.noticeDismissed(1);
-    expect(h.dismissed()).toBe('0.2.0');
+    expect(h.dismissed()).toBeUndefined();
   });
 });
 
@@ -914,7 +951,7 @@ describe('the unsaved-settings guard at the update\'s closes — OQ-311, REQ-SHE
   });
 
   it('Try again on the installer flavour asks too; Cancel leaves `Update not installed` as it was', async () => {
-    const h = harness({ classification: installer, keys: 'empty', unsaved: [true, false] });
+    const h = harness({ classification: installer, feed: { assetStatus: 503 }, unsaved: [true, false] });
     await h.updater.activate({ windowId: 1 });
     expect(await h.updater.install()).toMatchObject({ ok: false });
     const failure = h.notices.current();

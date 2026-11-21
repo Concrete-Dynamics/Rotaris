@@ -37,6 +37,7 @@ export class UpdateRelay {
     [CHANNEL.displayChanged]: 0, // channel 14 (REQ-CHAT-167, REQ-CONFIG-403), on the same rule
     [CHANNEL.projectInitOpen]: 0, // channel 15 (PD-WORKSPACE-005 revision 2, OQ-262), on the same rule
     [CHANNEL.sessionFocus]: 0, // channel 16 (PD-SHELL-001 revision 3, OQ-292), on the same rule
+    [CHANNEL.updateState]: 0, // channel 17 (PD-SHELL-018, R-117), on the same rule
   };
 
   attach(sink: RendererSink): void {

@@ -5,7 +5,7 @@ import { useStore } from 'zustand';
 import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult, type CommandRequest, type DiagnosticsCardState, type ModelSlotName, type OnboardingOutcome, type OnboardingView, type PermissionPreset, type ProviderSignInPrompt, type ProviderSignInResult } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
-import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
+import { TERMINAL_WINDOW_ROLE, UpdateStateSchema } from '@rotaris/contracts';
 import { type InPlaceSignInHost, FirstRunSetup, type FirstRunConfig, dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, settingsPageFor, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted, RUN_PANEL_WIDTH, INSPECTOR_WIDTH, COMPOSER_DEFAULT_HEIGHT } from '@rotaris/ui';
 import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
@@ -1163,9 +1163,20 @@ function dispatchNoticeAction(action: NoticeAction): void {
       void bridge.command({ kind: 'update.install' });
       return;
     case 'restart':
-      // `Restart now`, offered on the `Update installed` notice alone (REQ-STARTUP-121): the hand-over to the updated
-      // installation is main's, through the instance record.
+      // `Restart now`, on the `Update installed` notice and on the title-bar indicator's ready state (REQ-STARTUP-121,
+      // PD-SHELL-018): the hand-over to the updated installation is main's, behind REQ-STARTUP-174's guards, which main asks.
       void bridge.command({ kind: 'update.restart' });
+      return;
+    case 'cancel-update':
+      // REQ-STARTUP-170 (PD-STARTUP-008 item 1, PD-SHELL-005 revision 2; R-117): the download notice's `Cancel download` and the
+      // title-bar indicator's cancel, one member and one result from either place (REQ-SHELL-115). Main holds the one download;
+      // it ends it, removes what it wrote, and changes the notice by OQ-554's rule.
+      void bridge.command({ kind: 'update.cancel' });
+      return;
+    case 'open-release-page':
+      // PD-SHELL-018 revision 2 (OQ-556): the link-only offer's action, whose behaviour is the plan's Stage 3 (PD-STARTUP-014).
+      // No notice carries it yet; a press is logged here and nothing else (seams §6).
+      console.warn('notice action "open-release-page" pressed: opening a release page is not built yet (PD-STARTUP-014)');
       return;
     case 'retry-run':
       // REQ-NOTIFY-045 (OQ-178): the draft as the window last published it, else as stored (REQ-NOTIFY-066), else the
@@ -1427,6 +1438,22 @@ function App({ initialOnboarding, version, workspace, home, initialTheme, initia
     // before this window subscribed never reached it, so a window opened while its workspace's retrospective is pending would
     // draw the gesture available until the next one. A later publication arrives after this answer on the same pipe.
     queueMicrotask(() => { void bridge.command({ kind: 'improvements.activity' }).then((r) => { if (r.ok) apply(r.value); }); });
+    return unsubscribe;
+  }, []);
+
+  /*
+   * PD-SHELL-018 (R-117): the updater's phase on channel 17, the title-bar indicator's whole input. Application-wide — one
+   * download, one pending update (REQ-STARTUP-177) — so it lands in the shell store the title bar reads. Read once after
+   * subscribing, as the improvement activity is, so a window opened while a download runs draws the indicator at once.
+   */
+  useEffect(() => {
+    const apply = (p: unknown): void => {
+      const parsed = UpdateStateSchema.safeParse(p);
+      if (parsed.success) useShellState.getState().setUpdateState(parsed.data);
+      else console.warn('update:state publication did not parse; the indicator keeps its last state');
+    };
+    const unsubscribe = bridge.onUpdateState(apply);
+    queueMicrotask(() => { void bridge.command({ kind: 'update.state' }).then((r) => { if (r.ok) apply(r.value); }); });
     return unsubscribe;
   }, []);
 

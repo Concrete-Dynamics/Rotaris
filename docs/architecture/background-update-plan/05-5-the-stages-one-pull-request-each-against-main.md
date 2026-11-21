@@ -9,6 +9,16 @@ updated in the same commit; first executions reported into ADR-0054, `PD-STARTUP
 [R-080](../../product/requests.md#r-080)'s working rule each goes up as a pull request and lands only by the owner's act. No
 stage adds a platform, a channel, a differential or delta download, or `electron-updater`.
 
+*Corrected 2026-11-21 ([R-072](../../product/requests.md#r-072), the channel ruling of the brief of the update's surfaces,
+for [R-117](../../product/requests.md#r-117)): Stage 2 adds one channel, `update:state`, main → every main window, with a
+read command for a window that mounts later ([`title-bar-and-rail.md`](../../design/briefs/title-bar-and-rail.md) §3.1
+and §10). The reason the sentence above gave no longer
+holds for a channel: it was written for R-084, when every update fact reached a window through the one update notice, and
+[`PD-SHELL-018`](../../product/directives/pd-shell-018.md#pd-shell-018) (the owner, 2026-11-21) asks for an indicator that
+stands exactly while another notice holds the banner, so `notice:current` no longer carries the update then. The views
+(seams §2's count, the process view, state ownership) are updated by the stage that builds it, not by this correction.
+This correction reaches the channel alone.*
+
 **PR-0 — this plan** (docs only): the request row, REQ-STARTUP-169 to 181, `PD-STARTUP-008`, `PD-SHELL-005` revision 2,
 the back-pointers, ESC-43, three defect notes. Waits for R-081 to reach `main` (the request log is contiguous).
 

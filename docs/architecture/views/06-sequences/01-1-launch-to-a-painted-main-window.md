@@ -174,6 +174,7 @@ sequenceDiagram
   participant M as main (updater)
   participant F as the release feed
   participant S as the successor
+  Note over M: since 2026-11-21 (REQ-STARTUP-169, R-117): on the portable and the AppImage the check itself starts this sequence from "Downloading…" with no click, unless the connection is metered (UD-1), or a cancel or silent failure holds the version (UD-2, UD-4); update.cancel ends it within 2 s and leaves the offer (REQ-STARTUP-170); later faces publish by OQ-554's rule and channel 17 carries the indicator
   R->>M: update.install (Update now / Try again)
   opt installer flavour: every main window's unsaved settings first (REQ-SHELL-119 (1), REQ-SHELL-124, OQ-311 since 2026-10-14)
     M->>R: askUnsavedInTurn — active window first; a window with no guard installed skipped; each other surfaced, then asked Save/Discard/Cancel
@@ -187,7 +188,7 @@ sequenceDiagram
     M->>M: activeRuns — runs.active, instance-wide; confirmClose at the click, the message box "A run is still executing", Return to the window the default
     M-->>R: returned: { cancelled } — nothing downloaded or started, the offer notice stays
   end
-  M->>M: the offer notice becomes "Downloading Rotaris {v}" IN PLACE, action disabled (REQ-STARTUP-118, REQ-SHELL-118)
+  M->>M: the offer notice becomes "Downloading Rotaris {v}" IN PLACE, persistent, action Cancel download (REQ-STARTUP-118, PD-SHELL-005 rev. 2/3; disabled Update now until 2026-11-21)
   M->>F: GET SHA256SUMS.txt, then SHA256SUMS.txt.sig
   M->>M: verify the signature against the compiled-in key set — BEFORE parsing (REQ-STARTUP-122/167); empty set → refused, nothing downloaded
   M->>M: parse the manifest (REQ-STARTUP-113)
@@ -195,7 +196,7 @@ sequenceDiagram
   M->>M: digest verified, case-insensitively, with REQ-STARTUP-123's sentences
   M->>M: kept as the pending update — manifest and signature bytes beside it, .partial renamed, pending.json written last and atomically (REQ-STARTUP-171); a pending update of another version removed (UD-5)
   alt portable: place and flush .update, copy aside and flush .old, rename onto the target in one step; the directory flushes either side do nothing on Windows, the one host that classifies as portable (REQ-STARTUP-125, PD-STARTUP-008, REQ-STARTUP-176)
-    M->>M: "Update installed" + Restart now (REQ-STARTUP-119)
+    M->>M: "Update installed" + Restart now, in place only (REQ-STARTUP-119; OQ-553 message, OQ-554 since 2026-11-21)
     R->>M: update.restart
     M->>R: confirmUnsaved at the click — every main window's Save/Discard/Cancel in turn (OQ-311); Cancel or a failed Save → { cancelled }, no run box, nothing started
     M->>M: integrationAllows at the click — guard (2), instance-wide (OQ-361); running or unreadable → { cancelled }, no run box, nothing started

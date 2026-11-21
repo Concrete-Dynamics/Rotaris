@@ -9,6 +9,13 @@ background path**: the "Reserved to the owner" paragraph is replaced by "The own
 REQ-SHELL-114 and REQ-NOTIFY-216 join the Narrows list for UD-3, and the platform sentence of "What is unchanged" is
 replaced. Revision 1's text is kept below where it no longer governs.*
 
+*Revision 3 (2026-11-21, [R-072](../requests.md#r-072), the rulings of [OQ-553](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-553),
+[OQ-554](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-554) and [OQ-555](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-555), for [R-117](../requests.md#r-117)) — **the
+in-place ready notice, which of the update's states take the banner back, and an integrity refusal with no retry**: items
+13 to 15 are added below the list, ruled by the consortium under the owner's delegation, and REQ-STARTUP-174,
+REQ-STARTUP-120 and REQ-NOTIFY-221 join the Narrows list. Items 1 to 12 and the owner's rulings UD-1 to UD-12 stand
+unchanged.*
+
 **The directive.** On a supported standalone build, an update the release feed offers SHALL be downloaded in the background
 with no click, shown with its progress and a cancel action, verified, kept as the pending update, verified again from the
 retained bytes, and applied at the next start or when the user chooses `Restart now` — never by a restart, a close, an
@@ -39,6 +46,25 @@ heading. This directive states which derived requirements they displace, and the
 11. **REQ-NOTIFY-215** — the notice for a newer version is the download's, with no install action before the download.
 12. **REQ-NOTIFY-222** — an installed-flavour update that has downloaded publishes the ready notice with the restart action;
     the window does not close on its own.
+13. **REQ-STARTUP-174** — *revision 3.* Where the target was replaced in place (UD-8), the ready notice is titled
+    `Update installed` (REQ-STARTUP-119, REQ-STARTUP-121) and conveys that the named version has been downloaded, verified
+    and installed, that it runs the next time Rotaris starts, and that `Restart now` runs it now, in place of "will be
+    installed the next time Rotaris starts" (OQ-553). Where the update notice is not the current notice when the pending
+    update is verified, it does not become the ready notice and nothing is published: the title-bar indicator of
+    [`PD-SHELL-018`](pd-shell-018.md#pd-shell-018) carries the ready state and `Restart now` (OQ-554).
+14. **REQ-NOTIFY-222 and REQ-STARTUP-116** — *revision 3.* An update's later states change the banner only as
+    [`PD-SHELL-005`](pd-shell-005.md#pd-shell-005) revision 3's "When the notice changes" states: in place while the
+    update notice is current; where it is not, the ready notice is not published, the offer a silent transport failure
+    leaves is not published, and the offer a cancel leaves is published only where no notice holds the slot (OQ-554). A
+    failure UD-4 shows, and a failed apply, are always published. Items 2, 11 and 12 still govern their own cases.
+15. **REQ-STARTUP-120 and REQ-NOTIFY-221** — *revision 3.* A refusal on authenticity or integrity, and every discard UD-4
+    shows, is REQ-STARTUP-120's notice — its title, severity, persistence and the technical sentence as copyable details —
+    with the message `Rotaris is unchanged. You can download the release manually.` and no action, because REQ-STARTUP-179
+    forbids retrying that release in the same process, a press of `Try again` included (OQ-555). Every other failure
+    REQ-STARTUP-120 governs keeps its message and `Try again`.
+
+Item 10's "exactly one member" states its own case, the cancel. [`PD-SHELL-018`](pd-shell-018.md#pd-shell-018) revision 2
+narrows REQ-NOTIFY-044 by the disjoint case of the member that opens an available release's page (OQ-556, revision 3).
 
 The notice surface's own case — REQ-SHELL-118's download notice and REQ-SHELL-115's action list — is
 [`PD-SHELL-005`](pd-shell-005.md#pd-shell-005)'s, revised for this request rather than narrowed a second time.
@@ -97,6 +123,21 @@ download and the next start; a new per-user record; on the installed flavour, a 
 by the installer's run; and a never-bricks guarantee for that flavour that rests on the installer's own over-install
 behaviour, which nobody has measured (UD-12).
 
+**Why revision 3, and what it costs.** OQ-553, OQ-554 and OQ-555, ruled 2026-11-21 under the owner's delegation (R-072),
+raised by the `design-ui` brief of the update's surfaces. *Item 13:* UD-8 makes REQ-STARTUP-174's "will be installed the
+next time Rotaris starts" false for the portable and the AppImage, which REQ-STARTUP-174 itself reaches ("or … already
+applied in place"); `Update installed` is REQ-STARTUP-119's kept title and the one under which REQ-STARTUP-121 offers
+`Restart now`. *Item 14:* the banner holds one notice (REQ-NOTIFY-024), and the owner put the progress, the cancel and the
+restart in the title bar for the time another notice holds it (UD-10, PD-SHELL-018), so the update's own states do not
+take back a slot the person is reading; UD-2's offer is published where it displaces nothing. UD-2 is not reworded: it
+fixes what a cancel leaves, and says nothing of a notice that another has already replaced. *Item 15:* UD-4's "shown as
+REQ-STARTUP-120's notice" answers the question REQ-STARTUP-179 reserved — whether a refusal is shown, and on which surface
+— and 179 names that notice in the sentence that forbids the retry, so it fixes the notice and not the `Try again`; the
+message is REQ-STARTUP-120's with "try again or" removed. What it costs: a ready update can go unseen until the next start
+by a person who never looks at the title bar, where it is applied anyway (REQ-STARTUP-173); a cancel from the title bar
+while another notice stands leaves no `Update now` in that process; a refusal caused by a corrupted transfer is retried only
+by the next launch.
+
 **Recorded, not built.** Scheduled after the dependency remediation in the stages of the plan; the first execution is owed
 to the stage that builds it. *Built in part, 2026-11-21 (R-117, the plan's PR-2):* the pending update's store, its
 launch-time cleanup, UD-5's and UD-9's rules and REQ-STARTUP-172's revalidation, with the click flow still triggering
@@ -104,6 +145,26 @@ everything; UD-8 and UD-11 for the AppImage. Executed over fakes and, for REQ-ST
 application ([`first-executions`](../../architecture/first-executions/39-the-register-38.md)); not yet against a released
 artifact.
 
-> **Narrows:** REQ-STARTUP-017, REQ-STARTUP-114, REQ-STARTUP-116, REQ-STARTUP-119, REQ-STARTUP-121, REQ-STARTUP-122, REQ-STARTUP-125, REQ-STARTUP-127, REQ-STARTUP-155, REQ-NOTIFY-044, REQ-NOTIFY-215, REQ-NOTIFY-222, REQ-STARTUP-117, REQ-SHELL-114, REQ-NOTIFY-216
+*Built in part, 2026-11-21 (R-117, the plan's Stage 2; first executed):* the automatic download on the portable and the
+AppImage (REQ-STARTUP-169, with UD-1's metered skip read from NetworkManager's `Metered` over `gdbus`, UD-5's yield and UD-2's
+and UD-4's hold for the process), `update.cancel` (REQ-STARTUP-170), the faces and publishing rules of items 13 to 15 and of
+PD-SHELL-005 revision 3, UD-3's hide-only Dismiss (pinned: no `updates/dismissedVersion`), UD-7's acknowledgement and
+REQ-STARTUP-180's disclosure. Executed over fakes (`updater/updater.background.test.ts`: the cancel within REQ-STARTUP-170's
+2 s with every byte removed, each row of the notice-banner brief §4.1) and in the built application on the Linux agent host
+through the driver's verification-only face seam, which publishes the updater's own faces and moves no endpoint
+(REQ-STARTUP-111). **Found by building it:** a cancel arriving after the last byte but before the pending update was kept would
+have been verified and applied — `runInstall` now ends there and discards; and the click flow's `Dismiss` of `Update not
+installed` recorded the version as waved off, which the brief's §3.1 confines to the offer. **Decided here, not by the
+record:** the installer flavour keeps the click flow (no automatic download) until its next-start apply exists (Stage 3/PR-3),
+since a verified installer can only be applied by starting it; a local failure of a background download (the disk, the
+apply step) is shown with `Try again`, UD-4 silencing transport failures alone; Windows reports the connection's cost as
+unknown. **Not executed:** against a released artifact or a real feed (REQ-STARTUP-181), a metered connection on a real host,
+Windows.
+
+> **Narrows:** REQ-STARTUP-017, REQ-STARTUP-114, REQ-STARTUP-116, REQ-STARTUP-119, REQ-STARTUP-121, REQ-STARTUP-122, REQ-STARTUP-125, REQ-STARTUP-127, REQ-STARTUP-155, REQ-NOTIFY-044, REQ-NOTIFY-215, REQ-NOTIFY-222, REQ-STARTUP-117, REQ-SHELL-114, REQ-NOTIFY-216, REQ-STARTUP-174, REQ-STARTUP-120, REQ-NOTIFY-221
 
 *Raised by the owner, 2026-10-22; logged as [R-084](../requests.md#r-084). Revision 2: the owner's rulings, 2026-11-21, [R-117](../requests.md#r-117).*
+
+*Revision 3 raised by the consortium under the owner's delegation, 2026-11-21; logged as [R-072](../requests.md#r-072), the
+rulings of [OQ-553](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-553), [OQ-554](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-554) and [OQ-555](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-555), for
+[R-117](../requests.md#r-117). No other directive narrows REQ-STARTUP-174, REQ-STARTUP-120 or REQ-NOTIFY-221.*

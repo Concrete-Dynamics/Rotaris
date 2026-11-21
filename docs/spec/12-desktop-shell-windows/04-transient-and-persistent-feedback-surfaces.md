@@ -22,12 +22,16 @@ Part 4 of 7 of [domain 12](../12-desktop-shell-windows.md), which indexes every 
 - **REQ-SHELL-116**: The shell's standard error surface is a persistent ERROR notice with title, message, optional copyable details, and an optional action; it is used for Git refresh failures, checkpoint failures, settings save failures, run failures, and similar.
 - **REQ-SHELL-117**: Long-running worktree-merge and checkpoint operations show an indeterminate, window-modal, non-cancellable progress dialog that appears immediately, titled "Merging worktrees" / "Checkpoints" with accessible names "Worktree integration progress" / "Checkpoint progress".
 - **REQ-SHELL-118**: The update check begins only after the window is visible. Exactly one waved-off version is remembered at a time, never a list, so a release newer than the waved-off one is offered afresh. An available update raises a persistent INFO notice titled "Rotaris {version} is available" carrying the action "Update now". Download progress is reported into that same notice in whole percentage steps, without a second notice appearing. While the download runs the notice keeps that title and its identity — it is updated in place, never replaced — and its message SHALL convey two things and no more: that the update is downloading, and how far it has got as a whole-number percentage, redrawn only when that whole number changes. The "Update now" action SHALL be disabled for the duration so the same download cannot be started twice, and its accessible description SHALL say why it is disabled. When the download completes the message SHALL convey that the update is ready to install and the action SHALL be enabled again, performing the install action of REQ-SHELL-115. When it fails the notice SHALL become the persistent ERROR notice of REQ-SHELL-116, whose message conveys that the download failed, whose copyable details carry the reason, and whose action is enabled again so the user can retry. The wording of all four messages is left to the implementation. Dismissing any banner other than the update notice never records a waved-off version.
-  > **Narrowed by [`PD-SHELL-005`](../../product/directives/pd-shell-005.md#pd-shell-005), 2026-10-06; revision 2, 2026-10-22.** While the
+  > **Narrowed by [`PD-SHELL-005`](../../product/directives/pd-shell-005.md#pd-shell-005), 2026-10-06; revision 2, 2026-10-22; revision 3, 2026-11-21.** While the
   > download runs the notice keeps its identity and is updated in place, but carries REQ-STARTUP-118's title and message
   > and is not persistent; *revision 2:* its action cancels the download and is enabled throughout (REQ-STARTUP-170), and
   > a verified download leads not into the apply but into REQ-STARTUP-174's persistent ready notice with `Restart now`
   > (revision 1 read: "leads into the apply with no second activation"). A failure becomes REQ-STARTUP-120's `Update not
   > installed` in place. The available-update notice and the waved-off rule are unchanged.
+  > *Revision 3 (OQ-552, OQ-554):* the download notice is persistent while it runs and its dismissal only hides it (UD-3),
+  > recording no version (revision 2 read: "is not persistent"); a transport failure UD-4 keeps silent turns it into the
+  > offer with "Update now" rather than the failure notice; and while it is not the current notice a later state publishes
+  > nothing, except a failure UD-4 shows and the offer a cancel leaves into an empty slot.
 
 ### Window close, quit protection, shutdown
 

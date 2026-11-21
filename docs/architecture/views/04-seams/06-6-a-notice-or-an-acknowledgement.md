@@ -21,6 +21,16 @@ Invariants:
   no longer current (whatever replaced it stays, REQ-NOTIFY-024). A patch that raises the severity to `warning` or
   `error`, or renames a notice at that severity, is recorded first, as a publication would be (REQ-NOTIFY-268). Only the
   updater's offer uses it today (its download progress, its outcome, its failure); a new notice reaches for `report`.
+- **An update in place does not take the slot back** (OQ-554, PD-SHELL-005 revision 3, since 2026-11-21, R-117). The updater's
+  `show` publishes afresh only a first publication, a failure the record shows (replacing what holds the slot), and the offer
+  a cancel leaves into an EMPTY slot (`Publication`: `in-place`, `publish`, `into-empty-slot`); every other later transition
+  — a repaint, the ready state, the offer a silent transport failure leaves — changes the notice only while it is current
+  and otherwise publishes nothing, the title-bar indicator (channel 17, §2) carrying the state. A new notice that changes
+  over time and must not re-take the banner follows the same rule.
+- **The meter is the notice's own field** (`progress`, REQ-NOTIFY-043, since 2026-11-21): a whole percent drawn by
+  `Notice.tsx` as a `MeterBar` under the message; only the update's download face sets it, and it leaves with the notice.
+- **Dismissing records a waved-off version from the update OFFER alone** (UD-3, OQ-552): `updater.noticeDismissed` writes
+  `updates/dismissedVersion` only when the notice is in its offer face; the download, ready and failure faces only hide.
 - **A disabled action carries its reason.** `action.disabled` in `packages/contracts/src/notices.ts` is the
   accessible description REQ-SHELL-118 requires; its presence is the disabled state, and `Notice.tsx` renders the
   control disabled with that text as its description. There is no disabled action without a reason.
@@ -74,7 +84,9 @@ Invariants:
   renderer asks main for a log line by that sibling path; it still raises a persistent notice only by asking main.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.
 - **An action is dispatched in one place**, `dispatchNoticeAction` in `apps/desktop/src/renderer/main.tsx`; a member
-  whose target is not built is logged there and nothing else. `retry-run` has its target since 2026-10-02 (REQ-NOTIFY-045,
+  whose target is not built is logged there and nothing else (since 2026-11-21 `open-release-page`, PD-SHELL-018 revision 2,
+  whose behaviour is the plan's Stage 3; `cancel-update` relays `update.cancel`, from the banner and the title-bar indicator
+  alike, REQ-SHELL-115). `retry-run` has its target since 2026-10-02 (REQ-NOTIFY-045,
   `retryRun` in `apps/desktop/src/renderer/session-actions.ts`, reading the draft the composer last published through
   `composerDraft` in `shell.ts`); no failure notice carries it yet (OQ-178). A blank draft is the engine's to retry
   (`session.retry`, `Sessions.retry`, since 2026-10-02): the last submitted prompt is read over every row with

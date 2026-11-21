@@ -308,12 +308,14 @@ const disclosureOf = (probes) => text(probes, '[data-testid="network-disclosure-
 const disclosure = disclosureOf(noWorkspace.probes);
 const heading = text(noWorkspace.probes, '#about-network-heading')[0] ?? '';
 if (heading !== 'Network activity') throw new Error(`the disclosure's heading read "${heading}", not "Network activity"`);
-if (disclosure.length !== 3) throw new Error(`the About page carried ${disclosure.length} disclosure statements, not REQ-STARTUP-160's three: ${JSON.stringify(disclosure)}`);
+if (disclosure.length !== 4) throw new Error(`the About page carried ${disclosure.length} disclosure statements, not REQ-STARTUP-160's three and REQ-STARTUP-180's one: ${JSON.stringify(disclosure)}`);
 // PD-STARTUP-006 (OQ-261): the setup statement names the moment this build carries, a tool's first use, and not first-launch
 // machine setup, cache warm-up or the tool-archive hosts, which it does not carry; a build that carries either restores them.
 const owed = [
   ['first time a tool is needed', 'may', 'package registr', 'does not already have it'],
   ['supported standalone build', 'release endpoint', 'each time one of its windows is activated', 'cannot be turned off'],
+  // REQ-STARTUP-180 (R-117): the background download, where it installs, and UD-1's metered skip.
+  ['downloads it in the background', 'installs it the next time Rotaris starts', 'when you restart it', 'metered'],
   ['IP address', 'never carry', 'project files', 'prompt text', 'provider credentials'],
 ];
 owed.forEach((parts, i) => { for (const part of parts) if (!disclosure[i].includes(part)) throw new Error(`disclosure statement ${i + 1} does not say "${part}": "${disclosure[i]}"`); });

@@ -65,6 +65,25 @@
 .improvement-activity--run-header .improvement-activity__label { white-space: normal; overflow-wrap: normal; }
 .improvement-activity--title-bar .improvement-activity__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /*
+ * PD-SHELL-018 (R-117) — the title bar's update indicator, `docs/design/briefs/title-bar-and-rail.md` §8: one line, icon and
+ * text in one `--rt-space-1` gap, the mockup's right-hand items' quiet ink at the bar's small step. Not a card and not a
+ * filled pill: only the icon carries colour — the lifecycle family's run while downloading, done when ready (§1.3, §1.9) —
+ * and the figure is the mono face. No motion: the bar's one pulse is the improvement indicator's (§1.8). The action is the
+ * compact ghost button, bare text in the accent ink, so the window's one filled control stays the view's. It does not drag
+ * the window, and it never grows: its forms give way by the measurement in `UpdateIndicator.tsx`, not by shrinking here.
+ */
+.update-indicator {
+  -webkit-app-region: no-drag;
+  display: inline-flex; align-items: center; gap: var(--rt-space-1);
+  flex: 0 0 auto; min-width: 0;
+  font-size: var(--rt-text-xs); color: var(--rt-text-secondary); white-space: nowrap;
+}
+.update-indicator__status { display: inline-flex; align-items: baseline; gap: var(--rt-space-1); min-width: 0; }
+.update-indicator__icon { align-self: center; font-size: var(--rt-icon-size); line-height: 1; color: var(--rt-run); }
+.update-indicator[data-phase='ready'] .update-indicator__icon { color: var(--rt-done); }
+.update-indicator__figure { font-family: var(--rt-font-mono); color: var(--rt-text-secondary); }
+.update-indicator__action i { font-size: var(--rt-icon-size); line-height: 1; }
+/*
  * Stage B — the workspace chip (REQ-SHELL-033/035, REQ-WORKSPACE-016/017), drawn from the mockup's
  * own title bar (`docs/design/mockup/rotaris-ui-mockup.dc.html`, the `<!-- title bar -->` block):
  * a pill with a strong hairline, the mono face, the folder glyph one step quieter than the text,
@@ -742,6 +761,11 @@
 .notice__details summary { cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .notice__detail { margin: 4px 0; padding: var(--rt-space-2, 8px); background: var(--rt-chrome); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; user-select: text; }
 .notice__message { font-size: var(--rt-text-xs, 12px); }
+/* REQ-NOTIFY-043 (R-117, the notice-banner brief §8): the download's meter — a thin accent rule spanning the text column under
+   the message, drawn only while a sized download runs; the message states the same figure in words. `MeterBar` draws the
+   fill's width; its track and fill are painted here, the design system's components sheet carrying no meter rule. */
+.notice__meter { width: 100%; height: var(--rt-space-1); border-radius: var(--rt-radius-pill); background: var(--rt-border); overflow: hidden; }
+.notice__meter .meter-fill { display: block; height: 100%; background: var(--rt-accent); }
 /* UIR-008: the banner's controls share one cross-centred row, so they share a baseline. Each was a
    direct child of the `flex-start` banner before and only the dismiss centred itself, which put the
    two centres 5.42 px apart on every view at both sizes. */

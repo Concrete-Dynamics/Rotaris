@@ -25,6 +25,7 @@
  *   pnpm app:drive webPreferences [--window=approval]   (the security keys the window was built with, read back; R-091)
  *   pnpm app:drive useWindow persona:coding-agent       (every later command acts on that window; no argument: the active main window)
  *   pnpm app:drive probe "#approval-title" --window=approval    (--window= on any command: that window, for that command alone)
+ *   pnpm app:drive updateFace downloading [--version=0.2.0]   (R-117: offer|downloading|downloading-unsized|ready|failed|refused|acknowledgement|none — the updater's own faces, nothing fetched)
  *   pnpm app:drive log [--tail=40]
  *   pnpm app:drive stop            (the application's quit: the windows closed, no guard asked, then the run host's shutdown)
  *   pnpm app:drive stop --crash    (the immediate exit: a live run is left as a crash leaves it)
@@ -211,6 +212,10 @@ switch (command) {
     break;
   case 'ping':
     await withClient((d) => d.ping());
+    break;
+  // R-117: one of the updater's faces through the verification-only face seam — the notice and the title-bar indicator.
+  case 'updateFace':
+    await withClient((d) => d.send('updateFace', { ...on, text: positional[0] ?? '', ...(typeof flag('version', undefined) === 'string' ? { version: flag('version') } : {}) }));
     break;
   default:
     // The header comment, whatever its length: every line up to the one that closes it.

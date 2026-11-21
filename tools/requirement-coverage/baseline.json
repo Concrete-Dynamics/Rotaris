@@ -479,7 +479,7 @@
       ]
     },
     "NOTIFY": {
-      "uncited": 163,
+      "uncited": 161,
       "requirements": [
         "REQ-NOTIFY-002",
         "REQ-NOTIFY-004",
@@ -489,7 +489,6 @@
         "REQ-NOTIFY-039",
         "REQ-NOTIFY-041",
         "REQ-NOTIFY-042",
-        "REQ-NOTIFY-043",
         "REQ-NOTIFY-046",
         "REQ-NOTIFY-052",
         "REQ-NOTIFY-053",
@@ -606,7 +605,6 @@
         "REQ-NOTIFY-214",
         "REQ-NOTIFY-215",
         "REQ-NOTIFY-216",
-        "REQ-NOTIFY-217",
         "REQ-NOTIFY-218",
         "REQ-NOTIFY-219",
         "REQ-NOTIFY-220",
@@ -855,7 +853,7 @@
       ]
     },
     "STARTUP": {
-      "uncited": 67,
+      "uncited": 64,
       "requirements": [
         "REQ-STARTUP-008",
         "REQ-STARTUP-009",
@@ -920,9 +918,6 @@
         "REQ-STARTUP-151",
         "REQ-STARTUP-153",
         "REQ-STARTUP-154",
-        "REQ-STARTUP-170",
-        "REQ-STARTUP-174",
-        "REQ-STARTUP-180",
         "REQ-STARTUP-181"
       ]
     },

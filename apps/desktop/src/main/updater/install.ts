@@ -131,12 +131,21 @@ export interface InstallContext {
 
 /** `retain`: the verified download could not be kept as the pending update (REQ-STARTUP-171); it was discarded. */
 export type InstallStage = 'manifest' | 'signature' | 'download' | 'digest' | 'retain' | 'apply';
+/**
+ * What kind of failure a stage's sentence is, which REQ-STARTUP-179 and UD-4 (PD-STARTUP-008, R-117) treat differently:
+ * `refusal` — no signature, a signature that does not verify, no manifest, no listed digest, a digest mismatch, an oversized
+ * transfer: never retried for that release by the same process, shown with no `Try again` (OQ-555); `transport` — a request
+ * that failed or ended early: silent for a download the user did not start (UD-4); `abandoned` — the caller's signal ended
+ * it (a cancel, REQ-STARTUP-170, or the quit's bound): not a failure at all; `local` — this machine's disk or the apply
+ * step: shown with `Try again` (REQ-STARTUP-120).
+ */
+export type FailureKind = 'refusal' | 'transport' | 'abandoned' | 'local';
 export type InstallResult =
   /** `pending` is the record as last written: `swapped` after a replacement, `applying` after a hand-off. */
   | { readonly ok: true; readonly applied: Extract<ApplyOutcome, { ok: true }>; readonly pending: PendingRecord }
-  | { readonly ok: false; readonly stage: InstallStage; readonly sentence: string }
+  | { readonly ok: false; readonly stage: InstallStage; readonly kind: FailureKind; readonly sentence: string }
   /** `beforeApply` answered false: the verified download was discarded and nothing was started (OQ-86). */
-  | { readonly ok: false; readonly stage: 'declined'; readonly sentence: string };
+  | { readonly ok: false; readonly stage: 'declined'; readonly kind: 'local'; readonly sentence: string };
 
 /** The one place a small response (the manifest, the signature) is read whole; anything larger is not one of them. */
 const SMALL_RESPONSE_LIMIT = CHUNK_BYTES;
@@ -152,7 +161,7 @@ async function readSmall(body: AsyncIterable<Uint8Array>): Promise<Uint8Array | 
   return Buffer.concat(parts, total);
 }
 
-type Fetched = { readonly ok: true; readonly bytes: Uint8Array } | { readonly ok: false; readonly sentence: string };
+type Fetched = { readonly ok: true; readonly bytes: Uint8Array } | { readonly ok: false; readonly kind: FailureKind; readonly sentence: string };
 
 /** REQ-STARTUP-123: a failed fetch carries the transport status, `could not read the <what>: HTTP <status>`. */
 async function fetchSmall(network: UpdateNetwork, url: string, what: string, signal: AbortSignal | undefined): Promise<Fetched> {
@@ -160,16 +169,16 @@ async function fetchSmall(network: UpdateNetwork, url: string, what: string, sig
   try {
     response = await network.get(url, signal === undefined ? {} : { signal });
   } catch (cause) {
-    return { ok: false, sentence: `could not read the ${what}: ${messageOf(cause)}` };
+    return { ok: false, kind: signal?.aborted === true ? 'abandoned' : 'transport', sentence: `could not read the ${what}: ${messageOf(cause)}` };
   }
-  if (response.status !== 200) return { ok: false, sentence: `could not read the ${what}: HTTP ${response.status}` };
+  if (response.status !== 200) return { ok: false, kind: 'transport', sentence: `could not read the ${what}: HTTP ${response.status}` };
   let bytes: Uint8Array | 'too-large';
   try {
     bytes = await readSmall(response.body);
   } catch (cause) {
-    return { ok: false, sentence: `could not read the ${what}: ${messageOf(cause)}` };
+    return { ok: false, kind: signal?.aborted === true ? 'abandoned' : 'transport', sentence: `could not read the ${what}: ${messageOf(cause)}` };
   }
-  if (bytes === 'too-large') return { ok: false, sentence: `could not read the ${what}: it is larger than 1 MiB, which no ${what} is` };
+  if (bytes === 'too-large') return { ok: false, kind: 'refusal', sentence: `could not read the ${what}: it is larger than 1 MiB, which no ${what} is` };
   return { ok: true, bytes };
 }
 
@@ -188,17 +197,19 @@ export const hashMismatchSentence = (name: string, expected: string, actual: str
 export const oversizedSentence = (name: string, size: number): string => `${name} is larger than the ${size} bytes the release feed states for it; the download was ended and discarded, and nothing was installed`;
 
 export async function runInstall(offer: Offer, ctx: InstallContext): Promise<InstallResult> {
+  /** Read afresh at each use: the caller's signal can fire between any two awaits (a cancel, REQ-STARTUP-170). */
+  const aborted = (): boolean => ctx.signal?.aborted === true;
   // 1. The manifest and its signature must both be published (REQ-STARTUP-032/123), and both are fetched before anything else.
-  if (offer.manifest === null) return { ok: false, stage: 'manifest', sentence: noManifestSentence(offer.version) };
-  if (offer.signature === null) return { ok: false, stage: 'signature', sentence: noSignatureSentence(offer.version) };
+  if (offer.manifest === null) return { ok: false, stage: 'manifest', kind: 'refusal', sentence: noManifestSentence(offer.version) };
+  if (offer.signature === null) return { ok: false, stage: 'signature', kind: 'refusal', sentence: noSignatureSentence(offer.version) };
   const manifest = await fetchSmall(ctx.network, offer.manifest.url, 'checksum file', ctx.signal);
-  if (!manifest.ok) return { ok: false, stage: 'manifest', sentence: manifest.sentence };
+  if (!manifest.ok) return { ok: false, stage: 'manifest', kind: manifest.kind, sentence: manifest.sentence };
   const signature = await fetchSmall(ctx.network, offer.signature.url, 'signature over the checksum file', ctx.signal);
-  if (!signature.ok) return { ok: false, stage: 'signature', sentence: signature.sentence };
+  if (!signature.ok) return { ok: false, stage: 'signature', kind: signature.kind, sentence: signature.sentence };
 
   // 2. Verify the signature. An unverified manifest reaches no parser (REQ-STARTUP-122, REQ-STARTUP-167).
   const verdict = verifyDetachedSignature(manifest.bytes, signature.bytes, ctx.keys ?? RELEASE_SIGNING_KEYS);
-  if (!verdict.verified) return { ok: false, stage: 'signature', sentence: untrustedSignatureSentence(offer.version, verdict.reason === 'no-key') };
+  if (!verdict.verified) return { ok: false, stage: 'signature', kind: 'refusal', sentence: untrustedSignatureSentence(offer.version, verdict.reason === 'no-key') };
 
   // 3. Parse, and only now (REQ-STARTUP-113).
   const entries = parseChecksumManifest(Buffer.from(manifest.bytes).toString('utf8'));
@@ -221,7 +232,7 @@ export async function runInstall(offer: Offer, ctx: InstallContext): Promise<Ins
     await area.removeFile(paths.partial);
   } catch (cause) {
     await discard();
-    return { ok: false, stage: 'download', sentence: `could not make the directory ${paths.directory} for the download: ${messageOf(cause)}` };
+    return { ok: false, stage: 'download', kind: 'local', sentence: `could not make the directory ${paths.directory} for the download: ${messageOf(cause)}` };
   }
   const downloaded = paths.partial;
   let response: NetworkResponse;
@@ -229,42 +240,49 @@ export async function runInstall(offer: Offer, ctx: InstallContext): Promise<Ins
     response = await ctx.network.get(offer.asset.url, ctx.signal === undefined ? {} : { signal: ctx.signal });
   } catch (cause) {
     await discard();
-    return { ok: false, stage: 'download', sentence: `could not download ${offer.asset.name}: ${messageOf(cause)}` };
+    return { ok: false, stage: 'download', kind: aborted() ? 'abandoned' : 'transport', sentence: `could not download ${offer.asset.name}: ${messageOf(cause)}` };
   }
   if (response.status !== 200) {
     await discard();
-    return { ok: false, stage: 'download', sentence: `could not download ${offer.asset.name}: HTTP ${response.status}` };
+    return { ok: false, stage: 'download', kind: 'transport', sentence: `could not download ${offer.asset.name}: HTTP ${response.status}` };
   }
   let sink: DownloadSink & { close(): Promise<void> };
   try {
     sink = await area.open(downloaded);
   } catch (cause) {
     await discard();
-    return { ok: false, stage: 'download', sentence: `could not write the download to ${downloaded}: ${messageOf(cause)}` };
+    return { ok: false, stage: 'download', kind: 'local', sentence: `could not write the download to ${downloaded}: ${messageOf(cause)}` };
   }
   const streamed = await streamInChunks(response.body, offer.asset.size, sink, ctx.onProgress, ctx.signal);
   const closed = await sink.close().then(() => null, (cause: unknown) => messageOf(cause));
   if (streamed.ok && closed !== null) {
     await discard();
-    return { ok: false, stage: 'download', sentence: `could not write the download to ${downloaded}: ${closed}` };
+    return { ok: false, stage: 'download', kind: 'local', sentence: `could not write the download to ${downloaded}: ${closed}` };
   }
   if (!streamed.ok) {
     await discard();
-    if (streamed.why === 'write') return { ok: false, stage: 'download', sentence: `could not write the download to ${downloaded}: ${streamed.error}` };
-    if (streamed.why === 'aborted') return { ok: false, stage: 'download', sentence: `the download of ${offer.asset.name} was abandoned before it finished` };
+    if (streamed.why === 'write') return { ok: false, stage: 'download', kind: 'local', sentence: `could not write the download to ${downloaded}: ${streamed.error}` };
+    if (streamed.why === 'aborted') return { ok: false, stage: 'download', kind: 'abandoned', sentence: `the download of ${offer.asset.name} was abandoned before it finished` };
     // REQ-STARTUP-169/179: an oversized transfer is a refusal, not a transport failure, and its sentence says so.
-    if (streamed.why === 'oversized') return { ok: false, stage: 'download', sentence: oversizedSentence(offer.asset.name, offer.asset.size) };
-    return { ok: false, stage: 'download', sentence: `the download of ${offer.asset.name} ended early: ${streamed.error}` };
+    if (streamed.why === 'oversized') return { ok: false, stage: 'download', kind: 'refusal', sentence: oversizedSentence(offer.asset.name, offer.asset.size) };
+    return { ok: false, stage: 'download', kind: 'transport', sentence: `the download of ${offer.asset.name} ended early: ${streamed.error}` };
   }
 
   // 5. Verify the digest, case-insensitively (REQ-STARTUP-123).
   if (published === null) {
     await discard();
-    return { ok: false, stage: 'digest', sentence: noHashSentence(offer.asset.name) };
+    return { ok: false, stage: 'digest', kind: 'refusal', sentence: noHashSentence(offer.asset.name) };
   }
   if (published.toLowerCase() !== streamed.sha256.toLowerCase()) {
     await discard();
-    return { ok: false, stage: 'digest', sentence: hashMismatchSentence(offer.asset.name, published, streamed.sha256) };
+    return { ok: false, stage: 'digest', kind: 'refusal', sentence: hashMismatchSentence(offer.asset.name, published, streamed.sha256) };
+  }
+
+  // REQ-STARTUP-170: a cancel holds through the verification — a signal that arrived after the last byte ends it here,
+  // before anything is kept, and the partial goes like any other abandoned download's.
+  if (aborted()) {
+    await discard();
+    return { ok: false, stage: 'download', kind: 'abandoned', sentence: `the download of ${offer.asset.name} was abandoned before it finished` };
   }
 
   // 6. Keep it as the pending update (REQ-STARTUP-171): the manifest's and the signature's exact bytes beside it, each
@@ -284,20 +302,27 @@ export async function runInstall(offer: Offer, ctx: InstallContext): Promise<Ins
     await writePending(area, pending);
   } catch (cause) {
     await discard();
-    return { ok: false, stage: 'retain', sentence: `could not keep the verified download of ${offer.asset.name} in ${paths.directory}: ${messageOf(cause)}; it was discarded and nothing was installed` };
+    return { ok: false, stage: 'retain', kind: 'local', sentence: `could not keep the verified download of ${offer.asset.name} in ${paths.directory}: ${messageOf(cause)}; it was discarded and nothing was installed` };
   }
   // UD-5: a pending update of another version is superseded by this one, now verified — its directory, and anything else
   // no record names, goes (REQ-STARTUP-178).
   await sweepUpdates(area, pending);
 
+  // REQ-STARTUP-170: a cancel that arrived while the verified download was being kept leaves nothing either — the pending
+  // update it would have become is discarded and nothing is applied.
+  if (ctx.beforeApply === undefined && aborted()) {
+    await discardPending(area, offer.version);
+    return { ok: false, stage: 'download', kind: 'abandoned', sentence: `the download of ${offer.asset.name} was abandoned before it finished` };
+  }
+
   // 6a. OQ-86: the last moment before anything is started — a run begun while the download ran is asked about here.
   if (ctx.beforeApply !== undefined) {
     const proceed = await ctx.beforeApply();
-    if (!proceed || ctx.signal?.aborted === true) {
+    if (!proceed || aborted()) {
       await discardPending(area, offer.version);
       return proceed
-        ? { ok: false, stage: 'download', sentence: `the download of ${offer.asset.name} was abandoned before it finished` }
-        : { ok: false, stage: 'declined', sentence: 'a run is active and the user returned to the window; the verified download was discarded and nothing was started (REQ-STARTUP-046)' };
+        ? { ok: false, stage: 'download', kind: 'abandoned', sentence: `the download of ${offer.asset.name} was abandoned before it finished` }
+        : { ok: false, stage: 'declined', kind: 'local', sentence: 'a run is active and the user returned to the window; the verified download was discarded and nothing was started (REQ-STARTUP-046)' };
     }
   }
 
@@ -313,7 +338,7 @@ export async function runInstall(offer: Offer, ctx: InstallContext): Promise<Ins
   const applied = await applyUpdate(ctx.flavour, ctx.target, paths.asset, ctx.files, ctx.spawn);
   if (!applied.ok) {
     await discardPending(area, offer.version);
-    return { ok: false, stage: 'apply', sentence: applied.sentence };
+    return { ok: false, stage: 'apply', kind: 'local', sentence: applied.sentence };
   }
   // UD-8: the portable and AppImage replaced their artifact at once; the pending files and `<name>.old` stay until a
   // launch of the replaced artifact has painted (REQ-STARTUP-176, REQ-STARTUP-178; `settleAtLaunch`).

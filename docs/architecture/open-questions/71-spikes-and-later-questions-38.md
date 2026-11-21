@@ -1,6 +1,6 @@
 # Open questions — Spikes, and the questions raised since (38 of 38)
 
-Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543, OQ-549 – OQ-551; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542, OQ-544 – OQ-548 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
+Part 71 of 71 of the [open-questions record](../open-questions.md), which indexes every part. Holds OQ-543, OQ-549 – OQ-551; OQ-523 – OQ-540, OQ-485, OQ-473, OQ-475, OQ-476, OQ-480, OQ-541, OQ-542, OQ-544 – OQ-548, OQ-552 – OQ-557 archived in [the archive](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md).
 
 - OQ-523 — Is a `--rt-viz-2` persona label one stop from `--rt-run` a “state colour” under PD-CHAT-005?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-523)
 - OQ-524 — Is Workspace compact mode measured by the view's own width or by the viewport, when REQ-SHELL-059 and REQ-MONITOR-051 name different ones?; ruled 2026-11-03; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38.md#oq-524)
@@ -72,3 +72,10 @@ Part 71 of 71 of the [open-questions record](../open-questions.md), which indexe
 **What the build proceeds under.** An entry whose `api_mode` is stated as `responses` keeps the responses route although its `auth_provider` is `copilot`; every other Copilot entry is chat-only as REQ-CONFIG-084 says, and an entry that states `disable_responses_api: true` itself is obeyed (`packages/config/src/sections/models.ts`). With that reading the same model's request reached `<tenant base>/responses` and was no longer refused for its route.
 
 **What decides it.** Either REQ-CONFIG-084's switch yields to a stated or discovered `responses` mode (the reading built), or it holds and a Copilot model with no chat route is recorded `no_supported_route` under REQ-PROVIDER-073, which REQ-PROVIDER-074's own route table would then have to say. Not ruled here: the builder is not the orchestrator.
+
+- OQ-552 — How does the download notice leave the banner when nothing replaces it — the user's dismissal of UD-3, or a background transport failure …; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-552)
+- OQ-553 — Once the portable or the AppImage has been replaced in place on verification (UD-8), is its ready notice REQ-STARTUP-119's Update …; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-553)
+- OQ-554 — Which update transitions take the banner back from another notice: the ready state, the offer a cancel from the title-bar indicator leaves, …; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-554)
+- OQ-555 — Does REQ-STARTUP-120's `Try again` stand on an integrity refusal that REQ-STARTUP-179 says is not retried for that release by the same …; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-555)
+- OQ-556 — Is "open the page of an available release" a member of REQ-NOTIFY-044's action vocabulary, which PD-SHELL-018 does not name?; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-556)
+- OQ-557 — Do the notice banner and the acknowledgement stack take a row in `docs/design/README.md` §7, so a brief of their states has a slug?; ruled 2026-11-21; [archived](../../archive/architecture/open-questions/71-spikes-and-later-questions-38-continued-6.md#oq-557)

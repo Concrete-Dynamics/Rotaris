@@ -49,7 +49,7 @@ describe('the network-activity disclosure on About & Legal (REQ-STARTUP-160)', (
   // The server renderer escapes an apostrophe; the text the reader sees is the decoded one.
   const decoded = (html: string): string => html.replaceAll('&#x27;', "'").replaceAll('&quot;', '"').replaceAll('&amp;', '&');
 
-  it('is a labelled section of the surface carrying the three statements as plain paragraphs', () => {
+  it('is a labelled section of the surface carrying the four statements as plain paragraphs (REQ-STARTUP-160\'s three, REQ-STARTUP-180\'s one)', () => {
     const html = section(draw(false));
     expect(html).not.toBe('');
     expect(html).toMatch(/aria-labelledby="about-network-heading"/);
@@ -80,6 +80,11 @@ describe('the network-activity disclosure on About & Legal (REQ-STARTUP-160)', (
   it('states the update check: a supported standalone build, each window activation, not able to be turned off (REQ-STARTUP-105/111/114)', () => {
     const s = NETWORK_DISCLOSURE.updates;
     for (const part of ['supported standalone build', 'release endpoint', 'newer release', 'each time one of its windows is activated', 'cannot be turned off']) expect(s).toContain(part);
+  });
+
+  it('states the background download as REQ-STARTUP-180 has it, with UD-1\'s metered skip (PD-STARTUP-008)', () => {
+    const s = NETWORK_DISCLOSURE.download;
+    for (const part of ['newer release', 'supported standalone build', 'downloads it in the background', 'the host that serves', 'installs it the next time Rotaris starts', 'when you restart it', 'metered', 'Update now']) expect(s).toContain(part);
   });
 
   it('states what the requests can expose and what they never carry', () => {

@@ -13,6 +13,7 @@ import { reauthCommands } from './commands/reauth.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
 import { everyHandlerThrows, startDriver, type AuxiliaryWindow } from './driver.js';
+import { createFaceSeam } from './updater/face-seam.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey, claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, createProtector, type HandOver, type InstanceRecord } from '@rotaris/platform';
@@ -30,7 +31,7 @@ import { AUTH_RECOVERY_DIALOG_WIDTH, type AuthRecoveryPayload, type Acknowledgem
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater, updateCloseBox } from './updater/updater.js';
 import { createSuccessorWait } from './updater/successor.js';
-import { classifyThisInstallation, createUpdaterPorts, successorArguments, successorEndpointFromArgv } from './updater/electron.js';
+import { classifyThisInstallation, createUpdaterPorts, readConnectionCost, successorArguments, successorEndpointFromArgv } from './updater/electron.js';
 import { updateCommands } from './commands/update.js';
 import { diagnosticsCommands } from './commands/diagnostics.js'; // REQ-SHELL-163, REQ-STARTUP-129
 import { DiagnosticsCaptures, isExistingDirectory } from './diagnostics.js'; // REQ-STARTUP-129..133, hardening D2, PD-STARTUP-011
@@ -735,6 +736,10 @@ async function main(): Promise<void> {
     network: updaterPorts.network, updates: updaterPorts.updates, files: updaterPorts.files, spawn: updaterPorts.spawn, handOffRecord: updaterPorts.handOffRecord,
     dismissedVersion: { read: () => preferences.read('updates/dismissedVersion'), write: (version) => preferences.write('updates/dismissedVersion', version) },
     notices,
+    // UD-1 (REQ-STARTUP-169): the platform's report of the connection's cost; `unknown` is not metered (`updater/electron.ts`).
+    connectionCost: readConnectionCost,
+    // PD-SHELL-018, channel 17: the title-bar indicator's phase, to every window on the relay, before the notice changes.
+    publishState: (state) => { relay.broadcast(CHANNEL.updateState, { v: CONTRACT_SCHEMA_VERSION, ...state }); },
     log: (level, message) => log(message, level),
     timers: clocks.timers,
     wall: clocks.wall,
@@ -2264,6 +2269,7 @@ async function main(): Promise<void> {
   // listener, nor `driver.ts` at all, nor the name of the variable that would have started it.
   const driverEndpoint = __ROTARIS_SEAMS__ ? process.env['ROTARIS_DRIVER'] : undefined;
   if (driverEndpoint) {
+    const updateFaceSeam = createFaceSeam({ notices, publishState: (state) => { relay.broadcast(CHANNEL.updateState, { v: CONTRACT_SCHEMA_VERSION, ...state }); } });
     const driver = startDriver(driverEndpoint, {
       /**
        * A4: the seam addresses a window instead of assuming there is one. `which` is an index into the
@@ -2310,6 +2316,8 @@ async function main(): Promise<void> {
       command: (request, selectedWindow) => runCommand(request, selectedWindow.webContents.id),
       commandThrowing: (request, selectedWindow, cause) => dispatchOver(everyHandlerThrows(handlers, cause))(request, selectedWindow.webContents.id),
       deferProjectOffer: (selectedWindow, delayMs) => mainWindows.deferProjectOffer(selectedWindow.webContents.id, delayMs),
+      // R-117: the update's faces — the updater's own — published into the notice store and channel 17, nothing else.
+      updateFace: (face, version) => updateFaceSeam.show(face, version),
       // The application's quit is the default (`driver.ts`, `quit`); the immediate exit is asked for by name.
       quit: () => { log('driver: quitting through the application\'s quit'); app.quit(); },
       exit: () => exitCleanly(0),

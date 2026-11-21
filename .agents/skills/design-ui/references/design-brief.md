@@ -11,6 +11,7 @@ The slug is the surface's row in `docs/design/README.md` §7. `--views=` takes `
 | Slug | §7 row | `--views=` | Not in the `ui-review` pack — reach it with `pnpm app:drive` |
 |---|---|---|---|
 | `title-bar-and-rail` | Title bar, nav rail | all (omit `--views=`) | — |
+| `notice-banner` | Notice banner, acknowledgements | all (omit `--views=`) | a notice or an acknowledgement that is not standing: publish it by its command (`notice.report`) or, for the update's faces, by the face seam its build adds, then `waitFor` `[data-testid="notice"]` or `[data-testid="acknowledgement"]` |
 | `overview` | Overview | 1 | the delegation graph and the agent table during a run: drive a scripted run with delegated agents, `waitFor` `.agent-table__row` |
 | `transcript-rows` | Transcript rows, run header | 2 | each row category: drive a scripted run, `waitFor` the row |
 | `composer` | Queue, composer, slash catalogue | 2 | the slash popup is a captured overlay; queue states by `type --enter` |

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { isViewId, LIBRARY_TABS, STARTUP_VIEW, type AnalysisPass, type ViewId } from '@rotaris/contracts';
+import { isViewId, LIBRARY_TABS, STARTUP_VIEW, UPDATE_STATE_NONE, type AnalysisPass, type UpdateState, type ViewId } from '@rotaris/contracts';
 
 /**
  * Local-only interface state (ADR-0043, ADR-0057): the active view, and later
@@ -109,6 +109,12 @@ export interface ShellState {
    */
   readonly improvementAnalysis: ImprovementAnalysisActivity;
   setImprovementAnalysis: (activity: ImprovementAnalysisActivity) => void;
+  /**
+   * PD-SHELL-018 (R-117): the updater's phase as channel 17 carries it — the title-bar indicator's whole input. Main owns
+   * every fact in it; the window holds the last publication (or its `update.state` read at mount) and draws it.
+   */
+  readonly updateState: UpdateState;
+  setUpdateState: (state: UpdateState) => void;
 }
 
 export interface ImprovementAnalysisActivity {
@@ -155,6 +161,8 @@ export const useShellState = create<ShellState>((set, get) => ({
   toggleSidebar(foldedNow) { set({ sidebarFolded: !foldedNow }); },
   improvementAnalysis: { active: false, pass: 'post_run' },
   setImprovementAnalysis(activity) { set({ improvementAnalysis: activity }); },
+  updateState: UPDATE_STATE_NONE,
+  setUpdateState(updateState) { set({ updateState }); },
   switchView(id) {
     if (!isViewId(id)) return;
     const state = get();

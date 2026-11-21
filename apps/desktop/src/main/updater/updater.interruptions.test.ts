@@ -66,6 +66,8 @@ function launch(disk: MemoryDisk, version: string, kill?: string) {
     dismissedVersion: { read: () => undefined, write: async () => undefined }, notices, log: (level, message) => { logged.push(`${level}: ${message}`); },
     timers: clock.timers, wall: clock.wall, startSuccessor: async () => undefined, closeWindows: () => undefined, activeRuns: async () => 0,
     confirmClose: async () => true, confirmUnsaved: async () => true, integrationAllows: async () => true,
+    // UD-1: a metered connection keeps these launches on the offer and its `Update now`, the click this file interrupts.
+    connectionCost: async () => 'metered', publishState: () => undefined,
   });
   return { updater, logged, notices, clock };
 }

@@ -1,5 +1,12 @@
 ## The background "SIGINT while dash is starting the command" cases go red alone on a quiet Linux host
 
+## Outcome: repaired 2026-11-21 (R-119's landing branch)
+
+The attempt budget was a count, and on this host a miss costs about 1.5 ms: under the whole gate, two of the three cases
+spent all 1 500 attempts inside 2.2 s without one landing, twice in a row (the landing of R-119, `8e94bfe`). The loop now
+goes on past 1 500 attempts until one lands or 90 s have passed (the case's bound raised to 150 s), so a fast host buys
+more aim with the time a slow one spends on hits. A miss over the whole 90 s still fails the case, as before.
+
 `packages/agent-tools/src/terminal/background.test.ts`'s three cases "REQ-TOOLS-128 / R-044: a SIGINT that lands while
 dash is starting the command still stops the session" (sleep, a shell script, Node) fail at `expect(hit).toBe(true)`
 (line 219): none of the case's attempts landed its SIGINT inside dash's start window, so the case measured nothing and

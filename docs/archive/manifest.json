@@ -1142,6 +1142,7 @@
     "defects/the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md": "00b5320bc3034af46e73d6369ac050b6431e221bb930c590036116cb4368e90f",
     "defects/the-autopsy-reader-reads-two-agents-each-running-a-command-once-as-one-command-retried.md": "31f77f4a008df9e38dfe6c62ec0de8cbf44c4f4e71afe926aec7676603afc15e",
     "defects/the-autopsy-reports-zero-cost-with-tokens-whatever-the-qualifier.md": "418af5952cb23f9d2473726688affaa157272b1745380651e3da8b1f928a7b5a",
+    "defects/the-background-sigint-while-dash-starts-cases-go-red-alone-on-a-quiet-linux-host.md": "fd5ea8179564c39bd89517cc5bc025f8a94c845df822368b32afd6bb148c37e0",
     "defects/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md": "6bf88f1040c402d2f87a5993dc3ee700c705f2a6d75d6985a8f8a8525d2e8c10",
     "defects/the-bounded-projection-strands-a-run-whose-member-changed-in-place.md": "dc53152a1a68e8678bc0c29d920802157326dbc576d178e325e10e8a09766b6d",
     "defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md": "680cfe82a045cdaab13a38698f057604b677bf338ee594ba6e6da6a29dcc39e6",

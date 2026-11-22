@@ -139,7 +139,8 @@ function phraseFor(toolName: string, args: Args): string | null {
     case 'configure': {
       const setting = textOf(args, 'setting');
       const op = textOf(args, 'operation');
-      if (setting === '') return op === 'set' ? 'Changes a setting' : 'Reads a setting';
+      // No arguments drawn (display.show_tool_inputs off, found 2026-11-22): say nothing rather than guess the operation.
+      if (setting === '') return op === 'set' ? 'Changes a setting' : op === '' ? null : 'Reads a setting';
       return op === 'set' ? `Changes the setting ${setting}` : op === 'explain' ? `Explains the setting ${setting}` : `Reads the setting ${setting}`;
     }
     case 'git_commit': {

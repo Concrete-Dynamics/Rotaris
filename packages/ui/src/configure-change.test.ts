@@ -79,5 +79,7 @@ describe('a configure set\'s row draws its change and its Undo (PD-CONFIG-014 cl
   it('describes the call by its setting', () => {
     expect(describeToolCall('configure', '{"operation":"read","setting":"medium_model"}')).toBe('Reads the setting medium_model');
     expect(describeToolCall('configure', '{"operation":"explain","setting":"hooks"}')).toBe('Explains the setting hooks');
+    // With tool inputs hidden the row records none, and the header does not guess the operation.
+    expect(describeToolCall('configure', undefined)).toBe('configure');
   });
 });

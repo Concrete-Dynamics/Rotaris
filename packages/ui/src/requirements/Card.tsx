@@ -1,9 +1,21 @@
-import { memo } from 'react';
-import type { BoardCard, ReqId } from '@rotaris/contracts';
+import { Fragment, memo } from 'react';
+import type { BoardCard, HealthToken, ReqId } from '@rotaris/contracts';
 import { HEALTH_GLOSS, cardFacts, columnLabel, evidenceSegments, evidenceSummary, executionLine, joinCapped } from '@rotaris/ui-core';
 import { EvidenceIndicator } from './EvidenceIndicator.js';
 import { ALERT_GLYPH, DISMISS_FEEDBACK, PRIVATE_TRANSFER_TYPE, SELECTED_EXPLANATION, SELECTED_WORD, alertSeverity } from './model.js';
-import { Button as DesignButton, Tag as DesignTag } from '../design-system/index.js';
+import { Button as DesignButton, StatusDot as DesignStatusDot, Tag as DesignTag } from '../design-system/index.js';
+
+/**
+ * R-124 (the owner, 2026-11-22: "the info on cards could also be a little more distinctive"). What a card says is
+ * REQ-TRACE-242..257's and unchanged, word for word; how each fact is drawn now tells it apart from its neighbours. The
+ * health word stands beside a dot in its state's colour (state said twice, §1.2); each evidence obligation's state is
+ * set in its own colour after a quiet label; identifiers and paths among the facts are set in the mono face (§1.4).
+ */
+const HEALTH_TONE: Readonly<Record<HealthToken, 'run' | 'wait' | 'fail' | 'idle'>> = {
+  'healthy': 'run', 'incomplete-traceability': 'wait', 'needs-update': 'wait', 'verification-failed': 'fail', 'blocked': 'fail', 'superseded': 'idle', 'deprecated': 'idle',
+};
+/** Facts whose value is an identifier or a path (REQ-TRACE-243's optional facts). */
+const MONO_FACTS = new Set(['Epic', 'Source', 'Supersedes', 'Superseded by', 'Origin']);
 
 /**
  * Part AK2 — the requirement card (REQ-TRACE-242..257). The seven facts every card carries: identifier, title,
@@ -51,7 +63,8 @@ export const RequirementCard = memo(function RequirementCard({ card, now, localO
   // REQ-TRACE-243/256: the dependencies holding it, read off the card's own relations here so the memo's inputs are the card and nothing derived per render.
   const dependencies = card.relations.filter((r) => r.kind === 'depends-on').map((r) => r.id);
   const facts = cardFacts(card, now, localOffsetMinutes);
-  const summary = evidenceSummary(evidenceSegments(card));
+  const segments = evidenceSegments(card);
+  const summary = evidenceSummary(segments);
   const condition = card.column === 'blocked' ? 'blocked' : card.column;
   return (
     <article
@@ -91,16 +104,21 @@ export const RequirementCard = memo(function RequirementCard({ card, now, localO
         <EvidenceIndicator card={card} onOpen={onOpenEvidence} />
       </div>
       <span className="req-card__title">{card.title}</span>
-      <span className="req-card__health" data-testid="req-health" data-health={card.health} title={HEALTH_GLOSS[card.health]}>health: <span className="mono">{card.health}</span></span>
+      <span className="req-card__health" data-testid="req-health" data-health={card.health} data-tone={HEALTH_TONE[card.health]} title={HEALTH_GLOSS[card.health]}><DesignStatusDot state={HEALTH_TONE[card.health]} className="req-card__health-dot" />health: <span className="mono req-card__health-word">{card.health}</span></span>
       {selected && <span className="req-card__selected" data-testid="req-selected">{SELECTED_WORD} — {SELECTED_EXPLANATION}</span>}
       {inFlightLabel && <DesignTag kind="run" className="req-card__in-flight" role="status" data-testid="req-in-flight">{inFlightLabel}</DesignTag>}
-      <span className="card-meta req-card__evidence-summary" data-testid="req-evidence-summary">{summary}</span>
+      {/* REQ-TRACE-261's `<Obligation>: <State>` sentence, its text unchanged; each state drawn in its own colour. */}
+      <span className="card-meta req-card__evidence-summary" data-testid="req-evidence-summary" data-segmented={segments.length > 0}>
+        {segments.length === 0 ? summary : segments.map((s, i) => (
+          <Fragment key={s.kind}>{i > 0 && <span className="req-card__sep" aria-hidden="true"> · </span>}<span className="req-card__obligation">{s.label}: </span><span className="req-card__state" data-state={s.state}>{s.stateLabel}</span></Fragment>
+        ))}
+      </span>
       <span className="card-meta req-card__execution" data-testid="req-execution">{execution}</span>
       {(facts.length > 0 || dependencies.length > 0) && (
         <dl className="req-card__facts">
           {facts.map((f) => (f.label === 'Last change'
             ? <div key={f.label} className="req-card__fact"><dt>{f.label}</dt><dd title={f.detail} aria-description={f.detail}>{f.value}</dd></div>
-            : <div key={f.label} className="req-card__fact"><dt>{f.label}</dt><dd>{f.value}</dd></div>))}
+            : <div key={f.label} className="req-card__fact"><dt>{f.label}</dt><dd className={MONO_FACTS.has(f.label) ? 'mono' : undefined}>{f.value}</dd></div>))}
           {dependencies.length > 0 && <div className="req-card__fact"><dt>Dependencies</dt><dd className="mono">{joinCapped(dependencies)}</dd></div>}
         </dl>
       )}

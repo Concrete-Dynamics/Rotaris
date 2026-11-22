@@ -16,7 +16,7 @@ import { ArtifactsStateSchema } from './artifacts.js';
 import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from './repository.js';
 import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './checkpoints.js';
 import { PromptListSchema, PromptStateSchema } from './library.js';
-import { ActorSchema, RequirementsCommandSchema, STANDING_DISCLOSURES } from './requirements.js'; // Part AK
+import { ActorSchema, ProgressReportSchema, RequirementsCommandSchema, STANDING_DISCLOSURES } from './requirements.js'; // Part AK
 import { PromptsRootsResultSchema } from './slash.js'; // Part AO
 import { SkillsStateSchema } from './skills.js'; // ADR-0063
 import { ImprovementAnalysisJobSchema, ImprovementArtifactSchema, ImprovementCommandSchema, RunTypeSchema } from './improvements.js';
@@ -753,8 +753,12 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
    * it: a step must be visible "at the moment that step finishes", which a poll can only approximate.
    */
   z.object({ kind: z.literal('mcp.setupStatus'), status: McpSetupStatusSchema }),
-  /** PD-TRACE-002 clause 10: the workspace service read the board again because the repository changed under its watcher; main publishes the generation on channel 10. */
-  z.object({ kind: z.literal('requirements.changed'), workspaceRoot: z.string().min(1), generation: z.number().int().nonnegative() }),
+  /**
+   * PD-TRACE-002 clause 10: the workspace service read the board again because the repository changed under its watcher; main publishes the generation on channel 10.
+   * REQ-ADOPT-026 (R-123): with `progress`, the generation is unchanged and the event is a report of a survey in flight — one progress-protocol value
+   * (REQ-TRACE-212, REQ-TRACE-213) that main publishes on channel 10's own `progress` field, and the board reads nothing again for it.
+   */
+  z.object({ kind: z.literal('requirements.changed'), workspaceRoot: z.string().min(1), generation: z.number().int().nonnegative(), progress: ProgressReportSchema.optional() }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

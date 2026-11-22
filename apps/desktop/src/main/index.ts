@@ -591,7 +591,9 @@ async function main(): Promise<void> {
       // exactly as it hears one a command moved (REQ-TRACE-334). The workspace named is the canonical one this instance opened.
       svc.link.onEvent((e) => {
         if (e.kind !== 'requirements.changed') return;
-        for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, { v: CONTRACT_SCHEMA_VERSION, workspace: key, generation: e.generation, affected: null });
+        // REQ-ADOPT-026 (R-123): a survey's progress report travels on channel 10's own `progress` field, at an unchanged generation.
+        const payload = { v: CONTRACT_SCHEMA_VERSION, workspace: key, generation: e.generation, affected: null, ...(e.progress === undefined ? {} : { progress: e.progress }) };
+        for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, payload);
       });
       // ADR-0002 c.7 / ADR-0058: the service's narrow requests back to main are forwarded to the run host, bounded.
       svc.link.onAsk((a) => {

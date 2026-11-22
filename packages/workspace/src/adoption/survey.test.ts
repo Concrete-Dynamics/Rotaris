@@ -65,6 +65,21 @@ describe('the survey proposes, is measured, and ends in a preview that records n
     expect(snapshot(root)).toBe(before);
   });
 
+  it('hands each progress report to its host as it is made, the same reports the result returns (REQ-ADOPT-026, R-123)', async () => {
+    const root = project(FILES);
+    const heard: unknown[] = [];
+    const deps = { ...scripted([{ action: 'read', path: 'docs/spec/a.md' }, { action: 'propose', shape: GOOD }, { action: 'finish' }]), progress: (r: unknown) => heard.push(r) };
+    const r = await survey(root, deps);
+    expect(heard).toEqual(r.progress);
+    expect(heard).toEqual(expect.arrayContaining([{ kind: 'phase', phase: 'reading', total: 0 }, { kind: 'item', phase: 'adopting', label: 'read docs/spec/a.md', position: 1, total: 40 }, { kind: 'item', phase: 'adopting', label: 'propose', position: 2, total: 40 }]));
+  });
+
+  it('steps over a progress host that throws: the survey still ends in its preview (REQ-TRACE-215)', async () => {
+    const root = project(FILES);
+    const r = await survey(root, { ...scripted([{ action: 'propose', shape: GOOD }, { action: 'finish' }]), progress: () => { throw new Error('host down'); } });
+    expect(r.ok).toBe(true);
+  });
+
   it('hands a refused proposal back by field and takes the repair', async () => {
     const root = project(FILES);
     const deps = scripted([{ action: 'propose', shape: { ...GOOD, write_to: '/etc/passwd' } }, { action: 'propose', shape: { ...GOOD, stores: [{ ...GOOD.stores[0]!, definition: '^nothing(?<id>X-\\d+)' }], identifier: 'X-\\d+' } }, { action: 'propose', shape: GOOD }, { action: 'finish' }]);

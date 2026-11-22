@@ -2821,27 +2821,22 @@ strong { font-weight: var(--rt-weight-medium); }
 .req { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; padding-top: var(--rt-space-4); }
 .req-header { flex: none; display: flex; flex-direction: column; gap: var(--rt-space-2); padding: 0 var(--rt-space-5) var(--rt-space-2); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 .req-header__row { display: flex; align-items: center; gap: var(--rt-space-3); min-height: var(--rt-control-height); flex-wrap: wrap; }
-/* R-097 (docs/design/briefs/requirements-board.md, §8 and audit item 2): the analysis statement stands BESIDE the rows that
-   steer the board, not under them. Held to the prose measure (UIR-011) under the controls it was five lines, 89 px of a
-   248 px header, and the frame took two thirds of the view at the minimum window. `.req-header__steer` is one wrapping
-   line of two items: the rows ask for two measures and the statement for one, so the statement stands beside the rows
-   wherever the header holds three measures and a gap, and returns under them where it does not — no breakpoint is
-   written, the tokens decide. Its lines hold ONE measure in both places (OQ-535: the measure keeps its 340 px): beside
-   the rows it is one measure wide, the rows taking the line's free space; alone under them it is set in two columns
-   of one measure each, so five lines become three at the size where the board has least. The DOM order, and so what a
-   reader and the Tab key meet, is unchanged: the statement holds no control.
-   The controls row is two DECIDED lines — what the board shows (group, sort, the blocked column), then what is done
-   to it (filters, queue, new requirement, the filter's own sentence) — where it broke after a different control at
-   each width (the 2026-11-10 critique's finding 12). `.req-header__break` is the line's end: a layout box with no content. */
-.req-header__steer { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--rt-space-2) var(--rt-space-5); min-width: 0; }
-.req-header__rows { flex: 9999 1 calc(2 * var(--rt-prose-measure)); min-width: 0; display: flex; flex-direction: column; gap: var(--rt-space-2); }
-/* `display: block`: the statement also carries `.card-meta`, which is a flex line, and a flex container sets no columns. */
-.req-header__steer > .req-header__analysis { display: block; flex: 1 1 var(--rt-prose-measure); max-width: calc(2 * var(--rt-prose-measure) + var(--rt-space-5)); column-width: var(--rt-prose-measure); column-gap: var(--rt-space-5); }
-/* The break is a line of its own, of no height, so the row's gap falls on both sides of it: `--rt-space-1` twice is the
-   `--rt-space-2` the header's rows stand apart by. */
-.req-header__controls { row-gap: var(--rt-space-1); }
-.req-header__break { flex: 0 0 100%; height: 0; }
-.req-header__controls, .req-header__filters, .req-header__move { min-height: 0; }
+/* R-122 (the owner, 2026-11-21: too much text, an awkward block of drop-downs). Two lines where there were up to five:
+   the title row carries the board's standing facts as short statements beside the one primary action, and the controls
+   are one line — what the board shows, a hairline rule, what is done to it, the move control pushed to the line's end.
+   R-097's two-item wrapping line (the analysis paragraph beside or under the rows) is gone with the paragraph: its full
+   sentence is the short statement's tooltip and accessible description. Under the width a line needs, it wraps. */
+.req-header__top { row-gap: var(--rt-space-1); }
+.req-header__status { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--rt-space-1) var(--rt-space-3); margin: 0; min-width: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+.req-header__fact { white-space: nowrap; cursor: help; }
+.req-header__fact + .req-header__fact::before, .req-header__fact + .req-header__evaluated::before { content: "·"; margin-right: var(--rt-space-3); color: var(--rt-text-tertiary); }
+.req-header__controls { row-gap: var(--rt-space-2); }
+/* REQ-TRACE-490 bounds a closed-vocabulary drop-down at 240 points; it is a bound, not a width. Each takes its longest
+   option's width under it, so the controls line holds what it carries at 1400 and most of it at the minimum window. */
+.req-header .req-header__select, .req-header__filters .select, .req-header .req-move__picker { width: auto; }
+.req-header .req-header__check { font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.req-header__rule { flex: none; align-self: stretch; width: var(--rt-hairline-width); margin: var(--rt-space-1) var(--rt-space-1); background: var(--rt-divider); }
+.req-header__controls, .req-header__filters { min-height: 0; }
 .req-header__count { font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
 .req-header__spacer { flex: 1 1 auto; }
 .req-header__evaluated { white-space: nowrap; }
@@ -2855,10 +2850,9 @@ strong { font-weight: var(--rt-weight-medium); }
 .req-header__check { cursor: pointer; }
 .req-header__check input { margin: 0; accent-color: var(--rt-accent); }
 .req-header__filter { min-width: 0; }
-.req-header__analysis { margin: 0; }
 /* UIR-011: engine prose ran the full 1236 px of the view. A line that long is hard to track back to
    its start; the language's measure for a block of text is what bounds it. */
-.req-status, .req-header__analysis { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); max-width: var(--rt-prose-measure); }
+.req-status { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); max-width: var(--rt-prose-measure); }
 .req-status--error { color: var(--rt-danger-300); }
 /* The move control (REQ-TRACE-390..392): the sentence stays on screen beside the control, never only in a tooltip. */
 .req-move { display: flex; align-items: center; gap: var(--rt-space-2); min-width: 0; max-width: 100%; }
@@ -2867,8 +2861,11 @@ strong { font-weight: var(--rt-weight-medium); }
    size: 393.2 px of button carrying two clauses and a chord hint, where every other button in the
    product holds one or two words. It is bounded and elides now, the full sentence in the tooltip and
    in the accessible description exactly as before, and it sits on the toolbar's own band. */
-.req-header .btn.req-move__control { display: inline-flex; align-items: center; gap: var(--rt-space-2); min-width: 0; max-width: 22ch; height: var(--rt-control-height-compact); min-height: var(--rt-control-height-compact); white-space: nowrap; text-align: left; }
+.req-header .btn.req-move__control { display: inline-flex; align-items: center; gap: var(--rt-space-2); min-width: 0; max-width: 40ch; height: var(--rt-control-height-compact); min-height: var(--rt-control-height-compact); white-space: nowrap; text-align: left; }
 .req-move__control.is-refused { color: var(--rt-text-secondary); }
+/* R-122: with nothing selected the control is a prompt, not an act — it keeps its box for the chord and the focus ring
+   and drops its outline, so the toolbar ends in a quiet line of text until a card is chosen. */
+.req-header .req-move[data-state="none"] .btn.req-move__control { border-color: transparent; background: transparent; color: var(--rt-text-tertiary); max-width: none; }
 .req-move__glyph { flex: none; font-family: var(--rt-font-mono); }
 .req-move__sentence { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The blocked summary (REQ-TRACE-240/241): above the columns, a rule and a glyph, never a filled ground. */
@@ -2887,6 +2884,18 @@ strong { font-weight: var(--rt-weight-medium); }
 .req-adoption__delta, .req-adoption__outcome { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--rt-text-secondary); }
 .req-adoption__label { color: var(--rt-text-tertiary); }
 /* PD-TRACE-002: the survey's preview, under the strip's one line; nothing is recorded until it is accepted. */
+/* R-123 (REQ-ADOPT-026): a survey in flight says where it stands. Four segments in the survey's own order, each a tick-width rule
+   over its word: done in the secondary ink, current in the running colour with its word in the primary ink, to come in the
+   divider. Under them the step in progress and the figures with the clock. No fill: the strip is a region of the page. */
+.req-survey-progress { display: flex; flex-direction: column; gap: var(--rt-space-2); padding-block: var(--rt-space-2) var(--rt-space-1); min-width: 0; font-size: var(--rt-text-xs); }
+.req-survey-progress__stages { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--rt-space-1); max-width: calc(2 * var(--rt-prose-measure)); }
+.req-survey-progress__stage { padding-top: var(--rt-space-1); border-top: var(--rt-tick-width) solid var(--rt-divider); color: var(--rt-text-tertiary); white-space: nowrap; transition: border-color var(--rt-duration) var(--rt-ease-out), color var(--rt-duration) var(--rt-ease-out); }
+.req-survey-progress__stage[data-state='done'] { border-top-color: var(--rt-text-tertiary); color: var(--rt-text-secondary); }
+.req-survey-progress__stage[data-state='current'] { border-top-color: var(--rt-run); color: var(--rt-text); }
+.req-survey-progress__now { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--rt-space-1) var(--rt-space-3); min-width: 0; }
+.req-survey-progress__action { min-width: 0; color: var(--rt-text-secondary); overflow-wrap: anywhere; }
+.req-survey-progress__figures { white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .req-survey-progress__stage { transition: none; } }
 .req-survey { display: flex; flex-direction: column; gap: var(--rt-space-2); padding-block: var(--rt-space-2); min-width: 0; font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
 .req-survey__lead { margin: 0; color: var(--rt-text-primary); font-size: var(--rt-text-sm); overflow-wrap: anywhere; }
 .req-survey__samples, .req-survey__unread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; }
@@ -2972,7 +2981,24 @@ strong { font-weight: var(--rt-weight-medium); }
 .req-card__head { display: flex; align-items: center; gap: var(--rt-space-2); min-width: 0; flex-wrap: wrap; }
 .req-card__id { font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
 .req-card__title { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); line-height: var(--rt-leading-body); overflow-wrap: anywhere; }
-.req-card__health { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); }
+/* R-124: each fact drawn apart from its neighbours, the words unchanged (Card.tsx). The health word beside a dot in its
+   state's colour and in the secondary ink; each evidence state in its own colour after a tertiary label; the execution
+   line quieter than both. State is said twice: the word, and the colour beside it. */
+.req-card__health { display: inline-flex; align-items: center; gap: var(--rt-space-1); font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); }
+.req-card__health-dot { flex: none; }
+.req-card__health-word { color: var(--rt-text-secondary); }
+.req-card__health[data-tone='fail'] .req-card__health-word { color: var(--rt-fail); }
+.req-card__evidence-summary .req-card__obligation, .req-card__evidence-summary .req-card__sep { color: var(--rt-text-tertiary); }
+.req-card__state { color: var(--rt-text-secondary); font-weight: var(--rt-weight-medium); }
+.req-card__state[data-state='satisfied'] { color: var(--rt-run); }
+.req-card__state[data-state='stale'], .req-card__state[data-state='missing'] { color: var(--rt-wait); }
+.req-card__state[data-state='failed'] { color: var(--rt-fail); }
+.req-card .req-card__execution { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); }
+/* One obligation a row: its label, then its state at a shared column, so the three read down rather than wrap
+   mid-phrase. The text is REQ-TRACE-261's sentence unchanged; its separators are kept in the text and not drawn. */
+.req-card .req-card__evidence-summary.card-meta { display: block; }
+.req-card .req-card__evidence-summary.card-meta[data-segmented='true'] { display: grid; grid-template-columns: max-content 1fr; gap: 0 var(--rt-space-2); align-items: baseline; }
+.req-card__evidence-summary .req-card__sep { display: none; }
 .req-card__selected { font-size: var(--rt-text-2xs); color: var(--rt-accent-200); }
 .req-card__in-flight { align-self: flex-start; }
 .req-card__facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px var(--rt-space-2); margin: 0; font-size: var(--rt-text-xs); }
@@ -3023,10 +3049,6 @@ strong { font-weight: var(--rt-weight-medium); }
 .req-detail__runs, .req-detail__sites, .req-detail__findings, .req-detail__history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .req-detail__run { display: flex; align-items: center; gap: var(--rt-space-2); flex-wrap: wrap; padding: 6px 9px; background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); }
 .req-detail__history li.is-current { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
-.req-foot { flex: none; margin: 0; padding: var(--rt-space-1) var(--rt-space-5); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
-/* The foot is a sentence with a control's name inside it, and it also carries `.card-meta`, which is a flex line: as
-   flex items the sentence's parts stood as three columns at 1000x680. A block sets them as one text. */
-.req-foot.card-meta { display: block; }
 /* The evidence view and the reason dialog reuse the shell's dialog; only their bodies are sized here. */
 .req-evidence-pane { width: min(720px, 90vw); max-height: 85vh; display: flex; flex-direction: column; }
 .req-evidence-pane__body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: var(--rt-space-3); font-size: var(--rt-text-xs); }
@@ -3299,7 +3321,7 @@ table, .mono { font-variant-numeric: tabular-nums; }
 
 /* One page frame (`.view > :not(.workspace)`, above): a view's own regions stand on its edges and add no second inset. */
 .req { padding-top: var(--rt-space-5); }
-.req > .req-header, .req > .req-adoption, .req > .req-foot { padding-inline: 0; }
+.req > .req-header, .req > .req-adoption { padding-inline: 0; }
 .card-accented .card-kicker { color: var(--rt-text); }
 .git-card--table .git-card__head { padding-inline: 0; }
 .git-card--table.card { padding-top: 0; }

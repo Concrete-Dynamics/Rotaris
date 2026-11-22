@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-22**
 
+**A survey in flight says where it stands (R-123; REQ-ADOPT-026; 2026-11-22).** `02-process-view/05-message-families-4.md`: the workspace service's `requirements.changed` event gains an optional `progress`, published on channel 10's existing `progress` field at an unchanged generation; the board reads nothing again for it and the survey strip draws the survey's stages. No channel, command or store column is added.
+
 **The driver's `emulateFocus` (2026-11-22).** Verification only: `main/driver.ts` gains an op that turns on Chromium's focus emulation for the selected window, which `theme-proof` calls before its focus section ([the repaired note](../../archive/defects/theme-proofs-focus-section-fails-on-the-linux-host-at-varying-scales-on-main-too.md)). No view changes.
 
 **The configuration change's dialog block and its Undo (R-121; [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014) revision 3; 2026-11-22).** `02-process-view/02-message-families.md`: the renderer's configuration commands gain `config.undoAgentChange`. `02-process-view/05-message-families-4.md`: `approval.present`'s payload may carry `change`. `04-seams/04-4-a-tool.md`: `describeForApproval`, the executor's description for the dialog.

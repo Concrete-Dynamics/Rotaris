@@ -1,6 +1,6 @@
 # Process view — five processes and what crosses each boundary — Message families
 
-Part 2 of 8 of [the process view](../02-process-view.md), which indexes every part.
+Part 2 of 9 of [the process view](../02-process-view.md), which indexes every part.
 
 ## Message families
 

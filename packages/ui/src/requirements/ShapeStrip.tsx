@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { ShapeAcceptOutcome, ShapeExportOutcome, ShapeView, SurveyOutcome, SurveyPreview } from '@rotaris/contracts';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ProgressReport, ShapeAcceptOutcome, ShapeExportOutcome, ShapeView, SurveyOutcome, SurveyPreview } from '@rotaris/contracts';
 import { Button as DesignButton, TextArea as DesignTextArea } from '../design-system/index.js';
 import { deltaLines } from './adoption-model.js';
-import { ACCEPT_LABEL, acceptSentence, ANSWER_LABEL, ANSWER_PLACEHOLDER, DISCARD_LABEL, driftSentence, EXPORT_DESCRIPTION, EXPORT_LABEL, exportSentence, previewLead, previewWrites, RESURVEY_LABEL, SHAPE_RECORD_DESCRIPTION, SHAPE_RECORD_LABEL, shapeSentence, SURVEY_DESCRIPTION, SURVEY_LABEL, SURVEYING_SENTENCE } from './shape-model.js';
+import { ACCEPT_LABEL, acceptSentence, ANSWER_LABEL, ANSWER_PLACEHOLDER, DISCARD_LABEL, driftSentence, EXPORT_DESCRIPTION, EXPORT_LABEL, exportSentence, previewLead, previewWrites, RESURVEY_LABEL, SHAPE_RECORD_DESCRIPTION, SHAPE_RECORD_LABEL, shapeSentence, SURVEY_DESCRIPTION, SURVEY_LABEL, SURVEY_STAGES, SURVEYING_SENTENCE, elapsedClock, surveyFigures, surveyProgressOf } from './shape-model.js';
 import type { HostResult } from './RequirementsView.js';
 
 /**
@@ -23,9 +23,11 @@ export interface ShapeStripProps {
   readonly acceptShape: (token: string) => Promise<HostResult<ShapeAcceptOutcome>>;
   readonly recordShape: () => Promise<HostResult<ShapeAcceptOutcome>>;
   readonly exportShape: () => Promise<HostResult<ShapeExportOutcome>>;
+  /** REQ-ADOPT-026 (R-123): the survey's progress reports as channel 10 carries them; absent, the strip states only that a survey runs. */
+  readonly onProgress?: (listener: (report: ProgressReport) => void) => () => void;
 }
 
-export function ShapeStrip({ armed, generation, readShape, survey, acceptShape, recordShape, exportShape }: ShapeStripProps) {
+export function ShapeStrip({ armed, generation, readShape, survey, acceptShape, recordShape, exportShape, onProgress }: ShapeStripProps) {
   const [view, setView] = useState<ShapeView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'survey' | 'other' | null>(null);
@@ -33,6 +35,23 @@ export function ShapeStrip({ armed, generation, readShape, survey, acceptShape, 
   const [preview, setPreview] = useState<SurveyPreview | null>(null);
   const [answer, setAnswer] = useState('');
   const [details, setDetails] = useState(false);
+  /** R-123: the reports of the survey in flight, the moment it started, and whether it continues a preview from an answer. */
+  const [reports, setReports] = useState<readonly ProgressReport[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  const started = useRef(0);
+  const [continuing, setContinuing] = useState(false);
+  const surveying = busy === 'survey';
+  useEffect(() => {
+    if (!surveying || onProgress === undefined) return;
+    return onProgress((r) => setReports((list) => [...list, r]));
+  }, [surveying, onProgress]);
+  useEffect(() => {
+    if (!surveying) return;
+    const tick = () => setElapsed(performance.now() - started.current);
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [surveying]);
 
   const read = useCallback(() => {
     void readShape().then((r) => { if (r.ok) { setView(r.value); setError(null); } else setError(r.reason); });
@@ -40,6 +59,10 @@ export function ShapeStrip({ armed, generation, readShape, survey, acceptShape, 
   useEffect(() => { if (armed) read(); }, [armed, generation, read]);
 
   const runSurvey = (token?: string, words?: string) => {
+    started.current = performance.now();
+    setContinuing(token !== undefined);
+    setReports([]);
+    setElapsed(0);
     setBusy('survey');
     setOutcome(null);
     void survey(token, words).then((r) => {
@@ -84,7 +107,8 @@ export function ShapeStrip({ armed, generation, readShape, survey, acceptShape, 
       {details && lines.map((l) => (
         <p key={l.kind} className="req-adoption__delta card-meta" data-testid={`req-adoption-${l.kind}`}><span className="req-adoption__label">{l.label}</span> <span className={l.kind === 'undecided' ? undefined : 'mono'}>{l.ids}</span></p>
       ))}
-      {busy === 'survey' && <span className="visually-hidden" role="status" data-testid="req-survey-running">{SURVEYING_SENTENCE}</span>}
+      {surveying && <span className="visually-hidden" role="status" data-testid="req-survey-running">{SURVEYING_SENTENCE}</span>}
+      {surveying && <SurveyProgressView reports={reports} continuing={continuing} elapsed={elapsed} />}
       {preview !== null && (
         <div className="req-survey" data-testid="req-survey-preview" role="group" aria-label="The proposed shape">
           <p className="req-survey__lead">{previewLead(preview)}</p>
@@ -107,5 +131,32 @@ export function ShapeStrip({ armed, generation, readShape, survey, acceptShape, 
       )}
       {busy === null && outcome !== null && <p className="req-adoption__outcome card-meta" role="status" data-testid="req-adoption-outcome">{outcome}</p>}
     </section>
+  );
+}
+
+/**
+ * R-123 (REQ-ADOPT-026): where a survey in flight stands. Four stages in the survey's own order — the script's draft, the
+ * agent reading, its proposals (a first and at most three repairs, REQ-ADOPT-038), the preview — each a segment that is
+ * done, current or to come, the current one in the running colour and named in words beside it (state said twice). Under
+ * them the step in progress with the path it reads, and the figures and the clock. The stages are a list a screen reader
+ * walks with the current one marked; the strip's own status line already announces that a survey runs, so nothing here
+ * is a live region that would speak at every step.
+ */
+function SurveyProgressView({ reports, continuing, elapsed }: { readonly reports: readonly ProgressReport[]; readonly continuing: boolean; readonly elapsed: number }) {
+  const p = surveyProgressOf(reports, continuing);
+  const at = SURVEY_STAGES.findIndex((s) => s.key === p.stage);
+  const figures = surveyFigures(p);
+  return (
+    <div className="req-survey-progress" data-testid="req-survey-progress" data-stage={p.stage}>
+      <ol className="req-survey-progress__stages" aria-label="Survey stages">
+        {SURVEY_STAGES.map((s, i) => (
+          <li key={s.key} className="req-survey-progress__stage" data-state={i < at ? 'done' : i === at ? 'current' : 'next'} aria-current={i === at ? 'step' : undefined}>{s.label}</li>
+        ))}
+      </ol>
+      <p className="req-survey-progress__now">
+        <span className="req-survey-progress__action" data-testid="req-survey-action">{p.action}{p.path === undefined ? '' : ' '}{p.path !== undefined && <span className="mono">{p.path}</span>}</span>
+        <span className="req-survey-progress__figures card-meta" data-testid="req-survey-figures">{figures}{figures === '' ? '' : ' · '}<span className="mono">{elapsedClock(elapsed)}</span></span>
+      </p>
+    </div>
   );
 }

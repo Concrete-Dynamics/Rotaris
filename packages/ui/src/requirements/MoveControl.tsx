@@ -47,7 +47,7 @@ export const MoveControl = forwardRef<HTMLButtonElement, MoveControlProps>(funct
           className="input select req-move__picker"
           data-testid="req-move-picker"
           aria-label={`Move ${state.id} to a delivery state`}
-          style={{ width: CLOSED_DROPDOWN_WIDTH }}
+          style={{ maxWidth: CLOSED_DROPDOWN_WIDTH }}
           value=""
           onChange={(event) => { const to = event.currentTarget.value as DeliveryColumn | ''; if (to !== '') onMove(to); }}
         >

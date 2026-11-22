@@ -1,6 +1,6 @@
 # Process view — five processes and what crosses each boundary — The control channel (ADR-0010 #1) across the boundaries
 
-Part 6 of 8 of [the process view](../02-process-view.md), which indexes every part.
+Part 7 of 9 of [the process view](../02-process-view.md), which indexes every part.
 
 ## The control channel (ADR-0010 #1) across the boundaries
 

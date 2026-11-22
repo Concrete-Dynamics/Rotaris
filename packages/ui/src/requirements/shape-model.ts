@@ -1,4 +1,4 @@
-import type { CriterionClaim, ShapeAcceptOutcome, ShapeDrift, ShapeExportOutcome, ShapeView, SurveyPreview } from '@rotaris/contracts';
+import type { CriterionClaim, ProgressReport, ShapeAcceptOutcome, ShapeDrift, ShapeExportOutcome, ShapeView, SurveyPreview } from '@rotaris/contracts';
 import { countNoun } from '@rotaris/kernel';
 import { capList } from './adoption-model.js';
 
@@ -85,3 +85,90 @@ export function criteriaAcceptSentence(criteria: readonly CriterionClaim[] | und
 }
 
 export const CLAIM_WORD: Readonly<Record<CriterionClaim['claim'], string>> = Object.freeze({ met: 'reported met', unmet: 'reported unmet', unstated: 'not reported' });
+
+/**
+ * REQ-ADOPT-026 (R-123, the owner, 2026-11-21: "the user needs to see where its at and how far it progressed"). A survey
+ * reports through the board's progress protocol — `reading` while the script drafts a shape, then `adopting` with one
+ * item per step the agent takes, labelled by its action (`read <path>`, `list <path>`, `grep …`, `propose`, `finish`),
+ * at a position out of the step bound (REQ-TRACE-212, REQ-TRACE-213). Folded here into the survey's own stages, so the
+ * strip says where the survey stands rather than only that it runs. Pure: the strip draws it, the test reads it.
+ */
+export type SurveyStage = 'draft' | 'read' | 'propose' | 'preview';
+export const SURVEY_STAGES: readonly { readonly key: SurveyStage; readonly label: string }[] = [
+  { key: 'draft', label: 'Draft' },
+  { key: 'read', label: 'Read' },
+  { key: 'propose', label: 'Propose' },
+  { key: 'preview', label: 'Preview' },
+];
+export interface SurveyProgress {
+  readonly stage: SurveyStage;
+  /** Reading actions the agent has taken (list, read, grep). */
+  readonly reads: number;
+  /** Proposals the agent has made; the first is followed by at most three repairs (REQ-ADOPT-038). */
+  readonly proposals: number;
+  /** The last step's position and the step bound, where a step was reported. */
+  readonly step: number;
+  readonly total: number;
+  /** The step in progress, in words. */
+  readonly action: string;
+  readonly path: string | undefined;
+}
+/** REQ-ADOPT-038: a first proposal and at most three repairs. */
+export const SURVEY_PROPOSALS_MAX = 4;
+const READING_ACTIONS = new Set(['read', 'list', 'grep']);
+
+export function surveyProgressOf(reports: readonly ProgressReport[], continuing: boolean): SurveyProgress {
+  let stage: SurveyStage = continuing ? 'propose' : 'draft';
+  let reads = 0;
+  let proposals = 0;
+  let step = 0;
+  let total = 0;
+  let action = continuing ? 'Reading your correction' : 'Starting';
+  let path: string | undefined;
+  for (const r of reports) {
+    if (r.kind === 'phase') {
+      if (r.phase === 'reading') { stage = 'draft'; action = 'Drafting a shape from what the detection found'; path = undefined; }
+      if (r.phase === 'adopting') { if (stage === 'draft') stage = 'read'; action = 'Asking the agent'; path = undefined; }
+      continue;
+    }
+    if (r.phase !== 'adopting') continue;
+    step = r.position;
+    total = r.total;
+    const space = r.label.indexOf(' ');
+    const verb = space === -1 ? r.label : r.label.slice(0, space);
+    path = space === -1 ? undefined : r.label.slice(space + 1);
+    if (READING_ACTIONS.has(verb)) {
+      reads += 1;
+      if (stage === 'draft') stage = 'read';
+      action = verb === 'read' ? 'Reading' : verb === 'list' ? 'Listing' : 'Searching';
+    } else if (verb === 'propose') {
+      proposals += 1;
+      stage = 'propose';
+      action = `Testing proposal ${proposals} of at most ${SURVEY_PROPOSALS_MAX}`;
+      path = undefined;
+    } else if (verb === 'finish') {
+      // A finish can be refused (nothing valid to finish with), so the stage stays where it is: the preview is
+      // reached when the survey's answer arrives, and then the strip draws the preview itself.
+      action = 'Finishing';
+      path = undefined;
+    } else {
+      action = 'Thinking';
+    }
+  }
+  return { stage, reads, proposals, step, total, action, path };
+}
+
+/** The elapsed time as m:ss, for the strip's clock. */
+export function elapsedClock(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** The figures beside the stages, in one line: what has been read, which proposal, which step. */
+export function surveyFigures(p: SurveyProgress): string {
+  const parts: string[] = [];
+  if (p.reads > 0) parts.push(countNoun(p.reads, 'reading action'));
+  if (p.proposals > 0) parts.push(`proposal ${p.proposals} of at most ${SURVEY_PROPOSALS_MAX}`);
+  if (p.step > 0) parts.push(`step ${p.step} of at most ${p.total}`);
+  return parts.join(' · ');
+}

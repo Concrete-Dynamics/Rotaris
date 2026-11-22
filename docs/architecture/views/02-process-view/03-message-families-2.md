@@ -1,6 +1,6 @@
 # Process view — five processes and what crosses each boundary — Message families (continued)
 
-Part 3 of 8 of [the process view](../02-process-view.md), which indexes every part.
+Part 3 of 9 of [the process view](../02-process-view.md), which indexes every part.
 
 **Checkpoints (Part P; ADR-0039's first execution).** Renderer → main: `checkpoints.list {sessionId}` (rows only, REQ-GIT-050),
 `checkpoints.preview {sessionId, sequence}` and `checkpoints.restore {sessionId, sequence, force}`; main holds ONE desktop

@@ -108,6 +108,7 @@ one now names its part.
 | [03](02-process-view/03-message-families-2.md) | Message families *(continued, from "Checkpoints (Part P; ADR-0039's first execution).")* |
 | [04](02-process-view/04-message-families-3.md) | Message families *(continued, from "The improvement artifact store (ADR-0061; REQ-LIBRARY-002/036/042..058).")* |
 | [05](02-process-view/05-message-families-4.md) | Message families *(continued, from "initialization.*` (Part AS, ADR-0064).")* |
+| [05b](02-process-view/05-message-families-5.md) | Message families *(continued, from "The surveyed shape (PD-TRACE-002; REQ-ADOPT-031..052; 2026-11-21).")* |
 | [06](02-process-view/06-the-control-channel-adr-0010-1-across-the.md) | The control channel (ADR-0010 #1) across the boundaries |
 | [07](02-process-view/07-the-wire-bus-adr-0010-2-stays-in-the-run-host.md) | The wire bus (ADR-0010 #2) stays in the run host |
 | [08](02-process-view/08-files-and-directories-on-disk.md) | Files and directories on disk |

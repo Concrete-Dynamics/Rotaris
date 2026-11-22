@@ -183,3 +183,58 @@ Described in [the Settings brief](settings.md), "The second reading, of the corr
 | — | — | the brief cited `REQ-TRACE-334` and `REQ-TRACE-507` as authority for a foot that says there is no watcher, and filed nothing | recorded: the note above |
 
 Also read by it and older than the round, open: the adoption strip says "No candidate requirements store was found." above an empty state that speaks of a requirement source; "Evaluated just now" stands beside a source that could not be read; the header statement breaks mid-clause across its two columns at 1000×680.
+
+## Revision 2026-11-21 — the header in two lines (R-122)
+
+*By the model, through `/impeccable:impeccable`, for [R-122](../../product/requests.md#r-122): the owner found the board
+"too much text" and the drop-down block at its top awkward. Classified **covered**: no requirement asks for the removed
+paragraphs. This revises §1's "stay visible; none is shortened, folded or moved behind a control", §6's "No string is
+written or changed" and §8's composition; the cards, columns, panes and empty states are untouched.*
+
+**What the specification asks, read again.** REQ-TRACE-346 asks the board to *state* that change analysis is off and
+REQ-TRACE-345 to list and count what awaits judgement; REQ-TRACE-507 keeps Re-evaluate the guaranteed route; REQ-TRACE-291
+asks the filter's description to emit a distinguishable statement when no dimension is set, and REQ-TRACE-292 an active
+filter visible and clearable in one action; REQ-TRACE-391 asks the move control's prompt to name the chord; REQ-TRACE-490
+bounds a closed-vocabulary drop-down at 240 points. None asks for a paragraph, a row of its own or a fixed width.
+
+**Composition, replacing §8's header.** Two lines. The title row: the title and count, then — right-aligned, one line of
+`--rt-text-xs` tertiary — *Change analysis off · Awaiting judgement: none · Evaluated just now*, then Re-evaluate. Each
+short statement carries its full sentence (`ANALYSIS_OFF_SENTENCE`, `AWAITING_JUDGEMENT_NONE`, `SUBSCRIPTION_SENTENCE`)
+as its `title` and `aria-description`; the foot band is gone with its sentence moved there. The controls line: Group by,
+Sort, Blocked column, a hairline rule, Show filters, Queue, New requirement, the filter's statement and Clear while a
+filter is set, and the move control at the line's end — a quiet prompt with no outline while nothing is selected. The
+drop-downs take their longest option's width under REQ-TRACE-490's bound. The line wraps where the width runs out; no
+breakpoint is written. The DOM order, and so the Tab sequence, is as before.
+
+| Measure (nothing selected, no filter, the notice dismissed) | Before (`7fec7382`) | After |
+|---|---|---|
+| header height at 1400×900 | 139 px | 73 px (title row 32, controls 24) |
+| header height at 1000×680 | 198 px | 105 px (the controls wrap to two lines) |
+| words of text in the header outside its controls and title | 48 | 10 |
+| the foot band | 1 line (2 at 1000×680) | none |
+
+**Evidence.** Drives with `pnpm app:drive` of the `requirements-store` fixture at 1400×900 and 1000×680: idle, a card
+selected with the filters shown, and a lifecycle filter set. Not driven: `nocturne` and `high-contrast`; analysis
+enabled; a pass that leaves requirements awaiting judgement (this build's pass judges none).
+
+**Left, and why.** The card's text — the health word, the evidence summary, the execution sentence, the facts — is fixed
+by REQ-TRACE-242 to REQ-TRACE-257; shortening it is a directive, not asked for here. The empty columns' sentences are
+REQ-TRACE-308's. The survey strip's one-line statement is its own surface's.
+
+## Revision 2026-11-22 — the survey's progress and the card's facts (R-123, R-124)
+
+*By the model, in the session of R-122. Both covered; no string a requirement fixes is changed.*
+
+**The survey in flight (R-123, REQ-ADOPT-026).** Under the strip's status line while a survey runs: four stages in the
+survey's own order — Draft, Read, Propose, Preview — each a tick-width rule over its word, done in the tertiary ink,
+current in the running colour with its word in the primary ink, to come in the divider; then one line with the step in
+progress in words and the path it reads (mono), the figures (reading actions, proposal *n* of at most 4, step *n* of at
+most 40) and a clock. The stages are an ordered list with `aria-current="step"`; no live region speaks per step, the
+strip's existing status line announcing that a survey runs. Fed by the progress reports the survey already made
+(`shape-model.ts`, `surveyProgressOf`).
+
+**The card's facts (R-124).** The words are unchanged; each fact is drawn apart from its neighbours: the health word
+beside a `StatusDot` in its state's colour (healthy green; incomplete traceability and needs update amber; verification
+failed and blocked red, the word in red too; superseded and deprecated the idle dot), each evidence obligation's state in
+its colour after a tertiary label (satisfied green, stale and missing amber, failing red), the execution line at the
+smallest size in the tertiary ink, and Epic, Source and the relation facts in the mono face.

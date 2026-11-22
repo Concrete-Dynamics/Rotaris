@@ -1,4 +1,4 @@
-import type { Actor, BlockerPayload, CriterionOutcome, ProcessReply, ServiceAsk, BoardAction, BoardCard, BoardProjection, DisclosureState, Reachability, ReqId, RequirementDetail, RequirementRecord, RequirementsCommandPayload, ReviewPayload, RunClaim, RunLaunchPreview, RunPermissions, RunReaped, RunSettled, StandingDisclosure, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import type { Actor, BlockerPayload, CriterionOutcome, ProcessReply, ProgressReport, ServiceAsk, BoardAction, BoardCard, BoardProjection, DisclosureState, Reachability, ReqId, RequirementDetail, RequirementRecord, RequirementsCommandPayload, ReviewPayload, RunClaim, RunLaunchPreview, RunPermissions, RunReaped, RunSettled, StandingDisclosure, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
 import { SYSTEM_ONLY_REQUIREMENTS_COMMANDS } from '@rotaris/contracts'; // Part AP
 import { asSessionId, err, millis, toIsoUtc, type Clocks, type Millis, type Result } from '@rotaris/kernel';
 import { StoreDal, type ResolvedStore } from '@rotaris/store';
@@ -52,6 +52,8 @@ export interface DeliveryServiceDeps {
   readonly ask?: (request: ServiceAsk, bound: Millis) => Promise<ProcessReply>;
   /** PD-TRACE-002 clause 10: told when the watcher saw the repository change and the board was read again, so main can publish the generation. */
   readonly onChanged?: (generation: number) => void;
+  /** REQ-ADOPT-026 (R-123): a survey's progress report, at the generation the board stands at; nothing is read again for it. */
+  readonly onProgress?: (generation: number, report: ProgressReport) => void;
 }
 /** Part AP — what the service asks of Git for a launch; both are `runs.ts` units over ADR-0038's one helper. */
 export interface RunGitPort {
@@ -100,7 +102,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   let refreshing: Promise<number> | undefined;
   /** PD-TRACE-002: the pass through the surveyed shape, held while the board is drawn from it. */
   let shapePass: ShapePass | undefined;
-  const shapeHost = createShapeHost(workspaceRoot, { ask: deps.ask ?? (async () => ({ kind: 'refused', code: 'ask.unavailable', headline: 'This workspace service cannot reach a model' })), clocks, now: () => toIsoUtc(clocks.wall.instant()), log });
+  const shapeHost = createShapeHost(workspaceRoot, { ask: deps.ask ?? (async () => ({ kind: 'refused', code: 'ask.unavailable', headline: 'This workspace service cannot reach a model' })), clocks, now: () => toIsoUtc(clocks.wall.instant()), log, onProgress: (report) => deps.onProgress?.(generation, report) });
   const inFlight = new Map<ReqId, BoardAction>();
   const now = () => toIsoUtc(clocks.wall.instant());
 

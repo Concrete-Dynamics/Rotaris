@@ -1,6 +1,6 @@
 # Process view — five processes and what crosses each boundary — Files and directories on disk
 
-Part 8 of 8 of [the process view](../02-process-view.md), which indexes every part.
+Part 9 of 9 of [the process view](../02-process-view.md), which indexes every part.
 
 ## Files and directories on disk
 

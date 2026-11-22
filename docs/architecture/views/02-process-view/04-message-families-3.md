@@ -1,6 +1,6 @@
 # Process view — five processes and what crosses each boundary — Message families (continued)
 
-Part 4 of 8 of [the process view](../02-process-view.md), which indexes every part.
+Part 4 of 9 of [the process view](../02-process-view.md), which indexes every part.
 
 **The improvement artifact store (ADR-0061; REQ-LIBRARY-002/036/042..058).** Main → workspace service:
 `improvements.command {workspaceRoot, command}` → `improvements.result {value, changed?}`. The command union carries

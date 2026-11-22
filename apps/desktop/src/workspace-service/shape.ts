@@ -1,4 +1,4 @@
-import type { AnnotationSite, DeliveryColumn, DocumentPlace, ProcessReply, ReqId, RequirementsShape, ServiceAsk, ShapeAcceptOutcome, ShapeExportOutcome, ShapeMeasurement, ShapeRecord, ShapeView, StoreParse, SurveyedRequirement, SurveyOutcome, VerificationReport } from '@rotaris/contracts';
+import type { AnnotationSite, DeliveryColumn, DocumentPlace, ProcessReply, ProgressReport, ReqId, RequirementsShape, ServiceAsk, ShapeAcceptOutcome, ShapeExportOutcome, ShapeMeasurement, ShapeRecord, ShapeView, StoreParse, SurveyedRequirement, SurveyOutcome, VerificationReport } from '@rotaris/contracts';
 import { SHAPE_EXPORT_FILE, SURVEY_MESSAGE_MAX, SURVEY_MESSAGES_MAX } from '@rotaris/contracts';
 import { millis, type Clocks, type Millis } from '@rotaris/kernel';
 import { activeShape, citeShape, detectWorkspace, measureShape, recordOf, shapeDelta, shapeDrift, shapeParse, statusWordFor, storeOf, survey, writeBack, writeShapeExport, writeShapeRecord, type SurveyMessage, type SurveySession, type SurveyStep, type WriteBackEdit, type WriteBackOutcome } from '@rotaris/workspace';
@@ -49,7 +49,7 @@ export interface ShapeHost {
   readonly surveying: boolean;
 }
 
-export function createShapeHost(workspaceRoot: string, deps: { readonly ask: (request: ServiceAsk, bound: Millis) => Promise<ProcessReply>; readonly clocks: Clocks; readonly now: () => string; readonly log: (message: string, level?: 'info' | 'warn') => void }): ShapeHost {
+export function createShapeHost(workspaceRoot: string, deps: { readonly ask: (request: ServiceAsk, bound: Millis) => Promise<ProcessReply>; readonly clocks: Clocks; readonly now: () => string; readonly log: (message: string, level?: 'info' | 'warn') => void; readonly onProgress?: (report: ProgressReport) => void }): ShapeHost {
   const { ask, clocks, now, log } = deps;
   /** One preview at a time: a second survey replaces it, an accept consumes it (clause 2). Held in memory only — nothing is recorded before the accept. */
   let pending: SurveySession | undefined;
@@ -108,7 +108,7 @@ export function createShapeHost(workspaceRoot: string, deps: { readonly ask: (re
       surveying = true;
       const started = clocks.monotonic.now();
       try {
-        const r = await survey(workspaceRoot, { step, elapsed: () => Number(clocks.monotonic.now()) - Number(started), token: () => randomUUID(), log: (m) => log(m) }, continuing ? { session: pending!, answer: answer ?? '' } : undefined);
+        const r = await survey(workspaceRoot, { step, elapsed: () => Number(clocks.monotonic.now()) - Number(started), token: () => randomUUID(), log: (m) => log(m), ...(deps.onProgress === undefined ? {} : { progress: deps.onProgress }) }, continuing ? { session: pending!, answer: answer ?? '' } : undefined);
         if (!r.ok) { log(`survey (${workspaceRoot}): refused${r.field === undefined ? '' : ` at ${r.field}`}: ${r.reason}`, 'warn'); return r; }
         pending = r.session;
         log(`survey (${workspaceRoot}): previewed ${r.preview.count} requirement(s) from ${r.preview.stores.map((s) => s.dir).join(', ')} after ${r.preview.rounds} repair round(s) on ${r.preview.model}; nothing recorded`);

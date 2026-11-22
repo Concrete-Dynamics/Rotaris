@@ -44,6 +44,8 @@ export interface SurveyDeps {
   readonly elapsed: () => number;
   readonly token: () => string;
   readonly log?: (message: string) => void;
+  /** REQ-ADOPT-026 (R-123): each progress report as it is made, beside the list the result returns. A throwing sink is stepped over (REQ-TRACE-215). */
+  readonly progress?: (report: ProgressReport) => void;
 }
 
 /** What a survey leaves in memory for the accept, or for the user's answer in words to continue from (clause 2). */
@@ -257,7 +259,7 @@ export function surveyOpening(detection: DetectionResult, draft: { readonly shap
  */
 export async function survey(root: string, deps: SurveyDeps, prior?: { readonly session: SurveySession; readonly answer: string }): Promise<SurveyResult> {
   const progress: ProgressReport[] = [];
-  const host: ProgressHost = { sink: (r) => progress.push(r) };
+  const host: ProgressHost = { sink: (r) => { progress.push(r); deps.progress?.(r); }, onHookError: (hook, e) => deps.log?.(`survey: the ${hook} hook failed: ${e instanceof Error ? e.message : String(e)}`) };
   const messages: SurveyMessage[] = [];
   let best: { shape: RequirementsShape; measurement: ShapeMeasurement } | null = null;
   let model = prior?.session.model ?? '';

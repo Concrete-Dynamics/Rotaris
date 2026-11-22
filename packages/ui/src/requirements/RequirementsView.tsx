@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AdoptionOutcome, AdoptionView, CriterionOutcome, ShapeAcceptOutcome, ShapeExportOutcome, ShapeView, SurveyOutcome, BlockerPayload, BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, DeliveryQueue, EpicCard, LaunchPreview, PaneKey, Reachability, Refusal, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload, TransitionOutcome } from '@rotaris/contracts';
+import type { AdoptionOutcome, ProgressReport, AdoptionView, CriterionOutcome, ShapeAcceptOutcome, ShapeExportOutcome, ShapeView, SurveyOutcome, BlockerPayload, BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, DeliveryQueue, EpicCard, LaunchPreview, PaneKey, Reachability, Refusal, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload, TransitionOutcome } from '@rotaris/contracts';
 import { COLUMN_TOKENS, DELIVERY_COLUMNS, HEALTH_TOKENS } from '@rotaris/contracts';
 import { AXES, AXIS_DRAGGABLE, EMPTY_AXIS_SENTENCE, EMPTY_COLUMN_SENTENCE, EMPTY_FILTER, SORT_ORDERS, absoluteMoment, axisOf, columnLabel, columnsFor, describeFilter, distribute, emptinessFolds, filterActive, filterCards, foldDecision, parseFolds, relativeAge, serializeFolds, sortCards, sortOrderOf, type BoardFilter, type GroupingAxis, type SortOrder } from '@rotaris/ui-core';
 import { ConfirmDialog } from '../ConfirmDialog.js';
@@ -14,7 +14,7 @@ import { EpicCardView } from './EpicCardView.js';
 import { EvidencePane, evidenceOpenerSelector } from './EvidencePane.js';
 import { MoveControl } from './MoveControl.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_ELSEWHERE, EMPTY_STORE_SENTENCE, NEW_REQUIREMENT_LABEL, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, UNREAD_SOURCE_HOW, UNREAD_SOURCE_SENTENCE, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, emptyStoreHow, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable, type Phrase } from './model.js';
+import { ANALYSIS_OFF_LABEL, ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_LABEL, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, AWAITING_JUDGEMENT_NONE_LABEL, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_ELSEWHERE, EMPTY_STORE_SENTENCE, NEW_REQUIREMENT_LABEL, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, UNREAD_SOURCE_HOW, UNREAD_SOURCE_SENTENCE, bodyStateOf, dispatchesAfter, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, emptyStoreHow, evaluatedSentence, phraseText, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable, type Phrase } from './model.js';
 // Part R2 — the five panes Part AP built and nothing hosted, the elevation's disclosure, and the relationship graph.
 import { GRAPH_DEPTH_DEFAULT, buildGraph, clampDepth } from './graph.js';
 import { GraphPane } from './GraphPane.js';
@@ -339,6 +339,9 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
 
   // ---- REQ-TRACE-334/374/507: live refresh over channel 10 ----
   useEffect(() => host.onChanged((change) => {
+    // R-123 (REQ-ADOPT-026): a report of a survey in flight rides channel 10 at an unchanged generation; the survey strip
+    // reads it, and the board has nothing to read again for it.
+    if (change.progress !== undefined) return;
     void host.readBoard().then((r) => {
       if (!r.ok) { setError(r.reason); return; }
       adoptBoard(r.value, change.affected);
@@ -840,6 +843,8 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     );
   }, [epicIds, epics, cards, selected, select, open, filterToEpic, onKeyNavigate, now, host.localOffsetMinutes, axis, inFlight, feedback, openEvidence, clearFeedback, onDragStart, onDragRefused, onDragEnd]);
 
+  /** R-123: the survey strip's subscription — channel 10's reports that carry `progress`, and only those. */
+  const onSurveyProgress = useCallback((listener: (report: ProgressReport) => void) => host.onChanged((change) => { if (change.progress !== undefined) listener(change.progress); }), [host]);
   const onRealised = useCallback((key: string, n: number) => setRealised((m) => (m.get(key) === n ? m : withEntry(m, key, n))), []);
   /** REQ-TRACE-361 (defect AK2-3): a card is the same widget in every column, so a mean measured in one is the estimate the next column is built from. */
   const onMeasured = useCallback((mean: number) => setCardEstimate((e) => (Math.abs(mean - e) > 4 ? mean : e)), []);
@@ -847,6 +852,8 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const moveState = moveControlState(selectedId === null ? undefined : selectedCard, answersFor, chord);
   const dropOptions = dropTargetOptions(answersFor);
   const filterSentence = describeFilter(filter);
+  const analysisText = board?.analysisEnabled ? ANALYSIS_ON_SENTENCE : phraseText(ANALYSIS_OFF_SENTENCE);
+  const subscriptionText = phraseText(SUBSCRIPTION_SENTENCE);
   const evaluated = board === null ? '' : relativeAge(board.producedAt, now);
   const detailCard = detailId === null ? undefined : cards.find((c) => c.id === detailId);
   /** Part R2: the requirement a per-requirement pane was opened against — the editor writes into ITS source document. */
@@ -951,56 +958,56 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   return (
     <div className="req" data-testid="requirements" data-generation={generation} data-ready={ready} data-paint-ms={paintMs === null ? '' : Math.round(paintMs)} data-filter-ms={filterMs === null ? '' : Math.round(filterMs)}>
       <header className="req-header" data-testid="req-header" {...layoutContractAttributes(REQ_HEADER_LAYOUT)}>
-        <div className="req-header__row">
+        {/* The owner, 2026-11-21 (R-122): the header carried a five-line analysis paragraph, a filter sentence, a move
+            row of its own and a foot sentence. It is two lines now. The title row states the board's standing facts in
+            a few words — the analysis (REQ-TRACE-346), what awaits judgement (REQ-TRACE-345), when it was evaluated —
+            beside the one primary action; each short statement carries its full sentence as tooltip and accessible
+            description. The toolbar is one line: what the board shows, a rule, what is done to it, and the move
+            control (REQ-TRACE-390/391) at its end. The DOM order, and so the Tab sequence, is the order it was. */}
+        <div className="req-header__row req-header__top">
           <h1 className="display req-header__title">{BOARD_TITLE}</h1>
           <span className="req-header__count mono" data-testid="req-total" title={`${filtered.length} of ${cards.length} requirements shown`}>{filtered.length}{filtered.length !== cards.length ? ` / ${cards.length}` : ''}</span>
           <span className="req-header__spacer" />
-          <span className="req-header__evaluated card-meta" data-testid="req-evaluated" title={board === null ? undefined : absoluteMoment(board.producedAt, host.localOffsetMinutes)}>{evaluatedSentence(evaluated)}</span>
+          <p className="req-header__status card-meta" data-testid="req-analysis">
+            <span className="req-header__fact" title={analysisText} aria-description={analysisText}>{board?.analysisEnabled ? ANALYSIS_ON_LABEL : ANALYSIS_OFF_LABEL}</span>
+            <span className="req-header__fact" title={AWAITING_JUDGEMENT_NONE} aria-description={AWAITING_JUDGEMENT_NONE}>{AWAITING_JUDGEMENT_NONE_LABEL}</span>
+            <span className="req-header__evaluated card-meta" data-testid="req-evaluated" title={board === null ? subscriptionText : `${absoluteMoment(board.producedAt, host.localOffsetMinutes)}. ${subscriptionText}`} aria-description={subscriptionText}>{evaluatedSentence(evaluated)}</span>
+          </p>
           {/* REQ-TRACE-342/491: the ONE plain re-evaluation control, the primary action, 32 points high. */}
           <DesignButton type="button" className="btn btn-primary req-header__primary" data-testid="req-reevaluate" onClick={reevaluate} disabled={evaluating} aria-description={REEVALUATE_DESCRIPTION} title={REEVALUATE_DESCRIPTION}>{evaluating ? EVALUATING_LABEL : REEVALUATE_LABEL}</DesignButton>
         </div>
-        {/* R-097 (docs/design/briefs/requirements-board.md, §8): the rows that steer the board, and beside them the analysis
-            statement — one wrapping line of two items, so the statement stands beside the rows while the header holds both
-            and returns under them when it does not. The order a reader and the Tab key meet is the order it was. */}
-        <div className="req-header__steer">
-          <div className="req-header__rows">
-            <div className="req-header__row req-header__controls">
-              <label className="req-header__field"><span className="field-label">Group by</span>
-                <DesignSelect className="input select req-header__select" data-testid="req-axis" value={axis} onChange={(e) => setAxis(axisOf(e.currentTarget.value))} aria-label="Grouping axis" style={{ width: CLOSED_DROPDOWN_WIDTH }}>{AXES.map((a) => <option key={a} value={a}>{columnLabel(a)}</option>)}</DesignSelect></label>
-              <label className="req-header__field"><span className="field-label">Sort</span>
-                <DesignSelect className="input select req-header__select" data-testid="req-sort" value={sort} onChange={(e) => setSort(sortOrderOf(e.currentTarget.value))} aria-label="Sort order" style={{ width: CLOSED_DROPDOWN_WIDTH }}>{SORT_ORDERS.map((s) => <option key={s} value={s}>{s === 'priority' ? 'Priority, then identifier' : s === 'identifier' ? 'Identifier' : 'Health, then identifier'}</option>)}</DesignSelect></label>
-              <DesignCheckbox className="check req-header__field req-header__check" title={BLOCKED_COLUMN_DESCRIPTION} data-testid="req-blocked-column" checked={blockedColumn} onChange={(e) => setBlockedColumn(e.currentTarget.checked)} aria-description={BLOCKED_COLUMN_DESCRIPTION} label={BLOCKED_COLUMN_LABEL} />
-              {/* R-097: the end of the row's first line — what the board shows above, what is done to it below (`.req-header__break`). */}
-              <span className="req-header__break" aria-hidden="true" />
-              {/* REQ-TRACE-488: the toggle's accessible name alternates; hiding removes the controls from the tab sequence and returns focus here. */}
-              <DesignButton ref={filterToggleRef} type="button" className="btn btn-secondary btn-compact" data-testid="req-filter-toggle" aria-expanded={filtersShown} onClick={() => { setFiltersShown((v) => !v); if (filtersShown) requestAnimationFrame(() => filterToggleRef.current?.focus()); }}>{filtersShown ? FILTER_HIDE : FILTER_SHOW}</DesignButton>
-              {/* Part R2 — the two board-level panes of REQ-TRACE-375 reachable from the board itself; every other pane is
-                  opened against ONE requirement and is therefore reached from its detail. Both are 24 high, as
-                  REQ-TRACE-491 fixes every header control but the one primary. */}
-              <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-queue-open" onClick={() => openPane('queue', null)} aria-label={`${QUEUE_CONTROL_LABEL}: the scheduler's order, its reasons and its four controls`}>{QUEUE_CONTROL_LABEL}</DesignButton>
-              <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-create-open" onClick={() => openPane('create', null)} disabled={board === null || board.source.kind === 'none'} aria-label={`${NEW_REQUIREMENT_LABEL}, written into the project's own source`}>{NEW_REQUIREMENT_LABEL}</DesignButton>
-              <span className="req-header__filter card-meta" data-testid="req-filter-summary" data-active={filterActive(filter)} data-populating={populating}>{filterSentence}</span>
-              {filterActive(filter) && <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-filter-clear" onClick={() => { setFilter(EMPTY_FILTER); setTyped(''); }}>{FILTER_CLEAR}</DesignButton>}
-            </div>
-            <div className="req-header__row req-header__move">
-              <MoveControl state={moveState} options={dropOptions} onMove={(to) => { if (selected !== null) void requestMove(selected, to); }} />
-            </div>
-            {filtersShown && (
-              // Defect AK2-1 (ADR-0041's second execution): the five selects below once read `e.currentTarget.value` INSIDE the
-              // deferred `setFilter` updater, where `currentTarget` is already null — the first filter chosen threw and React
-              // tore the whole window down. The value is read in the handler and the updater closes over it.
-              <div className="req-header__row req-header__filters" data-testid="req-filters">
-                <label className="req-header__field"><span className="field-label">Text</span><DesignInput className="input" type="search" data-testid="req-filter-text" aria-label="Filter by text" placeholder="Identifier or title…" value={typed} onChange={(e) => setTyped(e.currentTarget.value)} style={{ width: OPEN_DROPDOWN_WIDTH + 30 }} /></label>
-                <label className="req-header__field"><span className="field-label">Epic</span><DesignSelect className="input select" data-testid="req-filter-epic" aria-label="Filter by epic" value={filter.epic} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, epic: v })); }} style={{ width: OPEN_DROPDOWN_WIDTH }}><option value="">Any</option>{epics.map((e) => <option key={e.id} value={e.id} title={e.title}>{e.id}</option>)}</DesignSelect></label>
-                <label className="req-header__field"><span className="field-label">Source</span><DesignSelect className="input select" data-testid="req-filter-source" aria-label="Filter by source" value={filter.source} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, source: v })); }} style={{ width: OPEN_DROPDOWN_WIDTH }}><option value="">Any</option>{sources.map((s) => <option key={s} value={s} title={s}>{s}</option>)}</DesignSelect></label>
-                <label className="req-header__field"><span className="field-label">Lifecycle</span><DesignSelect className="input select" data-testid="req-filter-lifecycle" aria-label="Filter by lifecycle" value={filter.lifecycle} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, lifecycle: v })); }} style={{ width: CLOSED_DROPDOWN_WIDTH }}><option value="">Any</option>{LIFECYCLES.map((l) => <option key={l} value={l}>{l}</option>)}</DesignSelect></label>
-                <label className="req-header__field"><span className="field-label">Health</span><DesignSelect className="input select" data-testid="req-filter-health" aria-label="Filter by health" value={filter.health} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, health: v })); }} style={{ width: CLOSED_DROPDOWN_WIDTH }}><option value="">Any</option>{HEALTH_TOKENS.map((h) => <option key={h} value={h}>{h}</option>)}</DesignSelect></label>
-                <label className="req-header__field"><span className="field-label">Priority</span><DesignSelect className="input select" data-testid="req-filter-priority" aria-label="Filter by priority" value={filter.priority} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, priority: v })); }} style={{ width: CLOSED_DROPDOWN_WIDTH }}><option value="">Any</option>{PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}</DesignSelect></label>
-              </div>
-            )}
-          </div>
-          <p className="req-header__analysis card-meta" data-testid="req-analysis">{board?.analysisEnabled ? ANALYSIS_ON_SENTENCE : phrase(ANALYSIS_OFF_SENTENCE)} {AWAITING_JUDGEMENT_NONE}</p>
+        <div className="req-header__row req-header__controls">
+          <label className="req-header__field"><span className="field-label">Group by</span>
+            <DesignSelect className="input select req-header__select" data-testid="req-axis" value={axis} onChange={(e) => setAxis(axisOf(e.currentTarget.value))} aria-label="Grouping axis" style={{ maxWidth: CLOSED_DROPDOWN_WIDTH }}>{AXES.map((a) => <option key={a} value={a}>{columnLabel(a)}</option>)}</DesignSelect></label>
+          <label className="req-header__field"><span className="field-label">Sort</span>
+            <DesignSelect className="input select req-header__select" data-testid="req-sort" value={sort} onChange={(e) => setSort(sortOrderOf(e.currentTarget.value))} aria-label="Sort order" style={{ maxWidth: CLOSED_DROPDOWN_WIDTH }}>{SORT_ORDERS.map((s) => <option key={s} value={s}>{s === 'priority' ? 'Priority, then identifier' : s === 'identifier' ? 'Identifier' : 'Health, then identifier'}</option>)}</DesignSelect></label>
+          <DesignCheckbox className="check req-header__field req-header__check" title={BLOCKED_COLUMN_DESCRIPTION} data-testid="req-blocked-column" checked={blockedColumn} onChange={(e) => setBlockedColumn(e.currentTarget.checked)} aria-description={BLOCKED_COLUMN_DESCRIPTION} label={BLOCKED_COLUMN_LABEL} />
+          <span className="req-header__rule" aria-hidden="true" />
+          {/* REQ-TRACE-488: the toggle's accessible name alternates; hiding removes the controls from the tab sequence and returns focus here. */}
+          <DesignButton ref={filterToggleRef} type="button" className="btn btn-secondary btn-compact" data-testid="req-filter-toggle" aria-expanded={filtersShown} aria-description={filterActive(filter) ? undefined : filterSentence} onClick={() => { setFiltersShown((v) => !v); if (filtersShown) requestAnimationFrame(() => filterToggleRef.current?.focus()); }}>{filtersShown ? FILTER_HIDE : FILTER_SHOW}</DesignButton>
+          {/* Part R2 — the two board-level panes of REQ-TRACE-375 reachable from the board itself; both 24 high (REQ-TRACE-491). */}
+          <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-queue-open" onClick={() => openPane('queue', null)} aria-label={`${QUEUE_CONTROL_LABEL}: the scheduler's order, its reasons and its four controls`}>{QUEUE_CONTROL_LABEL}</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-create-open" onClick={() => openPane('create', null)} disabled={board === null || board.source.kind === 'none'} aria-label={`${NEW_REQUIREMENT_LABEL}, written into the project's own source`}>{NEW_REQUIREMENT_LABEL}</DesignButton>
+          {/* REQ-TRACE-291/292: the filter's statement. While no dimension is set it is the toggle's description and
+              read by a screen reader here; once one is set it is on screen beside its one-action Clear. */}
+          <span className={`req-header__filter card-meta${filterActive(filter) ? '' : ' visually-hidden'}`} data-testid="req-filter-summary" data-active={filterActive(filter)} data-populating={populating}>{filterSentence}</span>
+          {filterActive(filter) && <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-filter-clear" onClick={() => { setFilter(EMPTY_FILTER); setTyped(''); }}>{FILTER_CLEAR}</DesignButton>}
+          <span className="req-header__spacer" />
+          <MoveControl state={moveState} options={dropOptions} onMove={(to) => { if (selected !== null) void requestMove(selected, to); }} />
         </div>
+        {filtersShown && (
+          // Defect AK2-1 (ADR-0041's second execution): the five selects below once read `e.currentTarget.value` INSIDE the
+          // deferred `setFilter` updater, where `currentTarget` is already null — the first filter chosen threw and React
+          // tore the whole window down. The value is read in the handler and the updater closes over it.
+          <div className="req-header__row req-header__filters" data-testid="req-filters">
+            <label className="req-header__field"><span className="field-label">Text</span><DesignInput className="input" type="search" data-testid="req-filter-text" aria-label="Filter by text" placeholder="Identifier or title…" value={typed} onChange={(e) => setTyped(e.currentTarget.value)} style={{ width: OPEN_DROPDOWN_WIDTH + 30 }} /></label>
+            <label className="req-header__field"><span className="field-label">Epic</span><DesignSelect className="input select" data-testid="req-filter-epic" aria-label="Filter by epic" value={filter.epic} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, epic: v })); }} style={{ maxWidth: OPEN_DROPDOWN_WIDTH }}><option value="">Any</option>{epics.map((e) => <option key={e.id} value={e.id} title={e.title}>{e.id}</option>)}</DesignSelect></label>
+            <label className="req-header__field"><span className="field-label">Source</span><DesignSelect className="input select" data-testid="req-filter-source" aria-label="Filter by source" value={filter.source} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, source: v })); }} style={{ maxWidth: OPEN_DROPDOWN_WIDTH }}><option value="">Any</option>{sources.map((s) => <option key={s} value={s} title={s}>{s}</option>)}</DesignSelect></label>
+            <label className="req-header__field"><span className="field-label">Lifecycle</span><DesignSelect className="input select" data-testid="req-filter-lifecycle" aria-label="Filter by lifecycle" value={filter.lifecycle} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, lifecycle: v })); }} style={{ maxWidth: CLOSED_DROPDOWN_WIDTH }}><option value="">Any</option>{LIFECYCLES.map((l) => <option key={l} value={l}>{l}</option>)}</DesignSelect></label>
+            <label className="req-header__field"><span className="field-label">Health</span><DesignSelect className="input select" data-testid="req-filter-health" aria-label="Filter by health" value={filter.health} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, health: v })); }} style={{ maxWidth: CLOSED_DROPDOWN_WIDTH }}><option value="">Any</option>{HEALTH_TOKENS.map((h) => <option key={h} value={h}>{h}</option>)}</DesignSelect></label>
+            <label className="req-header__field"><span className="field-label">Priority</span><DesignSelect className="input select" data-testid="req-filter-priority" aria-label="Filter by priority" value={filter.priority} onChange={(e) => { const v = e.currentTarget.value; setFilter((f) => ({ ...f, priority: v })); }} style={{ maxWidth: CLOSED_DROPDOWN_WIDTH }}><option value="">Any</option>{PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}</DesignSelect></label>
+          </div>
+        )}
         {/* REQ-TRACE-515's part clause, defect 81's quieter half: a store that parses in part draws a board, and the
             rejected documents are on no card. The count and the engine's own errors are stated here, in the alert
             the board already uses. */}
@@ -1014,7 +1021,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
         {notice !== null && <p className="req-status" role="status" data-testid="req-notice">{notice} <DesignButton type="button" className="btn btn-link" onClick={() => setNotice(null)}>Dismiss</DesignButton></p>}
       </header>
       {host.readShape !== undefined && host.survey !== undefined && host.acceptShape !== undefined && host.recordShape !== undefined && host.exportShape !== undefined
-        ? <ShapeStrip armed={board !== null} generation={board?.generation ?? 0} readShape={host.readShape} survey={host.survey} acceptShape={host.acceptShape} recordShape={host.recordShape} exportShape={host.exportShape} />
+        ? <ShapeStrip armed={board !== null} generation={board?.generation ?? 0} readShape={host.readShape} survey={host.survey} acceptShape={host.acceptShape} recordShape={host.recordShape} exportShape={host.exportShape} onProgress={onSurveyProgress} />
         : host.readAdoption !== undefined && host.adopt !== undefined && <AdoptionStrip armed={board !== null} readAdoption={host.readAdoption} adopt={host.adopt} />}
       {board !== null && <BlockedStrip blocked={board.blocked} onResume={(id) => { const c = board.cards.find((x) => x.id === id); if (c) void requestMove(id, c.returnTo ?? 'backlog'); }} onNavigate={revealCard} onFilterToBlocked={() => setFilter((f) => ({ ...f, health: 'blocked' }))} />}
       <div className="req-body">
@@ -1087,7 +1094,6 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
           </div>
         )}
       </div>
-      <p className="req-foot card-meta" data-testid="req-subscription">{phrase(SUBSCRIPTION_SENTENCE)}</p>
       {evidenceCard !== undefined && <EvidencePane card={evidenceCard} detail={detail} onClose={closeEvidence} onOpenSession={host.openSession} />}
       {/* Part R2 — REQ-TRACE-472: the elevation's disclosure, raised by the FIRST action of a launch that would start
           a run and before anything at all has been sent. Abandoning it sends nothing; accepting sends the act (or the

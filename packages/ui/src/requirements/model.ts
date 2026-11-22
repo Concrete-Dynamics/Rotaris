@@ -180,6 +180,15 @@ export const ANALYSIS_ON_SENTENCE = 'Change analysis is enabled for this workspa
 /** REQ-TRACE-345: what the pass left unjudged, by identifier. This build's pass judges nothing, so the list is what it reports: none. */
 export const AWAITING_JUDGEMENT_NONE = 'Awaiting judgement: none — this pass records no analyses, so no requirement is waiting on one.';
 /**
+ * The header's status line (the owner, 2026-11-21: the board carried too much text). REQ-TRACE-346 asks the board to
+ * STATE that analysis is off and REQ-TRACE-345 to list and count what awaits judgement; neither asks for a paragraph.
+ * The visible line states both facts in a few words; the full sentences above stay the line's tooltip and accessible
+ * description, so nothing the pass reports is lost.
+ */
+export const ANALYSIS_OFF_LABEL = 'Change analysis off';
+export const ANALYSIS_ON_LABEL = 'Change analysis on';
+export const AWAITING_JUDGEMENT_NONE_LABEL = 'Awaiting judgement: none';
+/**
  * REQ-TRACE-507 and REQ-TRACE-334, in what the reader sees. The board is told of a change by a reply to a command of
  * its own (a move, an acceptance, an edit, a creation) or of a run it started; the requirement documents are read
  * again only then and on Re-evaluate. Nothing watches the repository, so a document written by hand, by a session
@@ -214,7 +223,7 @@ export const MOVE_CONTROL_NAME = 'Move requirement';
 
 /** REQ-TRACE-390/391: the prompt when nothing is selected names the chord actually in force. */
 export function nothingSelectedSentence(chord: string): string {
-  return `Select a requirement on the board to move it (${chord} focuses this control).`;
+  return `Select a requirement on the board to move it (${chord}).`;
 }
 /** REQ-TRACE-297: a drag on a non-delivery axis is refused in words, never silently. */
 export function dragRefusedOnAxisSentence(axis: GroupingAxis, chord: string): string {

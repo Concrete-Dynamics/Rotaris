@@ -321,6 +321,8 @@ export function withLatestHash(args: unknown, messages: readonly ChatMessage[]):
 }
 
 export function scriptedClient(c: Clocks, log: (message: string) => void, record?: (call: ScriptedCallRecord) => void, ledger?: StandingLedger): ModelClient {
+  /** The clocks under a name no inner `c` shadows (the survey's `walk:<ms>` paces on it). */
+  const pacing = c;
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
   // Both are read behind the build-time flag on the read's own line, as every verification read is (the seam check's rule).
@@ -464,7 +466,8 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
        * PD-TRACE-002 clause 3: the survey, recognised by its own system text. Stateless over the conversation it is
        * handed: with no measurement behind it, it proposes the shape the quoted detection's first candidate implies;
        * once a proposal has been measured, it finishes. `ROTARIS_SURVEY_SCRIPT` (verification only): `garbage` (prose on
-       * every step), `refused` (a proposal carrying an unknown key, every time), `look` (one `list` before proposing).
+       * every step), `refused` (a proposal carrying an unknown key, every time), `look` (one `list` before proposing),
+       * `walk:<ms>` (four reading steps, then propose and finish, each after <ms>).
        */
       if (/^You survey a software repository/.test(system)) {
         const want = ((__ROTARIS_SEAMS__ ? process.env['ROTARIS_SURVEY_SCRIPT'] : undefined) ?? '').trim();
@@ -481,6 +484,26 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         // The opening carries the draft's own measurement; a proposal of this client's has run once it is told so.
         const measured = users.some((u) => u.startsWith('Your proposal ran.'));
         const looked = users.some((u) => u.includes('<result>'));
+        // `walk:<ms>` (R-123, verification only): a survey that takes its time — two listings, a read, a search, then the
+        // proposal and the finish, each step answered after <ms> on the clock port — so the strip's progress can be seen
+        // and measured in the built app. Stateless as the rest: the step is the count of results already handed back.
+        const walk = /^walk:(\d+)$/.exec(want);
+        if (walk) {
+          await new Promise<void>((resolve) => pacing.timers.after(millis(Number(walk[1])), resolve));
+          const results = users.filter((u) => u.includes('<result>')).length;
+          const dir = draft.stores?.[0]?.dir ?? '.';
+          const file = /([\w./-]+\.md)\b/.exec(users.filter((u) => u.includes('<result>')).at(-1) ?? '')?.[1];
+          const stepAnswer = measured && !/<answer>/.test(last) ? { action: 'finish' }
+            : results === 0 ? { action: 'list', path: '.' }
+              : results === 1 ? { action: 'list', path: dir }
+                : results === 2 ? { action: 'read', path: file === undefined ? dir : (file.includes('/') ? file : `${dir}/${file}`) }
+                  : results === 3 ? { action: 'grep', pattern: 'SHALL', path: dir }
+                    : { action: 'propose', shape };
+          yield ok<StreamPart>({ kind: 'text', delta: JSON.stringify(stepAnswer) });
+          yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 20 } });
+          yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+          return;
+        }
         const answer = want === 'garbage' ? 'The requirements are probably in docs.'
           : want === 'refused' ? JSON.stringify({ action: 'propose', shape: { ...shape, write_to: 'docs/out.md' } })
             : measured && !/<answer>/.test(last) ? JSON.stringify({ action: 'finish' })

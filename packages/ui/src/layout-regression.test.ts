@@ -261,10 +261,8 @@ describe('minimum-window layout regressions', () => {
     expect(rule('.table-card-head > .card-kicker')).toContain('margin-right: auto');
   });
 
-  it('keeps a control\'s name whole inside a sentence of the board, and sets the foot as one text (UIR-412)', () => {
+  it('keeps a control\'s name whole inside a sentence of the board (UIR-412)', () => {
     expect(rule('.req-whole')).toContain('white-space: nowrap');
-    // `.card-meta` is a flex line; the foot's sentence holds a span, and as flex items its parts stood in three columns.
-    expect(rule('.req-foot.card-meta')).toContain('display: block');
   });
 
   it('bounds the Requirements board body\'s empty state inside the body at the minimum window (R-097; REQ-SHELL-022)', () => {

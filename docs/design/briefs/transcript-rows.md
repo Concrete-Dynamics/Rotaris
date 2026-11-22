@@ -111,3 +111,113 @@ Round 1 read the captures of `build1/` against the capture before the change, th
 | 9 | "All activity" between the run and its agents; no sign of overflow | order resolved; the pinned tab's fade was not seen overflowing |
 
 New in round 2, open: a running call with a derived description still draws its raw input on the `⤷` line (`{"task_ids":[…]}` under "Waits for 2 children"); REQ-CHAT-061 gives that line, so leaving it out is a narrowing to classify, not a repair.
+
+## Brief 2026-11-22 — the configuration change row and its Undo ([R-121](../../product/requests.md#r-121), [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014) clause 7)
+
+**Status:** proposed. A brief for one addition to the built tool row (`packages/ui/src/transcript/Row.tsx`, mockup `WORKSPACE` → `transcript column`): the settled row of a `configure` set.
+
+### 1. Authority
+
+- `REQ-CHAT-046`: the tool row and its fields; `input` and `output` untruncated in the record.
+- `REQ-CHAT-060`: the four statuses.
+- `PD-CHAT-004`: the activity line.
+- `PD-CONFIG-014`:
+  - clause 7: the row carries the change and an Undo that writes the value before back through the same path;
+  - clause 2: the one writer;
+  - clause 5: a change applies at the next run.
+- `REQ-SHELL-149`: no state by colour alone.
+- Departures from the mockup: none. The mockup draws no row action of this kind.
+- Left open, and settled below:
+  - where the value before comes from on a paged-in row;
+  - what Undo does when the setting has changed since;
+  - what the row shows after Undo.
+
+### 2. Journeys that cross it
+
+- **When an agent has changed a setting I did not want changed, I want to put it back from the row that shows the change, so that I need not find the setting in Settings or the file.**
+  - Entry: a settled `ok` `configure` set row.
+  - Steps: press Undo.
+  - Exit: the row says the setting is back.
+  - Trust point: the row names the setting, both values and the scope before the press.
+  - Recover: if Undo is refused because the setting changed since, the row says what it holds now and points to Settings.
+- **The several-agents journey:** each row undoes its own change, and only while the setting still holds the value that row wrote (§5).
+- Ruled out: `read` and `explain` rows, failed and blocked rows. They changed nothing.
+
+### 3. Content model and hierarchy
+
+- The row stays a tool row.
+- Its preview line (`tool__preview`) reads the change: `<setting>: <before> → <after> · <scope>`.
+- Its one action, Undo, stands at the row's end, as `row__trailer` does.
+- **The change's data** is the observation's own: the `configure` result ends with a one-line machine record (`configure-change: {...}`, JSON, carrying setting, scope, stated, before and after). The renderer reads it from `output`, so a row paged in after a relaunch has it, and no store column is added (§10 item 1).
+- Disclosure: the expanded row shows the result text as today.
+
+### 4. States
+
+| Region | ideal | empty: first use | empty: cleared | empty: no results | filtered | cannot-show | loading | streaming / partial | error | success | disabled | permission-needed |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| change preview | `<setting>: <before> → <after> · <scope>` | before unstated: `<setting>: not set → <after> · <scope>` | n/a | n/a | n/a | no machine record (a row from before this build): the preview is the first line of `output`, as today, and no Undo | n/a — settled rows only | n/a — a running row has no result | failed or blocked: unchanged, no Undo | — | n/a | n/a |
+| Undo | `Undo` (text button) | same | n/a | n/a | n/a | absent | pressed: `Undoing…`, disabled | n/a | refused: the row's line becomes `Not undone — <setting> was changed since; it holds <value> now.` | `Undone — <setting> is <before> again.` and the button leaves | n/a | n/a — the press is the user's own, no dialog (§5) |
+
+### 5. Interaction
+
+- Undo is a text button (`Button`, the `row__trailer` variant), reached by Tab after the row header, with no palette entry.
+- The press sends the renderer command `config.undoAgentChange`, carrying setting, scope, stated, before and after. Main asks the workspace service to compare and set: the write goes through only while the file's value of the setting equals `after`.
+  - `stated: false` removes the key.
+  - Otherwise the key is written back to `before`.
+  - Either way the scoped per-field path is used, and the load follows, as clause 2 requires.
+- No `ConfirmDialog`: Undo is itself reversible, since the agent or the user can set the value again. The press is the user's, in the user's own window (`REQ-TOOLS-059`'s rule that only the host UI answers is met, not crossed).
+- Focus after the press stays on the row. The result line is announced (§7).
+- The "Undone" state is the window's, not recorded. After a relaunch the button shows again, and a second press is refused by the compare-and-set, since the setting no longer holds `after`. The record never claims an undo it did not make.
+
+### 6. Copy
+
+| Where | String |
+|---|---|
+| button | `Undo` |
+| busy | `Undoing…` |
+| success | `Undone — <setting> is <before> again.`; unstated before: `Undone — <setting> is no longer set in the <scope> file.` |
+| refused, changed since | `Not undone — <setting> was changed since; it holds <value> now.` |
+| refused, other | `Not undone — <the service's reason>` |
+| button's accessible name | `Undo the change to <setting>` |
+
+Bound: values clipped at 80 characters with `…` in the preview line. The expanded result holds them whole.
+
+### 7. Accessibility obligations
+
+- `REQ-SHELL-149`: the arrow is read as "changed to" in the preview's accessible description, so it is never a glyph alone.
+- The result line is `role="status"`, polite.
+- The button's name says which setting it undoes, so a list of rows read by name is unambiguous.
+
+### 8. Composition intent
+
+- Density as the tool row's. Earned surfaces: none new.
+- The Undo button aligns with `row__trailer`'s end edge.
+- Relations: `config-undo` `containment` in `row__main`; `text-fit` on the x axis for the preview, which clips with `…` and never wraps.
+
+| Region | 1400×900 | above 1180 | 1180–1080 | below 1080 | 1000×680 |
+|---|---|---|---|---|---|
+| change preview + Undo | one line, Undo at the end | same | same | same | the preview clips first; Undo holds whole |
+
+### 9. Components
+
+- `Button` (design-system), the existing `row__trailer` class, the existing `tool__preview` class. No §4.2 gap.
+
+### 10. Disagreements and gaps
+
+1. **The value before is not a row field.**
+   - It meets: `REQ-CHAT-046`'s row fields, and the store's append-only migrations.
+   - Settled: the machine record in `output` (§3). A store column was declined, because the output is already recorded untruncated.
+2. **Compare-and-set** is behaviour clause 7 does not state ("writes the value before back").
+   - Settled here as the guard that makes an Undo of a stale row harmless.
+   - Built under `PD-CONFIG-014` revision 3, which names it.
+
+### 11. Evidence plan
+
+- Capture: `pnpm app:drive`, the scripted dialect, `ROTARIS_SCRIPT=configure:display.show_tool_inputs=false,done` under `autonomous`.
+  - Steps: `waitFor` the row's `[data-action="config-undo"]`; `shot` at 1400×900 and 1000×680; `click --settle`; `waitFor` the status line; read the file.
+  - A second run edits the file between set and Undo, for the refused cell.
+- Rubric rows: F2, F3, F4, C1, D3.
+- **Must move:** the file holds the value before after Undo, and a stale Undo leaves the file unchanged.
+- **Must hold:**
+  - Every other tool row unchanged (`rows-proof`'s 52, 112 and 30 px).
+  - The tool row's statuses (`tool-shapes-proof`).

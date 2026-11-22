@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createReportingRoot, type ReportingRoot } from './render-failure.js';
 import { useStore } from 'zustand';
-import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type AuthRecoveryPayload, type AuthRecoveryResult, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInPrompt, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
+import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type CloudServerSetting, type AuthRecoveryPayload, type AuthRecoveryResult, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInPrompt, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { type InPlaceSignInHost, Acknowledgements, ApprovalDialog, AuthRecoveryDialog, ArtifactInspector, createTerminalWindowStreams, type ArtifactLoaded, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
 import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, reloadThisWindow, replica, terminalHost, terminalStreams } from './shell.js';
 import { entryOf, useCancelOverlaid, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
@@ -67,7 +67,15 @@ export function bootProvider(): Promise<void> {
     };
     const onCancelSignIn = (): void => { void bridge.command({ kind: 'provider.authCancel' }); };
     const onOpenLink = (url: string): void => { void bridge.command({ kind: 'shell.openExternal', url }); };
-    root.render(<StrictMode><ProviderDialog payload={payload} onSubmit={onSubmit} onAuthenticate={onAuthenticate} onPrompt={onPrompt} onCancelSignIn={onCancelSignIn} onOpenLink={onOpenLink} onClose={() => window.close()} /></StrictMode>);
+    const onLoadCloudServer = async (): Promise<CloudServerSetting | null> => {
+      const c = await bridge.command({ kind: 'providers.cloudServer' });
+      return c.ok ? (c.value as CloudServerSetting) : null;
+    };
+    const onSaveCloudServer = async (server: { apiBase: string | null; issuer: string | null }): Promise<{ ok: boolean; message: string }> => {
+      const c = await bridge.command({ kind: 'providers.setCloudServer', apiBase: server.apiBase, issuer: server.issuer });
+      return c.ok ? (c.value as { ok: boolean; message: string }) : { ok: false, message: c.detail ?? c.headline };
+    };
+    root.render(<StrictMode><ProviderDialog payload={payload} onSubmit={onSubmit} onAuthenticate={onAuthenticate} onPrompt={onPrompt} onCancelSignIn={onCancelSignIn} onOpenLink={onOpenLink} onLoadCloudServer={onLoadCloudServer} onSaveCloudServer={onSaveCloudServer} onClose={() => window.close()} /></StrictMode>);
   });
 }
 

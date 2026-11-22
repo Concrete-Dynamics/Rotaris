@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and forty-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and forty-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -160,6 +160,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-PROVIDER-001](directives/pd-provider-001.md) | the hosted connection mode is spelt `hosted-cloud`, and a provider's shared quota is a number it declares |
 | [PD-PROVIDER-002](directives/pd-provider-002.md) | a Claude subscription is used through the Claude Code tool the user installed and signed in to, and the product never handles its credential |
 | [PD-PROVIDER-003](directives/pd-provider-003.md) | each launch checks the signed-in providers, the Claude Code tool is connected when it is found, and its catalogue is the one the tool reports |
+| [PD-PROVIDER-004](directives/pd-provider-004.md) | Rotaris Cloud is available, at the address the backend is deployed on, and the user may point it at another server |
 
 ### SESSION
 

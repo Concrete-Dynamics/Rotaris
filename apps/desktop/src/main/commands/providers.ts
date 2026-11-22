@@ -8,7 +8,7 @@ import { type CommandContext, type CommandHandlers } from './context.js';
  */
 export function providersCommands(
   ctx: Pick<CommandContext, 'afterProviderChange' | 'authRecovery' | 'healthCache' | 'log' | 'openSignInPage' | 'presentProvider' | 'providerChoices' | 'providerPayloads' | 'providerRows' | 'providers' | 'providerSignIns' | 'raiseNotice' | 'recoveryFor'>,
-): Pick<CommandHandlers, 'providers.list' | 'providers.health' | 'providers.open' | 'provider.payload' | 'provider.signIn' | 'provider.authenticate' | 'provider.authPrompt' | 'provider.authCancel' | 'providers.save' | 'providers.validate' | 'providers.signOut' | 'providers.delete' | 'providers.refresh'> {
+): Pick<CommandHandlers, 'providers.list' | 'providers.health' | 'providers.open' | 'provider.payload' | 'provider.signIn' | 'provider.authenticate' | 'provider.authPrompt' | 'provider.authCancel' | 'providers.save' | 'providers.validate' | 'providers.signOut' | 'providers.cloudServer' | 'providers.setCloudServer' | 'providers.delete' | 'providers.refresh'> {
   const { afterProviderChange, authRecovery, healthCache, log, openSignInPage, presentProvider, providerChoices, providerPayloads, providerRows, providers, providerSignIns, raiseNotice, recoveryFor } = ctx;
   // REQ-NOTIFY-068: a provider's credentials changed, so a pair of it that failed authentication may be offered again.
   const credentialsChanged = (id: string): void => authRecovery.credentialsChanged(id);
@@ -110,6 +110,18 @@ export function providersCommands(
       log(`providers: ${r.message}`);
       await afterProviderChange();
       return { ok: true, value: { ok: r.outcome === 'signed-out' || r.outcome === 'nothing', message: r.message } };
+    },
+    // PD-PROVIDER-004: the Rotaris Cloud server. Two public URLs; nothing here is a credential.
+    'providers.cloudServer': () => {
+      const c = providers.cloudServerSetting();
+      return { ok: true, value: { storedApiBase: c.stored.apiBase ?? null, storedIssuer: c.stored.issuer ?? null, effectiveApiBase: c.effective?.apiBase ?? null, effectiveIssuer: c.effective?.issuer ?? null, environment: c.environment, error: c.error } };
+    },
+    'providers.setCloudServer': async (req) => {
+      const r = await providers.setCloudServer({ apiBase: req.apiBase, issuer: req.issuer });
+      if (!r.ok) return { ok: true, value: { ok: false, message: r.error } };
+      healthCache.delete('concrete-cloud');
+      await afterProviderChange();
+      return { ok: true, value: { ok: true, message: `Rotaris Cloud will use ${r.value.apiBase}, signing in at ${r.value.issuer}.` } };
     },
     'providers.delete': async (req) => {
       const r = await providers.deleteInstance(req.id);

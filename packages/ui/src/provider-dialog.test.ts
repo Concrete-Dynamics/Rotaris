@@ -39,4 +39,11 @@ describe('ui/ProviderDialog — what the window offers before a sign-in starts',
     expect(html).not.toContain('id="provider-key"');
     expect(html).toMatch(/<button[^>]*disabled[^>]*data-action="authenticate"|<button[^>]*data-action="authenticate"[^>]*disabled/);
   });
+
+  it('PD-PROVIDER-004: Rotaris Cloud is a browser sign-in that starts enabled; its Server section waits for the stored choice, so the first paint offers only Authenticate', () => {
+    const html = draw({ mode: 'authenticate', providerId: 'concrete-cloud', displayName: 'Rotaris Cloud (recommended)', choices: [choice({ id: 'concrete-cloud', displayName: 'Rotaris Cloud (recommended)' })] });
+    expect(html).toContain(OAUTH_INSTRUCTION.replace("'", '&#x27;'));
+    expect(html).not.toContain('id="provider-key"');
+    expect(html).toMatch(/<button[^>]*data-action="authenticate"(?![^>]*disabled)/);
+  });
 });

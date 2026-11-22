@@ -100,6 +100,14 @@ export const ProviderSignInPromptSchema = z.discriminatedUnion('kind', [
 ]);
 export type ProviderSignInPrompt = z.infer<typeof ProviderSignInPromptSchema>;
 
+/** PD-PROVIDER-004: what `providers.cloudServer` answers. `stored*` is the user's choice (null = production); `effective*` is what a sign-in uses now. */
+export const CloudServerSettingSchema = z.object({
+  storedApiBase: z.string().nullable(), storedIssuer: z.string().nullable(),
+  effectiveApiBase: z.string().nullable(), effectiveIssuer: z.string().nullable(),
+  environment: z.boolean(), error: z.string().nullable(),
+});
+export type CloudServerSetting = z.infer<typeof CloudServerSettingSchema>;
+
 export const ProviderActionResultSchema = z.object({ ok: z.boolean(), message: z.string() });
 export type ProviderActionResult = z.infer<typeof ProviderActionResultSchema>;
 

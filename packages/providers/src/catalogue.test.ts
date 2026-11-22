@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CATALOGUE, PROVIDER_IDS, sharedQuotaCaps, destinationHint, destinationHost, instanceId, instanceSlug, LABEL_EMPTY, lookupProvider, modelsEndpoint, normalizeBaseUrl, signInMethodFor, validateCatalog, type CatalogueEntry } from './catalogue.js';
+import { CLOUD_DEFAULT_API_BASE } from './flows/cloud.js';
 import { validateKnownLimits, lookupKnownLimits, KNOWN_LIMITS } from './limits.data.js';
 import { validateTierPreferences } from './tiers.data.js';
 
@@ -25,7 +26,7 @@ describe('the provider catalogue (ADR-0028; REQ-PROVIDER-001..007)', () => {
     expect(validateCatalog()).toEqual({ ok: true, value: undefined });
   });
   it('rejects a deliberately broken build: a local-sdk entry with a base URL, a custom entry with an operator, an unavailable entry without a reason', () => {
-    const broken = CATALOGUE.map((c): CatalogueEntry => (c.id === 'claude-code' ? { ...c, baseUrl: 'https://x.example' } : c.id === 'openai-compatible' ? { ...c, operator: 'Someone' } : c.id === 'concrete-cloud' ? { ...c, unavailabilityReason: null } : c));
+    const broken = CATALOGUE.map((c): CatalogueEntry => (c.id === 'claude-code' ? { ...c, baseUrl: 'https://x.example' } : c.id === 'openai-compatible' ? { ...c, operator: 'Someone' } : c.id === 'concrete-cloud' ? { ...c, available: false, unavailabilityReason: null } : c));
     const r = validateCatalog(broken);
     expect(r.ok).toBe(false);
     if (!r.ok) {
@@ -36,20 +37,22 @@ describe('the provider catalogue (ADR-0028; REQ-PROVIDER-001..007)', () => {
   });
   it('destination hosts (REQ-PROVIDER-004): none for local-sdk and custom, the hostname otherwise', () => {
     const host = (id: string) => destinationHost(CATALOGUE.find((c) => c.id === id)!);
-    expect(host('concrete-cloud')).toBe('rotaris.ai');
+    expect(host('concrete-cloud')).toBe('api.rotaris.ai');
     expect(host('copilot')).toBe('api.githubcopilot.com');
     expect(host('codex')).toBe('chatgpt.com');
     expect(host('deepseek')).toBe('api.deepseek.com');
     expect(host('claude-code')).toBeNull();
     expect(host('openai-compatible')).toBeNull();
   });
-  it('claude-code declares neither URL (REQ-PROVIDER-005); the hosted provider ships coming soon (006)', () => {
+  it('claude-code declares neither URL (REQ-PROVIDER-005); the hosted provider ships available at api.rotaris.ai (PD-PROVIDER-004)', () => {
     const cc = CATALOGUE.find((c) => c.id === 'claude-code')!;
     expect(cc.discoveryUrl).toBeNull();
     expect(cc.baseUrl).toBeNull();
     const cloud = CATALOGUE.find((c) => c.id === 'concrete-cloud')!;
-    expect(cloud.available).toBe(false);
-    expect(cloud.unavailabilityReason).toBe('Rotaris Cloud is coming soon.');
+    expect(cloud.available).toBe(true);
+    expect(cloud.unavailabilityReason).toBeNull();
+    expect(cloud.baseUrl).toBe(CLOUD_DEFAULT_API_BASE);
+    expect(cloud.discoveryUrl).toBe(`${CLOUD_DEFAULT_API_BASE}/models`);
     expect(CATALOGUE.find((c) => c.id === 'deepseek')!.discoveryUrl).toBe('https://api.deepseek.com/models');
   });
   it('an unknown id is an error and no alias resolves (REQ-PROVIDER-007/009)', () => {
@@ -81,7 +84,7 @@ describe('the provider catalogue (ADR-0028; REQ-PROVIDER-001..007)', () => {
     const hint = (id: string) => destinationHint(CATALOGUE.find((c) => c.id === id)!);
     expect(hint('openai-compatible')).toBe('Custom endpoint — model traffic is sent to the base URL you enter below.');
     expect(hint('claude-code')).toContain('Claude Agent SDK');
-    expect(hint('concrete-cloud')).toBe('Rotaris-managed cloud service — destination: rotaris.ai.');
+    expect(hint('concrete-cloud')).toBe('Rotaris-managed cloud service — destination: api.rotaris.ai.');
     expect(hint('deepseek')).toBe('Direct provider API — DeepSeek, destination: api.deepseek.com.');
   });
 });

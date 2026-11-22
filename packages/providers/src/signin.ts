@@ -5,6 +5,8 @@ import { credentialStatus, headerValidKey, type CredentialStatus, type Credentia
 import { discover, type DiscoveredModel, type DiscoveryError, type FetchLike } from './discovery.js';
 import { discoverCodex, discoverCopilot, isAvailable } from './discovery-strategies.js';
 import { CLAUDE_CODE_MARKER, CLAUDE_CODE_METHOD_LABEL, CLAUDE_CODE_NO_KEY, CLAUDE_CODE_NOT_INSTALLED, claudeCodeModels, claudeCodeStatus, localToolProblem, type LocalToolState } from './flows/claude-code.js';
+import type { CloudServerStore } from './cloud-server.js';
+import { authenticateCloud, refreshCloud, resolveCloudServer, revokeCloud, type CloudServer, type CloudServerChoice } from './flows/cloud.js';
 import { authenticateCodex, CODEX_ORIGINATOR, refreshCodex } from './flows/codex.js';
 import { authenticateCopilot, COPILOT_API_HEADERS, copilotStatus, refreshCopilot } from './flows/copilot.js';
 import { CANCELLED_BY_USER, type FlowDeps, type SignInPrompt } from './flows/oauth.js';
@@ -39,6 +41,10 @@ export interface SignInDeps {
   readonly localTool?: { readonly installed: () => boolean; readonly state: () => Promise<LocalToolState>;
     /** PD-PROVIDER-003 clause 1: the models the tool offers the signed-in account, or null when it could not be asked. */
     readonly models?: () => Promise<readonly DiscoveredModel[] | null> };
+  /** PD-PROVIDER-004: the Rotaris Cloud server the user chose; absent, the production default (the environment still wins). */
+  readonly cloudServer?: CloudServerStore;
+  /** The environment the application was started with — `ROTARIS_OIDC_ISSUER` and `ROTARIS_API_BASE_URL` (REQ-PROVIDER-037). */
+  readonly env?: Readonly<Record<string, string | undefined>>;
   readonly log: (m: string) => void;
   readonly warn: (m: string) => void;
 }
@@ -167,6 +173,34 @@ export class ProviderService {
 
   private flowFetch(): FetchLike { return this.deps.fetch ?? ((input, init) => fetch(input, init)); }
 
+  /** PD-PROVIDER-004: the server a Rotaris Cloud sign-in uses now — the environment, else the stored choice, else production. */
+  cloudServer(): Result<CloudServer, string> {
+    return resolveCloudServer(this.deps.cloudServer?.read() ?? null, this.deps.env ?? {});
+  }
+
+  /** What the settings surface shows: the stored choice (null halves = production), the server in force, and whether the environment overrides. */
+  cloudServerSetting(): { readonly stored: CloudServerChoice; readonly effective: CloudServer | null; readonly error: string | null; readonly environment: boolean } {
+    const effective = this.cloudServer();
+    const env = this.deps.env ?? {};
+    return {
+      stored: this.deps.cloudServer?.read() ?? { apiBase: null, issuer: null }, effective: effective.ok ? effective.value : null, error: effective.ok ? null : effective.error,
+      environment: [env['ROTARIS_OIDC_ISSUER'], env['ROTARIS_API_BASE_URL']].some((v) => typeof v === 'string' && v.trim().length > 0),
+    };
+  }
+
+  /**
+   * PD-PROVIDER-004: choose the server Rotaris Cloud signs in to; both halves empty restores production. A stored sign-in to
+   * another server is left alone — it keeps working against the server it was made for — until the user signs in again.
+   */
+  async setCloudServer(choice: CloudServerChoice): Promise<Result<CloudServer, string>> {
+    if (!this.deps.cloudServer) return err('This build cannot store a Rotaris Cloud server.');
+    const saved = await this.deps.cloudServer.write(choice);
+    if (!saved.ok) return err(saved.error.headline);
+    const effective = this.cloudServer();
+    if (effective.ok) this.deps.log(`Rotaris Cloud server: ${effective.value.apiBase} (sign-in at ${effective.value.issuer}).`);
+    return effective;
+  }
+
   method(id: string): SignInMethod | null {
     const family = this.deps.credentials.load(id)?.extra['provider_family'] ?? null;
     const m = signInMethodFor(id, family);
@@ -182,6 +216,7 @@ export class ProviderService {
   /** REQ-PROVIDER-069: the discovery dispatch. `cred` supplies what a strategy reads beside the token (account id, tenant base). */
   private async runDiscovery(id: string, token: string, baseUrl: string | null, displayName: string = this.displayName(id), cred: StoredCredential | null = this.deps.credentials.load(id)): Promise<Result<DiscoveredModel[], DiscoveryError>> {
     if (id === 'claude-code') return ok(await this.localModels());
+    if (id === 'concrete-cloud' && baseUrl === null) baseUrl = this.cloudApiBase(cred);
     const url = this.discoveryUrl(id, baseUrl);
     const common = { providerId: id, displayName, token, knownLimits: KNOWN_LIMITS, ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}) };
     if (id === 'codex' && url !== null) return discoverCodex({ ...common, modelsUrl: url, accountId: cred?.account_id ?? null });
@@ -204,8 +239,16 @@ export class ProviderService {
 
   static readonly PUBLIC_CATALOG_NOTE = 'This endpoint answers its model catalog without a key, so the key could not be validated against it; the first run will tell.';
 
+  /** The API base a Rotaris Cloud call goes to: the one the credential was signed in against, else the server in force, else production. */
+  private cloudApiBase(cred: StoredCredential | null): string | null {
+    if (cred?.extra['api_base']) return cred.extra['api_base'];
+    const server = this.cloudServer();
+    return server.ok ? server.value.apiBase : null;
+  }
+
   /** The base URL a record carries: the instance's stored `api_base`, else the catalogue's default. */
   private recordBase(id: string, cred: StoredCredential | null): string | null {
+    if (id === 'concrete-cloud') return this.cloudApiBase(cred);
     if (isInstanceId(id)) return cred?.extra['api_base'] ?? this.snapshotRecord(id)?.base_url ?? null;
     // REQ-PROVIDER-099: "using the stored API base for the base URL" — Copilot's tenant base, where the exchange gave one.
     if (id === 'copilot' && cred?.extra['api_base']) return cred.extra['api_base'];
@@ -455,6 +498,11 @@ export class ProviderService {
     const known = this.knownSignOutTargets();
     if (!known.includes(id)) return { outcome: 'unknown', message: `Unknown provider '${id}'. Known providers: ${known.join(', ')}. A user-defined instance is named openai-compatible--<label>.` };
     const name = this.displayName(id);
+    // REQ-PROVIDER-041: the refresh token is revoked at the server first, best effort; the local sign-out never waits on it succeeding.
+    if (id === 'concrete-cloud') {
+      const stored = this.deps.credentials.load(id);
+      if (stored) await revokeCloud({ fetch: this.flowFetch() }, stored, (m) => this.deps.log(m));
+    }
     const r = await this.deps.credentials.delete(id);
     this.lastErrors.delete(id);
     if (!r.ok) return { outcome: 'failed', message: `Sign-out of ${name} failed: ${r.error.headline}${r.error.detail ? ` (${r.error.detail})` : ''}` };
@@ -577,7 +625,7 @@ export class ProviderService {
         local: this.localSdk(id),
         authenticated: status === 'authenticated', status,
         maskedKey: cred && method === 'api-key' && !this.localSdk(id) && cred.access_token.length > 0 ? displayMask(cred.access_token) : null,
-        baseUrl: cred?.extra['api_base'] ?? rec?.base_url ?? (entry.ok ? entry.value.baseUrl : null),
+        baseUrl: id === 'concrete-cloud' ? this.cloudApiBase(cred) : cred?.extra['api_base'] ?? rec?.base_url ?? (entry.ok ? entry.value.baseUrl : null),
         modelCount: rec?.models.length ?? 0, userDefined: isInstanceId(id), available: entry.ok ? entry.value.available && (entry.value.connectionMode !== 'local-sdk' || this.localInstalled()) : true,
         lastError: this.lastError(id),
       };
@@ -592,6 +640,7 @@ export class ProviderService {
     const flow = { fetch: this.flowFetch() };
     if (id === 'codex') return refreshCodex(flow, cred, () => this.nowSeconds());
     if (id === 'copilot') return refreshCopilot(flow, cred);
+    if (id === 'concrete-cloud') return refreshCloud(flow, cred, () => this.nowSeconds());
     if (this.localSdk(id)) return ok(cred);
     if (cred.expires_at === 0) return ok(cred);
     return err('Authentication expired; re-authentication required.');
@@ -717,11 +766,19 @@ export class ProviderService {
       await this.deps.credentials.delete(id);
       this.deps.log(`Discarded stored authentication for ${name}.`);
     }
-    let cred = opts.reauthenticate ? null : await this.fresh(id);
+    // PD-PROVIDER-004: a stored Rotaris Cloud sign-in made against another server is not this server's — sign in again.
+    let cloud: CloudServer | null = null;
+    if (id === 'concrete-cloud') {
+      const server = this.cloudServer();
+      if (!server.ok) { this.recordError(id, server.error); return { outcome: 'failed', message: server.error }; }
+      cloud = server.value;
+    }
+    const sameServer = cloud === null || this.deps.credentials.load(id)?.extra['issuer'] === cloud.issuer;
+    let cred = opts.reauthenticate || !sameServer ? null : await this.fresh(id);
     if (cred) this.deps.log(`Using the stored authentication for ${name}.`);
     else {
       const flow: FlowDeps = { fetch: this.flowFetch(), timers: this.deps.timers, prompt: opts.prompt, warn: this.deps.warn, ...(opts.signal ? { signal: opts.signal } : {}) };
-      const authenticated = id === 'codex' ? await authenticateCodex(flow, () => this.nowSeconds()) : id === 'copilot' ? await authenticateCopilot(flow) : err(`${name} signs in with "${METHOD_LABELS[entry.value.signInMethod]}", which this build does not provide yet.`);
+      const authenticated = id === 'codex' ? await authenticateCodex(flow, () => this.nowSeconds()) : id === 'copilot' ? await authenticateCopilot(flow) : id === 'concrete-cloud' && cloud !== null ? await authenticateCloud(flow, () => this.nowSeconds(), cloud) : err(`${name} signs in with "${METHOD_LABELS[entry.value.signInMethod]}", which this build does not provide yet.`);
       if (!authenticated.ok) {
         if (authenticated.error === CANCELLED_BY_USER || opts.signal?.aborted) return { outcome: 'cancelled' };
         this.recordError(id, authenticated.error);

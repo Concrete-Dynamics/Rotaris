@@ -15,6 +15,8 @@ Part 1 of 7 of [domain 04](../04-model-providers-auth.md), which indexes every p
 - **REQ-PROVIDER-004** — Destination-host resolution: for local-sdk and custom modes the destination host is empty/none; for all other modes it is the hostname parsed from the default base URL (e.g. `rotaris.ai`, `api.githubcopilot.com`, `chatgpt.com`, `api.deepseek.com`).
 
 - **REQ-PROVIDER-005** — Fixed per-provider endpoints and transparency metadata. Each built-in entry declares its discovery URL outright; for `deepseek` that URL deliberately differs from `<base>/models`, and deriving a discovery URL from a base URL (REQ-PROVIDER-053) applies only to user-supplied `openai-compatible` endpoints.
+
+  > **Narrowed by [`PD-PROVIDER-004`](../../product/directives/pd-provider-004.md#pd-provider-004), 2026-11-22.** The `concrete-cloud` discovery URL and base are on `api.rotaris.ai`.
   - `concrete-cloud`: discovery `https://rotaris.ai/v1/models`, base `https://rotaris.ai/v1`, operator "Concrete Dynamics UG (haftungsbeschränkt)", privacy URL `https://rotaris.ai/privacy`.
   - `copilot`: discovery `https://api.githubcopilot.com/models`, base `https://api.githubcopilot.com`, operator "GitHub".
   - `codex`: discovery `https://chatgpt.com/backend-api/codex/models`, base `https://chatgpt.com/backend-api/codex`, operator "OpenAI".
@@ -23,6 +25,8 @@ Part 1 of 7 of [domain 04](../04-model-providers-auth.md), which indexes every p
   - `deepseek`: discovery `https://api.deepseek.com/models`, base `https://api.deepseek.com/v1`, operator "DeepSeek".
 
 - **REQ-PROVIDER-006** — The hosted provider `concrete-cloud` ships marked unavailable with unavailability reason "Rotaris Cloud is coming soon." This "coming soon" state is a static catalog attribute of the build, not a runtime probe: no health check, remote flag, configuration value, or user action ever flips it, and it changes only when a later build ships the entry marked available. Nothing in the running product writes the availability attribute.
+
+  > **Extended by [`PD-PROVIDER-004`](../../product/directives/pd-provider-004.md#pd-provider-004), 2026-11-22.** This build is the later one: the entry ships marked available.
 
 - **REQ-PROVIDER-007** — Looking up an unknown provider id in the catalog is an error; listing the catalog preserves the fixed insertion order.
 
@@ -100,6 +104,8 @@ Part 1 of 7 of [domain 04](../04-model-providers-auth.md), which indexes every p
 
 - **REQ-PROVIDER-037** — Rotaris Cloud sign-in uses OIDC Authorization Code + PKCE with public client id `rotaris-ai`. The issuer is a configuration value on the layered YAML configuration surface (any trailing slash stripped), and the API base is a configuration value defaulting to the catalog's `concrete-cloud` base `https://rotaris.ai/v1`. Where the environment variables `ROTARIS_OIDC_ISSUER` and `ROTARIS_API_BASE_URL` are present in the environment the application was started with, each overrides the corresponding configured value, so a deployment can point the flow at a different issuer without editing configuration. When neither route supplies an issuer, authentication fails before any request with a message stating that the Rotaris Cloud issuer must be configured before sign-in and naming the configuration key that supplies it.
 
+  > **Narrowed by [`PD-PROVIDER-004`](../../product/directives/pd-provider-004.md#pd-provider-004), 2026-11-22.** The default issuer is the production realm, the API base default is `https://api.rotaris.ai/v1`, and a stored choice sits between the environment and the default.
+
 - **REQ-PROVIDER-038** — OIDC discovery performs `GET <issuer>/.well-known/openid-configuration` with a 30-second timeout. The response must be JSON; its `issuer` must equal the configured issuer exactly (else "OIDC discovery issuer did not match configured issuer"); and it must supply `authorization_endpoint`, `token_endpoint`, and `revocation_endpoint` (else "OIDC discovery omitted a required endpoint").
 
 - **REQ-PROVIDER-039** — Unlike codex, the cloud loopback callback binds an ephemeral port on `127.0.0.1` with path `/callback`, and the flow itself opens the system default browser in addition to delivering the URL through the prompt callback. Callback wait timeout is 300 seconds. The success page SHALL state that authentication succeeded, that the browser tab can be closed, and that the user should return to the Rotaris window; its exact wording is left to the implementation.
@@ -111,6 +117,8 @@ Part 1 of 7 of [domain 04](../04-model-providers-auth.md), which indexes every p
 - **REQ-PROVIDER-042** — *Withdrawn.* Its only surface was the command-line provider menu; the coming-soon marking of the hosted provider in the chooser, and the refusal to authenticate it, are carried by REQ-PROVIDER-142, and the desktop health check, authenticate action, and add-provider dialog by REQ-PROVIDER-043.
 
 - **REQ-PROVIDER-043** — Desktop coming-soon gating: both the provider health check and the authenticate action short-circuit for the unavailable cloud provider, returning the provider status `coming_soon` of REQ-NOTIFY-200 with availability false and the unavailability reason as detail. The desktop "Add provider" dialog also excludes the cloud provider (and the generic openai-compatible family) from its built-in list.
+
+  > **Narrowed by [`PD-PROVIDER-004`](../../product/directives/pd-provider-004.md#pd-provider-004), 2026-11-22.** The provider ships available, so nothing short-circuits to `coming_soon` and the add-provider dialog lists it.
 
 ### Claude Code Subscription Provider (Pasted Token, Local Runtime)
 

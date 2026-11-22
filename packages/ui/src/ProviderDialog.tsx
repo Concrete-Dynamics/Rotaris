@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ProviderChoice, ProviderDialogPayload, ProviderSignInPrompt, ProviderSignInResult } from '@rotaris/contracts';
+import type { CloudServerSetting, ProviderChoice, ProviderDialogPayload, ProviderSignInPrompt, ProviderSignInResult } from '@rotaris/contracts';
 import { OAUTH_INSTRUCTION, SignInPromptView, signInKindOf, useSignInPrompt } from './sign-in-prompt.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect } from './design-system/index.js';
 
@@ -26,6 +26,9 @@ export interface ProviderDialogProps {
   /** REQ-PROVIDER-116: ends a pending device or callback wait early. */
   readonly onCancelSignIn?: () => void;
   readonly onOpenLink?: (url: string) => void;
+  /** PD-PROVIDER-004: the Rotaris Cloud server in force and stored, and the means to choose another (a development or a local backend). */
+  readonly onLoadCloudServer?: () => Promise<CloudServerSetting | null>;
+  readonly onSaveCloudServer?: (server: { apiBase: string | null; issuer: string | null }) => Promise<{ ok: boolean; message: string }>;
   readonly onClose: () => void;
 }
 
@@ -35,7 +38,7 @@ export { OAUTH_INSTRUCTION, PKCE_PROMPT } from './sign-in-prompt.js';
 export const BUSY_AUTH = 'Authenticating and checking provider health…';
 export const BUSY_ADD = 'Validating endpoint and discovering models…';
 
-export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, onCancelSignIn, onOpenLink, onClose }: ProviderDialogProps) {
+export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, onCancelSignIn, onOpenLink, onLoadCloudServer, onSaveCloudServer, onClose }: ProviderDialogProps) {
   const fixed = payload.mode !== 'add';
   const initial = useMemo(() => (fixed ? payload.choices.find((c) => c.id === payload.providerId) ?? null : payload.choices.find((c) => c.custom) ?? payload.choices[0] ?? null), [fixed, payload]);
   const [choice, setChoice] = useState<ProviderChoice | null>(initial);
@@ -49,6 +52,17 @@ export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, on
   const [noModels, setNoModels] = useState<{ retries: number } | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const keyInput = useRef<HTMLInputElement>(null);
+  // PD-PROVIDER-004: the Rotaris Cloud server fields. Blank means the production default; the effective values are the placeholders.
+  const [server, setServer] = useState<CloudServerSetting | null>(null);
+  const [serverApi, setServerApi] = useState('');
+  const [serverIssuer, setServerIssuer] = useState('');
+  const cloud = choice?.id === 'concrete-cloud' && onLoadCloudServer !== undefined && onSaveCloudServer !== undefined;
+  useEffect(() => {
+    if (!cloud || !onLoadCloudServer) return;
+    let live = true;
+    void onLoadCloudServer().then((c) => { if (live && c) { setServer(c); setServerApi(c.storedApiBase ?? ''); setServerIssuer(c.storedIssuer ?? ''); } });
+    return () => { live = false; };
+  }, [cloud, onLoadCloudServer]);
   const [waiting, setWaiting] = useState(false);
   const local = choice !== null && signInKindOf(choice) === 'local';
   const interactive = choice !== null && choice.available && signInKindOf(choice) !== 'key';
@@ -77,6 +91,12 @@ export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, on
     if (!choice || busy) return;
     if (!choice.available) { setError(choice.unavailabilityReason ?? 'This provider is not available.'); return; }
     if (signInKindOf(choice) !== 'key') {
+      if (cloud && onSaveCloudServer && server !== null && !server.environment && (serverApi.trim() !== (server.storedApiBase ?? '') || serverIssuer.trim() !== (server.storedIssuer ?? ''))) {
+        setBusy(true);
+        const saved = await onSaveCloudServer({ apiBase: serverApi.trim() === '' ? null : serverApi.trim(), issuer: serverIssuer.trim() === '' ? null : serverIssuer.trim() });
+        setBusy(false);
+        if (!saved.ok) { setError(saved.message); return; }
+      }
       if (!onAuthenticate) { setError(`${choice.displayName} signs in with "${choice.methodLabel}", which this window cannot start.`); return; }
       setBusy(true);
       setWaiting(true);
@@ -150,6 +170,21 @@ export function ProviderDialog({ payload, onSubmit, onAuthenticate, onPrompt, on
           {fieldErrors.baseUrl && <span className="composer__error" role="alert">{fieldErrors.baseUrl}</span>}
         </label>
       </>)}
+      {cloud && server !== null && (
+        <details className="provider-dialog__server" data-cloud-server open={server.storedApiBase !== null || server.storedIssuer !== null || server.environment ? true : undefined}>
+          <summary className="text-secondary">Server</summary>
+          {server.environment && <p className="text-secondary" data-environment>The environment variables ROTARIS_OIDC_ISSUER and ROTARIS_API_BASE_URL are set and override this.</p>}
+          <label className="provider-dialog__field">
+            <span className="text-secondary">API URL</span>
+            <DesignInput id="cloud-api-base" className="input mono" value={serverApi} disabled={busy || server.environment} placeholder={server.effectiveApiBase ?? 'https://api.rotaris.ai/v1'} onChange={(e) => setServerApi(e.currentTarget.value)} aria-label="Rotaris Cloud API URL" />
+          </label>
+          <label className="provider-dialog__field">
+            <span className="text-secondary">Sign-in URL (Keycloak realm)</span>
+            <DesignInput id="cloud-issuer" className="input mono" value={serverIssuer} disabled={busy || server.environment} placeholder={server.effectiveIssuer ?? 'https://auth.rotaris.ai/realms/rotaris'} onChange={(e) => setServerIssuer(e.currentTarget.value)} aria-label="Rotaris Cloud sign-in URL" />
+          </label>
+          <p className="text-secondary">Leave both empty for Rotaris Cloud. For a development or local backend, enter its API URL and its Keycloak realm URL, for example http://api.localhost/v1 and http://auth.localhost/realms/rotaris-dev.</p>
+        </details>
+      )}
       {choice && !choice.available && <p className="composer__error" role="alert" data-unavailable>{choice.unavailabilityReason ?? 'This provider is not available.'}</p>}
       {choice && choice.available && choice.method === 'api-key' && !local && (
         <label className="provider-dialog__field">

@@ -46,6 +46,8 @@ export interface TranscriptPaneProps {
    * Absent leaves the row drawn and inert, which is what it was until this part.
    */
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
+  /** PD-CONFIG-014 revision 3: the Undo on a `configure` set's row. */
+  readonly onUndoConfigChange?: TranscriptSurface['undoConfigChange'];
   readonly questionAgent?: string | undefined;
   /** PD-CHAT-015: a thread line's live state by agent name, and what pressing one does. The view above holds the agents; the pane holds none and asks. */
   readonly threadState?: ((name: string) => string | null) | undefined;
@@ -91,7 +93,7 @@ const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activ
 export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const {
     rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, threadState, onOpenThread, taskLabel,
-    onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row, onOpenTrailer,
+    onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row, onOpenTrailer, onUndoConfigChange,
     showReasoning = false, autoCollapseTools = false, onOpenLink, onReadAttachment, onAcknowledge, nowMs = 0,
   } = props;
 
@@ -274,14 +276,14 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const live = nowMs === 0 ? ticked : nowMs;
   const surface: TranscriptSurface = useMemo(() => ({
     showReasoning, autoCollapseTools, runActive: running, nowMs: live,
-    openLink: onOpenLink, openMenu: (request) => setMenu(request), openTrailer: onOpenTrailer,
+    openLink: onOpenLink, openMenu: (request) => setMenu(request), openTrailer: onOpenTrailer, undoConfigChange: onUndoConfigChange,
     openTerminal: terminalHost ? (streamId) => terminalHost.open(streamId) : undefined,
     terminalPreview: terminalHost ? (streamId) => terminalHost.streams.previewOf(streamId) : undefined,
     attachmentUrl: (attachment) => attachmentBodies.get(attachment.digest) ?? null,
     memberExpanded: (key) => expanded.has(key),
     toggleMember: (key) => toggle(key, expanded.has(key)),
     threadState, openThread: onOpenThread, taskLabel,
-  }), [showReasoning, autoCollapseTools, running, live, onOpenLink, onOpenTrailer, terminalHost, attachmentBodies, expanded, toggle, threadState, onOpenThread, taskLabel]);
+  }), [showReasoning, autoCollapseTools, running, live, onOpenLink, onOpenTrailer, onUndoConfigChange, terminalHost, attachmentBodies, expanded, toggle, threadState, onOpenThread, taskLabel]);
 
   // Whether the first row's slot draws something above its row: the start marker, or the notice of a page that failed.
   const slotLead = reachedOldest || paging === 'failed';

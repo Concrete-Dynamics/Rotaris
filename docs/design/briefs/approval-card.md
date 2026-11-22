@@ -1,6 +1,6 @@
 # Approval card — brief
 
-**Status:** proposed
+**Status:** built 2026-11-22 on `feat/r-121-configure-undo` (approved by the owner the same day)
 **Written:** 2026-11-22 by `design-ui`, for [R-121](../../product/requests.md#r-121) — the remainder of [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014) clause 4 ("showing the key, the scope, the value it holds and the value proposed")
 **Surface:** the approval dialog; §7 row "Approval card"; mockup section `WORKSPACE` → the `approvalOn` block; nearest built code `packages/ui/src/ApprovalDialog.tsx`; theme `rotaris-dim`
 

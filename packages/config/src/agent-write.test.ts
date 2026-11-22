@@ -116,3 +116,32 @@ describe('commitAgentConfigKey (PD-CONFIG-014 clause 2)', () => {
     expect(existsSync(s.wsFile)).toBe(false);
   });
 });
+
+describe('the Undo\'s compare-and-set (PD-CONFIG-014 revision 3, clause 7)', () => {
+  it('writes the value back only while the file holds what the change wrote', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'runtime:\n  max_iterations: 30 # mine\n');
+    const ok = await commitAgentConfigKey(s.globalDir, s.workspaceRoot, 'workspace', ['runtime', 'max_iterations'], 10, timers, {}, { value: 30 });
+    expect(ok.ok).toBe(true);
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  max_iterations: 10 # mine\n');
+    const stale = await commitAgentConfigKey(s.globalDir, s.workspaceRoot, 'workspace', ['runtime', 'max_iterations'], 5, timers, {}, { value: 30 });
+    expect(stale.ok).toBe(false);
+    if (!stale.ok) expect(stale.refusal).toMatchObject({ code: 'changed', holds: 10 });
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  max_iterations: 10 # mine\n');
+  });
+
+  it('removes a key the change added, and refuses once it is gone', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'display:\n  show_tool_inputs: false\n');
+    expect((await commitAgentConfigKey(s.globalDir, s.workspaceRoot, 'workspace', ['display', 'show_tool_inputs'], undefined, timers, {}, { value: false })).ok).toBe(true);
+    expect(readFileSync(s.wsFile, 'utf8')).not.toContain('show_tool_inputs');
+    const again = await commitAgentConfigKey(s.globalDir, s.workspaceRoot, 'workspace', ['display', 'show_tool_inputs'], undefined, timers, {}, { value: false });
+    expect(again.ok).toBe(false);
+  });
+
+  it('compares lists and mappings as data, key order aside', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'instructions:\n  overrides:\n    b: off\n    a: on\n');
+    expect((await commitAgentConfigKey(s.globalDir, s.workspaceRoot, 'workspace', ['instructions', 'overrides'], { a: 'off' }, timers, {}, { value: { a: 'on', b: 'off' } })).ok).toBe(true);
+  });
+});

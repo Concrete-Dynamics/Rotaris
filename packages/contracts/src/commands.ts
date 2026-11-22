@@ -1,4 +1,5 @@
 import { PAUSE_RESOLUTIONS, PausePayloadSchema, PLAN_DECISIONS, ControlRequestSchema } from './control.js';
+import { CONFIG_KEY_PATH_MAX, CONFIGURE_SCOPES } from './configuration-keys.js'; // PD-CONFIG-014
 import { CONFIG_SCOPES, DesktopSaveSchema, LiveStateSchema, SANDBOX_MODE_NAMES } from './config.js';
 import { z } from 'zod';
 import { HOOK_AGENT_IDS } from './hooks.js';
@@ -344,6 +345,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.read') }),
   z.object({ kind: z.literal('config.save'), save: DesktopSaveSchema }),
   z.object({ kind: z.literal('config.setField'), scope: z.enum(CONFIG_SCOPES).optional(), patch: jsonBounded(z.record(z.string().max(NAME_MAX), z.unknown())) }),
+  /**
+   * PD-CONFIG-014 revision 3 (clause 7): the Undo on a `configure` set's transcript row — the setting put back to the value
+   * it held before (removed where the file did not state it), only while the file still holds the value the change wrote.
+   */
+  z.object({ kind: z.literal('config.undoAgentChange'), setting: z.string().min(1).max(CONFIG_KEY_PATH_MAX), scope: z.enum(CONFIGURE_SCOPES), stated: z.boolean(), before: jsonBounded(z.unknown()).optional(), after: jsonBounded(z.unknown()) }),
   z.object({ kind: z.literal('config.liveState'), state: LiveStateSchema }),
   /**
    * OQ-455..458: one recording, as the renderer's recorder wrote it, answered `{ text }`. Five minutes of the recorder's default

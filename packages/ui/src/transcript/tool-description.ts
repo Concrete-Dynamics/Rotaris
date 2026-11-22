@@ -135,6 +135,13 @@ function phraseFor(toolName: string, args: Args): string | null {
       if (steps === 0) return 'Asks a question';
       return `Asks ${steps} ${steps === 1 ? 'question' : 'questions'}`;
     }
+    // PD-CONFIG-014: the configuration tool, by its operation and the setting it names.
+    case 'configure': {
+      const setting = textOf(args, 'setting');
+      const op = textOf(args, 'operation');
+      if (setting === '') return op === 'set' ? 'Changes a setting' : 'Reads a setting';
+      return op === 'set' ? `Changes the setting ${setting}` : op === 'explain' ? `Explains the setting ${setting}` : `Reads the setting ${setting}`;
+    }
     case 'git_commit': {
       const message = textOf(args, 'message');
       return message === '' ? 'Commits the workspace' : `Commits ${message}`;

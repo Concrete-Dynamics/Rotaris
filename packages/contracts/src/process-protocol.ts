@@ -94,6 +94,8 @@ const ConfigAgentWriteFields = {
   scope: z.enum(CONFIGURE_SCOPES),
   key: z.string().min(1).max(CONFIG_KEY_PATH_MAX),
   value: z.unknown().optional(),
+  /** PD-CONFIG-014 revision 3: an Undo's compare-and-set — written only while the file states the setting with this value. */
+  expect: z.object({ value: z.unknown() }).optional(),
 };
 
 export const RunHostRequestSchema = z.discriminatedUnion('kind', [

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ApprovalOption, ApprovalPayload } from '@rotaris/contracts';
-import { Button as DesignButton } from './design-system/index.js';
+import type { ApprovalChange, ApprovalOption, ApprovalPayload } from '@rotaris/contracts';
+import { Button as DesignButton, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
 
 /**
  * REQ-TOOLS-063 — the desktop approval prompt, painted inside its own modal window (ADR-0019's
@@ -28,6 +28,38 @@ export interface ApprovalDialogProps {
   readonly payload: ApprovalPayload;
   readonly othersWaiting: number;
   readonly onAnswer: (option: ApprovalOption) => Promise<{ delivered: boolean }>;
+}
+
+/**
+ * PD-CONFIG-014 revision 3 (clause 4; `docs/design/briefs/approval-card.md`): a `configure` set's dialog states the change —
+ * the setting, what it holds now and where, and what it will hold — above the call's raw arguments, read from the saved files
+ * when the dialog was posted. Words, never colour (REQ-SHELL-149); each value is the payload's compact JSON, already clipped.
+ */
+const APPROVAL_CHANGE_LAYOUT = { id: 'approval-change', relations: [{ kind: 'text-fit', axis: 'x' }] } satisfies UiLayoutContract;
+export const APPROVAL_CHANGE_FOOT = 'Applies from the next run. Each change to this setting asks again.';
+
+function scopeWords(scope: 'workspace' | 'global'): string {
+  return `— ${scope} file`;
+}
+
+function ChangeBlock({ change }: { change: ApprovalChange }) {
+  return (
+    <section id="approval-change" className="approval__change" aria-label="Change to the configuration" data-testid="approval-change" {...layoutContractAttributes(APPROVAL_CHANGE_LAYOUT)}>
+      <p className="approval__change-heading text-secondary">Change to the configuration</p>
+      <dl className="approval__change-lines">
+        <dt>Setting</dt><dd className="mono" data-testid="approval-change-setting">{change.setting}</dd>
+        <dt>Now</dt>
+        <dd data-testid="approval-change-now">
+          {change.current === null || change.currentScope === 'default'
+            ? <span className="text-secondary">not set (the built-in default applies)</span>
+            : <><span className="mono">{change.current}</span> <span className="text-secondary">{scopeWords(change.currentScope)}</span></>}
+        </dd>
+        <dt>After</dt>
+        <dd data-testid="approval-change-after"><span className="mono">{change.proposed}</span> <span className="text-secondary">{scopeWords(change.scope)}</span></dd>
+      </dl>
+      <p className="approval__change-foot text-secondary">{APPROVAL_CHANGE_FOOT}</p>
+    </section>
+  );
 }
 
 export function ApprovalDialog({ payload, othersWaiting, onAnswer }: ApprovalDialogProps) {
@@ -60,10 +92,11 @@ export function ApprovalDialog({ payload, othersWaiting, onAnswer }: ApprovalDia
 
   const disabled = busy || undeliverable;
   return (
-    <div className="approval" role="dialog" aria-modal="true" aria-labelledby="approval-title" aria-describedby="approval-detail">
+    <div className="approval" role="dialog" aria-modal="true" aria-labelledby="approval-title" aria-describedby={payload.change ? 'approval-change approval-detail' : 'approval-detail'}>
       <div className="dialog approval__dialog">
         <h1 id="approval-title" className="dialog-title">Allow {agent} to run {payload.tool_name}?</h1>
         <p className="dialog-body approval__requester">Requested by {agent} ({payload.persona} persona).</p>
+        {payload.change && <ChangeBlock change={payload.change} />}
         <pre
           id="approval-detail"
           className="approval__detail mono"

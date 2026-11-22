@@ -106,7 +106,7 @@ before). *Under revision 2 (fin43, until the same day) main surfaced a holder th
 with none, raised "Project <name> is not open in any window." in the asking window and added nothing*), **`projectInit.ready`**
 (PD-WORKSPACE-005 revision 3: sent by a main window's renderer right after it registers for channel 15; marks the window
 listening and answers `{owed}`, whether an open was held for it, once),
-`playbooks.catalogue`, `config.read/save/setField/liveState`, `providers.list/health/open/save/validate/signOut/
+`playbooks.catalogue`, `config.read/save/setField/liveState/undoAgentChange` (the last, [`PD-CONFIG-014`](../../../product/directives/pd-config-014.md#pd-config-014) revision 3: a `configure` set's row Undo, relayed by main to the service as `config.agentWrite` with `expect`, the compare-and-set), `providers.list/health/open/save/validate/signOut/
 delete/refresh`, `provider.payload/signIn`, **`dictation.transcribe` and, since 2026-11-12, `dictation.credential` /
 `dictation.setCredential {value}` / `dictation.clearCredential`** ([`PD-CONFIG-010`](../../../product/directives/pd-config-010.md#pd-config-010):
 the endpoint's bearer is stored in main's own protected file under the per-user data directory, written by the set and removed

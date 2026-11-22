@@ -194,10 +194,10 @@ export type AgentCommitResult =
  * not left standing: the file is put back exactly as it was and the write is refused with the load's own report
  * (REQ-CONFIG-478), so an agent can never leave a workspace whose configuration does not load.
  */
-export async function commitAgentConfigKey(globalDir: string, workspaceRoot: string, scope: 'workspace' | 'global', segments: readonly string[], value: unknown, timers: Timers, env: InstructionSnapshotEnv = {}): Promise<AgentCommitResult> {
+export async function commitAgentConfigKey(globalDir: string, workspaceRoot: string, scope: 'workspace' | 'global', segments: readonly string[], value: unknown, timers: Timers, env: InstructionSnapshotEnv = {}, expect?: { readonly value: unknown }): Promise<AgentCommitResult> {
   const files = scopeFiles(globalDir, workspaceRoot);
   const file = scope === 'global' ? files.global.agents : files.workspace.agents;
-  const w = await writeConfigKey(file, segments, value, { timers });
+  const w = await writeConfigKey(file, segments, value, { timers }, expect);
   if (!w.ok) return { ok: false, refusal: w.error };
   const loaded = loadConfiguration({ globalDir, workspaceRoot });
   if (!loaded.ok) {

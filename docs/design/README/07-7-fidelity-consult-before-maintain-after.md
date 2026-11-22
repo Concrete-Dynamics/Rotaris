@@ -33,7 +33,7 @@ banner; the first half is the design system's own specimen cards, which are the 
 | Transcript rows, run header | `WORKSPACE` → `transcript column` | `transcript/Row.tsx`, `TranscriptSurface.tsx` |
 | Queue, composer, slash catalogue | `WORKSPACE` → `queue + composer` | `WorkspaceView.tsx`, `composer.ts`, `slash/SlashPopup.tsx`, `RunHeader.tsx` |
 | Agent list, context rings, inspector | `WORKSPACE` → `agents panel`, `inspector` | `AgentTree.tsx`, `ContextRing.tsx`, `Inspector.tsx` |
-| Approval card | `WORKSPACE` → the `approvalOn` block | `ApprovalDialog.tsx` — a `configure` set's change block briefed 2026-11-22 ([`../briefs/approval-card.md`](../briefs/approval-card.md), at `proposed`) |
+| Approval card | `WORKSPACE` → the `approvalOn` block | `ApprovalDialog.tsx` — a `configure` set's change block briefed and built 2026-11-22 ([`../briefs/approval-card.md`](../briefs/approval-card.md)) |
 | Structured questions | `question stepper modal` | `QuestionStepper.tsx` |
 | Git worktrees, commits, diffs | `GIT` | `GitView.tsx` |
 | Library tabs and cards | `LIBRARY` | `library/LibraryView.tsx` |

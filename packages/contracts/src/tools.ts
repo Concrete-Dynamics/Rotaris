@@ -126,6 +126,21 @@ export const HEADLESS_POLICIES = ['deny', 'abort'] as const;
 export type HeadlessPolicy = (typeof HEADLESS_POLICIES)[number];
 
 /** REQ-TOOLS-056: the nine fields, JSON-serialisable in full; `sequence` orders presentation across windows (ADR-0019). */
+/**
+ * PD-CONFIG-014 revision 3 (clause 4): what a `configure` set would change, read from the saved files when the dialog is
+ * posted — the setting, the scope written, the value it holds now and the scope that states it, and the value proposed.
+ * Values are compact JSON, `null` for a value no file states. Carried only on that tool's dialog.
+ */
+export const APPROVAL_CHANGE_VALUE_MAX = 240;
+export const ApprovalChangeSchema = z.object({
+  setting: z.string().min(1).max(200),
+  scope: z.enum(['workspace', 'global']),
+  current: z.string().max(APPROVAL_CHANGE_VALUE_MAX + 1).nullable(),
+  currentScope: z.enum(['workspace', 'global', 'default']),
+  proposed: z.string().max(APPROVAL_CHANGE_VALUE_MAX + 1),
+});
+export type ApprovalChange = z.infer<typeof ApprovalChangeSchema>;
+
 export const ApprovalPayloadSchema = z.object({
   request_id: z.string().min(1),
   session_id: z.string().min(1),
@@ -139,6 +154,8 @@ export const ApprovalPayloadSchema = z.object({
   rule_id: z.string(),
   reason: z.string(),
   sequence: z.number().int().nonnegative(),
+  /** PD-CONFIG-014 revision 3: the change block's content, on a `configure` set's dialog only (REQ-TOOLS-056 extended). */
+  change: ApprovalChangeSchema.optional(),
 });
 export type ApprovalPayload = z.infer<typeof ApprovalPayloadSchema>;
 

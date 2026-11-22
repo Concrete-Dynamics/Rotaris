@@ -1,3 +1,4 @@
+import type { ApprovalChange } from '@rotaris/contracts';
 import type { z } from 'zod';
 import type { MonotonicClock, WallClock } from '@rotaris/kernel';
 
@@ -65,6 +66,11 @@ export interface ToolExecutor<A = unknown> {
    * record all see the repaired call.
    */
   inferArguments?(args: Readonly<Record<string, unknown>>): { readonly args: Record<string, unknown>; readonly note: string } | null;
+  /**
+   * PD-CONFIG-014 revision 3: what the call would change, for the approval dialog — read, never asked; the gate attaches it
+   * to the payload it posts. Absent, or null, for every call but a `configure` set.
+   */
+  describeForApproval?(args: A): ApprovalChange | null;
   execute(args: A, ctx: ToolContext): Promise<Observation>;
   /** REQ-TOOLS-105 etc.: how the call renders in a row header; defaults to the sorted argument keys. */
   label?(args: A): string;

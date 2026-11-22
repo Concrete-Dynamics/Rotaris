@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CONFIG_KEY_PATH_MAX, CONFIGURE_SCOPES, configKeyClass, configKeyClassSentence, configKeySegments, type ConfigureScope } from '@rotaris/contracts';
+import { APPROVAL_CHANGE_VALUE_MAX, CONFIG_KEY_PATH_MAX, CONFIGURE_CHANGE_PREFIX, type ConfigureChangeRecord, CONFIGURE_SCOPES, configKeyClass, configKeyClassSentence, configKeySegments, type ConfigureScope } from '@rotaris/contracts';
 import { errorObservation, observation, type ToolExecutor } from './types.js';
 
 /**
@@ -54,6 +54,12 @@ const DESCRIPTION = [
   'For keys that decide what a run may do (permission mode, sandbox, network, hooks, tool servers, a role\'s tools), and for the global scope, Rotaris itself shows the user an approval dialog when you call set: call set directly and do not ask the user beforehand. Credentials are never accessible.',
 ].join(' ');
 
+/** A value as compact JSON, clipped as REQ-TOOLS-057 clips a rendered value. */
+function clipped(value: unknown): string {
+  const text = JSON.stringify(value) ?? 'null';
+  return text.length > APPROVAL_CHANGE_VALUE_MAX ? `${text.slice(0, APPROVAL_CHANGE_VALUE_MAX)}…` : text;
+}
+
 function rendered(value: unknown): string {
   if (value === undefined) return '(not set)';
   const text = JSON.stringify(value);
@@ -71,6 +77,20 @@ export function configureTool(port: ConfigurationPort): ToolExecutor<ConfigureAr
     description: DESCRIPTION,
     schema: configureSchema,
     label: (args) => `${args.operation} ${args.setting}${args.operation === 'set' ? ` (${args.scope ?? 'workspace'})` : ''}`,
+    describeForApproval(args) {
+      if (args.operation !== 'set' || args.value === undefined) return null;
+      const setting = args.setting.trim();
+      if (configKeySegments(setting) === null) return null;
+      const r = port.read(setting);
+      const now = 'error' in r ? null : r;
+      return {
+        setting,
+        scope: args.scope ?? 'workspace',
+        current: now === null || now.value === undefined ? null : clipped(now.value),
+        currentScope: now?.scope ?? 'default',
+        proposed: clipped(args.value),
+      };
+    },
     async execute(args) {
       const key = args.setting.trim();
       const klass = configKeyClass(key);
@@ -88,7 +108,8 @@ export function configureTool(port: ConfigurationPort): ToolExecutor<ConfigureAr
       const scope = args.scope ?? 'workspace';
       const w = await port.write(key, scope, args.value);
       if (!w.ok) return errorObservation(`${key} was not changed: ${w.error}`);
-      return observation(`Set ${key} in the ${scope} configuration (${w.file}): ${w.stated ? rendered(w.before) : '(not stated in that file)'} → ${rendered(args.value)}. It takes effect at the next run; this run keeps the configuration it started with.`);
+      const record: ConfigureChangeRecord = { setting: key, scope, stated: w.stated, ...(w.stated ? { before: w.before } : {}), after: args.value };
+      return observation(`Set ${key} in the ${scope} configuration (${w.file}): ${w.stated ? rendered(w.before) : '(not stated in that file)'} → ${rendered(args.value)}. It takes effect at the next run; this run keeps the configuration it started with.\n${CONFIGURE_CHANGE_PREFIX}${JSON.stringify(record)}`);
     },
   };
 }

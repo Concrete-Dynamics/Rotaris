@@ -241,7 +241,7 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       const segments = configKeySegments(req.key);
       const klass = configKeyClass(req.key);
       if (segments === null || klass === 'never' || klass === 'unknown') return { kind: 'refused', code: 'config.invalid', headline: 'The setting could not be written', detail: `${req.key}: ${configKeyClassSentence(klass)}` };
-      const r = await commitAgentConfigKey(dirs.config, req.workspaceRoot, req.scope, segments, req.value, clocks.timers, instructionEnv());
+      const r = await commitAgentConfigKey(dirs.config, req.workspaceRoot, req.scope, segments, req.value, clocks.timers, instructionEnv(), req.expect);
       if (!r.ok) return { kind: 'refused', code: `config.${r.refusal.code}`, headline: 'The setting could not be written', detail: `${r.refusal.file}: ${r.refusal.fault}` };
       log(`configuration key ${req.key} ${req.value === undefined ? 'removed' : 'written'} for the configure tool (${req.scope}): ${r.file}`);
       return { kind: 'config.agentWritten', file: r.file, scope: req.scope, key: req.key, stated: r.stated, ...(r.stated ? { before: r.before } : {}), snapshot: r.snapshot };

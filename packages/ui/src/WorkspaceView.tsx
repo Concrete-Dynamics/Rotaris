@@ -30,6 +30,7 @@ import { TranscriptPane } from './transcript/TranscriptPane.js';
 import { TerminalToolbarControl } from './terminal/host.js'; // Part AL2 — the slot's control (one import line; the slot rule names the slot line only, reported in the handoff)
 import type { DisplayCaps } from './transcript/project.js';
 import type { TrailerRow } from './transcript/types.js';
+import type { TranscriptSurface } from './transcript/Row.js';
 import { TodoPane, type TodoEdit } from './TodoPane.js';
 import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
@@ -195,6 +196,8 @@ export interface WorkspaceViewProps {
   readonly onPanelWidths?: ((widths: readonly [number, number]) => void) | undefined;
   /** Part AC — REQ-CHAT-098/103 (098 superseded by PD-CHAT-002): clicking a trailer row opens the question stepper or raises the approval dialog. */
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
+  /** PD-CONFIG-014 revision 3: the Undo on a `configure` set's transcript row. */
+  readonly onUndoConfigChange?: TranscriptSurface['undoConfigChange'];
   /** PD-CHAT-002: submission and cancellation callbacks for the docked question form. */
   readonly onAnswerQuestions?: ((requestId: string, answers: QuestionAnswers) => Promise<{ delivered: boolean }>) | undefined;
   readonly onCancelQuestions?: ((requestId: string) => void) | undefined;
@@ -775,7 +778,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // PD-CHAT-015: whose transcript is shown — the run's own conversation first. REQ-CHAT-069's "This task" needs a
   // selected agent, and without one it is the run's.
@@ -1551,6 +1554,7 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
           onReadAttachment={onReadAttachment}
           onAcknowledge={onAcknowledge}
           onOpenTrailer={onOpenTrailer}
+          onUndoConfigChange={onUndoConfigChange}
           nowMs={nowIso === null ? 0 : Date.parse(nowIso)}
         />
         {/* PD-CHAT-002: auto-opened interactive question form docked at the bottom of the transcript */}

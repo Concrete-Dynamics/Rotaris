@@ -41,7 +41,7 @@ export function configAnnouncer(
  */
 export function configCommands(
   ctx: Pick<CommandContext, 'configFatal' | 'log' | 'mainWindows' | 'raiseNotice' | 'services' | 'runHost'> & { readonly liveState: LiveStateArbiter },
-): Pick<CommandHandlers, 'config.read' | 'repository.read' | 'config.save' | 'config.setField' | 'config.liveState'> {
+): Pick<CommandHandlers, 'config.read' | 'repository.read' | 'config.save' | 'config.setField' | 'config.liveState' | 'config.undoAgentChange'> {
   const { configFatal, log, liveState, mainWindows, raiseNotice, services, runHost } = ctx;
   const announce = configAnnouncer(mainWindows, services, configFatal);
   const onConfigSave = async (req: Extract<CommandRequest, { kind: 'config.save' | 'config.setField' }>, { w }: CommandAt): Promise<CommandOutcome> => {
@@ -106,6 +106,25 @@ export function configCommands(
       // PD-MONITOR-002, live-run finding a71-9: the read's line is the workspace service's, which performed it; main relays
       // the answer and does not write the same fact a second time.
       return { ok: true, value: r.state };
+    },
+    /*
+     * PD-CONFIG-014 revision 3 (clause 7): the transcript row's Undo. The same write the `configure` tool makes
+     * (`config.agentWrite`, the workspace service the one writer, the load after it), with the compare-and-set that keeps a
+     * stale row from undoing a later change; the reloaded snapshot is announced as any configuration write is.
+     */
+    'config.undoAgentChange': async (req, { w }) => {
+      if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before changing its configuration' };
+      const root = canonicalPath(w.workspace);
+      const svc = services.get(root);
+      if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+      const r = await svc.link.request({ kind: 'config.agentWrite', workspaceRoot: root, scope: req.scope, key: req.setting, ...(req.stated ? { value: req.before ?? null } : {}), expect: { value: req.after } }, millis(30_000));
+      if (r.kind !== 'config.agentWritten') {
+        if (r.kind === 'refused' && r.code === 'config.changed') return { ok: false, code: 'config.changed', headline: `Not undone — ${req.setting} was changed since; ${(r.detail ?? '').replace(/^.*?: /, '')}.` };
+        return refusal(r, `Not undone — ${req.setting} could not be written`);
+      }
+      void announce(root, r.snapshot);
+      log(`configuration key ${req.setting} undone for ${root} (an agent's change, put back by the user)`);
+      return { ok: true };
     },
     'config.save': onConfigSave,
     'config.setField': onConfigSave,

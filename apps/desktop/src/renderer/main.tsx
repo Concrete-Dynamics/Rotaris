@@ -337,6 +337,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     onSetNextModel={(model) => setNextModel(entryPersona, model)}
     onSetNextReasoning={(level) => setField({ personas: { [entryPersona]: { thinking: level } } })}
     onOpenTrailer={onOpenTrailer}
+    /* PD-CONFIG-014 revision 3: the Undo on a `configure` set's row, written by main through the workspace service. */
+    onUndoConfigChange={async (change) => { const r = await bridge.command({ kind: 'config.undoAgentChange', setting: change.setting, scope: change.scope, stated: change.stated, ...(change.stated ? { before: change.before } : {}), after: change.after }); return r.ok ? { ok: true as const } : { ok: false as const, message: r.headline }; }}
     onAnswerQuestions={answerQuestions}
     onCancelQuestions={cancelQuestions}
     session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onCancelRun={cancelRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}

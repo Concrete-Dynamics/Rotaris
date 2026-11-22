@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { MonotonicClock, Timers, WallClock } from '@rotaris/kernel';
-import { APPROVAL_RESOLUTION_SOURCES, denialText, interruptionPhrase, type ApprovalPayload, type HeadlessPolicy, type ToolStatus } from '@rotaris/contracts';
+import { APPROVAL_RESOLUTION_SOURCES, denialText, interruptionPhrase, type ApprovalChange, type ApprovalPayload, type HeadlessPolicy, type ToolStatus } from '@rotaris/contracts';
 import type { ApprovalOutcome, PendingApprovals, PresenterPort } from './approvals.js';
 import { argumentSummary, permissionRequest, requestSummary, type DecisionRecord, type PermissionRequest, type PolicyContext } from './policy.js';
 import { canonicalToolName, isPublicToolName, META_TOOL_NAMES } from './registry.js';
@@ -537,6 +537,22 @@ export class Gate {
     else if (obs.isError && obs.failureKind !== INTERRUPTED_FAILURE_KIND) this.deps.sink.issue({ kind: 'tool_error', severity: 'warning', actor, message: `The '${call.name}' call failed: ${obs.text.slice(0, 200)}`, evidence_ref: ref, metadata: meta });
   }
 
+  /**
+   * PD-CONFIG-014 revision 3: the change block of a `configure` set's dialog, described by the executor from the saved files —
+   * the executor reads and never asks; a description that throws, or a tool that offers none, leaves the dialog as it was.
+   */
+  private approvalChange(call: ToolCall, req: PermissionRequest): { change?: ApprovalChange } {
+    const executor = this.deps.executors.get(call.name);
+    if (executor?.describeForApproval === undefined || !this.deps.publicTool(call.name)) return {};
+    try {
+      const parsed = executor.schema.safeParse(req.args);
+      const change = parsed.success ? executor.describeForApproval(parsed.data) : null;
+      return change === null ? {} : { change };
+    } catch {
+      return {};
+    }
+  }
+
   /** ADR-0019's flow: publish, then either the headless policy (no wait at all) or the brokered wait. */
   private async broker(call: ToolCall, req: PermissionRequest, asked: DecisionRecord, attended: boolean, heldForQuit = false): Promise<{ decision: DecisionRecord; requestId: string } | { withdrawn: string; requestId: string }> {
     const { deps } = this;
@@ -575,6 +591,7 @@ export class Gate {
         request_id: requestId, session_id: deps.sessionId, agent_id: call.agentId || call.persona, persona: call.persona, tool_name: call.name,
         command: req.commandFacet === null ? '' : summary.slice(call.name.length + 2), argument_summary: argumentSummary(req),
         rule_id: asked.ruleId, reason: asked.reason, sequence: deps.nextSequence(),
+        ...this.approvalChange(call, req),
       };
       const wait = deps.approvals.create(payload, deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs : null);
       deps.sink.pendingChanged(deps.approvals.pending());

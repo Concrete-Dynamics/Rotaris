@@ -1,5 +1,5 @@
-import { createContext, useContext, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { parseSkillListing, parseSkillLoadMarker, type ImageAttachment, type ParsedSkillListing, type ParsedSkillLoadMarker, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
+import { createContext, useContext, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { configureChangeOf, parseSkillListing, parseSkillLoadMarker, type ConfigureChangeRecord, type ImageAttachment, type ParsedSkillListing, type ParsedSkillLoadMarker, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
 import { Markdown } from '../markdown/Markdown.js';
 import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
@@ -103,6 +103,8 @@ export interface TranscriptSurface {
    * registry; a row holds no emulator, so a rebound slot cannot carry one stream's screen to another row.
    */
   readonly terminalPreview?: ((streamId: string) => TerminalPreview | null) | undefined;
+  /** PD-CONFIG-014 revision 3 (clause 7): the Undo on a `configure` set's row; absent where no window can write (a persona window). */
+  readonly undoConfigChange?: ((change: ConfigureChangeRecord) => Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>) | undefined;
   /** REQ-CHAT-076: a question row opens the stepper, an approval row the approval dialog. */
   readonly openTrailer?: ((trailer: TrailerRow) => void) | undefined;
   /** REQ-CHAT-173: pane-owned verified thumbnail cache; rows remain pure. */
@@ -678,6 +680,52 @@ function SkillListingBlock({ listing, match, onOpenLink }: { listing: ParsedSkil
 }
 
 /**
+ * PD-CONFIG-014 revision 3 (clause 7; `docs/design/briefs/transcript-rows.md`, "Brief 2026-11-22"): a settled `configure`
+ * set's preview line — `<setting>: <before> → <after> · <scope>` — and its Undo. The Undo writes the value before back
+ * through main and the workspace service only while the setting still holds what this change wrote, so a row from an
+ * earlier session, or one a later change has overtaken, is refused and says so. The undone state is this window's.
+ */
+const CONFIG_CHANGE_LAYOUT = { id: 'config-change', relations: [{ kind: 'text-fit', axis: 'x' }] } satisfies UiLayoutContract;
+const CONFIG_VALUE_CLIP = 80;
+
+function configValue(value: unknown): string {
+  const text = JSON.stringify(value) ?? 'null';
+  return text.length > CONFIG_VALUE_CLIP ? `${text.slice(0, CONFIG_VALUE_CLIP)}…` : text;
+}
+
+type UndoState = { readonly kind: 'idle' } | { readonly kind: 'busy' } | { readonly kind: 'done' } | { readonly kind: 'refused'; readonly message: string };
+
+function ConfigChangeLine({ change, undo }: { change: ConfigureChangeRecord; undo: TranscriptSurface['undoConfigChange'] }) {
+  const [state, setState] = useState<UndoState>({ kind: 'idle' });
+  const before = change.stated ? configValue(change.before) : 'not set';
+  const after = configValue(change.after);
+  const press = async () => {
+    if (undo === undefined || state.kind === 'busy' || state.kind === 'done') return;
+    setState({ kind: 'busy' });
+    const r = await undo(change);
+    setState(r.ok ? { kind: 'done' } : { kind: 'refused', message: r.message });
+  };
+  const done = change.stated ? `Undone — ${change.setting} is ${before} again.` : `Undone — ${change.setting} is no longer set in the ${change.scope} file.`;
+  return (
+    <div className="config-change" data-testid="config-change" data-setting={change.setting} {...layoutContractAttributes(CONFIG_CHANGE_LAYOUT)}>
+      <div className="config-change__line">
+        <span className="config-change__text text-secondary mono" aria-description={`${change.setting} changed from ${before} to ${after}, in the ${change.scope} file.`}>
+          ⤷ {change.setting}: {before} → {after} · {change.scope}
+        </span>
+        {undo !== undefined && state.kind !== 'done' && (
+          <DesignButton type="button" className="row__trailer config-change__undo" data-action="config-undo" aria-label={`Undo the change to ${change.setting}`} disabled={state.kind === 'busy'} onClick={() => { void press(); }}>
+            {state.kind === 'busy' ? 'Undoing…' : 'Undo'}
+          </DesignButton>
+        )}
+      </div>
+      {(state.kind === 'done' || state.kind === 'refused') && (
+        <p className="config-change__status text-secondary" role="status" data-testid="config-undo-status">{state.kind === 'done' ? done : state.message}</p>
+      )}
+    </div>
+  );
+}
+
+/**
  * PD-CHAT-016 — the skill-load marker: one quiet line in the system notice's rule — `Skill loaded`, the skill's name, who
  * loaded it — never wrapping; the name and the agent elide before the line would, and the row's whole sentence is its
  * title. Every part is drawn through `PlainText` at its offset in the body, so a search match lands in the part it is in.
@@ -864,6 +912,7 @@ export function Row(p: RowProps) {
     // Part AM — REQ-SHELL-079 / REQ-CHAT-066: the live preview block, drawn whenever this renderer retains a screen
     // for the row's stream, expanded or not, so it stays visible; the card's INPUT/OUTPUT sit beneath it when open.
     const preview = stream !== null && !row.settled ? (surface.terminalPreview?.(stream) ?? null) : null;
+    const configChange = row.toolName === 'configure' && row.settled && outcome.state === 'ok' ? configureChangeOf(row.output) : null;
     return (
       <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-member-key={display.key} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
         <div className="row__grid">
@@ -887,7 +936,9 @@ export function Row(p: RowProps) {
             {/* Part AM — the live terminal preview: the emulator's screen text, the same cells the pop-out shows (REQ-SHELL-102). */}
             {preview !== null && <TerminalPreviewBlock preview={preview} onOpen={surface.openTerminal} />}
             {/* REQ-CHAT-076: clicking a live terminal preview requests the pop-out for that stream (the one-line form, until a screen is retained). */}
-            {preview === null && !expanded && !collapsedToName && expandable && (
+            {/* PD-CONFIG-014 revision 3 (clause 7): a settled `configure` set draws its change, and offers its Undo. */}
+            {configChange !== null && !collapsedToName && <ConfigChangeLine change={configChange} undo={surface.undoConfigChange} />}
+            {configChange === null && preview === null && !expanded && !collapsedToName && expandable && (
               stream !== null && !row.settled
                 ? <DesignButton type="button" className="tool__preview tool__preview--terminal text-secondary mono" data-stream-id={stream} onClick={() => surface.openTerminal?.(stream)} disabled={surface.openTerminal === undefined}>⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</DesignButton>
                 : <div className="tool__preview text-secondary mono">⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</div>

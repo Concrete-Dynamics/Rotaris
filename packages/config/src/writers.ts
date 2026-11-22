@@ -27,7 +27,9 @@ export type WriteRefusal =
   | { readonly code: 'unreadable'; readonly file: string; readonly fault: string }
   | { readonly code: 'not-a-mapping'; readonly file: string; readonly fault: string }
   | { readonly code: 'invalid'; readonly file: string; readonly fault: string }
-  | { readonly code: 'write-failed'; readonly file: string; readonly fault: string };
+  | { readonly code: 'write-failed'; readonly file: string; readonly fault: string }
+  /** PD-CONFIG-014 revision 3: an Undo's compare-and-set found the setting changed since; `holds` is its value now. */
+  | { readonly code: 'changed'; readonly file: string; readonly fault: string; readonly holds?: unknown };
 
 export interface WriteOutcome {
   readonly file: string;
@@ -183,7 +185,7 @@ export interface KeyWriteOutcome extends WriteOutcome {
  * undefined REMOVES the key instead (an Undo of a key the file did not state). An unparseable file is refused unwritten
  * (REQ-CONFIG-442), and a `runtime:` value is validated on assignment (REQ-CONFIG-111), as `writeConfigFields` does.
  */
-export async function writeConfigKey(file: string, segments: readonly string[], value: unknown, deps: WriterDeps = {}): Promise<Result<KeyWriteOutcome, WriteRefusal>> {
+export async function writeConfigKey(file: string, segments: readonly string[], value: unknown, deps: WriterDeps = {}, expect?: { readonly value: unknown }): Promise<Result<KeyWriteOutcome, WriteRefusal>> {
   if (segments.length === 0) return err({ code: 'invalid', file, fault: 'no key was named' });
   let previousText: string | null;
   try { previousText = readFileSync(file, 'utf8'); } catch { previousText = null; }
@@ -193,6 +195,10 @@ export async function writeConfigKey(file: string, segments: readonly string[], 
   const stated = doc.hasIn(segments as string[]);
   const beforeNode = stated ? doc.getIn(segments as string[], true) : undefined;
   const before = beforeNode === undefined ? undefined : isNode(beforeNode) ? plainOf(beforeNode) : beforeNode;
+  // PD-CONFIG-014 revision 3: an Undo writes only while the file still holds what the change wrote.
+  if (expect !== undefined && (!stated || !sameValue(before, expect.value))) {
+    return err({ code: 'changed', file, fault: stated ? `it holds ${JSON.stringify(before)} now` : 'it is no longer set in that file', ...(stated ? { holds: before } : {}) });
+  }
   if (value === undefined) {
     if (stated) doc.deleteIn(segments as string[]);
   } else {
@@ -216,6 +222,17 @@ export async function writeConfigKey(file: string, segments: readonly string[], 
   }
   const r = await commit(file, doc, deps.timers);
   return r.ok ? ok({ ...r.value, stated, before, previousText }) : r;
+}
+
+/** Two plain values equal as data (YAML's plain form: scalars, lists and mappings), key order aside. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) return a.length === (b as unknown[]).length && a.every((x, i) => sameValue(x, (b as unknown[])[i]));
+  const ka = Object.keys(a).sort();
+  const kb = Object.keys(b).sort();
+  return ka.length === kb.length && ka.every((k, i) => k === kb[i] && sameValue((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
 }
 
 /** PD-CONFIG-014 clause 2: put a file back exactly as `writeConfigKey` found it, after a load refused what it wrote. */

@@ -4,8 +4,9 @@
 
 ### PD-CONFIG-014 — an agent changes Rotaris's own configuration through one tool, never through a file write
 
-*Revision 2, 2026-11-22, [R-121](../requests.md#r-121): built; clause 3 asks rather than refuses, and REQ-TOOLS-001's
-registry gains the tool's name. Clause 7's Undo and clause 4's prior value in the dialog are not built yet (below).*
+*Revision 3, 2026-11-22, [R-121](../requests.md#r-121): clause 4's dialog names the value the setting holds now, and
+clause 7's Undo is built, with the compare-and-set that guards it. Revision 2 (the same day): built; clause 3 asks
+rather than refuses, and REQ-TOOLS-001's registry gains the tool's name.*
 
 1. **One tool.** A run SHALL be offered one configuration tool, `configure`, with three operations: `read` (the effective
    value of a named key and the scope it came from), `explain` (what a named key does and which values it takes) and
@@ -41,7 +42,21 @@ registry gains the tool's name. Clause 7's Undo and clause 4's prior value in th
    outside-workspace opt-out says, with a message that names `configure` for the former. Reading them is unchanged.
 7. **The record.** Every accepted `set` SHALL be written to the permission audit trail with the key, the scope, the value
    before and the value after, and SHALL draw in the transcript as one row carrying that change and an Undo that writes
-   the value before back through the same path.
+   the value before back through the same path — revision 3 — **only while the setting still holds the value the change
+   wrote**; otherwise the Undo writes nothing and the row says what the setting holds now. A setting the file did not
+   state before is removed by its Undo. The change reaches the row from the call's recorded result, so a row read again
+   after a relaunch offers the same Undo, and the compare-and-set makes a stale one harmless.
+
+   > Revision 2 said, and no longer governs: "…an Undo that writes the value before back through the same path." It
+   > named no guard, and an Undo pressed after a later change would have undone that later change too.
+
+8. **The dialog of a set** — revision 3. Where clause 4 asks, the approval dialog (REQ-TOOLS-063) SHALL hold, between the
+   requester line and the detail box, a block naming the setting, the value it holds now with the file that states it
+   (or that no file does), and the value proposed with the scope it is written to, read from the saved files when the
+   dialog is posted, never from the call's arguments; and a line saying the change applies from the next run and that
+   each change to the setting asks again. The approval payload (REQ-TOOLS-056) carries that block as one more field.
+   The three buttons stand; Approve for this session answers as Approve once does, since clause 4 lets no answer
+   pre-approve a later change.
 
 **Why, and what it costs.** The owner asked that Rotaris be able to change its own configuration from the workspace, as
 other harnesses do. Surveyed from their public documentation for R-121: Claude Code lets the model edit its settings
@@ -69,14 +84,12 @@ to a path under the global configuration directory is still refused (clause 6). 
 still admits.
 
 > **Narrows:** REQ-TOOLS-001, REQ-TOOLS-130
-> **Extends:** REQ-CONFIG-441, REQ-TOOLS-129, REQ-SANDBOX-056
+> **Extends:** REQ-CONFIG-441, REQ-TOOLS-129, REQ-SANDBOX-056, REQ-TOOLS-056, REQ-TOOLS-063
 
-**What is built, and what is owed (revision 2).** Built: clauses 1 to 6, the tool, the one writer with the load that
-restores a refused value, the classes, the gate's ruling, the next-run timing and the closed file tools. Clause 7 is
-built in part: the gate's decision on every `set` reaches the permission audit trail as any decision does, and the tool's
-result row in the transcript carries the key, the scope, the value before and the value after. **Owed:** the row's
-Undo control, and the approval dialog's naming of the value the key holds now (it names the key, the scope and the value
-proposed, from the call's own arguments). Both are a drawn surface, and wait for that surface's own design pass.
+**What is built (revision 3).** Every clause. Clause 8's block and clause 7's Undo were drawn from
+[`docs/design/briefs/approval-card.md`](../../design/briefs/approval-card.md) and the transcript rows brief's part of
+2026-11-22. Revision 2's owed list — the row's Undo control and the dialog's prior value — is discharged. Whether
+Approve for this session should instead be withheld on such a request is left open, as the brief records.
 
 *Raised by the owner, 2026-11-21, in conversation ("rotaris needs to be able to change its own configuration via
 workspace", then "Yes, log it" over the plan); logged as [R-121](../requests.md#r-121). Minted by the agent that drafted

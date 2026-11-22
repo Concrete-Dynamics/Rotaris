@@ -47,6 +47,8 @@ Part 2 of 9 of [domain 05](../05-tools-permissions-approvals.md), which indexes 
 
 **REQ-TOOLS-056** — The approval payload (rendered by hosts and persisted into session state) carries: `request_id` (hexadecimal UUID), `session_id`, `agent_id` (falling back to persona for display), `persona`, `tool_name`, `command` (secret-redacted), `argument_summary`, `rule_id`, `reason`.
 
+> **Extended by [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014), 2026-11-22.** The field list above still governs in full; a `configure` set's payload also carries `change` — the setting, its value now and where it is stated, and the value proposed.
+
 > **Extended by [`PD-TOOLS-021`](../../product/directives/pd-tools-021.md#pd-tools-021), 2026-11-03.** The approval
 > payload also carries `session_scope` (the case `command`, `paths`, `unresolved` or `arguments`, and for `paths` the
 > resolved path set); the fields above still govern in full.
@@ -75,6 +77,8 @@ Part 2 of 9 of [domain 05](../05-tools-permissions-approvals.md), which indexes 
   > **Narrowed by [`PD-ORCH-005`](../../product/directives/pd-orch-005.md#pd-orch-005) revision 4, 2026-09-28.** Clauses 9 and 15:
   > a dialog the application's quit closes answers nothing, and the quit withdraws the request. Closing the dialog
   > answers Deny in every other case, as stated.
+
+> **Extended by [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014), 2026-11-22.** The dialog above still governs in full; a `configure` set's dialog also holds, between the requester line and the detail box, the block naming the setting, its value now and the value proposed, and the line saying each change asks again.
 
 > **Extended by [`PD-TOOLS-021`](../../product/directives/pd-tools-021.md#pd-tools-021), 2026-11-03.** The approval
 > dialog states what a session approval lets through; the text above still governs in full, and the directive adds

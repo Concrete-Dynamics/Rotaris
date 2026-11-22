@@ -112,7 +112,7 @@ that records it and never travels on the wire), `shutdown`. Events back: `publis
 terminal persistence could not be confirmed, and what main reads to suppress its own terminal notice, `REQ-EVENTS-088`
 allowing exactly one failure notification per affected run; since 2026-10-14 it carries `workspaceRoot`, the root the run host
 recorded the session under in `sessionRoots`, absent where none is recorded — PD-SHELL-001 revision 3, the workspace a
-`focus-session` action names), `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish` (Part V: the fields
+`focus-session` action names), `run.paused`, `approval.present/close` (a `configure` set's payload carries `change`, the dialog's change block, described by the executor from the saved files — PD-CONFIG-014 revision 3), `presenter.poll`, `notice.publish` (Part V: the fields
 REQ-NOTIFY-023 lists, `sessionId` and `persistent` among them, and since 2026-10-14 `workspaceRoot` as on `run.result`,
 stamped by `withSessionRoot`, `run-host/session-roots.ts`, whose `runResultEvent`, `runNoticeEvent` and `reportNoticeEvent`
 build all three events `host.ts` sends about a session (2026-10-14, fin45) — the workspace a `focus-session` action names and, since OQ-293, the

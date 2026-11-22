@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { configKeyClass, configureSetAlwaysAsks } from '@rotaris/contracts';
+import { configKeyClass, configureChangeOf, configureSetAlwaysAsks } from '@rotaris/contracts';
 import { argumentSummary, buildPolicy, evaluate, permissionRequest, PolicyContext, type EvaluationEnv } from '../policy.js';
 import { configureTool, type ConfigurationPort } from './configure.js';
 import { checkFence, pathRuleFor, protectedWriteRefusal } from './fence.js';
@@ -161,5 +161,19 @@ describe('the file tools never write .rotaris/, .git/ or the global configuratio
   it('compares the protected name as the platform folds it', () => {
     expect(protectedWriteRefusal('.ROTARIS/agents.yaml', '/x', [], pathRuleFor('win32'))).not.toBeNull();
     expect(protectedWriteRefusal('.ROTARIS/agents.yaml', '/x', [], pathRuleFor('linux'))).toBeNull();
+  });
+});
+
+describe('the dialog\'s description of a set (PD-CONFIG-014 revision 3, clause 4)', () => {
+  it('names the setting, its value now and where, and the value proposed; and nothing for a read', () => {
+    const tool = configureTool(fakePort({ 'runtime.permission_mode': 'autonomous' }));
+    expect(tool.describeForApproval?.({ operation: 'set', setting: 'runtime.permission_mode', value: 'restricted' })).toEqual({ setting: 'runtime.permission_mode', scope: 'workspace', current: '"autonomous"', currentScope: 'workspace', proposed: '"restricted"' });
+    expect(tool.describeForApproval?.({ operation: 'set', setting: 'hooks', value: [], scope: 'global' })).toMatchObject({ scope: 'global', current: null, currentScope: 'default' });
+    expect(tool.describeForApproval?.({ operation: 'read', setting: 'hooks' })).toBeNull();
+  });
+
+  it('a set\'s result ends with the change as data', async () => {
+    const obs = await configureTool(fakePort({ medium_model: 'a' })).execute({ operation: 'set', setting: 'medium_model', value: 'b' }, ctx);
+    expect(configureChangeOf(obs.text)).toEqual({ setting: 'medium_model', scope: 'workspace', stated: true, before: 'a', after: 'b' });
   });
 });

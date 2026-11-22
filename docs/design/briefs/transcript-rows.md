@@ -114,7 +114,7 @@ New in round 2, open: a running call with a derived description still draws its 
 
 ## Brief 2026-11-22 — the configuration change row and its Undo ([R-121](../../product/requests.md#r-121), [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014) clause 7)
 
-**Status:** proposed. A brief for one addition to the built tool row (`packages/ui/src/transcript/Row.tsx`, mockup `WORKSPACE` → `transcript column`): the settled row of a `configure` set.
+**Status:** built 2026-11-22 on `feat/r-121-configure-undo` (approved by the owner the same day). A brief for one addition to the built tool row (`packages/ui/src/transcript/Row.tsx`, mockup `WORKSPACE` → `transcript column`): the settled row of a `configure` set.
 
 ### 1. Authority
 

@@ -120,3 +120,33 @@ export function configKeyClassSentence(klass: ConfigKeyClass): string {
     case 'unknown': return 'Not a key this build\'s configuration defines.';
   }
 }
+
+/**
+ * PD-CONFIG-014 revision 3 (clause 7): the last line of a set's result — the change as data, so the transcript row that
+ * holds the result can offer its Undo after a relaunch from the recorded output alone, with no store column.
+ */
+export const CONFIGURE_CHANGE_PREFIX = 'configure-change: ';
+
+/** The change a set made: `stated` false means the file did not state the setting before, so an Undo removes it. */
+export interface ConfigureChangeRecord {
+  readonly setting: string;
+  readonly scope: ConfigureScope;
+  readonly stated: boolean;
+  readonly before?: unknown;
+  readonly after: unknown;
+}
+
+/** The record a `configure` result carries on its last line, or null (a read, a refusal, a result from before the record). */
+export function configureChangeOf(output: string | undefined): ConfigureChangeRecord | null {
+  if (output === undefined) return null;
+  const line = output.split('\n').reverse().find((l) => l.startsWith(CONFIGURE_CHANGE_PREFIX));
+  if (line === undefined) return null;
+  try {
+    const v = JSON.parse(line.slice(CONFIGURE_CHANGE_PREFIX.length)) as Partial<ConfigureChangeRecord>;
+    if (typeof v.setting !== 'string' || (v.scope !== 'workspace' && v.scope !== 'global') || typeof v.stated !== 'boolean' || !('after' in v)) return null;
+    return { setting: v.setting, scope: v.scope, stated: v.stated, ...(v.stated ? { before: v.before } : {}), after: v.after };
+  } catch {
+    return null;
+  }
+}
+

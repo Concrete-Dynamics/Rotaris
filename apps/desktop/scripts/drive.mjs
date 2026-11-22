@@ -20,6 +20,7 @@
  *   pnpm app:drive eval "document.title"
  *   pnpm app:drive shot screen.png
  *   pnpm app:drive resize 1000 680
+ *   pnpm app:drive emulateFocus                         (the page behaves as a focused window's: `:focus-visible` paints, whatever the host decided)
  *   pnpm app:drive command '{"kind":"theme.set","name":"nocturne"}'
  *   pnpm app:drive windows                              (main windows, and the persona, approval and terminal windows)
  *   pnpm app:drive webPreferences [--window=approval]   (the security keys the window was built with, read back; R-091)
@@ -194,6 +195,9 @@ switch (command) {
     break;
   case 'maximize':
     await withClient((d) => d.send('maximize', on));
+    break;
+  case 'emulateFocus':
+    await withClient((d) => d.send('emulateFocus', on));
     break;
   case 'command':
     await withClient((d) => d.send('command', { ...on, request: JSON.parse(positional[0] ?? '{}') }));

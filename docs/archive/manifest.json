@@ -1432,6 +1432,7 @@
     "defects/the-worktree-subpath-report-does-not-say-the-rest-of-the-configuration-loaded.md": "f7652f43139c855cc29a3c8ba3d22ccc08367f36503c38a0de4398a4d6461028",
     "defects/theme-proofs-contrast-reads-a-dash-placeholder-under-the-floor-at-125-percent.md": "a2c6814d81f464d369ea7fdab995968c0bf8f0097060a760f56e9bfad43515e7",
     "defects/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md": "e24e67893dd85f179519be34543d40595bb797b4ca41ed8b20065b1435ee1293",
+    "defects/theme-proofs-focus-section-fails-on-the-linux-host-at-varying-scales-on-main-too.md": "58b14148456f097a1fc4eb2dd03014711c750d8492923f0b10b4ec4235891ba5",
     "defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md": "070e98eb40e32e7368a83e59a643f20d8157ad4cd13867b5d6294b7d0a6c0d18",
     "defects/three-pd-tools-002-reaches-and-one-pd-shell-003-reach-lack-a-note-or-a-disposition.md": "0ff33f4a228a856303dd27f587eaeffd15fd7085086aa2bbb1e16529e6be91ef",
     "defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md": "86463dbd49e7197c357001b3904b2cbbf09b14a45da00d5a37a6d1f251d6bf21",

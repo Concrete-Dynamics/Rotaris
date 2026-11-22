@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-22**
 
+**The driver's `emulateFocus` (2026-11-22).** Verification only: `main/driver.ts` gains an op that turns on Chromium's focus emulation for the selected window, which `theme-proof` calls before its focus section ([the repaired note](../../archive/defects/theme-proofs-focus-section-fails-on-the-linux-host-at-varying-scales-on-main-too.md)). No view changes.
+
 **The configuration change's dialog block and its Undo (R-121; [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014) revision 3; 2026-11-22).** `02-process-view/02-message-families.md`: the renderer's configuration commands gain `config.undoAgentChange`. `02-process-view/05-message-families-4.md`: `approval.present`'s payload may carry `change`. `04-seams/04-4-a-tool.md`: `describeForApproval`, the executor's description for the dialog.
 
 **An agent changes Rotaris's own configuration through `configure` (R-121; [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014); 2026-11-22).** `02-process-view/05-message-families-4.md`: the run host's asks gain `config.agentWrite`, relayed by main to the workspace service (`config.agentWritten`), and the service's requests list it. `05-state-ownership/02-durable-and-the-rules.md`: the run-host rule names the tool's route and the file tools' closed paths. `04-seams/04-4-a-tool.md`: an invariant for a tool the gate rules on by its own arguments.

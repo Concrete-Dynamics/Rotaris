@@ -108,6 +108,8 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
     deferProjectOffer: (delayMs = 650) => send('deferProjectOffer', { delayMs }),
     screenshot: (path) => send('screenshot', { path }),
     resize: (width, height) => send('resize', { width, height }),
+    /** The page behaves as a focused window's whatever the host decided (`main/driver.ts`, `emulateFocus`): `:focus` and `:focus-visible` match. */
+    emulateFocus: () => send('emulateFocus'),
     command: (request) => send('command', { request }),
     /**
      * R-091 (hardening F3): `request` through main's own dispatcher with every handler throwing (`main/driver.ts`,

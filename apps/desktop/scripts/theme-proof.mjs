@@ -186,6 +186,14 @@ for (const theme of selectedThemes) {
         await take(`settings-${String(index + 1).padStart(2, '0')}`);
       }
       const focusCount = Number(await d.eval(`[...document.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])')].filter((element) => { const r=element.getBoundingClientRect(); return r.width>0 && r.height>0; }).length`));
+      /*
+       * A focus ring paints only in a focused window, and a window manager may never give the driven window the system's
+       * focus: on the Linux host `document.hasFocus()` was false, `:focus-visible` matched nothing and every ring measured
+       * 1:1 (`docs/archive/defects/theme-proofs-focus-section-fails-on-the-linux-host-at-varying-scales-on-main-too.md`). The
+       * window is made to behave as focused first, and a run whose document still is not is a harness failure, not a verdict.
+       */
+      const emulated = await d.emulateFocus();
+      if (emulated?.hasFocus !== true) throw new Error(`the window does not behave as focused (document.hasFocus() is ${String(emulated?.hasFocus)}), so no focus ring can be measured`);
       await d.eval(`(() => { document.activeElement?.blur(); return true; })()`);
       for (let index = 0; index < focusCount; index += 1) {
         await d.chord('Tab');

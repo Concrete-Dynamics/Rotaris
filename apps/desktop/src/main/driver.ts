@@ -509,6 +509,21 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         writeFileSync(request.path, image.toPNG());
         return { path: request.path, painted };
       }
+      case 'emulateFocus': {
+        /**
+         * The page as a focused window sees it, whatever the host's window manager decided. Found 2026-11-22: on a Linux
+         * host the driven window never received the system's focus, so `document.hasFocus()` was false, `:focus` and
+         * `:focus-visible` matched nothing, and theme-proof photographed no focus ring at all while `activeElement` still
+         * named the control it Tabbed to — read as "this control's ring is invisible" (ratios of exactly 1). Chromium's own
+         * focus emulation (the DevTools protocol's, as headless capture uses it) makes the document behave as focused for
+         * this webContents; verification only, like every op here.
+         */
+        const wc = windowOrThrow(target).webContents;
+        if (!wc.debugger.isAttached()) wc.debugger.attach('1.3');
+        await wc.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
+        const focused = await wc.executeJavaScript('document.hasFocus()') as boolean;
+        return { emulated: true, hasFocus: focused };
+      }
       case 'maximize': {
         // Not the same as `resize` to the work area: the host decides a maximized window's frame, and a layout
         // defect that only appears at the size a person actually uses is one this op exists to reach.

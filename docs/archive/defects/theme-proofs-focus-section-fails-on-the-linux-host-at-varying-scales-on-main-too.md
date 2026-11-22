@@ -1,5 +1,14 @@
 ## theme-proof's focus section fails on the Linux host at varying scales, on main too
 
+**Outcome: repaired 2026-11-22.** The cause was the window, not the capture's timing: the driven window never received the
+system's focus on this host, so `document.hasFocus()` was false, `:focus` and `:focus-visible` matched nothing and no ring
+painted, while `activeElement` still named the control the proof had Tabbed to. The driver gained `emulateFocus`
+(`main/driver.ts`; Chromium's focus emulation through the DevTools protocol), and `theme-proof.mjs` calls it before its
+focus section and stops as a harness failure if the document still is not focused. rotaris-dim at 1.75, red before with
+twenty rings at 1:1, measured all 41 with the weakest at 6.1:1; `--counterfactual=focus` still turns it red. The
+resize-to-force-a-frame fallback that grew the viewport by a pixel per capture was a symptom (every Tab returned the same
+picture) and no longer fires.
+
 `pnpm theme-proof` reports `FAIL focus` for most theme × scale runs on this Linux host (X11 session, `WAYLAND_DISPLAY`
 unset), and which runs fail moves from one execution to the next:
 

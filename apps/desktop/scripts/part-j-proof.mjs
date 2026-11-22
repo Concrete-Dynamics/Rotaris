@@ -85,6 +85,9 @@ function open(s) { return new Database(oneDatabase(s.local), { readonly: true })
  * holder, run starts, summary); the proof reads the record after the exit. A reading the store is busy for is skipped,
  * not guessed. It was a worker because the launch blocked this thread (`spawnSync`); the launch is `spawnBounded`'s
  * since 2026-09-29, and the worker stays, so its sampling does not depend on this thread's event loop.
+ * A reading that fails drops the handle (2026-11-22): with the code-intelligence bundle present, the launch recycles the
+ * store's -wal/-shm while the runs happen (the project setup it lets run), and a read-only handle opened before that failed with
+ * `disk I/O error` on every later read, so the sampler saw nothing (docs/archive/defects/part-j-proofs-pause-sampler-sees-nothing-when-the-code-intelligence-bundle-is-present.md).
  */
 function sampleStore(local) {
   const stop = new Int32Array(new SharedArrayBuffer(4));
@@ -109,7 +112,7 @@ function sampleStore(local) {
           const key = JSON.stringify([status, lock, runStarts, summary]);
           if (key !== last) { last = key; samples.push({ status, lock, runStarts, summary }); writeFileSync(workerData.file, JSON.stringify(samples)); }
         }
-      } catch { /* the store is busy or not yet migrated: skipped */ }
+      } catch { /* the store is busy, not yet migrated, or its -wal/-shm were recycled under the handle (a read then fails with "disk I/O error" for good): skipped, and the handle is dropped so the next tick opens the store afresh */ try { db?.close(); } catch { /* closing */ } db = null; }
       Atomics.wait(tick, 0, 0, 50);
     }
     try { db?.close(); } catch { /* closing */ }

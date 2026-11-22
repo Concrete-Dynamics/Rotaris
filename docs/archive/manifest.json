@@ -1040,6 +1040,7 @@
     "defects/palette-proof-reads-the-win32-host-input-on-every-platform.md": "30f2f4d5dc2a134971974bb51dac9f3dbf68e3b072fea3437021d5dcc7f2b09a",
     "defects/parallel-worktree-agents-swap-uncommitted-edits-through-the-shared-git-stash.md": "c67e0c100df527653e78592f887362ae52ed31bd1b5fce871e8f049ba59f21ba",
     "defects/part-j-proof-cannot-launch-the-app-as-root.md": "d77152c86ba1c822afd9012f5db3dd6b4ed490a40f3d295745e0b08591fa3a1f",
+    "defects/part-j-proofs-pause-sampler-sees-nothing-when-the-code-intelligence-bundle-is-present.md": "46ab57d354f306f4dfc8904e46a27e086e5f7bed2fdf47505aaf823f7ee7659b",
     "defects/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md": "017228cb3f435cc8774539eab671e0236075317b74dedbe38b8636c0b8503a33",
     "defects/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md": "d2fc83b60ed891d5bafb4d2b4369c68b9b3fd0401a46bef4fa6fccf8157af219",
     "defects/part-j-proofs-two-window-launch-names-a-window-by-a-forward-slash-suffix-that-never-matches-on-windows.md": "ce794b273d72449a3fc683cd8df2e574c01a0d3eac7d7e46f2102efa01f5ca0c",

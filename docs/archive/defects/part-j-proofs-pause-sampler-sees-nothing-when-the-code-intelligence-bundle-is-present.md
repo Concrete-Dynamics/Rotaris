@@ -15,6 +15,13 @@ the project setup it lets run (create, index, memory) — that keeps the worker 
 further. Found 2026-11-22 while landing R-121; `pnpm worktree:land` builds the bundle into its landing tree whenever a
 diff names `code-intel-proof` or `init-proof`, which is when this proof turns red there.
 
+**Repaired 2026-11-22.** The cause was the instrument's handle, not the store's count: the worker's read-only handle,
+opened once the store and its `-shm` were there, failed every later read with `disk I/O error` (instrumented run: every
+sample `{"err":"disk I/O error","db":true}`, exactly one `workspace.db` found). With the bundle present the launch
+recycles the store's `-wal`/`-shm` while the runs happen, and the sampler swallowed the error and kept the dead handle.
+It now drops the handle on any failed reading and opens the store afresh on the next tick. `part-j-proof` with the
+bundle present: red before, green after (all scenarios, the pause's sampled lock included).
+
 ## Specs
 
 None contradicted by the product as far as is known: the proof's own instrument sees nothing, so it judges nothing. The

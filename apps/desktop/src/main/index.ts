@@ -39,7 +39,7 @@ import { DiagnosticsCaptures, isExistingDirectory } from './diagnostics.js'; // 
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { claudeCodeTool } from './claude-code-tool.js';
-import { CATALOGUE, CLAUDE_CODE_INSTRUCTION, CLAUDE_CODE_NOT_INSTALLED, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, validateCatalog } from '@rotaris/providers';
+import { CATALOGUE, CLAUDE_CODE_INSTRUCTION, CLAUDE_CODE_NOT_INSTALLED, CLOUD_SERVER_FILE, CloudServerStore, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, sharedQuotaCaps, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator, serviceMarkerWriter } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
@@ -377,7 +377,8 @@ async function main(): Promise<void> {
   /** PD-PROVIDER-002 / PD-PROVIDER-003: the Claude Code tool the user installed, as main asks about it. */
   const claudeCode = claudeCodeTool({ cwd: dirs.data });
   const claudeCodeInstalled = (): boolean => claudeCode.installed();
-  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, timers: clocks.timers, localTool: { installed: claudeCodeInstalled, state: () => claudeCode.state(), models: () => claudeCode.models() }, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
+  const cloudServer = new CloudServerStore({ path: join(dirs.config, CLOUD_SERVER_FILE), timers: clocks.timers, warn: (m) => log(`providers: ${m}`, 'warn') });
+  const providers = new ProviderService({ credentials, settings: projectSettings, cloudServer, env: process.env, wall: clocks.wall, timers: clocks.timers, localTool: { installed: claudeCodeInstalled, state: () => claudeCode.state(), models: () => claudeCode.models() }, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
 
   /**
    * REQ-NOTIFY-076 as the two recovery surfaces act on it: a key-based provider gets its key field; a device-code or browser
@@ -1124,7 +1125,7 @@ async function main(): Promise<void> {
   const providerChoices = (include: string | null = null): ProviderDialogPayload['choices'] => {
     const custom = CATALOGUE.find((c) => c.id === 'openai-compatible')!;
     const authenticated = new Set(providers.list().filter((r) => r.authenticated).map((r) => r.id));
-    const builtIns = CATALOGUE.filter((c) => c.id !== 'openai-compatible' && c.id !== 'concrete-cloud' && (!authenticated.has(c.id) || c.id === include));
+    const builtIns = CATALOGUE.filter((c) => c.id !== 'openai-compatible' && (!authenticated.has(c.id) || c.id === include));
     // REQ-PROVIDER-036: sign-in surfaces brand the codex provider.
     const nameOf = (c: (typeof CATALOGUE)[number]): string => (c.id === 'codex' ? `${c.displayName} (Sign in with ChatGPT)` : c.displayName);
     return [

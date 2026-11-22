@@ -54,9 +54,9 @@ export interface CatalogueEntry {
 export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
   Object.freeze<CatalogueEntry>({
     id: 'concrete-cloud', displayName: 'Rotaris Cloud (recommended)', signInMethod: 'browser-pkce',
-    discoveryUrl: 'https://rotaris.ai/v1/models', discoveryAuthScheme: 'Bearer', baseUrl: 'https://rotaris.ai/v1',
+    discoveryUrl: 'https://api.rotaris.ai/v1/models', discoveryAuthScheme: 'Bearer', baseUrl: 'https://api.rotaris.ai/v1',
     connectionMode: 'hosted-cloud', operator: 'Concrete Dynamics UG (haftungsbeschränkt)', privacyUrl: 'https://rotaris.ai/privacy',
-    available: false, unavailabilityReason: 'Rotaris Cloud is coming soon.', sharedQuotaCap: null,
+    available: true, unavailabilityReason: null, sharedQuotaCap: null,
   }),
   Object.freeze<CatalogueEntry>({
     id: 'copilot', displayName: 'GitHub Copilot', signInMethod: 'device-code',

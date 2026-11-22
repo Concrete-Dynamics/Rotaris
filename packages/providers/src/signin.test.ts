@@ -110,7 +110,7 @@ describe('the rest of the provider service', () => {
     expect(await svc.signInWithKey('copilot', KEY)).toMatchObject({ outcome: 'failed' });
     expect((await svc.signInWithKey('copilot', KEY) as { message: string }).message).toContain('Code shown here, entered at the provider');
     expect(await svc.signInWithKey('claude-code', KEY)).toMatchObject({ outcome: 'failed' });
-    expect(await svc.signInWithKey('concrete-cloud', KEY)).toEqual({ outcome: 'failed', message: 'Rotaris Cloud is coming soon.' });
+    expect(await svc.signInWithKey('concrete-cloud', KEY)).toMatchObject({ outcome: 'failed', message: expect.stringContaining('Sign in on a browser page') });
     expect((await svc.signInWithKey('nope', KEY) as { message: string }).message).toMatch(/^Unknown provider: nope/);
   });
   it('the provider list is the union by id with method label, masked key, base URL and count (REQ-PROVIDER-140/107)', async () => {
@@ -121,7 +121,7 @@ describe('the rest of the provider service', () => {
     const or = rows.find((r) => r.id === 'openai-compatible--openrouter')!;
     expect(or).toMatchObject({ displayName: 'OpenRouter', methodLabel: 'Paste an API key', authenticated: true, maskedKey: 'sk****ef', baseUrl: OR, modelCount: 3, userDefined: true });
     expect(JSON.stringify(rows)).not.toContain(KEY);
-    expect(rows.find((r) => r.id === 'concrete-cloud')!.available).toBe(false);
+    expect(rows.find((r) => r.id === 'concrete-cloud')).toMatchObject({ available: true, baseUrl: 'https://api.rotaris.ai/v1' });
     expect(rows.find((r) => r.id === 'deepseek')!.baseUrl).toBe('https://api.deepseek.com/v1');
   });
   it('sign-out (REQ-PROVIDER-102) keeps the snapshot record and marks it signed out (PD-PROVIDER-003 clause 4); delete (055) removes both; validate (141) needs a credential', async () => {
@@ -144,7 +144,7 @@ describe('the rest of the provider service', () => {
   it('health reduces the observations to one state (REQ-PROVIDER-118 → REQ-NOTIFY-200); a refused validate discards the credential (098)', async () => {
     let status = 200;
     const { svc, credentials } = service(fetchWith((_u, h) => new Response(status === 200 ? JSON.stringify(catalogue) : '', { status: h.get('authorization') === `Bearer ${KEY}` ? status : 401 })));
-    expect(await svc.health('concrete-cloud')).toEqual({ state: 'coming_soon', detail: 'Rotaris Cloud is coming soon.', available: false });
+    expect(await svc.health('concrete-cloud')).toEqual({ state: 'unauthenticated', detail: 'Not authenticated.', available: true });
     expect(await svc.health('deepseek')).toEqual({ state: 'unauthenticated', detail: 'Not authenticated.', available: true });
     expect(await svc.health('mystery')).toMatchObject({ state: 'unknown' });
     await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
@@ -199,7 +199,7 @@ describe('the recovery dialog\'s re-authentication (REQ-NOTIFY-076/077, REQ-NOTI
     expect(svc.reauthentication('copilot')).toEqual({ method: 'interactive', message: 'GitHub Copilot signs in with "Code shown here, entered at the provider". Start its sign-in, complete it at the provider, then confirm here.' });
     expect(svc.reauthentication('codex').method).toBe('interactive');
     expect(svc.reauthentication('claude-code').method).toBe('interactive');
-    expect(svc.reauthentication('concrete-cloud')).toEqual({ method: 'unavailable', message: 'Rotaris Cloud is coming soon.' });
+    expect(svc.reauthentication('concrete-cloud').method).toBe('interactive');
     expect(svc.reauthentication('scripted')).toMatchObject({ method: 'configuration', message: expect.stringMatching(/^Authentication is managed by model configuration\./) });
     // No message sends the user to a shell, a terminal or a separate program (REQ-NOTIFY-076's last sentence).
     for (const id of ['openai-compatible--openrouter', 'copilot', 'codex', 'claude-code', 'scripted']) expect(svc.reauthentication(id).message).not.toMatch(/terminal|shell|command line|cli\b|run `/i);
@@ -323,7 +323,6 @@ describe('the interactive sign-in, refresh and the lease (R-111; REQ-PROVIDER-02
   it('refuses the providers no interactive flow serves, before anything is contacted', async () => {
     let contacts = 0;
     const { svc, credentials } = service(fetchWith(() => { contacts += 1; return new Response('{}'); }));
-    expect(await svc.signInInteractive('concrete-cloud', { prompt: () => undefined })).toEqual({ outcome: 'failed', message: 'Rotaris Cloud is coming soon.' });
     expect((await svc.signInInteractive('deepseek', { prompt: () => undefined })).outcome).toBe('failed');
     expect((await svc.signInInteractive('nope', { prompt: () => undefined })).outcome).toBe('failed');
     expect(await svc.signInWithKey('claude-code', 'sk-ant-oat01-abc')).toMatchObject({ outcome: 'failed', message: expect.stringContaining('takes no key') });

@@ -393,6 +393,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('providers.save'), id: z.string().max(NAME_MAX).min(1), apiKey: z.string().max(PATH_MAX), baseUrl: z.string().max(PATH_MAX).nullable(), validate: z.boolean() }),
   z.object({ kind: z.literal('providers.validate'), id: z.string().max(NAME_MAX).min(1) }),
   z.object({ kind: z.literal('providers.signOut'), id: z.string().max(NAME_MAX).min(1) }),
+  /**
+   * PD-PROVIDER-004: the Rotaris Cloud server — read (the stored choice, the server in force, whether the environment
+   * overrides it) and set. Both are public URLs; an empty or null half is the production default.
+   */
+  z.object({ kind: z.literal('providers.cloudServer') }),
+  z.object({ kind: z.literal('providers.setCloudServer'), apiBase: z.string().max(PATH_MAX).nullable(), issuer: z.string().max(PATH_MAX).nullable() }),
   z.object({ kind: z.literal('providers.delete'), id: z.string().max(NAME_MAX).min(1) }),
   z.object({ kind: z.literal('providers.refresh'), ids: z.union([z.literal('all'), z.array(z.string().max(NAME_MAX)).max(LIST_MAX)]) }),
   /** ADR-0034 (Part S) / REQ-MCP-091/092/094/109: the MCP settings category, relayed to the run host, which holds the pipeline, the probe and the session override. */

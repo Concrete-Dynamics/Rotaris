@@ -1163,6 +1163,51 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE artifacts ADD COLUMN answer TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    to: 37,
+    /*
+     * PD-ORCH-019 clause 8 (ADR-0068, R-130): a workflow survives a restart. `workflows`: one row per workflow an agent
+     * started, keyed by the session, the agent's canonical name and the id its tool minted (`wf_1`) — its name, its script
+     * as the agent wrote it, and where it stands (state, phase, the counts its row shows, and what it ended with).
+     * `notified` is 1 once the agent that started it has been told how it ended, so a workflow cut off by the application
+     * ending is told to its agent once, by the next process, and not again.
+     * `workflow_calls`: the workflow's journal, one row per call its script made, in call order by `seq` — the call's kind,
+     * its arguments as canonical JSON, the child task an `agent` call started (written when the child is admitted, so a
+     * workflow started again waits for that child rather than starting a second), and the answer the script received as
+     * JSON, NULL until it arrives. A script started over its journal is answered from it while its calls match. Both
+     * cascade with their session; every read is a primary key's prefix. A session written before this version has no
+     * rows, which is true of it: no workflow existed before it.
+     */
+    sql: `
+      CREATE TABLE workflows (
+        session_id     TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        agent          TEXT NOT NULL,
+        workflow_id    TEXT NOT NULL,
+        name           TEXT NOT NULL,
+        script         TEXT NOT NULL,
+        state          TEXT NOT NULL,
+        phase          TEXT NOT NULL DEFAULT '',
+        agents_started INTEGER NOT NULL DEFAULT 0,
+        agents_ended   INTEGER NOT NULL DEFAULT 0,
+        calls          INTEGER NOT NULL DEFAULT 0,
+        result         TEXT NOT NULL DEFAULT '',
+        notified       INTEGER NOT NULL DEFAULT 0,
+        started_at     TEXT NOT NULL,
+        PRIMARY KEY (session_id, agent, workflow_id)
+      );
+      CREATE TABLE workflow_calls (
+        session_id  TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        agent       TEXT NOT NULL,
+        workflow_id TEXT NOT NULL,
+        seq         INTEGER NOT NULL,
+        kind        TEXT NOT NULL,
+        payload     TEXT NOT NULL,
+        task_id     TEXT,
+        outcome     TEXT,
+        PRIMARY KEY (session_id, agent, workflow_id, seq)
+      );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

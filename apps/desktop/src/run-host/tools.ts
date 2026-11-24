@@ -4,7 +4,7 @@ import { toIsoUtc, type Clocks, type WallClock } from '@rotaris/kernel';
 import { presetRank, resolvePreset, restrictionsAllow, TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, configureTool, type ConfigurationPort, directWorkBundle, grantsOn, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor,
+  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor, artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool, WorkflowManager, workflowTool, type JournalEntry, type WorkflowCallKind, type WorkflowState, AdvisorUses, advisorTool,
 } from '@rotaris/agent-tools';
 import { aliasesAmong, BUILT_IN_PERSONAS, delegationTargetsFor, EMPTY_MCP_EVIDENCE, isNativeFileWritingTool, sameRef, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
@@ -12,7 +12,6 @@ import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js
 import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
 import { throwOnAbort } from './throw-on-abort.js';
 import { writeSkillLoadMarker } from './skills.js';
-import { AdvisorUses, advisorTool, artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
 /**
@@ -530,8 +529,20 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // REQ-ORCH-025: `single` grants the entry role the direct-work bundle and withholds delegate from every role.
   const single = runtime.runOverride === 'single';
   // REQ-ORCH-016/018: the pre-flight's grant reaches the entry role only; the bundle is resolved by facet against the registry.
-  const directWork = isEntry && (single || ctx.grant === 'direct-work');
-  const granted = directWork ? [...new Set([...persona.tools, ...directWorkBundle()])] : persona.tools;
+  // PD-ORCH-019 clause 1: `lead` grants the entry role the same bundle and withholds nothing; it runs no pre-flight, so no grant arrives.
+  const lead = runtime.runOverride === 'lead';
+  const directWork = isEntry && (single || lead || ctx.grant === 'direct-work');
+  /*
+   * PD-ORCH-019 clause 4: under `lead` an agent at the depth limit holds no spawning tool. The ledger refuses a child
+   * deeper than `runtime.max_depth` on every run (`ledger.ts`); here the tool is withheld instead, so the agent is never
+   * offered a call the run would refuse. The entry is depth 0 and a child its parent's depth plus one, so an agent may
+   * spawn while its own depth is below the limit. A port that carries no depth is not narrowed.
+   */
+  const atDepthLimit = lead && ctx.depth !== undefined && runtime.childBudget !== undefined && ctx.depth >= runtime.childBudget.maxDepth;
+  // PD-ORCH-019 clause 5: every agent of a `lead` run that may spawn holds the workflow tool, whatever its persona declares.
+  const workflowGranted = lead && !atDepthLimit && ctx.delegation !== undefined;
+  const bundled = directWork ? [...new Set([...persona.tools, ...directWorkBundle()])] : persona.tools;
+  const granted = workflowGranted && !bundled.includes('workflow') ? [...bundled, 'workflow'] : bundled;
   /*
    * REQ-ORCH-153 (ADR-0062), enforcement point 1 of three: the planning grants applied to the DECLARED set, so
    * one resolution still feeds both the model's listing and the callable map (REQ-TOOLS-010) — a held run is
@@ -541,14 +552,21 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    * of it. This point only REMOVES; the dispatch check in the gate is what makes the withholding authoritative.
    */
   const planGateHeld = ctx.planGateHeld ?? (() => false);
-  const declared = planGateHeld() ? granted.filter((t) => !withheldUnderPlanGate(t)) : granted;
+  // PD-ORCH-019: a workflow is a way to do the work, so a held run is not offered it; its own declaration names no facet.
+  const declared = planGateHeld() ? granted.filter((t) => !withheldUnderPlanGate(t) && t !== 'workflow') : granted;
   /*
    * REQ-ORCH-153: the names this point and the MCP one below REMOVE because the gate is held. The gate reads it to
    * tell a withheld tool apart from a name that is no tool at all — the public names it can check against the
    * registry itself, but an MCP or plugin name exists only here. Filled as the surface resolves, read live.
    */
   const withheldAtPlanGate = new Set<string>(planGateHeld() ? granted.filter((t) => withheldUnderPlanGate(t)) : []);
-  const delegationAvailable = ctx.delegation !== undefined && !single;
+  const delegationAvailable = ctx.delegation !== undefined && !single && !atDepthLimit;
+  // Read by the workflow store before `writes` exists (the manager is built first): true once the run's end closed this port.
+  let portClosed: () => boolean = () => false;
+  // PD-ORCH-019 clause 9: this port's workflow manager, where it holds one, for the session record and the row's Stop.
+  let workflows: WorkflowManager | null = null;
+  // Bound once the gate exists (below): a workflow script's tool calls go through it.
+  let workflowGate: () => Gate = () => { throw new Error('the gate is not built yet'); };
   // Part Y (REQ-LIBRARY-099/100/101): the three artifact executors over the engine's port, bound to THIS agent.
   const artifacts = ctx.artifacts;
   if (artifacts) {
@@ -627,7 +645,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // prompt in front of, so the registry removes `ask_questions` with `user_prompt_channel_absent`. It stood at a
     // literal `false` until this part, because there was no executor for it to be true of.
     delegationRuntime: delegationAvailable, userPromptChannel: ctx.attended(), artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined && persona.canPublishArtifacts, terminalBackend: executors.has('terminal'),
-    executors: new Set([...executors.keys(), ...(delegationAvailable ? DELEGATION_TOOLS : [])]),
+    executors: new Set([...executors.keys(), ...(delegationAvailable ? DELEGATION_TOOLS : []), ...(delegationAvailable && workflowGranted ? ['workflow'] : [])]),
   };
   if (delegationAvailable && ctx.delegation) {
     const parentId = ctx.parentId ?? 'root';
@@ -640,6 +658,40 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     executors.set('delegate', delegateTool(ctx.delegation, parentId, catalogue, { markItem: markDelegatedItem, artifactStore: prerequisites.artifactStore }));
     executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId));
     executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId));
+    /*
+     * PD-ORCH-019 clauses 5 to 7: the workflow tool, one manager per port (a port is one agent). A script's `tool()` call is
+     * dispatched through THIS port's gate under this agent's identity (clause 6), read when the call is made, since the gate
+     * is built below. Its agents are this agent's children through the same delegation operations `delegate` uses.
+     */
+    if (workflowGranted) {
+      const delegation = ctx.delegation;
+      const manager = new WorkflowManager({
+        delegation, parentId, defaultPersona: 'coding-agent', now: () => Number(deps.clocks.monotonic.now()),
+        // Clause 9: each change republishes the session, which reads `workflows` from this port (as a question's does).
+        onChange: () => { if (!portClosed()) ctx.writer.save(ctx.writer.currentStatus, {}); },
+        // Clause 8: this agent's workflows and their journals, through the session's one writer. Nothing is written once the
+        // run's end has closed this port (REQ-SESSION-094); a workflow that ends after that keeps the state last written.
+        store: {
+          load: () => ctx.writer.workflowsOfAgent(ctx.agentName).map(({ row, calls }) => ({
+            workflow: { id: row.workflow_id, name: row.name, script: row.script, state: row.state as WorkflowState, phase: row.phase, agentsStarted: row.agents_started, agentsEnded: row.agents_ended, calls: row.calls, result: row.result, notified: row.notified === 1 },
+            journal: calls.map((c) => ({ seq: c.seq, kind: c.kind as WorkflowCallKind, payload: c.payload, ...(c.task_id === null ? {} : { taskId: c.task_id }), ...(c.outcome === null ? {} : { outcome: JSON.parse(c.outcome) as NonNullable<JournalEntry['outcome']> }) })),
+          })),
+          save: (w) => { if (!portClosed()) ctx.writer.saveWorkflow({ agent: ctx.agentName, workflow_id: w.id, name: w.name, script: w.script, state: w.state, phase: w.phase, agents_started: w.agentsStarted, agents_ended: w.agentsEnded, calls: w.calls, result: w.result, notified: w.notified ? 1 : 0 }); },
+          journal: (workflowId) => ({
+            append: (e) => { if (!portClosed()) ctx.writer.recordWorkflowCall({ agent: ctx.agentName, workflow_id: workflowId, seq: e.seq, kind: e.kind, payload: e.payload, task_id: e.taskId ?? null, outcome: e.outcome === undefined ? null : JSON.stringify(e.outcome) }); },
+            truncate: (seq) => { if (!portClosed()) ctx.writer.dropWorkflowCallsFrom(ctx.agentName, workflowId, seq); },
+          }),
+        },
+        dispatchTool: async (name, args, callId, signal) => {
+          const r = await workflowGate().dispatch({ callId, name, rawArgs: JSON.stringify(args), persona: ctx.persona, agentId: ctx.agentName, agentName: ctx.agentName }, signal);
+          return { text: r.text, isError: r.isError, interrupted: r.interrupted === true };
+        },
+      });
+      executors.set('workflow', workflowTool(manager));
+      workflows = manager;
+      // Clause 8: a workflow of this agent that an earlier process or a pause cut off is told to it once, as its next message.
+      manager.announceInterrupted();
+    }
   }
   const declaredWithAdvisor = advisorUses !== null && !declared.includes('advisor') ? [...declared, 'advisor'] : declared;
   const resolved = resolveAgentGrant(persona, { name: ctx.persona, declared: declaredWithAdvisor, parentPersona: parentAgentPersona, coordinating: delegationAvailable && !directWork, prerequisites, isEntry });
@@ -683,9 +735,11 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
   const approvals = new PendingApprovals(deps.clocks.timers, { held: quitting });
   const writes = writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn);
+  portClosed = () => writes.closed();
   const markSkillLoad = skillLoadMarking(ctx, root, deps.skillAt, writes.closed);
   const toolHooks = ctx.hooks ?? null;
-  const gate = new Gate({
+  workflowGate = () => gate;
+  const gate: Gate = new Gate({
     sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter, quitting,
     headlessPolicy: runtime.headlessPolicy, abortHook: ctx.abortRun, approvalTimeoutMs: runtime.approvalTimeoutMs,
     executors: callable, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } },
@@ -866,6 +920,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     answerQuestions: (requestId, answers) => questions.resolve(requestId, answers),
     cancelQuestions: (requestId) => questions.cancel(requestId),
     pendingQuestions: () => questions.pending(),
+    // PD-ORCH-019 clause 9: this agent's workflows as the record shows them, and the row's Stop.
+    workflows: () => (workflows?.snapshots() ?? []).map((w) => ({ id: w.id, agent: ctx.agentName, name: w.name, state: w.state, phase: w.phase, agentsStarted: w.agentsStarted, agentsEnded: w.agentsEnded, calls: w.calls })),
+    stopWorkflow: (id) => workflows?.stop(id).ok === true,
     pendingApprovals: () => approvals.pending(),
     // REQ-SESSION-094: the run has ended; what this port's gate still has open settles now, and nothing more is written.
     close: (cutOff) => writes.close(cutOff),

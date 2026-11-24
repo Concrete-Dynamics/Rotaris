@@ -64,6 +64,30 @@ export function swarmReading(first) {
   return { kind: 'coordinating', faults, offered };
 }
 
+/** The statement a `lead` run's entry role is given (PD-ORCH-019 clause 1). */
+export const LEAD_STATEMENT = 'Do the work yourself by default. Hand a part to a specialist only where that helps';
+
+/**
+ * What a `lead` run's entry role was told and offered, from its first request, and whether the run was classified
+ * (PD-ORCH-019 clauses 1 and 2): the lead statement, no coordinating sentence, no playbook, the writing tools beside
+ * `delegate`, and no `intent:` line in the launch log (the run host's pre-flight writes one per classification).
+ * `kind`: `absent` (no request was read: a NOTE) or `read`, whose `faults` lists what the product got wrong.
+ * @param {ReturnType<typeof requestOf>} first
+ * @param {string} log the launch log
+ */
+export function leadReading(first, log) {
+  /** @type {string[]} */
+  const faults = [];
+  if (/^.*\bintent: \w+/m.test(log)) faults.push('the lead run was classified');
+  if (first === null) return { kind: 'absent', faults, offered: [] };
+  const offered = first.tools.map((/** @type {{ name: string }} */ t) => t.name);
+  if (!first.system.includes(LEAD_STATEMENT)) faults.push('the lead run carries no lead statement');
+  if (first.system.includes('you do not modify files')) faults.push('the lead run was told it modifies nothing');
+  if (first.system.includes(SWARM_HEADING)) faults.push('the lead run carries the swarm layer');
+  for (const t of ['write_file', 'terminal', 'delegate']) if (!offered.includes(t)) faults.push(`the lead run was not offered ${t}`);
+  return { kind: 'read', faults, offered };
+}
+
 /**
  * The `delegate` catalogue a `delegates_to` narrowing must leave (OQ-229): the description says the list narrows it, and names
  * no persona outside it. `delegates`: the delegate calls (`{ args, result, status }`); a call to another persona must have been

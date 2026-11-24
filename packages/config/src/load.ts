@@ -43,7 +43,7 @@ import { PROJECT_SETTINGS_FILE, readProjectSnapshot, snapshotCapabilityRecords, 
 export const MODELS_FILE = 'models.yml' as const;
 export const AGENTS_FILE_NAME = 'agents.yaml' as const;
 export type ConfigScope = 'global' | 'workspace';
-export const DELEGATION_STRATEGIES = ['orchestrator', 'swarm', 'single'] as const;
+export const DELEGATION_STRATEGIES = ['orchestrator', 'swarm', 'single', 'lead'] as const;
 export type DelegationStrategy = (typeof DELEGATION_STRATEGIES)[number];
 
 export interface ScopeFiles {

@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow, ChildRow, StoreDal } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord, type RunOverride, type WorkflowStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -287,7 +287,7 @@ export interface RunDeps {
    * through `coordinating` and the grant; `swarm` changes the entry role's instruction text only (`runOverrideLayer`).
    * Absent means none.
    */
-  readonly runOverride?: 'single' | 'swarm' | null | undefined;
+  readonly runOverride?: RunOverride | null | undefined;
   /** REQ-ORCH-085: the host told the run paused at the limit, with the count and the limit. */
   readonly onPaused?: ((info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
   /**
@@ -1195,6 +1195,8 @@ export class Run {
 
   /** REQ-SESSION-114 / REQ-ORCH-014: a continuation's intent row, with the carried-over suffix where it applies. */
   private appendIntentRow(p: Preflight | null): void {
+    // PD-ORCH-019 clause 2: a `lead` run is never classified, so it has no intent to say, at a launch or a continuation.
+    if (this.deps.runOverride === 'lead') return;
     const intent = p?.intent ?? NO_PREFLIGHT_INTENT;
     this.deps.writer.appendRow('system', `Intent classified: ${intent.category}${intent.carried_over ? ' (continued from previous run)' : ''}`, true);
   }
@@ -1885,7 +1887,7 @@ export class Run {
      * a resumed iteration's carried intent, never the classification a continue's message brought for the next one —
      * so a resumed coordinator's instructions agree with the carried tools and do not change partway through it.
      */
-    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflightInEffect?.grant ?? null, entryPersona ?? null);
+    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflightInEffect?.grant ?? null, entryPersona ?? null, this.deps.runOverride ?? null);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
     let rootDetached = false;
     /*
@@ -3059,6 +3061,19 @@ export class Run {
     for (const p of this.ports) out.push(...(p.pendingApprovals?.() ?? []));
     if (this.deps.tools && !this.ports.has(this.deps.tools)) out.push(...(this.deps.tools.pendingApprovals?.() ?? []));
     return out;
+  }
+  /** PD-ORCH-019 clause 9: every agent's workflows, for the whole-session update. */
+  workflows(): WorkflowStatus[] {
+    const out: WorkflowStatus[] = [];
+    for (const p of this.ports) out.push(...(p.workflows?.() ?? []));
+    if (this.deps.tools && !this.ports.has(this.deps.tools)) out.push(...(this.deps.tools.workflows?.() ?? []));
+    return out;
+  }
+  /** PD-ORCH-019 clause 9: stops workflow `id` of the agent named `agent`; false where no port of that agent runs one of that id. */
+  stopWorkflow(agent: string, id: string): boolean {
+    const ports = [...this.ports, ...(this.deps.tools && !this.ports.has(this.deps.tools) ? [this.deps.tools] : [])];
+    for (const p of ports) if (p.workflows?.().some((w) => w.agent === agent && w.id === id) === true && p.stopWorkflow?.(id) === true) return true;
+    return false;
   }
   /** REQ-CHAT-097: every conversation's pending prompt, for the whole-session update. */
   pendingQuestions(): QuestionPrompt[] {

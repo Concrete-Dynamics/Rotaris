@@ -59,6 +59,7 @@ Part 4 of 7 of [domain 03](../03-conversation-composer-transcript.md), which ind
   > described by. The members stand one step in and hang from no rule.
 
 - **REQ-CHAT-066** — The structured-questions tool row MUST never fold into a group, and an unsettled live terminal row MUST never fold into a group (its live preview must stay visible). Incremental updates to grouped transcripts MUST remain incremental, refusing (and falling back to a full refresh) only when the update and the view describe different transcripts.
+  > **Narrowed by [`PD-ORCH-019`](../../product/directives/pd-orch-019.md#pd-orch-019), 2026-11-24.** A third row never folds: the call that started a workflow, which is the workflow's one row. Everything else above governs as written.
 - **REQ-CHAT-067** — A persisted display setting MUST auto-collapse all but the most recent tool-call/result pair (the last two tool rows; fewer than two → none collapse) to name-plus-chevron; it defaults **off**; per-row manual expansion overrides it; question rows and live terminal rows are exempt; toggling takes effect immediately. The tool-grouping display setting defaults **on**. Both of these are desktop preferences and are stored in the desktop preference store (REQ-CONFIG-405), not in the YAML configuration surface.
   > **Extended by [`PD-CHAT-004`](../../product/directives/pd-chat-004.md#pd-chat-004), 2026-09-15; revised 2026-09-16.** Both settings are
   > untouched and still govern in full. The tool-grouping setting additionally governs the **activity

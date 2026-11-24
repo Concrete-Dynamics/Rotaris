@@ -1,5 +1,5 @@
 import { asSessionId, type Clocks, countNoun, err, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
-import { type PlanDecision, type PlanGatePayload, type ResumablePayload, APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ApprovalPayload, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding, DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink, IntentResultSchema, type IntentCategory, type IntentGrant, type IntentResult, type IntentStatus } from '@rotaris/contracts';
+import { type PlanDecision, type PlanGatePayload, type ResumablePayload, APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ApprovalPayload, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding, DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink, IntentResultSchema, type IntentCategory, type IntentGrant, type IntentResult, type IntentStatus, type RunOverride, type WorkflowStatus, WORKFLOW_STATES } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { pathKey } from '@rotaris/platform';
 import { type ChildRow, RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
@@ -253,7 +253,7 @@ export interface RuntimePosture {
    * REQ-ORCH-025: `rotaris.delegation_strategy`'s override — under `single` the entry role is the worker, not a coordinator,
    * and REQ-ORCH-029's constraints do not bind it (`RunDeps.coordinating`). Absent means none.
    */
-  readonly runOverride?: 'single' | 'swarm' | null | undefined;
+  readonly runOverride?: RunOverride | null | undefined;
 }
 
 export interface SessionsDeps {
@@ -615,6 +615,18 @@ export function parseBinding(json: string | null): WorktreeBinding | null {
  * message, the Continue action and the decline, the plan decision, the at-rest cancel) and the projection that states
  * what a continue would resume ask this one question.
  */
+/** PD-ORCH-019 clause 9: the live run's workflows as a record field, absent where it has none (a stored record's never is). */
+function workflowsOf(run: { workflows(): WorkflowStatus[] } | null | undefined, dal: StoreDal, sessionId: SessionId): { workflows?: WorkflowStatus[] } {
+  const live = run?.workflows() ?? [];
+  // Clause 8: what the store holds stands in for a workflow no live port reports — a session read back, or an agent whose
+  // port is gone. A stored `running` there is a workflow cut off with its process.
+  const stored = dal.workflowsOf(sessionId)
+    .filter((w) => !live.some((l) => l.agent === w.agent && l.id === w.workflow_id))
+    .map((w): WorkflowStatus => ({ id: w.workflow_id, agent: w.agent, name: w.name, state: w.state === 'running' ? 'interrupted' : (WORKFLOW_STATES as readonly string[]).includes(w.state) ? w.state as WorkflowStatus['state'] : 'interrupted', phase: w.phase, agentsStarted: w.agents_started, agentsEnded: w.agents_ended, calls: w.calls }));
+  const workflows = [...live, ...stored];
+  return workflows.length === 0 ? {} : { workflows };
+}
+
 function storeFailureOf(dal: StoreDal, writer: SessionWriter): string | null {
   return SessionWriter.storeFailure(dal) ?? writer.failed ?? null;
 }
@@ -1519,7 +1531,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable, recoveryEntryOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, liveModelFor: (id) => entry.run?.childModel(id) ?? null, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryModelKey: entry.run?.entryModelKey ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable, recoveryEntryOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, liveModelFor: (id) => entry.run?.childModel(id) ?? null, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryModelKey: entry.run?.entryModelKey ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), compressions: runCompressionsOf(current, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...workflowsOf(entry.run, dal, sessionId), ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1579,7 +1591,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable, recoveryEntryOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, liveModelFor: (id) => entry.run?.childModel(id) ?? null, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryModelKey: entry.run?.entryModelKey ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...this.confinementShown(sessionId) }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable, recoveryEntryOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, liveModelFor: (id) => entry.run?.childModel(id) ?? null, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, intentPayloadOf(dal, sessionId), entry.run?.intentClassifying ?? false), wait: entry.run?.currentWait ?? null, modelOverrides: this.modelOverridesFor(sessionId), excludedModels: this.excludedModelsFor(sessionId), compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryPersona: entry.run?.entryPersona ?? null, entryModelKey: entry.run?.entryModelKey ?? null, entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), compressions: runCompressionsOf(row, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [], ...workflowsOf(entry.run, dal, sessionId), ...this.confinementShown(sessionId) }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1627,7 +1639,8 @@ export class Sessions {
     const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
     const cap = runtime?.modelConcurrencyCap ?? null;
     const capFor = runtime?.modelCapFor ?? (() => cap);
-    const preflight = this.deps.preflight;
+    // PD-ORCH-019 clause 2: a `lead` run is never classified, so it is given no pre-flight at all.
+    const preflight = runtime?.runOverride === 'lead' ? undefined : this.deps.preflight;
     const slots = this.modelSlotsFor(sessionId, dal, runRef);
     const run = new Run({
       sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: mintTodoId(new Set()), writer, owner, bus: this.bus, clocks: this.deps.clocks,
@@ -1642,7 +1655,7 @@ export class Sessions {
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       ...(runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: runtime.pauseToolDeadlineMs as Millis }),
       ...(this.deps.terminals ? { terminals: this.deps.terminals(sessionId) } : {}),
-      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single' && runtime?.runOverride !== 'lead', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153: the plan gate as a launch input; the run settles the hold itself once the intent is known.
       ...(this.planLaunchFor(dal, sessionId, runtime) ?? {}),
       backend: model.backend, config: model.config, tools, permission, configurationSnapshot: setup.value.configurationSnapshot, pid: this.deps.pid, host: this.deps.host,
@@ -1903,7 +1916,8 @@ export class Sessions {
     const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
     const cap = runtime?.modelConcurrencyCap ?? null;
     const capFor = runtime?.modelCapFor ?? (() => cap);
-    const preflight = this.deps.preflight;
+    // PD-ORCH-019 clause 2: a `lead` run is never classified, so it is given no pre-flight at all.
+    const preflight = runtime?.runOverride === 'lead' ? undefined : this.deps.preflight;
     /*
      * OQ-162 as ruled (R-071, PD-ORCH-005 revision 7 clause 40): the Continue action carries the intent in effect for the
      * whole run; any other continue that resumes the open iteration classifies its request for the run's next iteration
@@ -1932,7 +1946,7 @@ export class Sessions {
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       ...(runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: runtime.pauseToolDeadlineMs as Millis }),
       ...(this.deps.terminals ? { terminals: this.deps.terminals(sessionId) } : {}),
-      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single' && runtime?.runOverride !== 'lead', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153/154: a continuation holds again unless approval already released this run, and a revise
       // cycle passes its own number and the changes the user stated.
       ...(this.planLaunchFor(s.dal, sessionId, runtime, plan) ?? {}),
@@ -2198,6 +2212,13 @@ export class Sessions {
           };
         }
         return this.answerQuestions(requestId, answers) ? { ok: true } : { ok: false };
+      }
+      case 'stopWorkflow': {
+        // PD-ORCH-019 clause 9: the row's Stop. The agent ends the script; the workflow's ending reaches it as any other.
+        const agent = req.args['agent'];
+        const workflowId = req.args['workflowId'];
+        if (typeof agent !== 'string' || typeof workflowId !== 'string') return { ok: false };
+        return run.stopWorkflow(agent, workflowId) ? { ok: true } : { ok: false };
       }
       case 'cancelQuestions': {
         // REQ-CHAT-101: closing the stepper cancels the whole prompt and releases the waiting call at once.

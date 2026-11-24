@@ -52,6 +52,9 @@ export interface TranscriptPaneProps {
   /** PD-CHAT-015: a thread line's live state by agent name, and what pressing one does. The view above holds the agents; the pane holds none and asks. */
   readonly threadState?: ((name: string) => string | null) | undefined;
   readonly onOpenThread?: ((name: string) => void) | undefined;
+  /** PD-ORCH-019 clause 9: a workflow's live state, and its row's Stop. */
+  readonly workflowStatus?: TranscriptSurface['workflowStatus'];
+  readonly onStopWorkflow?: TranscriptSurface['stopWorkflow'];
   readonly taskLabel?: ((name: string) => string | null) | undefined;
   /** REQ-CHAT-165: fetch the next older span. Resolves false when the load FAILED, which a reader must be able to tell from having reached the oldest row. */
   readonly onPageOlder?: ((beforeIndex: number) => Promise<boolean>) | undefined;
@@ -92,7 +95,7 @@ const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activ
 
 export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const {
-    rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, threadState, onOpenThread, taskLabel,
+    rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, threadState, onOpenThread, taskLabel, workflowStatus, onStopWorkflow,
     onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row, onOpenTrailer, onUndoConfigChange,
     showReasoning = false, autoCollapseTools = false, onOpenLink, onReadAttachment, onAcknowledge, nowMs = 0,
   } = props;
@@ -282,8 +285,8 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     attachmentUrl: (attachment) => attachmentBodies.get(attachment.digest) ?? null,
     memberExpanded: (key) => expanded.has(key),
     toggleMember: (key) => toggle(key, expanded.has(key)),
-    threadState, openThread: onOpenThread, taskLabel,
-  }), [showReasoning, autoCollapseTools, running, live, onOpenLink, onOpenTrailer, onUndoConfigChange, terminalHost, attachmentBodies, expanded, toggle, threadState, onOpenThread, taskLabel]);
+    threadState, openThread: onOpenThread, taskLabel, workflowStatus, stopWorkflow: onStopWorkflow,
+  }), [showReasoning, autoCollapseTools, running, live, onOpenLink, onOpenTrailer, onUndoConfigChange, terminalHost, attachmentBodies, expanded, toggle, threadState, onOpenThread, taskLabel, workflowStatus, onStopWorkflow]);
 
   // Whether the first row's slot draws something above its row: the start marker, or the notice of a page that failed.
   const slotLead = reachedOldest || paging === 'failed';

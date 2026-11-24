@@ -255,6 +255,8 @@ describe('REQ-ORCH-016/017/018/025 the intent gate', () => {
     for (const c of ['question', 'moderate_feature', 'whole_project', 'ambiguous'] as const) expect(intentGrant(c, null, BUILT_IN_INTENT_MAPPING)).toBe('none');
     expect(intentGrant('whole_project', 'single', BUILT_IN_INTENT_MAPPING)).toBe('direct-work');
     expect(intentGrant('question', 'swarm', BUILT_IN_INTENT_MAPPING)).toBe('none');
+    // PD-ORCH-019 clause 1: `lead` grants as `single` does.
+    expect(intentGrant('question', 'lead', BUILT_IN_INTENT_MAPPING)).toBe('direct-work');
   });
   it('REQ-ORCH-017: a file mapping overlays the built-in when whole; an unknown key or an invalid file leaves the built-in with a warning', () => {
     const r = resolveIntentMapping({ kind: 'value', mapping: { small_feature: 'direct-work' } });

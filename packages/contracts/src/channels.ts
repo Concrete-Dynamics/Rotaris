@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DICTATION_AUDIO_MAX_BASE64, NAME_MAX } from './limits.js'; // OQ-467
+import { DICTATION_AUDIO_MAX_BASE64, LIST_MAX, NAME_MAX } from './limits.js'; // OQ-467
 import { IntentStatusSchema } from './intent.js';
 import { PlanGateSchema, ResumableSchema } from './control.js';
 import { ApprovalPayloadSchema, QuestionPromptSchema } from './tools.js';
@@ -239,6 +239,24 @@ export type SessionArtifactLink = z.infer<typeof SessionArtifactLinkSchema>;
 export const EntryRootSchema = z.object({ name: z.string(), canonical: z.string() });
 export type EntryRoot = z.infer<typeof EntryRootSchema>;
 
+
+/** PD-ORCH-019 clause 9: one workflow of a live run, as its row shows it. */
+export const WORKFLOW_STATES = ['running', 'completed', 'failed', 'stopped', 'interrupted'] as const;
+export const WorkflowStatusSchema = z.object({
+  /** The id the workflow tool's result names (`wf_1`), unique among its agent's workflows. */
+  id: z.string().max(NAME_MAX),
+  /** The canonical name of the agent that started it. */
+  agent: z.string().max(NAME_MAX),
+  name: z.string().max(NAME_MAX),
+  state: z.enum(WORKFLOW_STATES),
+  /** The phase the script last named; '' where it named none. */
+  phase: z.string().max(NAME_MAX),
+  agentsStarted: z.number().int(),
+  agentsEnded: z.number().int(),
+  calls: z.number().int(),
+});
+export type WorkflowStatus = z.infer<typeof WorkflowStatusSchema>;
+
 export const SessionRecordSchema = z.object({
   id: sessionId,
   executionStatus: z.string(),
@@ -270,6 +288,12 @@ export const SessionRecordSchema = z.object({
    * (REQ-SESSION-031). The mirror is never read back into this field.
    */
   pendingQuestions: z.array(QuestionPromptSchema),
+  /**
+   * PD-ORCH-019 clause 9: the workflows the live run's agents started, each as it stands now. DERIVED from the live run at
+   * every snapshot, like `pendingQuestions`: a stored record's list is absent, and a workflow's row then reads as the tool
+   * call that started it.
+   */
+  workflows: z.array(WorkflowStatusSchema).max(LIST_MAX).optional(),
   tokenUsage: z.object({ input: z.number().int(), output: z.number().int() }),
   /** Decimal string (ADR-0031). */
   cost: z.string(),

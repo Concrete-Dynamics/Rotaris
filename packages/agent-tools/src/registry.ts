@@ -44,6 +44,8 @@ export const DECLARATIONS: Readonly<Record<PublicToolName, Declaration>> = Objec
   configure: d(true, false, false),
   // PD-TOOLS-022: one request to another model; it reads the agent's conversation, never the workspace.
   advisor: d(false, false, false),
+  // PD-ORCH-019 clause 5: starts a script; what the script reads, writes or runs is each call's own, through the gate.
+  workflow: d(false, false, false),
 });
 
 /** REQ-TOOLS-007: the read-only class, exactly — and `advisor` (PD-TOOLS-022 clause 4), which a read-only agent keeps. */
@@ -184,7 +186,8 @@ export interface Prerequisites {
   readonly executors: ReadonlySet<string>;
 }
 
-const DELEGATION = new Set(['delegate', 'background_output', 'wait_for_tasks']);
+// PD-ORCH-019: a workflow starts children, so it needs the delegation runtime as `delegate` does.
+const DELEGATION = new Set(['delegate', 'background_output', 'wait_for_tasks', 'workflow']);
 const ARTIFACTS = new Set(['artifact_read', 'artifact_list', 'artifact_write']);
 
 export function removeUnmet(tools: readonly string[], p: Prerequisites): { tools: string[]; removals: Removal[] } {

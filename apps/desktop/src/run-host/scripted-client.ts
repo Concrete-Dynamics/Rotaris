@@ -39,7 +39,7 @@ export interface ScriptedCallRecord {
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
  * the script variable (`…_SCRIPT`) names the orchestrator's steps, comma-separated, one per model call, and
  * the child script variable (`…_CHILD_SCRIPT`) every child's. `glob`, `read`, `write`, `writeinfer`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
- * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `readfile:<path>` a `read_file` of that path (PD-CHAT-016); `configure:<key>=<json>` a `configure` set and `configure:<key>` its read (PD-CONFIG-014); `advisor:<question>` a consult of the advisor (PD-TOOLS-022); `continue:<persona>:<name>` a delegation taking up the newest continuation offer
+ * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `readfile:<path>` a `read_file` of that path (PD-CHAT-016); `workflow:<name>` a `workflow` start of a fixed two-agent script (PD-ORCH-019); `configure:<key>=<json>` a `configure` set and `configure:<key>` its read (PD-CONFIG-014); `advisor:<question>` a consult of the advisor (PD-TOOLS-022); `continue:<persona>:<name>` a delegation taking up the newest continuation offer
  * the conversation was told (`offeredTaskId`, PD-ORCH-004 revisions 3 and 4); `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
@@ -881,6 +881,8 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         : step.startsWith('configure:') ? configureStep(step.slice('configure:'.length))
         // advisor:<question> — a consult of the advisor with that question (PD-TOOLS-022).
         : step.startsWith('advisor:') ? { name: 'advisor', args: { question: step.slice('advisor:'.length) } }
+        // PD-ORCH-019: `workflow:<name>` starts a workflow whose script runs two agents one after another and returns both reports.
+        : step.startsWith('workflow:') ? { name: 'workflow', args: { action: 'start', name: step.slice('workflow:'.length), script: "await phase('First'); const a = await agent('TASK: workflow step one', { name: 'wf-one' }); await phase('Second'); const b = await agent('TASK: workflow step two', { name: 'wf-two' }); return { a, b };" } }
         : TOOL_STEPS[step]);
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
         yield ok<StreamPart>({ kind: 'text', delta: `Calling ${tool.name}. ` });

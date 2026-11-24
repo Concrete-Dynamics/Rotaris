@@ -38,7 +38,8 @@ export function coordinatorTodoReading(sessions) {
   const withoutPlan = [];
   const single = [];
   for (const s of sessions) {
-    if (s.runOverride === 'single') { single.push(s.scenario); continue; }
+    // PD-ORCH-019 clause 1: under `lead` the entry role does not coordinate either, so REQ-ORCH-029's list is not owed.
+    if (s.runOverride === 'single' || s.runOverride === 'lead') { single.push(s.scenario); continue; }
     const roots = new Set(s.rootNames);
     let items = 0;
     let listed = false;
@@ -63,7 +64,7 @@ export function launchRunOverride(payloadJson) {
   if (typeof payloadJson !== 'string' || payloadJson === '') return null;
   try {
     const strategy = JSON.parse(payloadJson)?.config_snapshot?.delegation_strategy;
-    return strategy === 'single' || strategy === 'swarm' ? strategy : null;
+    return strategy === 'single' || strategy === 'swarm' || strategy === 'lead' ? strategy : null;
   } catch { return null; }
 }
 

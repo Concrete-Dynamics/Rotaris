@@ -145,7 +145,7 @@ export interface PendingSettings {
   /** PD-TOOLS-022 clause 8: the advisor's switch and its cap per agent, committed by Save. */
   readonly advisor: AdvisorView;
   readonly compressorThresholdPercentage: number;
-  readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single';
+  readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single' | 'lead';
   /**
    * REQ-CONFIG-472: the Display category's four tool-row fields — workspace configuration, committed by Save
    * like the rest of destination 1, and read from here by the transcript the moment a control moves, so what is
@@ -593,7 +593,8 @@ export const REVIEW_INTERVAL_RANGE: NumberRange = { min: 1, max: 500 };
 export const ADVISOR_USES_RANGE: NumberRange = { min: 0, max: 50 };
 
 /** REQ-CONFIG-322: the delegation limits' widget clamps. */
-export const DEPTH_CAP_RANGE: NumberRange = { min: 1, max: 12 };
+/** PD-ORCH-019 clause 4: three steps; 3 is the no-limit step, and the slider writes nothing above it. */
+export const DEPTH_CAP_RANGE: NumberRange = { min: 1, max: 3 };
 export const FAN_OUT_RANGE: NumberRange = { min: 1, max: 64 };
 /** REQ-CONFIG-325: the two numeric policy limits' widget clamps. */
 export const COMPRESSION_THRESHOLD_RANGE: NumberRange = { min: 50, max: 95 };

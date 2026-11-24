@@ -57,6 +57,7 @@ the readings themselves are.
 | [theme-proof.md](theme-proof.md) | — | 2026-09-04 | three palettes from rendered pixels — the record of `pnpm theme-proof` |
 | [traceability-scale.md](traceability-scale.md) | 7 | 2026-09-09 | the traceability engine at `REQ-TRACE-300`'s scale |
 | [two-writers-one-store.md](two-writers-one-store.md) | 18 | 2026-09-03 | two writer processes on one store |
+| [quickjs-workflow-isolate.md](quickjs-workflow-isolate.md) | — | 2026-11-24 | a QuickJS isolate for agent-written workflow scripts ([`PD-ORCH-019`](../../product/directives/pd-orch-019.md#pd-orch-019) clause 5) |
 | [windows-writer-handle-compaction.md](windows-writer-handle-compaction.md) | 9 | 2026-08-31 | the writer's own handle, and what a follower sees across a compaction (withdrawn) |
 
 ## Where a new report goes

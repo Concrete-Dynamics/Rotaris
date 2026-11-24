@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { countNoun, err, ok } from '@rotaris/kernel';
-import { declaredToolsOf, isDelegationTarget, NOT_DELEGATION_TARGETS, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
+import { declaredToolsOf, enforcedDepth, isDelegationTarget, NOT_DELEGATION_TARGETS, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName, type RunOverride } from '@rotaris/contracts';
 import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, providerEffort, readProjectSnapshot, readSavedConfiguration, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type AdvisorSetup, type CatalogueEntry, type ClassifierSlots, type HelperModel, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
@@ -54,7 +54,7 @@ export interface RuntimeFromConfiguration extends RuntimePosture {
   /** REQ-CONFIG-116: `runtime.shell_command_timeout`, seconds. */
   readonly shellCommandTimeoutS: number;
   /** REQ-ORCH-025: `single` | `swarm` | null, from `rotaris.delegation_strategy`. */
-  readonly runOverride: 'single' | 'swarm' | null;
+  readonly runOverride: RunOverride | null;
   readonly retentionCap: number;
   readonly iterationLimit: number;
   readonly consecutiveRetryLimit: number;
@@ -103,14 +103,15 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: Avai
     modelConcurrencyCap: null,
     // REQ-CONFIG-094 under PD-PROVIDER-001: the entry's stated cap, else its provider's declared one (`modelCapInForce`).
     modelCapFor: (modelKey) => modelCapInForce(cfg.models[modelKey], sharedQuotaCaps),
-    childBudget: { maxDepth: r.max_depth, maxTotal: r.max_children, maxActive: r.max_active_children },
+    // PD-ORCH-019 clause 4: a `max_depth` of 3 or more is the no-limit step.
+    childBudget: { maxDepth: enforcedDepth(r.max_depth), maxTotal: r.max_children, maxActive: r.max_active_children },
     drainTimeoutMs: Math.round(r.shutdown_drain_timeout * 1000),
     approvalTimeoutMs: Math.round(r.approval_timeout_seconds * 1000),
     headlessPolicy: r.headless_approval_policy,
     allowOutsideWorkspace: r.allow_outside_workspace,
     additionalReadOnlyRoots: r.additional_read_only_roots,
     shellCommandTimeoutS: r.shell_command_timeout,
-    runOverride: cfg.delegationStrategy === 'single' ? 'single' : cfg.delegationStrategy === 'swarm' ? 'swarm' : null,
+    runOverride: cfg.delegationStrategy === 'orchestrator' ? null : cfg.delegationStrategy,
     retentionCap: r.event_retention_per_session,
     messageLimit: r.message_limit,
     iterationLimit: r.max_iterations,

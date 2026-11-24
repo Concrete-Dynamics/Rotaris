@@ -88,6 +88,28 @@ change; none for an entry role that declares no `delegate`; and none on a run th
 bundle, on any turn, the held one and a continuation included (`PD-ORCH-006` revision 3, OQ-205 as ruled, R-072). Until finacc3's repair round 1 (2026-10-06) the layer was appended in `Run` after the playbook but before the
 context units and the MCP section, and carried no precedence sentence: "the final layer" in name only.
 
+**A `lead` run has no pre-flight ([`PD-ORCH-019`](../../../product/directives/pd-orch-019.md#pd-orch-019) clauses 1, 2 and 4).** `Sessions` hands
+the run no `preflight` where `RuntimePosture.runOverride` is `lead`, at the launch and at a continuation, so nothing is
+classified, no cell is resolved and no BUDGET clamp reaches the child limits; the run reads `NO_PREFLIGHT_INTENT` wherever it
+reads an intent, the plan gate included. `coordinating` is false as under `single`. `entryInstructionsFor` gives the entry role
+`LEAD_INSTRUCTION` whatever its persona's flag, and the run host's port grants it the direct-work bundle with no grant arriving
+and keeps `delegate`, withholding it only from an agent whose depth has reached `runtime.max_depth` (`atDepthLimit`,
+`run-host/tools.ts`).
+
+**A workflow is something a parent waits for (`PD-ORCH-019` clauses 5 to 7; [ADR-0068](../../adr/0068-workflow-scripts-run-in-a-quickjs-isolate-in-the-run-host.md)).**
+An agent of a `lead` run that may spawn holds `workflow` (`agent-tools/src/tools/workflow.ts`): one `WorkflowManager` per
+port runs each script in a QuickJS isolate (`workflow/isolate.ts`) behind a journal (`workflow/journal.ts`). A script's
+`tool()` call is dispatched through that port's own `Gate` under the agent's identity; its `agent()` call goes through
+`DelegationOps.delegate` as the agent's child, is claimed (`claimForWorkflow`, the row's `observed` set at once) and waited
+for with `waitForTasks`. `IterationChildren` holds, per parent, the workflows running and the endings not yet told:
+`runWithChildren` treats either as a reason the parent is not done, `awaitTerminal` waits on them as on a child, and the
+parent's next message carries the ending (`endWorkflow`), or nothing where the agent already read it
+(`acknowledgeWorkflow`). `beginRest` and the run's abort end every script of the iteration. Clause 8: the manager writes each workflow and each
+journal entry through the session's writer (store v37), an `agent` call twice — when its child is admitted and when its
+report arrives. A manager built for an agent loads that agent's workflows; one cut off is told to the agent once
+(`announceInterrupted`, the `notified` column), and a start of the same script continues it over its journal under its
+own id, waiting for a child already started. The session record reads a workflow no live port reports from the store.
+
 **The cold path is timed, and it runs after first input.** `workspaceContext` reads the monotonic clock port four
 times on a cache miss: before the saved-policy read, after it, after the discovery and after the merge. It then logs
 one line, `workspace context: the enabled set of N instruction file(s) merged into B bytes in T ms (policy read …,

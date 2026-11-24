@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { Hint, Origin, SettingsTitle, type ValueOrigin } from './page.js';
-import { CIRCUIT_BREAKER_ESCALATION_NAMES, CIRCUIT_BREAKER_REVIEW_MODE_NAMES, DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { ADVISOR_USES_RANGE, REVIEW_INTERVAL_RANGE, CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, offeredForModel, reasoningChoice, reasoningModelKey, roleReasoningOptions, scopeCellOf, slotModelPick, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
+import { CIRCUIT_BREAKER_ESCALATION_NAMES, CIRCUIT_BREAKER_REVIEW_MODE_NAMES, DELEGATION_STRATEGY_NAMES, DEPTH_STEPS, UNLIMITED_DEPTH_FROM, EDITABLE_SLOTS, PERMISSION_PRESETS, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
+import { ADVISOR_USES_RANGE, REVIEW_INTERVAL_RANGE, CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, offeredForModel, reasoningChoice, reasoningModelKey, roleReasoningOptions, scopeCellOf, slotModelPick, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { DictationSettings } from './DictationSettings.js';
-import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
+import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, StepSlider as DesignStepSlider, Table as DesignTable } from '../design-system/index.js';
 import { Confirm } from './Confirm.js';
 
 export { Confirm };
@@ -280,6 +280,27 @@ export function Toggle({ id, label, hint, on, onChange, disabled, testId, origin
  * any other (`docs/archive/defects/a-runtime-number-field-ignores-a-value-typed-over-the-same-clamped-digits.md`, 2026-10-14).
  * That reading is ruled under OQ-301 (R-072).
  */
+/**
+ * PD-ORCH-019 clause 4: one step of the depth slider, drawn as the chain of agents it permits — the entry agent, then one
+ * node per level that may be started, and a trailing run of dots where there is no limit.
+ */
+function DepthFigure({ levels, open = false }: { readonly levels: number; readonly open?: boolean }) {
+  return (
+    <span className="depth-figure" data-open={open ? 'true' : 'false'}>
+      <span className="depth-figure__node depth-figure__node--entry" />
+      {Array.from({ length: levels }, (_, level) => <span key={level} className="depth-figure__node" />)}
+      {open ? <span className="depth-figure__more" /> : null}
+    </span>
+  );
+}
+
+/** PD-ORCH-019 clause 4: the slider's three steps, each saying what it permits. */
+export const DEPTH_SLIDER_STEPS = [
+  { label: '1 level', description: 'Only the main agent starts other agents. The agents it starts work alone.', figure: <DepthFigure levels={1} /> },
+  { label: '2 levels', description: 'The main agent starts agents, and each of those may start agents of its own.', figure: <DepthFigure levels={2} /> },
+  { label: 'No limit', description: 'Any agent may start agents, at any depth. The limits on how many agents exist and how many run at once still apply.', figure: <DepthFigure levels={3} open /> },
+] as const;
+
 function ClampedNumberField(props: { readonly id: string; readonly range: NumberRange; readonly shown: number; readonly onCommit: (value: number) => void; readonly description?: string }) {
   const { id, range, shown, onCommit } = props;
   const [draft, setDraft] = useState<string | null>(null);
@@ -344,7 +365,7 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
         <DesignSelect id="strategy" className="input select settings__select" aria-label="Delegation strategy" value={pending.delegationStrategy} onChange={(e) => onChange({ kind: 'delegationStrategy', value: e.currentTarget.value as PendingSettings['delegationStrategy'] })}>
           {DELEGATION_STRATEGY_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
         </DesignSelect>
-        <Hint>orchestrator coordinates through specialists; swarm lets roles fan out; single does the work in one role with no delegation.</Hint>
+        <Hint>orchestrator coordinates through specialists; swarm lets roles fan out; single does the work in one role with no delegation; lead does the work in one role and delegates when it chooses.</Hint>
       </div>
     </>);
   const runStartRow = (<>
@@ -359,8 +380,11 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
   const depthRow = (<>
       <div className="settings__action">
         <label htmlFor="max-depth">Depth cap</label>
-        <ClampedNumberField id="max-depth" range={DEPTH_CAP_RANGE} shown={clampForDisplay(rt.max_depth, DEPTH_CAP_RANGE.min, DEPTH_CAP_RANGE.max)} onCommit={(value) => onChange({ kind: 'runtime', key: 'max_depth', value })} />
-        <Origin of={from('max_depth')} /><Hint about="Depth cap">How many levels deep one agent may delegate to another.</Hint>
+        {/* PD-ORCH-019 clause 4: three steps and no more; a file value of 3 or more is the no-limit step. */}
+        <DesignStepSlider id="max-depth" aria-label="Depth cap" className="settings__depth" steps={DEPTH_SLIDER_STEPS}
+          value={DEPTH_STEPS.findIndex((step) => step === Math.min(Math.max(rt.max_depth, DEPTH_STEPS[0]), UNLIMITED_DEPTH_FROM))}
+          onChange={(index) => onChange({ kind: 'runtime', key: 'max_depth', value: DEPTH_STEPS[index] ?? UNLIMITED_DEPTH_FROM })} />
+        <Origin of={from('max_depth')} />
       </div>
     </>);
   const fanOutRow = (<>

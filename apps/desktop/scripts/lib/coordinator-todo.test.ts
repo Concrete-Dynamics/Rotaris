@@ -41,8 +41,10 @@ describe('coordinatorTodoReading (OQ-213, REQ-ORCH-029)', () => {
     const r = coordinatorTodoReading([
       { scenario: 'solo', rootNames: ['orchestrator'], agentPlanTasks: null, runOverride: 'single', calls: work },
       { scenario: 'swarmed', rootNames: ['orchestrator'], agentPlanTasks: null, runOverride: 'swarm', calls: work },
+      // PD-ORCH-019 clause 1: a `lead` run's entry role is the worker too.
+      { scenario: 'lead-strategy', rootNames: ['orchestrator'], agentPlanTasks: null, runOverride: 'lead', calls: work },
     ]);
-    expect(r.single).toEqual(['solo']);
+    expect(r.single).toEqual(['solo', 'lead-strategy']);
     // `swarm` changes the entry role's instruction text only, so the clause still binds it.
     expect(r.unlisted).toEqual([{ scenario: 'swarmed', ordinal: 2, tool_name: 'terminal' }, { scenario: 'swarmed', ordinal: 3, tool_name: 'write_file' }]);
     expect(r.multiStep).toEqual(['swarmed']);
@@ -51,6 +53,7 @@ describe('coordinatorTodoReading (OQ-213, REQ-ORCH-029)', () => {
 
   it('launchRunOverride reads the launch audit\'s configuration snapshot, and nothing else', () => {
     expect(launchRunOverride(JSON.stringify({ config_snapshot: { delegation_strategy: 'single' } }))).toBe('single');
+    expect(launchRunOverride(JSON.stringify({ config_snapshot: { delegation_strategy: 'lead' } }))).toBe('lead');
     expect(launchRunOverride(JSON.stringify({ config_snapshot: { delegation_strategy: 'swarm' } }))).toBe('swarm');
     expect(launchRunOverride(JSON.stringify({ config_snapshot: { delegation_strategy: 'orchestrator' } }))).toBeNull();
     expect(launchRunOverride(JSON.stringify({}))).toBeNull();

@@ -42,6 +42,8 @@ export const DECLARATIONS: Readonly<Record<PublicToolName, Declaration>> = Objec
   artifact_write: d(false, false, false),
   // PD-CONFIG-014: reads the saved configuration; its one write goes through the workspace service, never a file tool.
   configure: d(true, false, false),
+  // PD-ORCH-018 clause 5: starts a script; what the script reads, writes or runs is each call's own, through the gate.
+  workflow: d(false, false, false),
 });
 
 /** REQ-TOOLS-007: the read-only class, exactly. */
@@ -182,7 +184,8 @@ export interface Prerequisites {
   readonly executors: ReadonlySet<string>;
 }
 
-const DELEGATION = new Set(['delegate', 'background_output', 'wait_for_tasks']);
+// PD-ORCH-018: a workflow starts children, so it needs the delegation runtime as `delegate` does.
+const DELEGATION = new Set(['delegate', 'background_output', 'wait_for_tasks', 'workflow']);
 const ARTIFACTS = new Set(['artifact_read', 'artifact_list', 'artifact_write']);
 
 export function removeUnmet(tools: readonly string[], p: Prerequisites): { tools: string[]; removals: Removal[] } {

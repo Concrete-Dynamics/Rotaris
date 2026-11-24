@@ -94,7 +94,18 @@ classified, no cell is resolved and no BUDGET clamp reaches the child limits; th
 reads an intent, the plan gate included. `coordinating` is false as under `single`. `entryInstructionsFor` gives the entry role
 `SOLO_INSTRUCTION` whatever its persona's flag, and the run host's port grants it the direct-work bundle with no grant arriving
 and keeps `delegate`, withholding it only from an agent whose depth has reached `runtime.max_depth` (`atDepthLimit`,
-`run-host/tools.ts`). Clauses 5 to 9, the workflow tool, are not built.
+`run-host/tools.ts`).
+
+**A workflow is something a parent waits for (`PD-ORCH-018` clauses 5 to 7; [ADR-0068](../../adr/0068-workflow-scripts-run-in-a-quickjs-isolate-in-the-run-host.md)).**
+An agent of a `solo` run that may spawn holds `workflow` (`agent-tools/src/tools/workflow.ts`): one `WorkflowManager` per
+port runs each script in a QuickJS isolate (`workflow/isolate.ts`) behind a journal (`workflow/journal.ts`). A script's
+`tool()` call is dispatched through that port's own `Gate` under the agent's identity; its `agent()` call goes through
+`DelegationOps.delegate` as the agent's child, is claimed (`claimForWorkflow`, the row's `observed` set at once) and waited
+for with `waitForTasks`. `IterationChildren` holds, per parent, the workflows running and the endings not yet told:
+`runWithChildren` treats either as a reason the parent is not done, `awaitTerminal` waits on them as on a child, and the
+parent's next message carries the ending (`endWorkflow`), or nothing where the agent already read it
+(`acknowledgeWorkflow`). `beginRest` and the run's abort end every script of the iteration. Clause 8's journal is in memory
+only; clause 9 is not built.
 
 **The cold path is timed, and it runs after first input.** `workspaceContext` reads the monotonic clock port four
 times on a cache miss: before the saved-policy read, after it, after the discovery and after the merge. It then logs

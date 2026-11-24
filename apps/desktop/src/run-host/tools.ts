@@ -12,7 +12,7 @@ import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js
 import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
 import { throwOnAbort } from './throw-on-abort.js';
 import { writeSkillLoadMarker } from './skills.js';
-import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
+import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool, WorkflowManager, workflowTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
 /**
@@ -533,7 +533,17 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // PD-ORCH-018 clause 1: `solo` grants the entry role the same bundle and withholds nothing; it runs no pre-flight, so no grant arrives.
   const solo = runtime.runOverride === 'solo';
   const directWork = isEntry && (single || solo || ctx.grant === 'direct-work');
-  const granted = directWork ? [...new Set([...persona.tools, ...directWorkBundle()])] : persona.tools;
+  /*
+   * PD-ORCH-018 clause 4: under `solo` an agent at the depth limit holds no spawning tool. The ledger refuses a child
+   * deeper than `runtime.max_depth` on every run (`ledger.ts`); here the tool is withheld instead, so the agent is never
+   * offered a call the run would refuse. The entry is depth 0 and a child its parent's depth plus one, so an agent may
+   * spawn while its own depth is below the limit. A port that carries no depth is not narrowed.
+   */
+  const atDepthLimit = solo && ctx.depth !== undefined && runtime.childBudget !== undefined && ctx.depth >= runtime.childBudget.maxDepth;
+  // PD-ORCH-018 clause 5: every agent of a `solo` run that may spawn holds the workflow tool, whatever its persona declares.
+  const workflowGranted = solo && !atDepthLimit && ctx.delegation !== undefined;
+  const bundled = directWork ? [...new Set([...persona.tools, ...directWorkBundle()])] : persona.tools;
+  const granted = workflowGranted && !bundled.includes('workflow') ? [...bundled, 'workflow'] : bundled;
   /*
    * REQ-ORCH-153 (ADR-0062), enforcement point 1 of three: the planning grants applied to the DECLARED set, so
    * one resolution still feeds both the model's listing and the callable map (REQ-TOOLS-010) — a held run is
@@ -543,21 +553,17 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    * of it. This point only REMOVES; the dispatch check in the gate is what makes the withholding authoritative.
    */
   const planGateHeld = ctx.planGateHeld ?? (() => false);
-  const declared = planGateHeld() ? granted.filter((t) => !withheldUnderPlanGate(t)) : granted;
+  // PD-ORCH-018: a workflow is a way to do the work, so a held run is not offered it; its own declaration names no facet.
+  const declared = planGateHeld() ? granted.filter((t) => !withheldUnderPlanGate(t) && t !== 'workflow') : granted;
   /*
    * REQ-ORCH-153: the names this point and the MCP one below REMOVE because the gate is held. The gate reads it to
    * tell a withheld tool apart from a name that is no tool at all — the public names it can check against the
    * registry itself, but an MCP or plugin name exists only here. Filled as the surface resolves, read live.
    */
   const withheldAtPlanGate = new Set<string>(planGateHeld() ? granted.filter((t) => withheldUnderPlanGate(t)) : []);
-  /*
-   * PD-ORCH-018 clause 4: under `solo` an agent at the depth limit holds no spawning tool. The ledger refuses a child
-   * deeper than `runtime.max_depth` on every run (`ledger.ts`); here the tool is withheld instead, so the agent is never
-   * offered a call the run would refuse. The entry is depth 0 and a child its parent's depth plus one, so an agent may
-   * spawn while its own depth is below the limit. A port that carries no depth is not narrowed.
-   */
-  const atDepthLimit = solo && ctx.depth !== undefined && runtime.childBudget !== undefined && ctx.depth >= runtime.childBudget.maxDepth;
   const delegationAvailable = ctx.delegation !== undefined && !single && !atDepthLimit;
+  // Bound once the gate exists (below): a workflow script's tool calls go through it.
+  let workflowGate: () => Gate = () => { throw new Error('the gate is not built yet'); };
   // Part Y (REQ-LIBRARY-099/100/101): the three artifact executors over the engine's port, bound to THIS agent.
   const artifacts = ctx.artifacts;
   if (artifacts) {
@@ -614,7 +620,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // prompt in front of, so the registry removes `ask_questions` with `user_prompt_channel_absent`. It stood at a
     // literal `false` until this part, because there was no executor for it to be true of.
     delegationRuntime: delegationAvailable, userPromptChannel: ctx.attended(), artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined && persona.canPublishArtifacts, terminalBackend: executors.has('terminal'),
-    executors: new Set([...executors.keys(), ...(delegationAvailable ? DELEGATION_TOOLS : [])]),
+    executors: new Set([...executors.keys(), ...(delegationAvailable ? DELEGATION_TOOLS : []), ...(delegationAvailable && workflowGranted ? ['workflow'] : [])]),
   };
   if (delegationAvailable && ctx.delegation) {
     const parentId = ctx.parentId ?? 'root';
@@ -627,6 +633,22 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     executors.set('delegate', delegateTool(ctx.delegation, parentId, catalogue, { markItem: markDelegatedItem, artifactStore: prerequisites.artifactStore }));
     executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId));
     executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId));
+    /*
+     * PD-ORCH-018 clauses 5 to 7: the workflow tool, one manager per port (a port is one agent). A script's `tool()` call is
+     * dispatched through THIS port's gate under this agent's identity (clause 6), read when the call is made, since the gate
+     * is built below. Its agents are this agent's children through the same delegation operations `delegate` uses.
+     */
+    if (workflowGranted) {
+      const delegation = ctx.delegation;
+      const manager = new WorkflowManager({
+        delegation, parentId, defaultPersona: 'coding-agent', now: () => Number(deps.clocks.monotonic.now()),
+        dispatchTool: async (name, args, callId, signal) => {
+          const r = await workflowGate().dispatch({ callId, name, rawArgs: JSON.stringify(args), persona: ctx.persona, agentId: ctx.agentName, agentName: ctx.agentName }, signal);
+          return { text: r.text, isError: r.isError, interrupted: r.interrupted === true };
+        },
+      });
+      executors.set('workflow', workflowTool(manager));
+    }
   }
   const resolved = resolveAgentGrant(persona, { name: ctx.persona, declared, parentPersona: parentAgentPersona, coordinating: delegationAvailable && !directWork, prerequisites, isEntry });
   /*
@@ -671,7 +693,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const writes = writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn);
   const markSkillLoad = skillLoadMarking(ctx, root, deps.skillAt, writes.closed);
   const toolHooks = ctx.hooks ?? null;
-  const gate = new Gate({
+  workflowGate = () => gate;
+  const gate: Gate = new Gate({
     sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter, quitting,
     headlessPolicy: runtime.headlessPolicy, abortHook: ctx.abortRun, approvalTimeoutMs: runtime.approvalTimeoutMs,
     executors: callable, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } },

@@ -979,6 +979,59 @@ ${runtimeKeys}`);
     expect(entryPort('    tools: [read_file, grep, todo, delegate]\n', { depth: 3, parentId: 'child:3' }, null, '  max_depth: 1\n').port.specs().map((t) => t.name)).toContain('delegate');
   });
 
+  it('PD-ORCH-018 clauses 5 to 7: under `solo` the workflow tool runs a script whose tool calls pass this agent\'s gate and whose agents are its children', async () => {
+    const started: { persona: string; task: string }[] = [];
+    const claimed: string[] = [];
+    const acknowledged: string[] = [];
+    const ended: string[] = [];
+    const waiters: (() => void)[] = [];
+    /** Resolves once `n` workflows have ended, however long the machine takes. */
+    const endedCount = (n: number) => new Promise<void>((resolve) => { const check = () => { if (ended.length >= n) resolve(); else waiters.push(check); }; check(); });
+    const delegation = {
+      delegate: async (_parent: string, req: { persona: string; task: string }) => { started.push({ persona: req.persona, task: req.task }); return { status: 'queued' as const, canonicalName: `c${started.length}`, taskId: `bg_${started.length}`, message: 'started' }; },
+      waitForTasks: async () => ({ immediate: true, requested: 1, text: 'done' }),
+      backgroundOutput: (_parent: string, taskId: string) => ({ status: 'ok' as const, state: 'succeeded', text: `report of ${taskId}` }),
+      beginWorkflow: () => new AbortController().signal,
+      endWorkflow: (_parent: string, _id: string, notice: string) => { ended.push(notice); for (const w of waiters.splice(0)) w(); },
+      claimForWorkflow: (_parent: string, taskId: string) => { claimed.push(taskId); },
+      acknowledgeWorkflow: (_parent: string, id: string) => { acknowledged.push(id); },
+    } as unknown as NonNullable<ToolPortContext['delegation']>;
+    const e = entryPort('    tools: [read_file, grep, todo, delegate]\nrotaris:\n  delegation_strategy: solo\n', { todoList: undefined, delegation });
+    expect(e.port.specs().map((t) => t.name)).toContain('workflow');
+    const script = `
+      await phase('Write');
+      await tool('write_file', { path: 'from-script.txt', content: 'written by the script\\n' });
+      const reports = await parallel([() => agent('review a', { persona: 'codebase-analyst' }), () => agent('review b')]);
+      return { reports };`;
+    const start = await e.port.dispatch(e.call('wf', 'workflow', { action: 'start', name: 'review', script }), new AbortController().signal);
+    expect(start).toMatchObject({ status: 'ok' });
+    expect(start.text).toContain('started in the background as wf_1');
+    await endedCount(1);
+    expect(readFileSync(join(dir, 'from-script.txt'), 'utf8')).toBe('written by the script\n');
+    expect(started).toEqual([{ persona: 'codebase-analyst', task: 'review a' }, { persona: 'coding-agent', task: 'review b' }]);
+    expect(claimed).toEqual(['bg_1', 'bg_2']);
+    expect(ended).toHaveLength(1);
+    expect(ended[0]).toContain('Workflow review (wf_1) completed: 2 of 2 agents ended');
+    expect(ended[0]).toContain('{"reports":["report of bg_1","report of bg_2"]}');
+    const status = await e.port.dispatch(e.call('st', 'workflow', { action: 'status' }), new AbortController().signal);
+    expect(status.text).toContain('state: completed');
+    expect(status.text).toContain('phase: Write');
+    // The agent read the ending itself, so the notice still waiting for it is withdrawn.
+    expect(acknowledged).toEqual(['wf_1']);
+    // A script cannot start a workflow itself, and one that fails says why.
+    const nested = await e.port.dispatch(e.call('wf2', 'workflow', { action: 'start', name: 'nested', script: `await tool('workflow', { action: 'status' });` }), new AbortController().signal);
+    expect(nested.status).toBe('ok');
+    await endedCount(2);
+    expect(ended[1]).toContain('failed');
+    expect(ended[1]).toContain('A workflow script cannot call workflow');
+  });
+
+  it('PD-ORCH-018 clause 5: no other strategy is offered the workflow tool, and under `solo` an agent at the depth limit is not', () => {
+    expect(entryPort('    tools: [read_file, grep, todo, delegate]\n').port.specs().map((t) => t.name)).not.toContain('workflow');
+    const solo = '    tools: [read_file, grep, todo, delegate]\nrotaris:\n  delegation_strategy: solo\n';
+    expect(entryPort(solo, { depth: 1, parentId: 'child:1', todoList: undefined }, null, '  max_depth: 1\n').port.specs().map((t) => t.name)).not.toContain('workflow');
+  });
+
   it('an entry role whose resolved set holds no todo is never refused, and the run is told once per port', async () => {
     const e = entryPort('    tools: [read_file, grep, delegate]\n');
     expect(e.log).toEqual(['unavailable']);

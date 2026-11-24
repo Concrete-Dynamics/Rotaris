@@ -231,6 +231,10 @@ export class IterationChildren implements DelegationOps {
   private readonly startedAt = new Map<string, Millis>();
   private readonly toolCalls = new Map<string, number>();
   private readonly resumeWaiters = new Map<string, () => void>();
+  /** PD-ORCH-018 clause 7: per parent, the workflows still running and the notices of the ended ones it has not been told. */
+  private readonly workflows = new Map<string, { readonly active: Set<string>; notices: { readonly id: string; readonly text: string }[] }>();
+  /** PD-ORCH-018: aborted when the run stops or comes to rest, so every workflow script of this iteration ends with it. */
+  private readonly workflowStop = new AbortController();
   /** PD-TOOLS-006: the live write scopes' claims, in acceptance order, and each child's disclosure as fixed at its acceptance. */
   private readonly claims = new WriteClaims();
   private readonly disclosures = new Map<string, ScopeDisclosure>();
@@ -786,7 +790,41 @@ export class IterationChildren implements DelegationOps {
     if (this.resting) return;
     this.resting = true;
     this.scheduler.hold();
+    this.workflowStop.abort();
     for (const [parent, wake] of [...this.resumeWaiters]) { this.resumeWaiters.delete(parent); wake(); }
+  }
+
+  // ---- PD-ORCH-018: workflows a parent started -------------------------------------------------
+
+  private workflowsOf(parentId: string): { readonly active: Set<string>; notices: { readonly id: string; readonly text: string }[] } {
+    let w = this.workflows.get(parentId);
+    if (w === undefined) { w = { active: new Set(), notices: [] }; this.workflows.set(parentId, w); }
+    return w;
+  }
+
+  beginWorkflow(parentId: string, id: string): AbortSignal {
+    this.workflowsOf(parentId).active.add(id);
+    if (this.deps.runSignal.aborted) this.workflowStop.abort();
+    else this.deps.runSignal.addEventListener('abort', () => { this.workflowStop.abort(); }, { once: true });
+    return this.workflowStop.signal;
+  }
+
+  endWorkflow(parentId: string, id: string, notice: string): void {
+    const w = this.workflowsOf(parentId);
+    if (!w.active.delete(id)) return;
+    w.notices.push({ id, text: notice });
+    this.wakeForSteering(parentId);
+  }
+
+  acknowledgeWorkflow(parentId: string, id: string): void {
+    const w = this.workflows.get(parentId);
+    if (w === undefined) return;
+    w.notices = w.notices.filter((n) => n.id !== id);
+  }
+
+  claimForWorkflow(parentId: string, taskId: string): void {
+    const row = this.ledger.get(taskId);
+    if (row !== undefined && this.owns(parentId, row)) this.ledger.markObserved(taskId);
   }
   get isResting(): boolean {
     return this.resting;
@@ -994,7 +1032,10 @@ export class IterationChildren implements DelegationOps {
     if (this.resting) return Promise.resolve();
     const mine = this.ledger.childrenOf(parentId);
     if (mine.some((c) => isTerminalChildState(c.state) && c.observed === 0)) return Promise.resolve();
-    if (!mine.some((c) => !isTerminalChildState(c.state))) return Promise.resolve();
+    // PD-ORCH-018 clause 7: a workflow's notice wakes the parent as a child's end does, and a running workflow holds it.
+    const workflows = this.workflows.get(parentId);
+    if (workflows !== undefined && workflows.notices.length > 0) return Promise.resolve();
+    if (!mine.some((c) => !isTerminalChildState(c.state)) && (workflows === undefined || workflows.active.size === 0)) return Promise.resolve();
     return new Promise<void>((resolve) => { this.resumeWaiters.set(parentId, resolve); if (this.deps.runSignal.aborted) resolve(); });
   }
 
@@ -1018,7 +1059,10 @@ export class IterationChildren implements DelegationOps {
       const mine = this.ledger.childrenOf(agentId);
       const pending = mine.filter((c) => !isTerminalChildState(c.state));
       const unobserved = mine.filter((c) => isTerminalChildState(c.state) && c.observed === 0);
-      if (pending.length === 0 && unobserved.length === 0) {
+      // PD-ORCH-018 clause 7: a parent with a workflow running, or one ended it has not been told of, is not done.
+      const workflows = this.workflows.get(agentId);
+      const workflowOpen = workflows !== undefined && (workflows.active.size > 0 || workflows.notices.length > 0);
+      if (pending.length === 0 && unobserved.length === 0 && !workflowOpen) {
         const next = followUp?.(outcome) ?? null;
         if (next === null) break;
         outcome = await turn(next, history);
@@ -1044,7 +1088,8 @@ export class IterationChildren implements DelegationOps {
       if (settling) await settling;
       if (signal.aborted || this.resting) break;
       const newly = this.ledger.takeNewlyTerminal(agentId);
-      if (newly.length === 0) {
+      const workflowNotices = workflows === undefined ? [] : workflows.notices.splice(0).map((n) => n.text);
+      if (newly.length === 0 && workflowNotices.length === 0) {
         /*
          * REQ-MONITOR-135: a stall evaluation woke this agent for a steer pending while it waited on its children, so it
          * takes its next step now, before any child ends: the step's start injects the steer (REQ-MONITOR-134), and the
@@ -1060,7 +1105,7 @@ export class IterationChildren implements DelegationOps {
       const stillRunning = this.ledger.childrenOf(agentId).filter((c) => !isTerminalChildState(c.state)).length;
       const open = newly.some((c) => c.background === 1) ? this.deps.openTodoFor?.(agentId) ?? [] : [];
       const notices = newly.filter((c) => c.background === 1).map((c) => completionNotification(c, stillRunning, this.durationS(c), open));
-      const message = [...notices, resumeMessage(newly, stillRunning, this.openServedItemsOf(agentId, newly))].join('\n\n');
+      const message = [...notices, ...(newly.length === 0 ? [] : [resumeMessage(newly, stillRunning, this.openServedItemsOf(agentId, newly))]), ...workflowNotices].join('\n\n');
       outcome = await turn(message, history);
       history = outcome.messages;
       toolCalls += outcome.toolCallCount;

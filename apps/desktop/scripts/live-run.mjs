@@ -174,7 +174,8 @@
  *                 no root stuck activation and no `agent_session_aborted`.
  *   8l. solo     — OPT-IN (`--only=solo`), a few minutes (R-126): `rotaris.delegation_strategy: solo`, `PD-ORCH-018` clauses 1
  *                 and 2 — no classification in the launch log, the solo statement and the writing tools beside `delegate`
- *                 in the first root request, and a completed run (`lib/delegation-readings.mjs`, `soloReading`).
+ *                 in the first root request, and a completed run (`lib/delegation-readings.mjs`, `soloReading`). A second
+ *                 launch, `solo-workflow`, asks the entry role for a workflow script that starts two agents (clauses 5 to 7).
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -3311,6 +3312,50 @@ if (wanted.includes('solo')) {
   noted('how the solo run divided the work', `${ownByRoot} writing or command call(s) by the entry role, ${soloChildren} admitted delegation(s); the division is the model's`);
   results.scenarios['solo'] = { status: soloRead?.session.execution_status, faults: solo.faults, offered: solo.offered, ownCalls: ownByRoot, delegations: soloChildren, deadline: soloDeadline.outcome };
   if (soloRead) preserveRun('solo', soloRead.session.session_id);
+  await budgetGate();
+
+  /*
+   * solo-workflow — PD-ORCH-018 clauses 5 to 7 against a real model: the entry role is asked to write a workflow script that
+   * starts two agents side by side. What the product owes: the `workflow` call is admitted, its agents run as children, and
+   * a later root request carries the workflow's ending. Whether the model's script was right the first time is the model's.
+   */
+  const WORKFLOW_PROMPT = 'Use the workflow tool for this, not delegate: write a script that starts two agents side by side with parallel(), both with persona codebase-analyst. The first reports every function src/todos.js exports. The second reports what README.md says the project is. The script returns both reports. When you are told the workflow ended, reply with two sentences saying what the two agents found.';
+  let wfLog = '';
+  const wfStartedAt = Date.now();
+  try {
+    writeFileSync(agentsFile, withSectionKey(agentsBefore, 'rotaris', 'delegation_strategy', 'solo'));
+    wfLog = await launch('solo-workflow', {
+      ROTARIS_CAPTURE_PROMPT: WORKFLOW_PROMPT,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+    }, EDIT_WAIT_MS + 120_000);
+  } finally {
+    writeFileSync(agentsFile, agentsBefore);
+  }
+  const wfEndedAt = Date.now();
+  const wfRead = readSession();
+  const wfCalls = wfRead === null ? [] : readToolCalls(wfRead.session.session_id);
+  const wfDeadline = overrunReading({ log: wfLog, startedAt: wfStartedAt, endedAt: wfEndedAt, records: readTraffic('solo-workflow'), calls: wfCalls, budgetMs: EDIT_WAIT_MS, recorded: proxy !== null, raise: 'LIVE_RUN_EDIT_WAIT_MS' });
+  if (wfDeadline.outcome === 'window') noted('the solo-workflow run was bounded by the window, not by the product', wfDeadline.detail);
+  else check(wfDeadline.outcome === 'inside', 'the solo-workflow run reached its result inside the wait', wfDeadline.detail);
+  check(wfRead?.session.execution_status === 'completed', 'the solo-workflow run completed', `status ${wfRead?.session.execution_status ?? 'no session'}`);
+  const wfStarts = wfCalls.filter((c) => c.tool_name === 'workflow');
+  const wfAdmitted = wfStarts.filter((c) => c.status === 'ok');
+  const rootName = wfCalls[0]?.agent_name;
+  const wfAgents = new Set(wfCalls.filter((c) => c.agent_name !== rootName).map((c) => c.agent_name));
+  const wfTraffic = readTraffic('solo-workflow').map((r) => String(r.requestBody ?? ''));
+  const offered = wfTraffic.some((b) => b.includes('"name":"workflow"'));
+  const endings = wfTraffic.filter((b) => /Workflow [^\n"]* \(wf_\d+\) (completed|failed|was stopped|was interrupted)/.test(b));
+  const completedTold = wfTraffic.some((b) => /Workflow [^\n"]* \(wf_\d+\) completed/.test(b));
+  if (RECORD_TRAFFIC) check(offered, 'a solo run\'s entry role was offered the workflow tool (PD-ORCH-018 clause 5)', offered ? 'offered' : 'no recorded request offers it');
+  if (wfStarts.length === 0) noted('the model never called the workflow tool, so clauses 5 to 7 are unasked', `${wfCalls.length} tool calls, none of them workflow`);
+  else {
+    check(wfAdmitted.length > 0, 'a workflow call was admitted (PD-ORCH-018 clause 5)', `${wfAdmitted.length} of ${wfStarts.length} workflow calls ok`);
+    if (RECORD_TRAFFIC) check(endings.length > 0, 'the entry role was told its workflow ended, in a later request (PD-ORCH-018 clause 7)', `${endings.length} request(s) carry an ending`);
+    if (completedTold) check(wfAgents.size >= 2, 'a completed workflow\'s agents ran as children of the run (PD-ORCH-018 clause 6)', `${wfAgents.size} agent(s) besides the root made tool calls: ${[...wfAgents].join(', ')}`);
+    else noted('no workflow of this run completed, so its agents are unasked', 'the script the model wrote failed or was stopped; the ending it was told is in the traffic');
+  }
+  results.scenarios['solo-workflow'] = { status: wfRead?.session.execution_status, workflowCalls: wfStarts.length, admitted: wfAdmitted.length, agents: [...wfAgents], completedTold, deadline: wfDeadline.outcome };
+  if (wfRead) preserveRun('solo-workflow', wfRead.session.session_id);
   await budgetGate();
 }
 

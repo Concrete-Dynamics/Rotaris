@@ -20,8 +20,10 @@ and nothing it states reaches a run taken under any other strategy.
    other run is; a run not started in plan mode is never held.
 4. **Depth decides who may spawn.** `runtime.max_depth` governs a `solo` run as it governs every run, and under `solo` it
    MUST be enforced by withholding: an agent that stands at the depth limit holds neither `delegate` nor the workflow
-   tool of clause 5. At 1 only the entry role spawns; at 2 its children may; at 3 theirs may. The settings screen MUST
-   present the value as a slider whose every step states, on hover and on focus, what that step permits.
+   tool of clause 5. The settings screen MUST present the choice as a slider of three steps, each stating on hover and on
+   focus what it permits: at the first only the entry role spawns; at the second its children may; at the third there is
+   no depth limit, and an agent at any depth may spawn. The run's limits on how many children exist and how many are
+   active bind at every step.
 5. **Workflows.** An agent of a `solo` run that may spawn (clause 4) MUST hold a workflow tool that takes a script the
    agent wrote. The script MUST be able to start agents, run them side by side and in stages, name its phases, and call
    every tool its launching agent holds. The script itself MUST have no access to the file system, the network, a
@@ -48,12 +50,18 @@ it gets.
 
 This directive names [`PD-ORCH-006`](pd-orch-006.md#pd-orch-006), which narrows REQ-ORCH-025 and REQ-ORCH-029 for a run
 whose mapping grants direct work under `orchestrator` or `swarm`, and [`PD-ORCH-005`](pd-orch-005.md#pd-orch-005), which
-narrows REQ-ORCH-005 for a continued run's carried intent. Neither case is a `solo` run, so the cases stay apart.
+narrows REQ-ORCH-005 for a continued run's carried intent. Neither case is a `solo` run, so the cases stay apart. It
+names [`PD-CONFIG-014`](pd-config-014.md#pd-config-014) too, which narrows REQ-TOOLS-001 by adding `configure` to the
+public names: this directive adds `workflow`, a different name, and changes nothing of `configure`.
 
-> **Narrows:** REQ-ORCH-025, REQ-ORCH-029, REQ-ORCH-016, REQ-ORCH-005, REQ-ORCH-014
+> **Narrows:** REQ-ORCH-025, REQ-ORCH-029, REQ-ORCH-016, REQ-ORCH-005, REQ-ORCH-014, REQ-TOOLS-001
 > **Extends:** REQ-ORCH-024
 
 *Raised by the owner, 2026-11-24; logged as [R-126](../requests.md#r-126).*
+
+**The third step is no limit (the owner, 2026-11-24).** Asked whether the third step means three levels or none, the owner
+first chose "Three levels" and then wrote: "as i said before 1 2 and 3 is unlimited." The later word governs. The clause as
+first written, which no longer governs: "At 1 only the entry role spawns; at 2 its children may; at 3 theirs may."
 
 **Decided with it, 2026-11-24.** The script runtime is a QuickJS isolate compiled to WebAssembly inside the run host, the
 owner's choice over a `node:vm` context (not a security boundary) and a separate Node process (a sixth kind of process).
@@ -71,3 +79,14 @@ completed in 46 s with no classification, 30 tools offered, four writing or comm
 delegation. Clause 4 is held by a unit test only; clause 3 follows from the run having no pre-flight and was not driven. The
 choice where a run is started is not built: the strategy is chosen in Settings. Clause 4's slider and clauses 5 to 9 are not
 built. The row is in [the register](../../architecture/first-executions/39-the-register-38.md).
+
+**First execution of clauses 5, 6 and 7, 2026-11-24** ([ADR-0068](../../architecture/adr/0068-workflow-scripts-run-in-a-quickjs-isolate-in-the-run-host.md)).
+The tool is `workflow`, one public name with the actions `start`, `status` and `stop`. Against the owner's self-hosted `ds41`
+(`pnpm live-run --only=solo`, its second launch) the entry role wrote a script that started two `codebase-analyst` agents
+side by side; both ran as its children, the run completed in 55 s, and a later request carried the workflow's ending. The
+model read the ending with `status` before its turn ended and was then told it again, answering twice; an ending the agent
+has read is now withdrawn from what it is told (`acknowledgeWorkflow`), which a unit test holds and no live run has yet
+repeated. The script's calls are in the audit record and are not transcript rows. Clause 8 is built as a journal in memory
+and its replay, held by unit tests; nothing is stored, so a workflow cut off by the application ending is not yet resumable.
+Clause 9 is not built. Not measured: a script's `tool()` call by a real model, an approval holding a script, the
+interpreter in the packaged application.

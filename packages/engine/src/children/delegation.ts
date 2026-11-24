@@ -110,4 +110,18 @@ export interface DelegationOps {
   waitForTasks(parentId: string, taskIds: readonly string[]): Promise<WaitOutcome | { readonly refused: string } | { readonly interrupted: string }>;
   /** For the tree and the strip. */
   children(): readonly ChildRow[];
+  /**
+   * PD-ORCH-018 clause 7: `parentId` started workflow `id`. While it is active the parent's resume loop waits as it waits
+   * for a child. The signal aborts when the run stops or comes to rest: the workflow's script ends with it.
+   */
+  beginWorkflow(parentId: string, id: string): AbortSignal;
+  /** PD-ORCH-018 clause 7: workflow `id` ended; the parent is resumed with `notice` as its next message. */
+  endWorkflow(parentId: string, id: string, notice: string): void;
+  /** The parent read workflow `id`'s ending itself (its status call), so the notice not yet sent is withdrawn. */
+  acknowledgeWorkflow(parentId: string, id: string): void;
+  /**
+   * PD-ORCH-018 clause 6: a child a workflow started for `parentId` is the workflow's to report. It stays a child of the
+   * parent for every limit and every surface; only the resume loop's per-child report is not sent for it.
+   */
+  claimForWorkflow(parentId: string, taskId: string): void;
 }

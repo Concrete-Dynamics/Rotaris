@@ -34,3 +34,7 @@ export * from './tools/artifacts.js';
 export * from './tools/questions.js';
 /** PD-CONFIG-014: the `configure` tool — Rotaris's own configuration by key, never by a file write. */
 export * from './tools/configure.js';
+/** PD-ORCH-018: the `workflow` tool, its isolate and its journal. */
+export * from './tools/workflow.js';
+export * from './workflow/isolate.js';
+export * from './workflow/journal.js';

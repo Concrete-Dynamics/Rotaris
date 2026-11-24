@@ -135,6 +135,15 @@ function phraseFor(toolName: string, args: Args): string | null {
       if (steps === 0) return 'Asks a question';
       return `Asks ${steps} ${steps === 1 ? 'question' : 'questions'}`;
     }
+    // PD-ORCH-018: the workflow tool, by its action and the workflow it names.
+    case 'workflow': {
+      const named = textOf(args, 'name') || textOf(args, 'workflow_id');
+      switch (textOf(args, 'action')) {
+        case 'status': return named === '' ? 'Reads its workflows\' progress' : `Reads the progress of ${named}`;
+        case 'stop': return named === '' ? 'Stops a workflow' : `Stops ${named}`;
+        default: return named === '' ? 'Starts a workflow' : `Starts the workflow ${named}`;
+      }
+    }
     // PD-CONFIG-014: the configuration tool, by its operation and the setting it names.
     case 'configure': {
       const setting = textOf(args, 'setting');

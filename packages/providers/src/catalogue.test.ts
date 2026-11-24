@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CATALOGUE, PROVIDER_IDS, sharedQuotaCaps, destinationHint, destinationHost, instanceId, instanceSlug, LABEL_EMPTY, lookupProvider, modelsEndpoint, normalizeBaseUrl, signInMethodFor, validateCatalog, type CatalogueEntry } from './catalogue.js';
+import { CATALOGUE, PROVIDER_IDS, sharedQuotaCaps, destinationHint, destinationHost, instanceId, instanceSlug, LABEL_EMPTY, lookupProvider, modelsEndpoint, normalizeBaseUrl, signInMethodFor, stripTrailingSlashes, validateCatalog, type CatalogueEntry } from './catalogue.js';
 import { CLOUD_DEFAULT_API_BASE } from './flows/cloud.js';
 import { validateKnownLimits, lookupKnownLimits, KNOWN_LIMITS } from './limits.data.js';
 import { validateTierPreferences } from './tiers.data.js';
@@ -79,6 +79,14 @@ describe('the provider catalogue (ADR-0028; REQ-PROVIDER-001..007)', () => {
     expect(normalizeBaseUrl('')).toEqual({ ok: false, error: 'API base URL must not be empty.' });
     expect(normalizeBaseUrl('openrouter.ai/api/v1')).toEqual({ ok: false, error: 'API base URL must include a scheme and hostname.' });
     expect(modelsEndpoint('https://openrouter.ai/api/v1')).toBe('https://openrouter.ai/api/v1/models');
+  });
+  it('strips trailing slashes in linear time, so a long run of them cannot stall a URL check (CodeQL js/polynomial-redos)', () => {
+    expect(stripTrailingSlashes('https://a.example/v1///')).toBe('https://a.example/v1');
+    expect(stripTrailingSlashes('///')).toBe('');
+    expect(stripTrailingSlashes('')).toBe('');
+    const run = 'https://a.example' + '/'.repeat(200_000) + 'x';
+    expect(stripTrailingSlashes(run)).toBe(run);
+    expect(normalizeBaseUrl('https://openrouter.ai/api/v1/models//')).toEqual({ ok: true, value: 'https://openrouter.ai/api/v1' });
   });
   it('destination hints follow the connection mode (REQ-PROVIDER-117)', () => {
     const hint = (id: string) => destinationHint(CATALOGUE.find((c) => c.id === id)!);

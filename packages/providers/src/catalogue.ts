@@ -154,21 +154,28 @@ export function instanceId(label: string): Result<string, string> {
   return slug.length === 0 ? err(LABEL_EMPTY) : ok(`${INSTANCE_PREFIX}${slug}`);
 }
 
+/** Drops every trailing `/`, in linear time — a `/\/+$/` replace backtracks quadratically on a run of slashes. */
+export function stripTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
+}
+
 /** REQ-PROVIDER-053: trim, strip trailing slashes, require scheme + host, drop a trailing `/models`. */
 export const BASE_URL_EMPTY = 'API base URL must not be empty.';
 export const BASE_URL_SHAPE = 'API base URL must include a scheme and hostname.';
 export function normalizeBaseUrl(raw: string): Result<string, string> {
-  let s = raw.trim().replace(/\/+$/, '');
+  let s = stripTrailingSlashes(raw.trim());
   if (s.length === 0) return err(BASE_URL_EMPTY);
   let parsed: URL;
   try { parsed = new URL(s); } catch { return err(BASE_URL_SHAPE); }
   if (!/^https?:$/.test(parsed.protocol) || parsed.hostname.length === 0) return err(BASE_URL_SHAPE);
-  if (/\/models$/i.test(s)) s = s.replace(/\/models$/i, '').replace(/\/+$/, '');
+  if (/\/models$/i.test(s)) s = stripTrailingSlashes(s.slice(0, -'/models'.length));
   if (s.length === 0) return err(BASE_URL_SHAPE);
   return ok(s);
 }
 export function modelsEndpoint(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/models`;
+  return `${stripTrailingSlashes(baseUrl)}/models`;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { err, ok, type Result } from '@rotaris/kernel';
-import { normalizeBaseUrl } from '../catalogue.js';
+import { normalizeBaseUrl, stripTrailingSlashes } from '../catalogue.js';
 import type { StoredCredential } from '../credentials/store.js';
 import { openLoopback } from './loopback.js';
 import { boundedFetch, errorText, formBody, oauthState, pkceChallenge, pkceVerifier, type FlowDeps } from './oauth.js';
@@ -31,7 +31,7 @@ export interface CloudServer { readonly apiBase: string; readonly issuer: string
 export interface CloudServerChoice { readonly apiBase?: string | null; readonly issuer?: string | null }
 
 export const ISSUER_SHAPE = 'Sign-in server URL must include a scheme and hostname.';
-const trimSlashes = (s: string): string => s.trim().replace(/\/+$/, '');
+const trimSlashes = (s: string): string => stripTrailingSlashes(s.trim());
 
 export function normalizeIssuer(raw: string): Result<string, string> {
   const s = trimSlashes(raw);

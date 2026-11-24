@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<!--
+  The money slider (PD-ORCH-019, R-127): the composer chip, its popover and the default's row in Settings › Delegation.
+  A static mock for the brief `../composer.md`, drawn with the product's own stylesheets and the token sheet
+  `render-money-slider.mjs` projects from themes.ts. Design only; every model id and configuration here is synthetic.
+  One page, one scene per `?scene=`: regular-idle, token-burner-mixed, money-saver-live, all-set, pointed-small-budget,
+  chips, settings.
+-->
+<html lang="en" data-theme="rotaris-dim" data-dark="true">
+<head>
+<meta charset="utf-8">
+<title>Money slider — mock</title>
+<link rel="stylesheet" href="../../../../.ui-review/money-slider/tokens.css">
+<link rel="stylesheet" href="../../../../node_modules/@phosphor-icons/web/src/regular/style.css">
+<link rel="stylesheet" href="../../system/base.css">
+<link rel="stylesheet" href="../../system/components.css">
+<link rel="stylesheet" href="../../system/motif.css">
+<link rel="stylesheet" href="../../../../packages/ui/src/shell.css">
+<link rel="stylesheet" href="money-slider.mock.css">
+</head>
+<body>
+<div id="root"></div>
+<script>
+'use strict';
+// ── The copy (brief §6) ───────────────────────────────────────────────────────────────────────────────────
+const STOPS = [
+  { id: 'money_saver', label: 'Money saver', sentence: 'One agent does the work and delegates nothing, one tier and one reasoning level lower except on a large build.' },
+  { id: 'small_budget', label: 'Small budget', sentence: 'The entry role delegates only when it chooses, and every agent it delegates to runs one tier lower.' },
+  { id: 'regular', label: 'Regular', sentence: 'Runs as configured: this stop moves nothing.' },
+  { id: 'strong_budget', label: 'Strong budget', tone: 'warn', sentence: 'The entry role runs one tier and one reasoning level higher, and a run may start more agents.' },
+  { id: 'token_burner', label: 'Token burner', tone: 'warn', sentence: 'Every agent runs one tier and one reasoning level higher; a run may start 40 agents, 12 at once, 4 deep.' },
+];
+const RULE = [
+  'Except on a large build, where the entry role keeps its tier and reasoning level.',
+  'A solo run classifies nothing, so this holds whatever you ask.',
+  null,
+  'Except on an answer, a clarification or a micro edit, which run as at Regular.',
+  'Except on an answer, a clarification or a micro edit, which run as at Regular.',
+];
+const LIVE = 'A run is live. This move reaches only agents delegated from now; everything else applies from the next run.';
+const ALL_SET = 'You have set every lever, so no stop moves anything. Clear a value in Settings to let the slider choose it.';
+const ORIGIN = {
+  workspace: { glyph: 'ph-folder', words: 'Set for this workspace; no stop moves it' },
+  global: { glyph: 'ph-user', words: 'Set in your global configuration; no stop moves it' },
+  session: { glyph: 'ph-chat-circle-text', words: 'Chosen for this session; no stop moves it' },
+};
+const STRATEGY_LABELS = { orchestrator: 'Orchestrator', swarm: 'Swarm', single: 'Single', solo: 'Solo' };
+
+// ── A synthetic configuration: three tier slots, thirteen roles on them, every level the role default ─────
+const TIERS = ['small', 'medium', 'large'];
+const SLOTS = { small: 'qwen3-8b', medium: 'qwen3-32b', large: 'glm-4.6' };
+const LEVELS = { 'qwen3-8b': [], 'qwen3-32b': ['low', 'medium', 'high'], 'glm-4.6': ['low', 'medium', 'high', 'xhigh'] };
+const ROLES = [
+  ['orchestrator', 'large', true], ['architect', 'large'], ['requirements-engineer', 'medium'], ['planner', 'medium'],
+  ['coding-agent', 'medium'], ['tester', 'medium'], ['refactorer', 'medium'], ['verifier', 'medium'], ['ui-verifier', 'medium'],
+  ['gatekeeper', 'medium'], ['codebase-analyst', 'small'], ['librarian', 'small'], ['docs-writer', 'small'],
+].map(([name, tier, entry]) => ({ name, tier, entry: entry === true }));
+const MIXED = { roles: { architect: { model: { value: 'glm-4.6', origin: 'workspace' } }, tester: { level: { value: 'low', origin: 'global' } } } };
+const ALL = (() => {
+  const roles = {};
+  for (const r of ROLES) roles[r.name] = { model: { value: SLOTS[r.tier], origin: 'workspace' }, level: { value: r.tier === 'small' ? 'default' : 'medium', origin: 'global' } };
+  return { strategy: { value: 'orchestrator', origin: 'workspace' }, limits: { origin: 'workspace' }, roles };
+})();
+
+// ── PD-ORCH-019 clauses 3, 5 and 6, for the preview only ──────────────────────────────────────────────────
+const TIER_STEP = [[-1, 0], [0, -1], [0, 0], [1, 0], [1, 1]]; // [entry, delegated] per stop
+const LEVEL_STEP = [[-1, 0], [0, 0], [0, 0], [1, 0], [1, 1]];
+function resolve(stop, cfg) {
+  const set = cfg.roles ?? {};
+  const strategy = cfg.strategy ? { value: cfg.strategy.value, mark: { set: cfg.strategy.origin } }
+    : stop === 0 ? { value: 'single', mark: { from: 'orchestrator' } } : stop === 1 ? { value: 'solo', mark: { from: 'orchestrator' } } : { value: 'orchestrator' };
+  const roles = ROLES.map((r) => {
+    const i = r.entry ? 0 : 1;
+    const configured = SLOTS[r.tier];
+    let model;
+    if (set[r.name]?.model) model = { value: set[r.name].model.value, mark: { set: set[r.name].model.origin } };
+    else {
+      const d = TIER_STEP[stop][i];
+      const at = TIERS.indexOf(r.tier) + d;
+      if (d === 0) model = { value: configured };
+      else if (at < 0 || at >= TIERS.length) model = { value: configured, mark: { stays: d > 0 ? 'largest tier' : 'smallest tier' } };
+      else if (!SLOTS[TIERS[at]]) model = { value: configured, mark: { stays: d > 0 ? 'no larger model configured' : 'no smaller model configured' } };
+      else model = { value: SLOTS[TIERS[at]], mark: { from: configured, dir: d } };
+    }
+    const offered = LEVELS[model.value] ?? [];
+    let level;
+    if (set[r.name]?.level) level = { value: set[r.name].level.value, mark: { set: set[r.name].level.origin } };
+    else if (offered.length === 0) level = { value: 'none', none: true };
+    else {
+      const d = LEVEL_STEP[stop][i];
+      const base = Math.floor((offered.length - 1) / 2);
+      if (d === 0) level = { value: 'default' };
+      else if (base + d < 0 || base + d >= offered.length) level = { value: offered[base], mark: { stays: d > 0 ? 'highest level' : 'lowest level' } };
+      else level = { value: offered[base + d], mark: { from: 'default', dir: d } };
+    }
+    return { role: r, model, level };
+  });
+  const limits = cfg.limits ? { value: '6 at once · 3 deep · 20 in all', mark: { set: cfg.limits.origin } }
+    : strategy.value === 'single' ? { value: 'none', none: true, note: 'nothing is delegated' }
+    : stop === 3 ? { value: '8 at once · 3 deep · 30 in all', mark: { from: '6 · 3 · 20', dir: 1 } }
+    : stop === 4 ? { value: '12 at once · 4 deep · 40 in all', mark: { from: '6 · 3 · 20', dir: 1 } }
+    : { value: '6 at once · 3 deep · 20 in all' };
+  const allSet = Boolean(cfg.strategy && cfg.limits) && ROLES.every((r) => set[r.name]?.model && set[r.name]?.level);
+  return { strategy, roles, limits, allSet };
+}
+
+// ── Drawing ───────────────────────────────────────────────────────────────────────────────────────────────
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+function mark(m, kind) {
+  if (!m) return '';
+  if (m.set) { const o = ORIGIN[m.set]; return `<span class="money-mark" data-mark="set" role="img" aria-label="${o.words}" title="${o.words}"><i class="ph ${o.glyph}" aria-hidden="true"></i>set</span>`; }
+  if (m.stays) return `<span class="money-mark" data-mark="stays" title="Left as configured: ${m.stays}">stays: ${esc(m.stays)}</span>`;
+  const step = kind === 'level' ? 'reasoning level' : kind === 'limits' ? 'set of child limits' : 'tier';
+  const words = m.dir ? `One ${step} ${m.dir > 0 ? 'higher' : 'lower'}, from ${m.from}` : `Moved by this stop, from ${m.from}`;
+  const glyph = m.dir ? `<i class="ph ${m.dir > 0 ? 'ph-arrow-up' : 'ph-arrow-down'}" aria-hidden="true"></i>` : '';
+  return `<span class="money-mark" data-mark="moved" title="${esc(words)}">${glyph}from ${esc(kind === 'strategy' ? STRATEGY_LABELS[m.from] : m.from)}</span>`;
+}
+const cell = (v, kind) => `<span class="money-value"${v.none ? ' data-none' : ''}${v.none && kind === 'level' ? ' title="This model offers no reasoning levels; no stop changes it."' : ''}>${esc(kind === 'strategy' ? STRATEGY_LABELS[v.value] : v.value)}</span>${mark(v.mark, kind)}`;
+
+function preview(stop, pointed, cfg) {
+  const shown = pointed ?? stop;
+  const r = resolve(shown, cfg);
+  const entry = r.roles.find((x) => x.role.entry);
+  const groups = [];
+  for (const x of r.roles.filter((y) => !y.role.entry)) {
+    const key = JSON.stringify([x.model, x.level]);
+    const g = groups.find((h) => h.key === key);
+    if (g) g.names.push(x.role.name); else groups.push({ key, names: [x.role.name], x });
+  }
+  const single = r.strategy.value === 'single';
+  const rule = r.allSet ? ALL_SET : RULE[shown];
+  const ifWords = pointed !== null && pointed !== stop ? `<span class="money-preview__if">, if you choose ${STOPS[pointed].label}</span>` : '';
+  return `<section class="money-preview" aria-labelledby="money-preview-title">
+    <h3 class="money-preview__title" id="money-preview-title">Next run${ifWords}</h3>
+    ${rule ? `<p class="money-preview__rule">${rule}</p>` : ''}
+    <table class="money-preview__table">
+      <colgroup><col class="money-preview__col-role"><col></colgroup>
+      <tbody>
+        <tr class="money-preview__fact"><th scope="row">Strategy</th><td>${cell(r.strategy, 'strategy')}</td></tr>
+        <tr class="money-preview__fact"><th scope="row">Child limits</th><td>${cell(r.limits, 'limits')}${r.limits.note ? `<span class="money-mark">${r.limits.note}</span>` : ''}</td></tr>
+      </tbody>
+    </table>
+    <table class="money-preview__table">
+      <colgroup><col class="money-preview__col-role"><col class="money-preview__col-model"><col></colgroup>
+      <thead><tr class="money-preview__group"><th scope="col">Role</th><th scope="col">Model</th><th scope="col">Reasoning level</th></tr></thead>
+      <tbody>
+        <tr><th scope="row" class="money-preview__rowhead"><span class="money-role">${entry.role.name}<span class="money-role__note">entry role</span></span></th><td>${cell(entry.model, 'model')}</td><td>${cell(entry.level, 'level')}</td></tr>
+        ${single ? '<tr><td colspan="3" class="money-preview__empty">No agent is delegated: a single run works alone.</td></tr>'
+          : groups.map((g) => `<tr><th scope="row" class="money-preview__rowhead"><span class="money-role">${g.names.map((n) => `<span class="money-role__name">${n}</span>`).join(', ')}</span></th><td>${cell(g.x.model, 'model')}</td><td>${cell(g.x.level, 'level')}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  </section>`;
+}
+
+function slider({ id, stop, pointed = null, focus = false, cls = '' }) {
+  const s = STOPS[stop];
+  const shown = STOPS[pointed ?? stop];
+  return `<div class="step-slider money-slider ${cls}" data-ui-component="StepSlider" data-step="${stop}" data-steps="5">
+    <div class="step-slider__rail">
+      <input id="${id}" class="step-slider__input${focus ? ' mock-thumb-focus' : ''}" type="range" min="0" max="4" step="1" value="${stop}"
+        aria-label="Money slider" aria-valuetext="${s.label}: ${esc(s.sentence)}" aria-describedby="${id}-description">
+      <div class="step-slider__stops" aria-hidden="true">
+        ${STOPS.map((x, i) => `<button type="button" tabindex="-1" data-step-stop="${i}"${x.tone ? ` data-tone="${x.tone}"` : ''} class="step-slider__stop${i <= stop ? ' is-reached' : ''}${i === stop ? ' is-chosen' : ''}${i === pointed ? ' is-pointed' : ''}"><span class="step-slider__mark"></span><span class="step-slider__label">${x.label}</span>${i === pointed ? '<i class="ph ph-cursor mock-pointer" aria-hidden="true"></i>' : ''}</button>`).join('')}
+      </div>
+    </div>
+    <p id="${id}-description" class="step-slider__description" data-pointed="${pointed !== null}">${esc(shown.sentence)}</p>
+  </div>`;
+}
+
+function panel({ stop, pointed = null, live = false, cfg, follows = false, focus = false }) {
+  return `<div class="chip-menu__panel popover-panel" role="dialog" aria-labelledby="money-title" data-ui-component="PopoverPanel" id="money-panel">
+    <header class="popover-panel__head"><h2 class="popover-panel__title" id="money-title">Money slider</h2><span class="popover-panel__aside">${follows ? 'Follows the default' : 'This session'} ·</span><button type="button" class="btn btn-link popover-panel__link" aria-label="Default: Regular. Open Settings › Delegation" title="Open Settings › Delegation">Default: Regular</button></header>
+    ${live ? `<p class="money-live" id="money-live"><i class="ph ph-info" aria-hidden="true"></i><span>${LIVE}</span></p>` : ''}
+    ${slider({ id: 'money-session', stop, pointed, focus })}
+    ${preview(stop, pointed, cfg)}
+  </div>`;
+}
+
+function chip(stop, { open = false, cls = '', follows = false } = {}) {
+  const s = STOPS[stop];
+  const title = `Money slider: ${s.label}${follows ? ', the default' : ''}. ${s.sentence}`;
+  return `<div class="strip-control" data-testid="chip-money" data-disabled="0"><button type="button" class="strip-btn${open ? ' is-open' : ''} ${cls}"${s.tone ? ` data-tone="${s.tone}"` : ''}
+    aria-haspopup="dialog" aria-expanded="${open}" aria-label="Money slider" aria-describedby="chip-money-description" title="${esc(title)}" data-value="${s.label}">
+    <i class="ph ph-coins" aria-hidden="true"></i><span class="strip-btn__value">${s.label}</span><i class="ph ph-caret-down strip-btn__caret" aria-hidden="true"></i></button>
+    <span class="visually-hidden" id="chip-money-description">How willing this session is to spend. It moves only what you have not set.</span></div>`;
+}
+
+const sb = (icon, value, testid) => `<div class="strip-control" data-testid="${testid}"><button type="button" class="strip-btn"><i class="ph ${icon}" aria-hidden="true"></i><span class="strip-btn__value">${value}</span><i class="ph ph-caret-down strip-btn__caret" aria-hidden="true"></i></button></div>`;
+const act = (icon) => `<button type="button" class="strip-btn"><i class="ph ${icon}" aria-hidden="true"></i></button>`;
+function strip(stop, { open = false, live = false, compact = 'full', chipCls = '', follows = false } = {}) {
+  return `<div class="composer__strip" role="toolbar" aria-label="Composer controls" data-compact="${compact}">
+    ${act('ph-paperclip')}${sb('ph-user-circle', 'orchestrator', 'chip-persona')}${sb('ph-cpu', 'glm-4.6', 'chip-model')}
+    <span class="strip-sep" aria-hidden="true"></span>
+    ${sb('ph-brain', 'Medium', 'chip-reasoning')}${chip(stop, { open, cls: chipCls, follows })}${sb('ph-play-circle', 'Auto', 'chip-run-start-mode')}
+    ${sb('ph-tree-structure', 'Orchestrator', 'chip-strategy')}${sb('ph-shield-check', 'ask', 'chip-mode')}
+    ${act('ph-microphone')}${act('ph-push-pin')}
+    ${live ? `${act('ph-compass')}${act('ph-pause')}<button type="button" class="btn btn-danger btn-compact">Stop</button><button type="submit" class="strip-send">Queue<i class="ph ph-arrow-up" aria-hidden="true"></i></button>`
+      : `<span class="composer__estimate mono" data-testid="composer-estimate-strip">~0 tok</span><button type="submit" class="strip-send">Run<i class="ph ph-arrow-up" aria-hidden="true"></i></button>`}
+  </div>`;
+}
+
+function composerScene({ stop, pointed = null, live = false, cfg = MIXED, compact = 'full', follows = false, focus = false }) {
+  return `<div class="mock-col"><div class="mock-transcript">${live ? 'The run is live: coding-agent is working.' : 'No transcript yet'}</div>
+    <form class="composer"><div class="composer__dock"><div class="slash-field"><textarea class="input composer__input" aria-label="Composer" placeholder="Describe the outcome you want…" rows="2"></textarea></div>
+    ${strip(stop, { open: true, live, compact, follows })}</div></form>
+    ${panel({ stop, pointed, live, cfg, follows, focus })}</div>`;
+}
+
+function chipsScene() {
+  const fig = (caption, html) => `<figure><div class="mock-chipbox">${html}</div><figcaption>${caption}</figcaption></figure>`;
+  return `<div class="mock-sheet">
+    <section><h2>The chip at each stop</h2><div class="mock-row">${STOPS.map((s, i) => fig(s.label + (s.tone ? ' · warning' : ''), chip(i))).join('')}</div></section>
+    <section><h2>Pointer, keyboard focus, open</h2><div class="mock-row">
+      ${fig('hover', chip(2, { cls: 'mock-hover' }))}${fig('focus', chip(2, { cls: 'mock-focus' }))}${fig('open', chip(2, { open: true }))}${fig('focus at a warning stop', chip(4, { cls: 'mock-focus' }))}</div></section>
+    <section><h2>The strip at full (920), tight (880) and narrow (680)</h2>
+      <div style="display:grid;gap:var(--rt-space-3);">
+        <div style="width:calc(var(--rt-space-8) * 28.75)">${strip(2)}</div>
+        <div style="width:calc(var(--rt-space-8) * 27.5)">${strip(3, { compact: 'tight' })}</div>
+        <div style="width:calc(var(--rt-space-8) * 21.25)">${strip(4, { compact: 'narrow' })}</div>
+      </div></section>
+  </div>`;
+}
+
+function settingsScene() {
+  const s = 3;
+  return `<div class="mock-settings"><section class="settings__body" aria-label="Delegation" data-settings-page="delegation">
+    <header class="settings__head"><h1 class="display">Delegation</h1><button type="button" class="btn btn-ghost btn-icon settings__explain" aria-label="Show every explanation on this page" aria-pressed="false"><i class="ph ph-info" aria-hidden="true"></i></button>
+      <div class="save-bar" role="group" aria-label="Settings save status and actions"><span class="save-bar__status" role="status">All changes saved</span></div></header>
+    <div class="settings__section">
+      <h2 class="settings__heading">Starting</h2>
+      <div class="settings__action"><label for="money-default">Money slider</label>
+        ${slider({ id: 'money-default', stop: s, cls: 'settings__money' })}
+        <span class="settings__origin-mark" role="img" aria-label="Set in your global configuration" title="Set in your global configuration" data-origin="global"><i class="ph ph-user" aria-hidden="true"></i></span>
+        <button type="button" class="btn btn-ghost btn-icon settings__info" aria-label="Explanation of Money slider" title="Explanation of Money slider" aria-expanded="true"><i class="ph ph-info" aria-hidden="true"></i></button>
+        <span class="text-secondary settings__hint">How willing you are to spend, in five stops. A stop chooses the delegation strategy, each role's model tier and reasoning level, and the child limits, wherever you have set none; it states no sum and stops no run. A session can hold its own stop, chosen from the composer's chip. Applies to runs started from now.</span></div>
+      <div class="settings__action"><label for="strategy">Delegation strategy</label><select class="input select settings__select" id="strategy"><option>orchestrator</option></select><button type="button" class="btn btn-ghost btn-icon settings__info" aria-label="Explanation of Delegation strategy" aria-expanded="false"><i class="ph ph-info" aria-hidden="true"></i></button></div>
+      <div class="settings__action"><label for="run-start-mode">Run-start mode</label><select class="input select settings__select" id="run-start-mode"><option>auto</option></select><button type="button" class="btn btn-ghost btn-icon settings__info" aria-label="Explanation of Run-start mode" aria-expanded="false"><i class="ph ph-info" aria-hidden="true"></i></button></div>
+      <h2 class="settings__heading">Limits</h2>
+      <div class="settings__action"><label for="max-depth">Depth cap</label><div class="step-slider settings__depth" data-steps="3"><div class="step-slider__rail"><input id="max-depth" class="step-slider__input" type="range" min="0" max="2" value="2" aria-label="Depth cap"><div class="step-slider__stops" aria-hidden="true">
+        ${['1 level', '2 levels', 'No limit'].map((l, i) => `<button type="button" tabindex="-1" class="step-slider__stop is-reached${i === 2 ? ' is-chosen' : ''}"><span class="step-slider__mark"></span><span class="step-slider__label">${l}</span></button>`).join('')}
+      </div></div></div></div>
+    </div></section></div>`;
+}
+
+// ── Scenes ────────────────────────────────────────────────────────────────────────────────────────────────
+const SCENES = {
+  'regular-idle': () => composerScene({ stop: 2, follows: true, focus: true }),
+  'token-burner-mixed': () => composerScene({ stop: 4 }),
+  'money-saver-live': () => composerScene({ stop: 0, live: true, compact: 'narrow' }),
+  'all-set': () => composerScene({ stop: 3, cfg: ALL }),
+  'pointed-small-budget': () => composerScene({ stop: 2, pointed: 1 }),
+  chips: chipsScene,
+  settings: settingsScene,
+};
+const scene = new URLSearchParams(location.search).get('scene') ?? 'regular-idle';
+document.getElementById('root').innerHTML = (SCENES[scene] ?? SCENES['regular-idle'])();
+
+// The popover anchors to its chip and opens upward, as `panelPlacement` places the chip menus.
+function place() {
+const anchor = document.querySelector('[data-testid="chip-money"] .strip-btn.is-open');
+const pop = document.getElementById('money-panel');
+if (anchor && pop) {
+  const a = anchor.getBoundingClientRect();
+  const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rt-space-1'));
+  const w = pop.getBoundingClientRect().width;
+  pop.style.left = `${Math.max(gap * 2, Math.min(a.left, innerWidth - w - gap * 2))}px`;
+  pop.style.bottom = `${innerHeight - a.top + gap}px`;
+  pop.style.maxHeight = `${a.top - gap * 4}px`;
+}
+}
+place();
+// Fonts arrive after the first layout; the panel re-anchors whenever its own size changes.
+const panelBox = document.getElementById('money-panel');
+if (panelBox) new ResizeObserver(place).observe(panelBox);
+document.fonts.ready.then(place);
+</script>
+</body>
+</html>

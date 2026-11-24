@@ -68,8 +68,7 @@ REQ-NOTIFY-106, REQ-NOTIFY-108, REQ-NOTIFY-109, REQ-NOTIFY-110, REQ-CONFIG-137, 
 *Raised by the owner, 2026-11-24; logged as [R-126](../requests.md#r-126).*
 
 > **First execution, 2026-11-24 (branch `loop-supervisor-periodic-review`).** Clauses 1 to 8 were built as written; clause 9 (the
-> Settings rows) is **not built**: the five values are set in `agents.yaml` under `circuit_breaker:`, and the screen still shows only
-> the switch. **What was measured.** `supervisor.test.ts`'s PD-ORCH-018 block (nine cases: the mode, the interval's place in the
+> Settings rows) was built the same day in a second pass, reported at the foot of this note. **What was measured.** `supervisor.test.ts`'s PD-ORCH-018 block (nine cases: the mode, the interval's place in the
 > order, the task handed over, a failed and a cut review, ten clean reviews, the series and its restart, the bound past two seconds,
 > the action); `coordinator-plan.test.ts`'s two (a root's third activation rests the run `interrupted` with a `warning` issue, one
 > notice and the transcript line; `abort` fails it `agent_session_aborted`); `loop.test.ts`'s three (the review prompt, the task
@@ -77,6 +76,14 @@ REQ-NOTIFY-106, REQ-NOTIFY-108, REQ-NOTIFY-109, REQ-NOTIFY-110, REQ-CONFIG-137, 
 > private display): its `loop-supervisor` launch, at the default, leaves the session `paused` with three activations, the third
 > recording `escalation: pause`, and one `warning` issue; its `loop-reordered` launch sets `escalation: abort` and ends
 > `agent_session_aborted` as before. The first run of that proof was red on the old assertion, which read the abort at the default.
+> **Clause 9, built 2026-11-24.** The Delegation page draws five rows under the switch, only while it is on: Progress review, the
+> two intervals (only in the periodic mode), Review model and After two redirections. They ride one snapshot field and one sparse
+> save field (`circuitBreakerReview`, under the file's own key names), written by `saveDesktop` into `circuit_breaker:`. Driven in
+> the built application: the page opens on `on_signal`, `small_model` and `pause`; choosing the periodic mode shows the intervals;
+> Save wrote `circuit_breaker:\n  review_mode: periodic` and nothing else, and the reloaded page read it back clean. **Found by
+> driving it:** the snapshot first carried the classifier's model as the load resolved it, so the row showed the small slot's model
+> where the file means the alias; it now carries the stated value (`statedBreakerModel`). The values are not handed over live
+> (`LiveStateSchema` is unchanged): they reach a run through the saved file, at its start.
 > **What was not measured:** a child's escalation into the pause, a continue after it, a periodic review in the built application
 > (`part-h-proof` has no periodic launch), the other suites `pnpm verify:plan` names, and a live model. The row is in
 > [`../../architecture/first-executions.md`](../../architecture/first-executions.md).

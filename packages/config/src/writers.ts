@@ -303,6 +303,8 @@ export interface DesktopSave {
   /** REQ-CONFIG-256's closed list of runtime keys (`DESKTOP_SAVE_RUNTIME_KEYS`, PD-CONFIG-003 revision 2). */
   readonly runtime?: Partial<Record<DesktopSaveRuntimeKey, unknown>>;
   readonly circuitBreakerEnabled?: boolean;
+  /** PD-ORCH-018 clause 9: the changed review keys of `circuit_breaker:`, under the file's own names; an absent key is left as the file states it. */
+  readonly circuitBreakerReview?: PlainMap;
   readonly compressorThresholdPercentage?: number;
   readonly delegationStrategy?: DelegationStrategy;
   readonly display?: PlainMap;
@@ -406,6 +408,10 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
     for (const [key, value] of Object.entries(save.runtime)) runtime.set(key, doc.createNode(value));
   }
   if (save.circuitBreakerEnabled !== undefined) ensureMapping(root, 'circuit_breaker', doc).set('enabled', doc.createNode(save.circuitBreakerEnabled));
+  if (save.circuitBreakerReview && Object.keys(save.circuitBreakerReview).length > 0) {
+    const breaker = ensureMapping(root, 'circuit_breaker', doc);
+    for (const [key, value] of Object.entries(save.circuitBreakerReview)) if (value !== undefined) breaker.set(key, doc.createNode(value));
+  }
   if (save.compressorThresholdPercentage !== undefined) ensureMapping(root, 'compressor', doc).set('threshold_percentage', doc.createNode(save.compressorThresholdPercentage));
   if (save.delegationStrategy !== undefined) ensureMapping(root, 'rotaris', doc).set('delegation_strategy', doc.createNode(save.delegationStrategy));
   if (save.display && Object.keys(save.display).length > 0) {

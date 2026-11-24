@@ -13,7 +13,7 @@ const snapshot: ConfigSnapshot = {
   roles: [{ role: 'tester', rawModel: null, modelOrigin: 'default', effectiveModel: 'gpt-4o-mini', inherited: true, builtInDefault: 'medium_model', rawThinking: null, thinkingOrigin: 'default', tier: 'medium_model', tools: ['read_file'], declaredTools: ['read_file'] }],
   runtime: { max_depth: 3, max_active_children: 6, child_timeout: 1200, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [] },
   rawRuntime: { workspace: { max_depth: 3 }, global: null },
-  circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
+  circuitBreakerEnabled: true, circuitBreakerReview: { review_mode: 'on_signal', review_interval_tool_calls: 20, review_interval_messages: 20, escalation: 'pause', model: 'small_model' }, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
   skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, dictation: DICTATION_CONFIG_DEFAULT, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
   files: { workspace: 'C:/ws/.rotaris/agents.yaml', global: 'C:/cfg/agents.yaml' },
 };
@@ -324,4 +324,17 @@ describe('OQ-457 — the dictation keys on the screen', () => {
     expect(dictationSaveProblem(applyChange(off, { kind: 'dictation', key: 'local_model', value: '' }))).toBe('Dictation local model name must be a bare model name, with no path.');
     expect(dictationSaveProblem(applyChange(off, { kind: 'dictation', key: 'base_url', value: 'ftp://x' }))).toBe('Dictation base URL must be an http or https URL.');
   });
+  it('PD-ORCH-018 clause 9: a review setting is pending until Save, saved sparsely under the file\'s key names, and survives a reload beside another key\'s edit', () => {
+    const first = pendingFrom(snapshot);
+    expect(first.circuitBreakerReview).toEqual(snapshot.circuitBreakerReview);
+    const edited = applyChange(applyChange(first, { kind: 'circuitBreakerReview', key: 'review_mode', value: 'periodic' }), { kind: 'circuitBreakerReview', key: 'review_interval_tool_calls', value: 5 });
+    expect(applyChange(edited, { kind: 'circuitBreakerReview', key: 'review_mode', value: 'periodic' })).toBe(edited);
+    expect(savePayload(first, edited).circuitBreakerReview).toEqual({ review_mode: 'periodic', review_interval_tool_calls: 5 });
+    expect(savePayload(first, first).circuitBreakerReview).toBeUndefined();
+    // A reload that moved another key keeps the person's edit and takes the file's new value for the key they left alone.
+    const fresh = pendingFrom({ ...snapshot, circuitBreakerReview: { ...snapshot.circuitBreakerReview, escalation: 'abort' } });
+    const moved = rebasePending(first, edited, fresh);
+    expect(moved.circuitBreakerReview).toMatchObject({ review_mode: 'periodic', review_interval_tool_calls: 5, escalation: 'abort' });
+  });
+
 });

@@ -175,6 +175,29 @@ export function dictationFieldProblem(key: keyof DictationConfigView, value: str
   return null;
 }
 
+/**
+ * PD-ORCH-018 clause 9: the loop supervisor's review settings the Settings screen edits beside its switch, under the file's
+ * own key names (`circuit_breaker:`). The save is sparse: a key the person did not change is not sent and not written.
+ */
+export const CIRCUIT_BREAKER_REVIEW_MODE_NAMES = ['on_signal', 'periodic'] as const;
+export const CIRCUIT_BREAKER_ESCALATION_NAMES = ['pause', 'abort'] as const;
+export const CircuitBreakerReviewViewSchema = z.object({
+  review_mode: z.enum(CIRCUIT_BREAKER_REVIEW_MODE_NAMES),
+  review_interval_tool_calls: z.number().int(),
+  review_interval_messages: z.number().int(),
+  escalation: z.enum(CIRCUIT_BREAKER_ESCALATION_NAMES),
+  model: z.string(),
+});
+export type CircuitBreakerReviewView = z.infer<typeof CircuitBreakerReviewViewSchema>;
+export const CircuitBreakerReviewSaveSchema = z.object({
+  review_mode: z.enum(CIRCUIT_BREAKER_REVIEW_MODE_NAMES).optional(),
+  review_interval_tool_calls: z.number().int().min(1).optional(),
+  review_interval_messages: z.number().int().min(1).optional(),
+  escalation: z.enum(CIRCUIT_BREAKER_ESCALATION_NAMES).optional(),
+  model: z.string().min(1).max(NAME_MAX).optional(),
+}).strict();
+export type CircuitBreakerReviewSavePayload = z.infer<typeof CircuitBreakerReviewSaveSchema>;
+
 export const ConfigSnapshotSchema = z.object({
   workspaceRoot: z.string(),
   /** False when the files could not be loaded; `fatal` then carries REQ-CONFIG-478's report and every other field is the built-in default. */
@@ -209,6 +232,8 @@ export const ConfigSnapshotSchema = z.object({
   /** REQ-CONFIG-471: each scope's raw `runtime:` mapping as the file states it; null when the file states none. */
   rawRuntime: z.object({ workspace: z.record(z.string(), z.unknown()).nullable(), global: z.record(z.string(), z.unknown()).nullable() }),
   circuitBreakerEnabled: z.boolean(),
+  /** PD-ORCH-018 clause 9: the review mode, its two intervals, the escalation and the classifier's model, resolved. */
+  circuitBreakerReview: CircuitBreakerReviewViewSchema,
   compressorThresholdPercentage: z.number().int(),
   /** REQ-CHAT-166 (Part Z): the transcript's four display caps, resolved. */
   display: DisplayViewSchema,
@@ -359,6 +384,8 @@ export const DesktopSaveSchema = z.object({
   /** OQ-467: the runtime values are open-shaped (lists of roots and hosts among them), held to FREE_TEXT_MAX as JSON. */
   runtime: jsonBounded(z.partialRecord(z.enum(DESKTOP_SAVE_RUNTIME_KEYS), z.unknown())).optional(),
   circuitBreakerEnabled: z.boolean().optional(),
+  /** PD-ORCH-018 clause 9: the changed keys of the review settings, into `circuit_breaker:`. */
+  circuitBreakerReview: CircuitBreakerReviewSaveSchema.optional(),
   compressorThresholdPercentage: z.number().int().optional(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES).optional(),
   roles: z.record(z.string().max(NAME_MAX), RoleEditSchema).optional(),

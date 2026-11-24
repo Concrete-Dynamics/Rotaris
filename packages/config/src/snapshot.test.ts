@@ -136,3 +136,17 @@ describe('PD-CONFIG-003: the per-agent timeout reaches the snapshot', () => {
     expect(readSnapshot(dir('rotaris-timeout-global-'), bare, undefined, isolated()).runtime.child_timeout).toBe(1200);
   });
 });
+
+/** PD-ORCH-018 clause 9: the snapshot carries the loop supervisor's review settings the Delegation page edits. */
+describe('PD-ORCH-018: the review settings reach the snapshot', () => {
+  it('stated values reach the view; with none stated they are the defaults, and the model is the alias the file means, not the slot\'s model', () => {
+    const stated = dir('rotaris-review-');
+    mkdirSync(join(stated, '.rotaris'), { recursive: true });
+    writeFileSync(join(stated, '.rotaris', 'agents.yaml'), 'small_model: gpt-4o-mini\ncircuit_breaker:\n  review_mode: periodic\n  review_interval_tool_calls: 5\n  escalation: abort\n');
+    expect(readSnapshot(dir('rotaris-review-global-'), stated, undefined, isolated()).circuitBreakerReview).toEqual({ review_mode: 'periodic', review_interval_tool_calls: 5, review_interval_messages: 20, escalation: 'abort', model: 'small_model' });
+    const named = dir('rotaris-review-named-');
+    mkdirSync(join(named, '.rotaris'), { recursive: true });
+    writeFileSync(join(named, '.rotaris', 'agents.yaml'), 'circuit_breaker:\n  model: gpt-4o\n');
+    expect(readSnapshot(dir('rotaris-review-global-'), named, undefined, isolated()).circuitBreakerReview).toEqual({ review_mode: 'on_signal', review_interval_tool_calls: 20, review_interval_messages: 20, escalation: 'pause', model: 'gpt-4o' });
+  });
+});

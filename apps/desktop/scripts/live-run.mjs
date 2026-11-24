@@ -3345,12 +3345,17 @@ if (wanted.includes('solo')) {
   const wfTraffic = readTraffic('solo-workflow').map((r) => String(r.requestBody ?? ''));
   const offered = wfTraffic.some((b) => b.includes('"name":"workflow"'));
   const endings = wfTraffic.filter((b) => /Workflow [^\n"]* \(wf_\d+\) (completed|failed|was stopped|was interrupted)/.test(b));
-  const completedTold = wfTraffic.some((b) => /Workflow [^\n"]* \(wf_\d+\) completed/.test(b));
+  // The ending reaches the entry role one of two ways: the run's notice at its turn's end, or its own `status` call, after
+  // which the notice is withdrawn so it is not told twice (`acknowledgeWorkflow`).
+  const readByStatus = wfTraffic.filter((b) => /workflow: [^\n"]* \(wf_\d+\)\\nstate: (completed|failed|stopped|interrupted)/.test(b));
+  const completedTold = wfTraffic.some((b) => /Workflow [^\n"]* \(wf_\d+\) completed/.test(b) || /workflow: [^\n"]* \(wf_\d+\)\\nstate: completed/.test(b));
   if (RECORD_TRAFFIC) check(offered, 'a solo run\'s entry role was offered the workflow tool (PD-ORCH-018 clause 5)', offered ? 'offered' : 'no recorded request offers it');
   if (wfStarts.length === 0) noted('the model never called the workflow tool, so clauses 5 to 7 are unasked', `${wfCalls.length} tool calls, none of them workflow`);
   else {
     check(wfAdmitted.length > 0, 'a workflow call was admitted (PD-ORCH-018 clause 5)', `${wfAdmitted.length} of ${wfStarts.length} workflow calls ok`);
-    if (RECORD_TRAFFIC) check(endings.length > 0, 'the entry role was told its workflow ended, in a later request (PD-ORCH-018 clause 7)', `${endings.length} request(s) carry an ending`);
+    if (RECORD_TRAFFIC) check(endings.length > 0 || readByStatus.length > 0, 'the entry role was told its workflow ended, in a later request (PD-ORCH-018 clause 7)', `${endings.length} request(s) carry the run's notice, ${readByStatus.length} a status result that reads an ending`);
+    // Recorded, not asserted: a role told by the notice may still call `status` afterwards, which reads the same ending.
+    if (RECORD_TRAFFIC && readByStatus.length > 0) noted('how the entry role learned the ending', endings.length === 0 ? 'by its own status call; the notice was withdrawn' : `by the notice (${endings.length} request(s)) and by status`);
     if (completedTold) check(wfAgents.size >= 2, 'a completed workflow\'s agents ran as children of the run (PD-ORCH-018 clause 6)', `${wfAgents.size} agent(s) besides the root made tool calls: ${[...wfAgents].join(', ')}`);
     else noted('no workflow of this run completed, so its agents are unasked', 'the script the model wrote failed or was stopped; the ending it was told is in the traffic');
   }

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { configureChangeOf, parseSkillListing, parseSkillLoadMarker, type ConfigureChangeRecord, type ImageAttachment, type ParsedSkillListing, type ParsedSkillLoadMarker, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
+import { WORKFLOW_STARTED } from './constants.js';
+import { configureChangeOf, parseSkillListing, parseSkillLoadMarker, type ConfigureChangeRecord, type ImageAttachment, type ParsedSkillListing, type ParsedSkillLoadMarker, type SkillListingSpan, type TranscriptRow, type WorkflowStatus } from '@rotaris/contracts';
 import { Markdown } from '../markdown/Markdown.js';
 import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
@@ -134,6 +135,12 @@ export interface TranscriptSurface {
   readonly taskLabel?: ((name: string) => string | null) | undefined;
   /** PD-CHAT-015: pressing a thread line shows that agent's own transcript. Absent draws the line inert. */
   readonly openThread?: ((name: string) => void) | undefined;
+  /**
+   * PD-ORCH-018 clause 9: a workflow as it stands now, by the agent that started it and its id; null where the live run
+   * holds none of that id (a stored record never does). And the row's Stop. The view above holds the session; the row asks.
+   */
+  readonly workflowStatus?: ((agent: string, id: string) => WorkflowStatus | null) | undefined;
+  readonly stopWorkflow?: ((agent: string, id: string) => Promise<{ ok: true } | { ok: false; message: string }>) | undefined;
   /**
    * REQ-CHAT-164's drawing half: the whole seconds a live call's provider has been silent, or null. **Detecting
    * the ten seconds is stream-side and is Part Z's** (Z3b); drawing what it found is this file's.
@@ -695,6 +702,47 @@ function configValue(value: unknown): string {
 
 type UndoState = { readonly kind: 'idle' } | { readonly kind: 'busy' } | { readonly kind: 'done' } | { readonly kind: 'refused'; readonly message: string };
 
+/** PD-ORCH-018 clause 9: the id a `workflow` start call's result names, or null for any other call. */
+export function workflowIdOf(row: Pick<TranscriptRow, 'toolName' | 'output'>): string | null {
+  if (row.toolName !== 'workflow') return null;
+  return WORKFLOW_STARTED.exec(row.output ?? '')?.[1] ?? null;
+}
+
+/** PD-ORCH-018 clause 9: what the workflow's line says: its phase, how many of its agents have ended, and its state. */
+export function workflowLineText(status: WorkflowStatus | null, id: string): string {
+  if (status === null) return `${id} · its progress is shown while its run is live`;
+  const agents = status.agentsStarted === 0 ? 'no agent started yet' : `${status.agentsEnded} of ${status.agentsStarted} ${status.agentsStarted === 1 ? 'agent' : 'agents'} ended`;
+  return [status.name, status.phase === '' ? null : status.phase, agents, status.state].filter((part) => part !== null).join(' · ');
+}
+
+/**
+ * PD-ORCH-018 clause 9: the workflow's line, on the row of the call that started it — one row per workflow. It stands in
+ * the preview's place whatever the workflow's state, so the row's height does not change as the workflow moves; opening
+ * the row shows its script (the call's input). Stop is offered while it runs.
+ */
+function WorkflowLine({ agent, id, status, stop }: { agent: string; id: string; status: WorkflowStatus | null; stop: TranscriptSurface['stopWorkflow'] }) {
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const running = status?.state === 'running';
+  const press = async () => {
+    if (stop === undefined || busy) return;
+    setBusy(true);
+    const r = await stop(agent, id);
+    setBusy(false);
+    setRefusal(r.ok ? null : r.message);
+  };
+  return (
+    <div className="config-change workflow-line" data-testid="workflow-line" data-workflow={id} data-state={status?.state ?? 'unknown'}>
+      <div className="config-change__line">
+        <span className={`config-change__text text-secondary mono${running ? ' workflow-line__text--live' : ''}`} data-testid="workflow-line-text">⤷ {refusal ?? workflowLineText(status, id)}</span>
+        {running && stop !== undefined && (
+          <DesignButton type="button" variant="link" size="compact" className="config-change__undo" onClick={() => { void press(); }} disabled={busy} data-testid="workflow-stop" aria-label={`Stop the workflow ${status.name}`}>Stop</DesignButton>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ConfigChangeLine({ change, undo }: { change: ConfigureChangeRecord; undo: TranscriptSurface['undoConfigChange'] }) {
   const [state, setState] = useState<UndoState>({ kind: 'idle' });
   const before = change.stated ? configValue(change.before) : 'not set';
@@ -913,6 +961,8 @@ export function Row(p: RowProps) {
     // for the row's stream, expanded or not, so it stays visible; the card's INPUT/OUTPUT sit beneath it when open.
     const preview = stream !== null && !row.settled ? (surface.terminalPreview?.(stream) ?? null) : null;
     const configChange = row.toolName === 'configure' && row.settled && outcome.state === 'ok' ? configureChangeOf(row.output) : null;
+    // PD-ORCH-018 clause 9: the call that started a workflow carries the workflow's line.
+    const workflowId = row.settled && outcome.state === 'ok' ? workflowIdOf(row) : null;
     return (
       <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-member-key={display.key} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
         <div className="row__grid">
@@ -938,7 +988,8 @@ export function Row(p: RowProps) {
             {/* REQ-CHAT-076: clicking a live terminal preview requests the pop-out for that stream (the one-line form, until a screen is retained). */}
             {/* PD-CONFIG-014 revision 3 (clause 7): a settled `configure` set draws its change, and offers its Undo. */}
             {configChange !== null && !collapsedToName && <ConfigChangeLine change={configChange} undo={surface.undoConfigChange} />}
-            {configChange === null && preview === null && !expanded && !collapsedToName && expandable && (
+            {workflowId !== null && !collapsedToName && <WorkflowLine agent={row.name ?? ''} id={workflowId} status={surface.workflowStatus?.(row.name ?? '', workflowId) ?? null} stop={surface.stopWorkflow} />}
+            {configChange === null && workflowId === null && preview === null && !expanded && !collapsedToName && expandable && (
               stream !== null && !row.settled
                 ? <DesignButton type="button" className="tool__preview tool__preview--terminal text-secondary mono" data-stream-id={stream} onClick={() => surface.openTerminal?.(stream)} disabled={surface.openTerminal === undefined}>⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</DesignButton>
                 : <div className="tool__preview text-secondary mono">⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</div>

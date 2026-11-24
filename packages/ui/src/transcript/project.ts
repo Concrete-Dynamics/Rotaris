@@ -1,5 +1,5 @@
 import { parseSkillLoadMarker, stepsPhrase, type ApprovalPayload, type QuestionPrompt, type TranscriptRow } from '@rotaris/contracts';
-import { DIFF_LINE_CAP, GROUP_BLOB_CAP, THINKING_STALE_SECONDS } from './constants.js';
+import { DIFF_LINE_CAP, GROUP_BLOB_CAP, THINKING_STALE_SECONDS, WORKFLOW_STARTED } from './constants.js';
 import type { ActivitySegment, DisplayRow, OutcomeCounts, TrailerRow } from './types.js';
 
 /**
@@ -236,9 +236,12 @@ export function capDiff(text: string): string {
   return [header ?? '', ...body.slice(0, DIFF_LINE_CAP), `… +${hidden} more ${hidden === 1 ? 'line' : 'lines'}, diff truncated`].join('\n');
 }
 
-/** REQ-CHAT-066: the two rows that never fold. */
+/**
+ * REQ-CHAT-066: the two rows that never fold. PD-ORCH-018 clause 9 adds a third: the call that started a workflow, since
+ * that row is the workflow's one row and a folded row shows neither its progress nor its Stop.
+ */
 function neverFolds(row: TranscriptRow): boolean {
-  return row.toolName === 'ask_questions' || (row.streamId !== undefined && !row.settled);
+  return row.toolName === 'ask_questions' || (row.streamId !== undefined && !row.settled) || (row.toolName === 'workflow' && WORKFLOW_STARTED.test(row.output ?? ''));
 }
 
 /**

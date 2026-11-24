@@ -1008,6 +1008,8 @@
 .config-change__line { display: flex; align-items: baseline; gap: var(--rt-space-2); min-width: 0; }
 .config-change__text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .config-change__undo { flex: none; }
+/* PD-ORCH-018 clause 9: a running workflow's line takes the primary ink; an ended one keeps the quiet ink of a preview. */
+.workflow-line__text--live { color: var(--rt-text); }
 .config-change__status { margin: 0; font-size: var(--rt-text-xs); }
 .tool__header:disabled { color: var(--rt-text); opacity: 1; }
 /* REQ-CHAT-060 puts the chevron and the tool name in "the tool accent colour" without naming a colour; the design

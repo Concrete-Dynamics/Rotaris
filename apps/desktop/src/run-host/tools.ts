@@ -562,6 +562,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    */
   const withheldAtPlanGate = new Set<string>(planGateHeld() ? granted.filter((t) => withheldUnderPlanGate(t)) : []);
   const delegationAvailable = ctx.delegation !== undefined && !single && !atDepthLimit;
+  // PD-ORCH-018 clause 9: this port's workflow manager, where it holds one, for the session record and the row's Stop.
+  let workflows: WorkflowManager | null = null;
   // Bound once the gate exists (below): a workflow script's tool calls go through it.
   let workflowGate: () => Gate = () => { throw new Error('the gate is not built yet'); };
   // Part Y (REQ-LIBRARY-099/100/101): the three artifact executors over the engine's port, bound to THIS agent.
@@ -642,12 +644,15 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       const delegation = ctx.delegation;
       const manager = new WorkflowManager({
         delegation, parentId, defaultPersona: 'coding-agent', now: () => Number(deps.clocks.monotonic.now()),
+        // Clause 9: each change republishes the session, which reads `workflows` from this port (as a question's does).
+        onChange: () => { if (!writes.closed()) ctx.writer.save(ctx.writer.currentStatus, {}); },
         dispatchTool: async (name, args, callId, signal) => {
           const r = await workflowGate().dispatch({ callId, name, rawArgs: JSON.stringify(args), persona: ctx.persona, agentId: ctx.agentName, agentName: ctx.agentName }, signal);
           return { text: r.text, isError: r.isError, interrupted: r.interrupted === true };
         },
       });
       executors.set('workflow', workflowTool(manager));
+      workflows = manager;
     }
   }
   const resolved = resolveAgentGrant(persona, { name: ctx.persona, declared, parentPersona: parentAgentPersona, coordinating: delegationAvailable && !directWork, prerequisites, isEntry });
@@ -871,6 +876,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     answerQuestions: (requestId, answers) => questions.resolve(requestId, answers),
     cancelQuestions: (requestId) => questions.cancel(requestId),
     pendingQuestions: () => questions.pending(),
+    // PD-ORCH-018 clause 9: this agent's workflows as the record shows them, and the row's Stop.
+    workflows: () => (workflows?.snapshots() ?? []).map((w) => ({ id: w.id, agent: ctx.agentName, name: w.name, state: w.state, phase: w.phase, agentsStarted: w.agentsStarted, agentsEnded: w.agentsEnded, calls: w.calls })),
+    stopWorkflow: (id) => workflows?.stop(id).ok === true,
     pendingApprovals: () => approvals.pending(),
     // REQ-SESSION-094: the run has ended; what this port's gate still has open settles now, and nothing more is written.
     close: (cutOff) => writes.close(cutOff),

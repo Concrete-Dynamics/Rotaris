@@ -338,6 +338,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     onSetNextReasoning={(level) => setField({ personas: { [entryPersona]: { thinking: level } } })}
     onOpenTrailer={onOpenTrailer}
     /* PD-CONFIG-014 revision 3: the Undo on a `configure` set's row, written by main through the workspace service. */
+    /* PD-ORCH-018 clause 9: the workflow row's Stop, a control on the live run. */
+    onStopWorkflow={async (agent, workflowId) => { const r = await control('stopWorkflow', { agent, workflowId }, 'The workflow could not be stopped; it may already have ended.'); return r.ok ? { ok: true } : { ok: false, message: r.reason }; }}
     onUndoConfigChange={async (change) => { const r = await bridge.command({ kind: 'config.undoAgentChange', setting: change.setting, scope: change.scope, stated: change.stated, ...(change.stated ? { before: change.before } : {}), after: change.after }); return r.ok ? { ok: true as const } : { ok: false as const, message: r.headline }; }}
     onAnswerQuestions={answerQuestions}
     onCancelQuestions={cancelQuestions}

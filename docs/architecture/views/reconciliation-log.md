@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-24**
 
+**A workflow's row (R-126; `PD-ORCH-018` clause 9; 2026-11-24).** `03-runtime-view/09-5-controls-reaching-in-adr-0010-1.md`: the control channel gains `stopWorkflow`. The session record gains `workflows`, derived from the live run's ports at each snapshot as `pendingQuestions` is and never stored; a manager's change republishes the session through `writer.save`. The row is the `workflow` start call's tool row (`transcript/Row.tsx`, `WorkflowLine`), kept out of tool groups by `neverFolds`. No channel or store column is added.
+
 **The depth slider and the composer's strategy chip (R-126; `PD-ORCH-018` clauses 4 and 10; 2026-11-24).** No view changes: the slider writes `runtime.max_depth` through the Settings save as the number field did, and the chip sends the existing `config.save` with `delegationStrategy`. `StepSlider` joins the design system (`design-system/forms.tsx`). The run host reads `max_depth` through `enforcedDepth` (`contracts/config.ts`): 3 or more is no limit.
 
 **The `workflow` tool (R-126; `PD-ORCH-018` clauses 5 to 7; [ADR-0068](../adr/0068-workflow-scripts-run-in-a-quickjs-isolate-in-the-run-host.md); 2026-11-24).** `03-runtime-view/01-1-start.md`: `DelegationOps` gains `beginWorkflow`, `endWorkflow`, `acknowledgeWorkflow` and `claimForWorkflow`, and the resume loop waits on a running workflow as on a child. `agent-tools` gains the isolate, the journal and the tool; `quickjs-emscripten-core` and its `release-sync` variant are external dependencies of the run host's bundle. No channel, command or store column is added.

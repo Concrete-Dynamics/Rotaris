@@ -205,6 +205,8 @@ export interface WorkspaceViewProps {
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
   /** PD-CONFIG-014 revision 3: the Undo on a `configure` set's transcript row. */
   readonly onUndoConfigChange?: TranscriptSurface['undoConfigChange'];
+  /** PD-ORCH-018 clause 9: the workflow row's Stop. */
+  readonly onStopWorkflow?: TranscriptSurface['stopWorkflow'];
   /** PD-CHAT-002: submission and cancellation callbacks for the docked question form. */
   readonly onAnswerQuestions?: ((requestId: string, answers: QuestionAnswers) => Promise<{ delivered: boolean }>) | undefined;
   readonly onCancelQuestions?: ((requestId: string) => void) | undefined;
@@ -791,7 +793,7 @@ export const STRATEGY_HINTS: Readonly<Record<DelegationStrategyName, string>> = 
   orchestrator: 'coordinates specialists', swarm: 'delegates as widely as it can', single: 'one agent, no delegation', solo: 'one agent, delegates and scripts workflows',
 };
 
-export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, delegationStrategy = 'orchestrator', onSetDelegationStrategy, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, delegationStrategy = 'orchestrator', onSetDelegationStrategy, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onStopWorkflow, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // PD-CHAT-015: whose transcript is shown — the run's own conversation first. REQ-CHAT-069's "This task" needs a
   // selected agent, and without one it is the run's.
@@ -1299,6 +1301,9 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
     return threadedRows(rows, shownAgent, agents, entryRoots, heldThreads);
   }, [shownAgent, agents, rows, entryRoots, heldThreads]);
   /** PD-CHAT-015: a thread line's state and live elapsed time, by the agent's name; pressing the line shows that agent's transcript. */
+  // PD-ORCH-018 clause 9: a workflow's live state for its row, read from the session's derived list.
+  const workflowList = session?.workflows;
+  const workflowStatusOf = useMemo(() => (agent: string, id: string) => workflowList?.find((w) => w.agent === agent && w.id === id) ?? null, [workflowList]);
   const threadStateOf = useMemo(() => {
     const byName = new Map(agents.map((a) => [a.name, a]));
     return (name: string): string | null => { const a = byName.get(name); return a === undefined ? null : threadState(a, nowIso); };
@@ -1556,6 +1561,8 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
           pendingApprovals={pending}
           questionAgent={session?.agents[0]?.name}
           threadState={threadStateOf}
+          workflowStatus={workflowStatusOf}
+          onStopWorkflow={onStopWorkflow}
           onOpenThread={openThread}
           taskLabel={taskLabel}
           onPageOlder={onPageOlder}

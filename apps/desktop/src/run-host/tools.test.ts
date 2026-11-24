@@ -1018,6 +1018,10 @@ ${runtimeKeys}`);
     expect(status.text).toContain('phase: Write');
     // The agent read the ending itself, so the notice still waiting for it is withdrawn.
     expect(acknowledged).toEqual(['wf_1']);
+    // Clause 9: the port reports the workflow as the session record carries it, and stops only one that runs.
+    expect(e.port.workflows?.()).toEqual([{ id: 'wf_1', agent: 'orchestrator', name: 'review', state: 'completed', phase: 'Write', agentsStarted: 2, agentsEnded: 2, calls: 4 }]);
+    expect(e.port.stopWorkflow?.('wf_1')).toBe(false);
+    expect(e.port.stopWorkflow?.('wf_9')).toBe(false);
     // A script cannot start a workflow itself, and one that fails says why.
     const nested = await e.port.dispatch(e.call('wf2', 'workflow', { action: 'start', name: 'nested', script: `await tool('workflow', { action: 'status' });` }), new AbortController().signal);
     expect(nested.status).toBe('ok');

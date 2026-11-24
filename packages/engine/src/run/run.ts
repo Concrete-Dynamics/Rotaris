@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow, ChildRow, StoreDal } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord, type RunOverride } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord, type RunOverride, type WorkflowStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -3030,6 +3030,19 @@ export class Run {
     for (const p of this.ports) out.push(...(p.pendingApprovals?.() ?? []));
     if (this.deps.tools && !this.ports.has(this.deps.tools)) out.push(...(this.deps.tools.pendingApprovals?.() ?? []));
     return out;
+  }
+  /** PD-ORCH-018 clause 9: every agent's workflows, for the whole-session update. */
+  workflows(): WorkflowStatus[] {
+    const out: WorkflowStatus[] = [];
+    for (const p of this.ports) out.push(...(p.workflows?.() ?? []));
+    if (this.deps.tools && !this.ports.has(this.deps.tools)) out.push(...(this.deps.tools.workflows?.() ?? []));
+    return out;
+  }
+  /** PD-ORCH-018 clause 9: stops workflow `id` of the agent named `agent`; false where no port of that agent runs one of that id. */
+  stopWorkflow(agent: string, id: string): boolean {
+    const ports = [...this.ports, ...(this.deps.tools && !this.ports.has(this.deps.tools) ? [this.deps.tools] : [])];
+    for (const p of ports) if (p.workflows?.().some((w) => w.agent === agent && w.id === id) === true && p.stopWorkflow?.(id) === true) return true;
+    return false;
   }
   /** REQ-CHAT-097: every conversation's pending prompt, for the whole-session update. */
   pendingQuestions(): QuestionPrompt[] {

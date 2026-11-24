@@ -38,8 +38,11 @@ and nothing it states reaches a run taken under any other strategy.
 8. **A workflow survives a restart.** Each result a script received MUST be recorded as it arrives. A workflow cut off by
    the application ending MUST be resumable: the same script, started again, receives the recorded results in order
    without repeating the work that produced them, and continues from the first call that has none.
-9. **A workflow is one row.** The transcript MUST show a workflow as one row naming it, its current phase and how many
-   of its agents have ended, with a control that stops it; the row opens to the agents it started and to its script.
+9. **A workflow is one row.** The transcript MUST show a workflow on one row, the row of the call that started it: its
+   name, the phase its script last named, how many of the agents it started have ended, and its state, with a control that
+   stops it while it runs. That row MUST never fold into a group. Opening it shows the script. The agents it started are
+   shown as every delegated agent is. The row's progress is read from the live run; a session read back from the store
+   shows the call and the workflow's id alone.
 10. **The strategy is chosen where a run is started, too.** The composer MUST offer the four strategies for the next run,
     beside the run-start mode and on its terms. It writes the key the settings screen writes, and neither holds a strategy
     of its own. The settings screen's selector MUST offer the four in this order: `orchestrator`, `swarm`, `single`, `solo`.
@@ -65,7 +68,7 @@ every monitoring surface and calls Settings their one editor: the composer is wh
 surface, clause 10 puts the strategy there on REQ-ORCH-025's own words, and the depth control stays in Settings alone.
 
 > **Narrows:** REQ-ORCH-025, REQ-ORCH-029, REQ-ORCH-016, REQ-ORCH-005, REQ-ORCH-014, REQ-TOOLS-001
-> **Narrows:** REQ-CONFIG-112, REQ-CONFIG-321, REQ-CONFIG-322, REQ-MONITOR-169
+> **Narrows:** REQ-CONFIG-112, REQ-CONFIG-321, REQ-CONFIG-322, REQ-MONITOR-169, REQ-MONITOR-004, REQ-CHAT-066
 > **Extends:** REQ-ORCH-024
 
 *Raised by the owner, 2026-11-24; logged as [R-126](../requests.md#r-126).*
@@ -79,6 +82,16 @@ strategies with Solo chosen; its write is held by a unit test, and the press tha
 completed in the drive. `overview-proof` and `mission-proof` pass on the built application; the second presses the
 slider's second stop and reads `max_depth: 2` in the file, and its last press now names the Delegation page, where it named
 a Runtime page the settings screen has not had since `PD-CONFIG-012`. No critique was run.
+
+**First execution of clause 9, 2026-11-24.** The workflow's line is drawn on the `workflow` start call's row, in the place
+of the row's preview, so the row's height does not change as the workflow moves; the row no longer folds into a tool
+group (`neverFolds`), which the first live capture showed it did. Its state comes from `SessionRecord.workflows`, derived
+from the live run at each snapshot as the pending questions are; Stop is a new control, `stopWorkflow`. Against `ds41` the
+row read `todos-exports-and-readme · Two analysts in parallel · 2 of 2 agents ended · completed`, and the entry role,
+having read the ending with `status`, answered once. Stop is held by unit tests on the row and on the port, and was not
+pressed against a running workflow: both live workflows ended within seconds. As first written the clause said the row
+"opens to the agents it started and to its script"; the agents are the transcript's own thread lines, and the row opens
+to the script alone.
 
 **The third step is no limit (the owner, 2026-11-24).** Asked whether the third step means three levels or none, the owner
 first chose "Three levels" and then wrote: "as i said before 1 2 and 3 is unlimited." The later word governs. The clause as

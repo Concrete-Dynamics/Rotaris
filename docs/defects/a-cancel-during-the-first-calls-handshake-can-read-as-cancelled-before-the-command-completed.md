@@ -37,6 +37,8 @@ branch could not land; the three green runs were on the same head with the host 
 alone on `main` at `e23cf596`. The host was quiet in every run, so "the host quiet" is not the condition that decides
 it here.
 
+Seen again 2026-11-24 on a developer's Ubuntu host, twice in seven runs of `pnpm check` on the `feat/solo-strategy` branch (R-126), each time the one red of the run, in `terminal.pty-01.test.ts`'s case "a run's cancel that lands while a fresh shell answers the first call's handshake"; the suite passed alone four times in a row. The branch touches nothing under `packages/agent-tools/src/terminal/`.
+
 ## Specs
 
 `REQ-TOOLS-097` and `REQ-TOOLS-099` with OQ-144's ruling (a cancel that lands before the command is written ends the

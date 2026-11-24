@@ -305,6 +305,8 @@ export interface DesktopSave {
   readonly circuitBreakerEnabled?: boolean;
   /** PD-ORCH-018 clause 9: the changed review keys of `circuit_breaker:`, under the file's own names; an absent key is left as the file states it. */
   readonly circuitBreakerReview?: PlainMap;
+  /** PD-TOOLS-022 clause 8: the changed keys of `advisor:`, under the file's own names. */
+  readonly advisor?: PlainMap;
   readonly compressorThresholdPercentage?: number;
   readonly delegationStrategy?: DelegationStrategy;
   readonly display?: PlainMap;
@@ -411,6 +413,10 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
   if (save.circuitBreakerReview && Object.keys(save.circuitBreakerReview).length > 0) {
     const breaker = ensureMapping(root, 'circuit_breaker', doc);
     for (const [key, value] of Object.entries(save.circuitBreakerReview)) if (value !== undefined) breaker.set(key, doc.createNode(value));
+  }
+  if (save.advisor && Object.keys(save.advisor).length > 0) {
+    const advisor = ensureMapping(root, 'advisor', doc);
+    for (const [key, value] of Object.entries(save.advisor)) if (value !== undefined) advisor.set(key, doc.createNode(value));
   }
   if (save.compressorThresholdPercentage !== undefined) ensureMapping(root, 'compressor', doc).set('threshold_percentage', doc.createNode(save.compressorThresholdPercentage));
   if (save.delegationStrategy !== undefined) ensureMapping(root, 'rotaris', doc).set('delegation_strategy', doc.createNode(save.delegationStrategy));

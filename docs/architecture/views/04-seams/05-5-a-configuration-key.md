@@ -33,6 +33,8 @@ it, the screen's runtime keys (`pendingFrom`) must equal it and `TIER_B_RUNTIME_
 confinement and egress fields (`improvement-timeout.test.ts`, `writers.test.ts`), so a runtime key the screen edits is
 added in the list or the save refuses it.
 
+`advisor:` with the `advisor_model` slot (`PD-TOOLS-022`, 2026-11-24) is the worked example of **a new section and a new slot together**: the slot in `MODEL_SLOTS`, `MODEL_SLOT_NAMES`, `EDITABLE_SLOTS`, the screen's `SLOT_KEYS` and the agent-settable key classes; the section in `SECTION_KEYS`, its reader under `sections/`, `LoadedConfiguration`, the snapshot view, the sparse save and the six `config-state.ts` stops; and the run's reading of both in one function (`advisorOf`), where an unset slot falls to another.
+
 `dictation:` (OQ-457, 2026-10-30) is the worked example of a section **no run reads**: stop 5 is not crossed, main reads the snapshot at each press, and its rule for a value (`dictationFieldProblem` in `packages/contracts/src/config.ts`) is the one the loader, the save schema and the field share.
 
 A persona field the engine must act on rides on `Persona` (`packages/engine/src/children/personas.ts`), set in

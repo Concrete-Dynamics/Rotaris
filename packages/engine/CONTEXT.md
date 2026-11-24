@@ -266,6 +266,11 @@ assertion. — `REQ-ORCH-116`
 The record of what was checked for a task and how it came out, handed to the acceptance role and
 consulted before acceptance is allowed. — `REQ-ORCH-129`, `REQ-ORCH-039`
 
+**Advisor**:
+The stronger model an agent consults through the `advisor` tool: it reads the agent's conversation and a question, and
+answers; it runs no tools. Not the development hook under `tools/agent-advisor/`, which watches the coding agents of this
+repository. — `PD-TOOLS-022`
+
 **Loop supervisor**:
 The hidden observer that detects a run circling and escalates. Its **periodic review** asks, at an interval of tool calls
 or messages, whether an agent is progressing toward its task. — `REQ-ORCH-105`, `PD-ORCH-018`

@@ -39,6 +39,7 @@ import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { meteredBackend, type CountUsage } from './run/metered.js';
+import { createAdvisor, type AdvisorOps, type AdvisorSetup } from './run/advisor.js'; // PD-TOOLS-022
 import { mintTodoId, taskTitle, Todo, type TodoDocument } from './run/todo.js';
 import type { Persona, PersonaResolver } from './children/personas.js';
 import type { AgentActivity } from './children/activity.js';
@@ -64,6 +65,11 @@ export interface ModelSetup {
   /** REQ-CONFIG-065: the model that summarises child work, when the configuration names one; else the entry model. */
   readonly summariser?: { readonly model: ModelRef; readonly thinking: ThinkingLevel } | null;
   /**
+   * PD-TOOLS-022: the advisor as the configuration resolves it — the `advisor_model` slot, else the large tier, with the
+   * section's cap — or null where the switch is off, the cap is 0 or no model resolves, and then no agent is offered the tool.
+   */
+  readonly advisor?: AdvisorSetup | null;
+  /**
    * Part AH (ADR-0060): the configuration's half of context compression — the compressing model (null means
    * the agent's own, REQ-MONITOR-080), the section's two figures and REQ-CONFIG-134's resolved trigger. The
    * backend, the timers and the credential resolver are the session's and are joined to it at run start.
@@ -75,6 +81,21 @@ export interface ModelSetup {
     readonly preserveRecentTurns: number;
     readonly triggerFor: (model: ModelRef) => ResolvedTrigger;
   } | undefined;
+}
+
+/**
+ * PD-TOOLS-022: the run's advisor from the configuration's half — the metered backend, so a consult is counted on the run
+ * at the advisor's rates (REQ-EVENTS-053), the session's credentials, the helper-model read (PD-MONITOR-007), and the
+ * advisor's own compression threshold as the most of a conversation it is given. The two callbacks are read at each
+ * consult, so the context may be built before the run exists.
+ */
+function advisorOpsOf(model: ModelSetup, countUsage: CountUsage, helperModel: HelperModel): AdvisorOps | undefined {
+  if (!model.advisor) return undefined;
+  const compression = model.compression;
+  return createAdvisor({
+    backend: meteredBackend(model.backend, countUsage), setup: model.advisor, credentialFor: model.config.credentialFor, helperModel,
+    ...(compression ? { capChars: (ref: ModelRef) => compression.triggerFor(ref).tokens * compression.charsPerToken } : {}),
+  }, model.config.model);
 }
 
 /** What the run-host root hands a session's tool port factory. */
@@ -176,6 +197,11 @@ export interface ToolPortContext {
    * session's control arms clear it on the user's next input. Absent means no run holds one (a caller outside a run).
    */
   readonly presence?: UserPresence | undefined;
+  /**
+   * PD-TOOLS-022: the advisor of this run, the same object on every agent's context; the port offers the `advisor` tool
+   * where it stands and its model is not the agent's own (clause 5), and keeps the count (clause 6). Absent means none.
+   */
+  readonly advisor?: AdvisorOps | undefined;
 }
 
 /**
@@ -1588,7 +1614,7 @@ export class Sessions {
     // PD-TOOLS-005: one away holder per RUN, on the same terms — reached by every agent through `baseCtx`, discarded with the run.
     const presence = new UserPresence({ record: warn, writer });
     live.presence = presence;
-    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, pendingQuestionsOfSession: () => runRef.run?.pendingQuestions() ?? [], pendingApprovalsOfSession: () => runRef.run?.pendingApprovals() ?? [], presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    const baseCtx = { advisor: advisorOpsOf(model, (usage, ref) => { countUsage(usage, ref); }, (choice) => helperModel(choice)), sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, pendingQuestionsOfSession: () => runRef.run?.pendingQuestions() ?? [], pendingApprovalsOfSession: () => runRef.run?.pendingApprovals() ?? [], presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
     const tools: ToolPort | null = null;
     live.tools = tools;
@@ -1812,7 +1838,7 @@ export class Sessions {
     // PD-TOOLS-005: a continuation is a new run, so it starts with the user present — a previous run's away stretch is not inherited.
     const presence = new UserPresence({ record: warn, writer: s.writer });
     s.presence = presence;
-    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, pendingQuestionsOfSession: () => runRef.run?.pendingQuestions() ?? [], pendingApprovalsOfSession: () => runRef.run?.pendingApprovals() ?? [], presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    const baseCtx = { advisor: advisorOpsOf(model, (usage, ref) => { countUsage(usage, ref); }, (choice) => helperModel(choice)), sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, pendingQuestionsOfSession: () => runRef.run?.pendingQuestions() ?? [], pendingApprovalsOfSession: () => runRef.run?.pendingApprovals() ?? [], presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     // PD-ORCH-005 clause 3: what a crash left is recorded before the settle, which leaves every `paused` agent as it is.
     // A run of this process that parked closed no tool port: a ring row still `running` may be its call still under way —

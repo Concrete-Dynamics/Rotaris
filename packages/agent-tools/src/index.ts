@@ -34,3 +34,4 @@ export * from './tools/artifacts.js';
 export * from './tools/questions.js';
 /** PD-CONFIG-014: the `configure` tool — Rotaris's own configuration by key, never by a file write. */
 export * from './tools/configure.js';
+export * from './tools/advisor.js';

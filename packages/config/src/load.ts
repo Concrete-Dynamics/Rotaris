@@ -24,6 +24,7 @@ import { readMcpServersSection } from './sections/mcp-servers.js';
 import { readDiscoveryFiles, resolveMcpConfiguration, type BuiltinLaunch, type Diagnostic, type DiscoveredServers, type McpConfiguration } from './mcp/index.js';
 import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from './mcp/code-intelligence.js';
 import { readCircuitBreakerSection, type CircuitBreakerSection } from './circuit-breaker-section.js';
+import { readAdvisorSection, type AdvisorSection } from './sections/advisor.js'; // PD-TOOLS-022
 import { FieldReader, typeName, vocabularyString, type Problem, type ProblemSink } from './sections/field.js';
 import { resolveSlotsAndReasoning } from './slots.js';
 import { referentialMessages, renderProblems, type FatalLoadReport } from './validate.js';
@@ -70,6 +71,8 @@ export interface LoadedConfiguration {
   readonly runtime: RuntimeSection;
   readonly compressor: CompressorSection;
   readonly circuitBreaker: CircuitBreakerSection;
+  /** PD-TOOLS-022 clauses 6 and 8: the advisor's switch and its cap per agent. */
+  readonly advisor: AdvisorSection;
   /** REQ-GIT-070..072 (Part P): the three checkpoint keys, `max_per_session` rejected at load below 1 (REQ-GIT-071). */
   readonly checkpoints: CheckpointsSection;
   /** REQ-CONFIG-183/190..198 (Part AP): the strict `requirements:` block — spec 08's queue, change and human-in-the-loop keys, and the run branch template. */
@@ -610,6 +613,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const runtime = readRuntimeSection(top['runtime'], sink);
   const compressor = readCompressorSection(top['compressor'], sink);
   const circuitBreaker = readCircuitBreakerSection(top['circuit_breaker'], sink);
+  const advisor = readAdvisorSection(top['advisor'], sink); // PD-TOOLS-022
   const checkpoints = readCheckpointsSection(top['checkpoints'], sink);
   const requirements = readRequirementsSection(top['requirements'], sink); // Part AP
   const skills = readSkillsSection(top['skills'], sink); // ADR-0063
@@ -664,6 +668,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     runtime,
     compressor: { ...compressor, model: draft.compressorModel },
     circuitBreaker: { ...circuitBreaker, model: draft.circuitBreakerModel },
+    advisor, // PD-TOOLS-022
     checkpoints,
     requirements, // Part AP
     skills, // ADR-0063

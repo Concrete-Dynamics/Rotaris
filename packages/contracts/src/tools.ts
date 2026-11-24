@@ -6,11 +6,11 @@ import { z } from 'zod';
  * renders them and never invents a member.
  */
 
-/** REQ-TOOLS-001: exactly nineteen public names, and `configure` (PD-CONFIG-014) the twentieth. */
+/** REQ-TOOLS-001: exactly nineteen public names, `configure` (PD-CONFIG-014) the twentieth and `advisor` (PD-TOOLS-022) the twenty-first. */
 export const PUBLIC_TOOL_NAMES = [
   'ask_questions', 'delegate', 'background_output', 'wait_for_tasks', 'haet', 'haet_edit', 'haet_read', 'read_file',
   'write_file', 'terminal', 'git_commit', 'git_read', 'todo', 'fetch', 'grep', 'glob', 'artifact_read', 'artifact_list', 'artifact_write',
-  'configure',
+  'configure', 'advisor',
 ] as const;
 export type PublicToolName = (typeof PUBLIC_TOOL_NAMES)[number];
 export const PUBLIC_TOOL_NAME_SET: ReadonlySet<string> = new Set(PUBLIC_TOOL_NAMES);
@@ -64,6 +64,7 @@ export const TOOL_IMPLEMENTATIONS: Readonly<Record<PublicToolName, string | null
   artifact_list: 'artifactListTool',
   artifact_write: 'artifactWriteTool',
   configure: 'configureTool',
+  advisor: 'advisorTool',
 });
 
 /** REQ-TOOLS-012. */

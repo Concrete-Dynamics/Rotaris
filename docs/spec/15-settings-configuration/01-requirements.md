@@ -70,6 +70,8 @@ Part 1 of 13 of [domain 15](../15-settings-configuration.md), which indexes ever
 ### Merge disciplines
 
 - **REQ-CONFIG-040** — The merge recognizes exactly four classes of top-level key: replace-if-not-null, named-entry, section, and computed (REQ-CONFIG-041, REQ-CONFIG-043, REQ-CONFIG-047, REQ-CONFIG-049). A top-level key belonging to none of them contributes nothing to the merged configuration and is neither reported nor rejected. Contributing nothing to the merge is not the same as having no effect: such a key may still be read by a surface that parses the same file separately — `rotaris.delegation_strategy` is the shipped case (see Data & Formats). `display` is a section-class key (REQ-CONFIG-047, REQ-CONFIG-172) and `inject_agents_md` a replace-if-not-null key (REQ-CONFIG-466); both are merged by the load path and read back by the surfaces that write them.
+  > **Extended by [`PD-TOOLS-022`](../../product/directives/pd-tools-022.md#pd-tools-022), 2026-11-24.** `advisor` is a further section-class key, holding `enabled` (boolean, default true)
+  > and `max_uses` (integer 0 to 50, default 3).
   > **Extended by [`PD-WORKSPACE-002`](../../product/directives/pd-workspace-002.md#pd-workspace-002), 2026-09-21.** `instructions`
   > is a further section-class key holding the per-file `overrides` policy; it merges by the same rules and
   > is read back by the Instructions category. An unrecognized top-level key is **reported as a warning** naming the key and the file it was read from, and still contributes nothing to the merged configuration; it is never fatal, so a file authored against a later release still loads (REQ-CONFIG-233).

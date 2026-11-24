@@ -88,7 +88,7 @@ describe('REQ-CONFIG-277 / REQ-TOOLS-165 — the Tools inventory', () => {
 
   it('is sorted by name, and is the full public vocabulary', () => {
     const sorted = [...PUBLIC_TOOL_NAMES].sort((a, b) => a.localeCompare(b));
-    expect(sorted[0]).toBe('artifact_list');
+    expect(sorted[0]).toBe('advisor'); // PD-TOOLS-022: the twenty-first name sorts first
     expect(sorted).toHaveLength(PUBLIC_TOOL_NAMES.length);
     expect(new Set(sorted)).toEqual(new Set(PUBLIC_TOOL_NAMES));
   });

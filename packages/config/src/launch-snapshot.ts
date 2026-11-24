@@ -45,6 +45,7 @@ export function launchConfigurationSnapshot(
     runtime: cfg.runtime,
     compressor: cfg.compressor,
     circuit_breaker: cfg.circuitBreaker,
+    advisor: cfg.advisor,
     checkpoints: cfg.checkpoints,
     requirements: cfg.requirements,
     display: cfg.display,

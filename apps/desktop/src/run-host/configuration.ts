@@ -5,7 +5,7 @@ import { countNoun, err, ok } from '@rotaris/kernel';
 import { declaredToolsOf, isDelegationTarget, NOT_DELEGATION_TARGETS, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
 import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, providerEffort, readProjectSnapshot, readSavedConfiguration, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type HelperModel, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type AdvisorSetup, type CatalogueEntry, type ClassifierSlots, type HelperModel, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
 
 /**
@@ -491,6 +491,27 @@ export function retrospectiveOf(cfg: LoadedConfiguration, scripted: boolean): { 
   };
 }
 
+/**
+ * PD-TOOLS-022 clauses 5, 6 and 8: the advisor a run offers its agents — the `advisor_model` slot, then the large tier,
+ * with the slot's reasoning level, the model's own timeout and the section's cap. Null where the switch is off, the cap is
+ * 0, or neither slot names a model this run can reach; no agent is then offered the tool.
+ */
+export function advisorOf(cfg: LoadedConfiguration, scripted: boolean, modelTimeoutS: number): AdvisorSetup | null {
+  if (!cfg.advisor.enabled || cfg.advisor.max_uses < 1) return null;
+  const slot = cfg.slots.advisor_model ? 'advisor_model' : 'large_model';
+  const name = cfg.slots[slot];
+  const model = modelRefOf(cfg, name, scripted);
+  if (!name || !model) return null;
+  const configuredThinking = cfg.slotThinking[slot];
+  return {
+    model,
+    thinking: configuredThinking && configuredThinking !== 'auto' ? configuredThinking : thinkingOf(cfg.models[name]),
+    label: syntheticOriginOf(name, cfg.syntheticOrigins),
+    maxUses: cfg.advisor.max_uses,
+    timeoutMs: Math.round((cfg.models[name]?.timeout ?? modelTimeoutS) * 1000),
+  };
+}
+
 export interface ConfiguredRun extends RunSetup {
   readonly cfg: LoadedConfiguration;
   readonly runtime: RuntimeFromConfiguration;
@@ -793,6 +814,8 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
     const setup: ModelSetup = {
       backend,
       summariser: summariserOf(cfg, scripted),
+      // PD-TOOLS-022: the advisor every agent of this run may consult, or null.
+      advisor: advisorOf(cfg, scripted, runtime.modelTimeoutS),
       // Part AH (ADR-0060): the compressing pass's model; the section's figures travel beside it on the setup.
       compression: {
         model: compressorOf(cfg, scripted), timeoutMs: cfg.compressor.timeout_seconds * 1000,

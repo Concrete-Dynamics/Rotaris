@@ -15,10 +15,10 @@ export type ConfigScopeName = (typeof CONFIG_SCOPES)[number];
  */
 export const CONFIG_ORIGINS = ['workspace', 'global', 'discovered', 'default'] as const;
 
-export const MODEL_SLOT_NAMES = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
+export const MODEL_SLOT_NAMES = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'advisor_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
 export type ModelSlotName = (typeof MODEL_SLOT_NAMES)[number];
 /** REQ-CONFIG-256/329 and REQ-LIBRARY-040: the startup slots the screen edits. */
-export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model', 'improvement_collector_model', 'retrospective_model'] as const;
+export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model', 'improvement_collector_model', 'retrospective_model', 'advisor_model'] as const;
 /** PD-CONFIG-007 (REQ-CONFIG-069 narrowed): the slot/model reasoning vocabulary, `off` and `xhigh` included — the mirror of `REASONING_LEVELS` in `@rotaris/config`. */
 export const REASONING_LEVEL_NAMES = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type ReasoningLevelName = (typeof REASONING_LEVEL_NAMES)[number];
@@ -198,6 +198,16 @@ export const CircuitBreakerReviewSaveSchema = z.object({
 }).strict();
 export type CircuitBreakerReviewSavePayload = z.infer<typeof CircuitBreakerReviewSaveSchema>;
 
+/**
+ * PD-TOOLS-022 clause 8: the advisor's switch and its cap per agent, under the file's own key names (`advisor:`). The save
+ * is sparse, like the review settings above.
+ */
+export const ADVISOR_MAX_USES_BOUND = 50;
+export const AdvisorViewSchema = z.object({ enabled: z.boolean(), max_uses: z.number().int() });
+export type AdvisorView = z.infer<typeof AdvisorViewSchema>;
+export const AdvisorSaveSchema = z.object({ enabled: z.boolean().optional(), max_uses: z.number().int().min(0).max(ADVISOR_MAX_USES_BOUND).optional() }).strict();
+export type AdvisorSavePayload = z.infer<typeof AdvisorSaveSchema>;
+
 export const ConfigSnapshotSchema = z.object({
   workspaceRoot: z.string(),
   /** False when the files could not be loaded; `fatal` then carries REQ-CONFIG-478's report and every other field is the built-in default. */
@@ -234,6 +244,8 @@ export const ConfigSnapshotSchema = z.object({
   circuitBreakerEnabled: z.boolean(),
   /** PD-ORCH-018 clause 9: the review mode, its two intervals, the escalation and the classifier's model, resolved. */
   circuitBreakerReview: CircuitBreakerReviewViewSchema,
+  /** PD-TOOLS-022 clause 8: the advisor's switch and cap, resolved. */
+  advisor: AdvisorViewSchema,
   compressorThresholdPercentage: z.number().int(),
   /** REQ-CHAT-166 (Part Z): the transcript's four display caps, resolved. */
   display: DisplayViewSchema,
@@ -386,6 +398,8 @@ export const DesktopSaveSchema = z.object({
   circuitBreakerEnabled: z.boolean().optional(),
   /** PD-ORCH-018 clause 9: the changed keys of the review settings, into `circuit_breaker:`. */
   circuitBreakerReview: CircuitBreakerReviewSaveSchema.optional(),
+  /** PD-TOOLS-022 clause 8: the changed keys of `advisor:`. */
+  advisor: AdvisorSaveSchema.optional(),
   compressorThresholdPercentage: z.number().int().optional(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES).optional(),
   roles: z.record(z.string().max(NAME_MAX), RoleEditSchema).optional(),

@@ -39,7 +39,7 @@ export interface ScriptedCallRecord {
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
  * the script variable (`…_SCRIPT`) names the orchestrator's steps, comma-separated, one per model call, and
  * the child script variable (`…_CHILD_SCRIPT`) every child's. `glob`, `read`, `write`, `writeinfer`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
- * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `readfile:<path>` a `read_file` of that path (PD-CHAT-016); `configure:<key>=<json>` a `configure` set and `configure:<key>` its read (PD-CONFIG-014); `continue:<persona>:<name>` a delegation taking up the newest continuation offer
+ * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `readfile:<path>` a `read_file` of that path (PD-CHAT-016); `configure:<key>=<json>` a `configure` set and `configure:<key>` its read (PD-CONFIG-014); `advisor:<question>` a consult of the advisor (PD-TOOLS-022); `continue:<persona>:<name>` a delegation taking up the newest continuation offer
  * the conversation was told (`offeredTaskId`, PD-ORCH-004 revisions 3 and 4); `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
@@ -429,6 +429,14 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         const standing = Object.fromEntries(Object.entries(calls).filter(([key, n]) => (key === 'orchestrator' || key.startsWith('child:')) && n > 0).map(([key, n]) => [key, ordinalAt(scripts[key === 'orchestrator' ? 'orchestrator' : 'child'] ?? [], n - 1)]));
         yield ok<StreamPart>({ kind: 'text', delta: ['Work performed: the scripted agent read the repository and wrote NOTES.md.', 'Findings reached: the transcript renderer draws one row per event.', 'Questions left open: none.', `Scripted steps taken: ${JSON.stringify(standing)}`].join(String.fromCharCode(10)) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 40, output: 24 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
+      // PD-TOOLS-022: the advisor's one request, recognised by its own system text; the answer names what it was handed.
+      if (/^You are the advisor to an AI agent/.test(system)) {
+        const asked = /<question>\n([\s\S]*?)\n<\/question>/.exec(req.messages[1]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '')?.[1] ?? '';
+        yield ok<StreamPart>({ kind: 'text', delta: `Scripted advice on "${asked}": read the failing check first, change one thing, and run it again before you report.` });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 40, output: 20 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
         return;
       }
@@ -871,6 +879,8 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       const tool = dynamic ?? (step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } }
         : step.startsWith('readfile:') ? { name: 'read_file', args: { path: step.slice('readfile:'.length) } }
         : step.startsWith('configure:') ? configureStep(step.slice('configure:'.length))
+        // advisor:<question> — a consult of the advisor with that question (PD-TOOLS-022).
+        : step.startsWith('advisor:') ? { name: 'advisor', args: { question: step.slice('advisor:'.length) } }
         : TOOL_STEPS[step]);
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
         yield ok<StreamPart>({ kind: 'text', delta: `Calling ${tool.name}. ` });

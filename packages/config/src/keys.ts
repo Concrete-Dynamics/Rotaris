@@ -4,7 +4,7 @@
  * rejected nor silently lost: the loader warns naming it and the file, and every writer leaves it in place
  * (REQ-CONFIG-040, REQ-CONFIG-233, REQ-CONFIG-477 ground 1).
  */
-export const MODEL_SLOTS = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
+export const MODEL_SLOTS = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'advisor_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
 export type ModelSlot = (typeof MODEL_SLOTS)[number];
 
 /** REQ-CONFIG-070: exactly the three tier aliases. */
@@ -24,7 +24,7 @@ export const REPLACE_KEYS = [
   'inject_agents_md',
 ] as const;
 export const NAMED_ENTRY_KEYS = ['personas', 'models', 'mcp_servers', 'unavailable_models'] as const;
-export const SECTION_KEYS = ['runtime', 'verifier', 'compressor', 'circuit_breaker', 'transcript', 'display', 'initialization', 'project_init', 'requirements', 'skills', 'hooks', 'checkpoints', 'integration', 'instructions', 'dictation'] as const;
+export const SECTION_KEYS = ['runtime', 'verifier', 'compressor', 'circuit_breaker', 'advisor', 'transcript', 'display', 'initialization', 'project_init', 'requirements', 'skills', 'hooks', 'checkpoints', 'integration', 'instructions', 'dictation'] as const;
 export const COMPUTED_KEYS = ['workspace_root', 'metadata_workspace_root', 'mcp_server_sources', 'resolved_persona_model_tiers'] as const;
 /** Outside the layered model: read by a separate lookup over the same document, never merged (REQ-CONFIG-477 ground 1). */
 export const SEPARATE_KEYS = ['rotaris'] as const;

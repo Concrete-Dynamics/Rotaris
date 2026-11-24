@@ -10,6 +10,7 @@ import { rolePreferences, slotPreferences } from './preferences.js';
 import { RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { DISPLAY_DEFAULTS } from './display-section.js';
 import { CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
+import { ADVISOR_DEFAULTS } from './sections/advisor.js';
 import { renderFatal } from './validate.js';
 import { discoverInstructionFiles, WORKSPACE_INSTRUCTION_FILE_NAMES } from './instructions.js';
 import { restoreConfigText, saveDesktop, writeConfigFields, writeConfigKey, type DesktopSave, type RoleEdit, type RoleFieldEdits, type WriteRefusal } from './writers.js';
@@ -93,6 +94,8 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
       review_mode: cfg.circuitBreaker.review_mode, review_interval_tool_calls: cfg.circuitBreaker.review_interval_tool_calls,
       review_interval_messages: cfg.circuitBreaker.review_interval_messages, escalation: cfg.circuitBreaker.escalation, model: statedBreakerModel(cfg),
     },
+    // PD-TOOLS-022 clause 8.
+    advisor: { ...cfg.advisor },
     compressorThresholdPercentage: cfg.compressor.threshold_percentage,
     // REQ-CHAT-166 (Part Z): the transcript reads its caps from the same snapshot the settings screen does.
     display: { ...cfg.display },
@@ -140,6 +143,7 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
       review_mode: CIRCUIT_BREAKER_DEFAULTS.review_mode, review_interval_tool_calls: CIRCUIT_BREAKER_DEFAULTS.review_interval_tool_calls,
       review_interval_messages: CIRCUIT_BREAKER_DEFAULTS.review_interval_messages, escalation: CIRCUIT_BREAKER_DEFAULTS.escalation, model: CIRCUIT_BREAKER_DEFAULTS.model,
     },
+    advisor: { ...ADVISOR_DEFAULTS },
     compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, dictation: { ...DICTATION_CONFIG_DEFAULT }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', referential: [], warnings: [],
     // The instruction files exist or do not whatever the configuration says, so the inventory stands in a fatal snapshot too.
     instructions: instructionFiles(workspaceRoot, { ...env, globalDir: env.globalDir ?? globalDir }).map((f) => ({ ...f, enabled: true })),
@@ -175,6 +179,7 @@ function toDesktopSave(save: DesktopSavePayload): DesktopSave {
     ...(save.runtime ? { runtime: save.runtime } : {}),
     ...(save.circuitBreakerEnabled !== undefined ? { circuitBreakerEnabled: save.circuitBreakerEnabled } : {}),
     ...(save.circuitBreakerReview && Object.keys(save.circuitBreakerReview).length > 0 ? { circuitBreakerReview: save.circuitBreakerReview } : {}),
+    ...(save.advisor && Object.keys(save.advisor).length > 0 ? { advisor: save.advisor } : {}),
     ...(save.compressorThresholdPercentage !== undefined ? { compressorThresholdPercentage: save.compressorThresholdPercentage } : {}),
     ...(save.delegationStrategy !== undefined ? { delegationStrategy: save.delegationStrategy } : {}),
     // REQ-CONFIG-256/472: the four `display:` fields, already spelled as the file spells them (REQ-CONFIG-172).

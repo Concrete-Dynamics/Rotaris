@@ -29,6 +29,7 @@ export * from './terminal.js';
 export * from './terminal-keys.js';
 export * from './slash.js'; // Part AO
 export * from './skills.js'; // ADR-0063
+export * from './advisor.js'; // PD-TOOLS-022
 export * from './initialization.js'; // Part AS (ADR-0064)
 export * from './reauth.js'; // the 401 note's part B (REQ-NOTIFY-071/078)
 export * from './auth-recovery.js'; // REQ-NOTIFY-072..080

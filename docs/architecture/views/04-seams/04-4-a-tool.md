@@ -85,6 +85,11 @@ Invariants:
   the executor and the workspace service alike. **A tool whose dialog should say what the call changes** implements
   `describeForApproval` on its executor — a read, never an ask; the gate attaches the answer to the payload as `change`
   before posting (`Gate.approvalChange`), and a description that throws leaves the dialog as it was (PD-CONFIG-014 revision 3).
+- **A tool every agent is offered without declaring it** is joined to the declared set in `createToolPort`, before the one
+  resolution, and only where its executor was registered: `advisor` ([`PD-TOOLS-022`](../../../product/directives/pd-tools-022.md#pd-tools-022))
+  is the one such tool. The narrowing controls still bind it, and an agent it is not offered to logs no removal. **A tool that
+  needs the calling agent's conversation** reads it from the dispatched call (`PortToolCall.conversation`), never from a
+  registry; **one that calls a model** does so through an engine port on `ToolPortContext` over the metered backend.
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](../06-sequences/02-2-a-permission-approval-end-to-end.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress

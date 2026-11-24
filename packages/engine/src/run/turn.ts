@@ -28,6 +28,9 @@ import { duringImposedWait, type ImposedWaitPort } from '../children/stall.js';
  * REQ-ORCH-141: a replayed tool-call id is dispatched once; a repeat returns the recorded result.
  * A cancel aborts the in-flight step or tool and the row settles `failed`.
  */
+/** PD-TOOLS-022 clause 10: what a corrective message gains for an agent that can still consult the advisor. */
+export const ADVISOR_NUDGE_SENTENCE = 'Before you try again, consult the advisor with the advisor tool and say what you have tried.';
+
 export interface PortToolCall {
   readonly callId: string;
   readonly name: string;
@@ -35,6 +38,11 @@ export interface PortToolCall {
   readonly persona: string;
   readonly agentId: string;
   readonly agentName: string;
+  /**
+   * PD-TOOLS-022 clause 2: the calling agent's conversation as it stands when the call is dispatched — what the `advisor`
+   * tool hands the advisor's model. A read, never a copy the port keeps; absent from a caller that holds no conversation.
+   */
+  readonly conversation?: (() => readonly ChatMessage[]) | undefined;
 }
 export interface PortToolResult {
   readonly text: string;
@@ -98,6 +106,11 @@ export interface ToolPort {
   /** REQ-MCP-101 / REQ-TOOLS-010: the prompt's MCP section, rendered from the same resolution as `specs()`; appended to the system prompt. */
   promptSection?(): string;
   dispatch(call: PortToolCall, signal: AbortSignal): Promise<PortToolResult>;
+  /**
+   * PD-TOOLS-022 clause 10: the consults this agent may still make of the advisor, or 0 where it holds no `advisor` tool.
+   * Optional because a port without the tool has nothing to report.
+   */
+  advisorUsesLeft?(): number;
   /** REQ-MONITOR-012 / REQ-TOOLS-177: every waiting approval released, before the run stops. */
   cancelPending(): number;
   /**
@@ -362,7 +375,9 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
     injectSteering(deps, conv);
     const supervision = await deps.supervisor?.check();
     if (supervision?.kind === 'inject') {
-      conv.push({ role: 'user', content: [{ kind: 'text', text: supervision.message }] });
+      // PD-TOOLS-022 clause 10: an agent that can still consult the advisor is told to, in the corrective message itself.
+      const text = (deps.tools?.advisorUsesLeft?.() ?? 0) > 0 ? `${supervision.message} ${ADVISOR_NUDGE_SENTENCE}` : supervision.message;
+      conv.push({ role: 'user', content: [{ kind: 'text', text }] });
       writer.appendTimeline('loop_supervisor_activation', deps.agentName, supervision.message, { trigger: supervision.activation.trigger, reason: supervision.activation.reason, activation_count: supervision.activation.activationCount });
     } else if (supervision?.kind === 'escalate' && supervision.signal.action === 'pause' && deps.restForSupervisor?.(deps.agentName, supervision.signal) === true) {
       // PD-ORCH-018 clause 7 (narrowing REQ-ORCH-106): the run rests as on a user's pause; no agent is failed, and the
@@ -479,7 +494,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       const streamId = terminalRowStreamId(c.name, c.args, deps.agentName);
       const rowResult = writer.appendRow('tool', `${c.name}`, false, { persona: deps.persona, name: deps.agentName, toolName: c.name, toolStatus: 'running', callKey: c.callId, startedAt, input: c.args, ...(streamId === undefined ? {} : { streamId }) });
       const rowIndex = rowResult.ok ? rowResult.value.index : null;
-      const call: PortToolCall = { callId: c.callId, name: c.name, rawArgs: c.args, persona: deps.persona, agentId: deps.agentName, agentName: deps.agentName };
+      const call: PortToolCall = { callId: c.callId, name: c.name, rawArgs: c.args, persona: deps.persona, agentId: deps.agentName, agentName: deps.agentName, conversation: () => conv.snapshot() };
       // REQ-ORCH-134 (PD-ORCH-005 clause 2): the call runs under the turn's signal and the pause's tool deadline.
       const callSignal = deps.cutCalls ? AbortSignal.any([signal, deps.cutCalls]) : signal;
       deps.onToolStarted?.(call);

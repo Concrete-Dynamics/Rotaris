@@ -18,7 +18,10 @@ Part 2 of 13 of [domain 15](../15-settings-configuration.md), which indexes ever
   > **Narrowed by [`PD-MONITOR-007`](../../product/directives/pd-monitor-007.md#pd-monitor-007), 2026-10-06.** The summarizing model is
   > followed through the session's override, and where the pair it reaches is held out of quota the child is summarized on
   > the model it ran on, or, where that is held out of quota too, given the fallback report. The rest is as stated.
+  > **Extended by [`PD-TOOLS-022`](../../product/directives/pd-tools-022.md#pd-tools-022), 2026-11-24.** `advisor_model` (string or null) is a further slot: the model an agent consults through
+  > the `advisor` tool. Unset, the advisor is the model `large_model` names.
 - **REQ-CONFIG-066** — Each of those slots has a `<slot>_thinking` companion (`default_summary_model_thinking`, `improvement_collector_model_thinking`, `gatekeeper_model_thinking`, `small_model_thinking`, `medium_model_thinking`, `large_model_thinking`, `fallback_model_thinking`) accepting a reasoning level or null. Default null.
+  > **Extended by [`PD-TOOLS-022`](../../product/directives/pd-tools-022.md#pd-tools-022), 2026-11-24.** `advisor_model_thinking` is the companion of the `advisor_model` slot.
 - **REQ-CONFIG-067** — `fallback_model` is resolved before referential validation runs: unset or written as null, it resolves to whatever `small_model` resolves to, so referential validation never reports it as unset (REQ-CONFIG-232). Its shipped value is the tier alias `small_model` (REQ-CONFIG-065), which tier-alias substitution replaces with the concrete model name (REQ-CONFIG-073). A stated value naming no configured model is reported, with the message naming both the field and the offending value.
 - **REQ-CONFIG-068** — `worktree_storage_subpath` (string, default `worktrees`) is the subdirectory under the workspace configuration directory where per-session isolated checkouts are stored.
 - **REQ-CONFIG-069** — The reasoning-level vocabulary for slots and models is exactly `auto`, `low`, `medium`, `high`, `max`. The per-role vocabulary adds two: `default` and `provider_default`.

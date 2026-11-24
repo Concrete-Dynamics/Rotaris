@@ -20,7 +20,7 @@ const snapshotWith = (improvementTimeout: number): ConfigSnapshot => ({
   roles: [],
   runtime: runtime(improvementTimeout),
   rawRuntime: { workspace: null, global: null },
-  circuitBreakerEnabled: true, circuitBreakerReview: { review_mode: 'on_signal', review_interval_tool_calls: 20, review_interval_messages: 20, escalation: 'pause', model: 'small_model' }, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
+  circuitBreakerEnabled: true, circuitBreakerReview: { review_mode: 'on_signal', review_interval_tool_calls: 20, review_interval_messages: 20, escalation: 'pause', model: 'small_model' }, advisor: { enabled: true, max_uses: 3 }, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
   skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, dictation: DICTATION_CONFIG_DEFAULT, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
   files: { workspace: '/ws/.rotaris/agents.yaml', global: '/cfg/agents.yaml' },
 });

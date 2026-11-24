@@ -26,14 +26,14 @@ export const CONFIG_KEY_PATH_MAX = 200;
 /** The top-level replace keys an agent may set (REQ-CONFIG-040's table, less the location of the worktrees). */
 const ORDINARY_TOP: ReadonlySet<string> = new Set([
   'default_persona',
-  'default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model',
-  'default_summary_model_thinking', 'improvement_collector_model_thinking', 'retrospective_model_thinking', 'gatekeeper_model_thinking',
+  'default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'advisor_model', 'small_model', 'medium_model', 'large_model', 'fallback_model',
+  'default_summary_model_thinking', 'improvement_collector_model_thinking', 'retrospective_model_thinking', 'gatekeeper_model_thinking', 'advisor_model_thinking',
   'small_model_thinking', 'medium_model_thinking', 'large_model_thinking', 'fallback_model_thinking',
   'inject_agents_md',
 ]);
 
 /** Sections an agent may set field by field; their keys change what a run does, not what it may do. */
-const ORDINARY_SECTIONS: ReadonlySet<string> = new Set(['compressor', 'circuit_breaker', 'transcript', 'display', 'requirements', 'skills', 'checkpoints', 'instructions', 'unavailable_models']);
+const ORDINARY_SECTIONS: ReadonlySet<string> = new Set(['compressor', 'circuit_breaker', 'advisor', 'transcript', 'display', 'requirements', 'skills', 'checkpoints', 'instructions', 'unavailable_models']);
 
 /**
  * Whole top-level keys of the authority class: tool servers (an entry is a command the product executes), hooks (commands

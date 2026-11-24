@@ -82,6 +82,8 @@ Part 2 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
   > timeline entry or transcript row comes of it. In `on_signal` mode the requirement governs as written.
 
 **REQ-NOTIFY-103** — On a loop being declared, a corrective message is placed in the session's own context, either directing the agent to different work or requiring it to re-examine its current approach. The message is composed for that activation from that session's recent context: two activations whose recent context differs produce different text, and the text is not drawn from a fixed set of alternatives. It names no supervision feature, no loop detection and no component. It is placed in the session context only and is never presented to the user as a message in its own right.
+  > **Narrowed by [`PD-TOOLS-022`](../../product/directives/pd-tools-022.md#pd-tools-022), 2026-11-24.** For an agent that holds the `advisor` tool and has consults left, the message ends with
+  > one fixed sentence telling it to consult the advisor before trying again. The rest is composed as stated.
 
 **REQ-NOTIFY-104** — Detection counters reset after each activation. Consecutive activations with no user instruction between them are counted, and a new user instruction resets that count.
   > **Narrowed by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** In `periodic` review mode

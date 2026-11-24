@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Hint, Origin, SettingsTitle, type ValueOrigin } from './page.js';
 import { CIRCUIT_BREAKER_ESCALATION_NAMES, CIRCUIT_BREAKER_REVIEW_MODE_NAMES, DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { REVIEW_INTERVAL_RANGE, CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, offeredForModel, reasoningChoice, reasoningModelKey, roleReasoningOptions, scopeCellOf, slotModelPick, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
+import { ADVISOR_USES_RANGE, REVIEW_INTERVAL_RANGE, CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, offeredForModel, reasoningChoice, reasoningModelKey, roleReasoningOptions, scopeCellOf, slotModelPick, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { DictationSettings } from './DictationSettings.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
@@ -426,6 +426,17 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
         <Hint about="After two redirections">What happens when an agent is redirected twice and still circles. A paused run can be continued; an ended run has failed.</Hint>
       </div>
     </>);
+  // PD-TOOLS-022 clause 8: the advisor's switch and, while it is on, the consults one agent may make in a run.
+  const advisorRows = (<>
+      <Toggle id="advisor" label="Advisor" hint="Lets an agent ask a stronger model for advice before it commits to an approach, when it is stuck, and before it finishes. The advisor reads the agent's conversation and answers; it runs no tools. Its model is the advisor_model slot on the Models page, which follows large_model until set." on={pending.advisor.enabled} onChange={(v) => onChange({ kind: 'advisor', key: 'enabled', value: v })} />
+      {pending.advisor.enabled && (
+        <div className="settings__action">
+          <label htmlFor="advisor-uses">Advice per agent</label>
+          <ClampedNumberField id="advisor-uses" range={ADVISOR_USES_RANGE} shown={clampForDisplay(pending.advisor.max_uses, ADVISOR_USES_RANGE.min, ADVISOR_USES_RANGE.max)} onCommit={(value) => onChange({ kind: 'advisor', key: 'max_uses', value })} /><span className="text-secondary">consults in a run</span>
+          <Hint about="Advice per agent">Each consult is one request to the advisor's model with the agent's whole conversation, so it costs what that model charges for it. Applies to runs started from now.</Hint>
+        </div>
+      )}
+    </>);
   const outsideRow = (<>
         <Toggle id="outside" origin={from('allow_outside_workspace')} label="Allow outside workspace" hint="Lets agents read and change files outside the chosen workspace." on={rt.allow_outside_workspace} onChange={(v) => { if (v) setConfirm('outside'); else onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: false }); }} />
     </>);
@@ -503,7 +514,7 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
       <h2 className="settings__heading">Limits</h2>
       {depthRow}{fanOutRow}{childTimeoutRow}{iterationRow}{thresholdRow}
       <h2 className="settings__heading">Stopping</h2>
-      {circuitBreakerRow}{circuitBreakerReviewRows}{keepGoingRow}
+      {circuitBreakerRow}{circuitBreakerReviewRows}{advisorRows}{keepGoingRow}
       <h2 className="settings__heading">Advanced runtime</h2>
       {advancedCard}
     </div>
@@ -538,7 +549,7 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
       {depthRow}{fanOutRow}{childTimeoutRow}
       <h2 className="settings__heading">Runtime policy</h2>
       <DesignCard className="card settings__card">
-        {circuitBreakerRow}{circuitBreakerReviewRows}{outsideRow}{improvementRow}{improvementTimeoutRow}{keepGoingRow}{permissionRow}{thresholdRow}{iterationRow}{redactionRow}
+        {circuitBreakerRow}{circuitBreakerReviewRows}{advisorRows}{outsideRow}{improvementRow}{improvementTimeoutRow}{keepGoingRow}{permissionRow}{thresholdRow}{iterationRow}{redactionRow}
       </DesignCard>
       <h2 className="settings__heading">Security policy</h2>
       {securityPolicy}

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { configureChangeOf, parseSkillListing, parseSkillLoadMarker, type ConfigureChangeRecord, type ImageAttachment, type ParsedSkillListing, type ParsedSkillLoadMarker, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
+import { advisorQuestionOf, configureChangeOf, parseAdvisorResult, parseSkillListing, parseSkillLoadMarker, type ConfigureChangeRecord, type ImageAttachment, type ParsedSkillListing, type ParsedSkillLoadMarker, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
 import { Markdown } from '../markdown/Markdown.js';
 import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
@@ -913,6 +913,8 @@ export function Row(p: RowProps) {
     // for the row's stream, expanded or not, so it stays visible; the card's INPUT/OUTPUT sit beneath it when open.
     const preview = stream !== null && !row.settled ? (surface.terminalPreview?.(stream) ?? null) : null;
     const configChange = row.toolName === 'configure' && row.settled && outcome.state === 'ok' ? configureChangeOf(row.output) : null;
+    // PD-TOOLS-022 clause 7: an answered consult — the advisor's model and the count on the line, the advice folded beneath.
+    const consult = row.toolName === 'advisor' && row.settled && outcome.state === 'ok' ? parseAdvisorResult(row.output ?? '') : null;
     return (
       <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-member-key={display.key} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
         <div className="row__grid">
@@ -938,7 +940,12 @@ export function Row(p: RowProps) {
             {/* REQ-CHAT-076: clicking a live terminal preview requests the pop-out for that stream (the one-line form, until a screen is retained). */}
             {/* PD-CONFIG-014 revision 3 (clause 7): a settled `configure` set draws its change, and offers its Undo. */}
             {configChange !== null && !collapsedToName && <ConfigChangeLine change={configChange} undo={surface.undoConfigChange} />}
-            {configChange === null && preview === null && !expanded && !collapsedToName && expandable && (
+            {consult !== null && !collapsedToName && (
+              <div className="tool__preview text-secondary mono" data-testid="advisor-line" data-advisor-model={consult.model} aria-description={`The advisor ${consult.model} answered; consult ${consult.use} of ${consult.of}.`}>
+                ⤷ Advisor consulted{FACT_SEPARATOR}{consult.model}{FACT_SEPARATOR}{consult.use} of {consult.of}
+              </div>
+            )}
+            {consult === null && configChange === null && preview === null && !expanded && !collapsedToName && expandable && (
               stream !== null && !row.settled
                 ? <DesignButton type="button" className="tool__preview tool__preview--terminal text-secondary mono" data-stream-id={stream} onClick={() => surface.openTerminal?.(stream)} disabled={surface.openTerminal === undefined}>⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</DesignButton>
                 : <div className="tool__preview text-secondary mono">⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</div>
@@ -946,6 +953,11 @@ export function Row(p: RowProps) {
             {expanded && (
               row.toolName === 'ask_questions' ? (
                 <QuestionSummaryCard input={row.input} output={row.output} blockedReason={outcome.state === 'blocked' ? blockedReason : undefined} />
+              ) : consult !== null ? (
+                <div className="tool__card" data-testid="advisor-card">
+                  <div className="tool__caption">QUESTION</div><pre className="tool__pre mono" data-testid="advisor-question">{advisorQuestionOf(row.input)}</pre>
+                  <div className="tool__caption">ADVICE</div><pre className="tool__pre mono" data-testid="advisor-advice">{consult.advice}</pre>
+                </div>
               ) : (
                 <div className="tool__card">
                   {row.input !== undefined && row.input !== '' && (<><div className="tool__caption">INPUT</div><pre className="tool__pre mono" data-testid="tool-input">{row.input}</pre></>)}

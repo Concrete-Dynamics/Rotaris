@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and fifty.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and fifty-one.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -241,6 +241,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-TOOLS-019](directives/pd-tools-019.md) | a match at level 3 compares each line without its carriage return |
 | [PD-TOOLS-020](directives/pd-tools-020.md) | level 3 matches blank lines by having no visible character |
 | [PD-TOOLS-021](directives/pd-tools-021.md) | the approval dialog states what a session approval lets through |
+| [PD-TOOLS-022](directives/pd-tools-022.md) | an agent may consult an advisor, a stronger model that reads its conversation and answers |
 
 ### TRACE
 

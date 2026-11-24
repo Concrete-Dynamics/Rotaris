@@ -6,13 +6,13 @@ import {
   askQuestionsTool, buildPolicy, configureTool, type ConfigurationPort, directWorkBundle, grantsOn, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor,
 } from '@rotaris/agent-tools';
-import { aliasesAmong, BUILT_IN_PERSONAS, delegationTargetsFor, EMPTY_MCP_EVIDENCE, isNativeFileWritingTool, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { aliasesAmong, BUILT_IN_PERSONAS, delegationTargetsFor, EMPTY_MCP_EVIDENCE, isNativeFileWritingTool, sameRef, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
 import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
 import { throwOnAbort } from './throw-on-abort.js';
 import { writeSkillLoadMarker } from './skills.js';
-import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
+import { AdvisorUses, advisorTool, artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
 /**
@@ -591,6 +591,28 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       return ctx.writer.save(ctx.writer.currentStatus).ok;
     },
   }));
+  /*
+   * PD-TOOLS-022: the `advisor` tool. Clause 4 offers it to every agent, so it is joined to the declared set here rather
+   * than declared by each persona (a configured persona's `tools:` need not name it); the narrowing controls still bind it,
+   * `tool_restrictions` among them, and `read_only` keeps it (`READ_ONLY_CLASS`). Clause 5 offers it only where the run has
+   * an advisor and its model is not the agent's own — the persona's model, or the run's entry model for the entry agent and
+   * for a persona that names none — so an agent already on the advisor's model is not shown a tool that would ask itself.
+   * Where it is not offered nothing is joined and nothing is logged as removed: there is nothing the persona declared to
+   * remove. Clause 6's count is this port's, one agent's; a continued run builds new ports and so counts afresh. The
+   * conversation the advisor reads is the calling turn's, handed over with each dispatched call (`PortToolCall.conversation`).
+   */
+  const advisor = ctx.advisor;
+  const agentModel = advisor === undefined ? undefined : isEntry ? advisor.entryModel : persona.modelRef ?? advisor.entryModel;
+  let advisorUses: AdvisorUses | null = null;
+  let liveConversation: PortToolCall['conversation'];
+  if (advisor !== undefined && agentModel !== undefined && !sameRef(advisor.model, agentModel)) {
+    const uses = new AdvisorUses(advisor.maxUses);
+    advisorUses = uses;
+    executors.set('advisor', advisorTool({
+      maxUses: advisor.maxUses,
+      consult: (question, signal) => advisor.consult({ messages: liveConversation?.() ?? [], question, agent: ctx.agentName, persona: ctx.persona }, signal),
+    }, uses));
+  }
   // ONE resolution feeds the prompt listing and the callable set (REQ-TOOLS-010).
   // `canPublishArtifacts` is the persona's `can_publish_artifacts` (REQ-CONFIG-106) where a store exists: a declared
   // `artifact_write` is handed over only while the flag is true (REQ-TOOLS-150), and is otherwise removed and recorded as
@@ -619,7 +641,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId));
     executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId));
   }
-  const resolved = resolveAgentGrant(persona, { name: ctx.persona, declared, parentPersona: parentAgentPersona, coordinating: delegationAvailable && !directWork, prerequisites, isEntry });
+  const declaredWithAdvisor = advisorUses !== null && !declared.includes('advisor') ? [...declared, 'advisor'] : declared;
+  const resolved = resolveAgentGrant(persona, { name: ctx.persona, declared: declaredWithAdvisor, parentPersona: parentAgentPersona, coordinating: delegationAvailable && !directWork, prerequisites, isEntry });
   /*
    * REQ-TOOLS-006: "every removal is logged together with the persona and the control that removed it", at no level the
    * requirement names. A narrowing control's removal (the run's allow-list, `coordinator_only`, `read_only`,
@@ -795,7 +818,11 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     grant: () => grant,
     ready,
     promptSection: () => mcpSection,
+    // PD-TOOLS-022 clause 10: what is left to ask, where this agent holds the tool at all.
+    advisorUsesLeft: () => (callable.has('advisor') ? advisorUses?.left ?? 0 : 0),
     dispatch: async (call: PortToolCall, signal): Promise<PortToolResult> => {
+      // PD-TOOLS-022 clause 2: the calling turn's conversation, for an `advisor` call this dispatch may hold.
+      if (call.conversation !== undefined) liveConversation = call.conversation;
       const r = await gate.dispatch({ callId: call.callId, name: call.name, rawArgs: call.rawArgs, persona: call.persona, agentId: call.agentId, agentName: call.agentName }, signal);
       const status: Exclude<ToolStatus, 'running'> = r.status;
       // OQ-245: a native write that landed is noted, so a cross-file EDIT call observed meanwhile by another agent leaves it out.

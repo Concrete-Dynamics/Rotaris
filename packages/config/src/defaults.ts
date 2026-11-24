@@ -36,6 +36,8 @@ const DEFAULT_LAYER: PlainMap = {
   // PD-LIBRARY-002: the retrospective's own slot, falling back to the medium tier exactly as its sibling does.
   retrospective_model: null,
   gatekeeper_model: null,
+  // PD-TOOLS-022 clause 5: the advisor's own slot; unset, the run host resolves the large tier in its place (`advisorOf`).
+  advisor_model: null,
   worktree_storage_subpath: 'worktrees',
   inject_agents_md: true,
   models: SHIPPED_MODELS,

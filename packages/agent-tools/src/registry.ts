@@ -42,11 +42,13 @@ export const DECLARATIONS: Readonly<Record<PublicToolName, Declaration>> = Objec
   artifact_write: d(false, false, false),
   // PD-CONFIG-014: reads the saved configuration; its one write goes through the workspace service, never a file tool.
   configure: d(true, false, false),
+  // PD-TOOLS-022: one request to another model; it reads the agent's conversation, never the workspace.
+  advisor: d(false, false, false),
 });
 
-/** REQ-TOOLS-007: the read-only class, exactly. */
+/** REQ-TOOLS-007: the read-only class, exactly — and `advisor` (PD-TOOLS-022 clause 4), which a read-only agent keeps. */
 export const READ_ONLY_CLASS: ReadonlySet<PublicToolName> = new Set<PublicToolName>([
-  'grep', 'glob', 'fetch', 'haet_read', 'read_file', 'git_read', 'artifact_read', 'artifact_list', 'artifact_write',
+  'grep', 'glob', 'fetch', 'haet_read', 'read_file', 'git_read', 'artifact_read', 'artifact_list', 'artifact_write', 'advisor',
 ]);
 /** REQ-TOOLS-007: the network class, exactly. */
 export const NETWORK_CLASS: ReadonlySet<PublicToolName> = new Set<PublicToolName>(['fetch']);

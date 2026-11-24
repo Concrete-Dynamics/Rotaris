@@ -143,10 +143,11 @@ describe('contracts — the presentation mapping (REQ-NOTIFY-049, REQ-NOTIFY-050
 describe('contracts — tools vocabularies', () => {
   it('REQ-TOOLS-001/028/041/047: the sets are exactly as fixed and the ranks total', async () => {
     const t = await import('./tools.js');
-    // REQ-TOOLS-001's nineteen, and PD-CONFIG-014's `configure` the twentieth.
-    expect(t.PUBLIC_TOOL_NAMES).toHaveLength(20);
-    expect(new Set(t.PUBLIC_TOOL_NAMES).size).toBe(20);
+    // REQ-TOOLS-001's nineteen, PD-CONFIG-014's `configure` the twentieth and PD-TOOLS-022's `advisor` the twenty-first.
+    expect(t.PUBLIC_TOOL_NAMES).toHaveLength(21);
+    expect(new Set(t.PUBLIC_TOOL_NAMES).size).toBe(21);
     expect(t.PUBLIC_TOOL_NAMES).toContain('configure');
+    expect(t.PUBLIC_TOOL_NAMES).toContain('advisor');
     expect(t.DECISION_SOURCES).toHaveLength(12);
     // PD-TOOLS-011 (OQ-54): the audit's vocabularies are the policy's with the two members of a user's own terminal action.
     expect(t.AUDIT_DECISIONS).toEqual(['allow', 'ask', 'deny', 'user-input']);

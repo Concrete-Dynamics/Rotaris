@@ -1,4 +1,4 @@
-import { dictationFieldProblem, type CircuitBreakerReviewView, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type ReasoningLevelName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
+import { dictationFieldProblem, type AdvisorView, type CircuitBreakerReviewView, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type ReasoningLevelName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
  * REQ-CONFIG-332 / REQ-CONFIG-093 / REQ-CONFIG-254: what a reasoning-strength control shows and does, derived from the
@@ -142,6 +142,8 @@ export interface PendingSettings {
   readonly circuitBreakerEnabled: boolean;
   /** PD-ORCH-018 clause 9: the loop supervisor's review settings, committed by Save. */
   readonly circuitBreakerReview: CircuitBreakerReviewView;
+  /** PD-TOOLS-022 clause 8: the advisor's switch and its cap per agent, committed by Save. */
+  readonly advisor: AdvisorView;
   readonly compressorThresholdPercentage: number;
   readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single';
   /**
@@ -196,7 +198,7 @@ export interface PendingRoleEdit {
   readonly global?: PendingRoleFields;
 }
 
-const SLOT_KEYS: readonly ModelSlotName[] = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'];
+const SLOT_KEYS: readonly ModelSlotName[] = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'advisor_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'];
 
 /** The pending state a snapshot populates: the file's values, so the form starts clean by definition (REQ-CONFIG-425). */
 export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
@@ -219,6 +221,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
     },
     circuitBreakerEnabled: snapshot.circuitBreakerEnabled,
     circuitBreakerReview: { ...snapshot.circuitBreakerReview },
+    advisor: { ...snapshot.advisor },
     compressorThresholdPercentage: snapshot.compressorThresholdPercentage,
     delegationStrategy: snapshot.delegationStrategy,
     display: { ...snapshot.display },
@@ -327,6 +330,8 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
     circuitBreakerEnabled: pending.circuitBreakerEnabled !== previousSaved.circuitBreakerEnabled ? pending.circuitBreakerEnabled : fresh.circuitBreakerEnabled,
     // PD-ORCH-018 clause 9: per key, like the runtime block.
     circuitBreakerReview: Object.fromEntries((Object.keys(fresh.circuitBreakerReview) as (keyof CircuitBreakerReviewView)[]).map((key) => [key, pending.circuitBreakerReview[key] !== previousSaved.circuitBreakerReview[key] ? pending.circuitBreakerReview[key] : fresh.circuitBreakerReview[key]])) as unknown as CircuitBreakerReviewView,
+    // PD-TOOLS-022 clause 8: per key.
+    advisor: { enabled: pending.advisor.enabled !== previousSaved.advisor.enabled ? pending.advisor.enabled : fresh.advisor.enabled, max_uses: pending.advisor.max_uses !== previousSaved.advisor.max_uses ? pending.advisor.max_uses : fresh.advisor.max_uses },
     compressorThresholdPercentage: pending.compressorThresholdPercentage !== previousSaved.compressorThresholdPercentage ? pending.compressorThresholdPercentage : fresh.compressorThresholdPercentage,
     delegationStrategy: pending.delegationStrategy !== previousSaved.delegationStrategy ? pending.delegationStrategy : fresh.delegationStrategy,
     roles: pending.roles,
@@ -365,6 +370,7 @@ export type PendingChange =
   | { readonly kind: 'runtime'; readonly key: keyof PendingSettings['runtime']; readonly value: PendingSettings['runtime'][keyof PendingSettings['runtime']] }
   | { readonly kind: 'circuitBreaker'; readonly value: boolean }
   | { readonly kind: 'circuitBreakerReview'; readonly key: keyof CircuitBreakerReviewView; readonly value: CircuitBreakerReviewView[keyof CircuitBreakerReviewView] }
+  | { readonly kind: 'advisor'; readonly key: keyof AdvisorView; readonly value: AdvisorView[keyof AdvisorView] }
   | { readonly kind: 'compressorThreshold'; readonly value: number }
   | { readonly kind: 'delegationStrategy'; readonly value: PendingSettings['delegationStrategy'] }
   | { readonly kind: 'display'; readonly key: keyof DisplayView; readonly value: DisplayView[keyof DisplayView] }
@@ -409,6 +415,8 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
       return pending.circuitBreakerEnabled === change.value ? pending : { ...pending, circuitBreakerEnabled: change.value };
     case 'circuitBreakerReview':
       return pending.circuitBreakerReview[change.key] === change.value ? pending : { ...pending, circuitBreakerReview: { ...pending.circuitBreakerReview, [change.key]: change.value } };
+    case 'advisor':
+      return pending.advisor[change.key] === change.value ? pending : { ...pending, advisor: { ...pending.advisor, [change.key]: change.value } };
     case 'compressorThreshold':
       return pending.compressorThresholdPercentage === change.value ? pending : { ...pending, compressorThresholdPercentage: change.value };
     case 'delegationStrategy':
@@ -473,6 +481,11 @@ export function savePayload(saved: PendingSettings, pending: PendingSettings): D
   const review: Record<string, unknown> = {};
   for (const key of Object.keys(pending.circuitBreakerReview) as (keyof CircuitBreakerReviewView)[]) if (pending.circuitBreakerReview[key] !== saved.circuitBreakerReview[key]) review[key] = pending.circuitBreakerReview[key];
   if (Object.keys(review).length > 0) out.circuitBreakerReview = review;
+  // PD-TOOLS-022 clause 8: sparse, under the file's own key names.
+  const advisor: { enabled?: boolean; max_uses?: number } = {};
+  if (pending.advisor.enabled !== saved.advisor.enabled) advisor.enabled = pending.advisor.enabled;
+  if (pending.advisor.max_uses !== saved.advisor.max_uses) advisor.max_uses = pending.advisor.max_uses;
+  if (Object.keys(advisor).length > 0) out.advisor = advisor;
   if (pending.compressorThresholdPercentage !== saved.compressorThresholdPercentage) out.compressorThresholdPercentage = pending.compressorThresholdPercentage;
   if (pending.delegationStrategy !== saved.delegationStrategy) out.delegationStrategy = pending.delegationStrategy;
   // REQ-CONFIG-256/472: written per field and under the file's own key names, with unlimited stored as 0 (REQ-CONFIG-172).
@@ -575,6 +588,9 @@ export function clampForDisplay(value: number, min: number, max: number): number
 export interface NumberRange { readonly min: number; readonly max: number }
 /** PD-ORCH-018 clause 2: the two review intervals the screen offers; the file's own floor is 1. */
 export const REVIEW_INTERVAL_RANGE: NumberRange = { min: 1, max: 500 };
+
+/** PD-TOOLS-022 clause 6: the consults one agent may make in a run, as the screen offers them; 0 offers none. */
+export const ADVISOR_USES_RANGE: NumberRange = { min: 0, max: 50 };
 
 /** REQ-CONFIG-322: the delegation limits' widget clamps. */
 export const DEPTH_CAP_RANGE: NumberRange = { min: 1, max: 12 };

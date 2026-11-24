@@ -19,7 +19,13 @@ Every name in that registry additionally carries a **capability declaration**, a
 
 > **Narrowed by [`PD-CONFIG-014`](../../product/directives/pd-config-014.md#pd-config-014), 2026-11-22.** The registry above still governs, except that it also holds `configure`, which reads workspace files and neither writes them nor runs commands, and which the built-in `orchestrator` role declares.
 
+> **Extended by [`PD-TOOLS-022`](../../product/directives/pd-tools-022.md#pd-tools-022), 2026-11-24.** `advisor` is the twenty-first public name: one request to a stronger model over the
+> calling agent's conversation. It declares none of the three facets.
+
 **REQ-TOOLS-002** — An entry in a persona's `tools:` list is accepted only when it is one of the public tool names of REQ-TOOLS-001. Any other entry fails configuration validation, and the resulting error identifies the persona, the rejected entry, and the accepted public tool names. An entry that names a server configured for the workspace fails like any other unrecognized entry, and its error additionally says that MCP servers are granted through `mcp_servers`. A persona whose `custom_tools:` plugin registers under a name that persona also declares under `tools:` likewise fails validation, so no persona ever holds two different tools under one name.
+
+> **Narrowed by [`PD-TOOLS-022`](../../product/directives/pd-tools-022.md#pd-tools-022), 2026-11-24.** The rule governs every name but one: `advisor` is offered to an agent whether or not its
+> persona's `tools:` names it, where the run has an advisor on another model than the agent's.
 
 **REQ-TOOLS-003** — The verification-gate capabilities of section 22 are outside the public tool surface, and so is any capability not named in REQ-TOOLS-001. No configuration makes them callable by a persona: naming one under `tools:` is rejected like any other unrecognized entry (REQ-TOOLS-002), and no persona's prompt ever lists them among its tools. They are reachable only from the run that maintains the verification gate.
 
@@ -41,6 +47,8 @@ The run-scoped allow-list is a field of the run configuration produced when a ru
 **REQ-TOOLS-007** — The read-only tool class is exactly {`grep`, `glob`, `fetch`, `haet_read`, `read_file`, `git_read`, `artifact_read`, `artifact_list`, `artifact_write`}. `artifact_write` is deliberately classified read-only because the artifact store is not part of the workspace. The network tool class is exactly {`fetch`}, a subset of the read-only class, split out so presets can gate network access by host before any blanket read-only allow rule.
 
 Both classes are stated against the capability declaration of REQ-TOOLS-001 and are held consistent with it: no member of the read-only class declares writing workspace files or running commands, and no name that declares either is ever a member of it, so a name added to the registry declaring one of those two is outside the class by construction rather than by a second decision. The network class is defined by where the tool sends a request and not by any of the three facets — `fetch` declares none of them, the network not being the workspace file tree — which is why the two classes overlap without either being derivable from the other. Membership of a class is not itself a facet: the classes say what a preset may allow in bulk, while the declaration says what a tool does, and a requirement needing one of them cites the requirement that fixes it rather than reading it off the other.
+
+> **Extended by [`PD-TOOLS-022`](../../product/directives/pd-tools-022.md#pd-tools-022), 2026-11-24.** `advisor` is a member of the read-only class.
 
 **REQ-TOOLS-008** — When a persona requests `terminal`, the behavior specified in sections 10–14 is exactly what serves that name. The registered public name is exactly `terminal`.
 

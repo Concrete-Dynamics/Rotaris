@@ -6,6 +6,7 @@ export * from './loader.js';
 export * from './playbooks-overrides.js';
 export * from './intent-mapping.js';
 export * from './circuit-breaker-section.js';
+export * from './sections/advisor.js';
 export * from './keys.js';
 export * from './merge.js';
 export * from './defaults.js';

@@ -1,6 +1,6 @@
 # Composer: the money slider's chip, its popover and its default in Settings — brief
 
-**Status:** proposed
+**Status:** approved 2026-11-24
 **Written:** 2026-11-24 by `design-ui` with the Impeccable skill (`shape`, then a code-led mock and its critique), for
 [R-127](../../product/requests.md#r-127). No structured-question channel reached the owner from this session, so every
 choice below the binding clauses is the brief's own, marked **assumed** where the record does not settle it, and each
@@ -223,7 +223,14 @@ the Model column share one x (both tables 40 % first column); `spacing-token` fo
 
 ## 10. Disagreements and gaps — open questions, each with a recommendation
 
-None of these is raised in `docs/architecture/open-questions.md` yet; the orchestrator takes numbers and rules them.
+**Ruled by the owner, 2026-11-24: all thirteen as recommended** ("Accept all", shown the brief's summary and five of its
+renders, in the session of [R-127](../../product/requests.md#r-127)). Each **Recommend** below is therefore the decision,
+and the choices this brief marks **assumed** stand with it. The owner ruled them personally, so none is an open question
+for the orchestrator's consortium. Until that ruling this line read: *"None of these is raised in
+`docs/architecture/open-questions.md` yet; the orchestrator takes numbers and rules them."*
+
+Two of them reach outside this surface and are owed where they land, at build: 5 leaves the depth slider's "main agent"
+to a request of its own, and 10 changes the Delegation strategy row's explanation, which is `PD-ORCH-018`'s surface.
 
 1. **Compact order.** PD-CHAT-001 rev. 3 lists which controls shorten at `tight` and `narrow`; the chip is not on it.
    Measured 2026-11-24 in the built app: dock 920 px at 1400×900 with the inspector closed, `full`, about 760 px of controls and gaps (the sum of the measured widths); with

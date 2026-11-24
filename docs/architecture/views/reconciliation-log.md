@@ -16,7 +16,7 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-24**
 
-**A thinking level reaches the endpoint, and the reasoning controls offer the model's levels (R-126; [`PD-CHAT-017`](../../product/directives/pd-chat-017.md#pd-chat-017), [`PD-CONFIG-007`](../../product/directives/pd-config-007.md#pd-config-007); 2026-11-24).** `03-runtime-view/01-1-start.md` gains the effort table a `ModelRef` carries and the key each dialect is sent it under. The composer chip, the run header and the inspector read `ConfigSnapshot.modelReasoning`, an existing projection; no message, process, file or owner changes.
+**A thinking level reaches the endpoint, and the reasoning controls offer the model's levels (R-127; [`PD-CHAT-017`](../../product/directives/pd-chat-017.md#pd-chat-017), [`PD-CONFIG-007`](../../product/directives/pd-config-007.md#pd-config-007); 2026-11-24).** `03-runtime-view/01-1-start.md` gains the effort table a `ModelRef` carries and the key each dialect is sent it under. The composer chip, the run header and the inspector read `ConfigSnapshot.modelReasoning`, an existing projection; no message, process, file or owner changes.
 
 **A capture seam's press moves focus in an unfocused window (2026-11-22).** `02-process-view/01-what-each-process-owns.md`: before their first step the scriptable capture seams hold the page focused through `Emulation.setFocusEmulationEnabled` (`main/page-focus.ts`, verification only, in the seams' chunk), the capture-side counterpart of the driver's `emulateFocus`, so `requirements-proof`'s fold stage stops reading the host's window focus. No channel, command or store column is added.
 

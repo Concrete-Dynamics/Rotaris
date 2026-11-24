@@ -220,7 +220,7 @@ where the seams are compiled in (`isScriptedProvider`, `run-host/configuration.t
 OpenAI-compatible provider name. ADR-0056 rule 4 (b)'s packaged launch runs against a loopback stub reached through that client.
 *(Until then a packaged build answered a `scripted` entry with the stand-in and a fixed one-step script.)*
 
-**The effort a thinking level sends (PD-CONFIG-007, REQ-CONFIG-089/092; R-126, 2026-11-24).** `modelRefOf` puts the entry's
+**The effort a thinking level sends (PD-CONFIG-007, REQ-CONFIG-089/092; R-127, 2026-11-24).** `modelRefOf` puts the entry's
 effort table on the `ModelRef` (`reasoningEfforts`, one `providerEffort` per level, `unset` included), and the model port reads
 it at dispatch (`effortFor`, `packages/model/src/ports.ts`), so a role's synthetic copy and a mid-run `setReasoning` follow the
 same map and override as the configured level. `AiSdkModelClient` sends it under each dialect's own key — `openaiCompatible` for

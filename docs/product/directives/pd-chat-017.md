@@ -29,4 +29,4 @@ next-run semantics (REQ-MONITOR-146) govern unchanged.
 
 > **Narrows:** REQ-CHAT-009, REQ-MONITOR-144
 
-*Raised by the owner, 2026-11-24; logged as [R-126](../requests.md#r-126).*
+*Raised by the owner, 2026-11-24; logged as [R-127](../requests.md#r-127). Written as R-126 and renumbered after landing: the agent-advisor request, cited as R-126 on `main` first, keeps that number.*

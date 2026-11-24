@@ -53,7 +53,7 @@ branch at `ce5732e2` with the repairs below.
 
 ## Run on 2026-11-24, on the Linux agent host
 
-`mission-proof` is red on `main` (`0cbd3058`) and on the R-126 branch alike, at its Settings step and no longer at the
+`mission-proof` is red on `main` (`0cbd3058`) and on the R-127 branch alike, at its Settings step and no longer at the
 confirmation: "Settings → Runtime shows strategy undefined, depth undefined" (`mission-proof.mjs:873`). The file write it
 checks one line earlier passed (`delegation_strategy: swarm`, `max_depth: 2`); the end probe reads `#strategy` and
 `#max-depth` on a page that the "Open Runtime settings" press lands on as Delegation, so the probe's selectors are what

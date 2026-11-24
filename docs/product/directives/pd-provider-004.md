@@ -27,6 +27,15 @@
    (REQ-PROVIDER-040). Models are discovered from, and runs are sent to, that API base. A stored sign-in made against
    another issuer than the one now in force is not used by an interactive sign-in: the flow runs again.
 
+5. **What the backend must provide, in every realm.** The sign-in only works against a Keycloak realm whose `rotaris-ai`
+   client allows loopback redirects on any port (`http://127.0.0.1:*`) and issues access tokens whose `azp` is `rotaris-ai`
+   and whose audience contains both `rotaris-api` and `rotaris-backend`; the backend introspects with `rotaris-backend`, and
+   Keycloak 26.8 reports a token active only to a client in its audience. `rotaris-api` is no Keycloak client, so it is a
+   custom audience. A realm created before these settings existed keeps the old client, because `--import-realm` never
+   updates an existing realm; the backend's `scripts/keycloak-reconcile-native-client.mjs` and its runbook
+   `docs/runbooks/keycloak-native-client.md` (repository `rotaris-backend`) bring one in line. A sign-in refused with
+   "Invalid parameter: redirect_uri" or a 401 from `/v1/models` is that mismatch, not a fault of this product.
+
 **As built.** `packages/providers/src/flows/cloud.ts` (discovery, authorization with PKCE on an ephemeral loopback port at
 `/callback`, exchange, refresh, revocation), `cloud-server.ts` (the stored choice), `signin.ts` (`cloudServer`,
 `setCloudServer`, the dispatch), the commands `providers.cloudServer` and `providers.setCloudServer`, and the "Server"
@@ -35,10 +44,12 @@ section of `ProviderDialog`.
 **Why, and what it costs.** The owner asked for Rotaris Cloud to be enabled now the backend is deployed, and for a custom
 URL so the app can also authenticate against the development backend or one running locally. What it costs: a user can
 point the sign-in at any server they name, so the only protection is that the issuer's discovery document must name the
-issuer it was fetched for (REQ-PROVIDER-038); the production redirect for the loopback client is the backend's
-configuration, not this product's.
+issuer it was fetched for (REQ-PROVIDER-038); the loopback client's registration is the backend's configuration, not this
+product's (clause 5).
 
 > **Narrows:** REQ-PROVIDER-005, REQ-PROVIDER-037, REQ-PROVIDER-043
 > **Extends:** REQ-PROVIDER-006, REQ-PROVIDER-117
 
 *Raised by the owner, 2026-11-22; logged as [R-125](../requests.md#r-125).*
+
+*Revision 2, 2026-11-24 ([R-125](../requests.md#r-125)): clause 5, the backend settings the first live sign-in showed to be required.*

@@ -53,9 +53,10 @@ user has not set** (clause 2). At `regular` nothing this directive states change
 7. **The playbook reads the result.** A role's tier, wherever REQ-ORCH-019, REQ-ORCH-020 and REQ-ORCH-022 read it, is
    the tier its stop yields. The run-configuration record's audit payload (REQ-ORCH-027) MUST state the stop the run
    started at, and for each lever whether the stop moved it or the user had set it.
-8. **The budget tier and the limits.** At `token_burner` the BUDGET slot's clamp MUST be `wide`, whatever the resolved
-   cell states, in a run whose intent clause 4 does not hold back. At every other stop the resolved cell's budget clamps
-   as REQ-ORCH-024 states. The limits of clause 3 are configured limits in REQ-ORCH-024's sense: a clamp narrows them and
+8. **The budget tier and the limits.** In a run whose intent clause 4 does not hold back, the BUDGET slot's clamp MUST
+   be one step wider than the resolved cell states at `strong_budget` (`tight` clamps as `normal`, `normal` as `wide`,
+   and `wide` stays `wide`), and MUST be `wide` at `token_burner`, whatever the cell states. At every other stop the
+   resolved cell's budget clamps as REQ-ORCH-024 states. The limits of clause 3 are configured limits in REQ-ORCH-024's sense: a clamp narrows them and
    never widens them. At `token_burner`, with `runtime.max_depth` not set, the coordinator's deepest permitted child sits
    at depth 4.
 9. **The control.** The composer MUST carry a money-slider chip beside the model and reasoning chips, naming the
@@ -81,8 +82,10 @@ model the user chose by name. The intent bounds the stop so that the low end kee
 needs it and the high end does not spend on a one-line question.
 
 What it costs. The slider does nothing visible for a user who has set every lever, and the preview of clause 9 is the
-only thing that says why. `strong_budget`'s limits reach a run only where its cell's budget is `wide` or the limit they
-replace was below the clamp: a `normal` cell still holds a run to 4 active, 12 in all and depth 3 (REQ-ORCH-024).
+only thing that says why. `strong_budget` lifts the cell's budget one step because its limits would otherwise reach almost no run: a `normal`
+cell holds a run to 4 active, 12 in all and depth 3 (REQ-ORCH-024), under every figure the stop states. The price is
+that a cell its author marked `normal` runs unclamped at that stop, and one marked `tight` runs as `normal`, so the
+playbook's own judgement of how far a kind of work should fan out is overruled by one step.
 `token_burner` lets a run start up to forty agents, twelve at once, on the largest model the user configured, one level
 deeper than the coordinator was ever allowed; the total is the one bound left, and nothing asks first. A run may hold
 agents chosen under two stops, which is why each record names its own. The owner asked for the chip's warning only where
@@ -98,7 +101,7 @@ first for a `solo` run, the second for a run whose mapping grants the entry role
 not held to that requirement's constraints at all, so its depth sentence, the one thing this directive narrows there, has
 no reach in either case and the three stay apart. `PD-ORCH-018` also narrows REQ-ORCH-025 with a third override and
 extends REQ-ORCH-024; this directive extends the first, choosing among the overrides that exist, and its narrowing of the
-second is `token_burner`'s clamp alone, which a `solo` run never reads. It names
+second is the clamp at `strong_budget` and `token_burner` alone, which a `solo` run never reads. It names
 [`PD-ORCH-005`](pd-orch-005.md#pd-orch-005), whose clause 40 carries a resumed iteration's playbook and budget clamp
 unchanged: a resumed iteration keeps the stop it started under on the same terms, and clause 10's move reaches the
 agents it delegates afterwards, as it does in any live run. And it names

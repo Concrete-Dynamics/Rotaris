@@ -209,7 +209,9 @@ export const DIRECT_WORK_INSTRUCTION = 'For this run you hold the tools to read 
  * `delegate`, so the text names both and says which is the default.
  */
 export const SOLO_INSTRUCTION = 'For this run you hold the tools to read and write files and run commands yourself, and the delegate tool beside them. Do the work yourself by default. Hand a part to a specialist only where that helps: independent parts that can run side by side, or a part worth keeping out of your own conversation, such as a wide search. Keep a todo list current where the work spans more than one step, and finish by answering the user plainly with what was done.';
-const ORCHESTRATOR_SOLO = `You are the agent this run belongs to. ${SOLO_INSTRUCTION} Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`;
+// It opens as the role's other two prompts do: the role is still the orchestrator, and readers of a request (the scripted
+// client, the live run's harness) know the root by these words.
+const ORCHESTRATOR_SOLO = `You are the orchestrator. ${SOLO_INSTRUCTION} Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`;
 const ORCHESTRATOR_DIRECT_WORK = `You are the orchestrator. ${DIRECT_WORK_INSTRUCTION} Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`;
 
 /**

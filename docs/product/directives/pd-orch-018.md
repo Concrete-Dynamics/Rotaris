@@ -93,6 +93,17 @@ pressed against a running workflow: both live workflows ended within seconds. As
 "opens to the agents it started and to its script"; the agents are the transcript's own thread lines, and the row opens
 to the script alone.
 
+**First execution of clause 8, 2026-11-24.** Store v37 holds each workflow and its journal. A workflow cut off is told to
+its agent once, by the next port built for that agent, as its next message; started again with the very same script it
+continues under its own id. Driven in the built application with the scripted model: a workflow of two agents was started,
+the application quit while the first agent ran (the store then read `interrupted`, the journal one answered call and one
+`agent` call with its child and no answer, the child `paused`); relaunched and continued, the agent was told, started the
+same script, was answered "continues from its recorded results", and the workflow completed with two agents, the first
+under the task id it had before the quit: nothing was started twice. The drive also showed a continued `solo` run writing
+"Intent classified: moderate_feature", against clause 2; a `solo` run now writes no intent row. A `tool()` call in flight
+at the cut has no recorded answer and is made again. Not measured: a real model deciding to start the script again, a
+crash in place of a quit, a restore from a backup.
+
 **Proofs on the built application, 2026-11-24.** Green: `rows`, `transcript`, `composer`, `chat-controls`, `persona-chip`,
 `config`, `delegation`, `layout` (29 of 29), `overview`, `mission` and `settings`, the last after its Tools inventory count
 was moved from twenty names to twenty-one. Not run: the rest of the suites `pnpm verify:plan` names for this branch.

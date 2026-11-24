@@ -104,8 +104,11 @@ port runs each script in a QuickJS isolate (`workflow/isolate.ts`) behind a jour
 for with `waitForTasks`. `IterationChildren` holds, per parent, the workflows running and the endings not yet told:
 `runWithChildren` treats either as a reason the parent is not done, `awaitTerminal` waits on them as on a child, and the
 parent's next message carries the ending (`endWorkflow`), or nothing where the agent already read it
-(`acknowledgeWorkflow`). `beginRest` and the run's abort end every script of the iteration. Clause 8's journal is in memory
-only; clause 9 is not built.
+(`acknowledgeWorkflow`). `beginRest` and the run's abort end every script of the iteration. Clause 8: the manager writes each workflow and each
+journal entry through the session's writer (store v37), an `agent` call twice — when its child is admitted and when its
+report arrives. A manager built for an agent loads that agent's workflows; one cut off is told to the agent once
+(`announceInterrupted`, the `notified` column), and a start of the same script continues it over its journal under its
+own id, waiting for a child already started. The session record reads a workflow no live port reports from the store.
 
 **The cold path is timed, and it runs after first input.** `workspaceContext` reads the monotonic clock port four
 times on a cache miss: before the saved-policy read, after it, after the discovery and after the merge. It then logs

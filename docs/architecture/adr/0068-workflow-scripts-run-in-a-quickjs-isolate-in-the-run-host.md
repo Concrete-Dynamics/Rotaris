@@ -70,7 +70,11 @@ it runs in. The run host holds the run's credentials and its store writer.
 
 ## What this record does not decide, and what is owed
 
-- Where the journal is stored, and the resume after a restart (clause 8): the journal exists in memory only.
+- ~~Where the journal is stored, and the resume after a restart (clause 8): the journal exists in memory only.~~ Decided
+  and built 2026-11-24: store v37 (`workflows`, `workflow_calls`), written through the session's writer. An `agent` call is
+  journalled when its child is admitted and again when its report arrives, so a script started again waits for a child
+  already started. A resume is the agent's act: it is told once of a workflow cut off, and starts the same script again.
+  A `tool()` call cut off in flight is made again: the journal cannot know whether its effect landed.
 - The transcript row (clause 9).
 - The interpreter inside the packaged application's archive on each platform: not measured.
 

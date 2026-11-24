@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { countNoun, err, type Instant, type MachineId, maskArguments, ok, redactRowString, type Result, type SessionId, toIsoUtc, type WallClock } from '@rotaris/kernel';
-import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
+import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord, type WorkflowCallRow, type WorkflowRow } from '@rotaris/store';
 import { FOLLOW_UP_STATE, interruptionPhrase, isLegalChildMove, isLegalFollowUp, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
@@ -1055,6 +1055,50 @@ export class SessionWriter {
     if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
     this.trimIfOverflowed(at);
     return ok(dal.getChild(sessionId, row.task_id)!);
+  }
+
+  /**
+   * PD-ORCH-018 clause 8: a workflow's row, written by the run host at its start and at each change. `agent` is the
+   * canonical name of the agent that started it. A failure is the writer's failure, as any write's is.
+   */
+  saveWorkflow(row: Omit<WorkflowRow, 'session_id' | 'started_at'>): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    try {
+      dal.upsertWorkflow({ ...row, session_id: sessionId, started_at: toIsoUtc(wall.instant()) });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    this.deps.onCommitted({ kind: 'save' });
+    return ok(undefined);
+  }
+
+  /** PD-ORCH-018 clause 8: one entry of a workflow's journal, as the call starts a child or is answered. */
+  recordWorkflowCall(row: Omit<WorkflowCallRow, 'session_id'>): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    try {
+      this.deps.dal.upsertWorkflowCall({ ...row, session_id: this.deps.sessionId });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    return ok(undefined);
+  }
+
+  /** PD-ORCH-018 clause 8: a replay diverged at `seq`; the journal from there on is dropped. */
+  dropWorkflowCallsFrom(agent: string, workflowId: string, seq: number): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    try {
+      this.deps.dal.deleteWorkflowCallsFrom(this.deps.sessionId, agent, workflowId, seq);
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    return ok(undefined);
+  }
+
+  /** PD-ORCH-018 clause 8: the workflows `agent` started in this session, oldest first, each with its journal. */
+  workflowsOfAgent(agent: string): { readonly row: WorkflowRow; readonly calls: readonly WorkflowCallRow[] }[] {
+    const { dal, sessionId } = this.deps;
+    return dal.workflowsOfAgent(sessionId, agent).map((row) => ({ row, calls: dal.workflowCallsOf(sessionId, agent, row.workflow_id) }));
   }
 
   /**

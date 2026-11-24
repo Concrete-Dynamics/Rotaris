@@ -1193,6 +1193,8 @@ export class Run {
 
   /** REQ-SESSION-114 / REQ-ORCH-014: a continuation's intent row, with the carried-over suffix where it applies. */
   private appendIntentRow(p: Preflight | null): void {
+    // PD-ORCH-018 clause 2: a `solo` run is never classified, so it has no intent to say, at a launch or a continuation.
+    if (this.deps.runOverride === 'solo') return;
     const intent = p?.intent ?? NO_PREFLIGHT_INTENT;
     this.deps.writer.appendRow('system', `Intent classified: ${intent.category}${intent.carried_over ? ' (continued from previous run)' : ''}`, true);
   }

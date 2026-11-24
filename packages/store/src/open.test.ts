@@ -138,8 +138,8 @@ describe('store — the integrity check before a migration (hardening C1, REQ-SE
   });
 });
 
-/** PD-LIBRARY-007: what v36 added, undone so a store can stand at v35 and climb it again. */
-const UNDO_V36 = 'ALTER TABLE artifacts DROP COLUMN answer;';
+/** PD-ORCH-018 clause 8: what v37 added, the last migration, undone so a store can stand one version back and climb it again. */
+const UNDO_LAST = 'DROP TABLE workflow_calls; DROP TABLE workflows;';
 
 describe('store — foreign keys after a migration (hardening C1)', () => {
   function storeAtV35(orphan: boolean): void {
@@ -149,7 +149,7 @@ describe('store — foreign keys after a migration (hardening C1)', () => {
     forgetSpelling(r.dir);
     const raw = new Database(storeFile(root, id), { fileMustExist: true });
     raw.pragma('foreign_keys = OFF');
-    raw.exec(UNDO_V36);
+    raw.exec(UNDO_LAST);
     if (orphan) raw.prepare('INSERT INTO session_locks(session_id, pid, host, acquired_at) VALUES (?, ?, ?, ?)').run('S-ghost', 1, 'h', 't');
     raw.pragma(`user_version = ${CURRENT_SCHEMA_VERSION - 1}`);
     raw.close();

@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-24**
 
+**A workflow survives a restart (R-126; `PD-ORCH-018` clause 8; store v37; 2026-11-24).** `03-runtime-view/14-7-the-store-the-run-writes-2.md`: the tables `workflows` and `workflow_calls`. `03-runtime-view/01-1-start.md`: the manager's load, the one telling of an interrupted workflow, the resume over the journal. `SessionWriter` gains `saveWorkflow`, `recordWorkflowCall`, `dropWorkflowCallsFrom` and `workflowsOfAgent`. No channel or command is added.
+
 **A workflow's row (R-126; `PD-ORCH-018` clause 9; 2026-11-24).** `03-runtime-view/09-5-controls-reaching-in-adr-0010-1.md`: the control channel gains `stopWorkflow`. The session record gains `workflows`, derived from the live run's ports at each snapshot as `pendingQuestions` is and never stored; a manager's change republishes the session through `writer.save`. The row is the `workflow` start call's tool row (`transcript/Row.tsx`, `WorkflowLine`), kept out of tool groups by `neverFolds`. No channel or store column is added.
 
 **The depth slider and the composer's strategy chip (R-126; `PD-ORCH-018` clauses 4 and 10; 2026-11-24).** No view changes: the slider writes `runtime.max_depth` through the Settings save as the number field did, and the chip sends the existing `config.save` with `delegationStrategy`. `StepSlider` joins the design system (`design-system/forms.tsx`). The run host reads `max_depth` through `enforcedDepth` (`contracts/config.ts`): 3 or more is no limit.

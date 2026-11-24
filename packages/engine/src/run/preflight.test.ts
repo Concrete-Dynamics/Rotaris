@@ -81,6 +81,8 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(system).not.toContain('you do not modify files');
     expect(system).not.toContain('PLAYBOOK');
     expect((JSON.parse(dal.getLaunchAudit(sid)!.payload) as { intent_grant: string }).intent_grant).toBe('none');
+    // Nor is an intent said in the transcript, which a continued run of another strategy does say.
+    expect(dal.residentRows(sid).some((r) => /Intent classified/.test(r.body))).toBe(false);
   });
 
   it('OQ-202 as ruled (PD-ORCH-006): a run that grants the coordinator the direct-work bundle tells it to do the work itself; a coordinating run does not', async () => {

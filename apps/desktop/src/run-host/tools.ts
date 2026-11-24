@@ -4,7 +4,7 @@ import { toIsoUtc, type Clocks, type WallClock } from '@rotaris/kernel';
 import { presetRank, resolvePreset, restrictionsAllow, TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, configureTool, type ConfigurationPort, directWorkBundle, grantsOn, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor,
+  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type DelegateCatalogue, type GateSink, type PolicyRead, type Prerequisites, type PresenterPort, type ResolvedToolSet, type ToolExecutor, artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool, WorkflowManager, workflowTool, type JournalEntry, type WorkflowCallKind, type WorkflowState 
 } from '@rotaris/agent-tools';
 import { aliasesAmong, BUILT_IN_PERSONAS, delegationTargetsFor, EMPTY_MCP_EVIDENCE, isNativeFileWritingTool, toolRestrictionsFor, type AgentGrant, type ModeChange, type Persona, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
@@ -12,7 +12,6 @@ import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js
 import { configurationForExecutionRoot, grantEvidence, type McpHost } from './mcp.js';
 import { throwOnAbort } from './throw-on-abort.js';
 import { writeSkillLoadMarker } from './skills.js';
-import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool, WorkflowManager, workflowTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
 /**
@@ -562,6 +561,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    */
   const withheldAtPlanGate = new Set<string>(planGateHeld() ? granted.filter((t) => withheldUnderPlanGate(t)) : []);
   const delegationAvailable = ctx.delegation !== undefined && !single && !atDepthLimit;
+  // Read by the workflow store before `writes` exists (the manager is built first): true once the run's end closed this port.
+  let portClosed: () => boolean = () => false;
   // PD-ORCH-018 clause 9: this port's workflow manager, where it holds one, for the session record and the row's Stop.
   let workflows: WorkflowManager | null = null;
   // Bound once the gate exists (below): a workflow script's tool calls go through it.
@@ -645,7 +646,20 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       const manager = new WorkflowManager({
         delegation, parentId, defaultPersona: 'coding-agent', now: () => Number(deps.clocks.monotonic.now()),
         // Clause 9: each change republishes the session, which reads `workflows` from this port (as a question's does).
-        onChange: () => { if (!writes.closed()) ctx.writer.save(ctx.writer.currentStatus, {}); },
+        onChange: () => { if (!portClosed()) ctx.writer.save(ctx.writer.currentStatus, {}); },
+        // Clause 8: this agent's workflows and their journals, through the session's one writer. Nothing is written once the
+        // run's end has closed this port (REQ-SESSION-094); a workflow that ends after that keeps the state last written.
+        store: {
+          load: () => ctx.writer.workflowsOfAgent(ctx.agentName).map(({ row, calls }) => ({
+            workflow: { id: row.workflow_id, name: row.name, script: row.script, state: row.state as WorkflowState, phase: row.phase, agentsStarted: row.agents_started, agentsEnded: row.agents_ended, calls: row.calls, result: row.result, notified: row.notified === 1 },
+            journal: calls.map((c) => ({ seq: c.seq, kind: c.kind as WorkflowCallKind, payload: c.payload, ...(c.task_id === null ? {} : { taskId: c.task_id }), ...(c.outcome === null ? {} : { outcome: JSON.parse(c.outcome) as NonNullable<JournalEntry['outcome']> }) })),
+          })),
+          save: (w) => { if (!portClosed()) ctx.writer.saveWorkflow({ agent: ctx.agentName, workflow_id: w.id, name: w.name, script: w.script, state: w.state, phase: w.phase, agents_started: w.agentsStarted, agents_ended: w.agentsEnded, calls: w.calls, result: w.result, notified: w.notified ? 1 : 0 }); },
+          journal: (workflowId) => ({
+            append: (e) => { if (!portClosed()) ctx.writer.recordWorkflowCall({ agent: ctx.agentName, workflow_id: workflowId, seq: e.seq, kind: e.kind, payload: e.payload, task_id: e.taskId ?? null, outcome: e.outcome === undefined ? null : JSON.stringify(e.outcome) }); },
+            truncate: (seq) => { if (!portClosed()) ctx.writer.dropWorkflowCallsFrom(ctx.agentName, workflowId, seq); },
+          }),
+        },
         dispatchTool: async (name, args, callId, signal) => {
           const r = await workflowGate().dispatch({ callId, name, rawArgs: JSON.stringify(args), persona: ctx.persona, agentId: ctx.agentName, agentName: ctx.agentName }, signal);
           return { text: r.text, isError: r.isError, interrupted: r.interrupted === true };
@@ -653,6 +667,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       });
       executors.set('workflow', workflowTool(manager));
       workflows = manager;
+      // Clause 8: a workflow of this agent that an earlier process or a pause cut off is told to it once, as its next message.
+      manager.announceInterrupted();
     }
   }
   const resolved = resolveAgentGrant(persona, { name: ctx.persona, declared, parentPersona: parentAgentPersona, coordinating: delegationAvailable && !directWork, prerequisites, isEntry });
@@ -696,6 +712,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
   const approvals = new PendingApprovals(deps.clocks.timers, { held: quitting });
   const writes = writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn);
+  portClosed = () => writes.closed();
   const markSkillLoad = skillLoadMarking(ctx, root, deps.skillAt, writes.closed);
   const toolHooks = ctx.hooks ?? null;
   workflowGate = () => gate;

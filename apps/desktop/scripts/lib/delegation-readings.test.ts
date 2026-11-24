@@ -38,7 +38,7 @@ describe('swarmReading (PD-ORCH-006 revision 3, REQ-ORCH-025)', () => {
 describe('soloReading (PD-ORCH-018 clauses 1 and 2)', () => {
   const tools = [{ name: 'write_file' }, { name: 'terminal' }, { name: 'delegate' }];
   it('a solo run carries the statement and the writing tools beside delegate, and its log holds no classification', () => {
-    expect(soloReading(requestOf(body(`You are the agent this run belongs to. ${SOLO_STATEMENT}: …`, 'go', tools)), 'run-host: configuration: loaded\n')).toMatchObject({ kind: 'read', faults: [] });
+    expect(soloReading(requestOf(body(`You are the orchestrator. For this run … ${SOLO_STATEMENT}: …`, 'go', tools)), 'run-host: configuration: loaded\n')).toMatchObject({ kind: 'read', faults: [] });
   });
   it('names each thing the product got wrong', () => {
     const r = soloReading(requestOf(body(`You coordinate: you do not modify files.\n${SWARM_HEADING}`, 'go', [{ name: 'delegate' }])), 'run-host: intent: moderate_feature (0.9) via json_schema\n');

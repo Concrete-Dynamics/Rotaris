@@ -3,7 +3,7 @@
 The production layer is `packages/ui/src/design-system/`, exported as `@rotaris/ui/design-system`.
 
 - Core: Button, Kbd, SegmentedControl, StatusDot, Tag, ToggleSwitch
-- Forms: Input, TextArea, Select
+- Forms: Input, TextArea, Select, StepSlider
 - Surfaces: Card, KpiCard, SectionLabel
 - Data: ContextRing, MeterBar, Sparkline, Table
 - Feedback: Dialog, Spinner, Tooltip, Acknowledgement

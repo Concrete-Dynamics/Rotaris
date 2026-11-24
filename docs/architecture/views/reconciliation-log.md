@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-24**
 
+**The depth slider and the composer's strategy chip (R-126; `PD-ORCH-018` clauses 4 and 10; 2026-11-24).** No view changes: the slider writes `runtime.max_depth` through the Settings save as the number field did, and the chip sends the existing `config.save` with `delegationStrategy`. `StepSlider` joins the design system (`design-system/forms.tsx`). The run host reads `max_depth` through `enforcedDepth` (`contracts/config.ts`): 3 or more is no limit.
+
 **The `workflow` tool (R-126; `PD-ORCH-018` clauses 5 to 7; [ADR-0068](../adr/0068-workflow-scripts-run-in-a-quickjs-isolate-in-the-run-host.md); 2026-11-24).** `03-runtime-view/01-1-start.md`: `DelegationOps` gains `beginWorkflow`, `endWorkflow`, `acknowledgeWorkflow` and `claimForWorkflow`, and the resume loop waits on a running workflow as on a child. `agent-tools` gains the isolate, the journal and the tool; `quickjs-emscripten-core` and its `release-sync` variant are external dependencies of the run host's bundle. No channel, command or store column is added.
 
 **A `solo` strategy (R-126; [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018) clauses 1, 2 and 4; 2026-11-24).** `03-runtime-view/01-1-start.md`: a third run override. `Sessions` hands a `solo` run no pre-flight, the entry role is told `SOLO_INSTRUCTION` and holds the direct-work bundle with `delegate`, and the run host withholds `delegate` from an agent at `runtime.max_depth`. No channel, command or store column is added.

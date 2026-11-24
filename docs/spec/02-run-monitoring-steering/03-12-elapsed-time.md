@@ -201,6 +201,7 @@ Part 3 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 > **Narrowed by [`PD-ORCH-005`](../../product/directives/pd-orch-005.md#pd-orch-005) revision 6, 2026-10-06.** Clause 23: while
 > an agent is paused, the line names that count between waiting and done (`running 1 · waiting 0 · paused 2 · done
 > 1 · failed 0`). Otherwise it reads as stated.
+> **Narrowed by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** Where the configured depth is the no-limit step the caption's `{cap}` reads `no limit`. Everything else above governs as written.
 
 **REQ-MONITOR-170** — The cumulative token figure uses the aggregate total when available and otherwise falls back to the sum of prompt and completion tokens from the raw usage record.
 

@@ -1,4 +1,4 @@
-import { RUN_AGENT_ID, type CommandOutcome, type CommandRequest, type ImageAttachmentInput, type PauseResolution, type PermissionPreset, type PlanDecision, type QuestionAnswers, type RendererBridge, type SessionRecord } from '@rotaris/contracts';
+import { RUN_AGENT_ID, type CommandOutcome, type DelegationStrategyName, type CommandRequest, type ImageAttachmentInput, type PauseResolution, type PermissionPreset, type PlanDecision, type QuestionAnswers, type RendererBridge, type SessionRecord } from '@rotaris/contracts';
 import { useShellState, type CancelOverlayStore } from '@rotaris/ui';
 
 /**
@@ -237,6 +237,16 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
   }
 
   /**
+   * PD-ORCH-018 clause 10 (REQ-ORCH-025's "chosen where the run is started"): the composer's strategy for the next run. It
+   * writes the one key Settings writes (`rotaris.delegation_strategy`) through the same save, so neither surface holds a
+   * strategy of its own and the next run reads whichever was chosen last.
+   */
+  async function setDelegationStrategy(strategy: DelegationStrategyName): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const written = await send({ kind: 'config.save', save: { delegationStrategy: strategy } });
+    return written.ok ? { ok: true } : { ok: false, reason: written.detail ?? written.headline };
+  }
+
+  /**
    * REQ-MONITOR-146 / REQ-MONITOR-194: the composer's "Model for the next run". The choice is the entry persona's model in the
    * configuration (`personas.<entry>.model`), written first; then — with a session followed — the engine is told it was an
    * explicit choice (`session.chooseNextModel`), which clears the pair's exclusion if the session holds it out of quota, as
@@ -275,5 +285,5 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
     return r.ok ? { ok: true, resubmitted: 'last-prompt' } : { ok: false, reason: r.detail ?? r.headline };
   }
 
-  return { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, retryRun, setMode, setNextModel, setRunStartMode, stopRun, submitPrompt };
+  return { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, retryRun, setDelegationStrategy, setMode, setNextModel, setRunStartMode, stopRun, submitPrompt };
 }

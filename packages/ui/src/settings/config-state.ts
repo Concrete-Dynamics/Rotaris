@@ -563,7 +563,8 @@ export function clampForDisplay(value: number, min: number, max: number): number
 export interface NumberRange { readonly min: number; readonly max: number }
 
 /** REQ-CONFIG-322: the delegation limits' widget clamps. */
-export const DEPTH_CAP_RANGE: NumberRange = { min: 1, max: 12 };
+/** PD-ORCH-018 clause 4: three steps; 3 is the no-limit step, and the slider writes nothing above it. */
+export const DEPTH_CAP_RANGE: NumberRange = { min: 1, max: 3 };
 export const FAN_OUT_RANGE: NumberRange = { min: 1, max: 64 };
 /** REQ-CONFIG-325: the two numeric policy limits' widget clamps. */
 export const COMPRESSION_THRESHOLD_RANGE: NumberRange = { min: 50, max: 95 };

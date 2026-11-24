@@ -1574,6 +1574,51 @@
 .settings__scope > div { display: flex; align-items: center; gap: 6px; }
 .settings__tools { font-size: var(--rt-text-xs, 12px); max-width: 240px; }
 .settings__number { width: 5.5em; }
+
+/* PD-ORCH-018 clause 4 — the step slider (`design-system/forms.tsx`, `StepSlider`) and the depth figure its steps carry.
+   The native range input is the control and sits over the rail; the stops under it draw the steps. A reached stop takes
+   the accent, the chosen one the stronger accent, and the pointed one the hover ground, so the three states never share
+   a colour. Every measure is a spacing token. */
+.step-slider { display: flex; flex-direction: column; gap: var(--rt-space-2); min-width: 0; --step-slider-thumb: var(--rt-space-4); }
+.step-slider__rail { position: relative; display: grid; }
+.step-slider__stops { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.step-slider__stop { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--rt-space-1); padding: calc(var(--step-slider-thumb) + var(--rt-space-2)) var(--rt-space-2) var(--rt-space-2); border: 0; border-radius: var(--rt-radius-sm); background: none; color: var(--rt-text-secondary); font: inherit; font-size: var(--rt-text-xs); cursor: pointer; transition: background var(--rt-duration-fast) var(--rt-ease-out), color var(--rt-duration-fast) var(--rt-ease-out); }
+.step-slider__stop.is-pointed { background: var(--rt-hover); color: var(--rt-text); }
+.step-slider__stop.is-chosen { color: var(--rt-accent-200); }
+.step-slider__stop:disabled { cursor: default; color: var(--rt-text-disabled); }
+/* The rail is drawn by the stops: each carries the half-segments either side of its mark, so a reached stop colours the rail up to itself. */
+.step-slider__stop::before { content: ''; position: absolute; inset-block-start: calc(var(--step-slider-thumb) / 2 - var(--rt-hairline-width)); inset-inline: 0; height: calc(var(--rt-hairline-width) * 2); background: var(--rt-border-strong); }
+.step-slider__stop:first-child::before { inset-inline-start: 50%; }
+.step-slider__stop:last-child::before { inset-inline-end: 50%; }
+.step-slider__stop.is-reached::before { background: var(--rt-accent); }
+.step-slider__stop.is-chosen:not(:last-child)::before { background: linear-gradient(to right, var(--rt-accent) 50%, var(--rt-border-strong) 50%); }
+.step-slider__mark { position: absolute; inset-block-start: calc(var(--step-slider-thumb) / 2 - var(--rt-space-1)); inset-inline-start: calc(50% - var(--rt-space-1)); width: var(--rt-space-2); height: var(--rt-space-2); border-radius: var(--rt-radius-pill); background: var(--rt-border-strong); }
+.step-slider__stop.is-reached .step-slider__mark { background: var(--rt-accent); }
+.step-slider__label { font-weight: var(--rt-weight-medium); white-space: nowrap; }
+/* The input: no track of its own, a thumb in the accent, laid over the stops' rail and inset by half a stop so its ends meet the first and last marks. */
+.step-slider__input { grid-area: 1 / 1; z-index: 1; align-self: start; appearance: none; -webkit-appearance: none; height: var(--step-slider-thumb); margin: 0; background: none; cursor: pointer; }
+.step-slider[data-steps="3"] .step-slider__input { margin-inline: calc(100% / 6 - var(--step-slider-thumb) / 2); }
+.step-slider__stops { grid-area: 1 / 1; }
+.step-slider__input::-webkit-slider-runnable-track { height: var(--step-slider-thumb); background: none; }
+.step-slider__input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: var(--step-slider-thumb); height: var(--step-slider-thumb); border-radius: var(--rt-radius-pill); background: var(--rt-accent); border: calc(var(--rt-hairline-width) * 2) solid var(--rt-surface); box-shadow: var(--rt-shadow-sm); transition: transform var(--rt-duration-fast) var(--rt-ease-out); }
+.step-slider__input:hover::-webkit-slider-thumb { transform: scale(1.1); }
+.step-slider__input:focus-visible { outline: none; }
+.step-slider__input:focus-visible::-webkit-slider-thumb { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: var(--rt-hairline-width); }
+.step-slider__input:disabled { cursor: default; }
+.step-slider__input:disabled::-webkit-slider-thumb { background: var(--rt-border-strong); }
+.step-slider__description { margin: 0; min-height: calc(2 * var(--rt-leading-body) * 1em); max-width: 60ch; color: var(--rt-text-secondary); font-size: var(--rt-text-xs); line-height: var(--rt-leading-body); }
+.step-slider__description[data-pointed="true"] { color: var(--rt-text); }
+@media (prefers-reduced-motion: reduce) { .step-slider__stop, .step-slider__input::-webkit-slider-thumb { transition: none; } }
+.settings__depth { flex: 1 1 calc(var(--rt-space-8) * 9); max-width: calc(var(--rt-space-8) * 12); }
+/* The row's label reads against the slider's rail, its first line, and not against the middle of a control four lines tall. */
+.settings__action:has(> .step-slider) { align-items: flex-start; }
+/* The depth figure: the entry agent filled, each permitted level a ring after it, and three shrinking dots where the chain has no end. */
+.depth-figure { display: inline-flex; align-items: center; gap: var(--rt-space-1); height: var(--rt-space-3); }
+.depth-figure__node { box-sizing: border-box; width: var(--rt-space-2); height: var(--rt-space-2); border-radius: var(--rt-radius-pill); border: calc(var(--rt-hairline-width) * 1.5) solid currentColor; }
+.depth-figure__node--entry { background: currentColor; }
+.depth-figure__node + .depth-figure__node { margin-inline-start: var(--rt-space-1); position: relative; }
+.depth-figure__node + .depth-figure__node::before { content: ''; position: absolute; inset-block-start: calc(50% - var(--rt-hairline-width) / 2); inset-inline-end: 100%; width: var(--rt-space-2); height: var(--rt-hairline-width); background: currentColor; }
+.depth-figure__more { width: var(--rt-space-3); height: var(--rt-hairline-width); margin-inline-start: var(--rt-space-1); background: repeating-linear-gradient(to right, currentColor 0 var(--rt-hairline-width), transparent var(--rt-hairline-width) calc(var(--rt-hairline-width) * 3)); }
 .settings__card { margin: var(--rt-space-2, 8px) 0; display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
 .settings__raw { margin: 0; padding: var(--rt-space-2, 8px); background: var(--rt-bg); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 5px); font-size: var(--rt-text-xs, 12px); user-select: text; white-space: pre-wrap; }
 .settings__fatal, .settings__referential { margin: var(--rt-space-2, 8px) 0; }

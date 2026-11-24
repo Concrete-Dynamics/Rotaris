@@ -93,7 +93,9 @@ describe('the per-agent timeout in minutes (PD-CONFIG-003, REQ-MONITOR-286)', ()
     expect(section).toContain('data-testid="child-timeout-hint"');
     expect(section).toMatch(/delegated agent/);
     expect(section).not.toContain('data-testid="child-timeout-stored"');
-    expect((section.match(/type="number"/g) ?? []).length).toBe(3);
+    // Fan-out and the timeout; Depth cap is a slider since PD-ORCH-018 clause 4.
+    expect((section.match(/type="number"/g) ?? []).length).toBe(2);
+    expect((section.match(/type="range"/g) ?? []).length).toBe(1);
   });
 
   it('draws a stored 1250 s as 21 minutes with the exact seconds stated beneath', () => {
@@ -116,5 +118,23 @@ describe('the per-agent timeout in minutes (PD-CONFIG-003, REQ-MONITOR-286)', ()
     expect(storedTimeoutNote(3, 3)).toBe('Stored as 3 seconds; kept until you change this field.');
     // After Save the snapshot holds the new value, and the description follows it.
     expect(limits(render(snapshotWith(60)))).toContain('aria-description="Stored as 60 seconds."');
+  });
+
+  it('PD-ORCH-018 clause 4: Depth cap is a slider of three steps, each naming what it permits, and 3 or more is the no-limit step', () => {
+    const section = limits(render(snapshotWith(1200)));
+    expect(section).toContain('<label for="max-depth">Depth cap</label>');
+    expect(section).toMatch(/<input id="max-depth"[^>]*type="range"[^>]*min="0"[^>]*max="2"[^>]*step="1"/);
+    // The fixture's max_depth is 3: the third step, said as its label and what it permits.
+    expect(section).toMatch(/id="max-depth"[^>]*aria-valuetext="No limit: Any agent may start agents, at any depth\./);
+    expect(section).toMatch(/id="max-depth"[^>]*value="2"/);
+    expect((section.match(/data-step-stop=/g) ?? []).length).toBe(3);
+    for (const label of ['1 level', '2 levels', 'No limit']) expect(section).toContain(`<span class="step-slider__label">${label}</span>`);
+    expect(section).toMatch(/data-testid="max-depth-description"[^>]*>Any agent may start agents, at any depth\./);
+    // A file value above the last step is shown as the last step, never as a fourth.
+    const deep = limits(render({ ...snapshotWith(1200), runtime: { ...runtime(1200), max_depth: 8 } }));
+    expect(deep).toMatch(/id="max-depth"[^>]*value="2"/);
+    const one = limits(render({ ...snapshotWith(1200), runtime: { ...runtime(1200), max_depth: 1 } }));
+    expect(one).toMatch(/id="max-depth"[^>]*value="0"/);
+    expect(one).toMatch(/aria-valuetext="1 level: Only the main agent starts other agents\./);
   });
 });

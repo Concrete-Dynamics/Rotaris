@@ -1,7 +1,7 @@
 import { DictationControl, type DictationHost } from './DictationControl.js';
 import { insertTranscript } from './dictation.js';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, PROJECT_SETUP_SEND_REASON, PROJECT_SETUP_SUBMIT_DETAIL, PROJECT_SETUP_SUBMIT_HEADLINE, type InitializationStateView, type Notice, type PermissionPreset, type PlanDecision, type QuestionAnswers, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { DELEGATION_STRATEGY_NAMES, isBusy, PERMISSION_PRESETS, type DelegationStrategyName, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, PROJECT_SETUP_SEND_REASON, PROJECT_SETUP_SUBMIT_DETAIL, PROJECT_SETUP_SUBMIT_HEADLINE, type InitializationStateView, type Notice, type PermissionPreset, type PlanDecision, type QuestionAnswers, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { projectSidebarSection } from './settings/project-init.js'; // Part AS
 import { err, ok } from '@rotaris/kernel';
 import {
@@ -106,6 +106,13 @@ export interface WorkspaceViewProps {
    */
   readonly runStartMode?: 'auto' | 'plan' | undefined;
   readonly onSetRunStartMode?: ((mode: 'auto' | 'plan') => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /**
+   * PD-ORCH-018 clause 10 (REQ-ORCH-025: the override is "chosen in the desktop interface where the run is started"): the
+   * delegation strategy the next run takes. This control and Settings write the same key (`rotaris.delegation_strategy`);
+   * neither holds a strategy of its own.
+   */
+  readonly delegationStrategy?: DelegationStrategyName | undefined;
+  readonly onSetDelegationStrategy?: ((strategy: DelegationStrategyName) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-MONITOR-133/137: steer one live agent (`run` for the entry role). */
   readonly onSteer?: ((agentId: string, text: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-MONITOR-142/144: the run header's model and reasoning switch, next-iteration changes. */
@@ -778,7 +785,13 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
+/** PD-ORCH-018 clause 10: the composer's names for the four strategies, and what each does in a few words. */
+export const STRATEGY_LABELS: Readonly<Record<DelegationStrategyName, string>> = { orchestrator: 'Orchestrator', swarm: 'Swarm', single: 'Single', solo: 'Solo' };
+export const STRATEGY_HINTS: Readonly<Record<DelegationStrategyName, string>> = {
+  orchestrator: 'coordinates specialists', swarm: 'delegates as widely as it can', single: 'one agent, no delegation', solo: 'one agent, delegates and scripts workflows',
+};
+
+export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, delegationStrategy = 'orchestrator', onSetDelegationStrategy, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // PD-CHAT-015: whose transcript is shown — the run's own conversation first. REQ-CHAT-069's "This task" needs a
   // selected agent, and without one it is the run's.
@@ -1753,6 +1766,14 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
               /* PD-ORCH-003: the released hint names the gesture that re-arms, because choosing `plan` IS that gesture. */
               hints={{ auto: 'start at once', plan: planReleased ? 'approved — choose again to plan the next run' : 'plan gate first' }}
               onChoose={(v) => { void onSetRunStartMode(v as 'auto' | 'plan').then((r) => { if (!r.ok) setError(r.reason); }); }} />
+          )}
+          {/* PD-ORCH-018 clause 10: the strategy of the NEXT run, beside the run-start mode and on its terms — the same
+            * enablement, the same strip shell, and a change made while a run is in flight reaches the next run only. */}
+          {onSetDelegationStrategy && (
+            <PopoverChip id="chip-strategy" testId="chip-strategy" ariaLabel="Delegation strategy for the next run"
+              icon="ph-tree-structure" reason={chipReason} value={delegationStrategy} options={DELEGATION_STRATEGY_NAMES} strip stripCompact={stripTight}
+              labels={STRATEGY_LABELS} hints={STRATEGY_HINTS}
+              onChoose={(v) => { void onSetDelegationStrategy(v as DelegationStrategyName).then((r) => { if (!r.ok) setError(r.reason); }); }} />
           )}
           {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} strip stripCompact={stripTight} />}
           {/* REQ-LIBRARY-140 / REQ-CHAT-042: stashes whatever is typed, run or no run.

@@ -20,7 +20,8 @@ and nothing it states reaches a run taken under any other strategy.
    other run is; a run not started in plan mode is never held.
 4. **Depth decides who may spawn.** `runtime.max_depth` governs a `solo` run as it governs every run, and under `solo` it
    MUST be enforced by withholding: an agent that stands at the depth limit holds neither `delegate` nor the workflow
-   tool of clause 5. The settings screen MUST present the choice as a slider of three steps, each stating on hover and on
+   tool of clause 5. The settings screen MUST present the choice as a slider of three steps over `runtime.max_depth` (1, 2, and 3 or
+   more), each stating on hover and on
    focus what it permits: at the first only the entry role spawns; at the second its children may; at the third there is
    no depth limit, and an agent at any depth may spawn. The run's limits on how many children exist and how many are
    active bind at every step.
@@ -39,6 +40,9 @@ and nothing it states reaches a run taken under any other strategy.
    without repeating the work that produced them, and continues from the first call that has none.
 9. **A workflow is one row.** The transcript MUST show a workflow as one row naming it, its current phase and how many
    of its agents have ended, with a control that stops it; the row opens to the agents it started and to its script.
+10. **The strategy is chosen where a run is started, too.** The composer MUST offer the four strategies for the next run,
+    beside the run-start mode and on its terms. It writes the key the settings screen writes, and neither holds a strategy
+    of its own. The settings screen's selector MUST offer the four in this order: `orchestrator`, `swarm`, `single`, `solo`.
 
 **Why, and what it costs.** The owner wants the shape of a coding assistant that works alone and reaches for help by its
 own judgement, beside the coordinator that never touches a file and the worker that never delegates. A script is asked
@@ -52,12 +56,29 @@ This directive names [`PD-ORCH-006`](pd-orch-006.md#pd-orch-006), which narrows 
 whose mapping grants direct work under `orchestrator` or `swarm`, and [`PD-ORCH-005`](pd-orch-005.md#pd-orch-005), which
 narrows REQ-ORCH-005 for a continued run's carried intent. Neither case is a `solo` run, so the cases stay apart. It
 names [`PD-CONFIG-014`](pd-config-014.md#pd-config-014) too, which narrows REQ-TOOLS-001 by adding `configure` to the
-public names: this directive adds `workflow`, a different name, and changes nothing of `configure`.
+public names: this directive adds `workflow`, a different name, and changes nothing of `configure`. It names
+[`PD-CONFIG-003`](pd-config-003.md#pd-config-003), which narrows REQ-CONFIG-322 for the per-agent timeout: this directive's
+case there is the depth cap alone. It names `PD-ORCH-005` again for REQ-MONITOR-169, whose case is a resumed run's caption:
+this directive's is the word the caption carries where the configured depth is no limit. And it names
+[`PD-MONITOR-009`](pd-monitor-009.md#pd-monitor-009), whose clause 6 keeps the strategy selector and the depth control off
+every monitoring surface and calls Settings their one editor: the composer is where a run is started and no monitoring
+surface, clause 10 puts the strategy there on REQ-ORCH-025's own words, and the depth control stays in Settings alone.
 
 > **Narrows:** REQ-ORCH-025, REQ-ORCH-029, REQ-ORCH-016, REQ-ORCH-005, REQ-ORCH-014, REQ-TOOLS-001
+> **Narrows:** REQ-CONFIG-112, REQ-CONFIG-321, REQ-CONFIG-322, REQ-MONITOR-169
 > **Extends:** REQ-ORCH-024
 
 *Raised by the owner, 2026-11-24; logged as [R-126](../requests.md#r-126).*
+
+**First execution of clauses 4 and 10, 2026-11-24.** `runtime.max_depth` keeps its key and its integer: 1 and 2 are limits
+and 3 or more is no limit (`enforcedDepth`, `packages/contracts/src/config.ts`), so the shipped default of 3 is now no limit
+on every strategy, where a playbook's BUDGET cell still clamps a classified run. The slider is `StepSlider`, new in the
+design system; driven in the built application it showed three stops with their figures, the pointed stop's description,
+and "Unsaved changes" after a press. The Overview's caption reads `depth 1 / no limit`. The composer's chip listed the four
+strategies with Solo chosen; its write is held by a unit test, and the press that would have shown it in the file was not
+completed in the drive. `overview-proof` and `mission-proof` pass on the built application; the second presses the
+slider's second stop and reads `max_depth: 2` in the file, and its last press now names the Delegation page, where it named
+a Runtime page the settings screen has not had since `PD-CONFIG-012`. No critique was run.
 
 **The third step is no limit (the owner, 2026-11-24).** Asked whether the third step means three levels or none, the owner
 first chose "Three levels" and then wrote: "as i said before 1 2 and 3 is unlimited." The later word governs. The clause as

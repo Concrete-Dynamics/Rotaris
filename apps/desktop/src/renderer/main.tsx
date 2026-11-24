@@ -18,7 +18,7 @@ import '@phosphor-icons/web/fill';
 
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
-import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, reloadThisWindow, replica, retryRun, setMode, setNextModel, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, reloadThisWindow, replica, retryRun, setDelegationStrategy, setMode, setNextModel, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 import { joinOrAsk, settleGuard, type CloseGuardHost, type PendingGuardQuestion } from './guard-question.js';
 import { openWorkspaceFolder, useWindowWidth, useWorkspaceUsage } from './strip-facts.js';
 import { reportNoticeActionRefusal } from './notice-action-refusal.js';
@@ -369,6 +369,9 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     /* REQ-ORCH-152 / REQ-CONFIG-476: the composer's half of the run-start mode; the start dialog writes the same key. */
     runStartMode={snapshot?.runtime.run_start_mode ?? 'auto'}
     onSetRunStartMode={(mode) => setRunStartMode(mode)}
+    /* PD-ORCH-018 clause 10: the composer's half of the delegation strategy; Settings writes the same key. */
+    delegationStrategy={snapshot?.delegationStrategy ?? 'orchestrator'}
+    onSetDelegationStrategy={(strategy) => setDelegationStrategy(strategy)}
     onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
     onSetModel={(model) => control('setModel', { model }, 'The run did not accept that model.')}
     /* OQ-188's ruling (PD-MONITOR-004 revision 2): keep waiting is `setModel` marked as a retry of the wait it names, never a switch. */

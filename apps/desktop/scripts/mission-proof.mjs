@@ -837,7 +837,7 @@ const s6 = scenario('inspector');
 // drawn on no view now: the graph card's last line shows the configured strategy as text and leads to its one editor. So:
 // the card's strategy read (a span, `orchestrator`, the scratch file naming none), with no selector and no depth control on
 // the Overview; "Open Runtime settings" pressed, landing on the Settings view at Runtime; there "Delegation strategy" chosen
-// and "Depth cap" typed, the save bar reading unsaved until Save writes both keys; Settings shows the same values at the end;
+// and "Depth cap" set on its slider, the save bar reading unsaved until Save writes both keys; Settings shows the same values at the end;
 // the pop-out toggle writes its preference, as before. A second launch reads the card's strategy from the file just written.
 // The Overview draws its cards once a session is listed (its empty state otherwise), so the launch runs one scripted answer first.
 const s7 = scenario('settings');
@@ -850,10 +850,10 @@ const s7 = scenario('settings');
     // the configuration when it mounts and the card draws a dash until that answers (a reading 321 ms after the view step
     // read "—" on 2026-11-11). The press waits from 6.2 s on, so the reading comes first.
     ROTARIS_CAPTURE_EVAL_AT: `${card}@6000`,
-    ROTARIS_CAPTURE_CLICKS: '[data-testid="mission-open-runtime"]@6200~14000;;#max-depth@8400;;.save-bar .btn-primary>>Save@10800;;.nav-list__item>>Appearance@12200;;[data-testid="agent-pop-out-toggle"]@12700;;.nav-list__item>>Runtime@13300',
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="mission-open-runtime"]@6200~14000;;[data-step-stop="1"]@8400;;.save-bar .btn-primary>>Save@10800;;.nav-list__item>>Appearance@12200;;[data-testid="agent-pop-out-toggle"]@12700;;.nav-list__item>>Delegation@13300',
     ROTARIS_CAPTURE_SELECT: '#strategy>>swarm@7800',
-    // The depth cap typed as a person types it: the field's text selected, the digit typed over it, Tab to commit the draft.
-    ROTARIS_CAPTURE_CHORDS: 'Ctrl+A@8900', ROTARIS_CAPTURE_TYPE_AT: '2@9300', ROTARIS_CAPTURE_KEYS: 'Tab@10000',
+    // PD-ORCH-018 clause 4: the depth cap is a slider of three steps; its second stop is pressed ("2 levels", max_depth 2).
+    // Until 2026-11-24 it was a number field, and this typed 2 over its text.
     ROTARIS_CAPTURE_PROBE_AT: '.app-shell@7400;;.nav-list__item.is-selected@7400;;.save-bar__status@10400',
     ROTARIS_CAPTURE_AFTER_MS: '14600', ROTARIS_CAPTURE_PROBE: '#strategy;;#max-depth;;[data-testid="agent-pop-out-toggle"];;.save-bar__status;;.nav-list__item.is-selected',
   });
@@ -870,7 +870,8 @@ const s7 = scenario('settings');
   const yaml = readFileSync(join(s7.workspace, '.rotaris', 'agents.yaml'), 'utf8');
   expect(/delegation_strategy: swarm/.test(yaml) && /max_depth: 2\b/.test(yaml), `the file after the writes:\n${yaml}`);
   const strategy = endProbe(r.log, '#strategy')?.[0]?.value; const depth = endProbe(r.log, '#max-depth')?.[0]?.value;
-  expect(strategy === 'swarm' && depth === '2', `Settings → Runtime shows strategy ${strategy}, depth ${depth}`);
+  // The slider's value is the step's index: the second step is 1.
+  expect(strategy === 'swarm' && depth === '1', `Settings → Runtime shows strategy ${strategy}, depth step ${depth}`);
   const saved = endProbe(r.log, '.save-bar__status')?.[0]?.text ?? null;
   expect(saved === 'All changes saved', `the save bar at the end: ${JSON.stringify(saved)}`);
   const prefs = JSON.parse(readFileSync(join(s7.preferences, 'preferences.json'), 'utf8'));

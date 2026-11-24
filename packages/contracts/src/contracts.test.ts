@@ -140,6 +140,17 @@ describe('contracts — the presentation mapping (REQ-NOTIFY-049, REQ-NOTIFY-050
   });
 });
 
+describe('contracts — the depth steps (PD-ORCH-018 clause 4)', () => {
+  it('1 and 2 are limits, and 3 or more is no limit', async () => {
+    const c = await import('./config.js');
+    expect(c.DEPTH_STEPS).toEqual([1, 2, 3]);
+    expect([1, 2, 3, 12].map((n) => c.isUnlimitedDepth(n))).toEqual([false, false, true, true]);
+    expect([1, 2].map((n) => c.enforcedDepth(n))).toEqual([1, 2]);
+    expect(c.enforcedDepth(3)).toBe(Number.MAX_SAFE_INTEGER);
+    expect([1, 2, 3, 9].map((n) => c.depthLimitLabel(n))).toEqual(['1', '2', 'no limit', 'no limit']);
+  });
+});
+
 describe('contracts — tools vocabularies', () => {
   it('REQ-TOOLS-001/028/041/047: the sets are exactly as fixed and the ranks total', async () => {
     const t = await import('./tools.js');

@@ -199,7 +199,8 @@ if (JSON.stringify(chips) !== JSON.stringify(expectedChips)) throw new Error(`th
 const agentCount = Number(text(run.probes, '[data-testid="overview-agent-count"]')[0] ?? -1);
 if (agentCount !== children.length) throw new Error(`the agents card shows ${agentCount}; the ledger holds ${children.length}`);
 const caps = text(run.probes, '[data-testid="overview-agent-caps"]')[0] ?? '';
-if (!/^depth \d+ \/ 3 · fan-out \d+ \/ 4$/.test(caps)) throw new Error(`the agents caption did not carry the configured caps: "${caps}"`);
+// PD-ORCH-018 clause 4: a configured max_depth of 3 is the no-limit step, and the caption says so.
+if (!/^depth \d+ \/ no limit · fan-out \d+ \/ 4$/.test(caps)) throw new Error(`the agents caption did not carry the configured caps: "${caps}"`);
 const states = text(run.probes, '[data-testid="overview-agent-states"]')[0] ?? '';
 if (!/done 1/.test(states)) throw new Error(`the agents detail line did not count the settled child: "${states}"`);
 const branch = text(run.probes, '[data-testid="overview-repo-branch"]')[0] ?? '';

@@ -157,7 +157,7 @@ export function shellCommands(
       if (layoutView !== null) {
         if (typeof req.value !== 'object') return { ok: false, code: 'preference.type', headline: 'A pane layout requires a layout record' };
         await preferences.writeLayout(layoutView, req.value);
-      } else if (req.key === 'ui/reduced_motion') {
+      } else if (req.key === 'ui/reduced_motion' || req.key === 'appearance/themeChosen') {
         if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Reduce motion requires a boolean value' };
         await preferences.write(req.key, req.value);
       } else if (req.key === 'interface/agentPopout' || req.key === 'display/showReasoning' || req.key === 'display/autoCollapseTools') {

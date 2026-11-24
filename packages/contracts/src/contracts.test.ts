@@ -181,10 +181,11 @@ describe('contracts — theme data (REQ-SHELL-128..145)', () => {
     for (const [name, value] of Object.entries(adopted)) expect(actual[name], name).toBe(value);
   });
 
-  it('declares three ordered, distinct themes and resolves a stale name to the default', () => {
-    expect(THEMES.map((theme) => theme.name)).toEqual(['rotaris-dim', 'nocturne', 'high-contrast']);
-    expect(new Set(THEMES.map((theme) => theme.label)).size).toBe(3);
-    expect(THEMES.every((theme) => theme.description.length > 0 && theme.dark)).toBe(true);
+  it('declares four ordered, distinct themes and resolves a stale name to the default', () => {
+    expect(THEMES.map((theme) => theme.name)).toEqual(['rotaris-dim', 'nocturne', 'high-contrast', 'dusk-light']);
+    expect(new Set(THEMES.map((theme) => theme.label)).size).toBe(4);
+    expect(THEMES.every((theme) => theme.description.length > 0)).toBe(true);
+    expect(THEMES.filter((theme) => !theme.dark).map((theme) => theme.name)).toEqual(['dusk-light']);
     expect(resolveTheme('removed-theme').name).toBe('rotaris-dim');
   });
 

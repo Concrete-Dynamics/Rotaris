@@ -3653,3 +3653,18 @@ table, .mono { font-variant-numeric: tabular-nums; }
 /* The tools an agent is using or has used, named on one line; the one in flight in the running colour. */
 .inspector__used { color: var(--rt-text); overflow-wrap: anywhere; }
 .inspector__used-name.is-active { color: var(--rt-run); }
+
+/* First-launch theme choice (ThemeChoiceDialog). Above the first-run setup, below nothing else. */
+.theme-choice__backdrop { z-index: 70; }
+.theme-choice { display: flex; flex-direction: column; gap: var(--rt-space-3); }
+.theme-choice__options { display: grid; gap: var(--rt-space-2); }
+.theme-choice__option {
+  display: flex; flex-direction: column; gap: var(--rt-space-1); width: 100%; padding: var(--rt-space-3);
+  text-align: left; font: inherit; color: var(--rt-text); background: var(--rt-surface-2);
+  border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); cursor: pointer;
+}
+.theme-choice__option:hover { background: var(--rt-hover); }
+.theme-choice__option.is-selected { border-color: var(--rt-accent); box-shadow: 0 0 0 var(--rt-hairline-width) var(--rt-accent); }
+.theme-choice__option:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: var(--rt-focus-ring-width); }
+.theme-choice__name { font-weight: var(--rt-weight-medium); }
+.theme-choice__description { font-size: var(--rt-text-sm); color: var(--rt-text-secondary); }

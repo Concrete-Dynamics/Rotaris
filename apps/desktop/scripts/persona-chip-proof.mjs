@@ -227,12 +227,13 @@ for (const [chip, value] of Object.entries({ persona: atRest.persona, model: atR
 }
 /*
  * REQ-CHAT-006/009 with REQ-CONFIG-063: the at-rest chips name what the next run starts as. Workspace A's configured
- * default is `architect`, on `arch-model`, at `low` — its reasoning chip draws the label (`Low`), the persona and model
+ * default is `architect`, on `arch-model`, at `low` — its reasoning chip draws the level under its own name (`low`,
+ * PD-CHAT-017; `Low` before it), the persona and model
  * chips the bare identifiers. This is RED on the unrepaired build, which read `orchestrator` / `scripted` / `Medium`.
  */
 expect(atRest.persona === 'architect', `the persona chip at rest does not name the configured default role (REQ-CHAT-006/009): ${JSON.stringify(atRest.persona)} while the file states default_persona: architect`);
 expect(atRest.model === 'arch-model', `the model chip at rest does not name the configured role's model: ${JSON.stringify(atRest.model)} while architect is configured on arch-model — the three chips share entryRole's fallback role`);
-expect(atRest.reasoning === 'Low', `the reasoning chip at rest does not name the configured role's reasoning: ${JSON.stringify(atRest.reasoning)} while architect is configured at low`);
+expect(atRest.reasoning === 'low', `the reasoning chip at rest does not name the configured role's reasoning: ${JSON.stringify(atRest.reasoning)} while architect is configured at low`);
 /*
  * The permission-mode chip is the control: it reads `session?.permissionMode ?? configuredMode` and was repaired
  * separately, so it must NOT move between the two readings. A mode chip that moved here would mean the premise —

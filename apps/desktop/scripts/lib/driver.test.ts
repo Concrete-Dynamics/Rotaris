@@ -25,11 +25,30 @@ function scratch(): string {
   return dir;
 }
 
-/** A node child that stays up until signalled; `onTerm` is what it does with SIGTERM. */
+/**
+ * Slack added to every wall-clock bound below. What is pinned is that the ending waits a bounded number of steps, each
+ * at most `graceMs` or `quitMs`; the bound is those steps summed plus this, so a CPU-starved machine (a node child that
+ * takes seconds to start, a timer that fires late) does not turn the pin red while a wait with no bound still does.
+ */
+const SLACK_MS = 15_000;
+
+/**
+ * A node child that stays up until signalled; `onTerm` is what it does with SIGTERM. It prints `ready` once its SIGTERM
+ * handler is in place — `ready(child)` waits for that, never a fixed sleep, which a loaded machine outlasts.
+ */
 function sleeper(onTerm = 'process.exit(0)'): ChildProcess {
-  const child = spawn(process.execPath, ['-e', `process.on('SIGTERM', () => { ${onTerm} }); setInterval(() => {}, 1000);`], { stdio: 'ignore' });
+  const child = spawn(process.execPath, ['-e', `process.on('SIGTERM', () => { ${onTerm} }); setInterval(() => {}, 1000); process.stdout.write('ready\\n');`], { stdio: ['ignore', 'pipe', 'ignore'] });
   cleanups.push(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } });
   return child;
+}
+
+/** Resolves once the sleeper's handler is installed. */
+function ready(child: ChildProcess): Promise<void> {
+  return new Promise((resolve, reject) => {
+    child.stdout!.once('data', () => resolve());
+    child.once('error', reject);
+    child.once('exit', () => reject(new Error('the sleeper exited before it was ready')));
+  });
 }
 
 /**
@@ -71,25 +90,30 @@ describe('R-062: a driven launch ends within a bound', () => {
     const dir = scratch();
     const driver = await connect(await endpoint(dir, { answer: false }), { timeoutMs: 5_000 });
     const child = sleeper();
+    await ready(child); // SIGTERM must meet the handler, not the default action
+    // graceMs is also SIGTERM's answer time: generous, so a starved child still answers it before SIGKILL is sent.
+    const graceMs = 2_000;
     const started = Date.now();
-    const stopped = await stopApp({ child, driver }, { graceMs: 300, quitMs: 300, screenshot: join(dir, 'end.png') });
-    // 300 (picture) + 300 (quit) + 300 (exit) + SIGTERM's answer: bounded, where the first form waited on the quit forever.
-    expect(Date.now() - started).toBeLessThan(5_000);
+    const stopped = await stopApp({ child, driver }, { graceMs, quitMs: 300, screenshot: join(dir, 'end.png') });
+    // 300 (picture) + 300 (quit) + graceMs (exit) + graceMs (SIGTERM's answer): bounded, where the first form waited on the quit forever.
+    expect(Date.now() - started).toBeLessThan(2 * 300 + 2 * graceMs + SLACK_MS);
     expect(stopped.screenshot).toBe('unanswered within 300 ms');
     expect(stopped.quitAnswered).toBe(false);
-    expect(stopped.overran).toMatchObject({ quitAnswered: false, quitMs: 300, afterQuitMs: 300, endedBy: 'SIGTERM' });
+    expect(stopped.overran).toMatchObject({ quitAnswered: false, quitMs: 300, afterQuitMs: graceMs, endedBy: 'SIGTERM' });
     expect(alive(child.pid!)).toBe(false);
-    expect(stopOverrunMessage('override', stopped, 'first\nlast words\n')).toMatch(/^override did not answer the driver's quit within 300 ms, nor exit 300 ms after it: SIGTERM ended it after \d+ ms\.\n--- the launch's last words ---\nfirst\nlast words$/);
+    expect(stopOverrunMessage('override', stopped, 'first\nlast words\n')).toMatch(new RegExp(`^override did not answer the driver's quit within 300 ms, nor exit ${graceMs} ms after it: SIGTERM ended it after \\d+ ms\\.\\n--- the launch's last words ---\\nfirst\\nlast words$`));
   });
 
   it.skipIf(process.platform === 'win32')('stopApp SIGKILLs a launch that neither answers nor takes SIGTERM', async () => {
     const dir = scratch();
     const driver = await connect(await endpoint(dir, { answer: false }), { timeoutMs: 5_000 });
     const child = sleeper('/* ignored */');
-    await new Promise((r) => setTimeout(r, 200)); // the handler in place before the signal
+    await ready(child); // the handler in place before the signal, however slowly the child started
+    const graceMs = 300;
     const started = Date.now();
-    const stopped = await stopApp({ child, driver }, { graceMs: 300, quitMs: 300 });
-    expect(Date.now() - started).toBeLessThan(8_000);
+    const stopped = await stopApp({ child, driver }, { graceMs, quitMs: 300 });
+    // quit + exit grace + SIGTERM grace + SIGKILL's reaping: each step bounded, the sum plus slack.
+    expect(Date.now() - started).toBeLessThan(300 + 2 * graceMs + SLACK_MS);
     expect(stopped.overran).toMatchObject({ endedBy: 'SIGKILL' });
     expect(stopped.exit).toEqual({ code: null, signal: 'SIGKILL' });
     expect(stopOverrunMessage('launch', stopped, 'x')).toContain('SIGTERM did not end it within');
@@ -108,7 +132,7 @@ describe('R-062: a driven launch ends within a bound', () => {
     const log = join(dir, 'app.log');
     writeFileSync(log, 'booting\nstill booting\n');
     const child = sleeper();
-    await new Promise((r) => setTimeout(r, 200));
+    await ready(child);
     const failure = await connectOrEnd(child, join(dir, 'endpoint.json'), log, { timeoutMs: 300, graceMs: 2_000 }).then(() => null, (e: Error) => e);
     expect(failure?.message).toMatch(/wrote no driver endpoint .* within 300 ms; the launch was ended: SIGTERM ended it after \d+ ms\n--- the app's last words ---\nbooting\nstill booting$/);
     // Ended BEFORE the throw: nothing is left holding the proof's event loop open.

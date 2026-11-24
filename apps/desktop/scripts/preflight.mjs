@@ -292,16 +292,45 @@ export function probeDisplay(display) {
 }
 
 /**
+ * The narrowest screen a proof's window is drawn on as the proofs read it. The main window opens 1440 px wide
+ * (`mainWindowOptions`) and a screen narrower than that clamps it; below 1400 px (`BOTH_DOCKED_FROM`, PD-SHELL-017
+ * revision 2) the inspector is a closed drawer rather than a docked panel, so every proof that reads or presses the
+ * inspector finds none. `xvfb-run -a` alone gives a 1280×1024 screen, which did exactly that to compression-, plan-gate-
+ * and resilience-proof on 2026-11-24 (docs/archive/defects/the-run-level-agents-inspector-is-absent-in-compression-plan-gate-and-resilience-proofs-on-linux.md).
+ */
+export const PROOF_SCREEN_MIN_WIDTH = 1400;
+
+/**
+ * The first screen's size as `xdpyinfo` prints it (`dimensions:    1280x1024 pixels (…)`), or null when it printed none.
+ * @param {string} stdout
+ * @returns {{ width: number, height: number } | null}
+ */
+export function readScreen(stdout) {
+  const m = /dimensions:\s+(\d+)x(\d+)\s+pixels/.exec(stdout);
+  return m ? { width: Number(m[1]), height: Number(m[2]) } : null;
+}
+
+/**
  * A set DISPLAY on Linux passes only when a connect reached it (`probe`, from `probeDisplay`): a named display
- * no client can reach makes every launch exit SIGTRAP, and that is the machine, not the proof.
- * @param {{ platform: string, display: string | undefined, xvfb: boolean, probe?: DisplayProbe | null }} facts
+ * no client can reach makes every launch exit SIGTRAP, and that is the machine, not the proof. A reached display
+ * whose screen (`screen`, read by `xdpyinfo` where it is installed) is narrower than `PROOF_SCREEN_MIN_WIDTH` fails too.
+ * @param {{ platform: string, display: string | undefined, xvfb: boolean, probe?: DisplayProbe | null, screen?: { width: number, height: number } | null }} facts
  * @returns {Outcome}
  */
-export function displayCheck({ platform, display, xvfb, probe = null }) {
+export function displayCheck({ platform, display, xvfb, probe = null, screen = null }) {
   if (platform === 'linux') {
     if (display) {
       if (probe === null) return { name: 'display', status: 'fail', message: `DISPLAY=${display} is set, but no connection to it was tried` };
-      if (typeof probe.reached === 'string') return { name: 'display', status: 'pass', message: `the display is available (DISPLAY=${display})` };
+      if (typeof probe.reached === 'string') {
+        if (screen !== null && screen.width < PROOF_SCREEN_MIN_WIDTH) {
+          return {
+            name: 'display',
+            status: 'fail',
+            message: `DISPLAY=${display} is ${screen.width}×${screen.height}: the window is clamped below ${PROOF_SCREEN_MIN_WIDTH} px, where the inspector is a closed drawer (PD-SHELL-017) — run under xvfb-run -a -s "-screen 0 1600x1000x24"`,
+          };
+        }
+        return { name: 'display', status: 'pass', message: `the display is available (DISPLAY=${display}${screen === null ? '' : `, ${screen.width}×${screen.height}`})` };
+      }
       if (probe.tried.length === 0) {
         return { name: 'display', status: 'fail', message: `DISPLAY=${display} is no display this check can read (expected :N, unix:N or host:N, with an optional .screen)` };
       }
@@ -483,6 +512,12 @@ export function realIo(env = process.env) {
     xvfb: () => findOnPath('xvfb-run', env) !== null,
     /** @param {string} display */
     display: (display) => probeDisplay(display),
+    /** @param {string} display @returns {{ width: number, height: number } | null} null where `xdpyinfo` is absent or answered nothing */
+    screen: (display) => {
+      if (findOnPath('xdpyinfo', env) === null) return null;
+      const r = spawnSync('xdpyinfo', ['-display', display], { encoding: 'utf8', timeout: 10_000, windowsHide: true });
+      return r.status === 0 ? readScreen(r.stdout ?? '') : null;
+    },
     /** @returns {{ file: string, registry: () => any, hasKey: (name: string) => boolean }} the store, as far as `endpointCheck` reads it */
     store: () => endpointStore(),
   };
@@ -524,7 +559,8 @@ export function runPreflight({ ids = [], platform = process.platform, env = proc
   checks.push(environmentCheck(env));
   const display = env.DISPLAY;
   const probe = platform === 'linux' && display ? io.display(display) : null;
-  checks.push(displayCheck({ platform, display, xvfb: io.xvfb(), probe }));
+  const screen = probe !== null && typeof probe.reached === 'string' && display ? io.screen(display) : null;
+  checks.push(displayCheck({ platform, display, xvfb: io.xvfb(), probe, screen }));
 
   let store = null;
   const getStore = () => (store ??= io.store());

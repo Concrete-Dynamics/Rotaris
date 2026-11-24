@@ -1351,6 +1351,7 @@
     "defects/the-run-hosts-skill-discovery-at-a-workspace-open-runs-before-its-workspace-opened-reply.md": "d0c454c1b82762c1ff342d32950eaeccad1ad752171542cab221db1b21c83bd3",
     "defects/the-run-hosts-typecheck-declares-the-doms-globals-through-the-terminal-emulators-typings.md": "e6d6d4d4e189ffed8d8b34ed9a5fa7bc1116bbc79c1300b9466f3c47d2191ec8",
     "defects/the-run-level-agent-is-known-by-its-entry-persona-alone.md": "d0e2f50efa82715afc588305a2aa7448f36beb2e94c4f5edd9e3eaf071826915",
+    "defects/the-run-level-agents-inspector-is-absent-in-compression-plan-gate-and-resilience-proofs-on-linux.md": "9c6e6d2b32e9873a148c6dc9d97fcaf37c40ea224c1cc690ae72f27d01be22c2",
     "defects/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md": "94ae9e65498bc57c4643bd7d1e5ebc255119f0687e5cf65b9f8383b8bd784a2e",
     "defects/the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md": "6883d8e86726d9dfeabc49c60e60780bddb67e6124f9735987d62bc2b931065c",
     "defects/the-run-records-success-while-the-coordinators-own-plan-holds-a-pending-item.md": "30bad3392dc8dd34daa1989ab1a67c6e3c89d97b3619d36c00bfe495ef0d36a4",

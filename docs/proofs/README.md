@@ -12,7 +12,8 @@ harness is shown to be wrong.
 
 `pnpm <id>` runs an entry; the flags column is what a runner may pass it, `--skip-build` reusing the current
 build where it stands. Unless its platform clauses say otherwise an entry runs to its end on Windows, Linux and
-macOS; on a headless Linux host that means a display (`xvfb-run`, the wrapper the orchestrated build uses).
+macOS; on a headless Linux host that means a display (`xvfb-run -a -s "-screen 0 1600x1000x24"`, the wrapper the
+orchestrated build uses; without `-s` the 1280-px screen leaves the inspector a closed drawer, and `pnpm preflight` fails it).
 `live-run` is the one entry that spends real money against a metered endpoint; it is never automatic, and
 `slice-proof` runs on its terms. A proof's detailed record — what it measures, version by version — is the
 document its name links to.

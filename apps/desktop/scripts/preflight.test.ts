@@ -4,12 +4,12 @@
  * read from `tools/proof-registry/registry.mjs`.
  */
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { app, buildCheck, bundleCheck, connectTargets, displayCheck, displayTargets, electron, endpointCheck, environmentCheck, formatReport, mainEntry, newestSourceMtime, nodeCheck, parseArgs, platformCheck, probeDisplay, probeTargets, proofChecks, readProbe, repo, runPreflight, scratchCheck, suggestIds } from './preflight.mjs';
+import { app, buildCheck, bundleCheck, connectTargets, displayCheck, displayTargets, electron, endpointCheck, environmentCheck, formatReport, mainEntry, newestSourceMtime, nodeCheck, parseArgs, platformCheck, probeDisplay, probeTargets, PROOF_SCREEN_MIN_WIDTH, proofChecks, readProbe, readScreen, repo, runPreflight, scratchCheck, suggestIds } from './preflight.mjs';
 import { PROOFS } from '../../../tools/proof-registry/registry.mjs';
 import { app as harnessApp, electron as harnessElectron, mainEntry as harnessMainEntry, repo as harnessRepo } from './lib/harness.mjs';
 
@@ -69,6 +69,13 @@ describe('preflight — node, the environment and the display', () => {
     expect(displayCheck({ platform: 'linux', display: ':0', xvfb: true }).status).toBe('fail');
     expect(displayCheck({ platform: 'win32', display: ':0', xvfb: false }).status).toBe('pass');
     expect(displayCheck({ platform: 'darwin', display: ':0', xvfb: false }).status).toBe('pass');
+  });
+
+  it('reads the screen xdpyinfo prints, and holds the floor to the width the inspector docks from', () => {
+    expect(readScreen('screen #0:\n  dimensions:    1280x1024 pixels (433x347 millimeters)\n')).toEqual({ width: 1280, height: 1024 });
+    expect(readScreen('no screen here')).toBeNull();
+    const workspace = readFileSync(join(repo, 'packages', 'ui', 'src', 'WorkspaceView.tsx'), 'utf8');
+    expect(Number(/export const BOTH_DOCKED_FROM = (\d+);/.exec(workspace)?.[1])).toBe(PROOF_SCREEN_MIN_WIDTH);
   });
 
   it('reads :N and unix:N as the socket file and its abstract name, a bare :N then TCP localhost, host:N as TCP 6000+N', () => {
@@ -295,6 +302,7 @@ describe('preflight — the report', () => {
     sourceRoots: () => [],
     xvfb: () => true,
     display: (_display: string): { reached: string | null, tried: { label: string, error: string }[] } => { throw new Error('the display was probed'); },
+    screen: (_display: string): { width: number, height: number } | null => null,
     store: () => fakeStore,
     ...over,
   });
@@ -311,6 +319,13 @@ describe('preflight — the report', () => {
     const green = runPreflight({ platform: 'linux', env: { DISPLAY: ':99' }, io: fakeIo({ display: () => ({ reached: 'socket /tmp/.X11-unix/X99', tried: [] }) }) });
     expect(green.ok).toBe(true);
     expect(formatReport(green)).toContain('PASS  the display is available (DISPLAY=:99)');
+
+    // A reached display narrower than the docked inspector's window fails, naming the screen it read.
+    const narrow = runPreflight({ platform: 'linux', env: { DISPLAY: ':99' }, io: fakeIo({ display: () => ({ reached: 'socket /tmp/.X11-unix/X99', tried: [] }), screen: () => ({ width: 1280, height: 1024 }) }) });
+    expect(narrow.ok).toBe(false);
+    expect(formatReport(narrow)).toContain('FAIL  DISPLAY=:99 is 1280×1024');
+    const wide = runPreflight({ platform: 'linux', env: { DISPLAY: ':99' }, io: fakeIo({ display: () => ({ reached: 'socket /tmp/.X11-unix/X99', tried: [] }), screen: () => ({ width: 1600, height: 1000 }) }) });
+    expect(formatReport(wide)).toContain('PASS  the display is available (DISPLAY=:99, 1600×1000)');
 
     // The default fake throws when probed: these four never reach it.
     expect(runPreflight({ platform: 'linux', env: {}, io: fakeIo() }).checks.find((c: { name: string }) => c.name === 'display')).toMatchObject({ status: 'warn' });

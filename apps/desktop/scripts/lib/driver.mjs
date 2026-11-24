@@ -319,7 +319,7 @@ export async function clickLanded(driver, selector, { text, timeoutMs = 15_000, 
  * first. A native `<select>` takes the value through the prototype setter and a `change` event (what React listens
  * to), and the choice is confirmed once the control shows it; the design system's `SearchableSelect` is a button and a listbox, so it is driven as a person drives it: a real
  * click on the trigger, then a real click on the `[role="option"]` carrying the wanted `data-value`, each waiting for
- * its control. Resolves with the kind driven; rejects when the control, or the option, never appears.
+ * its control and settled before it is pressed. Resolves with the kind driven; rejects when the control, or the option, never appears.
  */
 export async function choose(driver, selector, value, { timeoutMs = 15_000 } = {}) {
   await driver.waitFor(selector, { timeoutMs });
@@ -338,7 +338,10 @@ export async function choose(driver, selector, value, { timeoutMs = 15_000 } = {
     await until(() => driver.eval(`document.querySelector(${JSON.stringify(selector)})?.value ?? null`), (v) => v === value, { timeoutMs, what: `${selector} showing ${JSON.stringify(value)}` });
     return { kind, value };
   }
-  await driver.click(selector, { timeoutMs });
-  await driver.click(`[role="option"][data-value=${JSON.stringify(value)}]`, { timeoutMs });
+  // Both presses are settled and retried when they meet something else (`clickLanded`): a notice that arrives as the
+  // trigger is pressed moves it, and resilience-proof's quota-retry once pressed the band's stash control instead
+  // (2026-11-24, the launch's "No model provider is authenticated yet" banner landing in the same millisecond).
+  await clickLanded(driver, selector, { timeoutMs });
+  await clickLanded(driver, `[role="option"][data-value=${JSON.stringify(value)}]`, { timeoutMs });
   return { kind, value };
 }

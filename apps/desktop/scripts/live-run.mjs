@@ -176,6 +176,10 @@
  *                 and 2 — no classification in the launch log, the lead statement and the writing tools beside `delegate`
  *                 in the first root request, and a completed run (`lib/delegation-readings.mjs`, `leadReading`). A second
  *                 launch, `lead-workflow`, asks the entry role for a workflow script that starts two agents (clauses 5 to 7).
+ *   8m. intelligent — OPT-IN (`--only=intelligent`), a few minutes (R-131): `rotaris.delegation_strategy: intelligent`,
+ *                 `PD-ORCH-020` clauses 1, 4 and 6 — two launches, a question and a small feature; each must log a strategy
+ *                 that was chosen and not fallen back to, write its `Strategy chosen` row and complete. Which strategy a
+ *                 real model chose is recorded, never asserted.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -394,7 +398,7 @@ const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions',
  * that trebles its wall clock does not belong in it by default, and a scenario nobody can leave out is a
  * scenario people stop running. Naming it is the consent.
  */
-const OPT_IN = ['duress', 'cutoff', 'rename', 'plan-open', 'empty-answer', 'lead'];
+const OPT_IN = ['duress', 'cutoff', 'rename', 'plan-open', 'empty-answer', 'lead', 'intelligent'];
 const SCENARIOS = [...OPTIONAL, ...OPT_IN];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
@@ -1188,7 +1192,7 @@ function checkCoordinatorTodo() {
         const timeline = db.prepare("SELECT ordinal, at, name, metadata FROM timeline WHERE session_id = ? AND name IN ('child_start', 'child_end', 'child_resumed') ORDER BY ordinal").all(sessionId);
         const listed = calls.find((c) => rootNames.includes(c.agent_name) && c.tool_name === 'todo' && c.status === 'ok');
         return { scenario, rootNames, calls, agentPlanTasks: agentPlanTaskCount(todo), listedAt: listed?.endedAt ?? null, rootPlanIds: planItemIds(rootAgentPlan(todo)), rootPlan: rootAgentPlan(todo), children, timeline,
-          runOverride: launchRunOverride(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null),
+          runOverride: launchRunOverride(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null, db.prepare("SELECT metadata FROM timeline WHERE session_id = ? AND name = 'run_strategy_chosen' ORDER BY ordinal DESC LIMIT 1").get(sessionId)?.metadata ?? null),
         };
       });
       r = coordinatorTodoReading(read);
@@ -3364,6 +3368,48 @@ if (wanted.includes('lead')) {
   await budgetGate();
 }
 
+// ── 8m. The strategy an `intelligent` run chooses ───────────────────────────────────────────────────────────
+/**
+ * OPT-IN (`--only=intelligent`), a few minutes (R-131): `PD-ORCH-020` against a real model. Two launches under
+ * `rotaris.delegation_strategy: intelligent`. What the product owes is read from the launch log and the session: one
+ * strategy logged per run, chosen and not fallen back to (clauses 1 and 4), its row in the transcript (clause 6), and a
+ * completed run. Which of the three the model chose is the model's, and is recorded, never asserted.
+ */
+if (wanted.includes('intelligent')) {
+  const agentsBefore = readFileSync(agentsFile, 'utf8');
+  const launches = [
+    ['intelligent', 'What does addTodo in src/todos.js return? Answer in one sentence and change nothing.'],
+    ['intelligent-feature', 'Make addTodo in src/todos.js refuse an empty or blank title and add a test for it beside the existing ones. Run the tests when done. Reply with one sentence.'],
+  ];
+  const chosen = {};
+  for (const [name, prompt] of launches) {
+    let runLog = '';
+    try {
+      writeFileSync(agentsFile, withSectionKey(agentsBefore, 'rotaris', 'delegation_strategy', 'intelligent'));
+      cpSync(agentsFile, join(scenarioDir(name), 'agents.yaml'));
+      runLog = await launch(name, {
+        ROTARIS_CAPTURE_PROMPT: prompt,
+        ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+      }, EDIT_WAIT_MS + 120_000);
+    } finally {
+      writeFileSync(agentsFile, agentsBefore);
+    }
+    const read = readSession();
+    const line = /strategy: (lead|single|orchestrator)( \(fallback: [^\n]*)?/.exec(runLog);
+    check(line !== null, `the ${name} run logged the strategy it chose (PD-ORCH-020 clause 1)`, line === null ? 'no `strategy:` line in the launch log' : line[0]);
+    check(line !== null && line[2] === undefined, `the ${name} run's strategy was chosen by the small model, not fallen back to (PD-ORCH-020 clause 4)`, line?.[2] ?? 'chosen');
+    const rows = (read?.rows ?? []).map((r) => String(r.body ?? ''));
+    const row = rows.find((b) => b.startsWith('Strategy chosen: ')) ?? null;
+    check(row !== null && line !== null && row.startsWith(`Strategy chosen: ${line[1]}`), `the ${name} run wrote the row naming the strategy it logged (PD-ORCH-020 clause 6)`, row ?? 'no row');
+    check(read?.session.execution_status === 'completed', `the ${name} run completed`, `status ${read?.session.execution_status ?? 'no session'}`);
+    chosen[name] = line?.[1] ?? null;
+    results.scenarios[name] = { status: read?.session.execution_status, strategy: chosen[name], row };
+    if (read) preserveRun(name, read.session.session_id);
+    await budgetGate();
+  }
+  noted('which strategies the model chose', `question: ${chosen['intelligent'] ?? 'none'}; small feature: ${chosen['intelligent-feature'] ?? 'none'}; the choice is the model's`);
+}
+
 // ── 8i. A symbol rename through the code-intelligence EDIT tier ─────────────────────────────────────────────
 /**
  * OPT-IN (`--only=rename`), a few minutes (fin42, N59): the first live run of a cross-file code-intelligence EDIT call that
@@ -3638,9 +3684,9 @@ if (wanted.includes('empty-answer')) {
 
 // ── 9. The long run ──────────────────────────────────────────────────────────────────────────────────────
 /**
- * OPT-IN (`--only=duress`), one of six: `OPT_IN` also names `cutoff`, `rename`, `plan-open`, `empty-answer` and `lead` (8e,
- * 8i, 8j, 8k and 8l above), and no default run reaches any of them. What only they ask — PD-ORCH-009 revisions 3 to 5
- * (`empty-answer`), PD-ORCH-019 (`lead`), PD-ORCH-015 (`plan-open`), PD-MCP-004's cold rename (`rename`), PD-CONFIG-003's cut-off child (`cutoff`) and the long run
+ * OPT-IN (`--only=duress`), one of seven: `OPT_IN` also names `cutoff`, `rename`, `plan-open`, `empty-answer`, `lead` and `intelligent` (8e,
+ * 8i, 8j, 8k, 8l and 8m above), and no default run reaches any of them. What only they ask — PD-ORCH-009 revisions 3 to 5
+ * (`empty-answer`), PD-ORCH-019 (`lead`), PD-ORCH-020 (`intelligent`), PD-ORCH-015 (`plan-open`), PD-MCP-004's cold rename (`rename`), PD-CONFIG-003's cut-off child (`cutoff`) and the long run
  * here — is measured by a run that names them, never by a default one (acceptance finding L9 at b9e3005,
  * docs/archive/defects/the-live-runs-duress-section-calls-itself-its-only-opt-in-scenario.md).
  *

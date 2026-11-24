@@ -683,10 +683,12 @@ export function stripIconTitle(ariaLabel: string, valueText: string, reason: str
  * `data-compact` state — the panel still lists every option with the current choice checked, and the
  * tooltip names control and choice through `stripIconTitle`.
  */
-function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labels, hints, onChoose, strip = false, stripCompact = false }: {
+function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labels, hints, onChoose, strip = false, stripCompact = false, wave }: {
   id: string; testId: string; ariaLabel: string; value: string; options: readonly string[]; reason: string | null;
   icon: string; labels?: Readonly<Record<string, string>> | undefined; hints?: Readonly<Record<string, string>> | undefined;
   onChoose: (value: string) => void; strip?: boolean; stripCompact?: boolean;
+  /** PD-ORCH-020 clause 8: the value whose name is drawn as a moving wave of the product's colours while it is the choice. */
+  wave?: string | undefined;
 }) {
   const shown = labels?.[value] ?? value;
   return (
@@ -697,6 +699,7 @@ function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labe
         aria-describedby={`${id}-reason`}
         icon={icon}
         value={shown}
+        className={wave === value ? 'is-wave' : undefined}
         disabled={reason !== null}
         title={strip ? stripIconTitle(ariaLabel, shown, reason) : reason ?? `Chosen for the next run.`}
         options={options.map((o) => ({ value: o, label: labels?.[o] ?? o, hint: hints?.[o] }))}
@@ -790,9 +793,10 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
 }
 
 /** PD-ORCH-019 clause 10: the composer's names for the four strategies, and what each does in a few words. */
-export const STRATEGY_LABELS: Readonly<Record<DelegationStrategyName, string>> = { orchestrator: 'Orchestrator', swarm: 'Swarm', single: 'Single', lead: 'Lead' };
+export const STRATEGY_LABELS: Readonly<Record<DelegationStrategyName, string>> = { orchestrator: 'Orchestrator', swarm: 'Swarm', single: 'Single', lead: 'Lead', intelligent: 'Intelligent' };
 export const STRATEGY_HINTS: Readonly<Record<DelegationStrategyName, string>> = {
   orchestrator: 'coordinates specialists', swarm: 'delegates as widely as it can', single: 'one agent, no delegation', lead: 'one agent, delegates and scripts workflows',
+  intelligent: 'picks Lead, Single or Orchestrator for each request',
 };
 
 export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], modelReasoning = {}, imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, delegationStrategy = 'orchestrator', onSetDelegationStrategy, onStopWorkflow, dictation}: WorkspaceViewProps) {
@@ -1782,7 +1786,7 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
           {onSetDelegationStrategy && (
             <PopoverChip id="chip-strategy" testId="chip-strategy" ariaLabel="Delegation strategy for the next run"
               icon="ph-tree-structure" reason={chipReason} value={delegationStrategy} options={DELEGATION_STRATEGY_NAMES} strip stripCompact={stripTight}
-              labels={STRATEGY_LABELS} hints={STRATEGY_HINTS}
+              labels={STRATEGY_LABELS} hints={STRATEGY_HINTS} wave="intelligent"
               onChoose={(v) => { void onSetDelegationStrategy(v as DelegationStrategyName).then((r) => { if (!r.ok) setError(r.reason); }); }} />
           )}
           {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} strip stripCompact={stripTight} />}

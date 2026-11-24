@@ -26,6 +26,8 @@ Last reconciled with the code: **2026-11-24**
 
 Last reconciled with the code: **2026-11-24**
 
+**`intelligent` (R-131; [`PD-ORCH-020`](../../product/directives/pd-orch-020.md#pd-orch-020); 2026-11-24).** `03-runtime-view/01-1-start.md`: the run chooses its strategy before its pre-flight, and the run host makes the choice the override its other readers see. The timeline gains `run_strategy_chosen`.
+
 **A workflow survives a restart (R-130; `PD-ORCH-019` clause 8; store v37; 2026-11-24).** `03-runtime-view/14-7-the-store-the-run-writes-2.md`: the tables `workflows` and `workflow_calls`. `03-runtime-view/01-1-start.md`: the manager's load, the one telling of an interrupted workflow, the resume over the journal. `SessionWriter` gains `saveWorkflow`, `recordWorkflowCall`, `dropWorkflowCallsFrom` and `workflowsOfAgent`. No channel or command is added.
 
 **A workflow's row (R-130; `PD-ORCH-019` clause 9; 2026-11-24).** `03-runtime-view/09-5-controls-reaching-in-adr-0010-1.md`: the control channel gains `stopWorkflow`. The session record gains `workflows`, derived from the live run's ports at each snapshot as `pendingQuestions` is and never stored; a manager's change republishes the session through `writer.save`. The row is the `workflow` start call's tool row (`transcript/Row.tsx`, `WorkflowLine`), kept out of tool groups by `neverFolds`. No channel or store column is added.

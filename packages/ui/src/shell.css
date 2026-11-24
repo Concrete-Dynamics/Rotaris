@@ -618,6 +618,20 @@
 .strip-btn[data-dictation='recording'] .ph { color: var(--rt-danger-300); animation: rt-pulse var(--rt-duration-slow) ease-in-out infinite; }
 .strip-btn[data-dictation='recording'][data-motion='reduced'] .ph { animation: none; }
 @media (prefers-reduced-motion: reduce) { .strip-btn[data-dictation='recording'] .ph { animation: none; } }
+/* PD-ORCH-020 clause 8: `intelligent` chosen — the strategy's name carries a wave of the product's three hues (the accent,
+   which is the z axis, and the x and y axes), moving along the text. The text keeps its weight and size; only its fill moves. Reduced motion
+   keeps the gradient and stops it. */
+.strip-btn.is-wave .strip-btn__value,
+.chip-menu.is-wave .chip-menu__value {
+  background-image: linear-gradient(90deg, var(--rt-accent-400, var(--rt-accent-300)), var(--rt-axis-x-400, var(--rt-axis-x-300)), var(--rt-axis-y-400, var(--rt-axis-y-300)), var(--rt-accent-400, var(--rt-accent-300)));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: strategy-wave 5s linear infinite;
+}
+@keyframes strategy-wave { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .strip-btn.is-wave .strip-btn__value, .chip-menu.is-wave .chip-menu__value { animation: none; } }
 .strip-btn:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .strip-btn .ph { font-size: var(--rt-text-sm); color: var(--rt-text-tertiary); }
 /* The compact trigger is icon-only: the icon keeps the row's neutral ink, so a shortened control reads

@@ -367,7 +367,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
     async *stream(req: ModelRequest) {
       const credential = await req.resolveCredential();
       const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
-      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You condense an agent conversation/.test(system) ? 'compressor' : /^You classify a user request/.test(system) ? 'classifier' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
+      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You condense an agent conversation/.test(system) ? 'compressor' : /^You classify a user request/.test(system) ? 'classifier' : /^You choose how a software agent system/.test(system) ? 'strategy' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
       call += 1;
       // Part S: every child instance follows the child script from its own first call (keyed by its TASK line), so a fan-out of
       // three children each takes the same steps; a single child reads exactly as before.
@@ -399,6 +399,15 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         const text = want === 'garbage' ? 'lol no' : want === 'reject' ? 'small_feature\nfrom the text rung' : req.output === undefined ? `${want}\nscripted` : JSON.stringify({ intent: want, confidence: 0.75, reason: 'scripted classification' });
         yield ok<StreamPart>({ kind: 'text', delta: text });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 12, output: 8 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
+      if (who === 'strategy') {
+        // ROTARIS_STRATEGY_SCRIPT: lead | single | orchestrator | swarm (a name never taken) | garbage — verification only (PD-ORCH-020).
+        const want = ((__ROTARIS_SEAMS__ ? process.env['ROTARIS_STRATEGY_SCRIPT'] : undefined) ?? 'lead').trim();
+        const text = want === 'garbage' ? 'lol no' : req.output === undefined ? `${want}\nscripted` : JSON.stringify({ strategy: want, reason: 'scripted choice' });
+        yield ok<StreamPart>({ kind: 'text', delta: text });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 10, output: 6 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
         return;
       }

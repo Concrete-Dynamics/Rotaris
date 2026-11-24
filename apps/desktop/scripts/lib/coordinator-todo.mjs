@@ -59,11 +59,21 @@ export function coordinatorTodoReading(sessions) {
   return { read: sessions.map((s) => s.scenario), single, unlisted, refused, multiStep, withoutPlan };
 }
 
-/** The run override a session was launched under (`single`, `swarm`), from its launch audit's payload, or null for none or unreadable. */
-export function launchRunOverride(payloadJson) {
+/**
+ * The run override a session was launched under (`single`, `swarm`, `lead`), from its launch audit's payload, or null for
+ * none or unreadable. A session launched under `intelligent` (PD-ORCH-020) has the override its run chose, read from the
+ * metadata of its latest `run_strategy_chosen` timeline entry: `orchestrator` chosen, or no entry, is no override.
+ * @param {unknown} payloadJson
+ * @param {unknown} [chosenJson]
+ */
+export function launchRunOverride(payloadJson, chosenJson = null) {
   if (typeof payloadJson !== 'string' || payloadJson === '') return null;
   try {
     const strategy = JSON.parse(payloadJson)?.config_snapshot?.delegation_strategy;
+    if (strategy === 'intelligent') {
+      const chosen = typeof chosenJson === 'string' && chosenJson !== '' ? JSON.parse(chosenJson)?.strategy : null;
+      return chosen === 'single' || chosen === 'lead' ? chosen : null;
+    }
     return strategy === 'single' || strategy === 'swarm' || strategy === 'lead' ? strategy : null;
   } catch { return null; }
 }

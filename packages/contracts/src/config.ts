@@ -23,10 +23,28 @@ export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fa
 export const REASONING_LEVEL_NAMES = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type ReasoningLevelName = (typeof REASONING_LEVEL_NAMES)[number];
 export const ROLE_REASONING_NAMES = ['default', 'provider_default', ...REASONING_LEVEL_NAMES] as const;
-export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single', 'lead'] as const;
+export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single', 'lead', 'intelligent'] as const;
 /** REQ-ORCH-025 with PD-ORCH-019: the override a strategy puts on a run; `orchestrator` puts none. */
 export type DelegationStrategyName = (typeof DELEGATION_STRATEGY_NAMES)[number];
 export type RunOverride = 'single' | 'swarm' | 'lead';
+/**
+ * PD-ORCH-020: `intelligent` is no strategy of its own. It has the small model choose one of these three for each run from
+ * the run's request; `swarm` is never among them (clause 3), and `lead` is the one a choice that could not be made leaves
+ * the run on (clause 4).
+ */
+export const AUTO_STRATEGY_NAMES = ['lead', 'single', 'orchestrator'] as const;
+export type AutoStrategyName = (typeof AUTO_STRATEGY_NAMES)[number];
+export const AUTO_STRATEGY_FALLBACK: AutoStrategyName = 'lead';
+export interface StrategyChoice {
+  readonly strategy: AutoStrategyName;
+  /** Why, in the small model's words; where `fallback` is true, why no choice was made. */
+  readonly reason: string;
+  readonly fallback: boolean;
+  /** True where the choice is the previous run's, kept because this run carries no request text of its own. */
+  readonly kept?: boolean | undefined;
+}
+/** The override a chosen strategy puts on the run: `orchestrator` puts none. */
+export const runOverrideOfChoice = (strategy: AutoStrategyName): RunOverride | null => (strategy === 'orchestrator' ? null : strategy);
 
 /**
  * PD-ORCH-019 clause 4: `runtime.max_depth` has three meanings and no more. 1: only the entry role spawns. 2: its children

@@ -1,5 +1,5 @@
 import { asSessionId, type Clocks, countNoun, err, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
-import { type PlanDecision, type PlanGatePayload, type ResumablePayload, APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ApprovalPayload, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding, DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink, IntentResultSchema, type IntentCategory, type IntentGrant, type IntentResult, type IntentStatus, type RunOverride, type WorkflowStatus, WORKFLOW_STATES } from '@rotaris/contracts';
+import { type AutoStrategyName, type StrategyChoice, type PlanDecision, type PlanGatePayload, type ResumablePayload, APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ApprovalPayload, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding, DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink, IntentResultSchema, type IntentCategory, type IntentGrant, type IntentResult, type IntentStatus, type RunOverride, type WorkflowStatus, WORKFLOW_STATES    } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { pathKey } from '@rotaris/platform';
 import { type ChildRow, RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
@@ -254,6 +254,8 @@ export interface RuntimePosture {
    * and REQ-ORCH-029's constraints do not bind it (`RunDeps.coordinating`). Absent means none.
    */
   readonly runOverride?: RunOverride | null | undefined;
+  /** PD-ORCH-020: true under `intelligent`; the run asks `SessionsDeps.chooseStrategy` for its strategy before its pre-flight. */
+  readonly chooseStrategy?: boolean | undefined;
 }
 
 export interface SessionsDeps {
@@ -339,6 +341,11 @@ export interface SessionsDeps {
   readonly checkpoints?: (ctx: CheckpointPortContext) => CheckpointPort | null;
   /** REQ-ORCH-005: the pre-flight, built by the root; absent means the fallback intent and no playbook. */
   readonly preflight?: (ctx: PreflightContext) => Promise<Preflight>;
+  /**
+   * PD-ORCH-020: the strategy of an `intelligent` run, chosen from its request by the small model. Asked by the run as it
+   * starts, before `preflight`. The host that answers also makes the choice the override its tool ports read.
+   */
+  readonly chooseStrategy?: (ctx: PreflightContext) => Promise<StrategyChoice>;
   /** REQ-ORCH-107: absence means supervision was intentionally disabled and constructs nothing. */
   /** `helperModel` (OQ-189's ruling, PD-MONITOR-007): the loop classifier's model, read at each classification. */
   readonly supervisor?: ((workspaceRoot: string, sessionId: SessionId, countUsage: CountUsage, helperModel: HelperModel) => { readonly config: SupervisorConfig; readonly classifier: LoopClassifier } | null) | undefined;
@@ -457,6 +464,8 @@ export function postureAtStart(runtime: RuntimePosture | undefined, attended: bo
 }
 
 interface Live {
+  /** PD-ORCH-020: the strategy the session's latest `intelligent` run was given; a run with no request text keeps it. */
+  chosenStrategy?: AutoStrategyName | undefined;
   writer: SessionWriter;
   owner: ProjectionOwner;
   readonly dal: StoreDal;
@@ -1655,7 +1664,7 @@ export class Sessions {
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       ...(runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: runtime.pauseToolDeadlineMs as Millis }),
       ...(this.deps.terminals ? { terminals: this.deps.terminals(sessionId) } : {}),
-      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single' && runtime?.runOverride !== 'lead', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single' && runtime?.runOverride !== 'lead', runOverride: runtime?.runOverride ?? null, ...this.strategyChoiceFor(live, runtime, { sessionId, workspaceRoot, prompt, warn, countUsage, helperModel }), onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153: the plan gate as a launch input; the run settles the hold itself once the intent is known.
       ...(this.planLaunchFor(dal, sessionId, runtime) ?? {}),
       backend: model.backend, config: model.config, tools, permission, configurationSnapshot: setup.value.configurationSnapshot, pid: this.deps.pid, host: this.deps.host,
@@ -1792,6 +1801,26 @@ export class Sessions {
    * carried because the workspace CONTEXT FILES are read from it, which is the half of that requirement the
    * recorded defect found unbuilt. A caller that has no binding passes the base root.
    */
+  /**
+   * PD-ORCH-020: the run's two strategy inputs under `intelligent`, and nothing otherwise. A run with request text asks
+   * the host; one with none (a plain Continue) keeps the strategy the session's previous run was given, and where there
+   * is none to keep the host is asked and answers `lead`.
+   */
+  private strategyChoiceFor(live: Live, runtime: RuntimePosture | undefined, ctx: Omit<PreflightContext, 'signal'>): { chooseStrategy?: (signal: AbortSignal) => Promise<StrategyChoice> } {
+    const ask = this.deps.chooseStrategy;
+    if (runtime?.chooseStrategy !== true || !ask) return {};
+    return {
+      chooseStrategy: async (signal) => {
+        const kept = live.chosenStrategy;
+        const choice: StrategyChoice = ctx.prompt.trim() === '' && kept !== undefined
+          ? { strategy: kept, reason: '', fallback: false, kept: true }
+          : await ask({ ...ctx, signal });
+        live.chosenStrategy = choice.strategy;
+        return choice;
+      },
+    };
+  }
+
   private setupFor(workspaceRoot: string, attended: boolean, sessionId: SessionId, executionRoot: string, entryPersona?: string): Result<RunSetup, StartRefusal> {
     const refused = (code: string, summary: string): StartRefusal => ({ code, reason: summary, failedBeforeStart: true, result: { status: 'error', session_id: '', stop_reason: '', summary, error: summary } });
     if (this.deps.configure) {
@@ -1946,7 +1975,7 @@ export class Sessions {
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       ...(runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: runtime.pauseToolDeadlineMs as Millis }),
       ...(this.deps.terminals ? { terminals: this.deps.terminals(sessionId) } : {}),
-      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single' && runtime?.runOverride !== 'lead', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single' && runtime?.runOverride !== 'lead', runOverride: runtime?.runOverride ?? null, ...this.strategyChoiceFor(s, runtime, { sessionId, workspaceRoot, prompt, warn, countUsage, helperModel }), onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153/154: a continuation holds again unless approval already released this run, and a revise
       // cycle passes its own number and the changes the user stated.
       ...(this.planLaunchFor(s.dal, sessionId, runtime, plan) ?? {}),

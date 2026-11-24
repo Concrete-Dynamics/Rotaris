@@ -54,6 +54,12 @@ describe('coordinatorTodoReading (OQ-213, REQ-ORCH-029)', () => {
   it('launchRunOverride reads the launch audit\'s configuration snapshot, and nothing else', () => {
     expect(launchRunOverride(JSON.stringify({ config_snapshot: { delegation_strategy: 'single' } }))).toBe('single');
     expect(launchRunOverride(JSON.stringify({ config_snapshot: { delegation_strategy: 'lead' } }))).toBe('lead');
+    // PD-ORCH-020: under `intelligent` the override is the one the run chose.
+    const intelligent = JSON.stringify({ config_snapshot: { delegation_strategy: 'intelligent' } });
+    expect(launchRunOverride(intelligent, JSON.stringify({ strategy: 'lead' }))).toBe('lead');
+    expect(launchRunOverride(intelligent, JSON.stringify({ strategy: 'single' }))).toBe('single');
+    expect(launchRunOverride(intelligent, JSON.stringify({ strategy: 'orchestrator' }))).toBeNull();
+    expect(launchRunOverride(intelligent)).toBeNull();
     expect(launchRunOverride(JSON.stringify({ config_snapshot: { delegation_strategy: 'swarm' } }))).toBe('swarm');
     expect(launchRunOverride(JSON.stringify({ config_snapshot: { delegation_strategy: 'orchestrator' } }))).toBeNull();
     expect(launchRunOverride(JSON.stringify({}))).toBeNull();

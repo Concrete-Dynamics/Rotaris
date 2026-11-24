@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
-import type { ApprovalPayload, PermissionPreset } from '@rotaris/contracts';
+import type { StrategyChoice, ApprovalPayload, PermissionPreset } from '@rotaris/contracts';
 import { RUN_CONFIG_DEFAULTS, Sessions, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type ToolPort, type ToolPortContext } from '../index.js';
 import type { AgentGrant, PersonaResolver } from './personas.js';
 import type { HookPort } from '../hooks-port.js';
@@ -73,7 +73,7 @@ export function delegationPort(ops: DelegationOps, parentId: string, tool?: Test
  * id-routed answer finds a holder. `closed` collects each port's close (REQ-SESSION-094): the agent, the statement its
  * open calls are settled with, and how many `session.end` events the session held at that moment.
  */
-export function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null; readiness?: (ctx: ToolPortContext) => Promise<void> | undefined; approvals?: (ctx: ToolPortContext) => readonly ApprovalPayload[]; classifier?: LoopClassifier; supervisorConfig?: Partial<SupervisorConfig> } = {}) {
+export function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null; readiness?: (ctx: ToolPortContext) => Promise<void> | undefined; approvals?: (ctx: ToolPortContext) => readonly ApprovalPayload[]; classifier?: LoopClassifier; supervisorConfig?: Partial<SupervisorConfig>; chooseStrategy?: (prompt: string) => Promise<StrategyChoice>; preflight?: () => void } = {}) {
   // The scripted client answers by persona and by the number of calls that persona has made.
   const counts = new Map<string, number>();
   const client = new ScriptedModelClient([]);
@@ -90,7 +90,7 @@ export function sessionsWith(script: (persona: string, turn: number, req: ModelR
   /** Each agent's tool-port context, by canonical name, as the engine built it. */
   const contexts = new Map<string, ToolPortContext>();
   const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: over.images === true ? { ...MODEL, acceptsImageInput: true } : MODEL, ...(over.modelKey === undefined ? {} : { modelKey: over.modelKey }), credentialFor: () => async () => 'k' };
-  const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, ...(over.capFor ? { modelCapFor: over.capFor } : {}), drainTimeoutMs: over.drainTimeoutMs ?? 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }), ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }) } as const;
+  const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, ...(over.capFor ? { modelCapFor: over.capFor } : {}), drainTimeoutMs: over.drainTimeoutMs ?? 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }), ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }), ...(over.chooseStrategy ? { chooseStrategy: true } : {}) } as const;
   const sessions = new Sessions({
     clocks: clock, publisher: over.publisher ?? NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), log: (m) => infos.push(m), mintSessionId: () => `S${++n}`,
     model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
@@ -115,6 +115,9 @@ export function sessionsWith(script: (persona: string, turn: number, req: ModelR
     ...(over.hooks ? { hooks: () => over.hooks! } : {}),
     ...(over.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, ...over.supervisorConfig }, classifier: over.classifier! }) } : {}),
     runtime,
+    // PD-ORCH-020: the host's two answers, as a test gives them. The pre-flight stand-in raises, so the run goes on unclassified.
+    ...(over.chooseStrategy ? { chooseStrategy: (ctx) => over.chooseStrategy!(ctx.prompt) } : {}),
+    ...(over.preflight ? { preflight: async () => { over.preflight!(); throw new Error('no classifier in this test'); } } : {}),
     // A resolved `personas:` table reaches a run only through the root's configuration (RunSetup).
     ...(over.personas ? { configure: () => ({ ok: true as const, value: { model: { backend: new DefaultAgentBackend(client), config }, runtime, personas: over.personas! } }) } : {}),
   });

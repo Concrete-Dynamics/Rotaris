@@ -88,6 +88,11 @@ change; none for an entry role that declares no `delegate`; and none on a run th
 bundle, on any turn, the held one and a continuation included (`PD-ORCH-006` revision 3, OQ-205 as ruled, R-072). Until finacc3's repair round 1 (2026-10-06) the layer was appended in `Run` after the playbook but before the
 context units and the MCP section, and carried no precedence sentence: "the final layer" in name only.
 
+**An `intelligent` run chooses its strategy first ([`PD-ORCH-020`](../../../product/directives/pd-orch-020.md#pd-orch-020)).** `RuntimePosture.chooseStrategy`
+gives the run `chooseStrategy`; `Run.start` awaits it before the pre-flight and takes the answer as its override. The run
+host's answer (`engine/src/intent/strategy.ts`, one small-model request) also replaces the override in `configuredRuns`,
+which the pre-flight and the tool ports read, so no reader sees `intelligent`. A raise or a fallback is `lead`.
+
 **A `lead` run has no pre-flight ([`PD-ORCH-019`](../../../product/directives/pd-orch-019.md#pd-orch-019) clauses 1, 2 and 4).** `Sessions` hands
 the run no `preflight` where `RuntimePosture.runOverride` is `lead`, at the launch and at a continuation, so nothing is
 classified, no cell is resolved and no BUDGET clamp reaches the child limits; the run reads `NO_PREFLIGHT_INTENT` wherever it

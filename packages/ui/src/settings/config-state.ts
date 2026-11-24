@@ -145,7 +145,7 @@ export interface PendingSettings {
   /** PD-TOOLS-022 clause 8: the advisor's switch and its cap per agent, committed by Save. */
   readonly advisor: AdvisorView;
   readonly compressorThresholdPercentage: number;
-  readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single' | 'lead';
+  readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single' | 'lead' | 'intelligent';
   /**
    * REQ-CONFIG-472: the Display category's four tool-row fields — workspace configuration, committed by Save
    * like the rest of destination 1, and read from here by the transcript the moment a control moves, so what is

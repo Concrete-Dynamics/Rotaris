@@ -55,6 +55,8 @@ export interface RuntimeFromConfiguration extends RuntimePosture {
   readonly shellCommandTimeoutS: number;
   /** REQ-ORCH-025: `single` | `swarm` | null, from `rotaris.delegation_strategy`. */
   readonly runOverride: RunOverride | null;
+  /** PD-ORCH-020: true under `rotaris.delegation_strategy: intelligent`; the run then chooses its strategy as it starts. */
+  readonly chooseStrategy: boolean;
   readonly retentionCap: number;
   readonly iterationLimit: number;
   readonly consecutiveRetryLimit: number;
@@ -111,7 +113,9 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: Avai
     allowOutsideWorkspace: r.allow_outside_workspace,
     additionalReadOnlyRoots: r.additional_read_only_roots,
     shellCommandTimeoutS: r.shell_command_timeout,
-    runOverride: cfg.delegationStrategy === 'orchestrator' ? null : cfg.delegationStrategy,
+    // PD-ORCH-020: `intelligent` puts no override on the run until its strategy is chosen, inside the run's start.
+    runOverride: cfg.delegationStrategy === 'orchestrator' || cfg.delegationStrategy === 'intelligent' ? null : cfg.delegationStrategy,
+    chooseStrategy: cfg.delegationStrategy === 'intelligent',
     retentionCap: r.event_retention_per_session,
     messageLimit: r.message_limit,
     iterationLimit: r.max_iterations,

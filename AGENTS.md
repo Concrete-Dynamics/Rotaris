@@ -101,7 +101,7 @@ native-surface mapping". IC-2 was discharged on 2026-09-04 by `pnpm theme-proof`
 three themes carry a palette, a label, a description and a dark flag (`packages/contracts/src/theme/themes.ts`);
 only the different-scale multi-monitor drag remains, the owner's measurement.*
 
-`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-8**, an index. A condition binds the work it
+`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-8**, an index *(this read "IC-1 to IC-7")*. A condition binds the work it
 names: that work may not be reported complete until the condition is discharged, discharging means
 recording the result in the record whether or not it passed, and **no condition may be downgraded by
 the person doing the work**.

@@ -126,10 +126,7 @@ it stopped, remove landed worktrees, else end silently. It survives restarts and
 | `needs-owner` | Two repair budgets spent, findings survive | Report the last findings to the owner |
 | `unverified` | One budget spent | Re-render: it gets a fresh budget at `max` with a root-cause note |
 | `merge-failed` | The rebased head was green but the push failed | Re-render: a review retries the landing (its step 0 finds one that did happen) |
-| `*-lost`, `halted`, `error` | An agent came back empty, or three in a row did | Recover (below) |
-
-Every agent the workflow starts inherits the repository's agent advisor (`.claude/settings.json`, `tools/agent-advisor/`): it
-nudges one that loops and stops it on the third nudge in a row. An agent the hook stopped is handled like a lost one.
+| `*-lost`, `halted`, `error` | An agent came back empty, or three in a row did; a Claude Code agent inherits the agent advisor (`tools/agent-advisor/`), and one that hook stopped is handled like a lost one | Recover (below) |
 
 The run's own `status`: `complete`; `incomplete` (a plan bundle did not settle, so acceptance was skipped: re-render);
 `halted` (lost agents: a usage limit or an outage); `acceptance-incomplete` (an acceptance agent was lost);

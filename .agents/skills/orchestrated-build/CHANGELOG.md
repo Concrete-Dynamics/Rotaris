@@ -5,14 +5,20 @@ verified. An entry that turns out wrong is corrected by a new entry, never edite
 
 ## 2026-11-24 — builders inherit the agent advisor, and a hook-stopped one is a lost one
 
-**Prompted by** the owner's request of 2026-11-24 (R-126) for an advisor that checks a coding agent for a loop and
-nudges it, and the hook that answers it for this repository (`tools/agent-advisor/`, wired in `.claude/settings.json`):
-it fires inside subagents too, so a builder or reviewer can now come back stopped by the hook, an ending the table in
-§4 did not name. **Changed** `SKILL.md` §4: one line under the bundle endings saying that every agent the workflow
-starts inherits the advisor and that one it stopped is handled like a lost one (the `*-lost` row: recover). No
-mechanism in `scripts/` changed and no invariant is touched. **Verified** by `node scripts/orchestration.mjs self-test`
-and `pnpm check`; whether a stop raised inside a subagent ends the subagent alone or the whole run is not measured
-here and is owed (`tools/agent-advisor/advisor.mjs` keeps a subagent's calls in a stream of their own either way).
+**Prompted by** the owner's request of 2026-11-24 for "some sort of advisor that runs every X tool calls or every X
+messages that checks if the agent is stuck in a loop or not progressing properly and nudges him", for the product's
+runs and for the coding agents that develop this repository, with the review by a small model through `claude -p` on
+the owner's subscription (the owner's decision, relayed in this change's brief). The request is R-126; its row in
+`docs/product/requests.md` is written by the session building the product half, which runs beside this one, so the id
+may reach `main` after this entry does. The hook that answers the harness half (`tools/agent-advisor/`, wired in
+`.claude/settings.json`) fires inside subagents too, per Claude Code's hooks reference, so a builder or reviewer can
+come back stopped by it, an ending the table in §4 did not name. **Changed** `SKILL.md` §4: the `*-lost` row says that
+a Claude Code agent inherits the advisor and that one the hook stopped is handled like a lost one (recover); the row
+grew, the file did not. No mechanism in `scripts/` changed and no invariant is touched. **Verified** by `node
+scripts/orchestration.mjs self-test` and `pnpm check`. **Owed, not measured:** whether a stop raised inside a subagent
+ends that subagent alone or the whole run, and whether it then returns empty (the template's `call()` counts only an
+empty reply as lost); `tools/agent-advisor/advisor.mjs` keeps a subagent's calls in a stream of their own either way,
+and never stops a session on a heuristic alone: the stopping check needs the model review's own verdict.
 
 ## 2026-11-04 — the review the archive bundles' skill changes owed
 

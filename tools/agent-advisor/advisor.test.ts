@@ -123,6 +123,7 @@ describe('the fingerprint', () => {
     expect(fingerprint(ok('Bash', { command: 'ls' }))).toMatchObject({ err: false, ek: null, edit: false });
     const first = fingerprint(failed('pnpm test', 'Exit code 1\n 3 failed in 1204ms'));
     const second = fingerprint(failed('pnpm test --bail', 'Exit code 1\n 3 failed   in 998ms'));
+    expect(fingerprint(failed('pnpm test', '')).ek).toBeNull();
     expect(first.err).toBe(true);
     expect(first.ek).toBe(second.ek);
     expect(fingerprint(failed('pnpm test', 'Exit code 127\ncommand not found')).ek).not.toBe(first.ek);
@@ -250,7 +251,7 @@ describe('escalation', () => {
   const before = (extra: Input = {}): Input => ({ session_id: SESSION, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'pnpm test' }, ...extra });
 
   it('stops the session on the third consecutive nudge, with a reason naming the loop', async () => {
-    const outputs = await feed(Array.from({ length: 12 }, () => ok('Bash', { command: 'pnpm test' })), broken);
+    const outputs = await feed(Array.from({ length: 12 }, () => ok('Bash', { command: 'pnpm test' })), stuck());
     expect(context(outputs[3])).not.toBe('');
     expect(context(outputs[3])).not.toContain('the next one stops the session');
     expect(context(outputs[7])).toContain('nudge 2 in a row; the next one stops the session');
@@ -262,7 +263,7 @@ describe('escalation', () => {
 
   it('delivers a stop earned on a failed call before the next call, since the failure event cannot stop a session', async () => {
     expect(await feed([before()], never)).toEqual([null]);
-    const outputs = await feed(loop(12), broken);
+    const outputs = await feed(loop(12), stuck());
     // The failure event says it to the model; it carries no `continue: false`, which Claude Code ignores there.
     expect(outputs[11]?.continue).toBeUndefined();
     expect(context(outputs[11])).toContain('Agent advisor stopped this session');
@@ -275,8 +276,16 @@ describe('escalation', () => {
     expect(await feed([before()], never)).toEqual([null]);
   });
 
+  it('never stops a session on a heuristic alone: with the review failing, the third check nudges again', async () => {
+    const outputs = await feed(loop(16), broken);
+    expect(outputs.some((output) => output?.continue === false)).toBe(false);
+    expect(context(outputs[11])).toContain('You made the same call 12 times');
+    expect(checks().map((line) => line.verdict)).toEqual(['nudge', 'nudge', 'skip', 'skip']);
+    expect(await feed([before()], never)).toEqual([null]);
+  });
+
   it('drops an undelivered stop on a user prompt', async () => {
-    await feed(loop(12), broken);
+    await feed(loop(12), stuck());
     expect(await feed([prompt(), before()], never)).toEqual([null, null]);
   });
 

@@ -29,6 +29,9 @@
 // **A stream** is the main conversation or one subagent (`agent_id`): each is counted and judged alone, so a subagent
 // reading widely does not hide the parent's loop, nor the reverse.
 //
+// **It never stops a session on a heuristic alone.** The third nudge in a row stops the session only when the model
+// review itself found no progress at that check; where the review failed, the check nudges again and stops nothing.
+//
 // **It never fails the work it watches.** Every path out of `main` exits 0, and an error prints nothing.
 
 import { spawn } from 'node:child_process';
@@ -170,7 +173,9 @@ export function fingerprint(input) {
   const text = typeof input.error === 'string' ? input.error : isRecord(response) && typeof response.stderr === 'string' ? response.stderr : '';
   const named = toolInput.command ?? toolInput.file_path ?? toolInput.pattern ?? toolInput.url ?? toolInput.description;
   const brief = `${tool} ${typeof named === 'string' ? named : canonical}`.replace(/\s+/g, ' ').slice(0, 120);
-  return { tool, key: hash(`${tool}\n${canonical}`), err, ek: err ? hash(normalizeError(text)) : null, brief, edit: EDIT_TOOLS.has(tool) };
+  // A failure that says nothing has no error text to recur: it is an error, and never "the same error".
+  const said = normalizeError(text);
+  return { tool, key: hash(`${tool}\n${canonical}`), err, ek: err && said !== '' ? hash(said) : null, brief, edit: EDIT_TOOLS.has(tool) };
 }
 
 /**
@@ -542,7 +547,13 @@ export async function handle(input, options = {}) {
     message = verdict.message;
   }
 
+  // A session is never stopped on a heuristic alone: where the review failed (no `claude`, a usage limit, the bound),
+  // the check that would stop it nudges again instead, and the series stays where it was.
   const series = nudgeSeries(readLog(file), stream) + 1;
+  if (series >= HALT_AT && verdict === null) {
+    record('skip');
+    return { hookSpecificOutput: { hookEventName: event, additionalContext: `Agent advisor (automated, tools/agent-advisor; not the user): ${message}` } };
+  }
   if (series >= HALT_AT) {
     const loop = signal?.detail ?? 'the review found no progress';
     const reason = `Agent advisor stopped this session: nudge ${series} in a row with no user prompt between them, and the loop continues — ${loop}. Last advice: ${message} Send a prompt to resume (tools/agent-advisor).`;

@@ -93,9 +93,15 @@ const loopIssues = loopDb.prepare("SELECT kind, severity, actor, message FROM is
 const loopCalls = loopDb.prepare("SELECT tool_name, status FROM tool_calls ORDER BY ordinal").all();
 loopDb.close();
 writeFileSync(join(output, 'loop-observed.json'), `${JSON.stringify({ loopSession, loopActivations, loopIssues, loopCalls }, null, 2)}\n`);
-if (loopSession?.stop_reason !== 'agent_session_aborted') throw new Error(`loop supervisor stop reason was ${loopSession?.stop_reason ?? 'absent'}`);
+// PD-ORCH-018 clause 7 (2026-11-24, narrowing REQ-ORCH-106): with the default `escalation: pause` the third activation rests the
+// run as a user's pause does — status `paused`, resumable, the issue a warning — where until then it ended the run
+// `agent_session_aborted`. `loop-reordered` below sets `escalation: abort` and keeps REQ-ORCH-106's reading.
+if (loopSession?.execution_status !== 'paused') throw new Error(`loop supervisor: the run's status was ${loopSession?.execution_status ?? 'absent'}, not paused (PD-ORCH-018 clause 7)`);
+if (loopSession?.stop_reason === 'agent_session_aborted') throw new Error('loop supervisor: the default escalation aborted the session; PD-ORCH-018 clause 7 pauses it');
 if (loopActivations.length !== 3) throw new Error(`expected three supervisor activations; found ${loopActivations.length}`);
+if (JSON.parse(loopActivations[2]?.metadata ?? '{}').escalation !== 'pause') throw new Error('loop supervisor: the third activation does not record the pause (PD-ORCH-018 clause 7)');
 if (loopIssues.length !== 1) throw new Error(`expected one circuit_breaker_escalation issue; found ${loopIssues.length}`);
+if (loopIssues[0].severity !== 'warning') throw new Error(`loop supervisor: the pausing escalation's issue is ${loopIssues[0].severity}, not warning`);
 
 // OQ-364 (ruled 2026-10-20 under R-072, no directive; REQ-ORCH-101): one argument value is one action whatever order its keys
 // were written in. The scripted root sends one `read_file` value, `{ path: 'README.md', offset: 1 }`, with its keys in the
@@ -109,6 +115,8 @@ mkdirSync(reorderedWorkspace, { recursive: true });
 mkdirSync(reorderedLocal, { recursive: true });
 writeFileSync(join(reorderedWorkspace, 'README.md'), '# loop proof\n');
 scratchAgentsYaml(reorderedWorkspace);
+// PD-ORCH-018 clause 7: `abort` is REQ-ORCH-106 as written, which this launch's last two assertions read.
+writeFileSync(join(reorderedWorkspace, '.rotaris', 'agents.yaml'), `${readFileSync(join(reorderedWorkspace, '.rotaris', 'agents.yaml'), 'utf8')}circuit_breaker:\n  escalation: abort\n`);
 await launch('loop-reordered', reorderedWorkspace, reorderedLocal, join(reorderedRoot, 'preferences'), {
   ROTARIS_SCRIPT: 'loop:readreorder:20',
   ROTARIS_LOOP_SCRIPT: 'detected',

@@ -73,6 +73,10 @@ REQ-NOTIFY-106, REQ-NOTIFY-108, REQ-NOTIFY-109, REQ-NOTIFY-110, REQ-CONFIG-137, 
 > order, the task handed over, a failed and a cut review, ten clean reviews, the series and its restart, the bound past two seconds,
 > the action); `coordinator-plan.test.ts`'s two (a root's third activation rests the run `interrupted` with a `warning` issue, one
 > notice and the transcript line; `abort` fails it `agent_session_aborted`); `loop.test.ts`'s three (the review prompt, the task
-> ahead of the excerpt, the uncapped bound); `load.test.ts`'s one. **What was not measured:** a child's escalation into the pause,
-> a continue after it, the built application (`part-h-proof` has no periodic launch), and a live model. The row is in
+> ahead of the excerpt, the uncapped bound); `load.test.ts`'s one. In the built application, `pnpm part-h-proof` (green whole, on a
+> private display): its `loop-supervisor` launch, at the default, leaves the session `paused` with three activations, the third
+> recording `escalation: pause`, and one `warning` issue; its `loop-reordered` launch sets `escalation: abort` and ends
+> `agent_session_aborted` as before. The first run of that proof was red on the old assertion, which read the abort at the default.
+> **What was not measured:** a child's escalation into the pause, a continue after it, a periodic review in the built application
+> (`part-h-proof` has no periodic launch), the other suites `pnpm verify:plan` names, and a live model. The row is in
 > [`../../architecture/first-executions.md`](../../architecture/first-executions.md).

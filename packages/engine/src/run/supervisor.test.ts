@@ -474,6 +474,110 @@ describe('loop supervisor (REQ-ORCH-099..107)', () => {
     });
   });
 
+  describe('PD-ORCH-018: the periodic review', () => {
+    const periodic = (overrides: Partial<SupervisorConfig> = {}): SupervisorConfig => config({ reviewMode: 'periodic', reviewIntervalTools: 5, reviewIntervalMessages: 5, ...overrides });
+    const work = (s: LoopSupervisor, from: number, count = 5) => { for (let i = from; i < from + count; i += 1) tool(s, 'read_file', `{"path":"src/${i}.ts"}`); };
+
+    it('clause 1: on_signal mode arms nothing at the review interval', async () => {
+      const seen: LoopActivation[] = [];
+      const s = new LoopSupervisor(sessionId, config({ reviewIntervalTools: 5, reviewIntervalMessages: 5 }), classifier(async (a) => { seen.push(a); return classification(); }), new FakeClock());
+      work(s, 0, 10);
+      expect((await s.check()).kind).toBe('continue');
+      expect(seen).toHaveLength(0);
+    });
+
+    it('clause 2: fires at either interval, after repetition and cycles, and never on the raw counts', async () => {
+      const seen: LoopActivation[] = [];
+      const s = new LoopSupervisor(sessionId, periodic({ toolThreshold: 2, messageThreshold: 2 }), classifier(async (a) => { seen.push(a); return classification(); }), new FakeClock());
+      work(s, 0, 4);
+      expect((await s.check()).kind).toBe('continue');
+      work(s, 4, 1);
+      expect(await s.check()).toMatchObject({ kind: 'inject', activation: { trigger: 'periodic', reason: 'review interval' } });
+      for (let i = 0; i < 5; i += 1) message(s, `step ${i}`);
+      await s.check();
+      expect(seen.map((a) => a.trigger)).toEqual(['periodic', 'periodic']);
+      for (let i = 0; i < 4; i += 1) tool(s, 'read_file', '{"path":"src/a.ts"}');
+      await s.check();
+      expect(seen[2]?.trigger).toBe('repetition');
+    });
+
+    it('clause 3: the review is handed the agent\'s task', async () => {
+      const seen: LoopActivation[] = [];
+      const s = new LoopSupervisor(sessionId, periodic(), classifier(async (a) => { seen.push(a); return classification(false); }), new FakeClock());
+      s.noteObjective('Fix the failing parser test.');
+      work(s, 0);
+      await s.check();
+      expect(seen[0]?.objective).toBe('Fix the failing parser test.');
+    });
+
+    it('clause 4: a review that fails, or is cut at its bound, redirects nothing and counts nothing', async () => {
+      const s = new LoopSupervisor(sessionId, periodic(), classifier(async () => { throw new Error('offline'); }), new FakeClock());
+      for (let round = 0; round < 6; round += 1) {
+        work(s, round * 5);
+        expect((await s.check()).kind).toBe('continue');
+      }
+      const clock = new FakeClock();
+      const cut = new LoopSupervisor(sessionId, periodic({ reviewTimeoutMs: 500 }), classifier(() => new Promise(() => undefined)), clock);
+      work(cut, 0);
+      const pending = cut.check();
+      clock.advance(500);
+      expect((await pending).kind).toBe('continue');
+    });
+
+    it('clause 5: a healthy agent is never escalated, however many reviews it passes', async () => {
+      const s = new LoopSupervisor(sessionId, periodic(), classifier(async () => classification(false)), new FakeClock());
+      for (let round = 0; round < 10; round += 1) {
+        work(s, round * 5);
+        expect((await s.check()).kind).toBe('continue');
+      }
+    });
+
+    it('clause 5: the third consecutive redirection escalates, and a review that finds progress restarts the series', async () => {
+      let stuck = true;
+      const s = new LoopSupervisor(sessionId, periodic(), classifier(async () => classification(stuck)), new FakeClock());
+      work(s, 0);
+      expect(await s.check()).toMatchObject({ kind: 'inject', activation: { activationCount: 1 } });
+      work(s, 5);
+      expect(await s.check()).toMatchObject({ kind: 'inject', activation: { activationCount: 2 } });
+      stuck = false;
+      work(s, 10);
+      expect((await s.check()).kind).toBe('continue');
+      stuck = true;
+      work(s, 15);
+      expect(await s.check()).toMatchObject({ kind: 'inject', activation: { activationCount: 1 } });
+      work(s, 20);
+      expect((await s.check()).kind).toBe('inject');
+      work(s, 25);
+      expect(await s.check()).toMatchObject({ kind: 'escalate', signal: { activationCount: 3, reason: 'repeated-loop' } });
+    });
+
+    it('clause 6: the review is bounded by its own timeout, past the two-second activation budget', async () => {
+      const clock = new FakeClock();
+      let answer: (value: LoopClassification) => void = () => undefined;
+      const s = new LoopSupervisor(sessionId, periodic({ reviewTimeoutMs: 10_000, classificationTimeoutMs: 2_000 }), classifier(() => new Promise((resolve) => { answer = resolve; })), clock);
+      work(s, 0);
+      clock.advance(3_000);
+      const pending = s.check();
+      clock.advance(6_000);
+      answer(classification());
+      expect((await pending).kind).toBe('inject');
+    });
+
+    it('clause 7: the escalation carries the configured action, pause by default', async () => {
+      const escalated = async (overrides: Partial<SupervisorConfig>) => {
+        const s = new LoopSupervisor(sessionId, config(overrides), classifier(), new FakeClock());
+        for (let round = 0; round < 3; round += 1) {
+          for (let i = 0; i < 4; i += 1) tool(s, 'read_file', '{"path":"src/a.ts"}');
+          const decision = await s.check();
+          if (decision.kind === 'escalate') return decision.signal.action;
+        }
+        return null;
+      };
+      expect(await escalated({})).toBe('pause');
+      expect(await escalated({ escalation: 'abort' })).toBe('abort');
+    });
+  });
+
   it('keeps separate state for separate supervisor instances', async () => {
     const a = new LoopSupervisor(sessionId, config(), classifier(), new FakeClock());
     const b = new LoopSupervisor(asSessionId('01JOTHERSUPERVISOR0000000000'), config(), classifier(), new FakeClock());

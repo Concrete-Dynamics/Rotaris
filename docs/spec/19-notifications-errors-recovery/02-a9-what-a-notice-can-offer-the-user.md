@@ -77,12 +77,21 @@ Part 2 of 7 of [domain 19](../19-notifications-errors-recovery.md), which indexe
 ### B3. Loop and stuck-state supervision
 
 **REQ-NOTIFY-102** — Where no loop occurs, a run with supervision enabled is indistinguishable from the same run with supervision disabled: no corrective message appears in the conversation or the transcript, no supervision entry appears in the session timeline or in diagnostics, and no transcript row is attributable to supervision.
+  > **Narrowed by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** In `periodic` review mode
+  > a run in which no loop occurs still makes one classification request per interval, counted in its usage; no message,
+  > timeline entry or transcript row comes of it. In `on_signal` mode the requirement governs as written.
 
 **REQ-NOTIFY-103** — On a loop being declared, a corrective message is placed in the session's own context, either directing the agent to different work or requiring it to re-examine its current approach. The message is composed for that activation from that session's recent context: two activations whose recent context differs produce different text, and the text is not drawn from a fixed set of alternatives. It names no supervision feature, no loop detection and no component. It is placed in the session context only and is never presented to the user as a message in its own right.
 
 **REQ-NOTIFY-104** — Detection counters reset after each activation. Consecutive activations with no user instruction between them are counted, and a new user instruction resets that count.
+  > **Narrowed by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** In `periodic` review mode
+  > the count is of activations that placed a corrective message, and a review answering that the agent is progressing resets
+  > it. In `on_signal` mode the requirement governs as written.
 
 **REQ-NOTIFY-105** — More than two consecutive activations with no intervening user instruction end the session. The stop is reported as an escalation naming three facts: the session, the number of consecutive activations, and that repeated looping caused it.
+  > **Narrowed by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** The session ends this way
+  > with `circuit_breaker.escalation: abort`. With `pause`, the default, the run is paused instead and stays resumable, the
+  > escalation naming the same three facts in an issue and the person told by a notice.
 
 **REQ-NOTIFY-106** — At most 2 seconds pass between a session's recent activity satisfying the criteria of REQ-NOTIFY-108 and the corrective message of REQ-NOTIFY-103 being present in that session's context. That budget is end to end and binds every step inside it, the classification call included: the classifier is allowed whatever remains of the 2 seconds when it is dispatched, and exceeding that is a failed classification handled by REQ-NOTIFY-109 rather than a missed budget.
 

@@ -1,6 +1,10 @@
 import { millis, type Clocks, type SessionId } from '@rotaris/kernel';
 
 export type ActivationMode = 'independent' | 'weighted';
+/** PD-ORCH-018 clause 1: what arms a review — REQ-ORCH-101's signals alone, or an interval as well. */
+export type ReviewMode = 'on_signal' | 'periodic';
+/** PD-ORCH-018 clause 7: what the third consecutive activation does to the run. */
+export type EscalationAction = 'pause' | 'abort';
 
 export interface SupervisorConfig {
   readonly enabled: boolean;
@@ -15,6 +19,13 @@ export interface SupervisorConfig {
   readonly repetitionThreshold: number;
   readonly cycleThreshold: number;
   readonly classificationTimeoutMs: number;
+  readonly reviewMode: ReviewMode;
+  /** PD-ORCH-018 clause 2: a periodic review falls due at this many tool calls, or this many messages, since the last activation. */
+  readonly reviewIntervalTools: number;
+  readonly reviewIntervalMessages: number;
+  /** PD-ORCH-018 clause 6: the bound of a classification a `periodic` trigger raised — the configured key, not capped at the activation budget. */
+  readonly reviewTimeoutMs: number;
+  readonly escalation: EscalationAction;
 }
 
 export const SUPERVISOR_DEFAULTS: SupervisorConfig = {
@@ -30,7 +41,15 @@ export const SUPERVISOR_DEFAULTS: SupervisorConfig = {
   repetitionThreshold: 4,
   cycleThreshold: 3,
   classificationTimeoutMs: 2_000,
+  reviewMode: 'on_signal',
+  reviewIntervalTools: 20,
+  reviewIntervalMessages: 20,
+  reviewTimeoutMs: 2_000,
+  escalation: 'pause',
 };
+
+/** The most of an agent's task a periodic review is handed (PD-ORCH-018 clause 3): the task, not a document. */
+const OBJECTIVE_CAP = 4_000;
 
 /**
  * REQ-NOTIFY-106's activation budget: at most 2 seconds from the activity satisfying the criteria to the corrective message,
@@ -51,11 +70,13 @@ export interface LoopClassification {
 }
 
 export interface LoopActivation {
-  readonly trigger: 'repetition' | 'cycle' | 'raw-count' | 'stuck';
+  readonly trigger: 'repetition' | 'cycle' | 'raw-count' | 'stuck' | 'periodic';
   readonly reason: string;
   readonly events: readonly SupervisorEvent[];
   readonly excerpt: string;
   readonly activationCount: number;
+  /** PD-ORCH-018 clause 3: the agent's task, for a review that judges progress toward it; absent when none was noted. */
+  readonly objective?: string | undefined;
 }
 
 export interface LoopClassifier {
@@ -66,6 +87,8 @@ export interface SupervisorEscalation {
   readonly sessionId: SessionId;
   readonly activationCount: number;
   readonly reason: 'repeated-loop';
+  /** PD-ORCH-018 clause 7: `pause` rests the run as a user's pause does; `abort` is REQ-ORCH-106's failed agent and aborted session. */
+  readonly action: EscalationAction;
 }
 
 export type SupervisorDecision =
@@ -201,6 +224,7 @@ export class LoopSupervisor {
    * next `check()` takes the activation.
    */
   private pendingSince = 0;
+  private objective: string | undefined;
 
   constructor(
     readonly sessionId: SessionId,
@@ -219,6 +243,12 @@ export class LoopSupervisor {
     if (event.kind === 'tool') this.toolCount += 1;
     else this.messageCount += 1;
     if (this.pending === null) this.arm(this.trigger());
+  }
+
+  /** PD-ORCH-018 clause 3: the task this agent was given, as its turn begins; a periodic review judges progress toward it. */
+  noteObjective(task: string): void {
+    const text = task.trim();
+    if (text !== '') this.objective = text.length <= OBJECTIVE_CAP ? text : text.slice(0, OBJECTIVE_CAP);
   }
 
   /** REQ-ORCH-096: the runtime's stuck report enters the same activation counter. */
@@ -253,39 +283,72 @@ export class LoopSupervisor {
     this.consecutiveActivations = 0;
   }
 
+  /**
+   * REQ-ORCH-102, and PD-ORCH-018 clause 5 beside it. In `on_signal` mode every activation is counted as it is taken, and the
+   * third escalates before any classification. In `periodic` mode the series counts REDIRECTIONS: the activation is decided
+   * first, it is counted only when it places a corrective message, the third such escalates in that message's place, and a
+   * review that answered "progressing" restarts the series. The reason: at an interval of 20 calls the first rule would
+   * escalate a healthy agent at its sixtieth.
+   */
   async check(): Promise<SupervisorDecision> {
     const trigger = this.pending;
     if (!trigger) return { kind: 'continue' };
     const since = this.pendingSince;
+    const periodicMode = this.config.reviewMode === 'periodic';
 
-    this.consecutiveActivations += 1;
+    if (!periodicMode) this.consecutiveActivations += 1;
     const activation: LoopActivation = {
       ...trigger,
       events: [...this.events],
       excerpt: this.excerpt(),
-      activationCount: this.consecutiveActivations,
+      activationCount: periodicMode ? this.consecutiveActivations + 1 : this.consecutiveActivations,
+      ...(this.objective === undefined ? {} : { objective: this.objective }),
     };
     const prints = this.prints;
     this.resetWindow();
 
-    if (this.consecutiveActivations > 2) {
-      return { kind: 'escalate', activation, signal: { sessionId: this.sessionId, activationCount: this.consecutiveActivations, reason: 'repeated-loop' } };
-    }
+    if (!periodicMode && this.consecutiveActivations > 2) return this.escalate(activation);
 
-    const classified = await this.classifyWithinBound(activation, since);
-    if (trigger.trigger === 'stuck') {
-      return { kind: 'inject', activation, message: classified?.corrective_message.trim() ? atMostNinetyWords(classified.corrective_message) : deterministicMessage(activation) };
+    const verdict = await this.decide(activation, prints, since);
+    if (!periodicMode) return verdict.message === null ? { kind: 'continue' } : { kind: 'inject', activation, message: verdict.message };
+    if (verdict.message === null) {
+      if (verdict.progressing) this.consecutiveActivations = 0;
+      return { kind: 'continue' };
     }
-    if (classified) {
-      if (!classified.loop_detected) return { kind: 'continue' };
+    this.consecutiveActivations += 1;
+    if (this.consecutiveActivations > 2) return this.escalate(activation);
+    return { kind: 'inject', activation, message: verdict.message };
+  }
+
+  private escalate(activation: LoopActivation): SupervisorDecision {
+    return { kind: 'escalate', activation, signal: { sessionId: this.sessionId, activationCount: this.consecutiveActivations, reason: 'repeated-loop', action: this.config.escalation } };
+  }
+
+  /**
+   * What one activation comes to: the corrective message it places, or none — and, with none, whether a classifier ANSWERED
+   * that there is nothing to correct (`progressing`), which is not the same as no answer. REQ-ORCH-103 and REQ-ORCH-104 for
+   * the four signal triggers; PD-ORCH-018 clauses 4 and 6 for a `periodic` one: its own bound, and no fallback, because an
+   * interval is a count and a loop is never declared from counts alone.
+   */
+  private async decide(activation: LoopActivation, prints: readonly string[], since: number): Promise<{ readonly message: string | null; readonly progressing: boolean }> {
+    const corrective = (classified: LoopClassification): string => {
       const message = classified.corrective_message.trim();
-      return { kind: 'inject', activation, message: message ? atMostNinetyWords(message) : deterministicMessage(activation) };
+      return message ? atMostNinetyWords(message) : deterministicMessage(activation);
+    };
+    if (activation.trigger === 'periodic') {
+      const reviewed = await this.classifyBounded(activation, this.config.reviewTimeoutMs);
+      if (!reviewed) return { message: null, progressing: false };
+      return reviewed.loop_detected ? { message: corrective(reviewed), progressing: false } : { message: null, progressing: true };
     }
-
-    if (trigger.trigger === 'repetition' || trigger.trigger === 'cycle' || this.rawFallbackHasEvidence(activation.events, prints)) {
-      return { kind: 'inject', activation, message: deterministicMessage(activation) };
+    const classified = await this.classifyWithinBound(activation, since);
+    if (activation.trigger === 'stuck') {
+      return { message: classified?.corrective_message.trim() ? atMostNinetyWords(classified.corrective_message) : deterministicMessage(activation), progressing: false };
     }
-    return { kind: 'continue' };
+    if (classified) return classified.loop_detected ? { message: corrective(classified), progressing: false } : { message: null, progressing: true };
+    if (activation.trigger === 'repetition' || activation.trigger === 'cycle' || this.rawFallbackHasEvidence(activation.events, prints)) {
+      return { message: deterministicMessage(activation), progressing: false };
+    }
+    return { message: null, progressing: false };
   }
 
   private trigger(): Trigger | null {
@@ -304,6 +367,13 @@ export class LoopSupervisor {
       const unit = tail.slice(0, width);
       if (new Set(unit).size !== width) continue;
       if (tail.every((value, index) => value === unit[index % width])) return { trigger: 'cycle', reason: 'repeated cycle' };
+    }
+
+    // PD-ORCH-018 clause 2: in `periodic` mode the interval stands where the raw counts stood.
+    if (this.config.reviewMode === 'periodic') {
+      return this.toolCount >= this.config.reviewIntervalTools || this.messageCount >= this.config.reviewIntervalMessages
+        ? { trigger: 'periodic', reason: 'review interval' }
+        : null;
     }
 
     if (this.config.activationMode === 'independent') {
@@ -364,7 +434,11 @@ export class LoopSupervisor {
    */
   private classifyWithinBound(activation: LoopActivation, since: number): Promise<LoopClassification | null> {
     const remaining = LOOP_ACTIVATION_BUDGET_MS - (this.clocks.monotonic.now() - since);
-    const bound = Math.min(this.config.classificationTimeoutMs, remaining);
+    return this.classifyBounded(activation, Math.min(this.config.classificationTimeoutMs, remaining));
+  }
+
+  /** One classification cut at `bound` milliseconds on the clock port; nothing left of the bound, a failure or a cut is `null`. */
+  private classifyBounded(activation: LoopActivation, bound: number): Promise<LoopClassification | null> {
     if (bound <= 0) return Promise.resolve(null);
     const controller = new AbortController();
     return new Promise((resolve) => {

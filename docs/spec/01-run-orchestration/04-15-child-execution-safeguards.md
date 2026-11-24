@@ -35,10 +35,17 @@ Part 4 of 8 of [domain 01](../01-run-orchestration.md), which indexes every part
   > message is written at all. The invisibility this requirement demands is preserved by the supervisor not
   > firing rather than by what it would have said.
 - **REQ-ORCH-100** — Supervisor defaults MUST be: activation mode `independent` (alternative: `weighted`); tool-call threshold 60; message-count threshold 60; weights 0.6 (tools) / 0.4 (messages) with target score 1.0; recent-event window 24; transcript excerpt cap 8000 characters; repetition threshold 4; cycle threshold 3; enabled true. These are the canonical values: the fingerprint-based repetition and cycle triggers of REQ-ORCH-101 are the primary detection path and the raw-count thresholds are the backstop behind them. Two of the supervisor's settings are deliberately not fixed here. The classifier model MUST NOT be a model identity named by this document: its default is the `small_model` capability slot of REQ-PROVIDER-088, resolved by that requirement's own rules, so a deployment resolves the classifier from its own configured catalogue and no third party's model name is shipped as a default. The bound on one loop-classification call is likewise not this domain's: it is the registered configuration key `runtime.loop_classification_timeout`, whose value, value space, and default are REQ-CONFIG-467's. This domain states no bound of its own on a classification call and none on an activation cycle.
+  > **Extended by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** The defaults above are
+  > untouched. The directive adds four settings beside them: `review_mode` (`on_signal`, default, or `periodic`),
+  > `review_interval_tool_calls` and `review_interval_messages` (each 20), and `escalation` (`pause`, default, or `abort`).
   > **Narrowed by [`PD-MONITOR-007`](../../product/directives/pd-monitor-007.md#pd-monitor-007), 2026-10-06.** The classifier's model is
   > followed through the session's override at each classification, and a pair held out of quota is not called: the
   > supervisor proceeds as on a classification that did not answer. The defaults are as stated.
 - **REQ-ORCH-101** — For each observed child event, triggers MUST be evaluated in this order, and the first that fires wins: (1) repetition — the same action observed 4 times in a row fires "repeated action"; (2) cycles — a repeating sequence of 2 to 4 distinct actions, observed 3 times over, fires "repeated cycle"; (3) raw counts — in `weighted` mode a score of (tool calls / tool threshold)·0.6 + (messages / message threshold)·0.4 reaching 1.0 fires, and in `independent` mode either count reaching its own threshold fires on its own. Two actions count as the same action only when their tool name and the whole of their arguments are identical: no part of the argument content may be disregarded when comparing, so two long edits differing only near their end MUST be treated as different actions. This requirement is the product's single definition of when two agent actions count as the same action. A document that needs to decide sameness — for repetition detection, for cycle detection, or for any count of repeated work — cites this identifier and holds no rule of its own, and no rule anywhere may decide sameness from a prefix, an excerpt, a normalized rendering, or any bounded number of characters of an argument, because each of those makes the two long edits above compare equal, which this requirement forbids. Only the most recent events, up to the configured event window (default 24), are considered.
+  > **Narrowed by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** The order, the triggers
+  > and the sameness rule above govern in `on_signal` mode. The directive names one case: in `periodic` mode the raw-count
+  > trigger (3) is not evaluated, and a `periodic` trigger fires in its place when either review interval is reached, after
+  > repetition and cycles.
 
   > **Narrowed by [`PD-ORCH-001`](../../product/directives/pd-orch-001.md#pd-orch-001), 2026-09-16.** The order, the triggers
   > and the sameness rule above are untouched. The directive narrows *when* they are evaluated: no event of a
@@ -53,7 +60,13 @@ Part 4 of 8 of [domain 01](../01-run-orchestration.md), which indexes every part
   > an encoding that keeps every member whole is not one. Arguments that do not parse as JSON are compared whole as text.
   > REQ-NOTIFY-108's "no normalisation of the compared text" is read the same way. The requirement's text is unchanged.
 - **REQ-ORCH-102** — On trigger, the supervisor MUST snapshot the pending activation, increment the consecutive-activation counter, and pause the child. If the counter exceeds 2 (the third activation without an intervening user instruction), it MUST escalate regardless of classification, with an escalation signal carrying session id, activation count, and a repeated-loop reason. Otherwise an LLM classifier judges whether a loop exists over the recent transcript tail (bounded by the event window and character cap).
+  > **Narrowed by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** In `on_signal` mode the
+  > counter is as stated. In `periodic` mode it counts only activations that placed a corrective message, and an activation
+  > raised by a `periodic` trigger is classified before it is counted, with the agent's task beside the transcript tail.
 - **REQ-ORCH-103** — The classifier contract is JSON `{loop_detected: bool, reason, corrective_message}` where the corrective message is at most 90 words, in natural user voice, and redirects to a different concrete approach or asks for a viability assessment, drawing on the transcript (dynamic, never templated). `loop_detected = false` MUST result in an invisible no-op resume.
+  > **Extended by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** The contract is untouched.
+  > On a `periodic` trigger the classifier is also given the agent's task and judges progress toward it; `loop_detected` true
+  > then means the agent needs redirecting.
 - **REQ-ORCH-104** — Classifier failure or timeout MUST fall back on evidence: for repetition/cycle triggers, always declare a loop with a deterministic "pause and reassess" message naming the circled tool and a path anchor; for raw-count triggers, declare a loop only from repeated identical assistant messages (last 3 normalized-equal) or ≥ 4 consecutive same-tool calls — never from counts alone; for stuck-mode triggers, ALWAYS recover with a deterministic corrective message, overriding even a classifier that declined recovery.
   > **Narrowed by [`PD-ORCH-016`](../../product/directives/pd-orch-016.md#pd-orch-016), 2026-10-07.** Its clause "≥ 4 consecutive
   > same-tool calls" counts only calls that are the same action by REQ-ORCH-101's comparison — the same tool name and
@@ -68,7 +81,14 @@ Part 4 of 8 of [domain 01](../01-run-orchestration.md), which indexes every part
   > withdrawn, so no classification is asked and no corrective message joins the run's own. Disjoint from `PD-ORCH-016`'s
   > raw-count case; the rest of the requirement governs as written.
 - **REQ-ORCH-105** — After every activation cycle, regardless of outcome, tool/message counters and fingerprints MUST reset to zero. The consecutive-activation counter resets only on a new user instruction — a real user message, injected steering, or a todo-correction message all count. Supervisor state MUST be strictly session-scoped, never leaking across sessions.
+  > **Narrowed by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** In `periodic` mode the
+  > consecutive-activation counter also resets when a review answers that the agent is progressing. Everything else governs as
+  > written, in both modes.
 - **REQ-ORCH-106** — Supervisor escalation MUST surface as: the child transitioned to failed; an escalation error issue ("child aborted after repeated activations"); a report carrying the escalation signal; and, at loop level, a session abort ending the run with stop reason `agent_session_aborted`.
+  > **Narrowed by [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018), 2026-11-24.** The surfaces above are the
+  > escalation's with `circuit_breaker.escalation: abort`. With `pause`, the default, the run comes to rest as a user's pause
+  > does: no agent is failed, the issue is recorded, and a notice and a transcript line tell the person the run can be
+  > continued.
 - **REQ-ORCH-107** — Disabling supervision via configuration MUST construct no supervisor and no model client; the runtime distinguishes "intentionally disabled" from "not yet built" and tolerates the absence; the setting round-trips through configuration files; configurations without the field deserialize as enabled; a host-level toggle propagates into the run configuration.
 
 ### 17. Child Report Artifacts and Summarization

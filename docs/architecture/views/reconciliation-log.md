@@ -12,6 +12,10 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 reconciliation-log.md"), which here would point at itself. Since then each change writes its entry at the top of this file and moves only the date in
 `README.md` (its maintenance rule, item 2).
 
+Last reconciled with the code: **2026-11-24**
+
+**The loop supervisor reviews progress at an interval, and its escalation pauses the run (`PD-ORCH-018`, R-126; 2026-11-24).** Runtime view §3 gains one paragraph. `packages/engine/src/run/supervisor.ts`: `SupervisorConfig` gains `reviewMode`, the two review intervals, `reviewTimeoutMs` and `escalation`; `LoopActivation` gains the `periodic` trigger and `objective`; `check()` is split into `decide` and `escalate`, and in `periodic` mode counts redirections, not reviews. `turn.ts` notes the task and takes `restForSupervisor`; `run.ts` gains `pauseForSupervisor` over `beginPause`, shared with `pause()`; `children/orchestration.ts` passes the port to a child's turn. `apps/desktop/src/run-host/loop.ts` gains `REVIEW_SYSTEM_PROMPT` and `loopPrompt`; `host.ts` maps the four new `circuit_breaker` keys (`packages/config/src/circuit-breaker-section.ts`). No package edge, channel, store column or timeline word is added: the pause is recorded as a `loop_supervisor_activation` carrying `escalation: pause`. Not built: the Settings rows of clause 9.
+
 ---
 
 Last reconciled with the code: **2026-11-24**

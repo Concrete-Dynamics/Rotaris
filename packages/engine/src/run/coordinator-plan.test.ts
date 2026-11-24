@@ -50,6 +50,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     const client = new ScriptedModelClient(calls);
     const workItemsRun: string[] = [];
     const warnings: string[] = [];
+    const notices: { headline: string; detail: string; severity: string }[] = [];
     const runtime: RuntimePosture = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runOverride, runStartMode };
     // The `todo` tool as the run host's is to the run: it writes the root's plan through the context's `writeTodo`.
     const portFor = (ctx: ToolPortContext): ToolPort => {
@@ -82,8 +83,9 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
       mintSessionId: () => `S-plan-${++minted}`, model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, ...config, model: MODEL, credentialFor: () => async () => 'k' } }, runtime,
       sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), tools: portFor, attended: () => true,
       ...(classifier ? { supervisor: () => ({ config: supervisorConfig, classifier }) } : {}),
+      notice: (n) => { notices.push(n); },
     });
-    return { sessions, client, workItemsRun, warnings };
+    return { sessions, client, workItemsRun, warnings, notices };
   }
   const firstUser = (r: ModelRequest): string => r.messages.find((m) => m.role === 'user')!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
   const outcomes = (sid: SessionId) => dal.iterationsOf(sid).map((r) => r.outcome);
@@ -736,6 +738,40 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
         // Without the reset the third activation was the third in a row: escalated, the root failed and the run aborted.
         expect(dal.issuesOf(sid).filter((i) => i.kind === 'circuit_breaker_escalation')).toEqual([]);
         expect(outcomes(sid)).toEqual(['succeeded']);
+      });
+    });
+
+    describe('PD-ORCH-018 clause 7: what the third consecutive activation does to the run', () => {
+      const circling = (): ScriptedCall[] => [
+        writePlan('c1', ['COMPLETED', 'PENDING']), writePlan('c1b', ['COMPLETED', 'PENDING']), // armed; taken at the next step: 1
+        writePlan('c1c', ['COMPLETED', 'PENDING']), writePlan('c1d', ['COMPLETED', 'PENDING']), // 2
+        writePlan('c1e', ['COMPLETED', 'PENDING']), writePlan('c1f', ['COMPLETED', 'PENDING']), // 3: escalated
+        answer('never reached'),
+      ];
+      const always: LoopClassifier = { classify: async () => ({ loop_detected: true, reason: 'loop', corrective_message: 'Pause and reassess the current task.' }) };
+
+      it('pause, the default: the run rests resumable, no agent is failed, and the person is told by a notice and a transcript line', async () => {
+        const { sessions, client, notices } = sessionsWith(circling(), null, undefined, {}, 'auto', false, always, { ...SUPERVISOR_DEFAULTS, messageThreshold: 2 });
+        const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+        const result = await sessions.running(sid)!;
+        expect(result.status).toBe('interrupted');
+        expect(client.requests).toHaveLength(6);
+        const issues = dal.issuesOf(sid).filter((i) => i.kind === 'circuit_breaker_escalation');
+        expect(issues.map((i) => [i.severity, JSON.parse(i.metadata) as { activation_count: number; reason: string; escalation: string }])).toEqual([['warning', expect.objectContaining({ activation_count: 3, reason: 'repeated-loop', escalation: 'pause' })]]);
+        expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('run_pause_requested');
+        expect(notices).toEqual([expect.objectContaining({ severity: 'warning', headline: expect.stringMatching(/^Run paused: .+ looks stuck$/) })]);
+        expect(dal.residentRows(sid).map((r) => r.body).filter((b) => b.startsWith('Run paused: '))).toEqual([expect.stringContaining('Continue it from the composer')]);
+        expect(dal.getSession(sid)!.stop_reason).not.toBe('agent_session_aborted');
+      });
+
+      it('abort: REQ-ORCH-106 as written — the root fails and the run ends agent_session_aborted, with no notice', async () => {
+        const { sessions, notices } = sessionsWith(circling(), null, undefined, {}, 'auto', false, always, { ...SUPERVISOR_DEFAULTS, messageThreshold: 2, escalation: 'abort' });
+        const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+        const result = await sessions.running(sid)!;
+        expect(result.status).toBe('failed');
+        expect(dal.getSession(sid)!.stop_reason).toBe('agent_session_aborted');
+        expect(dal.issuesOf(sid).filter((i) => i.kind === 'circuit_breaker_escalation').map((i) => i.severity)).toEqual(['error']);
+        expect(notices).toEqual([]);
       });
     });
 

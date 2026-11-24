@@ -46,7 +46,7 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}, runStartMode: 'auto' | 'plan' = 'auto', withoutTodo = false, classifier?: LoopClassifier, supervisorConfig: SupervisorConfig = SUPERVISOR_DEFAULTS) {
+  function sessionsWith(calls: ScriptedCall[], runOverride: 'single' | 'swarm' | 'solo' | null = null, gate?: (callId: string) => Promise<void>, config: Partial<typeof RUN_CONFIG_DEFAULTS> = {}, runStartMode: 'auto' | 'plan' = 'auto', withoutTodo = false, classifier?: LoopClassifier, supervisorConfig: SupervisorConfig = SUPERVISOR_DEFAULTS) {
     const client = new ScriptedModelClient(calls);
     const workItemsRun: string[] = [];
     const warnings: string[] = [];
@@ -493,6 +493,15 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
 
     it('REQ-ORCH-025: under a `single` override the entry role does not coordinate, and nothing is refused', async () => {
       const { sessions, workItemsRun, warnings } = sessionsWith([del('d1', 'one'), del('d2', 'two'), answer('Done.')], 'single');
+      const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(workItemsRun).toEqual(['one', 'two']);
+      expect(refusals(warnings)).toEqual([]);
+      expect(planner(sid)[0]).not.toHaveProperty('workItems');
+    });
+
+    it('PD-ORCH-018 clause 1: under a `solo` override the entry role does not coordinate either, and its delegations are not refused', async () => {
+      const { sessions, workItemsRun, warnings } = sessionsWith([del('d1', 'one'), del('d2', 'two'), answer('Done.')], 'solo');
       const sid = (sessions.start(dal, 'C:/ws', 'run the sequence') as { value: SessionId }).value;
       await sessions.running(sid)!;
       expect(workItemsRun).toEqual(['one', 'two']);

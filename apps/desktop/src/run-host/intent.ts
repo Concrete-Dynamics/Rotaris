@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { mergePlaybookOverrides, readIntentMapping, readPlaybookOverrides } from '@rotaris/config';
 import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
-import { isAnswerOnly, type ModelTier } from '@rotaris/contracts';
+import { isAnswerOnly, type ModelTier, type RunOverride } from '@rotaris/contracts';
 import { carryOver, classifyIntent, intentGrant, meteredBackend, resolveIntentMapping, resolvePlaybooks, ROLE_VOCABULARY, type RungMemory, type ClassifierSlots, type Preflight, type PreflightContext } from '@rotaris/engine';
 import type { AgentBackend, ModelRef } from '@rotaris/model';
 import type { Clocks } from '@rotaris/kernel';
@@ -25,7 +25,7 @@ export interface PreflightDeps {
   readonly globalDir: string;
   readonly tier: ModelTier | null;
   readonly slots: ClassifierSlots;
-  readonly runOverride: 'single' | 'swarm' | null;
+  readonly runOverride: RunOverride | null;
   readonly memory: RungMemory;
   readonly log: (m: string) => void;
   /**

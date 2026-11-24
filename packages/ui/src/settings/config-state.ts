@@ -141,7 +141,7 @@ export interface PendingSettings {
   };
   readonly circuitBreakerEnabled: boolean;
   readonly compressorThresholdPercentage: number;
-  readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single';
+  readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single' | 'solo';
   /**
    * REQ-CONFIG-472: the Display category's four tool-row fields — workspace configuration, committed by Save
    * like the rest of destination 1, and read from here by the transcript the moment a control moves, so what is

@@ -530,7 +530,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // REQ-ORCH-025: `single` grants the entry role the direct-work bundle and withholds delegate from every role.
   const single = runtime.runOverride === 'single';
   // REQ-ORCH-016/018: the pre-flight's grant reaches the entry role only; the bundle is resolved by facet against the registry.
-  const directWork = isEntry && (single || ctx.grant === 'direct-work');
+  // PD-ORCH-018 clause 1: `solo` grants the entry role the same bundle and withholds nothing; it runs no pre-flight, so no grant arrives.
+  const solo = runtime.runOverride === 'solo';
+  const directWork = isEntry && (single || solo || ctx.grant === 'direct-work');
   const granted = directWork ? [...new Set([...persona.tools, ...directWorkBundle()])] : persona.tools;
   /*
    * REQ-ORCH-153 (ADR-0062), enforcement point 1 of three: the planning grants applied to the DECLARED set, so
@@ -548,7 +550,14 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    * registry itself, but an MCP or plugin name exists only here. Filled as the surface resolves, read live.
    */
   const withheldAtPlanGate = new Set<string>(planGateHeld() ? granted.filter((t) => withheldUnderPlanGate(t)) : []);
-  const delegationAvailable = ctx.delegation !== undefined && !single;
+  /*
+   * PD-ORCH-018 clause 4: under `solo` an agent at the depth limit holds no spawning tool. The ledger refuses a child
+   * deeper than `runtime.max_depth` on every run (`ledger.ts`); here the tool is withheld instead, so the agent is never
+   * offered a call the run would refuse. The entry is depth 0 and a child its parent's depth plus one, so an agent may
+   * spawn while its own depth is below the limit. A port that carries no depth is not narrowed.
+   */
+  const atDepthLimit = solo && ctx.depth !== undefined && runtime.childBudget !== undefined && ctx.depth >= runtime.childBudget.maxDepth;
+  const delegationAvailable = ctx.delegation !== undefined && !single && !atDepthLimit;
   // Part Y (REQ-LIBRARY-099/100/101): the three artifact executors over the engine's port, bound to THIS agent.
   const artifacts = ctx.artifacts;
   if (artifacts) {

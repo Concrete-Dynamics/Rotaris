@@ -23,7 +23,9 @@ export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fa
 export const REASONING_LEVEL_NAMES = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type ReasoningLevelName = (typeof REASONING_LEVEL_NAMES)[number];
 export const ROLE_REASONING_NAMES = ['default', 'provider_default', ...REASONING_LEVEL_NAMES] as const;
-export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single'] as const;
+export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single', 'solo'] as const;
+/** REQ-ORCH-025 with PD-ORCH-018: the override a strategy puts on a run; `orchestrator` puts none. */
+export type RunOverride = 'single' | 'swarm' | 'solo';
 export const RUN_START_MODE_NAMES = ['auto', 'plan'] as const;
 /** REQ-SANDBOX-048 / REQ-SHELL-125: the three values, in the order the launch dialog offers them. */
 export const SANDBOX_MODE_NAMES = ['off', 'workspace-write', 'read-only'] as const;

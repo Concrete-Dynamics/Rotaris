@@ -14,7 +14,9 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 ---
 
-Last reconciled with the code: **2026-11-22**
+Last reconciled with the code: **2026-11-24**
+
+**A `solo` strategy (R-126; [`PD-ORCH-018`](../../product/directives/pd-orch-018.md#pd-orch-018) clauses 1, 2 and 4; 2026-11-24).** `03-runtime-view/01-1-start.md`: a third run override. `Sessions` hands a `solo` run no pre-flight, the entry role is told `SOLO_INSTRUCTION` and holds the direct-work bundle with `delegate`, and the run host withholds `delegate` from an agent at `runtime.max_depth`. No channel, command or store column is added.
 
 **A capture seam's press moves focus in an unfocused window (2026-11-22).** `02-process-view/01-what-each-process-owns.md`: before their first step the scriptable capture seams hold the page focused through `Emulation.setFocusEmulationEnabled` (`main/page-focus.ts`, verification only, in the seams' chunk), the capture-side counterpart of the driver's `emulateFocus`, so `requirements-proof`'s fold stage stops reading the host's window focus. No channel, command or store column is added.
 

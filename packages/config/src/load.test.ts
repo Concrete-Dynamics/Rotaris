@@ -705,6 +705,7 @@ describe('the rest of the load', () => {
   it('rotaris.delegation_strategy is a separate workspace-only lookup with no validation', () => {
     expect(loaded('rotaris:\n  delegation_strategy: single\n', null).delegationStrategy).toBe('orchestrator');
     expect(loaded(null, 'rotaris:\n  delegation_strategy: single\n').delegationStrategy).toBe('single');
+    expect(loaded(null, 'rotaris:\n  delegation_strategy: solo\n').delegationStrategy).toBe('solo');
     expect(loaded(null, 'rotaris:\n  delegation_strategy: chaos\n').delegationStrategy).toBe('orchestrator');
     const p = parseConfig('rotaris: 5\n');
     expect(readDelegationStrategy(p.ok ? p.value : null)).toBe('orchestrator');

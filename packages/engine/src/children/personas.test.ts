@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { BUILT_IN_ROLE_TOOLS } from '@rotaris/contracts';
-import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, entryInstructionsFor, ROLE_VOCABULARY, ROUTING_WORK_SENTENCE, runOverrideLayer, SWARM_HEADING, SWARM_INSTRUCTION, SWARM_PLAN_HELD_NOTE } from './personas.js';
+import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, SOLO_INSTRUCTION, entryInstructionsFor, ROLE_VOCABULARY, ROUTING_WORK_SENTENCE, runOverrideLayer, SWARM_HEADING, SWARM_INSTRUCTION, SWARM_PLAN_HELD_NOTE } from './personas.js';
 
 describe('engine/personas — the entry role\'s instructions for its grant (OQ-202 as ruled, PD-ORCH-006; REQ-ORCH-016/029)', () => {
   const orchestrator = BUILT_IN_PERSONAS.orchestrator;
+
+  it('PD-ORCH-018 clause 1: under `solo` every entry role is told it works and may delegate, with or without a grant', () => {
+    const prompt = entryInstructionsFor(orchestrator.systemPrompt, null, orchestrator, 'solo');
+    expect(prompt).toContain(SOLO_INSTRUCTION);
+    expect(prompt).not.toContain('you do not modify files');
+    expect(prompt).toContain('delegate tool');
+    expect(entryInstructionsFor('Configured prompt.', 'none', { coordinatorOnly: false }, 'solo')).toBe(`Configured prompt.\n\n${SOLO_INSTRUCTION}`);
+    expect(entryInstructionsFor('', null, null, 'solo')).toBe(SOLO_INSTRUCTION);
+    expect(runOverrideLayer('solo', null, orchestrator)).toBe('');
+  });
 
   it('a coordinator granted the direct-work bundle is told to do the work itself, and no longer that it modifies nothing', () => {
     const prompt = entryInstructionsFor(orchestrator.systemPrompt, 'direct-work', orchestrator);

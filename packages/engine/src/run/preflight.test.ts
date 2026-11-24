@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
-import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, SWARM_INSTRUCTION, SWARM_PLAN_HELD_NOTE, intentPayloadOf, intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
+import { BUILT_IN_PERSONAS, DIRECT_WORK_INSTRUCTION, SOLO_INSTRUCTION, SWARM_INSTRUCTION, SWARM_PLAN_HELD_NOTE, intentPayloadOf, intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
 import { resolvePlaybooks } from '../playbooks/resolve.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000c');
@@ -32,7 +32,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       playbookFor: (role, asEntry) => (role === 'orchestrator' ? (asEntry ? 'PLAYBOOK\nROUTE: entry text' : 'PLAYBOOK\nROUTE: routed text') : ''), budgetCell: { maxActive: 2, maxTotal: 6, maxDepth: 2 }, warnings: [],
     };
   }
-  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | ((ctx: PreflightContext) => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE, systemPrompt?: string, runOverride?: 'single' | 'swarm' | null, extras: { readonly mcpSection?: string; readonly contextUnits?: () => readonly string[]; readonly runStartMode?: 'auto' | 'plan' } = {}) {
+  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | ((ctx: PreflightContext) => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE, systemPrompt?: string, runOverride?: 'single' | 'swarm' | 'solo' | null, extras: { readonly mcpSection?: string; readonly contextUnits?: () => readonly string[]; readonly runStartMode?: 'auto' | 'plan' } = {}) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const seen: string[] = [];
@@ -71,6 +71,18 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     const status = intentStatusOf(dal.getSession(sid)!, dal.getLaunchAudit(sid)!.payload);
     expect(status).toMatchObject({ phase: 'classified', category: 'single_file_change' });
   });
+  it('PD-ORCH-018 clauses 1 and 2: a `solo` run is never classified, tells its entry role it works and may delegate, and gives it no playbook', async () => {
+    const { sessions, client, seen } = sessionsWith([answer('done')], preflightOf('none', 'whole_project'), undefined, undefined, NONE, undefined, 'solo');
+    const sid = (sessions.start(dal, 'C:/ws', 'build the feature') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(seen).toEqual([]);
+    const system = client.requests[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    expect(system).toContain(SOLO_INSTRUCTION);
+    expect(system).not.toContain('you do not modify files');
+    expect(system).not.toContain('PLAYBOOK');
+    expect((JSON.parse(dal.getLaunchAudit(sid)!.payload) as { intent_grant: string }).intent_grant).toBe('none');
+  });
+
   it('OQ-202 as ruled (PD-ORCH-006): a run that grants the coordinator the direct-work bundle tells it to do the work itself; a coordinating run does not', async () => {
     const coordinating = BUILT_IN_PERSONAS.orchestrator.systemPrompt;
     const systemOf = (client: ScriptedModelClient) => client.requests[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');

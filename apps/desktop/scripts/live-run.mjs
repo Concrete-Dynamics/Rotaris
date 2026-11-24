@@ -172,6 +172,9 @@
  *                 launch, `empty-wait`: the root's step right after a background delegation is emptied, so it waits silently;
  *                 the child's report must be the final message of the request that resumes it, with no stuck classification,
  *                 no root stuck activation and no `agent_session_aborted`.
+ *   8l. solo     — OPT-IN (`--only=solo`), a few minutes (R-126): `rotaris.delegation_strategy: solo`, `PD-ORCH-018` clauses 1
+ *                 and 2 — no classification in the launch log, the solo statement and the writing tools beside `delegate`
+ *                 in the first root request, and a completed run (`lib/delegation-readings.mjs`, `soloReading`).
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -271,7 +274,7 @@ import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/renam
 import { CLASSIFIER_MARK, DELEGATED_MARK, REPORT_MARK, ROOT_MARK, answerReading, planReading, waitReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
-import { HANDOFF_ARTIFACT_CAP, reportAnswerReading, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
+import { HANDOFF_ARTIFACT_CAP, reportAnswerReading, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, soloReading, swarmReading } from './lib/delegation-readings.mjs';
 import { frontmatterOfRow, leadingFrontmatter } from './lib/artifact-frontmatter.mjs';
 import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, terminalWaitMs, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -390,7 +393,7 @@ const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions',
  * that trebles its wall clock does not belong in it by default, and a scenario nobody can leave out is a
  * scenario people stop running. Naming it is the consent.
  */
-const OPT_IN = ['duress', 'cutoff', 'rename', 'plan-open', 'empty-answer'];
+const OPT_IN = ['duress', 'cutoff', 'rename', 'plan-open', 'empty-answer', 'solo'];
 const SCENARIOS = [...OPTIONAL, ...OPT_IN];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
@@ -1200,7 +1203,7 @@ function checkCoordinatorTodo() {
   check(r.unlisted.length === 0, 'no coordinator\'s second work item ran before it wrote a todo list of its own (REQ-ORCH-029, OQ-213)', r.unlisted.length === 0 ? `${r.multiStep.length} multi-step session(s): ${r.multiStep.join(', ') || 'none'}` : r.unlisted.map(at).join(', '));
   check(r.withoutPlan.length === 0, 'every multi-step coordinating session stores an agent plan (REQ-ORCH-029, REQ-TOOLS-147)', r.withoutPlan.length === 0 ? `${r.multiStep.length} multi-step session(s)` : `no agent plan stored: ${r.withoutPlan.join(', ')}`);
   if (r.refused.length > 0) noted('the gate refused a coordinator\'s second work item until it wrote its todo list (OQ-213)', r.refused.map(at).join(', '));
-  if (r.single.length > 0) noted('sessions launched under the `single` run override were not read for the coordinator\'s todo list (REQ-ORCH-025)', r.single.join(', '));
+  if (r.single.length > 0) noted('sessions launched under the `single` or `solo` run override were not read for the coordinator\'s todo list (REQ-ORCH-025, PD-ORCH-018)', r.single.join(', '));
   // PD-TOOLS-006 revision 6 (OQ-220): which todo item each implementation child served, read from the store.
   const child = (c) => `${c.scenario}: ${c.child}`;
   check(items.unnamed.length === 0, 'every root implementation delegation after the coordinator\'s first todo list names the item it serves (PD-TOOLS-006 revision 6, OQ-220)', items.unnamed.length === 0 ? `${items.named.length} child(ren) named an item` : items.unnamed.map((c) => `${child(c)} (${c.persona})`).join(', '));
@@ -3266,6 +3269,51 @@ if (wanted.includes('delegation')) {
   await budgetGate();
 }
 
+// ── 8l. A run under the solo strategy (PD-ORCH-018) ────────────────────────────────────────────────────────────
+/*
+ * OPT-IN (`--only=solo`), a few minutes: `rotaris.delegation_strategy: solo` against a real model (PD-ORCH-018 clauses 1
+ * and 2). What the product owes is read from the launch log and the first root request: no classification, the solo
+ * statement, the writing tools beside `delegate`. Whether the model wrote the files itself or delegated is the model's, and
+ * is recorded, never asserted.
+ */
+if (wanted.includes('solo')) {
+  const agentsBefore = readFileSync(agentsFile, 'utf8');
+  const SOLO_PROMPT = 'Make addTodo in src/todos.js refuse an empty or blank title, add a test for it beside the existing ones, and mention the rule in README.md. Run the tests when done. Reply with one sentence.';
+  let soloLog = '';
+  const soloStartedAt = Date.now();
+  try {
+    writeFileSync(agentsFile, withSectionKey(agentsBefore, 'rotaris', 'delegation_strategy', 'solo'));
+    cpSync(agentsFile, join(scenarioDir('solo'), 'agents.yaml'));
+    soloLog = await launch('solo', {
+      ROTARIS_CAPTURE_PROMPT: SOLO_PROMPT,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+    }, EDIT_WAIT_MS + 120_000);
+  } finally {
+    writeFileSync(agentsFile, agentsBefore);
+  }
+  const soloEndedAt = Date.now();
+  const soloRead = readSession();
+  const soloCalls = soloRead === null ? [] : readToolCalls(soloRead.session.session_id);
+  const soloDeadline = overrunReading({
+    log: soloLog, startedAt: soloStartedAt, endedAt: soloEndedAt, records: readTraffic('solo'),
+    calls: soloCalls, budgetMs: EDIT_WAIT_MS, recorded: proxy !== null, raise: 'LIVE_RUN_EDIT_WAIT_MS',
+  });
+  if (soloDeadline.outcome === 'window') noted('the solo run was bounded by the window, not by the product', soloDeadline.detail);
+  else check(soloDeadline.outcome === 'inside', 'the solo run reached its result inside the wait', soloDeadline.detail);
+  check(soloRead?.session.execution_status === 'completed', 'the solo run completed', `status ${soloRead?.session.execution_status ?? 'no session'}`);
+  const soloFirst = readTraffic('solo').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(requestOf).find((r) => r !== null && r.tools.length > 0) ?? null;
+  const solo = soloReading(soloFirst, soloLog);
+  if (solo.kind === 'absent') noted('no root request of the solo run was recorded', RECORD_TRAFFIC ? 'what the entry role was told is unasked' : 'traffic not recorded (--no-record-traffic)');
+  check(solo.faults.length === 0, 'a solo run was not classified, and its entry role was told it works and may delegate and was offered the writing tools beside delegate (PD-ORCH-018 clauses 1 and 2)', solo.faults.join('; ') || `offered ${solo.offered.length} tools`);
+  const own = soloCalls.filter((c) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(c.tool_name) && c.status === 'ok');
+  const ownByRoot = own.filter((c) => c.agent_name === soloCalls[0]?.agent_name).length;
+  const soloChildren = soloCalls.filter((c) => c.tool_name === 'delegate' && c.status === 'ok').length;
+  noted('how the solo run divided the work', `${ownByRoot} writing or command call(s) by the entry role, ${soloChildren} admitted delegation(s); the division is the model's`);
+  results.scenarios['solo'] = { status: soloRead?.session.execution_status, faults: solo.faults, offered: solo.offered, ownCalls: ownByRoot, delegations: soloChildren, deadline: soloDeadline.outcome };
+  if (soloRead) preserveRun('solo', soloRead.session.session_id);
+  await budgetGate();
+}
+
 // ── 8i. A symbol rename through the code-intelligence EDIT tier ─────────────────────────────────────────────
 /**
  * OPT-IN (`--only=rename`), a few minutes (fin42, N59): the first live run of a cross-file code-intelligence EDIT call that
@@ -3540,9 +3588,9 @@ if (wanted.includes('empty-answer')) {
 
 // ── 9. The long run ──────────────────────────────────────────────────────────────────────────────────────
 /**
- * OPT-IN (`--only=duress`), one of five: `OPT_IN` also names `cutoff`, `rename`, `plan-open` and `empty-answer` (8e, 8i, 8j
- * and 8k above), and no default run reaches any of them. What only they ask — PD-ORCH-009 revisions 3 to 5 (`empty-answer`),
- * PD-ORCH-015 (`plan-open`), PD-MCP-004's cold rename (`rename`), PD-CONFIG-003's cut-off child (`cutoff`) and the long run
+ * OPT-IN (`--only=duress`), one of six: `OPT_IN` also names `cutoff`, `rename`, `plan-open`, `empty-answer` and `solo` (8e,
+ * 8i, 8j, 8k and 8l above), and no default run reaches any of them. What only they ask — PD-ORCH-009 revisions 3 to 5
+ * (`empty-answer`), PD-ORCH-018 (`solo`), PD-ORCH-015 (`plan-open`), PD-MCP-004's cold rename (`rename`), PD-CONFIG-003's cut-off child (`cutoff`) and the long run
  * here — is measured by a run that names them, never by a default one (acceptance finding L9 at b9e3005,
  * docs/archive/defects/the-live-runs-duress-section-calls-itself-its-only-opt-in-scenario.md).
  *

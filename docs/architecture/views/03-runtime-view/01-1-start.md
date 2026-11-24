@@ -88,6 +88,14 @@ change; none for an entry role that declares no `delegate`; and none on a run th
 bundle, on any turn, the held one and a continuation included (`PD-ORCH-006` revision 3, OQ-205 as ruled, R-072). Until finacc3's repair round 1 (2026-10-06) the layer was appended in `Run` after the playbook but before the
 context units and the MCP section, and carried no precedence sentence: "the final layer" in name only.
 
+**A `solo` run has no pre-flight ([`PD-ORCH-018`](../../../product/directives/pd-orch-018.md#pd-orch-018) clauses 1, 2 and 4).** `Sessions` hands
+the run no `preflight` where `RuntimePosture.runOverride` is `solo`, at the launch and at a continuation, so nothing is
+classified, no cell is resolved and no BUDGET clamp reaches the child limits; the run reads `NO_PREFLIGHT_INTENT` wherever it
+reads an intent, the plan gate included. `coordinating` is false as under `single`. `entryInstructionsFor` gives the entry role
+`SOLO_INSTRUCTION` whatever its persona's flag, and the run host's port grants it the direct-work bundle with no grant arriving
+and keeps `delegate`, withholding it only from an agent whose depth has reached `runtime.max_depth` (`atDepthLimit`,
+`run-host/tools.ts`). Clauses 5 to 9, the workflow tool, are not built.
+
 **The cold path is timed, and it runs after first input.** `workspaceContext` reads the monotonic clock port four
 times on a cache miss: before the saved-policy read, after it, after the discovery and after the merge. It then logs
 one line, `workspace context: the enabled set of N instruction file(s) merged into B bytes in T ms (policy read …,

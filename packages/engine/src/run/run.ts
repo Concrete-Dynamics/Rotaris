@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow, ChildRow, StoreDal } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord, type RunOverride } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -287,7 +287,7 @@ export interface RunDeps {
    * through `coordinating` and the grant; `swarm` changes the entry role's instruction text only (`runOverrideLayer`).
    * Absent means none.
    */
-  readonly runOverride?: 'single' | 'swarm' | null | undefined;
+  readonly runOverride?: RunOverride | null | undefined;
   /** REQ-ORCH-085: the host told the run paused at the limit, with the count and the limit. */
   readonly onPaused?: ((info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
   /**
@@ -1882,7 +1882,7 @@ export class Run {
      * a resumed iteration's carried intent, never the classification a continue's message brought for the next one —
      * so a resumed coordinator's instructions agree with the carried tools and do not change partway through it.
      */
-    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflightInEffect?.grant ?? null, entryPersona ?? null);
+    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflightInEffect?.grant ?? null, entryPersona ?? null, this.deps.runOverride ?? null);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
     let rootDetached = false;
     /*

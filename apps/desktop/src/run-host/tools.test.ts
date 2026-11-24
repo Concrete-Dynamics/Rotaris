@@ -884,7 +884,7 @@ describe('the entry port\'s todo list owed before a second work item (OQ-213, RE
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
   /** The entry orchestrator's port over a configured persona; `tools` and `prompt` are the persona's own. */
-  function entryPort(orchestrator: string, extra: Partial<ToolPortContext> = {}, terminal: TerminalManager | null = null) {
+  function entryPort(orchestrator: string, extra: Partial<ToolPortContext> = {}, terminal: TerminalManager | null = null, runtimeKeys = '') {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `default_persona: orchestrator
 models:
@@ -901,7 +901,7 @@ personas:
     model: selected
 ${orchestrator}runtime:
   permission_mode: autonomous
-`);
+${runtimeKeys}`);
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
     if (!loaded.ok) throw new Error('configuration');
     const cfg = loaded.value;
@@ -954,6 +954,29 @@ ${orchestrator}runtime:
     expect(ran).toBe(0);
     expect(e.log).toEqual(['started']);
     expect(e.delegated).toEqual([]);
+  });
+
+  it('PD-ORCH-018 clause 1: under `solo` the entry role holds the direct-work bundle with no grant, and delegate beside it', async () => {
+    // The run owes no todo list where its entry role does not coordinate (`Run.todoListOwed`), so the port is handed no check.
+    const e = entryPort('    tools: [read_file, grep, todo, delegate]\nrotaris:\n  delegation_strategy: solo\n', { todoList: undefined });
+    const names = e.port.specs().map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(['write_file', 'haet_edit', 'delegate', 'todo']));
+    const write = await e.port.dispatch(e.call('w1', 'write_file', { path: 'solo.txt', content: 'one\n' }), new AbortController().signal);
+    expect(write.status).toBe('ok');
+    expect(existsSync(join(dir, 'solo.txt'))).toBe(true);
+    expect((await e.del('d1', 'a side search')).status).toBe('ok');
+    expect(e.delegated).toEqual(['a side search']);
+  });
+
+  it('PD-ORCH-018 clause 4: under `solo` an agent at the depth limit is offered no delegate, and one below it is', () => {
+    const solo = '    tools: [read_file, grep, todo, delegate]\nrotaris:\n  delegation_strategy: solo\n';
+    const names = (depth: number, maxDepth: number) => entryPort(`${solo}`, { depth, parentId: depth === 0 ? 'root:1' : `child:${depth}`, todoList: undefined }, null, `  max_depth: ${maxDepth}\n`).port.specs().map((t) => t.name);
+    expect(names(0, 1)).toContain('delegate');
+    expect(names(1, 1)).not.toContain('delegate');
+    expect(names(1, 2)).toContain('delegate');
+    expect(names(2, 2)).not.toContain('delegate');
+    // Another strategy is not narrowed here: the ledger's refusal is what bounds it.
+    expect(entryPort('    tools: [read_file, grep, todo, delegate]\n', { depth: 3, parentId: 'child:3' }, null, '  max_depth: 1\n').port.specs().map((t) => t.name)).toContain('delegate');
   });
 
   it('an entry role whose resolved set holds no todo is never refused, and the run is told once per port', async () => {

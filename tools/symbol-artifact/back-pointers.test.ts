@@ -131,7 +131,7 @@ describe('the back-pointers in docs/spec agree with the directive register', () 
   it('PD-ORCH-006 revision 3 (OQ-205 as ruled, R-072): REQ-ORCH-025 is narrowed by PD-ORCH-006 beside REQ-ORCH-029, and each note says so', () => {
     expect(narrowed('REQ-ORCH-025')).toContain('PD-ORCH-006');
     expect(narrowed('REQ-ORCH-029')).toContain('PD-ORCH-006');
-    expect(backPointers().filter((p) => p.requirement === 'REQ-ORCH-025').map((p) => `${p.verb} ${p.directive}`)).toEqual(['Narrowed PD-ORCH-006']);
+    expect(backPointers().filter((p) => p.requirement === 'REQ-ORCH-025').map((p) => `${p.verb} ${p.directive}`)).toEqual(['Narrowed PD-ORCH-006', 'Narrowed PD-ORCH-018']); // PD-ORCH-018 (R-126) narrows it too, on a disjoint case: a run taken under `solo`
   });
 
   it('OQ-237 (GV1, R-072), outside the bounded re-read: PD-LIBRARY-001 narrows the closed inventory and section order it widens', () => {

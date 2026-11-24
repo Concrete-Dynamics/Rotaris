@@ -3,7 +3,7 @@
  * survey). A reader that stopped matching its record would turn its check into "not asked" over a green run.
  */
 import { describe, expect, it } from 'vitest';
-import { DIRECT_WORK_STATEMENT, HANDOFF_ARTIFACT_CAP, SWARM_HEADING, reportAnswerReading, attachReading, handoffArtifact, delegatesToReading, followUpReading, handoffReading, requestOf, swarmReading } from './delegation-readings.mjs';
+import { DIRECT_WORK_STATEMENT, HANDOFF_ARTIFACT_CAP, SWARM_HEADING, reportAnswerReading, attachReading, handoffArtifact, delegatesToReading, followUpReading, handoffReading, requestOf, soloReading, SOLO_STATEMENT, swarmReading } from './delegation-readings.mjs';
 
 const body = (system: string, user: string, tools: { name: string; description?: string }[]) => ({
   requestBody: JSON.stringify({ model: 'm', messages: [{ role: 'system', content: system }, { role: 'user', content: [{ type: 'text', text: user }] }], tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description ?? t.name, parameters: {} } })) }),
@@ -32,6 +32,18 @@ describe('swarmReading (PD-ORCH-006 revision 3, REQ-ORCH-025)', () => {
     const both = swarmReading(requestOf(body(`${DIRECT_WORK_STATEMENT}\n${SWARM_HEADING}`, 'go', [{ name: 'delegate' }])));
     expect(both.faults).toContain('the granted run carries the swarm layer beside the direct-work statement');
     expect(swarmReading(null).kind).toBe('absent');
+  });
+});
+
+describe('soloReading (PD-ORCH-018 clauses 1 and 2)', () => {
+  const tools = [{ name: 'write_file' }, { name: 'terminal' }, { name: 'delegate' }];
+  it('a solo run carries the statement and the writing tools beside delegate, and its log holds no classification', () => {
+    expect(soloReading(requestOf(body(`You are the agent this run belongs to. ${SOLO_STATEMENT}: …`, 'go', tools)), 'run-host: configuration: loaded\n')).toMatchObject({ kind: 'read', faults: [] });
+  });
+  it('names each thing the product got wrong', () => {
+    const r = soloReading(requestOf(body(`You coordinate: you do not modify files.\n${SWARM_HEADING}`, 'go', [{ name: 'delegate' }])), 'run-host: intent: moderate_feature (0.9) via json_schema\n');
+    expect(r.faults).toEqual(['the solo run was classified', 'the solo run carries no solo statement', 'the solo run was told it modifies nothing', 'the solo run carries the swarm layer', 'the solo run was not offered write_file', 'the solo run was not offered terminal']);
+    expect(soloReading(null, '')).toMatchObject({ kind: 'absent', faults: [] });
   });
 });
 

@@ -1,5 +1,5 @@
 import { asSessionId, type Clocks, countNoun, err, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
-import { type PlanDecision, type PlanGatePayload, type ResumablePayload, APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ApprovalPayload, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding, DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink, IntentResultSchema, type IntentCategory, type IntentGrant, type IntentResult, type IntentStatus } from '@rotaris/contracts';
+import { type PlanDecision, type PlanGatePayload, type ResumablePayload, APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ApprovalPayload, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding, DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink, IntentResultSchema, type IntentCategory, type IntentGrant, type IntentResult, type IntentStatus, type RunOverride } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { pathKey } from '@rotaris/platform';
 import { type ChildRow, RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
@@ -227,7 +227,7 @@ export interface RuntimePosture {
    * REQ-ORCH-025: `rotaris.delegation_strategy`'s override — under `single` the entry role is the worker, not a coordinator,
    * and REQ-ORCH-029's constraints do not bind it (`RunDeps.coordinating`). Absent means none.
    */
-  readonly runOverride?: 'single' | 'swarm' | null | undefined;
+  readonly runOverride?: RunOverride | null | undefined;
 }
 
 export interface SessionsDeps {
@@ -1601,7 +1601,8 @@ export class Sessions {
     const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
     const cap = runtime?.modelConcurrencyCap ?? null;
     const capFor = runtime?.modelCapFor ?? (() => cap);
-    const preflight = this.deps.preflight;
+    // PD-ORCH-018 clause 2: a `solo` run is never classified, so it is given no pre-flight at all.
+    const preflight = runtime?.runOverride === 'solo' ? undefined : this.deps.preflight;
     const slots = this.modelSlotsFor(sessionId, dal, runRef);
     const run = new Run({
       sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: mintTodoId(new Set()), writer, owner, bus: this.bus, clocks: this.deps.clocks,
@@ -1616,7 +1617,7 @@ export class Sessions {
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       ...(runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: runtime.pauseToolDeadlineMs as Millis }),
       ...(this.deps.terminals ? { terminals: this.deps.terminals(sessionId) } : {}),
-      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single' && runtime?.runOverride !== 'solo', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153: the plan gate as a launch input; the run settles the hold itself once the intent is known.
       ...(this.planLaunchFor(dal, sessionId, runtime) ?? {}),
       backend: model.backend, config: model.config, tools, permission, configurationSnapshot: setup.value.configurationSnapshot, pid: this.deps.pid, host: this.deps.host,
@@ -1877,7 +1878,8 @@ export class Sessions {
     const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
     const cap = runtime?.modelConcurrencyCap ?? null;
     const capFor = runtime?.modelCapFor ?? (() => cap);
-    const preflight = this.deps.preflight;
+    // PD-ORCH-018 clause 2: a `solo` run is never classified, so it is given no pre-flight at all.
+    const preflight = runtime?.runOverride === 'solo' ? undefined : this.deps.preflight;
     /*
      * OQ-162 as ruled (R-071, PD-ORCH-005 revision 7 clause 40): the Continue action carries the intent in effect for the
      * whole run; any other continue that resumes the open iteration classifies its request for the run's next iteration
@@ -1906,7 +1908,7 @@ export class Sessions {
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       ...(runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: runtime.pauseToolDeadlineMs as Millis }),
       ...(this.deps.terminals ? { terminals: this.deps.terminals(sessionId) } : {}),
-      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      messageLimit: runtime?.messageLimit ?? null, coordinating: runtime?.runOverride !== 'single' && runtime?.runOverride !== 'solo', runOverride: runtime?.runOverride ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153/154: a continuation holds again unless approval already released this run, and a revise
       // cycle passes its own number and the changes the user stated.
       ...(this.planLaunchFor(s.dal, sessionId, runtime, plan) ?? {}),

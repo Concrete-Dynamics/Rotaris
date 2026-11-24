@@ -344,7 +344,7 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
         <DesignSelect id="strategy" className="input select settings__select" aria-label="Delegation strategy" value={pending.delegationStrategy} onChange={(e) => onChange({ kind: 'delegationStrategy', value: e.currentTarget.value as PendingSettings['delegationStrategy'] })}>
           {DELEGATION_STRATEGY_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
         </DesignSelect>
-        <Hint>orchestrator coordinates through specialists; swarm lets roles fan out; single does the work in one role with no delegation.</Hint>
+        <Hint>orchestrator coordinates through specialists; swarm lets roles fan out; single does the work in one role with no delegation; solo does the work in one role and delegates when it chooses.</Hint>
       </div>
     </>);
   const runStartRow = (<>

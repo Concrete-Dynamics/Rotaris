@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and forty-nine.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and fifty.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -153,6 +153,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-ORCH-016](directives/pd-orch-016.md) | a raw-count fallback reads four consecutive calls as evidence only when they are the same action |
 | [PD-ORCH-017](directives/pd-orch-017.md) | children have no fixed model-step cap |
 | [PD-ORCH-018](directives/pd-orch-018.md) | a `solo` strategy: one agent that does the work, delegates when it chooses, and scripts workflows |
+| [PD-ORCH-019](directives/pd-orch-019.md) | a money slider: five stops that choose the strategy, the model tier, the reasoning level and the child limits a user left unset |
 
 ### PROVIDER
 

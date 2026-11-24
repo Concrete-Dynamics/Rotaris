@@ -22,6 +22,7 @@ Part 1 of 7 of [domain 03](../03-conversation-composer-transcript.md), which ind
   > enablement rule above governs unchanged when a chip presents as a value chip with a
   > press-revealed popover — the chip is the control, and the same states disable it and the same
   > two-channel reason rule publishes why.
+  > **Extended by [`PD-ORCH-019`](../../product/directives/pd-orch-019.md#pd-orch-019), 2026-11-24.** The three chips' rule governs in full. The directive adds a fourth composer chip, the money slider, which stays enabled in every run state, as the permission-mode chip does.
 - **REQ-CHAT-007** — Sending MUST be refused in two situations, each with its reason readable by the user: while a run is cancelling, the reason MUST be exactly "Wait for the current run to finish cancelling."; while an unanswered project-setup prompt gates execution, the reason MUST convey exactly two facts — that the project setup prompt has to be answered before a prompt can be sent, and that nothing else in the application is blocked meanwhile — with its wording, punctuation, and sentence count left to the implementation. Every control this domain disables MUST publish its unavailability reason through both its tooltip and its accessible description; greying the control alone does not satisfy this.
   > **Extended by [`PD-CHAT-001`](../../product/directives/pd-chat-001.md#pd-chat-001), 2026-09-13.** An
   > explanatory hint sentence MAY move from visible text into the same two channels — tooltip plus

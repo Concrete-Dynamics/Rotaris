@@ -28,3 +28,5 @@ out of it, and launches it twice on the Windows runner (step 3′ in `release/lo
 aside of the artifact while the application runs (REQ-STARTUP-125). B4 was written on 2026-10-31 on a Windows host,
 which this proof refuses and which had no `cargo`, so it has not yet been executed: its first run, on Linux or macOS
 with `cargo`, reports back as a first execution.
+
+Since 2026-11-24 the B launches go through a proxy the script owns that refuses every connection, so a newer published release cannot put its update offer over the warning B4 reads ([the note](../defects/portable-proofs-b4-warning-is-replaced-by-a-live-update-offer-once-a-newer-release-is-published.md)).

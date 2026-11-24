@@ -11,12 +11,17 @@ The branch touches neither the updater nor the notices. The red follows from the
 as an updatable artifact and checks the real feed, which by design reads no configuration, environment or preference
 (REQ-STARTUP-111). It was green while no newer release was published and will be red on `main` while one is.
 
+**Repaired 2026-11-24 (the proof's side).** The B launches go through `--proxy-server` to a listener the script owns that
+refuses every connection, as `updater-proof` routes its launches. A check whose request fails is silent
+(REQ-STARTUP-110), so no offer reaches the screen. The launch logged `update check failed silently:
+net::ERR_CONNECTION_RESET`, and `portable-proof` passed 43 of 43 with 0.1.0rc8 still published. The product question
+below stays open.
+
 ## Specs
 
 Possibly REQ-STARTUP-165 (c) against REQ-NOTIFY-024: a person launching an artifact that cannot prepare itself, while an
 update is published, sees the warning for one frame before the offer replaces it. Whether the warning should outrank or
-outlast the offer is not ruled; an open question, not this note's to decide. Otherwise the proof's: B4 has no way to keep
-the live feed out of its launch.
+outlast the offer is not ruled; an open question, not this note's to decide.
 
 ## Relevant files
 

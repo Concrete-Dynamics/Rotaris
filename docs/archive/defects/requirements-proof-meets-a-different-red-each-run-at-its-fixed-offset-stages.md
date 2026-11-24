@@ -15,17 +15,28 @@ All of these were met on `main` (`710a4a5a`, the filter red) as well as on the b
 builds with and without the capture seams' page-focus hold, alike. Three runs in a row on the branch went green on
 2026-11-22, while the desktop was otherwise idle. Every launch of the proof reads its window at fixed offsets
 (`ROTARIS_CAPTURE_EVAL_AT`, `_CLICKS` and `_INSPECT_AT` at e.g. 3200, 3600 and 4400 ms). Each red reads as a step
-taken before the board, the pane or the answer it waits on was there. That would fit a host slower than the offsets
-assume, but it was not measured. Another session's proofs were running on the same desktop for three of the runs. The
+taken before the board, the pane or the answer it waits on was there. The cause is measured below. Another session's proofs were running on the same desktop for three of the runs. The
 rest ran alone, with the host's browser using about one core.
+
+**Cause, measured 2026-11-24.** In the landing tree's failing run (`ready-restart-automatic`), the stage's clicks at 4000 and
+4800 ms fired together at about 6070 ms, and the click at 7800 ms looked for "Release" before the 6800 ms press on the move
+control had raised it. The main process logged on time throughout. Each click waits for the renderer to answer its aim,
+and the renderer answered late while code-intelligence project setup ran: create, index and memory, about five seconds,
+ending at the same instant the late clicks fired. Every profile is a fresh workspace, and in a tree that holds the built
+bundle (`apps/desktop/resources/code-intelligence/`, which `pnpm worktree:land` builds into its landing tree) every launch
+runs that setup, so each launch's clicks raced it differently.
+
+**Repaired 2026-11-24.** The proof's workspaces record the setup as resolved (`skipped: [code-intelligence-setup]`, and the
+server disabled), as `code-intel-proof` and `dictation-proof` already seed theirs. Nothing in this proof measures that setup.
 
 Not to be confused with the fold stage's focus reading (REQ-TRACE-320), which was a different cause and is repaired
 (`docs/archive/defects/requirements-proof-fold-stage-depends-on-the-launched-window-holding-os-focus.md`).
 
 ## Specs
 
-None contradicted by the product as far as shown. A repair is likely the harness's: each stage waiting for what it reads
-(the step grammar's `~` "until" form, `settleAt`) in place of a fixed offset, as `overview-proof`'s relaunch was repaired.
+None contradicted by the product as far as shown. The stages still read at fixed offsets, so a launch slowed by anything
+else can still race them; the waiting form (the step grammar's `~` "until" form, `settleAt`) would remove that, and was
+not needed for this repair.
 
 ## Relevant files
 

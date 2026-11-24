@@ -33,6 +33,7 @@
  */
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, truncateSync, appendFileSync, writeFileSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
+import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { app, buildDesktop, dataDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, mainEntry } from './lib/harness.mjs';
@@ -239,6 +240,18 @@ async function application() {
   report.app = { artifact: made };
   check('B0 the application artifact is assembled: one file, the runtime and the app inside it', readPortable(exe).files.length === made.files, `${made.token}: ${made.files} files, ${(made.payloadBytes / 2 ** 20).toFixed(1)} MiB → ${(made.bytes / 2 ** 20).toFixed(1)} MiB`);
 
+  // The B launches are the real artifact, so they classify as updatable and check the real feed (REQ-STARTUP-105). Once a
+  // newer release is published its offer replaces the warning B4 waits for, one current notice at a time (REQ-NOTIFY-024):
+  // 2026-11-24, 0.1.0rc8's offer arrived 8 ms after the warning and B4 read "(no warning)"
+  // (docs/defects/portable-proofs-b4-warning-is-replaced-by-a-live-update-offer-once-a-newer-release-is-published.md).
+  // As updater-proof does, Chromium's network goes through a proxy this script owns; this one refuses every connection,
+  // and a check whose request fails is silent (REQ-STARTUP-110), so no offer reaches the screen. Main reads nothing to decide
+  // whether it checks (REQ-STARTUP-111), so the switch is the one lever, and it touches no product code.
+  const sink = createServer((socket) => socket.destroy());
+  await new Promise((resolveListen) => sink.listen(0, '127.0.0.1', resolveListen));
+  sink.unref();
+  const noFeed = [`--proxy-server=127.0.0.1:${/** @type {import('node:net').AddressInfo} */ (sink.address()).port}`];
+
   const scratch = join(root, 'scratch');
   const local = join(scratch, 'local');
   const ws = join(scratch, 'workspace');
@@ -264,7 +277,7 @@ async function application() {
       rmSync(recordFile, { force: true });
       const env = launchOptions({ local, preferences: join(scratch, 'preferences'), extra: { ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_AFTER_MS: '1500', ROTARIS_CAPTURE_PROBE_AT: `${TITLE}@1400`, PORTABLE_PROOF_RECORD: recordFile } });
       const markerBefore = i === 1 ? statSync(join(tokenDir, MARKER)) : null;
-      const r = await launch(label, exe, [...hostSwitches, ws], env, 120_000);
+      const r = await launch(label, exe, [...hostSwitches, ...noFeed, ws], env, 120_000);
       const records = existsSync(recordFile) ? readFileSync(recordFile, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [];
       // The first process is the one the stub started: main. Every later one was started by the product itself.
       const [rec = {}, ...children] = records;
@@ -296,7 +309,7 @@ async function application() {
     const png = join(output, 'B4-no-preparation.png');
     rmSync(recordFile, { force: true });
     const env = launchOptions({ local, preferences: join(scratch, 'preferences'), extra: { TMPDIR: tmp, ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_AFTER_MS: '10000', ROTARIS_CAPTURE_PROBE_AT: `${WARNING}@100~8000`, PORTABLE_PROOF_RECORD: recordFile } });
-    const r = await launch('B4-no-preparation', exe, [...hostSwitches, ws], env, 180_000);
+    const r = await launch('B4-no-preparation', exe, [...hostSwitches, ...noFeed, ws], env, 180_000);
     const [rec = {}] = existsSync(recordFile) ? readFileSync(recordFile, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [];
     check('B4 with the root refusing every write the application still starts and paints (clause (c))', r.status === 0 && existsSync(png) && /captured /.test(r.log), `status ${r.status}, ${r.elapsedMs} ms`);
     check('B4 it ran from a run-scoped placement, never from the root or beside the artifact (clause (c))', typeof rec.execPath === 'string' && rec.execPath.startsWith(`${tmp}/rotaris-run-`), rec.execPath ?? '(not recorded)');

@@ -93,6 +93,10 @@ pressed against a running workflow: both live workflows ended within seconds. As
 "opens to the agents it started and to its script"; the agents are the transcript's own thread lines, and the row opens
 to the script alone.
 
+**Proofs on the built application, 2026-11-24.** Green: `rows`, `transcript`, `composer`, `chat-controls`, `persona-chip`,
+`config`, `delegation`, `layout` (29 of 29), `overview`, `mission` and `settings`, the last after its Tools inventory count
+was moved from twenty names to twenty-one. Not run: the rest of the suites `pnpm verify:plan` names for this branch.
+
 **The third step is no limit (the owner, 2026-11-24).** Asked whether the third step means three levels or none, the owner
 first chose "Three levels" and then wrote: "as i said before 1 2 and 3 is unlimited." The later word governs. The clause as
 first written, which no longer governs: "At 1 only the entry role spawns; at 2 its children may; at 3 theirs may."

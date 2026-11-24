@@ -350,7 +350,8 @@ const toolRows = rows(tools.probes, '[data-testid="inventory-row"]');
 // REQ-CONFIG-277: populated unconditionally — here with nothing but the proof's working directory open, no configuration of
 // its own and no workspace argument.
 // REQ-TOOLS-001's nineteen and PD-CONFIG-014's `configure`, the twentieth.
-if (toolRows.length !== 20) throw new Error(`the Tools inventory listed ${toolRows.length} rows, not the twenty public names`);
+// REQ-TOOLS-001's nineteen, PD-CONFIG-014's `configure` and PD-ORCH-018's `workflow`.
+if (toolRows.length !== 21) throw new Error(`the Tools inventory listed ${toolRows.length} rows, not the twenty-one public names`);
 if (!toolRows.some((r) => r.data['data-name'] === 'configure')) throw new Error('the Tools inventory did not list configure (PD-CONFIG-014)');
 const toolNames = toolRows.map((r) => r.data['data-name']);
 if (JSON.stringify(toolNames) !== JSON.stringify([...toolNames].sort((a, b) => a.localeCompare(b)))) throw new Error(`the Tools inventory was not sorted: ${toolNames.join(', ')}`);

@@ -38,6 +38,7 @@ This table is the registry REQ-SHELL-006 makes closed: every key the product may
 |---|---|---|
 | `workspace/lastOpened` | workspace path used by startup resolution | unset |
 | `appearance/theme` | active theme name; unknown values degrade to the default theme | unset → default |
+| `appearance/themeChosen` | the first-launch theme dialog was answered or dismissed; boolean | `false` |
 | `ui/reduced_motion` | reduced-motion override; boolean; absent means "user has not said" | unset |
 | `interface/agentPopout` | agent click opens the persona window | false |
 | `interface/terminalPopout` | auto-open the terminal window when a command starts | false |

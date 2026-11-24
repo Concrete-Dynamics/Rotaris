@@ -11,6 +11,8 @@ export type DiagnosticsLevel = (typeof DIAGNOSTICS_LEVELS)[number];
 
 export const PREFERENCE_KEYS = {
   'appearance/theme': { type: 'string', default: undefined, owner: 'REQ-SHELL-128', coerce: (value: unknown) => typeof value === 'string' ? value : undefined },
+  /** Set once the first-launch theme dialog was answered or dismissed, so it opens on the first start only. */
+  'appearance/themeChosen': { type: 'boolean', default: false, owner: 'REQ-SHELL-128', coerce: (value: unknown) => value === true || value === 'true' },
   // PD-CONFIG-012: with nothing stored the Settings view opens on Setup; a stored value is a page, or a category from before the pages.
   'interface/settingsTab': { type: 'string', default: 'setup', owner: 'REQ-CONFIG-271', coerce: (value: unknown) => typeof value === 'string' ? value : 'setup' },
   'ui/reduced_motion': { type: 'boolean', default: undefined, owner: 'REQ-SHELL-135', coerce: (value: unknown) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : undefined },

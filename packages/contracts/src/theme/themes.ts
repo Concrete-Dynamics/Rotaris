@@ -1,4 +1,4 @@
-export const THEME_NAMES = ['rotaris-dim', 'nocturne', 'high-contrast'] as const;
+export const THEME_NAMES = ['rotaris-dim', 'nocturne', 'high-contrast', 'dusk-light'] as const;
 export type ThemeName = (typeof THEME_NAMES)[number];
 export type ThemeTokenGroup = Readonly<Record<`--rt-${string}`, string>>;
 
@@ -103,17 +103,39 @@ const TERM_HIGH_CONTRAST = {
 /** The sixteen ANSI names in SGR order 30–37 then 90–97, for the grid's theme mapping and the static check. */
 export const TERM_ANSI_NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'bright-black', 'bright-red', 'bright-green', 'bright-yellow', 'bright-blue', 'bright-magenta', 'bright-cyan', 'bright-white'] as const;
 
-const shared = { spacing, radius, size, typography, motion, elevation } as const;
-const palette = (name: 'nocturne' | 'high-contrast', overrides: Partial<ThemeTokenGroup>): ThemeTokenGroup => ({
+/*
+ * Dusk Light: a semi-light theme. The grounds are soft lavender-grey, not white (the content plane is the lightest,
+ * the chrome the darkest), the ink is near-black, and the terminal keeps a dark ground. Every text and state token that
+ * is a pale tint in the dark themes is a dark shade here, so the same contrast floors hold.
+ */
+const DUSK_LIGHT = {
+  '--rt-bg': 'oklch(91% 0.008 275)', '--rt-surface': 'oklch(95.5% 0.006 275)', '--rt-surface-2': 'oklch(97.5% 0.005 275)', '--rt-chrome': 'oklch(85% 0.011 275)', '--rt-hover': 'oklch(87% 0.012 275)', '--rt-overlay': 'oklch(25% 0.01 275 / 0.5)',
+  '--rt-border': 'oklch(80% 0.010 275)', '--rt-border-strong': 'oklch(50% 0.010 275)', '--rt-border-panel': 'oklch(84% 0.009 275)', '--rt-focus': 'oklch(45% 0.190 292)',
+  '--rt-text': 'oklch(21% 0.010 275)', '--rt-text-secondary': 'oklch(34% 0.012 275)', '--rt-text-tertiary': 'oklch(41% 0.012 275)',
+  '--rt-accent-100': 'oklch(30% 0.100 292)', '--rt-accent-200': 'oklch(36% 0.130 292)', '--rt-accent-300': 'oklch(42% 0.160 292)',
+  '--rt-axis-x-200': 'oklch(36% 0.090 70)', '--rt-axis-x-300': 'oklch(40% 0.100 70)', '--rt-axis-x-500': 'oklch(52% 0.130 75)',
+  '--rt-axis-y-200': 'oklch(34% 0.090 165)', '--rt-axis-y-300': 'oklch(40% 0.100 165)', '--rt-axis-y-500': 'oklch(50% 0.120 165)',
+  '--rt-danger-300': 'oklch(44% 0.180 25)', '--rt-danger-500': 'oklch(52% 0.200 25)', '--rt-info-300': 'oklch(41% 0.090 225)',
+  '--rt-viz-1': 'oklch(50% 0.160 292)', '--rt-viz-2': 'oklch(50% 0.120 165)', '--rt-viz-3': 'oklch(52% 0.130 75)', '--rt-viz-4': 'oklch(50% 0.100 205)', '--rt-viz-5': 'oklch(50% 0.120 125)', '--rt-viz-6': 'oklch(50% 0.140 350)',
+  '--rt-run': 'var(--rt-axis-y-300)', '--rt-wait': 'var(--rt-axis-x-300)', '--rt-done': 'var(--rt-accent-300)', '--rt-fail': 'var(--rt-danger-300)', '--rt-ok': 'var(--rt-axis-y-300)', '--rt-warn': 'var(--rt-axis-x-300)',
+  '--rt-diff-add-bg': 'oklch(50% 0.120 165 / 0.14)', '--rt-diff-del-bg': 'oklch(52% 0.200 25 / 0.12)',
+  '--rt-fill-accent': 'oklch(59% 0.160 292 / 0.14)', '--rt-fill-x': 'oklch(52% 0.130 75 / 0.18)', '--rt-fill-y': 'oklch(50% 0.120 165 / 0.15)', '--rt-fill-danger': 'oklch(52% 0.200 25 / 0.13)',
+  '--rt-accent-tint-07': 'oklch(59% 0.160 292 / 0.07)', '--rt-accent-tint-10': 'oklch(59% 0.160 292 / 0.10)', '--rt-accent-tint-14': 'oklch(59% 0.160 292 / 0.15)',
+} as const satisfies ThemeTokenGroup;
+
+const sharedNoElevation = { spacing, radius, size, typography, motion } as const;
+const shared = { ...sharedNoElevation, elevation } as const;
+const palette = (name: 'nocturne' | 'high-contrast' | 'dusk-light', overrides: Partial<ThemeTokenGroup>): ThemeTokenGroup => ({
   ...color,
   ...overrides,
-  ...(name === 'nocturne' ? { '--rt-text-disabled': 'oklch(60% 0.006 275)', '--rt-boundary-strong': 'oklch(55% 0 0)' } : { '--rt-text-disabled': 'oklch(62% 0 0)', '--rt-boundary-strong': 'oklch(70% 0 0)' }),
+  ...(name === 'dusk-light' ? { '--rt-text-disabled': 'oklch(52% 0.008 275)', '--rt-boundary-strong': 'oklch(50% 0 0)' } : name === 'nocturne' ? { '--rt-text-disabled': 'oklch(60% 0.006 275)', '--rt-boundary-strong': 'oklch(55% 0 0)' } : { '--rt-text-disabled': 'oklch(62% 0 0)', '--rt-boundary-strong': 'oklch(70% 0 0)' }),
 });
 
 export const THEMES: readonly Theme[] = [
   { name: 'rotaris-dim', label: 'Rotaris Dim', description: 'The default dark theme at moderate contrast, intended for long working sessions.', dark: true, tokens: { color: { ...color, ...TERM_DIM }, ...shared } },
   { name: 'nocturne', label: 'Nocturne', description: 'A darker theme with deeper backgrounds for work in low ambient light.', dark: true, tokens: { color: palette('nocturne', { '--rt-bg': 'oklch(14% 0.006 275)', '--rt-surface': 'oklch(17.5% 0.007 275)', '--rt-surface-2': 'oklch(21.5% 0.008 275)', '--rt-chrome': 'oklch(11% 0.005 275)', '--rt-hover': 'oklch(23.5% 0.009 275)', '--rt-overlay': 'oklch(6% 0 0 / 0.78)', '--rt-border': 'oklch(27% 0.008 275)', '--rt-border-strong': 'oklch(55% 0.008 275)', '--rt-border-panel': 'oklch(22% 0.007 275)', '--rt-text-secondary': 'oklch(83% 0.006 275)', '--rt-accent-500': 'oklch(53% 0.160 292)', '--rt-accent-600': 'oklch(44% 0.150 292)', '--rt-accent-700': 'oklch(35% 0.125 292)', '--rt-run': 'var(--rt-axis-y-300)', '--rt-wait': 'var(--rt-axis-x-300)', '--rt-done': 'var(--rt-accent-300)', '--rt-fail': 'var(--rt-danger-300)', '--rt-ok': 'var(--rt-axis-y-300)', '--rt-warn': 'var(--rt-axis-x-300)', ...TERM_NOCTURNE }), ...shared } },
   { name: 'high-contrast', label: 'High Contrast', description: 'Contrast well beyond the accessibility floors, for use when the other themes are hard to read.', dark: true, tokens: { color: palette('high-contrast', { '--rt-bg': 'oklch(8% 0 0)', '--rt-surface': 'oklch(12% 0 0)', '--rt-surface-2': 'oklch(17% 0 0)', '--rt-chrome': 'oklch(5% 0 0)', '--rt-hover': 'oklch(21% 0 0)', '--rt-overlay': 'oklch(3% 0 0 / 0.84)', '--rt-border': 'oklch(48% 0 0)', '--rt-border-strong': 'oklch(70% 0 0)', '--rt-border-panel': 'oklch(42% 0 0)', '--rt-focus': 'oklch(94% 0.08 292)', '--rt-text': 'oklch(99% 0 0)', '--rt-text-secondary': 'oklch(92% 0 0)', '--rt-text-tertiary': 'oklch(82% 0 0)', '--rt-text-disabled': 'oklch(55% 0 0)', '--rt-accent-300': 'oklch(91% 0.075 292)', '--rt-accent-500': 'oklch(53% 0.160 292)', '--rt-accent-600': 'oklch(44% 0.150 292)', '--rt-accent-700': 'oklch(35% 0.125 292)', '--rt-axis-x-300': 'oklch(91% 0.105 88)', '--rt-axis-y-300': 'oklch(90% 0.105 165)', '--rt-danger-300': 'oklch(91% 0.095 25)', '--rt-info-300': 'oklch(92% 0.065 210)', '--rt-run': 'var(--rt-axis-y-300)', '--rt-wait': 'var(--rt-axis-x-300)', '--rt-done': 'var(--rt-accent-300)', '--rt-fail': 'var(--rt-danger-300)', '--rt-ok': 'var(--rt-axis-y-300)', '--rt-warn': 'var(--rt-axis-x-300)', ...TERM_HIGH_CONTRAST }), ...shared } },
+  { name: 'dusk-light', label: 'Dusk Light', description: 'A semi-light theme with soft grey-lavender grounds and dark ink, for bright rooms.', dark: false, tokens: { color: palette('dusk-light', { ...DUSK_LIGHT, ...TERM_DIM }), elevation: { '--rt-shadow-sm': '0 0 0 1px var(--rt-border)', '--rt-shadow-md': '0 0 0 1px var(--rt-border),0 6px 16px oklch(30% 0.02 275 / 0.16)', '--rt-shadow-lg': '0 0 0 1px var(--rt-border),0 18px 40px oklch(30% 0.02 275 / 0.22)' }, ...sharedNoElevation } },
 ] as const;
 
 export const DEFAULT_THEME: ThemeName = 'rotaris-dim';

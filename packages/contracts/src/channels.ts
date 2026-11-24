@@ -515,7 +515,7 @@ export const AcknowledgementPublishSchema = z.object({
 });
 export type AcknowledgementPublish = z.infer<typeof AcknowledgementPublishSchema>;
 
-export const ThemeChangedSchema = z.object({ v: schemaVersion, name: z.enum(['rotaris-dim', 'nocturne', 'high-contrast']) });
+export const ThemeChangedSchema = z.object({ v: schemaVersion, name: z.enum(['rotaris-dim', 'nocturne', 'high-contrast', 'dusk-light']) });
 export type ThemeChanged = z.infer<typeof ThemeChangedSchema>;
 
 /**

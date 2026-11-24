@@ -235,9 +235,9 @@ complete registry (its ownership clause, `docs/spec/12-desktop-shell-windows.md`
 from line 400: "every key the product may store is listed here, whatever document owns the behavior behind it"; *corrected
 2026-10-14: this read "from line 402", the table's header row, two lines below the sentence it quotes —
 [the note](../../defects/oq-302-cites-the-preference-tables-closing-sentence-at-line-402-where-it-stands-at-line-400.md)*).
-`display/showReasoning` stands as that table registers it (line 413) and REQ-CHAT-167 owns it: default off, written user-wide under
+`display/showReasoning` stands as that table registers it (line 414) and REQ-CHAT-167 owns it: default off, written user-wide under
 REQ-CONFIG-405's write policy. REQ-CONFIG-405's list equals the set the table leaves to it — the three `requirements/` elevation
-keys its row assigns to REQ-CONFIG-405 by name (line 415), and the `interface/` and `display/` rows that name no other owner;
+keys its row assigns to REQ-CONFIG-405 by name (line 416), and the `interface/` and `display/` rows that name no other owner;
 `display/showReasoning`'s row names REQ-CHAT-167 — so the specification has no defect here. `packages/platform/src/preferences.ts`
 is confirmed as built (`display/showReasoning`, boolean, default `false`, owner REQ-CHAT-167). **The two recommendations
 weighed:** advocate A's and advocate B's, both confirm-as-built; the ruling follows both. The open note

@@ -63,7 +63,7 @@ export const REQUIREMENT_FOLDS_PREFERENCE_KEY = 'workspaces/{workspace}/requirem
  */
 export const PANE_LAYOUT_PREFERENCE_KEYS = ['panels/overview/state', 'panels/git/state', 'panels/library/state', 'panels/workspace/state'] as const;
 export const REQUIREMENTS_PREFERENCE_KEYS = ['requirements/filter/text', 'requirements/filter/epic', 'requirements/filter/source', 'requirements/filter/lifecycle', 'requirements/filter/health', 'requirements/filter/priority', 'requirements/sort', 'requirements/blocked_column', 'requirements/axis', 'requirements/fullPermissionRuns', 'requirements/fullPermissionNoticeSuppressed', 'requirements/answerWaitSeconds', REQUIREMENT_FOLDS_PREFERENCE_KEY] as const;
-const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', ...PANE_LAYOUT_PREFERENCE_KEYS, 'interface/agentPopout', 'display/groupToolCalls', 'display/showReasoning', 'display/autoCollapseTools', ...REQUIREMENTS_PREFERENCE_KEYS] as const;
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'appearance/themeChosen', 'interface/settingsTab', ...PANE_LAYOUT_PREFERENCE_KEYS, 'interface/agentPopout', 'display/groupToolCalls', 'display/showReasoning', 'display/autoCollapseTools', ...REQUIREMENTS_PREFERENCE_KEYS] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome

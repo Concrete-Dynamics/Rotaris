@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE, UpdateStateSchema } from '@rotaris/contracts';
-import { type InPlaceSignInHost, FirstRunSetup, type FirstRunConfig, dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, settingsPageFor, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted, RUN_PANEL_WIDTH, INSPECTOR_WIDTH, COMPOSER_DEFAULT_HEIGHT } from '@rotaris/ui';
+import { type InPlaceSignInHost, FirstRunSetup, type FirstRunConfig, dictationSaveProblem, DictationCredentialField, type DictationCredentialFieldProps, insertTranscript, TerminalHostProvider, type DictationHost, type DraftWriteOutcome, Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, settingsPageFor, bindWebSearchSetup, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, adoptSnapshot, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, isolationRequiredOf, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindReasoningPreference, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type SettingsForm, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, restingView, statusStripModeItem, statusStripSandboxItem, stripCircuitBreakerArmed, stripItems, stripWidthBand, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard, bindPromptRootsReader, askUntilDiscovered, bindSkillsReader, readWhileMounted, ThemeChoiceDialog, RUN_PANEL_WIDTH, INSPECTOR_WIDTH, COMPOSER_DEFAULT_HEIGHT } from '@rotaris/ui';
 import { pressMcpToggle } from './mcp-toggle.js';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls (`bindPromptRootsReader`, in the `@rotaris/ui` import above), and the shape it answers.
 // ADR-0063 — portable skills: the catalog reader (`askUntilDiscovered`, `bindSkillsReader`, `readWhileMounted`, in the `@rotaris/ui` import above), the Settings tab's props and the composer's commands.
@@ -1215,7 +1215,7 @@ function dispatchNoticeAction(action: NoticeAction): void {
   }
 }
 
-function App({ initialOnboarding, version, workspace, home, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerAtBoot, circuitBreakerHostOff, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialOnboarding: OnboardingView | null; initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; home: string | undefined; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerAtBoot: boolean; circuitBreakerHostOff: boolean; initialPopOut: boolean }) {
+function App({ initialThemeChosen, initialOnboarding, version, workspace, home, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerAtBoot, circuitBreakerHostOff, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialThemeChosen: boolean; initialOnboarding: OnboardingView | null; initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; home: string | undefined; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerAtBoot: boolean; circuitBreakerHostOff: boolean; initialPopOut: boolean }) {
   // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
   const [popOut, setPopOut] = useState(initialPopOut);
   // REQ-CHAT-067 (Part Z): the tool-grouping display preference, default ON, in the desktop preference store;
@@ -1322,6 +1322,9 @@ function App({ initialOnboarding, version, workspace, home, initialTheme, initia
     void bridge.command({ kind: 'pause.present', payload: { sessionId: session.id, count: session.pausedAtCount ?? session.iterationsCompleted, limit: session.messageLimit, tokens: session.tokenUsage } });
   }, [session]);
   const changeTheme = useCallback((name: ThemeName) => windowTheme.change(name), []);
+  // The first-launch theme dialog: shown once, after the first-run setup (if owed) is done, then never again.
+  const [themeChosen, setThemeChosen] = useState(initialThemeChosen);
+  const finishThemeChoice = useCallback(() => { setThemeChosen(true); void bridge.command({ kind: 'prefs.set', key: 'appearance/themeChosen', value: true }); }, []);
   const changeMotion = useCallback(async (value: boolean) => {
     const r = await bridge.command({ kind: 'prefs.set', key: 'ui/reduced_motion', value });
     if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
@@ -1671,6 +1674,7 @@ function App({ initialOnboarding, version, workspace, home, initialTheme, initia
         ? <ProjectSetupDialog state={initialization.state} auto={projectSetup === 'auto'} onInitialize={initialization.onInitialize} onSkip={initialization.onSkip} onClose={closeProjectSetup} />
         : undefined}
     />
+    {onboarding === null && !themeChosen && <ThemeChoiceDialog themes={THEMES} activeTheme={theme.name} onTheme={changeTheme} onDone={finishThemeChoice} />}
     {onboarding !== null && (
       <FirstRunSetup version={version} home={home} view={onboarding} config={firstRunConfig}
         windowControls={{ maximized: windowMaximized, onMinimize: () => { void bridge.command({ kind: 'window.minimize' }); }, onToggleMaximize: toggleWindowMaximize, onClose: () => { void bridge.command({ kind: 'window.close' }); } }}
@@ -1876,7 +1880,8 @@ function useDictationCredential(): DictationCredentialFieldProps {
 }
 
 async function boot(): Promise<void> {
-  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply, workspaceLayoutReply] = await Promise.all([
+  const [chosenReply, themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply, workspaceLayoutReply] = await Promise.all([
+    bridge.command({ kind: 'prefs.get', key: 'appearance/themeChosen' }),
     bridge.command({ kind: 'theme.get' }),
     bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
@@ -1886,6 +1891,7 @@ async function boot(): Promise<void> {
     bridge.command({ kind: 'prefs.get', key: 'interface/agentPopout' }),
     bridge.command({ kind: 'prefs.get', key: 'panels/workspace/state' }),
   ]);
+  const initialThemeChosen = chosenReply.ok ? (chosenReply.value as { value?: boolean }).value === true : true;
   const initialPopOut = popOutReply.ok ? (popOutReply.value as { value?: boolean }).value === true : false;
   const initialLayout = layoutReply.ok ? ((layoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   const initialGitLayout = gitLayoutReply.ok ? ((gitLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
@@ -1925,7 +1931,7 @@ async function boot(): Promise<void> {
   createReportingRoot(document.getElementById('root')!, 'main', bridge.command, reloadThisWindow).render(
     <StrictMode>
       {__ROTARIS_SEAMS__ ? <RenderFaultSeam /> : null}
-      <App initialOnboarding={initialOnboarding} version={info.version} workspace={info.workspace} home={info.home} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerAtBoot={info.circuitBreakerArmed} circuitBreakerHostOff={info.circuitBreakerHostOff} initialPopOut={initialPopOut} />
+      <App initialThemeChosen={initialThemeChosen} initialOnboarding={initialOnboarding} version={info.version} workspace={info.workspace} home={info.home} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerAtBoot={info.circuitBreakerArmed} circuitBreakerHostOff={info.circuitBreakerHostOff} initialPopOut={initialPopOut} />
     </StrictMode>,
   );
 }

@@ -315,6 +315,11 @@ appRun = await stepAsync('the packaged app opens a store and runs a terminal cal
     const lad = join(scratch, 'LocalAppData');
     mkdirSync(ws, { recursive: true });
     mkdirSync(lad, { recursive: true });
+    // The first-launch theme dialog is modal and takes the typed prompt's keys; a scratch profile is a first launch, so the
+    // dialog is answered beforehand through the product's own preference store (no seam: this root is a product variable).
+    const prefsRoot = join(scratch, 'Preferences');
+    mkdirSync(prefsRoot, { recursive: true });
+    writeFileSync(join(prefsRoot, 'preferences.json'), JSON.stringify({ 'appearance/themeChosen': true }, null, 2));
     writeFileSync(join(ws, 'README.md'), '# scratch\n');
     /*
      * The run reads its files (ADR-0036): an OpenAI-compatible model at the loopback stub this step starts, an autonomous mode and
@@ -333,7 +338,7 @@ appRun = await stepAsync('the packaged app opens a store and runs a terminal cal
     const png = join(RELEASE, 'load-proof.png');
     const env = {
       ...process.env,
-      ...proofIsolationEnv({ profileRoot: scratch, local: lad }),
+      ...proofIsolationEnv({ profileRoot: scratch, local: lad, preferences: prefsRoot }),
       ROTARIS_CAPTURE_PNG: png,
       ROTARIS_CAPTURE_PROMPT: 'show me the tree',
       ROTARIS_CAPTURE_AFTER_MS: '9000',

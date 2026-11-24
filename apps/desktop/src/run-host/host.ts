@@ -544,10 +544,12 @@ export function createRunHost() {
       // model request's own timeout is given that ceiling, and the supervisor's timer cuts the call at what remains of the
       // budget when it is dispatched.
       const timeoutMs = Math.min(Math.round(run.runtime.loopClassificationTimeoutS * 1_000), LOOP_ACTIVATION_BUDGET_MS);
+      // PD-ORCH-018 clause 6 (narrowing REQ-CONFIG-467): a periodic review is bounded by the key alone, with no budget over it.
+      const reviewTimeoutMs = Math.round(run.runtime.loopClassificationTimeoutS * 1_000);
       const classifier = createLoopClassifier({
         // REQ-EVENTS-053: each classification is a request of the run, counted against it.
         backend: meteredBackend(run.model.backend, countUsage), runModel: run.model.config.model, thinking: run.model.config.thinking, credentialFor: run.model.config.credentialFor,
-        memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted, runBearers.get(sessionId), (m) => log(m, 'warn')), modelTimeoutMs: timeoutMs,
+        memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted, runBearers.get(sessionId), (m) => log(m, 'warn')), modelTimeoutMs: timeoutMs, reviewTimeoutMs,
         // OQ-189 (PD-MONITOR-007): the session's overrides followed at each classification; none made on a pair out of quota.
         helperModel,
       });
@@ -556,6 +558,8 @@ export function createRunHost() {
           ...SUPERVISOR_DEFAULTS, activationMode: cb.activation_mode, classificationTimeoutMs: timeoutMs,
           toolThreshold: cb.tool_call_threshold, messageThreshold: cb.message_count_threshold, toolWeight: cb.tool_weight, messageWeight: cb.message_weight, targetScore: cb.target_score,
           eventWindow: cb.max_recent_events, excerptCap: cb.max_transcript_chars, repetitionThreshold: cb.repetition_threshold, cycleThreshold: cb.cycle_threshold,
+          // PD-ORCH-018 clauses 1, 2, 6 and 7.
+          reviewMode: cb.review_mode, reviewIntervalTools: cb.review_interval_tool_calls, reviewIntervalMessages: cb.review_interval_messages, reviewTimeoutMs, escalation: cb.escalation,
         },
         classifier,
       } : null;

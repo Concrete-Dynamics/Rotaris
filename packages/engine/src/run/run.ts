@@ -27,7 +27,7 @@ import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
 import { clampBudget, storeChildReport, writeCancelledTeardown } from '../children/ledger.js';
-import type { LoopSupervisor } from './supervisor.js';
+import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
 import { entryInstructionsFor, resolveRole, runOverrideLayer, type Persona, type PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
 import { entryOf, excludedModelKeys, helperChoiceOf, isLoaderCopyKey, keyOfPair, overridesInForce, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type HelperModel, type ModelChoice } from './resilience.js';
@@ -505,6 +505,8 @@ export class Run {
   get intentClassifying(): boolean { return this.classifying; }
   /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
   private pauseRequested = false;
+  /** PD-ORCH-018 clause 7: the agent whose supervision escalated into the pause in force; null for a user's pause. */
+  private supervisorPause: string | null = null;
   /**
    * OQ-165 (ruled 2026-10-06): the explicit cancel, or the stop (REQ-SESSION-186, `stopAccepted`), was accepted and saved
    * `cancelling`, which every later save keeps until the teardown writes the run's end.
@@ -1284,7 +1286,7 @@ export class Run {
         outcome = 'cancelled';
         task.state = 'pending';
         this.todo.releaseHeld(iteration, false);
-        summary = 'the run paused at the user\'s request before the agent finished';
+        summary = this.supervisorPause === null ? 'the run paused at the user\'s request before the agent finished' : `the run was paused because ${this.supervisorPause} was circling`;
         if (this.rootRecord) this.rootRecord.state = 'cancelled';
       } else if (report.status === 'succeeded' && this.openRootPlan(task).length > 0) {
         /*
@@ -1838,6 +1840,7 @@ export class Run {
         ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
         ...(this.deps.personas ? { personas: this.deps.personas } : {}),
         steeringFor: (id: string) => this.steeringFor(id), steeringPending: (id: string) => this.steeringPending(id), shouldPause: () => this.pauseRequested,
+        restForSupervisor: (agentName: string, escalation: SupervisorEscalation) => this.pauseForSupervisor(agentName, escalation),
         // PD-ORCH-005: the rest the run is coming to, and the pause's tool deadline every child's calls run under.
         restCause: () => this.restCause, cutCalls: this.toolCut.signal, resumeNotice: (taskId: string) => this.resumeNotice(taskId),
         // PD-ORCH-005 clause 1: every child's conversation is recorded under its task id.
@@ -1929,6 +1932,7 @@ export class Run {
       ...(this.deps.supervisorFor && !this.planHeld ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
       // REQ-MONITOR-135: a steer delivered refreshes the root's last activity, as a child's (`refreshing`).
       steering: refreshing(this.steeringFor('root'), () => rootWatch.activity()), shouldPause: () => this.pauseRequested,
+      restForSupervisor: (agentName: string, escalation: SupervisorEscalation) => this.pauseForSupervisor(agentName, escalation),
       // PD-ORCH-005: the pause's tool deadline, and what the root's interrupted calls are recorded as interrupted by.
       cutCalls: this.toolCut.signal, interruption: () => this.restCause,
       resilience: rootResilience,
@@ -2374,16 +2378,41 @@ export class Run {
    * and stops every child from starting (clause 2); each agent then stops before its next model step.
    */
   pause(): boolean {
+    return this.beginPause(() => this.deps.writer.appendTimeline('run_pause_requested', 'user', 'The user asked the run to pause; the current step finishes first.', {}));
+  }
+  /**
+   * PD-ORCH-018 clause 7 (narrowing REQ-ORCH-106 and REQ-NOTIFY-105): loop supervision's escalation brings the run to rest on
+   * the user's pause's own path, so everything a pause withdraws, cuts and leaves resumable is the same. What differs is who
+   * is told and how: the turn records the issue and the timeline entry, and the person gets a persistent notice here and a
+   * transcript line at the rest (`teardown`), each naming the agent. Refused exactly where a user's pause is.
+   */
+  private pauseForSupervisor(agentName: string, escalation: SupervisorEscalation): boolean {
+    if (!this.beginPause(() => { this.supervisorPause = agentName; })) return false;
+    this.deps.notice?.({
+      severity: 'warning', headline: `Run paused: ${agentName} looks stuck`,
+      detail: `${agentName} was redirected ${escalation.activationCount - 1} times and did not change course, so the run was paused rather than left to circle. Continue it from the composer, with an instruction if you have one.`,
+      key: `loop-supervisor.pause:${this.sessionId}:${agentName}`, sessionId: this.sessionId,
+    });
+    return true;
+  }
+  /** `accepted` runs once the pause is taken and saved, ahead of everything it withdraws: where the user's pause is announced. */
+  private beginPause(accepted: () => void): boolean {
     if (this.endWritten || this.stop.requested || this.pauseRequested || this.planHeld) return false;
     this.pauseRequested = true;
     this.deps.writer.save('pausing');
-    this.deps.writer.appendTimeline('run_pause_requested', 'user', 'The user asked the run to pause; the current step finishes first.', {});
+    accepted();
     try { this.withdrawPending('pause'); } catch (cause) { this.deps.warn(`withdrawing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
     // Clause 2: no model call after the pause is accepted, so an agent parked on a provider limit stops waiting now.
     this.waits.releaseForRest();
     this.toolDeadline = this.deps.clocks.timers.after(this.deps.pauseToolDeadlineMs ?? PAUSE_TOOL_DEADLINE, () => this.toolCut.abort());
     this.children?.beginRest();
     return true;
+  }
+  /** The transcript line a pause's rest is announced with: the user's own pause, or PD-ORCH-018 clause 7's. */
+  private pausedRowText(): string {
+    return this.supervisorPause === null
+      ? 'Run paused at the user\'s request; continue it from the composer.'
+      : `Run paused: ${this.supervisorPause} was redirected and did not change course. Continue it from the composer, with an instruction if you have one.`;
   }
   /**
    * REQ-SESSION-094 with OQ-165 (finacc3 F05): the run's end is written — the teardown's terminal status (or about to be,
@@ -3307,7 +3336,7 @@ export class Run {
       // REQ-MONITOR-166: once more at the terminal state, then the sampler goes.
       this.sampler?.cancel();
       this.sampleTokens(false);
-      const systemRow = classified.result === 'interrupted' ? (this.pauseRequested && !this.stop.final ? 'Run paused at the user\'s request; continue it from the composer.' : 'Run paused: interrupted by user.')
+      const systemRow = classified.result === 'interrupted' ? (this.pauseRequested && !this.stop.final ? this.pausedRowText() : 'Run paused: interrupted by user.')
         : classified.result === 'failed' || classified.result === 'error' || status === 'failed' ? `Run failed: ${this.lastFailure ?? stopReason}`
           : summary.message;
       const r = writer.endRun({

@@ -157,7 +157,7 @@ describe('PD-ORCH-005: a turn comes to rest (runTurn)', () => {
     let checks = 0;
     const supervisor = {
       check: async () => { checks += 1; if (checks === 2) rest = 'pause'; return { kind: 'continue' as const }; },
-      observe: () => undefined, noteUserInstruction: () => undefined,
+      observe: () => undefined, noteUserInstruction: () => undefined, noteObjective: () => undefined,
     } as unknown as LoopSupervisor;
     const { tools } = port((c) => ok(`${c.callId}-done`));
     const out = await runTurn(deps(client, tools, { supervisor, interruption: () => rest, shouldPause: () => rest !== null }), 'Do it.', [], new AbortController().signal);

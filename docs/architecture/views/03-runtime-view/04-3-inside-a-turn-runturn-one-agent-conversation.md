@@ -53,6 +53,8 @@ report does not (it is no user instruction), so the wait leaves the series where
 while its background child ran was still a stuck report: the turn the child's report led took the trigger, the corrective
 followed the report, and a root that waited silently over three batches escalated (`agent_session_aborted`).
 
+**The supervisor's periodic review and its pause (`PD-ORCH-018`, 2026-11-24).** `circuit_breaker.review_mode: periodic` adds a fourth trigger, `periodic`, armed in `LoopSupervisor.trigger()` where the raw counts stood, at `review_interval_tool_calls` or `review_interval_messages`. The turn hands the supervisor its task (`noteObjective`), the activation carries it as `objective`, and the run host's classifier sends `REVIEW_SYSTEM_PROMPT` with the task ahead of the excerpt, bounded by `runtime.loop_classification_timeout` alone. In that mode `check()` decides first and counts only an activation that injects; a review answering "progressing" restarts the series, and one that does not answer injects nothing. **Escalation carries an action.** With `escalation: pause` (the default) the turn calls `TurnDeps.restForSupervisor`, which is `Run.pauseForSupervisor`: the user's pause's own path (`beginPause`), a `warning` notice, and the rest's transcript line naming the agent; the turn returns `paused`, not `failed`. Refused where a pause is refused, or with `abort`, it is the failed turn above.
+
 **The conversation record (PD-ORCH-005 clause 1; `run/record.ts`).** Every agent's `Conversation` carries a
 recorder, so every `push` — the task or the resume message, a steer, a supervisor correction, the assistant message
 with its tool calls, the tool results, hook feedback — is one `agent_messages` entry under the agent's task id, written

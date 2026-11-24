@@ -101,7 +101,7 @@ describe('answer reading (live-run `empty-answer`, PD-ORCH-009 revision 2)', () 
     const inputs: TurnInput[] = [];
     const b: AgentBackend = { ownsTheLoop: false, runTurn: async (input) => { inputs.push(input); return { status: 'succeeded', text: '{"loop_detected":true,"reason":"r","corrective_message":"m"}', usage: { input: 1, output: 1 } }; } };
     const M = { providerId: 'p', modelId: 'small', dialect: 'chat' as const };
-    const classifier = createLoopClassifier({ backend: b, runModel: M, thinking: 'unset', credentialFor: () => async () => 'k', memory: new RungMemory(), configuredModel: null, slots: { small: M, fallback: null, summary: null }, modelTimeoutMs: 30_000 })!;
+    const classifier = createLoopClassifier({ backend: b, runModel: M, thinking: 'unset', credentialFor: () => async () => 'k', memory: new RungMemory(), configuredModel: null, slots: { small: M, fallback: null, summary: null }, modelTimeoutMs: 30_000, reviewTimeoutMs: 30_000 })!;
     await classifier.classify({ trigger: 'stuck', reason: 'the agent reported that it cannot make progress', excerpt: '', events: [], activationCount: 1 }, new AbortController().signal);
     const prompt = inputs[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
     expect(prompt.startsWith(STUCK_TRIGGER)).toBe(true);

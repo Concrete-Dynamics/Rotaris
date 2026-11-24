@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RungMemory, type HelperModel, type LoopActivation } from '@rotaris/engine';
 import type { AgentBackend, TurnInput, TurnReport } from '@rotaris/model';
-import { createLoopClassifier } from './loop.js';
+import { createLoopClassifier, REVIEW_SYSTEM_PROMPT } from './loop.js';
 
 const M = (id: string) => ({ providerId: 'p', modelId: id, dialect: 'chat' as const });
 const ok = (text: string): TurnReport => ({ status: 'succeeded', text, usage: { input: 1, output: 1 } });
@@ -14,7 +14,7 @@ function backend() {
 }
 const deps = (b: AgentBackend, helperModel?: HelperModel) => ({
   backend: b, runModel: M('entry'), thinking: 'unset' as const, credentialFor: () => async () => 'k', memory: new RungMemory(),
-  configuredModel: null, slots: { small: M('small'), fallback: null, summary: null }, modelTimeoutMs: 30_000, ...(helperModel ? { helperModel } : {}),
+  configuredModel: null, slots: { small: M('small'), fallback: null, summary: null }, modelTimeoutMs: 30_000, reviewTimeoutMs: 45_000, ...(helperModel ? { helperModel } : {}),
 });
 
 /*
@@ -49,5 +49,33 @@ describe('run-host/loop — the loop classifier\'s model (REQ-ORCH-100/103, OQ-1
     const c = createLoopClassifier(deps(b, () => ({ ok: false, reason: 'p/small is held out of quota for this session' })))!;
     await expect(c.classify(activation, new AbortController().signal)).rejects.toThrow("the loop classifier's model p/small is held out of quota for this session; no classification call was made");
     expect(inputs).toEqual([]);
+  });
+});
+
+describe('run-host/loop — a periodic review (PD-ORCH-018 clauses 3 and 6)', () => {
+  const textOf = (i: TurnInput): string => i.messages.flatMap((m) => m.content.map((c) => (c.kind === 'text' ? c.text : ''))).join('\n');
+  const periodic = { trigger: 'periodic', reason: 'review interval', excerpt: 'tool: read_file {"path":"a.ts"}', events: [], objective: 'Fix the failing parser test.' } as unknown as LoopActivation;
+
+  it('asks about progress toward the task, hands it the task ahead of the excerpt, and bounds the request by the review timeout', async () => {
+    const { b, inputs } = backend();
+    const c = createLoopClassifier(deps(b))!;
+    await expect(c.classify(periodic, new AbortController().signal)).resolves.toMatchObject({ loop_detected: true });
+    expect(inputs[0]!.systemPrompt).toBe(REVIEW_SYSTEM_PROMPT);
+    expect(textOf(inputs[0]!)).toContain('<task>\nFix the failing parser test.\n</task>\n<conversation_excerpt>');
+    expect(inputs[0]!.timeoutMs).toBe(45_000);
+  });
+  it('leaves every other trigger on the loop prompt and the capped bound', async () => {
+    const { b, inputs } = backend();
+    const c = createLoopClassifier(deps(b))!;
+    await c.classify(activation, new AbortController().signal);
+    expect(inputs[0]!.systemPrompt).not.toBe(REVIEW_SYSTEM_PROMPT);
+    expect(textOf(inputs[0]!)).toContain('Trigger: repetition (the same call four times).');
+    expect(textOf(inputs[0]!)).not.toContain('<task>');
+    expect(inputs[0]!.timeoutMs).toBe(30_000);
+  });
+  it('says so when no task was recorded rather than sending an empty one', async () => {
+    const { b, inputs } = backend();
+    await createLoopClassifier(deps(b))!.classify({ ...periodic, objective: undefined }, new AbortController().signal);
+    expect(textOf(inputs[0]!)).toContain('the task was not recorded');
   });
 });

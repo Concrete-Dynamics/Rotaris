@@ -22,7 +22,7 @@ import { admitTodoItem, openServedItems, type CallerPlan, type OpenServedItem } 
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/prompt-layers.js';
 import { STOP_GRACE } from '../run/grace.js';
-import type { LoopSupervisor } from '../run/supervisor.js';
+import type { LoopSupervisor, SupervisorEscalation } from '../run/supervisor.js';
 import type { TurnResilience } from '../run/ladder.js';
 import { providerIdentity, type ModelChoice } from '../run/resilience.js';
 import type { TurnCompression } from '../run/compression.js';
@@ -139,6 +139,8 @@ export interface ChildrenDeps {
    */
   readonly steeringPending?: ((agentId: string) => boolean) | undefined;
   readonly shouldPause?: (() => boolean) | undefined;
+  /** PD-ORCH-018 clause 7: a child's supervision escalating with `pause` asks the run to rest (`TurnDeps.restForSupervisor`). */
+  readonly restForSupervisor?: ((agentName: string, escalation: SupervisorEscalation) => boolean) | undefined;
   /**
    * PD-ORCH-005: the interruption the run is coming to rest by — a pause, a stop or a quit — or null when it is not, or
    * when its stop is the explicit cancel (which ends its children `cancelled`, as before).
@@ -1434,6 +1436,7 @@ export class IterationChildren implements DelegationOps {
         // REQ-MONITOR-123's pause and REQ-ORCH-088's landing are the same act, so they are the same flag here — and so is
         // PD-ORCH-005's rest, whatever brought it: every agent stops before its next model step.
         shouldPause: () => landing || this.resting || (deps.shouldPause?.() ?? false),
+        ...(deps.restForSupervisor ? { restForSupervisor: deps.restForSupervisor } : {}),
         ...(deps.cutCalls ? { cutCalls: deps.cutCalls } : {}),
         interruption: () => (this.resting ? deps.restCause?.() ?? null : null),
         ...(resilience ? { resilience } : {}),

@@ -267,7 +267,8 @@ The record of what was checked for a task and how it came out, handed to the acc
 consulted before acceptance is allowed. — `REQ-ORCH-129`, `REQ-ORCH-039`
 
 **Loop supervisor**:
-The hidden observer that detects a run circling and escalates. — `REQ-ORCH-105`
+The hidden observer that detects a run circling and escalates. Its **periodic review** asks, at an interval of tool calls
+or messages, whether an agent is progressing toward its task. — `REQ-ORCH-105`, `PD-ORCH-018`
 
 **Plan correction**:
 The message the run sends a coordinating root, in its own conversation, when it answers `succeeded` with items of its own

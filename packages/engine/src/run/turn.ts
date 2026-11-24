@@ -156,6 +156,12 @@ export interface TurnDeps {
   /** REQ-ORCH-141: the call ids already dispatched in this run. */
   readonly dispatched: Map<string, string>;
   readonly supervisor?: LoopSupervisor | undefined;
+  /**
+   * PD-ORCH-018 clause 7: asks the run to come to rest because this agent's supervision escalated with `pause`; true when the
+   * run accepted, after which `shouldPause` reads true. Absent, or refused (the run is already stopping, pausing or held at
+   * the plan gate), the escalation is REQ-ORCH-106's abort.
+   */
+  readonly restForSupervisor?: ((agentName: string, escalation: SupervisorEscalation) => boolean) | undefined;
   /** REQ-MONITOR-134/135: the pending steering prompts for this conversation, drained at the agent's next step. */
   readonly steering?: (() => readonly SteeringPrompt[]) | undefined;
   /** REQ-MONITOR-123: a graceful pause — the turn stops before its next model step. */
@@ -304,6 +310,8 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
   // PD-ORCH-005: a null task continues the history as it stands — how a recorded conversation is resumed.
   const conv = new Conversation(history, deps.recorder);
   if (task !== null) conv.push({ role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] });
+  // PD-ORCH-018 clause 3: a periodic review judges progress toward the task this turn was given.
+  if (task !== null) deps.supervisor?.noteObjective(task);
   // ADR-0034: the MCP surface is demanded before the listing and the prompt are read — one resolution feeds both.
   if (tools?.ready) await tools.ready();
   const specs = tools?.specs() ?? [];
@@ -356,6 +364,13 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
     if (supervision?.kind === 'inject') {
       conv.push({ role: 'user', content: [{ kind: 'text', text: supervision.message }] });
       writer.appendTimeline('loop_supervisor_activation', deps.agentName, supervision.message, { trigger: supervision.activation.trigger, reason: supervision.activation.reason, activation_count: supervision.activation.activationCount });
+    } else if (supervision?.kind === 'escalate' && supervision.signal.action === 'pause' && deps.restForSupervisor?.(deps.agentName, supervision.signal) === true) {
+      // PD-ORCH-018 clause 7 (narrowing REQ-ORCH-106): the run rests as on a user's pause; no agent is failed, and the
+      // turn stops here, before its next model step, with its conversation as it stands.
+      const headline = `${deps.agentName} was redirected twice without changing course; the run is paused`;
+      writer.recordIssue({ kind: 'circuit_breaker_escalation', severity: 'warning', actor: deps.agentName, message: headline, metadata: { session_id: supervision.signal.sessionId, activation_count: supervision.signal.activationCount, reason: supervision.signal.reason, escalation: 'pause' } });
+      writer.appendTimeline('loop_supervisor_activation', deps.agentName, headline, { trigger: supervision.activation.trigger, reason: supervision.signal.reason, activation_count: supervision.signal.activationCount, escalation: 'pause' });
+      return { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
     } else if (supervision?.kind === 'escalate') {
       const headline = 'child aborted after repeated activations';
       writer.recordIssue({ kind: 'circuit_breaker_escalation', severity: 'error', actor: deps.agentName, message: headline, metadata: { session_id: supervision.signal.sessionId, activation_count: supervision.signal.activationCount, reason: supervision.signal.reason } });

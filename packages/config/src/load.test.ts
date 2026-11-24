@@ -358,6 +358,17 @@ describe('REQ-CONFIG-111..131 the runtime section', () => {
     expect(s.errors).toEqual([]);
     expect(s.warnings.map((w) => w.path)).toEqual(['circuit_breaker.timeout_seconds']);
   });
+  it('PD-ORCH-018 clauses 1, 2 and 7: the review mode, its two intervals and the escalation load, default to on_signal, 20, 20 and pause, and hold their vocabularies', () => {
+    expect(CIRCUIT_BREAKER_DEFAULTS).toMatchObject({ review_mode: 'on_signal', review_interval_tool_calls: 20, review_interval_messages: 20, escalation: 'pause' });
+    const s = sink();
+    const cb = readCircuitBreakerSection({ review_mode: 'periodic', review_interval_tool_calls: 5, review_interval_messages: 7, escalation: 'abort' }, s);
+    expect(cb).toEqual({ ...CIRCUIT_BREAKER_DEFAULTS, review_mode: 'periodic', review_interval_tool_calls: 5, review_interval_messages: 7, escalation: 'abort' });
+    expect(s.errors).toEqual([]);
+    expect(s.warnings).toEqual([]);
+    const bad = sink();
+    readCircuitBreakerSection({ review_mode: 'always', review_interval_tool_calls: 0, escalation: 'stop' }, bad);
+    expect(bad.errors.map((e) => e.path).sort()).toEqual(['circuit_breaker.escalation', 'circuit_breaker.review_interval_tool_calls', 'circuit_breaker.review_mode']);
+  });
 });
 
 describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {

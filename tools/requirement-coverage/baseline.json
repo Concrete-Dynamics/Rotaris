@@ -479,7 +479,7 @@
       ]
     },
     "NOTIFY": {
-      "uncited": 161,
+      "uncited": 160,
       "requirements": [
         "REQ-NOTIFY-002",
         "REQ-NOTIFY-004",
@@ -502,7 +502,6 @@
         "REQ-NOTIFY-102",
         "REQ-NOTIFY-103",
         "REQ-NOTIFY-104",
-        "REQ-NOTIFY-105",
         "REQ-NOTIFY-107",
         "REQ-NOTIFY-108",
         "REQ-NOTIFY-110",

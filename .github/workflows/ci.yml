@@ -1,16 +1,21 @@
 # Continuous integration — R-079 (docs/product/requests.md#r-079).
 #
-# Every push to a branch and every pull request runs two jobs on a Windows x64 runner:
+# Every push and every pull request runs the `gate`; the development packages are built only where their cost is
+# owed — a push to `main` (and a manual dispatch) — never on a pull request or a branch push. The owner's ask of
+# 2026-11-24: the installer build sat in every pull request's run though its inputs are a release concern, and a
+# pull request now runs the checks alone. Development tooling no requirement governs (R-079: nothing is minted).
 #
 #   gate     `pnpm deps:audit` — `pnpm audit --prod --audit-level=high` over the production tree, blocking (R-091,
 #            docs/architecture/hardening.md §3.5); `pnpm deps:audit:runtime` — the shipped Electron's advisories at high and
 #            above, blocking; then `pnpm check` — symbols, typecheck, lint, tests: the commit gate
 #            of AGENTS.md; then `pnpm req-coverage`'s summary on the run's page (R-092); then `pnpm test:coverage`, failing
-#            below vitest.config.ts's floor, its summary on the run's page and coverage/ uploaded (R-091)
+#            below vitest.config.ts's floor, its summary on the run's page and coverage/ uploaded (R-091). Runs on every
+#            push and every pull request.
 #   package  `pnpm package` — the code-intelligence runtime for win32-x64 (ADR-0035), the native bindings rebuilt and
 #            load-proved under the shipped Electron, the installer named by tools/release-naming (REQ-STARTUP-031), and
 #            the packaged app launched once against a loopback stub model (ADR-0056 rule 4 (b)); the installer is
-#            uploaded as a WORKFLOW ARTIFACT
+#            uploaded as a WORKFLOW ARTIFACT. `if:`-gated to a push to `main` or a manual dispatch: a development
+#            package is not a check a pull request owes, and building it there was the request that started this change.
 #
 # What this workflow is NOT:
 #   - not the tag workflow of docs/architecture/first-release-plan.md §4.2 (`release.yml`, R-080): it never runs on a
@@ -24,7 +29,9 @@
 #   - not a proof runner: R-079 put no proof suite in CI. `pnpm live-run` and `slice-proof` may never run here
 #     (AGENTS.md).
 #
-# One platform key, windows-x64 (PD-STARTUP-001, OQ-400): no arm64 runner, no macOS or Linux job (IC-3).
+# One platform key was windows-x64 (PD-STARTUP-001, OQ-400); a second key, linux-x86_64, is built for the release (R-104,
+# ADR-0066) and carries a development package here on the same terms as the Windows one. No arm64 runner, no macOS job
+# (IC-3).
 #
 # Hardening for a public repository: third-party actions pinned by full commit SHA (the tag in the comment), the token
 # read-only, `pull_request` and never `pull_request_target`, no secret referenced anywhere, checkout without persisted
@@ -168,6 +175,9 @@ jobs:
 
   package:
     name: package (windows-x64, development)
+    # (2026-11-24): a development package is built where its cost is owed — a push to `main` or a manual
+    # dispatch — not on a pull request or a branch push, where the checks alone are what is asked.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: windows-latest
     timeout-minutes: 75
     env:
@@ -275,6 +285,9 @@ jobs:
   # proof reads whether the runner has or ever had one before it counts the launch for AC-1.
   package-linux:
     name: package (linux-x86_64, development)
+    # (2026-11-24): as `package` above — the development package is built on a push to `main` or a manual
+    # dispatch, never on a pull request or a branch push.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:

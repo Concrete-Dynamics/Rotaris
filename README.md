@@ -96,9 +96,12 @@ On any platform Node 24 runs on. Windows x64 and Linux x86_64 have a published r
 
 **Prerequisites.**
 
-- Node.js 24 or later (`engines.node` is `>=24.0.0` in the root `package.json`).
+- Node.js 24 or later (`engines.node` is `>=24.0.0` in the root `package.json`). A later major is allowed: `pnpm install`,
+  `pnpm build` and `pnpm dev` were run on Node 26.12.
 - pnpm 11.9.0, the version the root `package.json` pins in `packageManager`.
 - Git on `PATH`.
+- On Linux, a C/C++ toolchain and Python 3 (`sudo apt install build-essential python3` on Debian and Ubuntu). `better-sqlite3`
+  and `node-pty` compile when no prebuilt binary applies; without `make` the install stops with `not found: make`.
 - On Linux, a display, or `xvfb-run`, for anything that opens a window.
 - For `pnpm package` only: a Rust toolchain (`cargo`), which builds the portable's launcher stub
   ([first-release plan §4.5](docs/architecture/first-release-plan/04-4-the-windows-release-pipeline.md#4-the-windows-release-pipeline)).

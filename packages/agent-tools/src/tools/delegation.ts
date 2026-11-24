@@ -293,7 +293,9 @@ export function waitForTasksTool(port: DelegationPort, parentId: string): ToolEx
     name: 'wait_for_tasks',
     description: 'Wait until the named child tasks (or, with an empty list, all of your active background children) reach a terminal state; returns their reports. Only your direct children; never your own task.',
     schema: waitSchema,
-    label: (a) => `wait_for_tasks ${a.task_ids.join(', ') || '(all)'}`,
+    // The gate labels the call as sent, before the schema's default fills `task_ids` (gate.ts, `argsForGate`): `{}` is the
+    // documented "all" form and must label as such, never throw.
+    label: (a) => `wait_for_tasks ${Array.isArray(a.task_ids) ? a.task_ids.join(', ') || '(all)' : '(all)'}`,
     execute: async (a) => {
       const r = await port.waitForTasks(parentId, a.task_ids);
       if ('refused' in r) return errorObservation(r.refused);

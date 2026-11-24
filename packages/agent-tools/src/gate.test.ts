@@ -14,6 +14,7 @@ import { askQuestionsTool, PendingQuestions } from './tools/questions.js';
 import { realPathOf } from './tools/fence.js';
 import { FileToolState, haetEditTool, writeFileTool } from './tools/files.js';
 import { INTERRUPTED_FAILURE_KIND } from './tools/types.js';
+import { waitForTasksTool, type DelegationPort } from './tools/delegation.js';
 
 const ROOT = 'D:/ws';
 
@@ -1519,5 +1520,25 @@ describe('REQ-TOOLS-032: a call the advertised JSON Schema accepts is never refu
     expect(repairArrayFields({ tasks: [], phases: { p: 1 } }, schema)).toEqual({ tasks: [], phases: { p: 1 } });
     // A field outside REQ-TOOLS-032's five is never wrapped.
     expect(repairArrayFields({ tasks: [], other: { a: 1 } }, z.object({ tasks: z.array(z.unknown()), other: z.array(z.unknown()).optional() }))).toEqual({ tasks: [], other: { a: 1 } });
+  });
+});
+
+describe('a row label never ends the run (REQ-TOOLS-105, REQ-TOOLS-032)', () => {
+  it('wait_for_tasks called with {} labels as (all) and waits on every child, rather than throwing on the absent task_ids', async () => {
+    const waited: (readonly string[])[] = [];
+    const port = { waitForTasks: async (_parent: string, ids: readonly string[]) => { waited.push(ids); return { text: 'all settled' }; } } as unknown as DelegationPort;
+    const h = harness({ preset: 'autonomous', extraExecutors: [['wait_for_tasks', waitForTasksTool(port, 'orchestrator')]] });
+    const r = await h.gate.dispatch(h.call('wait_for_tasks', {}), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'ok', isError: false, text: 'all settled' });
+    expect(r.label).toBe('wait_for_tasks (all)');
+    expect(waited).toEqual([[]]);
+  });
+
+  it('a label that throws falls back to the default label; the call still runs', async () => {
+    const thrower = { ...simpleExecutor('grep', 'g', z.object({ pattern: z.string() }), async () => ({ text: 'found', isError: false })), label: () => { throw new TypeError('boom'); } };
+    const h = harness({ preset: 'autonomous', extraExecutors: [['grep', thrower]] });
+    const r = await h.gate.dispatch(h.call('grep', { pattern: 'x' }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'ok', text: 'found' });
+    expect(r.label).toBe('grep x');
   });
 });

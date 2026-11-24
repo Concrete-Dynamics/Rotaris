@@ -307,7 +307,14 @@ export class Gate {
     }
     const argsForGate: Readonly<Record<string, unknown>> = repaired ?? {};
     const open = { call_id: call.callId, agent_name: call.agentName, tool_name: call.name, args: argsForGate };
-    const label = executor?.label?.(argsForGate) ?? defaultLabel(call.name, argsForGate);
+    // A label reads the call as sent, not as parsed, so a tool's label can meet a field its schema would default. A label
+    // that throws names the row by its argument keys instead: a row header never ends the run.
+    let label: string;
+    try {
+      label = executor?.label?.(argsForGate) ?? defaultLabel(call.name, argsForGate);
+    } catch {
+      label = defaultLabel(call.name, argsForGate);
+    }
     // The evidence record is opened first: tool.start precedes everything else naming this call (REQ-EVENTS-076).
     const ordinal = deps.sink.toolOpen(open);
     const finish = (r: Omit<ToolResult, 'durationMs' | 'callId' | 'name' | 'args' | 'label'>, extra: { outcome_kind?: string; exit_code?: number | null; failure_kind?: string | null; warnings?: readonly string[]; error?: string | null } = {}): ToolResult => {

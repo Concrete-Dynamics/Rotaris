@@ -19,8 +19,12 @@
  *   start and would be a second, silent route to the rules — the shape measured and dropped on 2026-10-27, and not
  *   kept;
  * - every path-scoped rule is named in `AGENTS.md`'s index, for the harnesses that do not load them;
- * - `AGENTS.md` stays under 32 KiB, the part of it Codex reads (`project_doc_max_bytes`'s default).
+ * - `AGENTS.md` stays under 32 KiB, the part of it Codex reads (`project_doc_max_bytes`'s default);
+ * - `.claude/settings.json` is tracked and wires the agent advisor (`tools/agent-advisor/`, R-126) to the four events
+ *   it needs: a call that succeeded, a call that failed, a call about to run (where a stop earned on a failure is
+ *   delivered), and a user prompt, which starts the nudge series over.
  */
+import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -100,6 +104,35 @@ describe('the rules have one home', () => {
       const text = readFileSync(join(rules, file), 'utf8');
       expect(/^---\n[\s\S]*?\n---\n/.test(text), `.claude/rules/${file} carries no frontmatter`).toBe(true);
       expect(text, `.claude/rules/${file} has no paths: frontmatter, so it would load eagerly`).toContain('paths:');
+    }
+  });
+});
+
+describe('the agent advisor is wired into Claude Code', () => {
+  type Entry = { matcher?: string; hooks: { type: string; command: string; timeout?: number }[] };
+  const file = join(root, '.claude', 'settings.json');
+  const hooks = (JSON.parse(readFileSync(file, 'utf8')) as { hooks: Record<string, Entry[]> }).hooks;
+
+  it('is carried by a fresh clone: git does not ignore .claude/settings.json', () => {
+    const ignored = spawnSync('git', ['check-ignore', '-q', '.claude/settings.json'], { cwd: root });
+    expect(ignored.status, 'git check-ignore exits 1 for a path that is not ignored').toBe(1);
+  });
+
+  it.each(['PostToolUse', 'PostToolUseFailure', 'PreToolUse', 'UserPromptSubmit'])('runs on %s, for every tool, and can never fail the call', (event) => {
+    const entries = hooks[event] ?? [];
+    const advisor = entries.filter((entry) => entry.hooks.some((hook) => hook.command.includes('tools/agent-advisor/advisor.mjs')));
+    expect(advisor, `${event} does not call the advisor`).toHaveLength(1);
+    expect(advisor[0]!.matcher ?? '', 'a matcher would hide tools from the advisor').toMatch(/^\*?$/);
+    const hook = advisor[0]!.hooks[0]!;
+    expect(hook.type).toBe('command');
+    expect(hook.command, 'the hook answers 0 whatever the script does').toMatch(/\|\| true$/);
+    expect(existsSync(join(root, 'tools', 'agent-advisor', 'advisor.mjs'))).toBe(true);
+  });
+
+  it('gives a tool-call hook longer than the review may take', async () => {
+    const { REVIEW_TIMEOUT_MS } = await import('./agent-advisor/advisor.mjs');
+    for (const event of ['PostToolUse', 'PostToolUseFailure']) {
+      expect(hooks[event]![0]!.hooks[0]!.timeout! * 1000, event).toBeGreaterThan(REVIEW_TIMEOUT_MS);
     }
   });
 });

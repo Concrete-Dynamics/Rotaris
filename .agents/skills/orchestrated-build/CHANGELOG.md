@@ -3,6 +3,17 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-11-24 — builders inherit the agent advisor, and a hook-stopped one is a lost one
+
+**Prompted by** the owner's request of 2026-11-24 (R-126) for an advisor that checks a coding agent for a loop and
+nudges it, and the hook that answers it for this repository (`tools/agent-advisor/`, wired in `.claude/settings.json`):
+it fires inside subagents too, so a builder or reviewer can now come back stopped by the hook, an ending the table in
+§4 did not name. **Changed** `SKILL.md` §4: one line under the bundle endings saying that every agent the workflow
+starts inherits the advisor and that one it stopped is handled like a lost one (the `*-lost` row: recover). No
+mechanism in `scripts/` changed and no invariant is touched. **Verified** by `node scripts/orchestration.mjs self-test`
+and `pnpm check`; whether a stop raised inside a subagent ends the subagent alone or the whole run is not measured
+here and is owed (`tools/agent-advisor/advisor.mjs` keeps a subagent's calls in a stream of their own either way).
+
 ## 2026-11-04 — the review the archive bundles' skill changes owed
 
 **Prompted by** the independent review (`references/skill-review.md`, Opus `high`, read-only, run by the hardening

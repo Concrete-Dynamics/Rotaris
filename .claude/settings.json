@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/agent-advisor/advisor.mjs\" 2>/dev/null || true", "timeout": 30 }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/agent-advisor/advisor.mjs\" 2>/dev/null || true", "timeout": 30 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/agent-advisor/advisor.mjs\" 2>/dev/null || true", "timeout": 5 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/agent-advisor/advisor.mjs\" 2>/dev/null || true", "timeout": 5 }
+        ]
+      }
+    ]
+  }
+}

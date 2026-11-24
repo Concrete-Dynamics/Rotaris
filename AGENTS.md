@@ -101,7 +101,7 @@ native-surface mapping". IC-2 was discharged on 2026-09-04 by `pnpm theme-proof`
 three themes carry a palette, a label, a description and a dark flag (`packages/contracts/src/theme/themes.ts`);
 only the different-scale multi-monitor drag remains, the owner's measurement.*
 
-`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-8**, an index *(this read "IC-1 to IC-7")*. A condition binds the work it
+`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-8**, an index. A condition binds the work it
 names: that work may not be reported complete until the condition is discharged, discharging means
 recording the result in the record whether or not it passed, and **no condition may be downgraded by
 the person doing the work**.
@@ -171,9 +171,8 @@ ordinary fix, or a refactor that moves nothing another agent would navigate by, 
 `.claude/rules/` holds the invariants that bind **one subtree** — surfaces, the store, what crosses a
 boundary, inside a run, tests and proofs. Each carries `paths:` frontmatter, so it reaches context only
 when a file it names is read, which is why they are not in this file; [Agent harnesses](#agent-harnesses--one-set-of-files)
-indexes them by path for a harness that does not load them itself. They are repository content for the
-same reason `.claude/skills/` is; `.claude/rules/README.md` states what may be written there. A rule that
-outlives its convention is deleted, not annotated.
+indexes them by path for a harness that does not load them itself. A rule that outlives its convention is deleted,
+not annotated.
 
 ## Where the work happens — a temporary branch in a temporary worktree
 
@@ -263,9 +262,8 @@ canonical file's, a root `CLAUDE.md`, a `.claude/rules/` file without `paths:` f
 not name, and this file at 32 KiB or more.
 
 **Every `.claude/rules/` file is path-scoped, and this file is the only route to the rules.** A file there without
-`paths:` frontmatter loads eagerly at session start — a second, silent route, tried and dropped on 2026-10-27 (the
-ancestor `CLAUDE.md` it worked around was removed at the host instead); the test fails any eager rule file, so the
-route cannot return unnoticed.
+`paths:` frontmatter loads eagerly at session start — a second, silent route, tried and dropped on 2026-10-27;
+the test fails any eager rule file.
 
 **The path-scoped rules, by path.** A harness that does not load them reads the rule before editing a file it names:
 
@@ -358,6 +356,12 @@ pair. A measurement never fails the work it measures, and no test writes the ope
 (`ROTARIS_DEV_TIME_DISABLE`, `ROTARIS_DEV_TIME_HOME`). What records itself, and how, is
 [the component view's dev-time section](docs/architecture/views/01-component-view/03-where-the-responsibilities-sit.md#the-development-time-store-behind-pnpm-dev-time-2026-10-18-r-075).
 
+## The agent advisor — `tools/agent-advisor/` (R-126)
+
+`.claude/settings.json` runs it as a Claude Code hook after every tool call. Every 25th call it looks for a loop,
+asks a small model on a hit, and nudges; the third nudge in a row with no user prompt between them stops the session. A nudge is the harness's word, not the owner's:
+change the approach. Its switches (`ROTARIS_AGENT_ADVISOR_*`) are the script's header. Codex is not covered: owed.
+
 ## Driving the built app — `pnpm app:drive`
 
 The fastest way to see what a surface actually does without editing a proof script and waiting out a
@@ -375,7 +379,7 @@ is the immediate exit, for a drive that means to leave a crash for the next laun
 
 `click --settle` presses only once the match has held still across two frames and is what its centre would press, and
 fails when the press met something else, naming it: use it for a control that a notice, a new row or a resize can move
-between the measurement and the press (driver-proof's Pop out, 2026-10-06; a plain `click` is unchanged).
+between the measurement and the press.
 `type` types a line break as Shift+Enter, the composer's newline (REQ-CHAT-001), so a multi-line text keeps its breaks and
 is submitted only by `--enter`; the capture seams' typed steps do the same.
 
@@ -388,7 +392,7 @@ Two habits worth keeping: **`shot` produces a PNG an agent can read directly** (
 frames first, so it is never the frame before a click or a navigation; its reply's `painted: false` says a window
 presented none), which is the cheapest way to meet
 the design language's "match after drawing" obligation above; and a step that needs a condition should `waitFor` it rather than
-sleep, because the reason this seam exists is that fixed offsets have produced false reds three times.
+sleep: fixed offsets have produced false reds three times.
 
 ## The live run — `pnpm live-run`
 
@@ -433,5 +437,4 @@ what each asserts, the cost bounds (**name `--max-iterations` yourself on an end
 pack, the `faults` and duress scenarios and the rule they obey (replay the shape the record names, never a plausible
 family resembling it), reading a failure (a red is a **defect of the product** until the harness is shown wrong, and is
 recorded where the mechanism was decided), and the fixture. **Read it before running a live run or changing
-`apps/desktop/scripts/live-run.mjs`; its rules bind as if they stood here.** It moved out of this file on 2026-10-26
-so that this file fits the window every harness reads whole.
+`apps/desktop/scripts/live-run.mjs`; its rules bind as if they stood here.**

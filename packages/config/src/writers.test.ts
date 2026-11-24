@@ -75,6 +75,16 @@ describe('REQ-CONFIG-252 every writer preserves comments, blank lines, indentati
     expect(text).toContain('circuit_breaker:\n  enabled: false\n');
     expect(text).toContain('rotaris:\n  delegation_strategy: single\n');
   });
+  it('PD-ORCH-018 clause 9: the desktop save writes the changed review keys under circuit_breaker and leaves the rest of it as stated', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, `${FIXTURE}circuit_breaker:\n  # keep the count low\n  tool_call_threshold: 9\n`);
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { circuitBreakerReview: { review_mode: 'periodic', review_interval_tool_calls: 5, model: 'gpt-4o-mini' } });
+    expect(r.ok).toBe(true);
+    const text = readFileSync(s.wsFile, 'utf8');
+    expect(text).toContain('circuit_breaker:\n  # keep the count low\n  tool_call_threshold: 9\n  review_mode: periodic\n  review_interval_tool_calls: 5\n  model: gpt-4o-mini\n');
+    expect(text).not.toContain('escalation');
+    expect(text).not.toContain('review_interval_messages');
+  });
   it('the model-preference writer touches slots, companions and the role mapping only', async () => {
     const s = scope();
     writeFileSync(s.wsFile, FIXTURE);

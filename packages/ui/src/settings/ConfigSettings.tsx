@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Hint, Origin, SettingsTitle, type ValueOrigin } from './page.js';
-import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, offeredForModel, reasoningChoice, reasoningModelKey, roleReasoningOptions, scopeCellOf, slotModelPick, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
+import { CIRCUIT_BREAKER_ESCALATION_NAMES, CIRCUIT_BREAKER_REVIEW_MODE_NAMES, DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
+import { REVIEW_INTERVAL_RANGE, CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, offeredForModel, reasoningChoice, reasoningModelKey, roleReasoningOptions, scopeCellOf, slotModelPick, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { DictationSettings } from './DictationSettings.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
@@ -384,7 +384,47 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
       </div>
     </>);
   const circuitBreakerRow = (<>
-        <Toggle id="cb" label="Circuit breaker" hint="Watches every agent for repeated work and redirects it; escalates after three activations." on={pending.circuitBreakerEnabled} onChange={(v) => onChange({ kind: 'circuitBreaker', value: v })} />
+        <Toggle id="cb" label="Circuit breaker" hint="Watches every agent for repeated work and redirects it; acts on the third redirection in a row." on={pending.circuitBreakerEnabled} onChange={(v) => onChange({ kind: 'circuitBreaker', value: v })} />
+    </>);
+  // PD-ORCH-018 clause 9: the supervisor's review settings, beside its switch and only while it is on; the two intervals
+  // only in the mode that reads them.
+  const review = pending.circuitBreakerReview;
+  const reviewModels = ['small_model', ...snapshot.models.filter((m) => m !== 'small_model')];
+  const reviewModelOptions = reviewModels.includes(review.model) ? reviewModels : [review.model, ...reviewModels];
+  const REVIEW_MODE_LABEL = { on_signal: 'On a signal', periodic: 'At an interval' } as const;
+  const ESCALATION_LABEL = { pause: 'Pause the run', abort: 'End the run' } as const;
+  const circuitBreakerReviewRows = !pending.circuitBreakerEnabled ? null : (<>
+      <div className="settings__action">
+        <label htmlFor="cb-review-mode">Progress review</label>
+        <DesignSelect id="cb-review-mode" className="input select settings__select" aria-label="Progress review" value={review.review_mode} onChange={(e) => onChange({ kind: 'circuitBreakerReview', key: 'review_mode', value: e.currentTarget.value as typeof review.review_mode })}>
+          {CIRCUIT_BREAKER_REVIEW_MODE_NAMES.map((m) => <option key={m} value={m}>{REVIEW_MODE_LABEL[m]}</option>)}
+        </DesignSelect>
+        <Hint about="Progress review">On a signal, an agent is reviewed once it repeats itself. At an interval, it is also reviewed every so many tool calls or messages, against its task; each review is one request to the review model.</Hint>
+      </div>
+      {review.review_mode === 'periodic' && (<>
+        <div className="settings__action">
+          <label htmlFor="cb-review-tools">Review every</label>
+          <ClampedNumberField id="cb-review-tools" range={REVIEW_INTERVAL_RANGE} shown={clampForDisplay(review.review_interval_tool_calls, REVIEW_INTERVAL_RANGE.min, REVIEW_INTERVAL_RANGE.max)} onCommit={(value) => onChange({ kind: 'circuitBreakerReview', key: 'review_interval_tool_calls', value })} /><span className="text-secondary">tool calls</span>
+        </div>
+        <div className="settings__action">
+          <label htmlFor="cb-review-messages">Or every</label>
+          <ClampedNumberField id="cb-review-messages" range={REVIEW_INTERVAL_RANGE} shown={clampForDisplay(review.review_interval_messages, REVIEW_INTERVAL_RANGE.min, REVIEW_INTERVAL_RANGE.max)} onCommit={(value) => onChange({ kind: 'circuitBreakerReview', key: 'review_interval_messages', value })} /><span className="text-secondary">messages</span>
+        </div>
+      </>)}
+      <div className="settings__action">
+        <label htmlFor="cb-review-model">Review model</label>
+        <DesignSelect id="cb-review-model" className="input select settings__select" aria-label="Review model" value={review.model} onChange={(e) => onChange({ kind: 'circuitBreakerReview', key: 'model', value: e.currentTarget.value })}>
+          {reviewModelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+        </DesignSelect>
+        <Hint about="Review model">The model that judges whether an agent is circling. small_model follows the small slot.</Hint>
+      </div>
+      <div className="settings__action">
+        <label htmlFor="cb-escalation">After two redirections</label>
+        <DesignSelect id="cb-escalation" className="input select settings__select" aria-label="After two redirections" value={review.escalation} onChange={(e) => onChange({ kind: 'circuitBreakerReview', key: 'escalation', value: e.currentTarget.value as typeof review.escalation })}>
+          {CIRCUIT_BREAKER_ESCALATION_NAMES.map((m) => <option key={m} value={m}>{ESCALATION_LABEL[m]}</option>)}
+        </DesignSelect>
+        <Hint about="After two redirections">What happens when an agent is redirected twice and still circles. A paused run can be continued; an ended run has failed.</Hint>
+      </div>
     </>);
   const outsideRow = (<>
         <Toggle id="outside" origin={from('allow_outside_workspace')} label="Allow outside workspace" hint="Lets agents read and change files outside the chosen workspace." on={rt.allow_outside_workspace} onChange={(v) => { if (v) setConfirm('outside'); else onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: false }); }} />
@@ -463,7 +503,7 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
       <h2 className="settings__heading">Limits</h2>
       {depthRow}{fanOutRow}{childTimeoutRow}{iterationRow}{thresholdRow}
       <h2 className="settings__heading">Stopping</h2>
-      {circuitBreakerRow}{keepGoingRow}
+      {circuitBreakerRow}{circuitBreakerReviewRows}{keepGoingRow}
       <h2 className="settings__heading">Advanced runtime</h2>
       {advancedCard}
     </div>
@@ -498,7 +538,7 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
       {depthRow}{fanOutRow}{childTimeoutRow}
       <h2 className="settings__heading">Runtime policy</h2>
       <DesignCard className="card settings__card">
-        {circuitBreakerRow}{outsideRow}{improvementRow}{improvementTimeoutRow}{keepGoingRow}{permissionRow}{thresholdRow}{iterationRow}{redactionRow}
+        {circuitBreakerRow}{circuitBreakerReviewRows}{outsideRow}{improvementRow}{improvementTimeoutRow}{keepGoingRow}{permissionRow}{thresholdRow}{iterationRow}{redactionRow}
       </DesignCard>
       <h2 className="settings__heading">Security policy</h2>
       {securityPolicy}

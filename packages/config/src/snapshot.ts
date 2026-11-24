@@ -9,6 +9,7 @@ import { loadConfiguration, scopeFiles, type LoadedConfiguration } from './load.
 import { rolePreferences, slotPreferences } from './preferences.js';
 import { RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { DISPLAY_DEFAULTS } from './display-section.js';
+import { CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
 import { renderFatal } from './validate.js';
 import { discoverInstructionFiles, WORKSPACE_INSTRUCTION_FILE_NAMES } from './instructions.js';
 import { restoreConfigText, saveDesktop, writeConfigFields, writeConfigKey, type DesktopSave, type RoleEdit, type RoleFieldEdits, type WriteRefusal } from './writers.js';
@@ -87,6 +88,11 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
     },
     rawRuntime: { workspace: rawRuntimeOf(cfg.raw.workspace.agents), global: rawRuntimeOf(cfg.raw.global.agents) },
     circuitBreakerEnabled: cfg.circuitBreaker.enabled,
+    // PD-ORCH-018 clause 9: the review settings, as resolved.
+    circuitBreakerReview: {
+      review_mode: cfg.circuitBreaker.review_mode, review_interval_tool_calls: cfg.circuitBreaker.review_interval_tool_calls,
+      review_interval_messages: cfg.circuitBreaker.review_interval_messages, escalation: cfg.circuitBreaker.escalation, model: statedBreakerModel(cfg),
+    },
     compressorThresholdPercentage: cfg.compressor.threshold_percentage,
     // REQ-CHAT-166 (Part Z): the transcript reads its caps from the same snapshot the settings screen does.
     display: { ...cfg.display },
@@ -129,11 +135,27 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
       network_allowed_hosts: [...RUNTIME_DEFAULTS.network_allowed_hosts], network_denied_hosts: [...RUNTIME_DEFAULTS.network_denied_hosts],
     },
     rawRuntime: { workspace: null, global: null },
-    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, dictation: { ...DICTATION_CONFIG_DEFAULT }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', referential: [], warnings: [],
+    circuitBreakerEnabled: true,
+    circuitBreakerReview: {
+      review_mode: CIRCUIT_BREAKER_DEFAULTS.review_mode, review_interval_tool_calls: CIRCUIT_BREAKER_DEFAULTS.review_interval_tool_calls,
+      review_interval_messages: CIRCUIT_BREAKER_DEFAULTS.review_interval_messages, escalation: CIRCUIT_BREAKER_DEFAULTS.escalation, model: CIRCUIT_BREAKER_DEFAULTS.model,
+    },
+    compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, dictation: { ...DICTATION_CONFIG_DEFAULT }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', referential: [], warnings: [],
     // The instruction files exist or do not whatever the configuration says, so the inventory stands in a fatal snapshot too.
     instructions: instructionFiles(workspaceRoot, { ...env, globalDir: env.globalDir ?? globalDir }).map((f) => ({ ...f, enabled: true })),
     files: { workspace: files.workspace.agents, global: files.global.agents },
   };
+}
+
+/**
+ * PD-ORCH-018 clause 9: the classifier's model as the merged configuration STATES it — the `small_model` alias by default —
+ * not as the load resolved it. The resolved section holds the slot's model in the alias's place (`slots.ts`), and a screen
+ * that showed that would, on Save of any other change to the field, pin a model where the file said "follow the slot".
+ */
+function statedBreakerModel(cfg: LoadedConfiguration): string {
+  const section = cfg.merged['circuit_breaker'];
+  const stated = isPlainMap(section) ? section['model'] : undefined;
+  return typeof stated === 'string' && stated !== '' ? stated : CIRCUIT_BREAKER_DEFAULTS.model;
 }
 
 export function readSnapshot(globalDir: string, workspaceRoot: string, now?: () => number, env: InstructionSnapshotEnv = {}): ConfigSnapshot {
@@ -152,6 +174,7 @@ function toDesktopSave(save: DesktopSavePayload): DesktopSave {
     ...(save.slotThinking ? { slotThinking: save.slotThinking } : {}),
     ...(save.runtime ? { runtime: save.runtime } : {}),
     ...(save.circuitBreakerEnabled !== undefined ? { circuitBreakerEnabled: save.circuitBreakerEnabled } : {}),
+    ...(save.circuitBreakerReview && Object.keys(save.circuitBreakerReview).length > 0 ? { circuitBreakerReview: save.circuitBreakerReview } : {}),
     ...(save.compressorThresholdPercentage !== undefined ? { compressorThresholdPercentage: save.compressorThresholdPercentage } : {}),
     ...(save.delegationStrategy !== undefined ? { delegationStrategy: save.delegationStrategy } : {}),
     // REQ-CONFIG-256/472: the four `display:` fields, already spelled as the file spells them (REQ-CONFIG-172).

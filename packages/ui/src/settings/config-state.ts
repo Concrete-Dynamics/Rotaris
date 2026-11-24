@@ -1,4 +1,4 @@
-import { dictationFieldProblem, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type ReasoningLevelName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
+import { dictationFieldProblem, type CircuitBreakerReviewView, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type ReasoningLevelName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
  * REQ-CONFIG-332 / REQ-CONFIG-093 / REQ-CONFIG-254: what a reasoning-strength control shows and does, derived from the
@@ -140,6 +140,8 @@ export interface PendingSettings {
     readonly network_denied_hosts: readonly string[];
   };
   readonly circuitBreakerEnabled: boolean;
+  /** PD-ORCH-018 clause 9: the loop supervisor's review settings, committed by Save. */
+  readonly circuitBreakerReview: CircuitBreakerReviewView;
   readonly compressorThresholdPercentage: number;
   readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single';
   /**
@@ -216,6 +218,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
       network_allowed_hosts: snapshot.runtime.network_allowed_hosts, network_denied_hosts: snapshot.runtime.network_denied_hosts,
     },
     circuitBreakerEnabled: snapshot.circuitBreakerEnabled,
+    circuitBreakerReview: { ...snapshot.circuitBreakerReview },
     compressorThresholdPercentage: snapshot.compressorThresholdPercentage,
     delegationStrategy: snapshot.delegationStrategy,
     display: { ...snapshot.display },
@@ -322,6 +325,8 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
     // OQ-457: per key, like the runtime block: a key the person changed stands, and any other takes the reloaded value.
     dictation: Object.fromEntries((Object.keys(fresh.dictation) as (keyof DictationConfigView)[]).map((key) => [key, pending.dictation[key] !== previousSaved.dictation[key] ? pending.dictation[key] : fresh.dictation[key]])) as unknown as DictationConfigView,
     circuitBreakerEnabled: pending.circuitBreakerEnabled !== previousSaved.circuitBreakerEnabled ? pending.circuitBreakerEnabled : fresh.circuitBreakerEnabled,
+    // PD-ORCH-018 clause 9: per key, like the runtime block.
+    circuitBreakerReview: Object.fromEntries((Object.keys(fresh.circuitBreakerReview) as (keyof CircuitBreakerReviewView)[]).map((key) => [key, pending.circuitBreakerReview[key] !== previousSaved.circuitBreakerReview[key] ? pending.circuitBreakerReview[key] : fresh.circuitBreakerReview[key]])) as unknown as CircuitBreakerReviewView,
     compressorThresholdPercentage: pending.compressorThresholdPercentage !== previousSaved.compressorThresholdPercentage ? pending.compressorThresholdPercentage : fresh.compressorThresholdPercentage,
     delegationStrategy: pending.delegationStrategy !== previousSaved.delegationStrategy ? pending.delegationStrategy : fresh.delegationStrategy,
     roles: pending.roles,
@@ -359,6 +364,7 @@ export type PendingChange =
   | { readonly kind: 'slotThinking'; readonly slot: ModelSlotName; readonly value: string | null }
   | { readonly kind: 'runtime'; readonly key: keyof PendingSettings['runtime']; readonly value: PendingSettings['runtime'][keyof PendingSettings['runtime']] }
   | { readonly kind: 'circuitBreaker'; readonly value: boolean }
+  | { readonly kind: 'circuitBreakerReview'; readonly key: keyof CircuitBreakerReviewView; readonly value: CircuitBreakerReviewView[keyof CircuitBreakerReviewView] }
   | { readonly kind: 'compressorThreshold'; readonly value: number }
   | { readonly kind: 'delegationStrategy'; readonly value: PendingSettings['delegationStrategy'] }
   | { readonly kind: 'display'; readonly key: keyof DisplayView; readonly value: DisplayView[keyof DisplayView] }
@@ -401,6 +407,8 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
       return { ...pending, runtime: { ...pending.runtime, [change.key]: change.value } };
     case 'circuitBreaker':
       return pending.circuitBreakerEnabled === change.value ? pending : { ...pending, circuitBreakerEnabled: change.value };
+    case 'circuitBreakerReview':
+      return pending.circuitBreakerReview[change.key] === change.value ? pending : { ...pending, circuitBreakerReview: { ...pending.circuitBreakerReview, [change.key]: change.value } };
     case 'compressorThreshold':
       return pending.compressorThresholdPercentage === change.value ? pending : { ...pending, compressorThresholdPercentage: change.value };
     case 'delegationStrategy':
@@ -461,6 +469,10 @@ export function savePayload(saved: PendingSettings, pending: PendingSettings): D
   for (const key of Object.keys(pending.runtime) as (keyof PendingSettings['runtime'])[]) if (pending.runtime[key] !== saved.runtime[key]) runtime[key] = pending.runtime[key];
   if (Object.keys(runtime).length > 0) out.runtime = runtime;
   if (pending.circuitBreakerEnabled !== saved.circuitBreakerEnabled) out.circuitBreakerEnabled = pending.circuitBreakerEnabled;
+  // PD-ORCH-018 clause 9: sparse, under the file's own key names.
+  const review: Record<string, unknown> = {};
+  for (const key of Object.keys(pending.circuitBreakerReview) as (keyof CircuitBreakerReviewView)[]) if (pending.circuitBreakerReview[key] !== saved.circuitBreakerReview[key]) review[key] = pending.circuitBreakerReview[key];
+  if (Object.keys(review).length > 0) out.circuitBreakerReview = review;
   if (pending.compressorThresholdPercentage !== saved.compressorThresholdPercentage) out.compressorThresholdPercentage = pending.compressorThresholdPercentage;
   if (pending.delegationStrategy !== saved.delegationStrategy) out.delegationStrategy = pending.delegationStrategy;
   // REQ-CONFIG-256/472: written per field and under the file's own key names, with unlimited stored as 0 (REQ-CONFIG-172).
@@ -561,6 +573,8 @@ export function clampForDisplay(value: number, min: number, max: number): number
 
 /** The inclusive whole-number range a Settings number field is clamped to at the widget (REQ-CONFIG-322, REQ-CONFIG-325). */
 export interface NumberRange { readonly min: number; readonly max: number }
+/** PD-ORCH-018 clause 2: the two review intervals the screen offers; the file's own floor is 1. */
+export const REVIEW_INTERVAL_RANGE: NumberRange = { min: 1, max: 500 };
 
 /** REQ-CONFIG-322: the delegation limits' widget clamps. */
 export const DEPTH_CAP_RANGE: NumberRange = { min: 1, max: 12 };

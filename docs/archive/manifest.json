@@ -1074,7 +1074,7 @@
     "defects/replace-document-sync-throws-when-the-parent-cannot-be-created.md": "86d614a5190c5a5ef0cbf6a3d945a17e6b57e89e7283f9b7e0fd2503738000db",
     "defects/requirements-proof-counted-the-requirements-views-first-mount-against-the-board-on-screen.md": "aaf709aa6e70426faaf783666862e931fb0129a762fa8602aa5118c471de7aa6",
     "defects/requirements-proof-fold-stage-depends-on-the-launched-window-holding-os-focus.md": "ad406082e410e807835ca04ab8921b1f3c2b7d2783c565857f8743a44f994f9b",
-    "defects/requirements-proof-meets-a-different-red-each-run-at-its-fixed-offset-stages.md": "4f2a847f4154cf377ea004c62d55a4efff2856d050077ab9ccd67f16269a4b7d",
+    "defects/requirements-proof-meets-a-different-red-each-run-at-its-fixed-offset-stages.md": "e7a11d577cf78c58c090676f4fa17cff8a7a956eb05c16f2bc942fee0812e434",
     "defects/requirements-proofs-drop-stage-reads-a-revealed-cards-focus-two-frames-after-asking-for-it.md": "ddd345db17cccccce9536d7edab0dec3392716fae11a61d294e101cf00df824b",
     "defects/resilience-proof-cannot-launch-the-app-as-root.md": "a40b3c92376b6ed92f6ccef3c547a9a716dc5c7b2a560152b4ec473f328bab12",
     "defects/resilience-proofs-auth-fallback-minimum-reads-two-of-three-prompt-controls-through-the-logs-redaction.md": "205f07e682c436c44e069d74243c487523cfbea8154de07104ea769246f7c6a2",

@@ -29,6 +29,15 @@ runs that setup, so each launch's clicks raced it differently.
 **Repaired 2026-11-24.** The proof's workspaces record the setup as resolved (`skipped: [code-intelligence-setup]`, and the
 server disabled), as `code-intel-proof` and `dictation-proof` already seed theirs. Nothing in this proof measures that setup.
 
+**A second cause, measured the same day.** With the setup resolved the proof still went red in four of four runs on the
+desktop (`filter`, REQ-TRACE-364, REQ-TRACE-365), and in each the step that waits on animation frames came late: a click's
+aim waits two frames (`targetProbe`) and landed about 1.1 s after its time, while an eval or a probe beside it answered on
+time. The host runs GNOME on Wayland and the proof's windows are XWayland windows, which receive no frames while another
+window covers them, so the product's own frame-driven work (the board's realisation, a reveal's focus) stalled with them.
+Turning off background throttling for the window changed nothing. Run under a virtual display that nothing covers,
+`xvfb-run -a -s "-screen 0 1920x1080x24" pnpm requirements-proof` passed three of three. On this host a proof run, and
+`pnpm worktree:land`, runs under `xvfb-run`, the wrapper `docs/proofs/README.md` names for Linux.
+
 Not to be confused with the fold stage's focus reading (REQ-TRACE-320), which was a different cause and is repaired
 (`docs/archive/defects/requirements-proof-fold-stage-depends-on-the-launched-window-holding-os-focus.md`).
 

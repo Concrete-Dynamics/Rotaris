@@ -16,8 +16,16 @@ branch's runs met an unfocused window more often than `main`'s three is not esta
 real pointer resting over one of the header's new `title`-bearing statements, whose native tooltip window takes the
 launched window's focus).
 
-`theme-proof`'s `focus` item fails on the same host at the same scales on `main` and on the branch, and is likely the same
-cause.
+`theme-proof`'s `focus` item failed on the same host at the same scales on `main` and on the branch, for the same cause;
+`main` repaired that one separately (43c72df2).
+
+**Repaired 2026-11-24.** The scriptable capture seams hold their page focused before the first step
+(`apps/desktop/src/main/page-focus.ts`, the DevTools protocol's `Emulation.setFocusEmulationEnabled`; called from
+`capture/index.ts`), the capture-side counterpart of the driver's `emulateFocus` that fixed `theme-proof`'s focus section
+on `main` (43c72df2). Measured 2026-11-22 to 24: in twelve runs with the hold, none read the focus off the rail (REQ-TRACE-320). One met a
+different red in the same stage, the press folding no column at all ("left 0 rail(s)"), a shape also met without the hold.
+That one and the reds the runs met at later stages (REQ-TRACE-365, -375/376, -397, -426) came alike from builds with and
+without the hold, so they are not this note's.
 
 ## Specs
 

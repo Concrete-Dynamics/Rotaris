@@ -16,6 +16,8 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-22**
 
+**A capture seam's press moves focus in an unfocused window (2026-11-22).** `02-process-view/01-what-each-process-owns.md`: before their first step the scriptable capture seams hold the page focused through `Emulation.setFocusEmulationEnabled` (`main/page-focus.ts`, verification only, in the seams' chunk), the capture-side counterpart of the driver's `emulateFocus`, so `requirements-proof`'s fold stage stops reading the host's window focus. No channel, command or store column is added.
+
 **A survey in flight says where it stands (R-123; REQ-ADOPT-026; 2026-11-22).** `02-process-view/05-message-families-4.md`: the workspace service's `requirements.changed` event gains an optional `progress`, published on channel 10's existing `progress` field at an unchanged generation; the board reads nothing again for it and the survey strip draws the survey's stages. No channel, command or store column is added.
 
 **The driver's `emulateFocus` (2026-11-22).** Verification only: `main/driver.ts` gains an op that turns on Chromium's focus emulation for the selected window, which `theme-proof` calls before its focus section ([the repaired note](../../archive/defects/theme-proofs-focus-section-fails-on-the-linux-host-at-varying-scales-on-main-too.md)). No view changes.

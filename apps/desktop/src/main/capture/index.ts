@@ -47,6 +47,10 @@ export async function runCapture(host: CaptureHost): Promise<boolean> {
   const typing = prompt ? installPromptSeam(host, prompt, Boolean(resumeWanted)) : undefined;
 
   if (__ROTARIS_SEAMS__) {
+    // A seam's press moves focus only in a focused page, which a freshly launched window on an X11 host is not always
+    // (`../page-focus.ts`); hold it before the first scheduled step.
+    const { holdPageFocus } = await import('../page-focus.js');
+    await holdPageFocus(host.win.webContents, host.log);
     const { installSeams } = await import('./seams.js');
     installSeams(host, { prompt, resumeWanted });
   }

@@ -358,9 +358,9 @@ pair. A measurement never fails the work it measures, and no test writes the ope
 
 ## The agent advisor — `tools/agent-advisor/` (R-126)
 
-`.claude/settings.json` runs it as a Claude Code hook after every tool call. Every 25th call it looks for a loop,
-asks a small model on a hit, and nudges; the third nudge in a row with no user prompt between them stops the session. A nudge is the harness's word, not the owner's:
-change the approach. Its switches (`ROTARIS_AGENT_ADVISOR_*`) are the script's header. Codex is not covered: owed.
+`.claude/settings.json` runs it as a Claude Code hook around every tool call. Every 25th call it looks for a loop,
+asks a small model on a hit, and nudges; a third nudge in a row the model confirms, no user prompt between, stops the
+session. A nudge is the harness's word: change the approach. Its switches are the script's header. Codex: owed.
 
 ## Driving the built app — `pnpm app:drive`
 

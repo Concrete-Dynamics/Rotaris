@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { PRESENTATION_STATUSES } from '@rotaris/contracts';
 import {
   CANCELLING_REFUSAL, CHIPS_DISABLED_STATES, CHIPS_ENABLED_STATES, clampComposerHeight, composerAfterSubmission, composerChipReason, draftErrorAfterWrite, composerPlaceholderFor, composerReclaimsFocus,
-  COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DEFAULT_REASONING, DRAFT_PUBLISH_MS,
+  COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DRAFT_PUBLISH_MS, liveReasoningOptions, reasoningChoices,
   DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, pausePendingAfter,
   PROJECT_SETUP_REFUSAL, reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel,
   runTimingSeconds, sendRefusal, statusStripModeItem, statusStripSandboxItem, STRIP_BACKGROUND_MIN_WIDTH, STRIP_NAMES, STRIP_PATH_MIN_WIDTH, stripCircuitBreakerArmed, stripCostText, stripItems, stripModelItem, stripWidthBand,
@@ -345,12 +345,22 @@ describe('composer — REQ-CHAT-004: the four placeholders', () => {
 });
 
 describe('composer — REQ-CHAT-009: the chip labels', () => {
-  it('defaults reasoning to high, not to the agent records medium (REQ-MONITOR-048)', () => {
-    expect(DEFAULT_REASONING).toBe('high');
-    expect(reasoningChipLabel(null)).toBe('reasoning: high');
-    expect(reasoningChipLabel('unset')).toBe('reasoning: high');
+  it('PD-CHAT-017 (REQ-CHAT-009 narrowed): the chip names the level the role states, or the provider default', () => {
+    expect(reasoningChipLabel(null)).toBe('reasoning: Provider default');
+    expect(reasoningChipLabel('default')).toBe('reasoning: Provider default');
+    expect(reasoningChipLabel('provider_default')).toBe('reasoning: Provider default');
     expect(reasoningChipLabel('low')).toBe('reasoning: low');
-    expect(reasoningChipLabel('medium')).toBe('reasoning: medium');
+    expect(reasoningChipLabel('xhigh')).toBe('reasoning: xhigh');
+  });
+  it('PD-CHAT-017: the choices are the selected model’s own levels after the provider default — never a fixed three', () => {
+    expect(reasoningChoices(['off', 'low', 'high', 'xhigh', 'max'], 'xhigh')).toEqual({ options: ['provider_default', 'off', 'low', 'high', 'xhigh', 'max'], value: 'xhigh' });
+    expect(reasoningChoices([], null)).toEqual({ options: ['provider_default'], value: 'provider_default' });
+    expect(reasoningChoices(['low', 'high'], 'default')).toEqual({ options: ['provider_default', 'low', 'high'], value: 'provider_default' });
+    // A stored level the model no longer offers is appended and shown, never silently discarded (REQ-CONFIG-332's rule).
+    expect(reasoningChoices(['low', 'high'], 'medium')).toEqual({ options: ['provider_default', 'low', 'high', 'medium'], value: 'medium' });
+  });
+  it('PD-CHAT-017: a live switch offers the model’s levels after the runtime’s unset, labelled as the provider default', () => {
+    expect(liveReasoningOptions(['low', 'xhigh'])).toEqual([{ value: 'unset', label: 'Provider default' }, { value: 'low', label: 'low' }, { value: 'xhigh', label: 'xhigh' }]);
   });
   it('names no vendor and no model until the options have loaded', () => {
     expect(modelChipLabel(false, [], null)).toBe(MODELS_LOADING_LABEL);

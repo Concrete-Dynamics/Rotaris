@@ -377,13 +377,28 @@ export function composerPlaceholderFor(hasSession: boolean, localRunActive: bool
   return COMPOSER_PLACEHOLDERS.none;
 }
 
-/** REQ-CHAT-009: `reasoning: <level>`, defaulting to **high** — which is NOT REQ-MONITOR-048's `medium` for an agent record. */
-export const REASONING_LEVELS = ['low', 'medium', 'high'] as const;
-export type ReasoningLevel = (typeof REASONING_LEVELS)[number];
-export const DEFAULT_REASONING: ReasoningLevel = 'high';
+/**
+ * PD-CHAT-017 (REQ-CHAT-009 narrowed): a reasoning control offers the levels the selected model offers — the
+ * configuration snapshot's `modelReasoning`, the projection REQ-CONFIG-332 and PD-CONFIG-007 fix — after the provider
+ * default, never a fixed `low`/`medium`/`high`. Each level is displayed under its own name. The role vocabulary spells
+ * the provider default `provider_default`; the runtime's `setReasoning` spells it `unset`.
+ */
+export const PROVIDER_DEFAULT_REASONING = 'provider_default';
+export const PROVIDER_DEFAULT_LABEL = 'Provider default';
+export const REASONING_LABELS: Readonly<Record<string, string>> = { [PROVIDER_DEFAULT_REASONING]: PROVIDER_DEFAULT_LABEL };
+const statesNoLevel = (level: string | null): boolean => level === null || level === '' || level === 'default' || level === 'unset' || level === PROVIDER_DEFAULT_REASONING;
 export function reasoningChipLabel(level: string | null): string {
-  const known = (REASONING_LEVELS as readonly string[]).includes(level ?? '') ? (level as ReasoningLevel) : DEFAULT_REASONING;
-  return `reasoning: ${known}`;
+  return `reasoning: ${statesNoLevel(level) ? PROVIDER_DEFAULT_LABEL : level}`;
+}
+/** The composer's choices for a role on a model: the provider default, the model's levels, then a stored level it no longer offers (REQ-CONFIG-332's appending rule). */
+export function reasoningChoices(offered: readonly string[], stored: string | null): { readonly options: readonly string[]; readonly value: string } {
+  const options = [PROVIDER_DEFAULT_REASONING, ...offered];
+  if (statesNoLevel(stored)) return { options, value: PROVIDER_DEFAULT_REASONING };
+  return { options: options.includes(stored!) ? options : [...options, stored!], value: stored! };
+}
+/** A live run's switch: the runtime's `unset` as the provider default, then the model's own levels. */
+export function liveReasoningOptions(offered: readonly string[]): { value: string; label: string }[] {
+  return [{ value: 'unset', label: PROVIDER_DEFAULT_LABEL }, ...offered.map((level) => ({ value: level, label: level }))];
 }
 /**
  * REQ-CHAT-009: until model options have been loaded the model chip shows a neutral label naming no vendor and

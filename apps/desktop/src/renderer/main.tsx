@@ -348,7 +348,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     personas={personas} entry={entry} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60}
     onSelectAgent={(id, source) => { if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
     onOpenPersona={(agent, focusSteer) => { void openPersona(agent, focusSteer); }}
-    models={models} imageInputModels={snapshot?.imageInputModels ?? []}
+    models={models} modelReasoning={snapshot?.modelReasoning ?? {}} imageInputModels={snapshot?.imageInputModels ?? []}
     dictation={dictation}
     onQueue={(text) => control('createQueuedPrompt', { text }, 'The run no longer accepts prompts.')}
     onEditQueued={(promptId, text) => control('editQueuedPrompt', { promptId, text }, 'Queued message was already picked up and cannot be edited.')}

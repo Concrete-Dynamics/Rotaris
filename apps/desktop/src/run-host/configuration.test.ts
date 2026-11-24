@@ -3,10 +3,10 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, redact } from '@rotaris/kernel';
-import { authProvidersOf, classifierSlotsOf, configureRun, credentialFactory, modelRefOf, postRunAnalystOf, prepareRun, restingCatalogueOf, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { authProvidersOf, classifierSlotsOf, configureRun, credentialFactory, modelRefOf, postRunAnalystOf, prepareRun, restingCatalogueOf, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, reasoningEffortsOf, runtimeFromConfiguration } from './configuration.js';
 import { childModelKey } from '@rotaris/engine';
 import { nodeClocks } from '@rotaris/platform';
-import { loadConfiguration, type ModelEntry } from '@rotaris/config';
+import { loadConfiguration, readModelEntry, type ModelEntry } from '@rotaris/config';
 
 /**
  * ADR-0030 at the run-host root: a model naming an `auth_provider` resolves the bearer main leased, per request;
@@ -629,5 +629,18 @@ personas:
     expect(modelRefOf(loaded.value, 'scripted', false)).toMatchObject({ providerId: 'scripted', modelId: 'scripted' });
     const f = credentialFactory(loaded.value, false, {}, () => ({}), async () => 'entry', () => {});
     expect(await f({ providerId: 'scripted', modelId: 'scripted', dialect: 'chat' })()).toBe('');
+  });
+});
+
+describe('PD-CONFIG-007 (REQ-CONFIG-092 extended): the effort table a model reference carries to dispatch', () => {
+  const entry = (over: Partial<ModelEntry>): ModelEntry => ({ ...readModelEntry('m', { provider: 'acme', model_id: 'm1', base_url: 'http://127.0.0.1:1/v1' }, { errors: [], warnings: [] })!, ...over });
+  it('the map spells a level, off without one sends nothing, max goes as xhigh', () => {
+    const t = reasoningEffortsOf(entry({ reasoning_effort_map: { off: 'none', high: 'HIGH' } }));
+    expect(t).toMatchObject({ off: 'none', low: 'low', high: 'HIGH', xhigh: 'xhigh', max: 'xhigh', unset: null });
+    expect(reasoningEffortsOf(entry({}))['off']).toBeNull();
+  });
+  it('an explicit reasoning_effort is sent for every level, unset included', () => {
+    const t = reasoningEffortsOf(entry({ reasoning_effort: 'medium' }));
+    for (const level of ['off', 'low', 'max', 'unset'] as const) expect(t[level]).toBe('medium');
   });
 });

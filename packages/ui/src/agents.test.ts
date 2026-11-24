@@ -160,7 +160,7 @@ describe('entryRole — the run-level agent is drawn as the latest root (REQ-MON
       row({ index: 4, kind: 'agent', name: 'reviewer', persona: 'reviewer' }),
       row({ index: 5, kind: 'agent', name: 'helper', persona: 'coding-agent' }),
     ];
-    expect(entryRole(roles, rows, [agent({ name: 'helper' })])).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+    expect(entryRole(roles, rows, [agent({ name: 'helper' })])).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', rawReasoning: null, tools: ['glob', 'read_file', 'todo'] });
   });
   it('REQ-CHAT-006 / REQ-SESSION-026: with a session-wide override in force the entry role names the model it runs on', () => {
     const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' })];
@@ -187,22 +187,22 @@ describe('entryRole — the run-level agent is drawn as the latest root (REQ-MON
     const before = [row({ index: 0, kind: 'user', body: 'read the readme' }), row({ index: 1, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 2, kind: 'user', body: 'now review it' })];
     for (const kind of ['tool', 'thinking', 'diff'] as const) {
       const rows = [...before, row({ index: 3, kind, name: 'reviewer', persona: 'reviewer', ...(kind === 'tool' ? { toolName: 'glob' } : {}) })];
-      expect(entryRole(roles, rows, [], roots)).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+      expect(entryRole(roles, rows, [], roots)).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', rawReasoning: null, tools: ['glob', 'read_file', 'todo'] });
     }
     // A row that names no author (a system notice) is no root's.
     expect(entryRole(roles, [...before, row({ index: 3, kind: 'system', body: 'Intent classified: question' })], [], roots).persona).toBe('orchestrator');
   });
   it('while a run is live, the persona its root runs as (`SessionRecord.entryPersona`) is drawn, before that root has written any row', () => {
     const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'user', body: 'now review it' })];
-    expect(entryRole(roles, rows, [], [{ name: 'orchestrator' }], 'reviewer')).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+    expect(entryRole(roles, rows, [], [{ name: 'orchestrator' }], 'reviewer')).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', rawReasoning: null, tools: ['glob', 'read_file', 'todo'] });
     // At rest (no live run) the transcript decides.
     expect(entryRole(roles, rows, [], [{ name: 'orchestrator' }], null).persona).toBe('orchestrator');
   });
   it('one root, a child\'s rows after it, or no root row at all', () => {
     const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'agent', name: 'helper', persona: 'coding-agent' })];
-    expect(entryRole(roles, rows, [agent({ name: 'helper' })])).toEqual({ persona: 'orchestrator', model: 'large', reasoning: 'high', tools: ['read_file', 'grep', 'glob', 'write_file'] });
+    expect(entryRole(roles, rows, [agent({ name: 'helper' })])).toEqual({ persona: 'orchestrator', model: 'large', reasoning: 'high', rawReasoning: 'high', tools: ['read_file', 'grep', 'glob', 'write_file'] });
     expect(entryRole(roles, [], []).persona).toBe('orchestrator');
-    expect(entryRole([], [row({ kind: 'agent', name: 'reviewer', persona: 'reviewer' })], [])).toEqual({ persona: 'reviewer', model: '', reasoning: 'medium', tools: [] });
+    expect(entryRole([], [row({ kind: 'agent', name: 'reviewer', persona: 'reviewer' })], [])).toEqual({ persona: 'reviewer', model: '', reasoning: 'medium', rawReasoning: null, tools: [] });
   });
   /*
    * REQ-CHAT-006 / REQ-CHAT-009 with REQ-CONFIG-063, added 2026-11-08: the composer's three chips choose what the NEXT
@@ -219,7 +219,7 @@ describe('entryRole — the run-level agent is drawn as the latest root (REQ-MON
     ];
     // The whole fallback is measured, not just the name: the model and the reasoning come from the SAME role lookup,
     // so the literal fallback misdrew all three chip values at once.
-    expect(entryRole(configured, [], [], [], null, [], 'architect')).toEqual({ persona: 'architect', model: 'arch-model', reasoning: 'low', tools: ['glob'] });
+    expect(entryRole(configured, [], [], [], null, [], 'architect')).toEqual({ persona: 'architect', model: 'arch-model', reasoning: 'low', rawReasoning: 'low', tools: ['glob'] });
     // The configured value loses to a live run's root persona and to the transcript's latest root, which stay pinned above.
     expect(entryRole(configured, [], [], [], 'orchestrator', [], 'architect').persona).toBe('orchestrator');
     const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' })];

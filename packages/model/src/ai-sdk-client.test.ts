@@ -397,3 +397,36 @@ describe('model — a tool call\'s streamed arguments are model events (REQ-ORCH
     expect(report.toolCalls).toEqual([{ callId: 'call_1', name: 'write_file', args: JSON.stringify(JSON.parse(pieces.join(''))) }]);
   });
 });
+
+describe('PD-CONFIG-007 (REQ-CONFIG-092 extended): the effort a thinking level sends, on both dialects', () => {
+  const responsesDone = JSON.stringify({ type: 'response.completed', response: { id: 'r1', created_at: 0, model: 'acme-1', output: [], usage: { input_tokens: 1, output_tokens: 1 } } });
+  async function bodyFor(dialect: 'chat' | 'responses', over: Partial<ModelRequest>): Promise<Record<string, unknown>> {
+    const seen: string[] = [];
+    const fake: FetchLike = async (_input, init) => {
+      seen.push(bodyOf(init));
+      return dialect === 'chat' ? sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 1, completion_tokens: 1 }), '[DONE]']) : sse([responsesDone]);
+    };
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
+    await collect(client.stream(request(dialect, over)));
+    return JSON.parse(seen[0]!) as Record<string, unknown>;
+  }
+  const effortOf = (dialect: 'chat' | 'responses', body: Record<string, unknown>): unknown => (dialect === 'chat' ? body['reasoning_effort'] : (body['reasoning'] as { effort?: unknown } | undefined)?.effort);
+
+  for (const dialect of ['chat', 'responses'] as const) {
+    it(`${dialect}: a level reaches the endpoint — xhigh as itself, max as xhigh, off and unset as no field`, async () => {
+      expect(effortOf(dialect, await bodyFor(dialect, { thinking: 'low' }))).toBe('low');
+      expect(effortOf(dialect, await bodyFor(dialect, { thinking: 'xhigh' }))).toBe('xhigh');
+      expect(effortOf(dialect, await bodyFor(dialect, { thinking: 'max' }))).toBe('xhigh');
+      expect(effortOf(dialect, await bodyFor(dialect, { thinking: 'off' }))).toBeUndefined();
+      expect(effortOf(dialect, await bodyFor(dialect, { thinking: 'unset' }))).toBeUndefined();
+    });
+    it(`${dialect}: the model's own effort table wins — a map's spelling, and an explicit override even for unset`, async () => {
+      const model = { providerId: 'acme', modelId: 'acme-1', dialect, reasoningEfforts: { off: 'none', max: 'max', unset: null } };
+      expect(effortOf(dialect, await bodyFor(dialect, { model, thinking: 'off' }))).toBe('none');
+      expect(effortOf(dialect, await bodyFor(dialect, { model, thinking: 'max' }))).toBe('max');
+      expect(effortOf(dialect, await bodyFor(dialect, { model, thinking: 'unset' }))).toBeUndefined();
+      const pinned = { providerId: 'acme', modelId: 'acme-1', dialect, reasoningEfforts: { unset: 'medium', low: 'medium' } };
+      expect(effortOf(dialect, await bodyFor(dialect, { model: pinned, thinking: 'unset' }))).toBe('medium');
+    });
+  }
+});

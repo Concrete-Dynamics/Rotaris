@@ -37,6 +37,28 @@ export interface ModelRef {
   readonly baseUrl?: string | undefined;
   /** REQ-PROVIDER-149: the selected model's explicit image-input declaration. */
   readonly acceptsImageInput?: boolean | undefined;
+  /**
+   * PD-CONFIG-007 (REQ-CONFIG-089/092 extended): the effort string each thinking level sends this model's endpoint,
+   * `null` for no reasoning-effort field — computed from the entry's `reasoning_effort` and `reasoning_effort_map` by
+   * the root that resolves configuration (`providerEffort`), because this package may not read configuration. A level
+   * the table does not name takes `effortFor`'s built-in route. Absent means the built-in route for every level.
+   */
+  readonly reasoningEfforts?: Readonly<Partial<Record<ThinkingLevel, string | null>>> | undefined;
+}
+
+/**
+ * PD-CONFIG-007's route from a thinking level to the effort an endpoint receives, `null` meaning no field at all: the
+ * model's own table first (`ModelRef.reasoningEfforts`), else `low`, `medium`, `high` and `xhigh` as themselves, `max`
+ * as `xhigh`, and `off` and `unset` as nothing — "switched off" is never a guessed string.
+ */
+export function effortFor(model: Pick<ModelRef, 'reasoningEfforts'>, level: ThinkingLevel): string | null {
+  const table = model.reasoningEfforts;
+  if (table !== undefined && Object.hasOwn(table, level)) return table[level] ?? null;
+  switch (level) {
+    case 'low': case 'medium': case 'high': case 'xhigh': return level;
+    case 'max': return 'xhigh';
+    case 'off': case 'unset': return null;
+  }
 }
 
 export type ContentPart =

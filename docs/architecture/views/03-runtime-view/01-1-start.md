@@ -220,6 +220,13 @@ where the seams are compiled in (`isScriptedProvider`, `run-host/configuration.t
 OpenAI-compatible provider name. ADR-0056 rule 4 (b)'s packaged launch runs against a loopback stub reached through that client.
 *(Until then a packaged build answered a `scripted` entry with the stand-in and a fixed one-step script.)*
 
+**The effort a thinking level sends (PD-CONFIG-007, REQ-CONFIG-089/092; R-126, 2026-11-24).** `modelRefOf` puts the entry's
+effort table on the `ModelRef` (`reasoningEfforts`, one `providerEffort` per level, `unset` included), and the model port reads
+it at dispatch (`effortFor`, `packages/model/src/ports.ts`), so a role's synthetic copy and a mid-run `setReasoning` follow the
+same map and override as the configured level. `AiSdkModelClient` sends it under each dialect's own key — `openaiCompatible` for
+the chat dialect, `openai` with `forceReasoning` for the responses dialect. *(Until then the chat dialect's effort sat under
+`openai`, which its SDK never reads, so no chat endpoint received a level; and `max` went as `high`.)*
+
 **The continuation lease (2026-09-14, REQ-PROVIDER-066).** The run-launching continuation commands —
 `session.continue`, `session.prompt`, `session.planDecision`, and since 2026-10-02 `session.retry` (REQ-NOTIFY-045) — re-ask main for the credential lease
 (`leaseForContinuation`) before the engine resolves the run's setup, and publish the fresh bearers under

@@ -149,7 +149,7 @@ export function runLevelModel(session: Pick<SessionRecord, 'entryModelKey'>, ent
 }
 
 /** The entry role as `runLevelAgent` draws it: its persona, model, reasoning and the declared tools that stand in for its grant. */
-export interface EntryRole { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }
+export interface EntryRole { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[]; /** PD-CHAT-017: the role's `thinking:` as stated, null when it states none — what the composer's reasoning chip shows. */ readonly rawReasoning?: string | null }
 /**
  * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): the persona the LATEST root runs or ran as —
  * while a run is live, the persona its root runs as (`SessionRecord.entryPersona`, passed as `live`); else the `persona` of
@@ -194,7 +194,7 @@ export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 
   // REQ-CHAT-006 / REQ-SESSION-026 / REQ-NOTIFY-089: a session-wide override of the configured key is what the next run starts
   // with, so the role names the key it runs on (`SessionRecord.modelOverrides`, already the end of the override chain).
   const configured = role?.effectiveModel ?? '';
-  return { persona, model: modelInForce(configured, overrides), reasoning: role?.rawThinking ?? 'medium', tools: role?.declaredTools ?? [] };
+  return { persona, model: modelInForce(configured, overrides), reasoning: role?.rawThinking ?? 'medium', rawReasoning: role?.rawThinking ?? null, tools: role?.declaredTools ?? [] };
 }
 /**
  * REQ-CHAT-006 / REQ-SESSION-026: the model key an agent configured on `configured` runs on — the override in force for it

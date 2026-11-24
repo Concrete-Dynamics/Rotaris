@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { countNoun, err, ok } from '@rotaris/kernel';
 import { declaredToolsOf, isDelegationTarget, NOT_DELEGATION_TARGETS, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
-import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, readSavedConfiguration, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, providerEffort, readProjectSnapshot, readSavedConfiguration, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type HelperModel, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
@@ -181,7 +181,18 @@ export function modelRefOf(cfg: LoadedConfiguration, name: string | null, script
   const baseUrl = entry.base_url ?? PROVIDER_BASE_URLS[entry.provider];
   if (!baseUrl) return null;
   const dialect = entry.api_mode === 'responses' && !entry.disable_responses_api ? 'responses' : 'chat';
-  return { providerId: entry.provider, modelId: entry.model_id, dialect, baseUrl, acceptsImageInput: entry.accepts_image_input };
+  return { providerId: entry.provider, modelId: entry.model_id, dialect, baseUrl, acceptsImageInput: entry.accepts_image_input, reasoningEfforts: reasoningEffortsOf(entry) };
+}
+
+const THINKING_LEVELS: readonly ThinkingLevel[] = ['off', 'low', 'medium', 'high', 'xhigh', 'max', 'unset'];
+/**
+ * PD-CONFIG-007 (REQ-CONFIG-089/092 extended): what each thinking level sends this entry's endpoint, by the one rule
+ * `providerEffort` states — an explicit `reasoning_effort` verbatim, else the `reasoning_effort_map`'s spelling, else
+ * the built-in route. The model port reads the table at dispatch, so a level switched mid-run (`setReasoning`) or a
+ * role's synthetic copy (REQ-CONFIG-079) reaches the endpoint by the same rule as the configured one.
+ */
+export function reasoningEffortsOf(entry: ModelEntry): Readonly<Partial<Record<ThinkingLevel, string | null>>> {
+  return Object.fromEntries(THINKING_LEVELS.map((level) => [level, providerEffort({ ...entry, thinking: level === 'unset' ? null : level })]));
 }
 
 /** REQ-CONFIG-083 / REQ-PROVIDER-092: an `auth_provider` reads the leased bearer; otherwise `api_key` outranks `api_key_env`. Read per request. */

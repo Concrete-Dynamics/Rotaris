@@ -5,9 +5,9 @@ import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, ty
 import { projectSidebarSection } from './settings/project-init.js'; // Part AS
 import { err, ok } from '@rotaris/kernel';
 import {
-  clampComposerHeight, composerAfterSubmission, composerChipReason, composerPlaceholderFor, composerReclaimsFocus, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
+  clampComposerHeight, composerAfterSubmission, composerChipReason, composerPlaceholderFor, composerReclaimsFocus, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT,
   draftErrorAfterWrite, DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel,
-  pausePendingAfter, REASONING_LEVELS, runStateOf, sendRefusal,
+  pausePendingAfter, REASONING_LABELS, reasoningChoices, runStateOf, sendRefusal,
   type DraftWriteOutcome, type HistoryWalk, type PauseScope, type RunState,
 } from './composer.js';
 import { RunCompress, RunHeader, RunSwitches } from './RunHeader.js';
@@ -121,7 +121,9 @@ export interface WorkspaceViewProps {
   readonly imageInputModels?: readonly string[] | undefined;
   /** Part R — the inspector (REQ-MONITOR-050..067): the configured personas, the entry role's facts for the run-level agent, the compression threshold. */
   readonly personas?: readonly PersonaEntry[] | undefined;
-  readonly entry?: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] } | undefined;
+  readonly entry?: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[]; readonly rawReasoning?: string | null | undefined } | undefined;
+  /** PD-CHAT-017: the levels each model offers, keyed as `models` is (`ConfigSnapshot.modelReasoning`). */
+  readonly modelReasoning?: Readonly<Record<string, readonly string[]>> | undefined;
   readonly compressionThresholdPercent?: number | undefined;
   /** REQ-SHELL-073 / REQ-MONITOR-072: a tree click selects (the shared selection) and, with the preference on, the caller opens the window; `key` moves select only. */
   readonly onSelectAgent?: ((id: string | null, source?: 'click' | 'key') => void) | undefined;
@@ -778,7 +780,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], modelReasoning = {}, imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, dictation}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // PD-CHAT-015: whose transcript is shown — the run's own conversation first. REQ-CHAT-069's "This task" needs a
   // selected agent, and without one it is the run's.
@@ -826,6 +828,7 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
   const projectSection = initialization === null ? null : projectSidebarSection(initialization.view, initialization.labels);
   const sendReasonId = useId();
   const acceptsImages = entry !== undefined && imageInputModels.includes(entry.model);
+  const nextReasoning = reasoningChoices(modelReasoning[entry?.model ?? ''] ?? [], entry?.rawReasoning ?? null);
   const attachmentReason = acceptsImages ? null : 'The selected model does not declare image input support.';
   const estimate = composerTokenEstimate(text, attachments);
 
@@ -1354,7 +1357,7 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
     setConfirming({ agent: { id: agent.id, name: agent.name } });
   };
   const inspector = (
-    <Inspector session={session} rows={rows} personas={personas} runLevel={runLevel} selectedAgentId={selectedAgent} onSelect={(id) => select(id, 'click')} models={models}
+    <Inspector session={session} rows={rows} personas={personas} runLevel={runLevel} selectedAgentId={selectedAgent} onSelect={(id) => select(id, 'click')} models={models} modelReasoning={modelReasoning}
       compressionThresholdPercent={compressionThresholdPercent} runActive={runActive} resting={resting} nowIso={nowIso}
       onSteer={(agent) => { if (onOpenPersona) onOpenPersona(agent, true); else setSteering({ id: agent.id, name: agent.name }); }}
       onCancel={inspectorCancel} onPopOut={(agent) => onOpenPersona?.(agent, false)} onSetModel={onSetModel} onSetReasoning={onSetReasoning}
@@ -1584,7 +1587,7 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
             {narrow && <DesignButton type="button" className="btn btn-ghost btn-compact run-panel__close" aria-label="Close the run panel" onClick={() => setDrawer(null)}><i className="ph ph-x" aria-hidden="true" /></DesignButton>}
           </div>
           <div className="run-panel__switches">
-            <RunSwitches runState={runState} session={session} runActive={runActive} models={models} onSetModel={onSetModel} onSetReasoning={onSetReasoning} onError={setError} />
+            <RunSwitches runState={runState} session={session} runActive={runActive} models={models} reasoningLevels={modelReasoning[entry?.model ?? ''] ?? []} onSetModel={onSetModel} onSetReasoning={onSetReasoning} onError={setError} />
           </div>
           <section className="agents" aria-label="Delegation">
             <div className="agents__header">
@@ -1736,10 +1739,10 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
           {onSetNextReasoning && (
             <PopoverChip id="chip-reasoning" testId="chip-reasoning" ariaLabel="Reasoning effort for the next run"
               icon="ph-brain" reason={chipReason} strip stripCompact={stripTight}
-              value={(REASONING_LEVELS as readonly string[]).includes(entry?.reasoning ?? '') ? entry!.reasoning : DEFAULT_REASONING}
-              options={REASONING_LEVELS}
-              labels={{ low: 'Low', medium: 'Medium', high: 'High' }}
-              hints={{ medium: 'default' }}
+              /* PD-CHAT-017 (REQ-CHAT-009 narrowed): the selected model's own levels, after the provider default. */
+              value={nextReasoning.value}
+              options={nextReasoning.options}
+              labels={REASONING_LABELS}
               onChoose={(v) => { void onSetNextReasoning(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
           )}
           {/* REQ-ORCH-152: the run-start mode. It obeys the same enablement rule as its three neighbours — it

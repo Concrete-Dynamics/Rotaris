@@ -2,7 +2,7 @@ import { err, millis, ok, type MonotonicClock, type Result, type TimerHandle, ty
 import { APICallError, jsonSchema, Output, RetryError, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRef, type ModelRequest, type OutputSpec, type StreamPart, type ToolSpec, type Usage } from './ports.js';
+import { effortFor, modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRef, type ModelRequest, type OutputSpec, type StreamPart, type ToolSpec, type Usage } from './ports.js';
 import { createStreamNormaliser, reasoningItemSeparator } from './reasoning.js';
 import { costAskFor, reportedCostExtractor, reportedCostFrom } from './reported-cost.js';
 
@@ -311,14 +311,23 @@ export class AiSdkModelClient implements ModelClient {
       const output = req.output === undefined ? undefined : req.output.kind === 'json_schema' ? Output.object({ schema: jsonSchema(req.output.schema as Parameters<typeof jsonSchema>[0]) }) : Output.json();
       const { instructions, rest } = splitSystem(req.messages);
       const shape = req.model.dialect === 'responses' ? this.opts.responsesShapeFor?.(req.model) : undefined;
-      const openaiOptions: Record<string, string | boolean | string[]> = {
-        ...(req.thinking === 'unset' ? {} : { reasoningEffort: req.thinking === 'max' ? 'high' : req.thinking }),
+      /**
+       * PD-CONFIG-007 (REQ-CONFIG-092 extended): the effort is the model's own (`effortFor`). Each dialect's SDK reads it
+       * under its own key — the chat dialect's under `openaiCompatible`, where an `openai` key reached no endpoint at
+       * all, and the responses dialect's under `openai` with `forceReasoning`, without which the SDK drops the effort
+       * for any model id it does not itself recognise as a reasoning model (every self-hosted one among them).
+       * Measured 2026-11-24: neither dialect sent a configured level to a non-OpenAI-named model.
+       */
+      const effort = effortFor(req.model, req.thinking);
+      const openaiOptions: Record<string, string | boolean | string[]> = req.model.dialect === 'responses' ? {
+        ...(effort === null ? {} : { reasoningEffort: effort, forceReasoning: true }),
         ...(shape?.stateless ? { store: false, include: ['reasoning.encrypted_content'] } : {}),
         ...(shape?.instructionsInBody ? { instructions: instructions ?? '' } : {}),
-      };
+      } : effort === null ? {} : { reasoningEffort: effort };
+      const optionsKey = req.model.dialect === 'responses' ? 'openai' : 'openaiCompatible';
       const result = streamText({
         model, messages: toModelMessages(rest), ...(instructions === undefined || shape?.instructionsInBody ? {} : { instructions }), abortSignal: signal, maxRetries: req.retries, ...(tools ? { tools } : {}), ...(output ? { output } : {}),
-        ...(Object.keys(openaiOptions).length === 0 ? {} : { providerOptions: { openai: openaiOptions } }),
+        ...(Object.keys(openaiOptions).length === 0 ? {} : { providerOptions: { [optionsKey]: openaiOptions } }),
       });
       let usage: Usage | null = null;
       // PD-MONITOR-001: the provider's own cost for this request, carried on the `finish-step` part the

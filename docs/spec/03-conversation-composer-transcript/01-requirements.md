@@ -42,6 +42,9 @@ Part 1 of 7 of [domain 03](../03-conversation-composer-transcript.md), which ind
   > control draws its icon alone while its value stays mounted for the probes and the panel keeps
   > listing the current choice; the compact tooltip names control and choice. Order, thresholds and
   > what never shortens are the directive's, and govern there.
+  > **Narrowed by [`PD-CHAT-017`](../../product/directives/pd-chat-017.md#pd-chat-017), 2026-11-24.** The
+  > reasoning chip offers the selected model's own levels after a Provider default entry, not `low` /
+  > `medium` / `high`, and with no level stated it shows the provider default rather than `high`.
 - **REQ-CHAT-010** — Composer geometry defaults MUST be: composer block default height 150 px, minimum 110 px; transcript area minimum 180 px; composer widget minimum height 48 px. The divider between transcript and composer MUST be user-draggable and its position persisted across launches.
 
   > **Narrowed by [`PD-ORCH-002`](../../product/directives/pd-orch-002.md#pd-orch-002) revision 2, 2026-09-17.** In exactly

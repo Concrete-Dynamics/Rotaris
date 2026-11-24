@@ -9,6 +9,7 @@ import { markMotionStart } from './motion.js';
 import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, StatusDot as DesignStatusDot } from './design-system/index.js';
 import { PopoverMenu } from './design-system/overlays.js';
 import { annotatedModelOptions } from './model-options.js';
+import { liveReasoningOptions } from './composer.js';
 
 /**
  * REQ-MONITOR-050..067 (Part R): the per-agent inspector. One tab per configured persona (050); the selected
@@ -37,6 +38,8 @@ export interface InspectorProps {
   readonly selectedAgentId: string | null;
   readonly onSelect: (id: string | null) => void;
   readonly models: readonly string[];
+  /** PD-CHAT-017: the levels each model offers (`ConfigSnapshot.modelReasoning`); a model it does not name offers the provider default alone. */
+  readonly modelReasoning?: Readonly<Record<string, readonly string[]>> | undefined;
   /** REQ-MONITOR-067: models the provider withholds, with its reason; empty in this build (no provider reports one). */
   readonly withheldModels?: readonly { readonly model: string; readonly reason: string }[] | undefined;
   readonly compressionThresholdPercent: number;
@@ -68,7 +71,7 @@ export const NEXT_ITERATION_NOTE = 'Takes effect from the next iteration, for th
 export const NO_ARTIFACTS = 'This agent has produced and received no artifacts yet.';
 
 export function Inspector(props: InspectorProps) {
-  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, resting, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onClose, onOpenArtifact } = props;
+  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, modelReasoning = {}, withheldModels = [], compressionThresholdPercent, runActive, resting, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onClose, onOpenArtifact } = props;
   const agents = useMemo(() => session?.agents ?? [], [session]);
   const selected = useMemo(() => (selectedAgentId === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgentId) ?? null), [selectedAgentId, agents, runLevel]);
   // PD-ORCH-005 clause 4 with OQ-97: the run-level agent owns the rows its roots wrote, under whichever name each carries.
@@ -176,9 +179,10 @@ export function Inspector(props: InspectorProps) {
               /* REQ-MONITOR-194: the shown key re-chosen counts only when the session holds it out of quota — the explicit choice that clears it. */
               onChange={(v) => { if (onSetModel && v !== '' && (v !== currentModel || (session?.excludedModels ?? []).includes(v))) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }} />
             <label className="field-label" htmlFor="inspector-reasoning">Reasoning</label>
-            <DesignSearchableSelect id="inspector-reasoning" className="input select" ariaLabel="Agent reasoning" value={['low', 'medium', 'high'].includes(shown.reasoning) ? shown.reasoning : 'medium'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning"
+            <DesignSearchableSelect id="inspector-reasoning" className="input select" ariaLabel="Agent reasoning" value={(modelReasoning[currentModel] ?? []).includes(shown.reasoning) ? shown.reasoning : 'unset'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning"
               filterPlaceholder="Filter levels…" emptyText="No matching level."
-              options={['low', 'medium', 'high'].map((l) => ({ value: l, label: l }))}
+              /* PD-CHAT-017: the agent's model's own levels, after the provider default — never a fixed three. */
+              options={liveReasoningOptions(modelReasoning[currentModel] ?? [])}
               onChange={(v) => { if (onSetReasoning && v !== '') void onSetReasoning(v).then((r) => setError(r.ok ? null : r.reason)); }} />
             <span id="inspector-controls-note" className="text-secondary inspector__note" data-testid="inspector-controls-note">{writable ? NEXT_ITERATION_NOTE : PER_PERSONA_NOTE}</span>
           </div>

@@ -127,6 +127,7 @@ Part 3 of 8 of [domain 02](../02-run-monitoring-steering.md), which indexes ever
 **REQ-MONITOR-143** — Given the run loop has already closed, a switch still records the override without announcing it, because no live loop remains to receive the announcement; the control must not error.
 
 **REQ-MONITOR-144** — The run header's active-run model selector and active-run reasoning selector (low / medium / high) are enabled while a run is executing in state `running` or in state `waiting`, and changing either applies the corresponding switch immediately as a next-iteration change. They are enabled during `waiting` because changing the model is the documented way out of a provider quota wait (REQ-MONITOR-145, REQ-MONITOR-303); a switch made during a wait takes effect on the iteration that resumes it.
+  > **Narrowed by [`PD-CHAT-017`](../../product/directives/pd-chat-017.md#pd-chat-017), 2026-11-24.** The reasoning selector offers Provider default and the run's model's own levels, not low / medium / high.
 
 **REQ-MONITOR-145** — Mid-run model switching is the supported recovery lever for moving back to a primary model once its provider has been re-authenticated, in a run that has meanwhile been proceeding on a fallback.
 

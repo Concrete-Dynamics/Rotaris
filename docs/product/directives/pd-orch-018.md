@@ -59,6 +59,11 @@ narrows REQ-ORCH-005 for a continued run's carried intent. Neither case is a `so
 owner's choice over a `node:vm` context (not a security boundary) and a separate Node process (a sixth kind of process).
 Its decision record is written with the spike that is the first act of building clause 5.
 
+**The spike, 2026-11-24** ([report](../../architecture/spikes/quickjs-workflow-isolate.md)). Held: no ambient authority, calls to the host journalled in call
+order, a looping script interrupted at its deadline. Falsified: the engine's own memory limit did not bound an allocating
+script, which took the process to 2 GiB; a capped WebAssembly memory per workflow did, at 125 MiB. Not yet measured inside
+Electron or the packaged application.
+
 **First execution of clauses 1, 2 and 4, 2026-11-24.** `Sessions` hands a `solo` run no pre-flight; `entryInstructionsFor`
 gives the entry role the solo statement; the run host's port grants the direct-work bundle with `delegate` and withholds
 `delegate` from an agent at `runtime.max_depth`. Against the owner's self-hosted `ds41` (`pnpm live-run --only=solo`) the run

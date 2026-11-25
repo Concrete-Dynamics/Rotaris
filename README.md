@@ -120,16 +120,15 @@ missing, as it is in a new Git worktree, `node node_modules/electron/install.js`
 
 ## Status
 
-Rotaris is **pre-release**. The version it declares is `0.1.0rc9` (`apps/desktop/package.json`).
+Rotaris is **pre-release**. The version it declares is `0.1.0rc10` (`apps/desktop/package.json`).
 
-**What is published.** `v0.1.0rc9` is a release candidate for **Windows x64** — a setup installer and a portable
+**What is published.** `v0.1.0rc10` is a release candidate for **Windows x64** — a setup installer and a portable
 executable — and **Linux x86_64** — an AppImage and a Debian package
 ([`PD-STARTUP-013`](docs/product/directives/pd-startup-013.md#pd-startup-013)) — with a CycloneDX SBOM for each platform,
 `SHA256SUMS.txt` and its signature, built, signed and drafted by the tag workflow (`.github/workflows/release.yml`). It
-follows `v0.1.0rc7` of 2026-11-21 and six candidates before it. It carries Rotaris Cloud as a provider
-([`PD-PROVIDER-004`](docs/product/directives/pd-provider-004.md#pd-provider-004)) and an agent changing Rotaris's own
-configuration through `configure` with the approval dialog naming the value
-([`PD-CONFIG-014`](docs/product/directives/pd-config-014.md#pd-config-014)). `v0.1.0rc8` built nothing.
+follows `v0.1.0rc9` of 2026-11-24 and seven candidates before it. It carries the Lead strategy and its workflows,
+loop supervision that reviews progress at an interval, an agent advisor that consults a stronger model, and the Dusk Light
+theme with a first-launch theme dialog.
 
 Three things a reader should know about it:
 
@@ -161,7 +160,7 @@ Three things a reader should know about it:
   [`PD-STARTUP-001`](docs/product/directives/pd-startup-001.md#pd-startup-001)). Nothing in the application is removed or
   disabled there. The proofs are run from source on Windows and on Linux.
 
-**What stands between `v0.1.0rc9` and `v0.1.0`**, from
+**What stands between `v0.1.0rc10` and `v0.1.0`**, from
 [`docs/architecture/first-release-plan.md`](docs/architecture/first-release-plan.md):
 
 - **The release gate** ([§5](docs/architecture/first-release-plan/06-5-the-release-gate.md#5-the-release-gate)): the installer and the

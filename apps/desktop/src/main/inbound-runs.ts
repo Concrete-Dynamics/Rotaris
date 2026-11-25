@@ -459,25 +459,25 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
 
   const runStatus = async (handle: string): Promise<InboundRunStatusAnswer> => {
     // REQ-MCP-123/130: only a handle this surface minted is answered; anything else is refused, so no other run is readable.
-    const run = deps.runs.byHandle(handle);
-    if (run === undefined) return { kind: 'refused', code: 'inbound.unknown-run', headline: 'No run of this surface answers to that handle' };
+    const first = deps.runs.byHandle(handle);
+    if (first === undefined) return { kind: 'refused', code: 'inbound.unknown-run', headline: 'No run of this surface answers to that handle' };
     // A start that was DEFINITELY refused is stated as that refusal (REWORK 4: "a subsequent startup failure is a status outcome").
-    if (run.refusal !== null) return { kind: 'refused', code: run.refusal.code, headline: run.refusal.headline, ...(run.refusal.detail === undefined ? {} : { detail: run.refusal.detail }) };
-    /*
-     * MAJOR (2026-11-25): a run that has ENDED is answered from the state FROZEN at its end, never from a later reading of
-     * the same session. A desktop continuation of the session would otherwise make this old handle report the
-     * continuation's state and waiting flag, and blend its own reason with the continuation's status (REQ-MCP-123/125/130).
-     */
-    if (run.endState !== null) return { kind: 'inbound.runStatus', status: endedStatus(run) };
+    if (first.refusal !== null) return { kind: 'refused', code: first.refusal.code, headline: first.refusal.headline, ...(first.refusal.detail === undefined ? {} : { detail: first.refusal.detail }) };
     /*
      * REQ-MCP-123/126 (REWORK 4, point 8): a second, ask-INDEPENDENT path to the attempt's outcome. The product's own state
      * for the minted session is read here; a state for it is positive evidence the execution exists, so a held attempt
      * settles by this read whether or not the caller ever asked again.
      */
-    const read = await deps.readStatus(run.workspaceId ?? '', run.sessionId);
-    if (read.kind === 'row') deps.runs.observe(run.sessionId, { executionStatus: read.executionStatus, stopReason: null, awaitingInput: read.awaitingInput });
-    const now = deps.runs.byHandle(handle);
-    if (now === undefined) return { kind: 'refused', code: 'inbound.unknown-run', headline: 'No run of this surface answers to that handle' };
+    const read = await deps.readStatus(first.workspaceId ?? '', first.sessionId);
+    if (read.kind === 'row') deps.runs.observe(first.sessionId, { executionStatus: read.executionStatus, stopReason: null, awaitingInput: read.awaitingInput });
+    const now = deps.runs.byHandle(handle) ?? first;
+    /*
+     * MAJOR (2026-11-25; B3's negative control reverts exactly this): a run that has ENDED is answered from the state
+     * FROZEN at its end, never from a later reading of the same session. A desktop continuation of the session would
+     * otherwise make this old handle report the continuation's state and waiting flag, and blend its own reason with the
+     * continuation's status (REQ-MCP-123/125/130). ONE seam, after the read, so an ended handle is answered from its own
+     * end whatever the read found (`observe` above already no-ops for a handle whose end is frozen).
+     */
     if (now.endState !== null) return { kind: 'inbound.runStatus', status: endedStatus(now) };
     if (!now.confirmed) {
       // A start reserved but not confirmed, with nothing yet in the product: the handle reads `starting` and the slot is held.

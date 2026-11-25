@@ -83,7 +83,12 @@ export function createInboundEnableSequencer(ports: InboundEnablePorts): Inbound
     return tracked;
   };
 
-  const disable = (): Promise<CommandOutcome> => serialize(async (): Promise<CommandOutcome> => {
+  /**
+   * The disable's own work, run INSIDE the one chain (MAJOR of review 4): a disable that arrives while an enable is still
+   * binding waits for it and THEN unbinds, instead of reading both flags as false, skipping the listener, and leaving the
+   * exposure to be switched ON by the enable's reply.
+   */
+  const doDisable = async (): Promise<CommandOutcome> => {
     const wasEnabled = ports.exposure.view(false).enabled;
     // REQ-MCP-120/121: the exposure main shows is revoked at once — the choice does not persist. With nothing to revoke
     // and nothing the listener may hold, there is nothing to ask; otherwise the listener is asked to unbind.
@@ -96,7 +101,9 @@ export function createInboundEnableSequencer(ports: InboundEnablePorts): Inbound
     }
     listenerBound = false;
     return { ok: true, value: ports.exposure.view(false) };
-  });
+  };
+
+  const disable = (): Promise<CommandOutcome> => serialize(doDisable);
 
   return { enable, disable, listenerBound: () => listenerBound, listenerGone: () => { listenerBound = false; } };
 }

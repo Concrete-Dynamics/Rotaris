@@ -530,12 +530,10 @@ export class InboundSurfaceRuns {
     //
     // REWORK 9: only while the run is NOT PARKED. A desktop pause leaves the session parked, and a parked session may be
     // continued on the SAME iteration (the advisor's rule), so an absence of a parked run proves nothing about whether it
-    // can resume. Such a reading is recorded (the phase arm below) and the slot is HELD.
+    // can resume. The absent reading is no observation of a phase (it states no status), so the phase the handle already
+    // holds stands and the slot is HELD.
     if (event.kind === 'listing-gone') {
-      if (isParkedStatus(run.phase?.executionStatus ?? '')) {
-        run.phase = { executionStatus: 'paused', awaitingInput: run.phase?.awaitingInput ?? false, stopReason: run.phase?.stopReason ?? null };
-        return { newlyConfirmed, released: false };
-      }
+      if (isParkedStatus(run.phase?.executionStatus ?? '')) return { newlyConfirmed, released: false };
       this.#freeze(run, { executionStatus: 'stopped', awaitingInput: false }, 'agent_session_aborted', true);
       return { newlyConfirmed, released: true };
     }

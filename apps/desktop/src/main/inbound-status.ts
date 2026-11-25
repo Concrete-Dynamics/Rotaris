@@ -73,17 +73,13 @@ export function stoppedSession(snapshot: SessionSnapshot): { readonly sessionId:
     state: {
       executionStatus: snapshot.session.executionStatus,
       stopReason: snapshot.session.stopReason,
-      /*
-       * MAJOR 2(b) (REQ-MCP-123/125/126, 2026-11-25): the EXECUTION's own identity, as the product publishes it. The run
-       * host writes `runStartedAt` anew for every launch of the session, so a snapshot of a LATER execution of the same
-       * session (a desktop continuation) carries a different instant and the surface can tell it from this handle's run
-       * instead of adopting its state. `null` before any run wrote it (nothing to compare, and the first real launch's
-       * snapshot then fixes it).
-       */
-      executionStartedAt: snapshot.session.runStartedAt,
       // REQ-MCP-125: the same rule the listing uses (REQ-SESSION-031) — a pending approval or a pending question means
       // the run waits on a person. Read off the published record, so a run that ends through a park reports the flag it
       // had at its end (MAJOR of 2026-11-25: the frozen end state, not a later read of the same session).
+      //
+      // REWORK 6 (2026-11-25): the record's `runStartedAt` is NOT carried. Round 5 read it here as an execution identity
+      // and refused a state whose instant differed; that was falsified (a desktop revise starts the next phase of the
+      // same run with a new instant), so the field left `ObservedState` entirely.
       awaitingInput: snapshot.session.pendingApprovals.length > 0 || snapshot.session.pendingQuestions.length > 0,
     },
   };

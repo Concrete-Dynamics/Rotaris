@@ -118,7 +118,9 @@ function wired(): {
   // As `index.ts` wires it: the run's end releases the slot and keeps its reason; the snapshot settles a park/cancel.
   eventListeners.add((e) => {
     if (e.kind === 'run.result') runs.ended(e.sessionId, e.result.stop_reason, e.result.execution_status);
-    else if (e.kind === 'publish.snapshot') { const o = stoppedSession(e.payload); runs.observe(o.sessionId, o.state); }
+    // REWORK 6: through the coordinator's own entry point, exactly as `index.ts` wires it, so a confirming snapshot arms
+    // the one reconcile too.
+    else if (e.kind === 'publish.snapshot') { const o = stoppedSession(e.payload); coordinator.observeSnapshot(o.sessionId, o.state); }
   });
 
   const link = new InboundListenerLink(portOfChild(child as never), nodeClocks().timers, () => undefined);
@@ -262,6 +264,32 @@ describe('REQ-MCP-123/126 (BLOCKER C): a desktop cancel at the plan gate settles
     // A fresh external start is admitted now.
     const second = await w.host.ask({ kind: 'inbound.startRun', prompt: 'next' });
     expect(second.kind).toBe('inbound.runStarted');
+  });
+});
+
+describe('REQ-MCP-123/126 (MAJOR A, REWORK 6): Revise → Cancel frees the slot through the REAL wiring', () => {
+  it('the next phase of the same run (a desktop revise) is adopted, and its cancel at the next gate frees the slot', async () => {
+    const w = wired();
+    await w.link.request({ kind: 'inbound.enable', token: 'tok-wired' }, 5_000);
+    await settle();
+    const started = await w.host.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    expect(started.kind).toBe('inbound.runStarted');
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    // The run parks at the plan gate: no reason, so the slot HOLDS.
+    w.emitSnapshot(sessionId, 'awaiting_plan_decision', null);
+    expect(w.runs.active?.sessionId).toBe(sessionId);
+    // The user REVISES: the NEXT PHASE of the same run starts (`idle`, then `running`). The round-5 timestamp guard
+    // would have discarded following states; here they are adopted.
+    w.emitSnapshot(sessionId, 'idle', null);
+    w.emitSnapshot(sessionId, 'running', null);
+    expect(w.runs.active?.sessionId).toBe(sessionId);
+    // The user CANCELS at the next gate: `paused` + `user_cancelled`, and NO `run.result`.
+    w.emitSnapshot(sessionId, 'paused', 'user_cancelled');
+    expect(w.runs.active).toBeNull();
+    const out = await w.host.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('paused');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('user_cancelled');
   });
 });
 

@@ -149,4 +149,32 @@ describe('REQ-GIT-022/023: the workspace binding is made before the host is aske
     const start = h.hostAsked.find((r) => r.kind === 'session.start');
     expect(start).toMatchObject({ effectiveRoot: '/work/wt', worktree: expect.objectContaining({ worktree_path: '/work/wt', branch: 'b' }) });
   });
+
+  it('REQ-MCP-124 (MAJOR, 2026-11-25): a NO-REPLY does NOT remove the worktree — the host may still start the run with it', async () => {
+    const h = harness(() => ({ kind: 'refused', code: 'run-host.unreachable', headline: 'The run host did not answer', detail: 'no reply' }));
+    const out = await startSessionRun(h.deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
+    expect(out.ok).toBe(false);
+    expect(out.ok === false && out.code).toBe('run-host.unreachable');
+    // The tree the start created is KEPT: the host may yet start the run with exactly this working directory.
+    await new Promise((r) => setImmediate(r));
+    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
+  });
+
+  it('REQ-MCP-124: a DEFINITE refusal DOES remove the auto-created worktree (nothing came to exist)', async () => {
+    const h = harness(() => ({ kind: 'refused', code: 'session.no-model', headline: 'No model is configured' }));
+    const out = await startSessionRun(h.deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
+    expect(out.ok).toBe(false);
+    // The worktree is taken away again, since the host answered that no run exists.
+    await new Promise((r) => setImmediate(r));
+    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(true);
+  });
+
+  it('REQ-MCP-124 (BLOCKER B, 2026-11-25): the inbound path sets its OWN start bound, above the desktop default', async () => {
+    const h = harness();
+    const bounds: number[] = [];
+    const deps = { ...h.deps, runHost: { request: async (req: RunHostRequest, bound: number) => { if (req.kind === 'session.start') bounds.push(bound); return req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : { kind: 'session.started', sessionId: 'S-STARTED' }; } } } as unknown as SessionStartDeps;
+    await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p' });
+    await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', hostStartBoundMs: 60_000 as never });
+    expect(bounds).toEqual([10_000, 60_000]);
+  });
 });

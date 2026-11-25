@@ -55,6 +55,13 @@ export interface SessionStartInput {
   readonly isolation?: { readonly branch: string } | undefined;
   /** REQ-GIT-021: an existing worktree to attach; never from the inbound path. */
   readonly attach?: { readonly path: string } | undefined;
+  /**
+   * BLOCKER B (2026-11-25, the lead's decision): the bound THIS start waits for the run host's `session.start`. The
+   * desktop path leaves it unset and takes `DEFAULT_START_BOUND_MS`; the inbound path sets it above the run host's own
+   * credential lease (`LEASE_ASK_MS` = 45 s, `INBOUND_START_BOUND_MS`), so a healthy-but-slow host is not read as a
+   * no-reply and the surface's one-run slot is not held on a wrong reading.
+   */
+  readonly hostStartBoundMs?: number | undefined;
   /** REQ-SHELL-125: the desktop's sandbox choice; never from the inbound path. */
   readonly sandboxMode?: SessionStartSandboxMode | undefined;
   /** The window the desktop start belongs to; absent for a start with no window (the surface's). */
@@ -115,6 +122,13 @@ export function checkStartInput(input: Pick<SessionStartInput, 'workspaceId' | '
   }
   return null;
 }
+
+/**
+ * REQ-MCP-124 / ADR-0002 c.11: the bound the DESKTOP start waits for the run host's `session.start`. The inbound path
+ * overrides it (`SessionStartInput.hostStartBoundMs`), because the host may spend up to `LEASE_ASK_MS` (45 s) on its own
+ * credential lease before it answers (BLOCKER B, 2026-11-25).
+ */
+export const DEFAULT_START_BOUND_MS = millis(10_000);
 
 /** REQ-MONITOR-251 / PD-GIT-001: the runs a launch in this workspace would share a working tree with, or null when the count cannot be read. */
 async function sharingRunCount(deps: SessionStartDeps, workspaceId: string): Promise<number | null> {
@@ -232,10 +246,18 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
     ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }),
     ...(input.sandboxMode === undefined ? {} : { sandboxMode: input.sandboxMode }),
   };
-  const r = await runHost.request(runHostRequest, millis(10_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
+  const r = await runHost.request(runHostRequest, input.hostStartBoundMs === undefined ? DEFAULT_START_BOUND_MS : (input.hostStartBoundMs as ReturnType<typeof millis>)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
   if (r.kind !== 'session.started') {
+    /*
+     * MAJOR (REQ-MCP-124, 2026-11-25): a NO-REPLY is not a definite refusal. `run-host.unreachable` is this
+     * coordinator's own reading of a host that did not answer within the bound — the bound may simply have been shorter
+     * than the host's work (its credential lease is bounded at 45 s), and the host may still start the run WITH EXACTLY
+     * this working directory. Taking the worktree away here would then remove the tree out from under a run that is being
+     * born. So the worktree is removed only on a DEFINITE refusal (`r.kind === 'refused'`, the host's own answer that no
+     * run exists) — where the caller that hit the no-reply is responsible for the tree, or leaves it to session open.
+     */
     if (wcId !== null) mainWindows.endStart(wcId, sessionId);
-    if (binding?.created_by_session && svc) {
+    if (r.kind === 'refused' && r.code !== 'run-host.unreachable' && binding?.created_by_session && svc) {
       const path = binding.worktree_path;
       void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed after the refused start (${x.kind})`)).catch(() => undefined);
     }

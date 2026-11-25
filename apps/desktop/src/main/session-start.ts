@@ -66,6 +66,20 @@ export interface SessionStartInput {
   readonly sandboxMode?: SessionStartSandboxMode | undefined;
   /** The window the desktop start belongs to; absent for a start with no window (the surface's). */
   readonly window?: MainWindowState | undefined;
+  /**
+   * BLOCKER (REQ-MCP-126, 2026-11-25): the run host CONFIRMED the start (`session.started`). It is reported the instant
+   * that reply is read — BEFORE `clearForRunStart`/`configFatal.loaded` and every other piece of post-work — so a caller
+   * that holds a resource for this execution (the inbound surface's one-run slot) records it before anything that could
+   * still throw. The post-work is cosmetic thereafter: it may fail, and the run exists all the same. The desktop path
+   * leaves it unset.
+   */
+  readonly onStarted?: ((sessionId: string) => void) | undefined;
+  /**
+   * MAJOR 1 (REQ-MCP-123/126, 2026-11-25): a reply to this start that arrived AFTER its bound. `ProcessLink` discards
+   * such a reply (ADR-0002 c.11), so a start the host really did answer — confirmation or refusal — would leave the
+   * caller with a no-reply alone. The link hands the late reply here instead, so the outcome is not lost with the ask.
+   */
+  readonly onLateOutcome?: ((reply: ProcessReply) => void) | undefined;
 }
 
 /** What the coordinator needs: the run-host link, the workspace services, the notices, the window registry and the log. */
@@ -255,7 +269,13 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
     ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }),
     ...(input.sandboxMode === undefined ? {} : { sandboxMode: input.sandboxMode }),
   };
-  const r = await runHost.request(runHostRequest, input.hostStartBoundMs === undefined ? DEFAULT_START_BOUND_MS : (input.hostStartBoundMs as ReturnType<typeof millis>)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
+  const r = await runHost.request(runHostRequest, input.hostStartBoundMs === undefined ? DEFAULT_START_BOUND_MS : (input.hostStartBoundMs as ReturnType<typeof millis>), input.onLateOutcome).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
+  /*
+   * BLOCKER (REQ-MCP-126, 2026-11-25): the confirmation is reported as the FIRST thing the reply does. Everything below
+   * may throw — `clearForRunStart` is the case the review named — and a caller that recorded this moment can no longer
+   * mistake such a throw for a start that never happened.
+   */
+  if (r.kind === 'session.started') input.onStarted?.(r.sessionId);
   if (r.kind !== 'session.started') {
     /*
      * MAJOR (REQ-MCP-124, 2026-11-25): a NO-REPLY is not a definite refusal. `run-host.unreachable` is this
@@ -296,9 +316,20 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
     return { ok: false, code: r.kind === 'refused' ? r.code : 'reply.unexpected', headline: 'The session could not be started', detail: r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}` };
   }
   if (binding) log(`session ${r.sessionId} bound to ${binding.worktree_path} on ${binding.branch} (${binding.created_by_session ? 'created by the session' : 'attached'})`);
-  await notices.clearForRunStart(r.sessionId);
-  if (deps.configFatal) await deps.configFatal.loaded(root);
-  if (forcedSessionId !== undefined && binding) deps.raiseNotice('info', ISOLATION_REQUIRED_HINT, `This session runs on branch ${binding.branch}.`, undefined, r.sessionId);
-  window?.personaWindows.destroyAll('a new session started');
+  /*
+   * BLOCKER (REQ-MCP-126, 2026-11-25): everything below is POST-work on a run that ALREADY EXISTS — the notice cleanup,
+   * the configuration's fatal notice, the isolation hint, the persona windows. The confirmation was reported above, so a
+   * failure here is reported and does not travel out as if the start had not happened: a caller that freed a resource on
+   * such a throw would free it for a run the host did start, which is how two runs come to exist. The start is still
+   * `ok: true` — it did start — and the failure is logged as what it is.
+   */
+  try {
+    await notices.clearForRunStart(r.sessionId);
+    if (deps.configFatal) await deps.configFatal.loaded(root);
+    if (forcedSessionId !== undefined && binding) deps.raiseNotice('info', ISOLATION_REQUIRED_HINT, `This session runs on branch ${binding.branch}.`, undefined, r.sessionId);
+    window?.personaWindows.destroyAll('a new session started');
+  } catch (cause) {
+    log(`session ${r.sessionId} started, but the post-start work failed: ${cause instanceof Error ? cause.message : String(cause)}`, 'warn');
+  }
   return { ok: true, value: { sessionId: r.sessionId } };
 }

@@ -633,32 +633,27 @@ describe('REQ-MCP-123/126 (MAJOR 3/4, REWORK 7): the phase unit on the handle, a
     expect((await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).kind).toBe('inbound.runStarted');
   });
 
-  it('TEMP-SPLIT MAJOR 4: a CHANGING state extends the reconcile', async () => {
-    const h = harness();
-    const c = coordinator(h);
-    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
-    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
-    await settle();
-    h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: false });
-    for (let i = 0; i < RECONCILE_MAX_STEPS * 2; i += 1) {
-      await driveStep(h);
-      c.observe(sessionId, { executionStatus: 'running', stopReason: null, awaitingInput: i % 2 === 0 });
-    }
-    expect(h.steps.length).toBeGreaterThan(0);
-  });
-
-  it('TEMP-SPLIT MAJOR 4 (REWORK 9): polling the SAME unchanged row exhausts at the cap', async () => {
+  it('REWORK 10 (MAJOR 2): ALTERNATING unchanged snapshots and listing rows does NOT reset the cap — no source pattern extends it', async () => {
     const h = harness();
     const c = coordinator(h);
     const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
     const handle = started.kind === 'inbound.runStarted' ? started.run : '';
     const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
     await settle();
-    h.listings.set(sessionId, { status: 'running', awaitingInput: false });
-    const poll = (): Promise<unknown> => c.ask({ kind: 'inbound.runStatus', run: handle });
-    for (let i = 0; i < RECONCILE_MAX_STEPS * 3; i += 1) { await driveStep(h); await poll(); }
+    // The reviewer's measured escape: a listing row signs `stale` while a snapshot of the SAME phase signs `stopReason`, so
+    // ALTERNATING the two sources reset the round-9 counter forever (after 192 steps a follow-up was still planned).
+    // REWORK 10 removed the reset: the chain exhausts at the cap however the sources alternate.
+    for (let i = 0; i < RECONCILE_MAX_STEPS * 2; i += 1) {
+      h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
+      await driveStep(h);
+      c.observe(sessionId, { executionStatus: 'running', stopReason: null, awaitingInput: i % 2 === 0 });
+    }
+    // The chain is BOUNDED: the cap was reached and no step is scheduled again, while the run is still HELD.
     expect(h.steps).toHaveLength(0);
     expect(h.runs.holder).toBe(handle);
+    // And a LATER terminal result still settles it by the ordinary path.
+    h.runs.ended(sessionId, 'tasks_complete', 'completed');
+    expect(h.runs.holder).toBeNull();
   });
 
   it('MAJOR 4 (REWORK 8): an UNREADABLE read does NOT extend the chain — polling cannot keep it alive past the cap', async () => {

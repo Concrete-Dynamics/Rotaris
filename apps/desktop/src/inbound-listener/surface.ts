@@ -73,7 +73,10 @@ export async function callInboundTool(ask: InboundAskHandler, name: string, args
     return { isError: false, text: JSON.stringify({ run: answer.run, sessionId: answer.sessionId }), structured: { run: answer.run, sessionId: answer.sessionId } };
   }
   const parsed = InboundRunStatusInputSchema.safeParse(args);
-  if (!parsed.success) return { isError: true, text: 'A run handle is required: pass the value `rotaris_start_run` returned as `run`.' };
+  // REQ-MCP-123/130 (Minor, 2026-11-25): the input schema holds the handle to the surface's own shape, so a value that
+  // is not a handle this surface could have minted is refused HERE — a stated refusal, never passed on to wait out an
+  // IPC bound on a value the surface can already tell was never its own.
+  if (!parsed.success) return { isError: true, text: 'Refused: this requires a run handle — the value `rotaris_start_run` returned in its `run` field (shape `inr_` followed by 32 hexadecimal characters). An unrelated session id is not one.' };
   const answer = await ask({ kind: 'inbound.runStatus', run: parsed.data.run });
   if (answer.kind !== 'inbound.runStatus') return { isError: true, text: answer.kind === 'refused' ? refusedText(answer) : 'The run’s state could not be read.' };
   return { isError: false, text: statusText(answer.status), structured: statusStructured(answer.status) };
@@ -95,12 +98,27 @@ function startRunInputRefusal(issues: readonly { readonly code: string; readonly
 
 /** REQ-MCP-123/125: the status in the product's own vocabulary, as text for the caller's transcript. */
 export function statusText(status: InboundRunStatus): string {
-  // REQ-MCP-123: the stop reason when the run has stopped, the product's own word for why. BLOCKER 3 (2026-11-25): the
-  // reason is a REAL value now, so a finished run no longer reads as "the run has not stopped".
-  const reason = status.stopReason === null ? 'the run has not stopped' : `it stopped: ${status.stopReason}`;
+  // REQ-MCP-123 (BLOCKER D, 2026-11-25): the text follows the STATE. A busy run has not stopped, and says so. A run in a
+  // terminal or resting state HAS stopped — if the product published no reason for it, the text must not read as
+  // "not stopped" (the fault the review found: a completed run without a reason still said it had not stopped).
+  const busy = !hasStoppedState(status.state);
+  const reason = status.stopReason !== null
+    ? `it stopped: ${status.stopReason}`
+    : busy
+      ? 'the run has not stopped'
+      : 'it stopped (no reason was published)';
   // REQ-MCP-125: the one thing a caller may observe about a run waiting on a decision — it may never answer one.
   const waiting = status.awaitingInput === true ? '; waiting for a person at the desktop' : '';
   return JSON.stringify({ run: status.run, sessionId: status.sessionId, state: status.state, stopReason: status.stopReason, awaitingInput: status.awaitingInput ?? false, summary: `${status.state}; ${reason}${waiting}` });
+}
+
+/**
+ * REQ-NOTIFY-048 (BLOCKER D, 2026-11-25): the presentation states that are terminal or at rest — a run the product has
+ * finished with. `paused` is NOT among them: a run parked at the plan gate or the message limit still waits for a
+ * person and has not stopped. Everything else is a run the surface may call still in progress.
+ */
+function hasStoppedState(state: InboundRunStatus['state']): boolean {
+  return state === 'completed' || state === 'failed' || state === 'stopped' || state === 'idle';
 }
 
 function statusStructured(status: InboundRunStatus): unknown {

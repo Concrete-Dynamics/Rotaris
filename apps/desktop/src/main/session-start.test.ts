@@ -169,6 +169,54 @@ describe('REQ-GIT-022/023: the workspace binding is made before the host is aske
     expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(true);
   });
 
+  it('REQ-MCP-124 (Minor, 2026-11-25): a start the host refused only AFTER its bound has its session-created worktree removed', async () => {
+    // The follow-up reads `session.list`; with an EMPTY listing (the session never appeared) the tree is removed.
+    const h = harness(() => ({ kind: 'refused', code: 'run-host.unreachable', headline: 'The run host did not answer', detail: 'no reply' }));
+    const rechecks: (() => void)[] = [];
+    const deps = {
+      ...h.deps,
+      scheduleRecheck: (fn: () => void) => { rechecks.push(fn); },
+      runHost: { request: async (req: RunHostRequest) => {
+        h.hostAsked.push(req);
+        if (req.kind === 'runs.active') return { kind: 'runs.count', workspaceId: 'ws-1', count: 0 };
+        if (req.kind === 'session.list') return { kind: 'session.list', sessions: [] };
+        return { kind: 'refused', code: 'run-host.unreachable', headline: 'x' };
+      } },
+    } as unknown as SessionStartDeps;
+    const out = await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
+    expect(out.ok).toBe(false);
+    // Nothing is removed at once (the host may still start the run).
+    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
+    expect(rechecks).toHaveLength(1);
+    rechecks[0]!();
+    for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
+    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(true);
+  });
+
+  it('REQ-MCP-124 (Minor, 2026-11-25): the worktree is KEPT when the session appears after the no-reply', async () => {
+    const h = harness(() => ({ kind: 'refused', code: 'run-host.unreachable', headline: 'The run host did not answer' }));
+    const rechecks: (() => void)[] = [];
+    // The listing carries the session that was ASKED to start (its id comes from the `session.start` request).
+    const deps = {
+      ...h.deps,
+      scheduleRecheck: (fn: () => void) => { rechecks.push(fn); },
+      runHost: { request: async (req: RunHostRequest) => {
+        h.hostAsked.push(req);
+        if (req.kind === 'runs.active') return { kind: 'runs.count', workspaceId: 'ws-1', count: 0 };
+        if (req.kind === 'session.start') return { kind: 'refused', code: 'run-host.unreachable', headline: 'x' };
+        if (req.kind === 'session.list') {
+          const started = h.hostAsked.find((r) => r.kind === 'session.start') as { sessionId?: string } | undefined;
+          return { kind: 'session.list', sessions: [{ sessionId: started?.sessionId ?? 'none' }] };
+        }
+        return { kind: 'refused', code: 'run-host.unreachable', headline: 'x' };
+      } },
+    } as unknown as SessionStartDeps;
+    await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
+    rechecks[0]!();
+    for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
+    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
+  });
+
   it('REQ-MCP-124 (BLOCKER B, 2026-11-25): the inbound path sets its OWN start bound, above the desktop default', async () => {
     const h = harness();
     const bounds: number[] = [];

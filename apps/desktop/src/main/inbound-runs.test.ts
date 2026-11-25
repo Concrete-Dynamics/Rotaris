@@ -257,6 +257,36 @@ describe('REQ-MCP-126/123 (BLOCKER B): a lost reply settles from the product sta
     expect((await c.ask({ kind: 'inbound.startRun', prompt: 'p' })).kind).toBe('inbound.runStarted');
   });
 
+  it('BLOCKER 2 (2026-11-25): the absence must SPAN the host worst case, not just reach a count of readings', async () => {
+    // A probe whose clean-absent COUNT is reached long before its SPAN: the slot must stay held until the span elapses.
+    const h = harness();
+    h.hostStart = async (req) => (req.kind === 'session.start' ? Promise.reject(new Error('no reply')) : { kind: 'ack' });
+    const startDeps = {
+      log: () => undefined,
+      runHost: { request: async (req: { kind: string; sessionId?: string }) => {
+        if (req.kind === 'runs.active') return { kind: 'runs.count', workspaceId: 'ws-1', count: 0 };
+        if (req.kind === 'session.start' && typeof req.sessionId === 'string') h.started.push(req.sessionId);
+        return h.hostStart(req);
+      } },
+      services: new Map(), mainWindows: { takeMintedSession: () => null, beginStart: () => undefined, endStart: () => undefined }, notices: { report: async () => ({ id: 1, shown: true }), clearForRunStart: async () => undefined }, raiseNotice: () => undefined, recoveryFor: () => [],
+      openWorkspaceRead: async () => h.open,
+      confinementNotice: (r: { headline: string }) => ({ severity: 'error' as const, title: r.headline, message: r.headline, detail: r.headline, persistent: true as const, action: { label: 'x', action: { kind: 'open-view' as const, view: 'workspace' } } }),
+    } as unknown as SessionStartDeps;
+    const c = createInboundCoordinator({
+      start: startDeps, runs: h.runs, openWorkspace: async () => h.open,
+      readStatus: async (_w, sessionId) => { const row = h.listings.get(sessionId); return row === undefined ? { kind: 'absent' as const } : { kind: 'row' as const, executionStatus: row.status, awaitingInput: row.awaitingInput, stale: row.stale ?? false }; },
+      settleProbe: { schedule: (fn) => { h.probes.push(fn); }, attempts: 2, intervalMs: 1 as never, spanMs: 5 as never },
+      startBoundMs: 60_000 as never,
+      mintHandle: () => `inr_${'a'.repeat(32)}`,
+    });
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    expect(first.kind === 'refused' && first.code).toBe('inbound.start-unconfirmed');
+    // Three clean-absent readings: past `attempts` (2) but not yet past the SPAN (5 steps). The slot must stay HELD.
+    for (let i = 0; i < 3; i += 1) { const step = h.probes.shift(); step?.(); await Promise.resolve(); await Promise.resolve(); }
+    expect(h.runs.attempt).not.toBeNull();
+    expect((await c.ask({ kind: 'inbound.startRun', prompt: 'p' })).kind).toBe('refused');
+  });
+
   it('the inbound start waits on its OWN bound, above the run host’s credential lease', async () => {
     const h = harness();
     const c = coordinator(h);

@@ -1,4 +1,4 @@
-import { ISOLATION_REQUIRED_HINT, SANDBOX_MODE_NAMES, type CommandOutcome, type ImageAttachmentInput, type ProcessReply, type RunHostRequest, type SandboxModeName, type WorktreeBinding } from '@rotaris/contracts';
+import { ISOLATION_REQUIRED_HINT, SANDBOX_MODE_NAMES, type CommandOutcome, type ImageAttachmentInput, type MoneyStop, type ProcessReply, type RunHostRequest, type SandboxModeName, type WorktreeBinding } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
@@ -65,6 +65,12 @@ export interface SessionStartInput {
   readonly hostStartBoundMs?: number | undefined;
   /** REQ-SHELL-125: the desktop's sandbox choice; never from the inbound path. */
   readonly sandboxMode?: SessionStartSandboxMode | undefined;
+  /**
+   * PD-ORCH-021 clause 9: the session's money-slider stop, chosen in the composer; the desktop path supplies it (the
+   * inbound path states none, REQ-MCP-124). Carried on the run host's `session.start` so the run starts at the stop the
+   * composer showed.
+   */
+  readonly moneyStop?: MoneyStop | undefined;
   /** The window the desktop start belongs to; absent for a start with no window (the surface's). */
   readonly window?: MainWindowState | undefined;
   /**
@@ -260,6 +266,7 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
     sessionId,
     ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }),
     ...(input.sandboxMode === undefined ? {} : { sandboxMode: input.sandboxMode }),
+    ...(input.moneyStop === undefined ? {} : { moneyStop: input.moneyStop }),
   };
   const r = await runHost.request(runHostRequest, input.hostStartBoundMs === undefined ? DEFAULT_START_BOUND_MS : (input.hostStartBoundMs as ReturnType<typeof millis>), input.onLateOutcome).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
   /*

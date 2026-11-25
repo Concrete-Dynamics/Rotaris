@@ -8,6 +8,7 @@ import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { ConfigSnapshotSchema } from './config.js';
 import { AcknowledgementActionSchema, AcknowledgementKindSchema, NoticeSchema } from './notices.js';
 import { RequirementsChangedSchema } from './requirements.js'; // Part AK
+import { MoneyStopSchema } from './money-slider.js'; // PD-ORCH-021
 import { TerminalStreamMetaSchema } from './terminal.js';
 import { ReauthPromptPublishSchema } from './reauth.js';
 import { ImprovementActivitySchema, RunTypeSchema } from './improvements.js';
@@ -294,6 +295,8 @@ export const SessionRecordSchema = z.object({
    * call that started it.
    */
   workflows: z.array(WorkflowStatusSchema).max(LIST_MAX).optional(),
+  /** PD-ORCH-021 clause 9: the session's own money slider stop; null or absent where it holds none (the default stands). */
+  moneyStop: MoneyStopSchema.nullable().optional(),
   tokenUsage: z.object({ input: z.number().int(), output: z.number().int() }),
   /** Decimal string (ADR-0031). */
   cost: z.string(),

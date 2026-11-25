@@ -98,6 +98,7 @@ export function sessionCommands(
         ...(req.isolation === undefined ? {} : { isolation: req.isolation }),
         ...(req.attach === undefined ? {} : { attach: req.attach }),
         ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }),
+        ...(req.moneyStop === undefined ? {} : { moneyStop: req.moneyStop }),
         window: w,
       });
       return outcome;

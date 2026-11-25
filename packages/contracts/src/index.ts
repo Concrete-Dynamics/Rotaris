@@ -38,3 +38,4 @@ export * from './diagnostics.js'; // REQ-SHELL-163, REQ-STARTUP-129
 export * from './configuration-keys.js'; // PD-CONFIG-014
 export * from './inbound.js'; // ADR-0067, REQ-MCP-119..130
 export * from './inbound-protocol.js'; // REQ-MCP-127: the listener's wire
+export * from './money-slider.js'; // PD-ORCH-021

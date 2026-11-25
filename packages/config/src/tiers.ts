@@ -1,4 +1,5 @@
-import type { Result } from '@rotaris/kernel';
+import { MONEY_STOPS, type MoneyStop } from '@rotaris/contracts';
+import { ok, type Result } from '@rotaris/kernel';
 import { clonePlain, isPlainMap, type PlainMap } from './merge.js';
 import { MODEL_SLOTS, REASONING_LEVELS, ROLE_REASONING_LEVELS, thinkingKeyOf, type ModelSlot, type ReasoningLevel, type RoleReasoning } from './keys.js';
 import { DELEGATION_STRATEGIES, resolveMerged, type DelegationStrategy, type LoadedConfiguration } from './load.js';
@@ -37,6 +38,8 @@ export interface LiveState {
   readonly sessionModel?: string | null;
   readonly sessionThinking?: RoleReasoning | null;
   readonly delegationStrategy?: DelegationStrategy;
+  /** PD-ORCH-021: the screen's default stop, saved or not. A session holding its own stop is not moved by it. */
+  readonly moneySlider?: MoneyStop;
   readonly runtime?: Partial<Pick<RuntimeSection, TierBRuntimeKey>>;
   readonly circuitBreakerEnabled?: boolean;
   readonly compressorThresholdPercentage?: number;
@@ -71,6 +74,7 @@ export function liveStateProblems(live: LiveState): readonly Problem[] {
   if (live.sessionModel !== undefined && live.sessionModel !== null && typeof live.sessionModel !== 'string') problems.push({ path: `personas.${role}.model`, message: `must be a string, got ${typeName(live.sessionModel)}` });
   oneOf(`personas.${role}.thinking`, live.sessionThinking, ROLE_REASONING_LEVELS, true);
   oneOf('rotaris.delegation_strategy', live.delegationStrategy, DELEGATION_STRATEGIES, false);
+  oneOf('rotaris.money_slider', live.moneySlider, MONEY_STOPS, false);
   for (const key of TIER_B_RUNTIME_KEYS) {
     const value = live.runtime?.[key];
     if (value !== undefined) problems.push(...validateRuntimeField(key, value));
@@ -133,9 +137,20 @@ export function overlayLiveState(config: LoadedConfiguration, live: LiveState): 
   // stated it (REQ-CONFIG-478, `statingFile`). A fault on a value the overlay supplied would be named the same way, in a
   // file that does not hold it; none reaches here from the product, since the run host installs only a live state
   // `liveStateProblems` passes (REQ-CONFIG-111). A caller that skips that check gets the files' attribution.
+  const resolved = resolveAgain(config, top, live.delegationStrategy ?? config.delegationStrategy);
+  // PD-ORCH-021: an unsaved stop on the screen is a choice the user made, as a saved one is: the workspace's, where it differs.
+  if (!resolved.ok || live.moneySlider === undefined || live.moneySlider === resolved.value.moneySlider.stop) return resolved;
+  return ok({ ...resolved.value, moneySlider: { stop: live.moneySlider, origin: 'workspace', warnings: resolved.value.moneySlider.warnings } });
+}
+
+/**
+ * The loader's own passes over a document an overlay produced from `config.merged`, with everything else the load read kept
+ * as it was: Tier B's live state above, and PD-ORCH-021's money-slider stop (`applyMoneyResolution`) laid over its result.
+ */
+export function resolveAgain(config: LoadedConfiguration, top: PlainMap, delegationStrategy: DelegationStrategy): Result<LoadedConfiguration, FatalLoadReport> {
   return resolveMerged(top, {
     workspaceRoot: config.workspaceRoot, hooks: config.hooks, files: config.files, raw: config.raw,
-    delegationStrategy: live.delegationStrategy ?? config.delegationStrategy, loadMs: config.loadMs, authenticatedProviders: config.authenticatedProviders, discoveredSlots: config.discoveredSlots,
+    delegationStrategy, loadMs: config.loadMs, authenticatedProviders: config.authenticatedProviders, discoveredSlots: config.discoveredSlots,
     snapshotCapabilities: config.snapshotCapabilities,
     mcp: config.mcpInputs,
   });

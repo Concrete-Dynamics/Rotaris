@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { jsonBounded, NAME_MAX, PATH_MAX } from './limits.js'; // OQ-467
 import { SKILL_INVOCATION_MODE_NAMES, SKILL_LOAD_MODE_NAMES } from './skills.js'; // ADR-0063
+import { MoneyLeversSchema, MONEY_STOPS } from './money-slider.js'; // PD-ORCH-021
+import { DELEGATION_STRATEGY_NAMES } from './delegation.js';
+export * from './delegation.js';
 
 /**
  * What the Settings screen reads and writes for destination 1 — workspace and global configuration
@@ -23,9 +26,6 @@ export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fa
 export const REASONING_LEVEL_NAMES = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type ReasoningLevelName = (typeof REASONING_LEVEL_NAMES)[number];
 export const ROLE_REASONING_NAMES = ['default', 'provider_default', ...REASONING_LEVEL_NAMES] as const;
-export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single', 'lead', 'intelligent'] as const;
-/** REQ-ORCH-025 with PD-ORCH-019: the override a strategy puts on a run; `orchestrator` puts none. */
-export type DelegationStrategyName = (typeof DELEGATION_STRATEGY_NAMES)[number];
 export type RunOverride = 'single' | 'swarm' | 'lead';
 /**
  * PD-ORCH-020: `intelligent` is no strategy of its own. It has the small model choose one of these three for each run from
@@ -46,24 +46,6 @@ export interface StrategyChoice {
 /** The override a chosen strategy puts on the run: `orchestrator` puts none. */
 export const runOverrideOfChoice = (strategy: AutoStrategyName): RunOverride | null => (strategy === 'orchestrator' ? null : strategy);
 
-/**
- * PD-ORCH-019 clause 4: `runtime.max_depth` has three meanings and no more. 1: only the entry role spawns. 2: its children
- * may. 3 or more: no depth limit. The owner's word, 2026-11-24: "1 2 and 3 is unlimited".
- */
-export const UNLIMITED_DEPTH_FROM = 3;
-export const DEPTH_STEPS = [1, 2, UNLIMITED_DEPTH_FROM] as const;
-/** Whether a configured `max_depth` is the no-limit step. */
-export function isUnlimitedDepth(maxDepth: number): boolean {
-  return maxDepth >= UNLIMITED_DEPTH_FROM;
-}
-/** The depth the run enforces for a configured `max_depth`: the value itself, or a bound no run reaches. */
-export function enforcedDepth(maxDepth: number): number {
-  return isUnlimitedDepth(maxDepth) ? Number.MAX_SAFE_INTEGER : maxDepth;
-}
-/** How a surface names a configured `max_depth` as a limit: the number, or `no limit`. */
-export function depthLimitLabel(maxDepth: number): string {
-  return isUnlimitedDepth(maxDepth) ? 'no limit' : String(maxDepth);
-}
 export const RUN_START_MODE_NAMES = ['auto', 'plan'] as const;
 /** REQ-SANDBOX-048 / REQ-SHELL-125: the three values, in the order the launch dialog offers them. */
 export const SANDBOX_MODE_NAMES = ['off', 'workspace-write', 'read-only'] as const;
@@ -327,6 +309,10 @@ export const ConfigSnapshotSchema = z.object({
    */
   worktreeStorageSubpath: z.string(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES),
+  /** PD-ORCH-021 clause 1: the default money-slider stop and the scope that states it (`default`: the shipped `regular`). */
+  moneySlider: z.object({ stop: z.enum(MONEY_STOPS), origin: z.enum(['default', 'global', 'workspace']) }),
+  /** PD-ORCH-021 clauses 2 and 9: the levers a stop reads, with where each comes from — what the composer's preview resolves. */
+  moneyLevers: MoneyLeversSchema.nullable(),
   referential: z.array(z.string()),
   warnings: z.array(z.string()),
   files: z.object({ workspace: z.string(), global: z.string() }),
@@ -442,6 +428,8 @@ export const DesktopSaveSchema = z.object({
   advisor: AdvisorSaveSchema.optional(),
   compressorThresholdPercentage: z.number().int().optional(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES).optional(),
+  /** PD-ORCH-021 clause 1: `rotaris.money_slider`, written from Settings › Delegation into the workspace file. */
+  moneySlider: z.enum(MONEY_STOPS).optional(),
   roles: z.record(z.string().max(NAME_MAX), RoleEditSchema).optional(),
   /** REQ-CONFIG-472 (Part AG): destination 1's four tool-row display fields. */
   display: DisplaySaveSchema.optional(),
@@ -459,6 +447,8 @@ export const LiveStateSchema = z.object({
   slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().max(NAME_MAX).nullable()).optional(),
   slotThinking: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.enum(REASONING_LEVEL_NAMES).nullable()).optional(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES).optional(),
+  /** PD-ORCH-021: the screen's default stop, saved or not; a session holding its own stop is not moved by it. */
+  moneySlider: z.enum(MONEY_STOPS).optional(),
   /** OQ-467: open-shaped, held to FREE_TEXT_MAX as JSON. */
   runtime: jsonBounded(z.record(z.string().max(NAME_MAX), z.unknown())).optional(),
   circuitBreakerEnabled: z.boolean().optional(),

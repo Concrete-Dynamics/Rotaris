@@ -1208,6 +1208,21 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 38,
+    /*
+     * PD-ORCH-021 clauses 1 and 10 (R-132): the money slider. `sessions.money_stop` is the stop a session holds of its own,
+     * chosen in the composer and never written to a configuration scope; NULL is a session that follows the default
+     * (`rotaris.money_slider`), which every session written before this version does. `children.money_stop` is the stop a
+     * delegated agent was started under, written at its admission, so a move made while a run is live reaches only the agents
+     * delegated after it and each record says which stop it ran at; NULL on a child admitted before this version, which ran
+     * at no stop at all.
+     */
+    sql: `
+      ALTER TABLE sessions ADD COLUMN money_stop TEXT;
+      ALTER TABLE children ADD COLUMN money_stop TEXT;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

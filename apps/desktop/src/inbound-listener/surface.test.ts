@@ -227,6 +227,15 @@ describe('REQ-MCP-123/130: the status tool answers a handle, in the product’s 
     expect((await callInboundTool(ask, 'rotaris_list_files', {})).isError).toBe(true);
   });
 
+  it('REQ-MCP-123 (BLOCKER 3, 2026-11-25): an `idle` run does NOT read as stopped — a continuation may follow', () => {
+    // idle is published BEFORE a plan-approve or a message-limit continue relaunches the same session, so the surface
+    // must say the run has not stopped rather than claim an end that has not come.
+    const text = statusText({ run: `inr_${'a'.repeat(32)}`, sessionId: 'S-1', state: 'idle', stopReason: null });
+    expect(text).toContain('idle');
+    expect(text).toContain('the run has not stopped');
+    expect(text).not.toContain('it stopped');
+  });
+
   it('the status text is the product’s own words, and no extra field rides along', () => {
     const text = statusText({ run: `inr_${'a'.repeat(32)}`, sessionId: 'S-1', state: 'paused', stopReason: null });
     expect(text).toContain('paused');

@@ -28,7 +28,28 @@ import type { ObservedState } from './inbound-runs.js';
 export interface InboundStatusRead {
   readonly executionStatus: string;
   readonly awaitingInput: boolean;
+  /**
+   * REQ-SESSION-171 (MAJOR, 2026-11-25): the listing's own liveness verdict — the session claims a busy status while no
+   * live process holds its lock. This is the definite signal that a run whose terminal write FAILED (the durable image
+   * still says busy, no `run.result` ever came) really is over: nothing is running it. A genuinely running run is `live`
+   * and never stale, so the reconcile can only ever end a run that nothing is running.
+   */
+  readonly stale: boolean;
 }
+
+/**
+ * BLOCKER 2 (2026-11-25): WHAT a status read found, told apart exactly as the settle probe must. The surface's slot may
+ * be freed only on a DEFINITE signal, so the three outcomes can never be conflated:
+ *
+ * - `row` — the listing was read and carries the session (the run exists, or at least its record does);
+ * - `absent` — the listing was read successfully and the session is NOT in it (one half of the definite "no run");
+ * - `unreadable` — the listing could not be read at all (a host refusal, an error, a bound). This proves NOTHING about
+ *   whether a run was born, so a probe that sees it must EXTEND, never settle.
+ */
+export type InboundStatusReading =
+  | { readonly kind: 'row'; readonly executionStatus: string; readonly awaitingInput: boolean; readonly stale: boolean }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'unreadable' };
 
 /** The run host's side: the listing read alone (the reason comes from the published records, wired by main). */
 export interface InboundStatusDeps {
@@ -37,8 +58,8 @@ export interface InboundStatusDeps {
 }
 
 export interface InboundStatusReader {
-  /** REQ-MCP-123/125: the run's live state and waiting fact; null when the listing cannot be read or the session is not in it. */
-  readonly readStatus: (workspaceId: string, sessionId: string) => Promise<InboundStatusRead | null>;
+  /** REQ-MCP-123/125 (BLOCKER 2): the run's live state and waiting fact, or a definite absence, or an unreadable listing. */
+  readonly readStatus: (workspaceId: string, sessionId: string) => Promise<InboundStatusReading>;
 }
 
 /**
@@ -47,18 +68,30 @@ export interface InboundStatusReader {
  * `stopReason` is the reason to keep with the handle when the session is not busy.
  */
 export function stoppedSession(snapshot: SessionSnapshot): { readonly sessionId: string; readonly state: ObservedState } {
-  return { sessionId: snapshot.sessionId, state: { executionStatus: snapshot.session.executionStatus, stopReason: snapshot.session.stopReason } };
+  return {
+    sessionId: snapshot.sessionId,
+    state: {
+      executionStatus: snapshot.session.executionStatus,
+      stopReason: snapshot.session.stopReason,
+      // REQ-MCP-125: the same rule the listing uses (REQ-SESSION-031) — a pending approval or a pending question means
+      // the run waits on a person. Read off the published record, so a run that ends through a park reports the flag it
+      // had at its end (MAJOR of 2026-11-25: the frozen end state, not a later read of the same session).
+      awaitingInput: snapshot.session.pendingApprovals.length > 0 || snapshot.session.pendingQuestions.length > 0,
+    },
+  };
 }
 
 export function createInboundStatusReader(deps: InboundStatusDeps): InboundStatusReader {
   return {
     readStatus: async (workspaceId, sessionId) => {
+      // BLOCKER 2: a listing that could not be read is `unreadable`, NEVER `absent` — the caller's probe must extend on
+      // it, since it says nothing about whether the run was born.
       const r = await deps.request({ kind: 'session.list', workspaceId }, millis(10_000)).catch((cause: Error) => { deps.log?.(`inbound status: the session listing did not answer (${cause.message})`); return null; });
-      if (r === null || r.kind !== 'session.list') return null;
+      if (r === null || r.kind !== 'session.list') return { kind: 'unreadable' };
       const row = r.sessions.find((s) => s.sessionId === sessionId);
-      if (row === undefined) return null;
+      if (row === undefined) return { kind: 'absent' };
       // REQ-MCP-123/130: only the product's own vocabulary crosses — never an internal field, a file or a token.
-      return { executionStatus: row.status, awaitingInput: row.awaitingInput };
+      return { kind: 'row', executionStatus: row.status, awaitingInput: row.awaitingInput, stale: row.stale };
     },
   };
 }

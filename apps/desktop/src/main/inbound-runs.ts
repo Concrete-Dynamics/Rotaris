@@ -1,7 +1,8 @@
-import { INBOUND_NO_OPEN_WORKSPACE, INBOUND_RUN_ALREADY_ACTIVE, INBOUND_RUN_HANDLE_PATTERN, isBusy, presentationStatus, runHasEnded, type InboundListenerAsk, type InboundRunStatus, type InboundStartRunAnswer, type InboundRunStatusAnswer, type StopReason } from '@rotaris/contracts';
+import { INBOUND_NO_OPEN_WORKSPACE, INBOUND_RUN_ALREADY_ACTIVE, INBOUND_RUN_HANDLE_PATTERN, INBOUND_START_BOUND_MS as INBOUND_START_BOUND_MS_NUMBER, isBusy, presentationStatus, runHasEnded, type InboundListenerAsk, type InboundRunStatus, type InboundStartRunAnswer, type InboundRunStatusAnswer, type StopReason } from '@rotaris/contracts';
 import { millis, type Millis } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import { startSessionRun, type SessionStartDeps } from './session-start.js';
+import type { InboundStatusReading } from './inbound-status.js';
 
 /**
  * THE SURFACE'S MAIN-SIDE COORDINATOR (ADR-0067; REQ-MCP-123/124/125/126/128/130). This is the one place an external
@@ -30,6 +31,19 @@ import { startSessionRun, type SessionStartDeps } from './session-start.js';
  * A's late `committed` then consumed B's reservation and entered the dead A as the active run — a later refusal of B
  * left the slot occupied for good. An attempt carries its own handle and workspace, so a settled (late-started) attempt
  * can be observed under the handle the caller was given.
+ *
+ * REWORK 3 (2026-11-25, the LEAD RULE). The slot is freed ONLY on a DEFINITE signal; when in doubt it is HELD. The cost
+ * of holding is a surface that refuses further starts for a while; the cost of freeing early is TWO running runs, which
+ * REQ-MCP-126 forbids. Three consequences, each a fix below:
+ *
+ * - **BLOCKER 1** — the listener's ask bound is now DERIVED from main's start bound (the one chain in
+ *   `contracts/inbound.ts`), so a slow-but-confirmed start is delivered rather than timed out in the listener.
+ * - **BLOCKER 2** — the settle probe frees the slot only when it is definite that no run was born (a successful listing
+ *   that lacks the session for the whole host worst case, or a definite refusal); an unreadable listing EXTENDS it, and
+ *   a later snapshot of the RESERVED session settles THAT attempt even after a newer `take`.
+ * - **BLOCKER 3** — `runHasEnded` no longer reads `idle` (nor any non-terminal, reasonless state) as an end, so a
+ *   plan-approve/revise or a message-limit continue, which publish `idle` before relaunching the SAME session, keep the
+ *   slot through the continuation.
  */
 
 /** One externally started run: the handle the caller was given, the session behind it, the workspace it belongs to, and the reason it stopped (REQ-MCP-123, BLOCKER D). */
@@ -44,6 +58,19 @@ export interface InboundRun {
    * this surface and is ignored) nor displace it (`ended`/`observe` write it only for this run's own session).
    */
   stopReason: string | null;
+  /**
+   * MAJOR (2026-11-25): the state the run was in WHEN IT ENDED, frozen at that moment. `rotaris_run_status` answers a
+   * run that has ended from THIS, never from a later reading of the same session — a desktop continuation of the session
+   * (a re-run of the same session id) would otherwise make the old handle report the continuation's state and waiting
+   * flag (REQ-MCP-123/125). null while the run is still live.
+   */
+  endState: FrozenEndState | null;
+}
+
+/** The two fields frozen at a run's end: its execution status and whether it waited on a person then. */
+export interface FrozenEndState {
+  readonly executionStatus: string;
+  readonly awaitingInput: boolean;
 }
 
 /** The identity of one attempt at the slot: minted when the start takes it, and the only thing a later transition may act on. */
@@ -64,6 +91,8 @@ interface HeldAttempt {
   ended: boolean;
   /** The reason observed for this attempt's run, so a late `committed` records it with the handle (BLOCKER D). */
   stopReason: string | null;
+  /** The state frozen when this attempt's run ended (MAJOR), carried into the recorded run. */
+  endState: FrozenEndState | null;
 }
 
 /** What taking the slot answers: the attempt identity when it was taken, a bare refusal when one is active. */
@@ -73,6 +102,8 @@ export type TakeOutcome = { readonly ok: true; readonly attempt: InboundAttempt 
 export interface ObservedState {
   readonly executionStatus: string;
   readonly stopReason: string | null;
+  /** REQ-MCP-125: whether the run waited on a person at the moment this state was read; absent means no. */
+  readonly awaitingInput?: boolean | undefined;
 }
 
 /** The current run as the coordinator holds it, and the handle index for `rotaris_run_status`. */
@@ -82,11 +113,20 @@ export class InboundSurfaceRuns {
   #attempt: HeldAttempt | null = null;
   /**
    * Attempts that were superseded while their start was still in flight (an `ended` of A freed A's slot and B took it
-   * before A's own `committed` arrived). A late `committed` of such an attempt records the handle it was minted with and
-   * touches NOTHING else (BLOCKER A); the map is bounded like the handle history, since the attempt resolves at once.
+   * before A's own `committed` arrived), and attempts whose probe settled them while their commit was still on its way.
+   * A late `committed` of such an attempt records the handle it was minted with and touches NOTHING else (BLOCKER A); a
+   * later snapshot of its RESERVED session settles THAT attempt, not the one that took the slot in the meantime
+   * (BLOCKER 2). The map is bounded; an eviction still leaves the handle answerable, because a late `committed` records
+   * the run's own handle even when its attempt is gone (Minor of 2026-11-25).
    */
   readonly #orphans = new Map<number, HeldAttempt>();
-  static readonly #ORPHAN_MAX = 16;
+  /**
+   * MINOR (2026-11-25): how many superseded, unsettled attempts are remembered. It is set well above the number that can
+   * be in flight at once (an attempt resolves at the commit or the definite refusal, both inside one start bound), so the
+   * eviction path is unreachable in practice; and if it is ever reached, the eviction loses only the ATTEMPT's identity,
+   * never the caller's handle — a late `committed` records that handle regardless (`committed` below).
+   */
+  static readonly #ORPHAN_MAX = 64;
   #nextAttemptId = 1;
   /** Handles this surface minted, by handle, newest last, bounded so a long-lived application does not grow without end. */
   readonly #handles = new Map<string, InboundRun>();
@@ -102,6 +142,14 @@ export class InboundSurfaceRuns {
   /** The attempt holding the slot, or null — the identity a later transition must match to act (REWORK 2, BLOCKER A). */
   get attempt(): InboundAttempt | null {
     return this.#attempt;
+  }
+
+  /** Whether any attempt — current or superseded — is still tied to this session (BLOCKER 2's reserved-session read). */
+  holdsSession(sessionId: string): boolean {
+    if (this.#active !== null && this.#active.sessionId === sessionId) return true;
+    if (this.#attempt !== null && this.#attempt.sessionId === sessionId) return true;
+    for (const o of this.#orphans.values()) if (o.sessionId === sessionId) return true;
+    return false;
   }
 
   /**
@@ -126,7 +174,7 @@ export class InboundSurfaceRuns {
         this.#orphans.delete(oldest);
       }
     }
-    const attempt: HeldAttempt = { id: this.#nextAttemptId, sessionId, handle, workspaceId: null, ended: false, stopReason: null };
+    const attempt: HeldAttempt = { id: this.#nextAttemptId, sessionId, handle, workspaceId: null, ended: false, stopReason: null, endState: null };
     this.#nextAttemptId += 1;
     this.#attempt = attempt;
     return { ok: true, attempt };
@@ -159,16 +207,24 @@ export class InboundSurfaceRuns {
    *
    * A `run.result`/`snapshot` that arrived BEFORE this commit (the run started and ended while the start reply was still
    * on its way) already told us the run is over: its handle is recorded with its reason, and the slot is left free.
+   *
+   * MINOR (2026-11-25): an attempt whose identity is gone (evicted as an orphan) still has its HANDLE recorded — the
+   * caller was given that handle, and the run really started — but nothing else is touched.
    */
   committed(attempt: InboundAttempt, run: InboundRun): void {
     const held = this.#attempt !== null && this.#attempt.id === attempt.id ? this.#attempt : this.#orphans.get(attempt.id) ?? null;
-    if (held === null) return;
+    if (held === null) {
+      // The attempt's identity is gone, but the run is real: record its handle (with its OWN facts) and touch nothing.
+      this.#record({ handle: run.handle, sessionId: run.sessionId, workspaceId: run.workspaceId, stopReason: run.stopReason, endState: run.endState });
+      return;
+    }
     const superseded = this.#attempt === null || this.#attempt.id !== attempt.id;
     const alreadyEnded = held.ended;
     const reason = run.stopReason ?? held.stopReason;
+    const endState = run.endState ?? held.endState;
     this.#orphans.delete(attempt.id);
     if (!superseded) this.#attempt = null;
-    const stored = this.#record({ handle: run.handle, sessionId: run.sessionId, workspaceId: run.workspaceId, stopReason: reason });
+    const stored = this.#record({ handle: run.handle, sessionId: run.sessionId, workspaceId: run.workspaceId, stopReason: reason, endState });
     // Only the CURRENT attempt's commit enters the active run: a superseded attempt's run is recorded but never made
     // active, so it can neither hold the slot nor displace whatever holds it (BLOCKER A).
     if (!superseded && !alreadyEnded) this.#active = stored;
@@ -183,10 +239,15 @@ export class InboundSurfaceRuns {
     if (this.#held(attempt) !== null) this.#attempt = null;
   }
 
-  /** The probe found the attempt's session was never created by the run host: no run was born, so no handle is kept (BLOCKER B). */
+  /**
+   * BLOCKER 2 (2026-11-25): the probe established DEFINITIVELY that the attempt's session was never created by the run
+   * host — a successful listing for the whole host worst case that does not carry it — so no run was born and no handle
+   * is kept. Bound to the attempt: settling a superseded attempt touches nothing.
+   */
   settleAbsent(attempt: InboundAttempt): void {
     if (this.#held(attempt) !== null) this.#attempt = null;
   }
+
   /** REQ-MCP-126/130: the run for a handle this surface minted, or undefined for any other value (an unrelated session id among them). */
   byHandle(handle: string): InboundRun | undefined {
     return this.#handles.get(handle);
@@ -202,16 +263,20 @@ export class InboundSurfaceRuns {
 
   /**
    * REQ-MCP-126: a terminal state — the run ended, so the slot is free again. Called from the run host's `run.result`
-   * for the run's session, with the product's own stop reason (REQ-MONITOR-301). A run that ended for another reason (a
-   * desktop stop of the same session) releases the slot too: the product's own notion of "the run is over" is this one.
+   * for the run's session, with the product's own stop reason and execution status (REQ-MONITOR-301, REQ-SESSION-073).
+   * A run that ended for another reason (a desktop stop of the same session) releases the slot too: the product's own
+   * notion of "the run is over" is this one.
    *
    * BLOCKER A: bound to the run's session. If the active run is another session, nothing happens; if the attempt's own
    * session ended, the attempt is marked ended (a late `committed` then records the handle and leaves the slot free).
+   * MAJOR: the execution status is FROZEN with the reason, so the handle answers its own end from then on.
    */
-  ended(sessionId: string, stopReason: string | null = null): void {
+  ended(sessionId: string, stopReason: string | null = null, executionStatus: string | null = null): void {
+    const endState = executionStatus === null ? { executionStatus: 'stopped', awaitingInput: false } : { executionStatus, awaitingInput: false };
     if (this.#active !== null) {
       if (this.#active.sessionId !== sessionId) return;
       if (stopReason !== null) this.#active.stopReason = stopReason;
+      this.#active.endState = endState;
       this.#active = null;
       return;
     }
@@ -219,39 +284,99 @@ export class InboundSurfaceRuns {
     if (held !== null && held.sessionId === sessionId) {
       held.ended = true;
       if (stopReason !== null) held.stopReason = stopReason;
+      held.endState = endState;
+      return;
+    }
+    // BLOCKER 2: an attempt that was superseded (or probe-settled) is still remembered: its reserved session ending is
+    // THIS attempt's end, and its handle must carry the reason (never the current attempt's).
+    for (const o of this.#orphans.values()) {
+      if (o.sessionId !== sessionId) continue;
+      o.ended = true;
+      if (stopReason !== null) o.stopReason = stopReason;
+      o.endState = endState;
+      const recorded = this.#handles.get(o.handle);
+      if (recorded !== undefined) { if (stopReason !== null) recorded.stopReason = stopReason; recorded.endState = endState; }
+      return;
     }
   }
 
   /**
    * REQ-MCP-123/126 (BLOCKER B/C, 2026-11-25): the product's own state for one session, as `publish.snapshot` publishes
-   * it (`executionStatus`, `stopReason`). This is the mechanism BLOCKER B and BLOCKER C share: the coordinator knows the
-   * session id it minted, so it reads that session's state from the product rather than waiting only for a `run.result`
-   * the halted/plan-gate paths never send.
+   * it (`executionStatus`, `stopReason`, the waiting flag). This is the mechanism BLOCKER B and BLOCKER C share: the
+   * coordinator knows the session id it minted, so it reads that session's state from the product rather than waiting only
+   * for a `run.result` the halted/plan-gate paths never send.
    *
-   * - The ACTIVE run's session: its reason is kept and, once the run has ENDED (`runHasEnded`: a busy status has not, a
-   *   terminal one has, a park has exactly when a reason accompanies it — a plan-gate cancel writes `paused` +
-   *   `user_cancelled`), the slot is freed without any `run.result`.
-   * - The HELD attempt's session: a held status means the run really was born, so the attempt settles into the active run
-   *   under the handle the caller was given (BLOCKER B's "confirmed late" case); an ended state frees the slot and keeps
-   *   the handle with its reason.
+   * BLOCKER 3: `runHasEnded` no longer treats `idle` (nor any non-terminal, reasonless state) as an end, so a status that
+   * is published BEFORE a continuation of the same session does not free the slot; only a terminal state, a park WITH a
+   * reason, or the run's own `run.result` does.
+   *
+   * - The ACTIVE run's session: its reason and its end state are kept and, once the run has ENDED, the slot is freed
+   *   without any `run.result`.
+   * - The HELD attempt's session: a state means the run really was born, so the attempt settles into the active run under
+   *   the handle the caller was given (BLOCKER B's "confirmed late" case); an ended state frees the slot and keeps the
+   *   handle with its reason and its end state.
+   * - A superseded attempt's RESERVED session (BLOCKER 2): the snapshot settles THAT attempt (records its handle), never
+   *   the attempt that took the slot in the meantime.
    * - Any other session: nothing. A desktop run of another session cannot touch this surface's slot or reasons.
    */
   observe(sessionId: string, state: ObservedState): void {
     const ended = runHasEnded(state.executionStatus, state.stopReason);
+    const frozen: FrozenEndState = { executionStatus: state.executionStatus, awaitingInput: state.awaitingInput ?? false };
     if (this.#active !== null && this.#active.sessionId === sessionId) {
       if (state.stopReason !== null) this.#active.stopReason = state.stopReason;
-      if (ended) this.#active = null;
+      if (ended) { this.#active.endState = frozen; this.#active = null; }
       return;
     }
     const held = this.#attempt;
-    if (held === null || held.sessionId !== sessionId) return;
-    if (state.stopReason !== null) held.stopReason = state.stopReason;
-    const run: InboundRun = { handle: held.handle, sessionId, workspaceId: held.workspaceId ?? '', stopReason: held.stopReason };
-    this.#attempt = null;
-    const stored = this.#record(run);
-    // A held status is a run the product holds, so the attempt was a real run and becomes the active one; an ended state
-    // (including a park WITH a reason — a plan-gate or message-limit cancel) leaves the slot free, handle and reason kept.
-    if (!ended && !held.ended) this.#active = stored;
+    if (held !== null && held.sessionId === sessionId) {
+      if (state.stopReason !== null) held.stopReason = state.stopReason;
+      if (ended) held.endState = frozen;
+      const run: InboundRun = { handle: held.handle, sessionId, workspaceId: held.workspaceId ?? '', stopReason: held.stopReason, endState: ended ? frozen : null };
+      this.#attempt = null;
+      const stored = this.#record(run);
+      // A non-ended state is a run the product holds, so the attempt was a real run and becomes the active one; an ended
+      // state (a terminal status or a park WITH a reason — a plan-gate or message-limit cancel) leaves the slot free.
+      if (!ended && !held.ended) this.#active = stored;
+      return;
+    }
+    // BLOCKER 2: the attempt that reserved THIS session may have been superseded by a newer `take`. Its snapshot settles
+    // THAT attempt — its handle is recorded and its end state kept — and never the current attempt or the active run.
+    for (const o of this.#orphans.values()) {
+      if (o.sessionId !== sessionId) continue;
+      if (state.stopReason !== null) o.stopReason = state.stopReason;
+      if (ended) o.endState = frozen;
+      const stored = this.#handles.get(o.handle);
+      if (stored !== undefined) {
+        if (state.stopReason !== null) stored.stopReason = state.stopReason;
+        if (ended) stored.endState = frozen;
+      } else {
+        this.#record({ handle: o.handle, sessionId, workspaceId: o.workspaceId ?? '', stopReason: o.stopReason, endState: ended ? frozen : null });
+      }
+      if (ended) this.#orphans.delete(o.id);
+      return;
+    }
+  }
+
+  /**
+   * MAJOR (2026-11-25): the run host's `session.list` reading, used by the one bounded reconcile after a successful start.
+   * A run whose TERMINAL WRITE failed leaves its durable image busy and sends no `run.result`, so the surface would hold
+   * the slot for good. This ends such a run on a DEFINITE reading and nothing else: the session is GONE from the listing
+   * (`absent`), or it is present and the listing marks it STALE (busy while no live process holds its lock,
+   * REQ-SESSION-171). A live busy run is never ended, so a real run can never be killed by this.
+   */
+  reconcile(sessionId: string, reading: InboundStatusReading): void {
+    const run = this.#active;
+    if (run === null || run.sessionId !== sessionId) return;
+    if (reading.kind === 'unreadable') return;
+    if (reading.kind === 'absent') { run.endState = { executionStatus: 'stopped', awaitingInput: false }; this.#active = null; return; }
+    if (!reading.stale) {
+      // Present and live: either genuinely busy (hold) or resting, which `observe` already settles. Nothing here.
+      if (runHasEnded(reading.executionStatus, null)) { run.endState = { executionStatus: reading.executionStatus, awaitingInput: reading.awaitingInput }; this.#active = null; }
+      return;
+    }
+    // Stale: busy in its record while nothing runs it — the terminal write never landed. The run is over.
+    run.endState = { executionStatus: reading.executionStatus, awaitingInput: reading.awaitingInput };
+    this.#active = null;
   }
 
   /**
@@ -271,7 +396,7 @@ export class InboundSurfaceRuns {
     return held !== null && held.id === attempt.id ? held : null;
   }
 
-  /** Remember a run's handle — and, with it, its stop reason, which is evicted exactly when the handle is (BLOCKER D). */
+  /** Remember a run's handle — and, with it, its stop reason and end state, which are evicted exactly when the handle is (BLOCKER D). */
   #record(run: InboundRun): InboundRun {
     this.#handles.set(run.handle, run);
     this.#handleOrder.push(run.handle);
@@ -290,26 +415,32 @@ export function mintInboundRunHandle(randomBytes: () => string = () => randomUUI
 }
 
 /**
- * BLOCKER B (2026-11-25): how a held attempt is settled. The run host's own credential lease is bounded at 45 s
- * (`LEASE_ASK_MS`), so a healthy host can answer `session.start` late; the coordinator's start bound is set above that
- * (`INBOUND_START_BOUND_MS`), and this probe is the belt-and-braces behind it: while the attempt is held, its session is
- * read from the product state, and the slot is freed the moment it is definite that no run was born (the session never
- * appears) or that the run has reached a resting/terminal state.
+ * BLOCKER 2 (2026-11-25): how a held attempt is settled, and HOW LONG the probe must keep going before an absence is
+ * taken as definite. The run host's own credential lease is bounded at `INBOUND_HOST_CREDENTIAL_LEASE_MS` (45 s) and the
+ * inbound start waits `INBOUND_START_BOUND_MS` (60 s), so a run can still be born for the whole of that window; the probe
+ * therefore only frees the slot after a successful listing that lacks the session for at least `spanMs`, and any
+ * unreadable listing EXTENDS it.
  */
 export interface InboundSettleProbe {
   /** Schedule one probe step; production passes the main clock's `after`, a test drives it synchronously. */
   readonly schedule: (fn: () => void, after: Millis) => void;
-  /** How many empty readings before the attempt is taken as never having produced a run. */
+  /** How many CONSECUTIVE successful-but-absent readings, spanning at least `spanMs`, before the attempt is taken as never having produced a run. */
   readonly attempts: number;
   readonly intervalMs: Millis;
+  /** The host worst case the absence must span before it is definite; defaulted to `INBOUND_START_BOUND_MS`. */
+  readonly spanMs?: Millis | undefined;
+  /** The hard cap on probe steps, so an always-unreadable listing does not probe forever (the slot then stays HELD). */
+  readonly maxSteps?: number | undefined;
 }
 
 /**
- * REQ-MCP-126/123 (BLOCKER B, lead's decision 2026-11-25): the bound the INBOUND start waits for `session.start`, set
- * ABOVE the run host's own credential lease (LEASE_ASK_MS = 45 s so the host can answer late). The desktop start keeps
- * its own, shorter wait (`startSessionRun`'s default); only the inbound path sets this one.
+ * REQ-MCP-126/123 (BLOCKER B, the lead's decision 2026-11-25): the bound the INBOUND start waits for `session.start`, set
+ * ABOVE the run host's own credential lease (`LEASE_ASK_MS` = 45 s so the host can answer late). The desktop start keeps
+ * its own, shorter wait (`startSessionRun`'s default); only the inbound path sets this one. REWORK 3: the figure now lives
+ * in `contracts/inbound.ts` as ONE chain with the LISTENER's ask bound, so the two can never drift again (BLOCKER 1); this
+ * kernel-typed re-export keeps the coordinator's callers reading a `Millis` from here.
  */
-export const INBOUND_START_BOUND_MS = millis(60_000);
+export const INBOUND_START_BOUND_MS = millis(INBOUND_START_BOUND_MS_NUMBER);
 
 /** What the coordinator needs to answer both tools: the shared start coordinator's deps, the run store, the open-workspace read, and the session status. */
 export interface InboundCoordinatorDeps {
@@ -318,10 +449,10 @@ export interface InboundCoordinatorDeps {
   /**
    * REQ-MCP-123/125/130: the run's live state and whether it waits on a person, in the product's own vocabulary, read
    * from where the product holds it (the run host's listing for the workspace). The stop reason does NOT ride it (BLOCKER
-   * D): it lives with the handle (`InboundRun.stopReason`), fed from `publish.snapshot`/`run.result`. Answers null when
-   * the session cannot be read at all.
+   * D): it lives with the handle (`InboundRun.stopReason`), fed from `publish.snapshot`/`run.result`. Answers a definite
+   * reading: the row, a definite absence, or an unreadable listing (BLOCKER 2).
    */
-  readonly readStatus: (workspaceId: string, sessionId: string) => Promise<{ readonly executionStatus: string; readonly awaitingInput: boolean } | null>;
+  readonly readStatus: (workspaceId: string, sessionId: string) => Promise<InboundStatusReading>;
   /** REQ-MCP-124: the open workspace, as `SessionStartDeps.openWorkspaceRead` reads it. */
   readonly openWorkspace: SessionStartDeps['openWorkspaceRead'];
   readonly mintHandle?: (() => string) | undefined;
@@ -329,6 +460,8 @@ export interface InboundCoordinatorDeps {
   readonly settleProbe?: InboundSettleProbe | undefined;
   /** BLOCKER B: the bound the inbound start waits; defaulted to `INBOUND_START_BOUND_MS`. */
   readonly startBoundMs?: Millis | undefined;
+  /** MAJOR: after a run starts, one bounded reconcile may end it if it stays busy with no live process (a failed terminal write); defaulted to `INBOUND_START_BOUND_MS + 60 s`. */
+  readonly reconcileAfterMs?: Millis | undefined;
 }
 
 /** REQ-MCP-123/124: the two answers a `rotaris_*` tool call becomes, plus the coordinator's own observation entry point. */
@@ -354,30 +487,60 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
 } {
   const mint = deps.mintHandle ?? (() => mintInboundRunHandle());
   const startBound = deps.startBoundMs ?? INBOUND_START_BOUND_MS;
+  const reconcileAfter = deps.reconcileAfterMs ?? millis(millis(INBOUND_START_BOUND_MS) + 60_000);
 
   /**
-   * BLOCKER B: probe the held attempt's own session until it is definite what became of it. Each step reads the product
-   * state; a session that appears settles the attempt (busy → active run, quiescent → slot freed, handle kept), and a
-   * session that never appears after the probe's attempts is taken as no run at all (the slot freed, no handle kept).
+   * BLOCKER 2: probe the held attempt's own session until it is DEFINITE what became of it. Each step reads the product
+   * state; a session that appears settles the attempt (a live status → active run, an ended status → the slot freed with
+   * handle and end state kept), and the slot is freed for a never-appearing session ONLY after a successful listing that
+   * lacks it for the whole host worst case (`spanMs`). A FAILED/UNREADABLE listing proves nothing and EXTENDS the probe;
+   * if the cap is reached without a definite reading, the slot stays HELD (the conservative side of REQ-MCP-126).
    */
   const probe = (attempt: InboundAttempt, workspaceId: string): void => {
     const plan = deps.settleProbe;
     if (plan === undefined) return;
-    let left = plan.attempts;
+    const span = plan.spanMs ?? INBOUND_START_BOUND_MS;
+    const maxSteps = plan.maxSteps ?? Math.max(plan.attempts, Math.ceil(span / Math.max(1, plan.intervalMs)) + plan.attempts);
+    let cleanAbsent = 0;
+    let elapsed = 0;
+    let steps = 0;
     const step = (): void => {
-      if (deps.runs.attempt?.id !== attempt.id) return;
+      // Stop once the coordinator no longer tracks this attempt at all (settled and forgotten, or superseded past the cap).
+      if (deps.runs.attempt?.id !== attempt.id && !deps.runs.holdsSession(attempt.sessionId)) return;
+      steps += 1;
       void deps.readStatus(workspaceId, attempt.sessionId).then((read) => {
-        if (deps.runs.attempt?.id !== attempt.id) return;
-        if (read !== null) {
-          deps.runs.observe(attempt.sessionId, { executionStatus: read.executionStatus, stopReason: null });
+        if (deps.runs.attempt?.id !== attempt.id && !deps.runs.holdsSession(attempt.sessionId)) return;
+        if (read.kind === 'row') {
+          deps.runs.observe(attempt.sessionId, { executionStatus: read.executionStatus, stopReason: null, awaitingInput: read.awaitingInput });
           return;
         }
-        left -= 1;
-        if (left <= 0) deps.runs.settleAbsent(attempt);
-        else plan.schedule(step, plan.intervalMs);
+        if (read.kind === 'unreadable') {
+          // BLOCKER 2: a listing that could not be read proves NOTHING — extend, and never settle on it.
+          cleanAbsent = 0;
+        } else {
+          cleanAbsent += 1;
+        }
+        elapsed += Math.max(1, plan.intervalMs);
+        if (cleanAbsent >= plan.attempts && elapsed >= span) { deps.runs.settleAbsent(attempt); return; }
+        if (steps >= maxSteps) return; // the cap: no definite reading, so the slot stays HELD.
+        plan.schedule(step, plan.intervalMs);
       });
     };
     plan.schedule(step, plan.intervalMs);
+  };
+
+  /**
+   * MAJOR (2026-11-25): ONE bounded, slow reconcile after a run starts. It reads the session once after the whole host
+   * worst case has passed and ends the run only on a DEFINITE reading (`InboundSurfaceRuns.reconcile`): the session is
+   * gone, or it is stale — busy in its record while nothing runs it, which is exactly the failed-terminal-write case. A
+   * live busy run is left alone, so a real run is never killed.
+   */
+  const reconcile = (workspaceId: string, sessionId: string): void => {
+    const plan = deps.settleProbe;
+    if (plan === undefined) return;
+    plan.schedule(() => {
+      void deps.readStatus(workspaceId, sessionId).then((read) => { deps.runs.reconcile(sessionId, read); });
+    }, reconcileAfter);
   };
 
   const startRun = async (prompt: string): Promise<InboundStartRunAnswer> => {
@@ -423,7 +586,9 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
         return { kind: 'refused', code: outcome.code, headline: outcome.headline, ...(outcome.detail === undefined ? {} : { detail: outcome.detail }) };
       }
       const started = (outcome.value as { sessionId: string }).sessionId;
-      deps.runs.committed(attempt, { handle, sessionId: started, workspaceId: open.workspaceId, stopReason: null });
+      deps.runs.committed(attempt, { handle, sessionId: started, workspaceId: open.workspaceId, stopReason: null, endState: null });
+      // MAJOR: one bounded reconcile behind the start, so a failed terminal write does not hold the slot for good.
+      reconcile(open.workspaceId, started);
       return { kind: 'inbound.runStarted', run: handle, sessionId: started };
     } catch (cause) {
       // Nothing throws into the listener: a rejection here is a refusal with its reason, and the slot is freed.
@@ -436,8 +601,24 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     // REQ-MCP-123/130: only a handle this surface minted is answered; anything else is refused, so no other run is readable.
     const run = deps.runs.byHandle(handle);
     if (run === undefined) return { kind: 'refused', code: 'inbound.unknown-run', headline: 'No run of this surface answers to that handle' };
+    /*
+     * MAJOR (2026-11-25): a run that has ENDED is answered from the state FROZEN at its end, never from a later reading of
+     * the same session. A desktop continuation of the session (the same id, a new run) would otherwise make this old
+     * handle report the continuation's state and waiting flag, and blend its own reason with the continuation's status
+     * (REQ-MCP-123/125/130).
+     */
+    if (run.endState !== null) {
+      const ended: InboundRunStatus = {
+        run: handle,
+        sessionId: run.sessionId,
+        state: presentationStatus(run.endState.executionStatus),
+        stopReason: run.stopReason as StopReason | null,
+        awaitingInput: run.endState.awaitingInput,
+      };
+      return { kind: 'inbound.runStatus', status: ended };
+    }
     const read = await deps.readStatus(run.workspaceId, run.sessionId);
-    if (read === null) return { kind: 'refused', code: 'inbound.run-unreadable', headline: 'The run’s state could not be read' };
+    if (read.kind !== 'row') return { kind: 'refused', code: 'inbound.run-unreadable', headline: 'The run’s state could not be read' };
     const busy = isBusy(read.executionStatus);
     const status: InboundRunStatus = {
       run: handle,
@@ -460,9 +641,9 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
   };
 }
 
-/** REQ-MCP-126: the run's session ending releases the slot, and its reason is kept with the handle (BLOCKER D). Main wires this to the run host's `run.result`. */
-export function inboundRunEnded(runs: InboundSurfaceRuns, sessionId: string, stopReason: string | null = null): void {
-  runs.ended(sessionId, stopReason);
+/** REQ-MCP-126: the run's session ending releases the slot, and its reason and end state are kept with the handle (BLOCKER D, MAJOR). Main wires this to the run host's `run.result`. */
+export function inboundRunEnded(runs: InboundSurfaceRuns, sessionId: string, stopReason: string | null = null, executionStatus: string | null = null): void {
+  runs.ended(sessionId, stopReason, executionStatus);
 }
 
 /**

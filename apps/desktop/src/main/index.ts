@@ -62,9 +62,10 @@ import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands, confinementRefusalNotice } from './commands/session.js';
 import type { SessionStartDeps } from './session-start.js';
-import { createInboundCoordinator, inboundRunEnded, inboundRunHostExited, inboundRunObserved, InboundSurfaceRuns } from './inbound-runs.js';
+import { createInboundCoordinator, inboundRunEnded, inboundRunHostExited, inboundRunObserved, INBOUND_START_BOUND_MS, InboundSurfaceRuns } from './inbound-runs.js';
 import { createInboundStatusReader, stoppedSession } from './inbound-status.js';
 import { InboundExposure, InboundListenerLink, INBOUND_LISTENER_SERVICE_NAME, inboundListenerGoneRefusal, newInboundToken, portOfChild } from './inbound-exposure.js';
+import { createInboundEnableSequencer } from './inbound-enable.js';
 import { inboundCommands } from './commands/inbound.js';
 import { dictationCommands } from './commands/dictation.js';
 import type { DictationCredentialDeps } from './dictation/credential.js';
@@ -2213,6 +2214,9 @@ async function main(): Promise<void> {
    */
   const runHostProjection: SessionStartDeps = {
     log, runHost, services, mainWindows, notices, raiseNotice, recoveryFor, configFatal,
+    // MINOR (REQ-MCP-124, 2026-11-25): the one bounded follow-up that removes a session-created worktree when the host
+    // refused a start only after its bound (so `ProcessLink` discarded the reply and the caller saw a no-reply).
+    scheduleRecheck: (fn, afterMs) => { clocks.timers.after(millis(afterMs), fn); },
     storeRefusal: (workspace) => storeRefusals.get(canonicalPath(workspace))?.held,
     openWorkspaceRead: async (wcId) => {
       const view = wcId === null ? activeWindow() : mainWindows.forSender(wcId);
@@ -2227,9 +2231,11 @@ async function main(): Promise<void> {
     openWorkspace: (wcId) => runHostProjection.openWorkspaceRead(wcId),
     readStatus: (workspaceId, sessionId) => inboundStatus.readStatus(workspaceId, sessionId),
     // BLOCKER B: while a held attempt is unsettled, read its own session from the run host's listing and settle it the
-    // moment it is definite (the session appears → the run was born; it never appears → no run was born). The bound is
-    // the inbound START bound above the host's credential lease (INBOUND_START_BOUND_MS); the probe is the belt behind it.
-    settleProbe: { schedule: (fn, after) => { clocks.timers.after(after, fn); }, attempts: 6, intervalMs: millis(10_000) },
+    // moment it is DEFINITE (the session appears → the run was born; it never appears → no run was born). The bound is
+    // the inbound START bound above the host's credential lease; the probe is the belt behind it. BLOCKER 2: the absence
+    // must span the whole host worst case (spanMs) and an unreadable listing EXTENDS the probe, so the slot is never
+    // freed while a run may still be born.
+    settleProbe: { schedule: (fn, after) => { clocks.timers.after(after, fn); }, attempts: 6, intervalMs: millis(10_000), spanMs: INBOUND_START_BOUND_MS },
   });
   /**
    * REQ-MCP-126: the run's own end releases the single-run slot, whether it ended on its own or was stopped, and its
@@ -2245,69 +2251,58 @@ async function main(): Promise<void> {
    * exactly as the board's coordinator reaps on the same event (`requirements-runs.ts`).
    */
   runHost.onEvent((e) => {
-    if (e.kind === 'run.result') inboundRunEnded(inboundRuns, e.sessionId, e.result.stop_reason);
+    if (e.kind === 'run.result') inboundRunEnded(inboundRuns, e.sessionId, e.result.stop_reason, e.result.execution_status);
     else if (e.kind === 'publish.snapshot') { const o = stoppedSession(e.payload); inboundRunObserved(inboundRuns, o.sessionId, o.state); }
   });
   runHostChild.on('exit', () => { inboundRunHostExited(inboundRuns); });
 
   /**
-   * REQ-MCP-127: fork the listener at the first enable and answer the port it chose. The token is handed over on the
-   * `enable` ask alone (REQ-MCP-121); it is never logged on either side. REQ-MCP-120: quitting disables the listener.
+   * REQ-MCP-127/120/121: fork the listener at the first enable and answer the port it chose; the token is handed over on
+   * the `enable` ask alone and never logged. MAJOR (2026-11-25): the two gestures share ONE serialized path (`createInboundEnableSequencer`).
+   * `enable` forks the listener on the first press and asks it to bind; a second press while the first binds JOINS it,
+   * and a press while the surface is already on is idempotent (no fresh token, no rebind). `disable` revokes the exposure
+   * at once and asks the listener to unbind; a disable the listener did NOT confirm is not treated as done, so the next
+   * disable asks it again. The token is shown ONCE, on the enabling press's answer, and never logged.
    */
-  const enableInbound = async (): Promise<CommandOutcome> => {
-    /*
-     * REQ-MCP-120/121 (MAJOR, 2026-11-25): a SECOND enable while the exposure is ALREADY on is IDEMPOTENT — it returns
-     * the state in force and mints NO fresh token. Minting one here would put main's shown token out of step with the
-     * listener's (the host refuses a second bind and keeps the first socket), so the display and the surface would drift.
-     * The token is minted only on the FIRST exposure's press (REQ-MCP-121: shown once).
-     */
-    const current = inboundExposure.view(false);
-    if (current.enabled && current.port !== null && inboundLink !== null) return { ok: true, value: current };
-    if (inboundChild === null) {
-      const child = utilityProcess.fork(join(__dirname, 'inbound-listener.js'), [], { serviceName: INBOUND_LISTENER_SERVICE_NAME });
-      const link = new InboundListenerLink(portOfChild(child), clocks.timers, inboundLog);
-      link.onAsk(inboundCoordinator.ask);
-      child.once('spawn', () => log(`inbound listener forked (pid ${child.pid ?? '?'}); REQ-MCP-127`));
-      child.on('exit', (code) => {
-        log(`inbound listener exited (${code}); the surface is off and no run is admitted until it is forked again`, code === 0 ? 'info' : 'warn');
-        link.end(inboundListenerGoneRefusal());
-        inboundExposure.turnOff();
-        if (inboundChild === child) { inboundChild = null; inboundLink = null; }
-      });
-      inboundChild = child;
-      inboundLink = link;
-    }
-    const link = inboundLink;
-    if (link === null) return { ok: false, code: 'inbound.fork-failed', headline: 'The inbound listener could not be started' };
-    // REQ-MCP-121: a fresh exposure mints a fresh token; the same exposure shows the same one.
-    const token = newInboundToken();
-    const reply = await link.request({ kind: 'inbound.enable', token }, 25_000).catch((cause: Error) => ({ kind: 'refused' as const, code: 'inbound.unreachable', headline: 'The inbound listener did not answer', detail: cause.message }));
-    if (reply.kind !== 'inbound.state' || reply.state.port === null) {
-      inboundExposure.turnOff();
-      return reply.kind === 'refused' ? { ok: false, code: reply.code, headline: reply.headline, ...(reply.detail === undefined ? {} : { detail: reply.detail }) } : { ok: false, code: 'inbound.not-bound', headline: 'The inbound listener did not bind to loopback' };
-    }
-    inboundExposure.turnOn(token);
-    inboundExposure.bound(reply.state.port);
-    // REQ-MCP-121: the token is shown ONCE — the enabling press's answer alone carries it; nothing here writes it to the log.
-    log(`inbound surface enabled for this session on 127.0.0.1:${reply.state.port} (loopback, ephemeral; REQ-MCP-119/120)`);
-    return { ok: true, value: inboundExposure.view(true) };
-  };
-  const disableInbound = async (): Promise<CommandOutcome> => {
-    const wasEnabled = inboundExposure.view(false).enabled;
-    inboundExposure.turnOff();
-    // REQ-MCP-120 (MAJOR, 2026-11-25): a disable the listener did not answer is NOT reported as a success. Main revokes
-    // its exposure and the token regardless (the choice does not persist), but the caller is told the surface did not
-    // answer, so a switch that thought it turned the surface off reads the truth rather than a green that hid a refusal.
-    if (!wasEnabled) return { ok: true, value: inboundExposure.view(false) };
-    if (inboundLink === null) return { ok: true, value: inboundExposure.view(false) };
-    const reply = await inboundLink.request({ kind: 'inbound.disable' }, 10_000).catch(() => null);
-    if (reply === null) {
-      log('inbound surface: the listener did not answer the disable; the exposure is revoked in main regardless', 'warn');
-      return { ok: false, code: 'inbound.unreachable', headline: 'The inbound surface did not answer the disable', detail: 'The exposure and its token are revoked in the application; the listener did not confirm it, so a socket of it may still be open until the listener or the application ends.' };
-    }
-    log('inbound surface disabled; the token is invalidated with the exposure (REQ-MCP-120/121)');
-    return { ok: true, value: inboundExposure.view(false) };
-  };
+  const inboundEnable = createInboundEnableSequencer({
+    exposure: inboundExposure,
+    mintToken: () => newInboundToken(),
+    askEnable: async (token) => {
+      if (inboundChild === null) {
+        const child = utilityProcess.fork(join(__dirname, 'inbound-listener.js'), [], { serviceName: INBOUND_LISTENER_SERVICE_NAME });
+        const link = new InboundListenerLink(portOfChild(child), clocks.timers, inboundLog);
+        link.onAsk(inboundCoordinator.ask);
+        child.once('spawn', () => log(`inbound listener forked (pid ${child.pid ?? '?'}); REQ-MCP-127`));
+        child.on('exit', (code) => {
+          log(`inbound listener exited (${code}); the surface is off and no run is admitted until it is forked again`, code === 0 ? 'info' : 'warn');
+          link.end(inboundListenerGoneRefusal());
+          inboundExposure.turnOff();
+          inboundEnable.listenerGone();
+          if (inboundChild === child) { inboundChild = null; inboundLink = null; }
+        });
+        inboundChild = child;
+        inboundLink = link;
+      }
+      const link = inboundLink;
+      if (link === null) return { ok: false, outcome: { ok: false, code: 'inbound.fork-failed', headline: 'The inbound listener could not be started' } };
+      const reply = await link.request({ kind: 'inbound.enable', token }, 25_000).catch((cause: Error) => ({ kind: 'refused' as const, code: 'inbound.unreachable', headline: 'The inbound listener did not answer', detail: cause.message }));
+      if (reply.kind !== 'inbound.state' || reply.state.port === null) {
+        return { ok: false, outcome: reply.kind === 'refused' ? { ok: false, code: reply.code, headline: reply.headline, ...(reply.detail === undefined ? {} : { detail: reply.detail }) } : { ok: false, code: 'inbound.not-bound', headline: 'The inbound listener did not bind to loopback' } };
+      }
+      log(`inbound surface enabled for this session on 127.0.0.1:${reply.state.port} (loopback, ephemeral; REQ-MCP-119/120)`);
+      return { ok: true, port: reply.state.port };
+    },
+    askDisable: async () => {
+      if (inboundLink === null) return true;
+      const reply = await inboundLink.request({ kind: 'inbound.disable' }, 10_000).catch(() => null);
+      const confirmed = reply !== null && reply.kind === 'inbound.state' && !reply.state.listening;
+      if (!confirmed) log('inbound surface: the listener did not confirm the disable; the exposure is revoked in main and the next disable asks it again', 'warn');
+      else log('inbound surface disabled; the token is invalidated with the exposure (REQ-MCP-120/121)');
+      return confirmed;
+    },
+  });
+  const enableInbound = (): Promise<CommandOutcome> => inboundEnable.enable();
+  const disableInbound = (): Promise<CommandOutcome> => inboundEnable.disable();
 
   const handlers: CommandHandlers = {
     ...authRecoveryCommands(commandContext),

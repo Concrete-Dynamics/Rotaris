@@ -1,69 +1,64 @@
 import { millis } from '@rotaris/kernel';
-import type { ProcessEvent, ProcessReply, RunHostRequest } from '@rotaris/contracts';
+import type { ProcessReply, RunHostRequest, SessionSnapshot } from '@rotaris/contracts';
+import type { ObservedState } from './inbound-runs.js';
 
 /**
- * REQ-MCP-123/125/130 (BLOCKER 3 of the review, 2026-11-25): the surface's STATUS READ, and where the stop reason comes
- * from. `rotaris_run_status` SHALL read the run's state AND stop reason in the product's own vocabulary — the original
- * build set `stopReason: null` unconditionally, so a finished run reported no reason and the surface text even said "the
- * run has not stopped".
+ * REQ-MCP-123/125/128/130 (BLOCKER C/D of the review, 2026-11-25): the surface's STATUS READ, and where the run's state
+ * and stop reason come from.
  *
- * The state and the waiting-on-a-person fact come from the run host's own `session.list` (its `status` and
- * `awaitingInput`); the STOP REASON does not ride that listing, so it is held main-side — the slot's owner is main — from
- * the run host's own terminal `run.result` (`e.result.stop_reason`, REQ-MONITOR-301's closed set), which main already
- * consumes. No new store and no new event type is minted (REQ-MCP-128): the reason is read from an event the product
- * already publishes.
+ * `rotaris_run_status` SHALL read the run's state AND stop reason in the product's own vocabulary. The state and the
+ * waiting-on-a-person fact come from the run host's own `session.list` (its `status` and `awaitingInput`). The STOP
+ * REASON does not ride that listing, and it is NOT held main-side in a map of its own (BLOCKER D: a per-session map
+ * counted every `run.result` — a desktop run's among them — against one cap, so a live handle's reason could be evicted,
+ * and a desktop continuation of the same session could displace it). The reason lives with the HANDLE
+ * (`InboundSurfaceRuns`, `InboundRun.stopReason`) and is fed from where the product already publishes it:
  *
- * This module is the whole of that seam, kept out of `index.ts` so it can be driven without an Electron main.
+ * - the run host's **terminal `run.result`** (`e.result.stop_reason`, REQ-MONITOR-301's closed set), which main already
+ *   consumes; and
+ * - the run host's **`publish.snapshot`** (`SessionRecordSchema.stopReason`, `packages/contracts/src/channels.ts`), which
+ *   main already relays — this is the source of the reason for a run that STOPPED WITHOUT a terminal `run.result`: a
+ *   desktop cancel at the plan gate or the message limit leaves the session `paused` with `stop_reason: 'user_cancelled'`
+ *   and no result event at all (BLOCKER C). `stoppedSession` reads exactly those two fields off the published record.
+ *
+ * No new store and no new event type is minted (REQ-MCP-128): both facts are read from publications the product already
+ * makes. This module is the whole of that seam, kept out of `index.ts` so the listing read can be driven without Electron.
  */
 
-/** How many terminal stop reasons main remembers. Past it the oldest is dropped, as the surface's handle history is. */
-export const INBOUND_STOP_REASON_HISTORY_MAX = 64;
-
-/** The status the surface answers in, in the product's own vocabulary (REQ-MCP-123/125). */
+/** The status the surface answers in, in the product's own vocabulary (REQ-MCP-123/125): the live half, read from the listing. */
 export interface InboundStatusRead {
   readonly executionStatus: string;
-  readonly stopReason: string | null;
   readonly awaitingInput: boolean;
 }
 
-/** The run host's side: the listing read, and the terminal reasons main holds. */
+/** The run host's side: the listing read alone (the reason comes from the published records, wired by main). */
 export interface InboundStatusDeps {
   readonly request: (request: RunHostRequest, boundMs: ReturnType<typeof millis>) => Promise<ProcessReply>;
-  /** The run host's event stream, so the terminal stop reason can be captured (main calls `runHost.onEvent`). */
-  readonly onEvent: (fn: (e: ProcessEvent) => void) => () => void;
   readonly log?: ((message: string) => void) | undefined;
 }
 
 export interface InboundStatusReader {
-  /** REQ-MCP-123/125: the run's state, stop reason and waiting fact; null when the listing cannot be read. */
+  /** REQ-MCP-123/125: the run's live state and waiting fact; null when the listing cannot be read or the session is not in it. */
   readonly readStatus: (workspaceId: string, sessionId: string) => Promise<InboundStatusRead | null>;
-  /** The last terminal stop reason main holds for a session, or undefined. */
-  readonly stopReasonOf: (sessionId: string) => string | undefined;
+}
+
+/**
+ * REQ-MCP-123 (BLOCKER C/D): the product's own state for one session, read straight off a `publish.snapshot`'s record —
+ * the two fields the surface needs, and nothing else. `executionStatus` decides busy-versus-resting (`isBusy`), and
+ * `stopReason` is the reason to keep with the handle when the session is not busy.
+ */
+export function stoppedSession(snapshot: SessionSnapshot): { readonly sessionId: string; readonly state: ObservedState } {
+  return { sessionId: snapshot.sessionId, state: { executionStatus: snapshot.session.executionStatus, stopReason: snapshot.session.stopReason } };
 }
 
 export function createInboundStatusReader(deps: InboundStatusDeps): InboundStatusReader {
-  const terminalReasons = new Map<string, string>();
-  deps.onEvent((e) => {
-    if (e.kind !== 'run.result') return;
-    // REQ-MCP-123/128: the run host's own terminal stop reason, in the product's vocabulary, kept where the surface can
-    // read it — the same event main already consumes for the notice, its slot and its logs. No new store, no new type.
-    terminalReasons.set(e.sessionId, e.result.stop_reason);
-    while (terminalReasons.size > INBOUND_STOP_REASON_HISTORY_MAX) {
-      const oldest = terminalReasons.keys().next().value;
-      if (oldest === undefined) break;
-      terminalReasons.delete(oldest);
-    }
-  });
-
   return {
-    stopReasonOf: (sessionId) => terminalReasons.get(sessionId),
     readStatus: async (workspaceId, sessionId) => {
       const r = await deps.request({ kind: 'session.list', workspaceId }, millis(10_000)).catch((cause: Error) => { deps.log?.(`inbound status: the session listing did not answer (${cause.message})`); return null; });
       if (r === null || r.kind !== 'session.list') return null;
       const row = r.sessions.find((s) => s.sessionId === sessionId);
       if (row === undefined) return null;
       // REQ-MCP-123/130: only the product's own vocabulary crosses — never an internal field, a file or a token.
-      return { executionStatus: row.status, stopReason: terminalReasons.get(sessionId) ?? null, awaitingInput: row.awaitingInput };
+      return { executionStatus: row.status, awaitingInput: row.awaitingInput };
     },
   };
 }

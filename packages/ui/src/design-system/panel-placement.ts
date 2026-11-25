@@ -39,10 +39,15 @@ export const PANEL_MARGIN = 8;
 /** A panel shorter than this is unusable — never report less, so it scrolls instead. */
 export const PANEL_MIN_HEIGHT = 96;
 
-export function panelPlacement(trigger: TriggerRect, viewport: ViewportSize): PanelBox {
+/**
+ * `panelWidth` is the panel's own width where it is wider than its trigger (a `PopoverPanel`), so its right edge stays in the
+ * viewport too; absent, the panel is taken to be as wide as the trigger, which a menu's `minWidth` makes it at least.
+ */
+export function panelPlacement(trigger: TriggerRect, viewport: ViewportSize, panelWidth?: number): PanelBox {
+  const width = Math.max(trigger.width, panelWidth ?? 0);
   const left = Math.max(
     PANEL_MARGIN,
-    Math.min(trigger.left, Math.max(PANEL_MARGIN, viewport.width - trigger.width - PANEL_MARGIN)),
+    Math.min(trigger.left, Math.max(PANEL_MARGIN, viewport.width - width - PANEL_MARGIN)),
   );
   const minWidth = trigger.width;
   // The upward anchor is the legacy one: the panel's bottom edge sits at the

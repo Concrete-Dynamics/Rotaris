@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CommandOutcome, CommandRequest, SessionRecord, TranscriptRow } from '@rotaris/contracts';
-import { createCancelOverlayStore, shownSession } from '@rotaris/ui';
+import { createCancelOverlayStore, shownSession, useShellState } from '@rotaris/ui';
 import { createSessionActions, type SessionActionDeps } from './session-actions.js';
 
 const agentRecord = (over: Partial<AgentRecord>): AgentRecord => ({ id: 'bg_00000001', name: 'one', parentId: 'bg_0000root', state: 'running', presentationState: 'running', activity: 'TASK: one', activeTools: [], live: true, completedAt: null, ...over } as AgentRecord);
@@ -320,5 +320,22 @@ describe('REQ-MONITOR-146 / REQ-MONITOR-194: the composer\'s model for the next 
     expect(refusedWrite.sent.map((r) => r.kind)).toEqual(['config.setField']);
     const refusedChoice = actions([{ ok: true, value: null }, { ok: false, code: 'session.unknown-model', headline: 'The model for the next run could not be applied to the session', detail: "'alpha' is not a configured model" }]);
     expect(await refusedChoice.setNextModel('orchestrator', 'alpha')).toEqual({ ok: false, reason: "'alpha' is not a configured model" });
+  });
+});
+
+describe('PD-ORCH-021 clause 9: the money slider chip', () => {
+  it('with a session followed, the stop is that session\'s own, set by the control live or at rest', async () => {
+    const a = actions([{ ok: true, value: { ok: true } }]);
+    expect(await a.setMoneyStop('token_burner')).toEqual({ ok: true });
+    expect(a.sent).toEqual([{ kind: 'session.control', request: { op: 'setMoneyStop', sessionId: 'S1', args: { stop: 'token_burner' } } }]);
+  });
+
+  it('with none, the stop is held and rides on the start of the next session, which consumes it', async () => {
+    const a = actions([{ ok: true, value: { sessionId: 'S9' } }, { ok: true, value: {} }], null);
+    expect(await a.setMoneyStop('money_saver')).toEqual({ ok: true });
+    expect(a.sent).toEqual([]);
+    await a.submitPrompt('do it', []);
+    expect(a.sent[0]).toMatchObject({ kind: 'session.start', prompt: 'do it', moneyStop: 'money_saver' });
+    expect(useShellState.getState().pendingMoneyStop).toBeNull();
   });
 });

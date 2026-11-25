@@ -1,4 +1,4 @@
-import { dictationFieldProblem, type AdvisorView, type CircuitBreakerReviewView, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type ReasoningLevelName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
+import { dictationFieldProblem, type AdvisorView, type CircuitBreakerReviewView, displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DictationConfigView, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type MoneyStop, type ModelSlotName, type ReasoningLevelName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
  * REQ-CONFIG-332 / REQ-CONFIG-093 / REQ-CONFIG-254: what a reasoning-strength control shows and does, derived from the
@@ -146,6 +146,8 @@ export interface PendingSettings {
   readonly advisor: AdvisorView;
   readonly compressorThresholdPercentage: number;
   readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single' | 'lead' | 'intelligent';
+  /** PD-ORCH-021 clause 1: the money slider's default stop, `rotaris.money_slider`. */
+  readonly moneySlider: MoneyStop;
   /**
    * REQ-CONFIG-472: the Display category's four tool-row fields — workspace configuration, committed by Save
    * like the rest of destination 1, and read from here by the transcript the moment a control moves, so what is
@@ -224,6 +226,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
     advisor: { ...snapshot.advisor },
     compressorThresholdPercentage: snapshot.compressorThresholdPercentage,
     delegationStrategy: snapshot.delegationStrategy,
+    moneySlider: snapshot.moneySlider.stop,
     display: { ...snapshot.display },
     skills: { enabled: snapshot.skills.enabled, overrides: { ...snapshot.skills.overrides }, invocationOverrides: { ...snapshot.skills.invocation_overrides } },
     instructions: { overrides: { ...snapshot.instructionsPolicy.overrides } },
@@ -334,6 +337,7 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
     advisor: { enabled: pending.advisor.enabled !== previousSaved.advisor.enabled ? pending.advisor.enabled : fresh.advisor.enabled, max_uses: pending.advisor.max_uses !== previousSaved.advisor.max_uses ? pending.advisor.max_uses : fresh.advisor.max_uses },
     compressorThresholdPercentage: pending.compressorThresholdPercentage !== previousSaved.compressorThresholdPercentage ? pending.compressorThresholdPercentage : fresh.compressorThresholdPercentage,
     delegationStrategy: pending.delegationStrategy !== previousSaved.delegationStrategy ? pending.delegationStrategy : fresh.delegationStrategy,
+    moneySlider: pending.moneySlider !== previousSaved.moneySlider ? pending.moneySlider : fresh.moneySlider,
     roles: pending.roles,
   };
 }
@@ -373,6 +377,7 @@ export type PendingChange =
   | { readonly kind: 'advisor'; readonly key: keyof AdvisorView; readonly value: AdvisorView[keyof AdvisorView] }
   | { readonly kind: 'compressorThreshold'; readonly value: number }
   | { readonly kind: 'delegationStrategy'; readonly value: PendingSettings['delegationStrategy'] }
+  | { readonly kind: 'moneySlider'; readonly value: MoneyStop }
   | { readonly kind: 'display'; readonly key: keyof DisplayView; readonly value: DisplayView[keyof DisplayView] }
   | { readonly kind: 'skillsEnabled'; readonly value: boolean }
   | { readonly kind: 'skillLoad'; readonly name: string; readonly value: SkillLoadModeName }
@@ -421,6 +426,8 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
       return pending.compressorThresholdPercentage === change.value ? pending : { ...pending, compressorThresholdPercentage: change.value };
     case 'delegationStrategy':
       return pending.delegationStrategy === change.value ? pending : { ...pending, delegationStrategy: change.value };
+    case 'moneySlider':
+      return pending.moneySlider === change.value ? pending : { ...pending, moneySlider: change.value };
     case 'display':
       // REQ-CONFIG-419: repopulating a control from the stored value emits no change and cannot dirty the form.
       return pending.display[change.key] === change.value ? pending : { ...pending, display: { ...pending.display, [change.key]: change.value } };
@@ -488,6 +495,7 @@ export function savePayload(saved: PendingSettings, pending: PendingSettings): D
   if (Object.keys(advisor).length > 0) out.advisor = advisor;
   if (pending.compressorThresholdPercentage !== saved.compressorThresholdPercentage) out.compressorThresholdPercentage = pending.compressorThresholdPercentage;
   if (pending.delegationStrategy !== saved.delegationStrategy) out.delegationStrategy = pending.delegationStrategy;
+  if (pending.moneySlider !== saved.moneySlider) out.moneySlider = pending.moneySlider;
   // REQ-CONFIG-256/472: written per field and under the file's own key names, with unlimited stored as 0 (REQ-CONFIG-172).
   const display: DisplaySavePayload = {};
   if (pending.display.show_tool_results !== saved.display.show_tool_results) display.show_tool_results = pending.display.show_tool_results;
@@ -576,6 +584,7 @@ export function liveStateOf(pending: PendingSettings): LiveStatePayload {
     circuitBreakerEnabled: pending.circuitBreakerEnabled,
     compressorThresholdPercentage: pending.compressorThresholdPercentage,
     delegationStrategy: pending.delegationStrategy,
+    moneySlider: pending.moneySlider,
   };
 }
 

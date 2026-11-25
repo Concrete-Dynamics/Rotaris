@@ -1,6 +1,6 @@
 # Composer: the money slider's chip, its popover and its default in Settings — brief
 
-**Status:** approved 2026-11-24
+**Status:** approved 2026-11-24; built 2026-11-25 (PD-ORCH-021 first execution)
 **Written:** 2026-11-24 by `design-ui` with the Impeccable skill (`shape`, then a code-led mock and its critique), for
 [R-132](../../product/requests.md#r-132). No structured-question channel reached the owner from this session, so every
 choice below the binding clauses is the brief's own, marked **assumed** where the record does not settle it, and each

@@ -768,16 +768,7 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
    * affects correctness — the chain cannot release anything (it is a pure phase refresh) — it only stops a periodic
    * refresh, and the STATUS path still refreshes on demand (`rotaris_run_status`).
    */
-  const armed = new Map<string, { steps: number; last: string | null }>();
-
-  /** TEMP-REVERT (rework10 commit split): the round-9 progress reset, restored only to split the commits. */
-  const pulse = (sessionId: string, signature: string): void => {
-    const state = armed.get(sessionId);
-    if (state === undefined) return;
-    if (state.last === signature) return;
-    state.steps = 0;
-    state.last = signature;
-  };
+  const armed = new Map<string, { steps: number }>();
 
   /**
    * MAJOR (REWORK 4, point 6): the one reconcile, re-armed while the run is live. Each step reads the product state and
@@ -791,7 +782,7 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     const schedule = deps.schedule;
     if (schedule === undefined) return;
     if (armed.has(sessionId)) return;
-    const state = { steps: 0, last: null as string | null };
+    const state = { steps: 0 };
     armed.set(sessionId, state);
     /*
      * MAJOR 2 (REWORK 10): the counter is incremented per step and never cleared, so the cap is a hard bound under every
@@ -936,7 +927,6 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
      * reconcile unarmed and a failed terminal write could hold the slot for good.
      */
     if (read.kind === 'row') armOnConfirm(first, deps.runs.observeListing(first.sessionId, { executionStatus: read.executionStatus, awaitingInput: read.awaitingInput, stale: read.stale }));
-    if (read.kind === 'row') pulse(first.sessionId, `${read.executionStatus}|${read.awaitingInput}|${read.stale}`);
     const now = deps.runs.byHandle(handle) ?? first;
     // MINOR (REQ-MCP-123): the same guard AFTER the read — a refusal or an end that landed while the listing was being
     // read is stated now, rather than being overtaken by this call's `starting`.
@@ -992,7 +982,6 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     observeSnapshot: (sessionId, state) => {
       const run = deps.runs.openRunForSession(sessionId);
       armOnConfirm(run, deps.runs.observe(sessionId, state));
-      pulse(sessionId, `${state.executionStatus}|${state.awaitingInput ?? false}|${state.stopReason ?? ''}`);
     },
   };
 }

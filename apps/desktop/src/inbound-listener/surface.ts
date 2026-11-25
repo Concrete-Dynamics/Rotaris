@@ -13,7 +13,7 @@ import { checkInboundRequest, type InboundToken } from './guards.js';
 
 /** REQ-MCP-123: the two tools' output shapes, as `tools/call` reports them under `structuredContent`. */
 const StartRunOutputSchema = z.object({ run: z.string(), sessionId: z.string() });
-const RunStatusOutputSchema = z.object({ run: z.string(), sessionId: z.string(), state: z.string(), stopReason: z.string().nullable() });
+const RunStatusOutputSchema = z.object({ run: z.string(), sessionId: z.string(), state: z.string(), stopReason: z.string().nullable(), awaitingInput: z.boolean().optional() });
 
 /**
  * THE INBOUND SURFACE, as a fetch-shaped MCP handler (ADR-0067; REQ-MCP-119/121/122/123). This is the pure core of the
@@ -93,14 +93,18 @@ function startRunInputRefusal(issues: readonly { readonly code: string; readonly
   return 'This surface starts a run with a prompt alone; the call carried none or one that is not text.';
 }
 
-/** REQ-MCP-123/130: the status in the product's own vocabulary, as text for the caller's transcript. */
+/** REQ-MCP-123/125: the status in the product's own vocabulary, as text for the caller's transcript. */
 export function statusText(status: InboundRunStatus): string {
+  // REQ-MCP-123: the stop reason when the run has stopped, the product's own word for why. BLOCKER 3 (2026-11-25): the
+  // reason is a REAL value now, so a finished run no longer reads as "the run has not stopped".
   const reason = status.stopReason === null ? 'the run has not stopped' : `it stopped: ${status.stopReason}`;
-  return JSON.stringify({ run: status.run, sessionId: status.sessionId, state: status.state, stopReason: status.stopReason, summary: `${status.state}; ${reason}` });
+  // REQ-MCP-125: the one thing a caller may observe about a run waiting on a decision — it may never answer one.
+  const waiting = status.awaitingInput === true ? '; waiting for a person at the desktop' : '';
+  return JSON.stringify({ run: status.run, sessionId: status.sessionId, state: status.state, stopReason: status.stopReason, awaitingInput: status.awaitingInput ?? false, summary: `${status.state}; ${reason}${waiting}` });
 }
 
 function statusStructured(status: InboundRunStatus): unknown {
-  return { run: status.run, sessionId: status.sessionId, state: status.state, stopReason: status.stopReason };
+  return { run: status.run, sessionId: status.sessionId, state: status.state, stopReason: status.stopReason, awaitingInput: status.awaitingInput ?? false };
 }
 
 /**

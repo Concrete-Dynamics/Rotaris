@@ -1,7 +1,7 @@
 import type { UtilityProcess } from 'electron';
 import type { MessagePortLike } from '@rotaris/shell';
 import { millis, type Timers } from '@rotaris/kernel';
-import { CONTRACT_SCHEMA_VERSION, InboundListenerStateSchema, InboundListenerEventEnvelopeSchema, InboundListenerReplyEnvelopeSchema, type InboundExposure as InboundExposureView, type InboundAskHandler, type InboundListenerRequest, type InboundListenerReply } from '@rotaris/contracts';
+import { CONTRACT_SCHEMA_VERSION, InboundAskEnvelopeSchema, InboundListenerStateSchema, InboundListenerEventEnvelopeSchema, InboundListenerReplyEnvelopeSchema, type InboundExposure as InboundExposureView, type InboundAskHandler, type InboundListenerRequest, type InboundListenerReply } from '@rotaris/contracts';
 import { randomBytes } from 'node:crypto';
 
 /**
@@ -35,10 +35,16 @@ export class InboundListenerLink {
 
   constructor(private readonly port: MessagePortLike, private readonly timers: Timers, private readonly log: (m: string, level: 'info' | 'warn') => void) {
     this.#stop = port.onMessage((raw) => {
-      // The listener's answer to one of ITS asks (a tool call), told apart from its replies and its events by shape.
-      const ask = raw as { ask?: unknown; answer?: unknown };
-      if (typeof ask.ask === 'number' && ask.answer !== undefined) {
-        this.#answer(ask.ask, ask.answer);
+      /*
+       * The listener's ASK to main (a tool call), read through the boundary's own contract rather than an ad-hoc cast:
+       * the listener sends `{ ask, request }` (`InboundAskEnvelopeSchema`, `listenerAsk`). This direction is the one the
+       * fix of 2026-11-25 repaired — the branch previously tested `raw.answer`, which a `{ ask, request }` message never
+       * carries, so every `rotaris_start_run`/`rotaris_run_status` ask fell through the shape test and was dropped in
+       * silence and the two tools never reached the coordinator. Answering back as `{ ask, answer }` is unchanged.
+       */
+      const ask = InboundAskEnvelopeSchema.safeParse(raw);
+      if (ask.success) {
+        this.#answer(ask.data.ask, ask.data.request);
         return;
       }
       const reply = InboundListenerReplyEnvelopeSchema.safeParse(raw);
@@ -136,14 +142,22 @@ export class InboundExposure {
   }
 }
 
-/** A message port over an Electron `UtilityProcess` (the same shape `main` gives `ProcessLink`). */
+/**
+ * A message port over an Electron `UtilityProcess` (the same shape `main` gives `ProcessLink`), and the ONE such adapter
+ * of main's composition root — the run host, every workspace service and the inbound listener all read their child
+ * through it.
+ *
+ * Electron's `UtilityProcess.on('message')` hands the listener the MESSAGE ITSELF (`(message: any) => void`), not an
+ * event object: the adapter that wrapped a child in `(e) => fn(e.data)` handed every reader `undefined` and the
+ * `InboundListenerLink` then threw on `raw.ask` inside the port's own handler, so the whole main↔listener channel was
+ * dead. `apps/desktop/src/main/index.ts` passed the payload straight through all along; this is that same adapter.
+ */
 export function portOfChild(child: UtilityProcess): MessagePortLike {
   return {
     postMessage: (message) => child.postMessage(message),
     onMessage: (fn) => {
-      const listener = (e: { data: unknown }) => fn(e.data);
-      child.on('message', listener);
-      return () => child.removeListener('message', listener);
+      child.on('message', fn);
+      return () => { child.removeListener('message', fn); };
     },
   };
 }

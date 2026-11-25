@@ -1833,7 +1833,9 @@ function useMcp(): McpSettingsProps {
         if (!r.ok) return { ok: false, message: r.detail ?? r.headline };
         const value = r.value as InboundExposure;
         setInbound(value);
-        return { ok: true, message: enabled ? 'The surface is on for this session.' : 'The surface is off; its token is invalidated.' };
+        // REQ-MCP-121: the FRESH exposure rides back with the press, so the card shows the token the enabling answer
+        // carries without reading a stale prop (BLOCKER of the review, 2026-11-25).
+        return { ok: true, message: enabled ? 'The surface is on for this session.' : 'The surface is off; its token is invalidated.', exposure: value };
       },
     },
   };

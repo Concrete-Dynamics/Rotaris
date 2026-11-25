@@ -186,10 +186,51 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     await sessions.running(started.value);
     const ends = dal.timelineOf(started.value).filter((e) => e.name === 'iteration_end');
     expect(ends.map((e) => JSON.parse(e.metadata) as Record<string, unknown>).map((m) => [m['iteration'], m['outcome']])).toEqual([[1, 'succeeded'], [2, 'succeeded'], [3, 'succeeded']]);
-    const third = client.requests[2]!.messages.find((m) => m.role === 'user')!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
+    const third = client.requests[2]!.messages.findLast((m) => m.role === 'user')!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
     const block = third.slice(third.indexOf('Recent iterations:'), third.indexOf('\n\nRecent session context:'));
     // Without the repair: "Recent iterations:\n- (none recorded)".
     expect(block).toBe('Recent iterations:\n- Iteration 1 (write the parser): succeeded — First done.\n- Iteration 2 (make it accept tabs): succeeded — Second done: the parser now accepts tabs.');
+  });
+
+  /**
+   * PD-ORCH-022 (R-134): a follow-up prompt's root starts from the previous root's conversation — what it was asked, what
+   * it read and what it answered — and is then sent its handoff, instead of starting fresh from the handoff alone.
+   */
+  it('PD-ORCH-022: a follow-up\'s root carries the previous root\'s conversation, then reads its handoff', async () => {
+    const client = new ScriptedModelClient([
+      toolCalls([{ callId: 'c1', name: 'read_file', args: '{"path":"src/parser.ts"}' }]),
+      answer('First done: the parser lives in src/parser.ts.'),
+      answer('Second done.'),
+    ]);
+    const sessions = makeSessions(92, new DefaultAgentBackend(client));
+    const started = sessions.start(dal, 'C:/ws', 'write the parser');
+    if (!started.ok) throw new Error(started.error.reason);
+    await sessions.running(started.value);
+    expect(sessions.prompt(started.value, 'make it accept tabs').ok).toBe(true);
+    await sessions.running(started.value);
+    const follow = client.requests[2]!.messages.filter((m) => m.role !== 'system');
+    const texts = follow.map((m) => JSON.stringify(m.content));
+    expect(texts[0]).toContain('write the parser');
+    // This test has no tool port, so the call ended the turn unanswered: it is not carried (no unpaired call reaches a provider).
+    expect(texts.some((t) => t.includes('tool-call'))).toBe(false);
+    expect(texts.some((t) => t.includes('First done: the parser lives in src/parser.ts.'))).toBe(true);
+    const last = follow.at(-1)!;
+    expect(last.role).toBe('user');
+    expect(JSON.stringify(last.content)).toContain('This is a follow-up within an existing session.');
+    const carried = dal.timelineOf(started.value).filter((e) => e.name === 'root_conversation_carried');
+    expect(carried).toHaveLength(1);
+    const [one, two] = dal.iterationsOf(started.value);
+    expect(JSON.parse(carried[0]!.metadata)).toMatchObject({ from_task_id: one!.root_task_id, to_task_id: two!.root_task_id, messages: 3 });
+  });
+
+  it('PD-ORCH-022: a first run carries nothing', async () => {
+    const client = new ScriptedModelClient([answer('Done.')]);
+    const sessions = makeSessions(93, new DefaultAgentBackend(client));
+    const started = sessions.start(dal, 'C:/ws', 'write the parser');
+    if (!started.ok) throw new Error(started.error.reason);
+    await sessions.running(started.value);
+    expect(client.requests[0]!.messages.filter((m) => m.role !== 'system')).toHaveLength(1);
+    expect(dal.timelineOf(started.value).filter((e) => e.name === 'root_conversation_carried')).toHaveLength(0);
   });
 
   it('REQ-SESSION-115: the iterations block keeps the last five, each cut to 700 characters', () => {

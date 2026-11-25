@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**One hundred and fifty-four.** The count here is the number of entries below, written nowhere else so that it cannot go
+**One hundred and fifty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 4.
 
@@ -157,6 +157,7 @@ a new file of the same shape and a row in its domain's table below; a link to it
 | [PD-ORCH-019](directives/pd-orch-019.md) | a `lead` strategy: one agent that does the work, delegates when it chooses, and scripts workflows |
 | [PD-ORCH-020](directives/pd-orch-020.md) | `intelligent`: the small model chooses each run's strategy from its request |
 | [PD-ORCH-021](directives/pd-orch-021.md) | a money slider: five stops that choose the strategy, the model tier, the reasoning level and the child limits a user left unset |
+| [PD-ORCH-022](directives/pd-orch-022.md) | a follow-up's first root carries the previous root's conversation |
 
 ### PROVIDER
 

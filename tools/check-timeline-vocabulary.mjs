@@ -58,6 +58,8 @@ export const VOCABULARY = {
   context_selection: 'PD-ORCH-014', notice: 'PD-ORCH-014',
   // PD-ORCH-020: the strategy an `intelligent` run chose, written before its pre-flight.
   run_strategy_chosen: 'PD-ORCH-020',
+  // PD-ORCH-022 clause 3: a follow-up's first root began from the previous root's conversation.
+  root_conversation_carried: 'PD-ORCH-022',
   waiting_on_tools: 'PD-ORCH-014', stall_recovered: 'PD-ORCH-014', corrective_message: 'PD-ORCH-014',
   // PD-CHAT-009 (OQ-157; R-071): the chat domain's words for the user's chat controls.
   steering_submitted: 'PD-CHAT-009', steering_injected: 'PD-CHAT-009', steering_not_delivered: 'PD-CHAT-009',

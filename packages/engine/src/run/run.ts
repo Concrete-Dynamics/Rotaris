@@ -39,6 +39,7 @@ import { ConversationRecord, personaDefinitionOf } from './record.js';
 import { answerOpenCalls, iterationAgents } from './crash.js';
 import { callsRun, interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
+import { carriedConversation, previousRootTaskId } from './carry.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
 import { StallWatch, stallRecords } from '../children/stall.js';
@@ -631,6 +632,8 @@ export class Run {
   readonly conversations = new ConversationRegistry();
   /** PD-ORCH-005 clause 1: every agent's conversation of this run, recorded as it happens. */
   private readonly record: ConversationRecord;
+  /** PD-ORCH-022: true until the run's first root starts; only a continuation's first fresh root carries a conversation. */
+  private carryPending: boolean;
   /** PD-ORCH-005 clause 1: the todo task the current iteration works on, recorded with the iteration and its root. */
   private iterationTask: { readonly id: string; readonly text: string } | null = null;
   /**
@@ -679,6 +682,7 @@ export class Run {
     this.rootName = deps.config.persona;
     this.hooks = deps.hooks ?? null;
     this.record = new ConversationRecord(deps.writer, deps.dal, deps.sessionId);
+    this.carryPending = deps.continuation === true;
     this.memory = deps.resilience?.memory ?? new ResilienceMemory();
     this.catalogue = deps.resilience?.catalogue ?? [];
     this.waits = new WaitRegistry({ clocks: deps.clocks, onChange: () => this.publishWait() });
@@ -1452,6 +1456,25 @@ export class Run {
   }
 
   /**
+   * PD-ORCH-022 (R-134): a continuation's first root carries the conversation of the session's most recent root, read
+   * from its record and cut to its last answer (`carriedConversation`), and is sent its payload after it — so a follow-up
+   * starts from what the previous root already read and decided instead of rediscovering it. The carried messages are
+   * recorded under the new root as one replacement before its first message, so a resume of it loads the whole of what
+   * it was given. Every later root of the run, and every root of a run that is no continuation, starts fresh as before.
+   */
+  private freshRootStart(task: string, rootTaskId: string, iteration: number): TurnStart {
+    const fresh: TurnStart = { kind: 'fresh', task };
+    if (!this.carryPending || !this.deps.dal) return fresh;
+    const previous = previousRootTaskId(this.deps.dal, this.sessionId, rootTaskId);
+    if (previous === null) return fresh;
+    const history = carriedConversation(this.record.load(previous));
+    if (history.length === 0) return fresh;
+    this.record.recorder(rootTaskId, iteration).replaced(history);
+    this.deps.writer.appendTimeline('root_conversation_carried', 'rotaris', `The conversation of ${previous} (${history.length} messages) was carried into ${rootTaskId}.`, { from_task_id: previous, to_task_id: rootTaskId, messages: history.length, iteration });
+    return { kind: 'fresh', task, history };
+  }
+
+  /**
    * PD-ORCH-005 clauses 4 and 10: the resumed root's conversation — its record, which already holds what the continue
    * told it: the notice of its background sessions, then the new message a continue by message delivers, so the user's
    * message is the last it reads (`Sessions.launchContinuation` records both at the continue).
@@ -2047,7 +2070,8 @@ export class Run {
     this.rootUncountedFrom = writer.activity.callCount(rootName);
     rootWatch.start();
     try {
-      const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
+      const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : this.freshRootStart(task, rootTaskId, iteration);
+      this.carryPending = false;
       // OQ-153 with PD-ORCH-005 clause 4: a root resumed into waiting takes no step until a child's report — it is between
       // its turns from the start, and no silence is counted against it while it waits (found by the verifier's review).
       if (start.kind === 'resumed' && start.waiting) rootWatch.betweenTurns();

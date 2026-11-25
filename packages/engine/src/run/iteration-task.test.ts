@@ -44,8 +44,8 @@ describe('every iteration is sent its own task (REQ-CHAT-040, REQ-ORCH-004, REQ-
     return { sessions, client };
   }
 
-  /** The first user message of a request: what a fresh root is sent. */
-  const firstUser = (r: ModelRequest): string => r.messages.find((m) => m.role === 'user')!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
+  /** The last user message of a root's first request: what a fresh root is sent, after any conversation it carries (PD-ORCH-022). */
+  const firstUser = (r: ModelRequest): string => r.messages.findLast((m) => m.role === 'user')!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
   const tasksOf = (sid: SessionId) => decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
   const iterationTexts = (sid: SessionId) => dal.iterationsOf(sid).map((r) => [r.iteration, tasksOf(sid).find((t) => t.id === r.todo_task_id)?.text, r.outcome]);
   const tick = () => new Promise((r) => setTimeout(r, 10));

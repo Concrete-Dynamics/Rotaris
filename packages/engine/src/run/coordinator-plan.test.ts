@@ -87,7 +87,8 @@ describe('the run\'s completion agrees with the coordinator\'s own plan (REQ-ORC
     });
     return { sessions, client, workItemsRun, warnings, notices };
   }
-  const firstUser = (r: ModelRequest): string => r.messages.find((m) => m.role === 'user')!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
+  /** PD-ORCH-022: the last user message of a root's first request is its payload, after any conversation it carries. */
+  const firstUser = (r: ModelRequest): string => r.messages.findLast((m) => m.role === 'user')!.content.map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
   const outcomes = (sid: SessionId) => dal.iterationsOf(sid).map((r) => r.outcome);
   const agentStates = (sid: SessionId) => decodeStoredTodo(dal.getSession(sid)!.todo).agent!.phases.flatMap((p) => p.tasks.map((t) => t.state));
 

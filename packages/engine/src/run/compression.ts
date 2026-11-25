@@ -125,8 +125,9 @@ function headOf(text: string, room: number): string {
  * the system prompt and the tool definitions, is not in the conversation at all: it travels on every request
  * as `systemPrompt` and `tools`, so it survives character for character without being copied here.
  */
-export function rebuild(original: ChatMessage, summary: string, todoLines: readonly string[], preserved: readonly ChatMessage[]): ChatMessage[] {
-  const out: ChatMessage[] = [original, { role: 'user', content: [{ kind: 'text', text: `[Context compression] The earlier part of this conversation was replaced by this summary.\n\n${summary}` }] }];
+export function rebuild(original: ChatMessage | null, summary: string, todoLines: readonly string[], preserved: readonly ChatMessage[]): ChatMessage[] {
+  // PD-ORCH-022: null where the original request is itself among the preserved turns (it follows a carried conversation).
+  const out: ChatMessage[] = [...(original === null ? [] : [original]), { role: 'user', content: [{ kind: 'text', text: `[Context compression] The earlier part of this conversation was replaced by this summary.\n\n${summary}` }] }];
   // REQ-MONITOR-084 (4): carried across ONE FOR ONE — never summarised, never cut to fit the summary's bound.
   if (todoLines.length > 0) out.push({ role: 'user', content: [{ kind: 'text', text: `[Task plan] The items on your plan, unchanged:\n${todoLines.map((t) => `- ${t}`).join('\n')}` }] });
   out.push(...preserved);
@@ -153,8 +154,9 @@ export async function compress(input: CompressionInput, deps: CompressorDeps, si
   const fail = (reason: string, nothingToDo = false): CompressionOutcome => ({ ok: false, reason, nothingToDo, beforeTokens: before, afterTokens: before, beforeMessages: messages.length, afterMessages: messages.length, summary: '' });
   if (original === null) return fail('the conversation carries no user request to preserve', true);
   const from = preservedFrom(messages, input.preserveRecentTurns);
-  const start = messages.indexOf(original) + 1;
-  const compressible = messages.slice(start, from);
+  // PD-ORCH-022: a carried conversation stands before the original request, and is compressed with what follows it.
+  const at = messages.indexOf(original);
+  const compressible = messages.slice(0, from).filter((m) => m !== original);
   if (compressible.length === 0) return fail('nothing lies between the original request and the preserved turns', true);
 
   const timeout = deps.timeoutMs ?? COMPRESSION_TIMEOUT_MS;
@@ -185,7 +187,7 @@ export async function compress(input: CompressionInput, deps: CompressorDeps, si
   if (text === '') return fail('the compressing pass produced no summary');
 
   const summary = clampSummary(text);
-  const rebuilt = rebuild(original, summary, input.todoLines, messages.slice(from));
+  const rebuilt = rebuild(at >= from ? null : original, summary, input.todoLines, messages.slice(from));
   if (!conversation.replace(rebuilt)) return fail('the agent\'s turn ended before the compressing pass completed');
   return { ok: true, reason: '', nothingToDo: false, beforeTokens: before, afterTokens: estimateTokens(rebuilt, input.charsPerToken), beforeMessages: messages.length, afterMessages: rebuilt.length, summary };
 }

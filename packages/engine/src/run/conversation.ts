@@ -41,6 +41,15 @@ export class Conversation {
     this.recorder?.appended(message);
   }
   /**
+   * The request this turn was given, pushed as `push` does and taken as the original request (REQ-MONITOR-082) even after a
+   * carried conversation (PD-ORCH-022), whose own first request is an earlier run's: the request a compression keeps
+   * verbatim is the one the agent is working on now.
+   */
+  pushRequest(message: ChatMessage): void {
+    this.push(message);
+    this.original = message;
+  }
+  /**
    * ADR-0060 decision 1: a NEW array, so an in-flight request keeps the old one. False, and nothing replaced or recorded,
    * once the conversation's turn has ended: a manual pass (Part AO) can finish after its turn, when the agent's next turn
    * already works on a new conversation built from this one's history, and a replacement recorded then would put a

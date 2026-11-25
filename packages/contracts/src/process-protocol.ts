@@ -6,6 +6,7 @@ import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
 import { McpHealthSchema, McpListingSchema, McpSecretWriteOutcomeSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
 import { ConfinementVerdictSchema } from './confinement.js';
 import { PlaybookCatalogueSchema } from './intent.js';
+import { MoneyStopSchema } from './money-slider.js'; // PD-ORCH-021
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { CONFIG_KEY_PATH_MAX, CONFIGURE_SCOPES } from './configuration-keys.js'; // PD-CONFIG-014
 import { ImageAttachmentInputSchema, SessionSnapshotSchema, TerminalFrameSchema, TimelineSeveritySchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
@@ -120,7 +121,7 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * the base workspace (REQ-GIT-019). `sandboxMode` is REQ-SHELL-125's choice, recorded on the row (ADR-0022: not honoured here).
    * REQ-TRACE-470/471: boardPermissions carries the authorized board grant for this launch.
    */
-  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string().max(FREE_TEXT_MAX), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), boardPermissions: z.literal('permissive').optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional(), runType: RunTypeSchema.optional(), initialTodo: InitialTodoSchema.optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string().max(FREE_TEXT_MAX), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), boardPermissions: z.literal('permissive').optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional(), runType: RunTypeSchema.optional(), initialTodo: InitialTodoSchema.optional(), moneyStop: MoneyStopSchema.optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   z.object({ kind: z.literal('circuit_breaker.status'), workspaceId: z.string() }),
   /** ADR-0037 Tier B: the settings store's current values, handed to the run host ahead of the next run start. */
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),

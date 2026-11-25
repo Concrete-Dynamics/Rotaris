@@ -1,7 +1,8 @@
 import { textOf, type Clocks, countNoun, HAND_OFF_BUDGET, millis, sessionContentInLog, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
-import { interruptionPhrase, isTerminalChildState, reportStatusToState, resumeStateFor, TASK_ID_PATTERN, type ChildState, type Interruption, type RootExecutionRecord } from '@rotaris/contracts';
+import { interruptionPhrase, isMoneyStop, isTerminalChildState, reportStatusToState, resumeStateFor, TASK_ID_PATTERN, type ChildState, type Interruption, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
+import type { ChildSpend } from '../run/spend.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import { isSteeringMessage, runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
@@ -131,6 +132,8 @@ export interface ChildrenDeps {
   readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
   /** ADR-0036: the configured personas over the built-in table; absent means the built-in table alone. */
   readonly personas?: PersonaResolver | undefined;
+  /** PD-ORCH-021 clause 10: the money slider as children read it; absent, every child runs as `personas` states. */
+  readonly spend?: ChildSpend | undefined;
   /** REQ-MONITOR-133: the pending steering prompts per child conversation. */
   readonly steeringFor?: ((conversationId: string) => () => readonly SteeringPrompt[]) | undefined;
   /**
@@ -217,6 +220,16 @@ export function childModelKey(persona: Pick<Persona, 'modelRef' | 'modelKey'> | 
  */
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
   return (deps.personas ? deps.personas.resolve(name) : resolveRole(name))?.persona;
+}
+
+/**
+ * PD-ORCH-021 clause 10: the persona a child runs as under the stop recorded at its admission — its model and level are that
+ * stop's, whatever the slider reads later. A child admitted with no stop (no slider wired, or a record older than v38) runs
+ * as `personaOf` reads it.
+ */
+function personaAtStop(deps: ChildrenDeps, name: string, stop: string | null | undefined): Persona | undefined {
+  if (deps.spend === undefined || stop === null || stop === undefined || !isMoneyStop(stop)) return personaOf(deps, name);
+  return deps.spend.personasAt(stop).resolve(name)?.persona ?? personaOf(deps, name);
 }
 
 /** How a resumed child carries on (PD-ORCH-005 clause 4). */
@@ -387,9 +400,13 @@ export class IterationChildren implements DelegationOps {
     // child holds, or no item from a coordinator that keeps a list (REQ-ORCH-028, REQ-ORCH-029).
     const admitted = this.admitTodoItem(parentId, req, persona, parentPersona, continuationOf);
     if (!admitted.ok) return { status: 'rejected', canonicalName: req.taskName, message: admitted.reason };
+    // PD-ORCH-021 clause 10: the stop the session's slider reads now is this child's for its whole life.
+    const moneyStop = this.deps.spend?.stopNow();
+    const runsAs = moneyStop === undefined ? persona : personaAtStop(this.deps, req.persona, moneyStop) ?? persona;
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
-      category: req.category, background: req.runInBackground, modelKey: childModelKey(persona, this.deps),
+      category: req.category, background: req.runInBackground, modelKey: childModelKey(runsAs, this.deps),
+      ...(moneyStop !== undefined ? { moneyStop } : {}),
       ...(continuationOf !== '' ? { continuationOf } : {}),
       ...(scope.patterns.length > 0 ? { writeScope: scope.patterns } : {}),
       ...(req.suppressAutoContext === true ? { suppressAutoContext: true } : {}),
@@ -1303,7 +1320,7 @@ export class IterationChildren implements DelegationOps {
       const moved = this.ledger.transition(row.task_id, 'running');
       if (!moved.ok) { deps.warn(moved.reason); return; }
     }
-    const persona = personaOf(deps, row.persona);
+    const persona = personaAtStop(deps, row.persona, row.money_stop);
     const childTimeoutMs = deps.childTimeoutMs ?? CHILD_TIMEOUT_MS;
     // PD-ORCH-004: the progress rule's window — the role's own `stall_timeout` (REQ-CONFIG-108), else the run's
     // `runtime.child_stall_timeout` — and the log it reads, kept across both attempts of REQ-ORCH-088's retry.

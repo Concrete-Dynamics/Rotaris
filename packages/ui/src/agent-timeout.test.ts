@@ -125,7 +125,7 @@ describe('PD-CONFIG-003 revision 3: where a cut-off agent shows', () => {
 
 function settingsProps(): ConfigSettingsProps {
   const snapshot: ConfigSnapshot = {
-    workspaceRoot: '/ws', loadOk: true, fatal: null, defaultPersona: 'orchestrator',
+    workspaceRoot: '/ws', loadOk: true, fatal: null, defaultPersona: 'orchestrator', moneySlider: { stop: 'regular', origin: 'default' }, moneyLevers: null,
     slots: [{ slot: 'large_model', value: 'gpt-4o', origin: 'default', thinking: null }],
     models: ['gpt-4o'], imageInputModels: [], modelReasoning: { 'gpt-4o': ['low', 'medium', 'high', 'max'] },
     roles: [],

@@ -168,7 +168,7 @@ export function sessionCommands(
       sessionId ??= randomUUID();
       mainWindows.beginStart(w.wcId, sessionId);
       // ADR-0019, as above: an unanswered run host refuses the start rather than throwing out of it.
-      const r = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), sessionId, ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
+      const r = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), sessionId, ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.moneyStop === undefined ? {} : { moneyStop: req.moneyStop }) }, millis(10_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
       if (r.kind !== 'session.started') {
         mainWindows.endStart(w.wcId, sessionId);
         // A tree this request created for a session that never came to exist is taken away again, so nothing is left behind (REQ-GIT-023).

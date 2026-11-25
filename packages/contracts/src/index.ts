@@ -36,3 +36,4 @@ export * from './auth-recovery.js'; // REQ-NOTIFY-072..080
 export * from './limits.js'; // OQ-467, PD-CHAT-011
 export * from './diagnostics.js'; // REQ-SHELL-163, REQ-STARTUP-129
 export * from './configuration-keys.js'; // PD-CONFIG-014
+export * from './money-slider.js'; // PD-ORCH-021

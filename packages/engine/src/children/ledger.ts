@@ -147,6 +147,8 @@ export interface SpawnInput {
   readonly attachArtifacts?: readonly string[] | undefined;
   /** PD-TOOLS-006 revision 6: the item of the caller's own plan the delegation serves, admitted before the spawn; absent means none. */
   readonly todoItem?: string | undefined;
+  /** PD-ORCH-021 clause 10: the session's money slider stop at this child's admission; its model and level are that stop's. */
+  readonly moneyStop?: string | undefined;
   /**
    * OQ-228 and OQ-229: the delegating agent's persona, whose `delegates_to` narrows the targets `spawn` admits and lists; absent
    * narrows nothing.
@@ -380,6 +382,7 @@ export class ChildLedger {
       // PD-TOOLS-006 revision 6 (REQ-ORCH-028/029): the item the delegation serves, so a second implementation delegation for
       // it is refused while this child is outstanding, and the run's records say which item each child answered for.
       todo_item: input.todoItem ?? null,
+      money_stop: input.moneyStop ?? null,
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };

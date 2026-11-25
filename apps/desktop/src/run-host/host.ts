@@ -1,4 +1,4 @@
-import { CONTRACT_SCHEMA_VERSION, runOverrideOfChoice, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
+import { CONTRACT_SCHEMA_VERSION, runOverrideOfChoice, type MoneyStop, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
 import { millis, toIsoUtc, type Millis } from '@rotaris/kernel';
 import { dataLayout, environmentWithout, installedProductVersion, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import type { PromptLists, StoreDal, StoreHandle } from '@rotaris/store';
@@ -315,8 +315,8 @@ export function createRunHost() {
     },
   });
 
-  const configure = (workspaceRoot: string, attended: boolean, entryPersona?: string) => {
-    const r = configureRun(workspaceRoot, attended, configurationDeps, entryPersona === undefined ? undefined : { entryPersona });
+  const configure = (workspaceRoot: string, attended: boolean, entryPersona?: string, moneyStop?: MoneyStop) => {
+    const r = configureRun(workspaceRoot, attended, configurationDeps, { ...(entryPersona === undefined ? {} : { entryPersona }), ...(moneyStop === undefined ? {} : { moneyStop }) });
     if (r.ok) { configured.set(workspaceRoot, r.value); mcp.newConfiguration(r.value.cfg); }
     return r;
   };
@@ -416,7 +416,7 @@ export function createRunHost() {
     restingCatalogue: (workspaceRoot) => restingCatalogueOf(workspaceRoot, configurationDeps),
     // ADR-0036/0037: the files, the live state, the loader's passes — once per run start.
     configure: (workspaceRoot, ctx) => {
-      const r = configure(workspaceRoot, ctx.attended, ctx.entryPersona);
+      const r = configure(workspaceRoot, ctx.attended, ctx.entryPersona, ctx.moneyStop);
       if (r.ok) { configuredRuns.set(ctx.sessionId, r.value); runBearers.set(ctx.sessionId, leased.get(workspaceRoot) ?? {}); }
       // REQ-WORKSPACE-060: the units as a GETTER, read at every agent construction, so a skill invoked between
       // prompts reaches the next agent built and never retracts one already running (REQ-CONFIG-166).

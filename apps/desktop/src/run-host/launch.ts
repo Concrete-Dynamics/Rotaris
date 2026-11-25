@@ -175,7 +175,7 @@ export async function launchSession(req: LaunchRequest, deps: LaunchDeps): Promi
    * gate below reads a null verdict as unavailable — the fail-closed side.
    */
   if (deps.settleConfinement) await deps.settleConfinement();
-  const prepared = prepareRun(deps.workspaceRoot, deps.attended, deps.configuration, req.boardPermissions, { sandboxMode: req.sandboxMode });
+  const prepared = prepareRun(deps.workspaceRoot, deps.attended, deps.configuration, req.boardPermissions, { sandboxMode: req.sandboxMode, ...(req.moneyStop === undefined ? {} : { moneyStop: req.moneyStop }) });
   if (!prepared.ok) {
     if (prepared.error.code === 'no-model') return { kind: 'refused', code: 'session.no-model', headline: 'No model configured', detail: 'Choose a model in Settings before starting a run.' };
     // REQ-SANDBOX-120: the notice's title conveys that the run did not get underway; its body

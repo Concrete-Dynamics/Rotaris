@@ -12,6 +12,7 @@ import { DISPLAY_DEFAULTS } from './display-section.js';
 import { CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
 import { ADVISOR_DEFAULTS } from './sections/advisor.js';
 import { renderFatal } from './validate.js';
+import { moneyLeversOf } from './money-slider.js'; // PD-ORCH-021
 import { discoverInstructionFiles, WORKSPACE_INSTRUCTION_FILE_NAMES } from './instructions.js';
 import { restoreConfigText, saveDesktop, writeConfigFields, writeConfigKey, type DesktopSave, type RoleEdit, type RoleFieldEdits, type WriteRefusal } from './writers.js';
 
@@ -113,6 +114,9 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
     // REQ-GIT-073 / REQ-CONFIG-068: main sends it on an isolated start's `worktree.create` (REQ-GIT-005).
     worktreeStorageSubpath: cfg.worktreeStorageSubpath,
     delegationStrategy: cfg.delegationStrategy,
+    // PD-ORCH-021: the default stop, and the levers the composer's preview resolves a stop over.
+    moneySlider: { stop: cfg.moneySlider.stop, origin: cfg.moneySlider.origin },
+    moneyLevers: moneyLeversOf(cfg),
     referential: [...cfg.referential],
     warnings: [...cfg.warnings],
     files: { workspace: cfg.files.workspace.agents, global: cfg.files.global.agents },
@@ -144,7 +148,7 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
       review_interval_messages: CIRCUIT_BREAKER_DEFAULTS.review_interval_messages, escalation: CIRCUIT_BREAKER_DEFAULTS.escalation, model: CIRCUIT_BREAKER_DEFAULTS.model,
     },
     advisor: { ...ADVISOR_DEFAULTS },
-    compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, dictation: { ...DICTATION_CONFIG_DEFAULT }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', referential: [], warnings: [],
+    compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, dictation: { ...DICTATION_CONFIG_DEFAULT }, injectAgentsMd: true, worktreeStorageSubpath: 'worktrees', delegationStrategy: 'orchestrator', moneySlider: { stop: 'regular', origin: 'default' }, moneyLevers: null, referential: [], warnings: [],
     // The instruction files exist or do not whatever the configuration says, so the inventory stands in a fatal snapshot too.
     instructions: instructionFiles(workspaceRoot, { ...env, globalDir: env.globalDir ?? globalDir }).map((f) => ({ ...f, enabled: true })),
     files: { workspace: files.workspace.agents, global: files.global.agents },
@@ -182,6 +186,7 @@ function toDesktopSave(save: DesktopSavePayload): DesktopSave {
     ...(save.advisor && Object.keys(save.advisor).length > 0 ? { advisor: save.advisor } : {}),
     ...(save.compressorThresholdPercentage !== undefined ? { compressorThresholdPercentage: save.compressorThresholdPercentage } : {}),
     ...(save.delegationStrategy !== undefined ? { delegationStrategy: save.delegationStrategy } : {}),
+    ...(save.moneySlider !== undefined ? { moneySlider: save.moneySlider } : {}),
     // REQ-CONFIG-256/472: the four `display:` fields, already spelled as the file spells them (REQ-CONFIG-172).
     ...(save.display && Object.keys(save.display).length > 0 ? { display: save.display } : {}),
     // REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys, already sparse — a null value removes a key.

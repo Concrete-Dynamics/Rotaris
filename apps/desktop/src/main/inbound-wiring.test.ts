@@ -77,7 +77,7 @@ function startDeps(): { readonly deps: SessionStartDeps; readonly hostAsked: Run
 function snapshot(sessionId: string, executionStatus: string, stopReason: string | null): SessionSnapshot {
   return {
     v: 1, sessionId, seq: 1,
-    session: { id: sessionId, executionStatus, stopReason, workspaceRoot: '/work' } as never,
+    session: { id: sessionId, executionStatus, stopReason, workspaceRoot: '/work', pendingApprovals: [], pendingQuestions: [] } as never,
   };
 }
 
@@ -116,7 +116,7 @@ function wired(): {
   });
   // As `index.ts` wires it: the run's end releases the slot and keeps its reason; the snapshot settles a park/cancel.
   eventListeners.add((e) => {
-    if (e.kind === 'run.result') runs.ended(e.sessionId, e.result.stop_reason);
+    if (e.kind === 'run.result') runs.ended(e.sessionId, e.result.stop_reason, e.result.execution_status);
     else if (e.kind === 'publish.snapshot') { const o = stoppedSession(e.payload); runs.observe(o.sessionId, o.state); }
   });
 
@@ -210,9 +210,27 @@ describe('REQ-MCP-123 (BLOCKER D): the stop reason reaches the caller through th
     expect(out.kind).toBe('inbound.runStatus');
     expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('tasks_complete');
     expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('completed');
-    w.listings.set(sessionId, { status: 'waiting', awaitingInput: true });
-    const waiting = await w.host.ask({ kind: 'inbound.runStatus', run: handle });
-    expect(waiting.kind === 'inbound.runStatus' && waiting.status.awaitingInput).toBe(true);
+  });
+
+  it('MAJOR (2026-11-25): a LATER desktop continuation of the same session does not change an old handle’s answer', async () => {
+    const w = wired();
+    await w.link.request({ kind: 'inbound.enable', token: 'tok-wired' }, 5_000);
+    await settle();
+    const started = await w.host.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    // The run ends with a reason and its frozen state.
+    w.listings.set(sessionId, { status: 'completed', awaitingInput: false });
+    w.emitRunResult(sessionId, 'tasks_complete');
+    // A person then CONTINUES the same session at the desktop: the same id is now `running` and waits on a person.
+    w.listings.set(sessionId, { status: 'running', awaitingInput: true });
+    w.emitSnapshot(sessionId, 'running', null);
+    const out = await w.host.ask({ kind: 'inbound.runStatus', run: handle });
+    // The OLD handle keeps its OWN end state and waiting flag — never the continuation's (today it would report running+true).
+    expect(out.kind).toBe('inbound.runStatus');
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('completed');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('tasks_complete');
+    expect(out.kind === 'inbound.runStatus' && out.status.awaitingInput).toBe(false);
   });
 });
 

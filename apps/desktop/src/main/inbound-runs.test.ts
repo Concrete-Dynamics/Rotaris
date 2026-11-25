@@ -363,6 +363,51 @@ describe('REQ-MCP-123/126 (REWORK 4, point 6): release from the REAL execution l
     expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('tasks_complete');
   });
 
+  it('REWORK 9 (BLOCKER): a `run.result` whose OWN status is a park does NOT free the slot — only a terminal result does', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // A normal desktop PAUSE writes `paused` + `user_cancelled` AND delivers a `run.result` whose execution status is a
+    // PARK. A Continue then resumes the SAME open iteration, so this result must NOT release the slot: the blocker.
+    h.runs.ended(sessionId, 'user_cancelled', 'paused');
+    expect(h.runs.holder).toBe(handle);
+    // The handle is still observable and names NO reason (the run has not ended).
+    const held = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(held.kind === 'inbound.runStatus' && held.status.state).toBe('paused');
+    expect(held.kind === 'inbound.runStatus' && held.status.stopReason).toBeNull();
+    // The desktop CONTINUES: the same iteration runs again — the handle follows it, the slot is still held.
+    c.observe(sessionId, { executionStatus: 'running', stopReason: null });
+    expect(h.runs.holder).toBe(handle);
+    // A second external start is REFUSED (round 8 admitted it here — two runs overlapped).
+    expect(await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).toMatchObject({ kind: 'refused', code: 'inbound.run-active' });
+    // A TERMINAL result later frees the slot and names its reason.
+    h.runs.ended(sessionId, 'tasks_complete', 'completed');
+    expect(h.runs.holder).toBeNull();
+    const ended = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(ended.kind === 'inbound.runStatus' && ended.status.stopReason).toBe('tasks_complete');
+  });
+
+  it('REWORK 9: a STALE listing of a PARKED run does not free the slot; a stale listing of a live one still does', async () => {
+    const runs = new InboundSurfaceRuns();
+    const handle = `inr_${'9'.repeat(32)}`;
+    runs.take('S-P', handle);
+    runs.committed(handle, 'S-P');
+    // The run parked, then its listing reads STALE. A parked session may be continued, so a stale reading proves nothing.
+    runs.observe('S-P', { executionStatus: 'paused', stopReason: null, awaitingInput: true });
+    expect(runs.reconcile('S-P', { kind: 'row', executionStatus: 'paused', awaitingInput: true, stale: true })).toBe('held');
+    expect(runs.holder).toBe(handle);
+    // A live (not parked) run whose record stays busy with nothing running it IS the failed-terminal-write case, and ends.
+    const handle2 = `inr_${'8'.repeat(32)}`;
+    runs.ended('S-P', 'tasks_complete', 'completed');
+    runs.take('S-L', handle2);
+    runs.committed(handle2, 'S-L');
+    expect(runs.reconcile('S-L', { kind: 'row', executionStatus: 'running', awaitingInput: false, stale: true })).toBe('released');
+    expect(runs.holder).toBeNull();
+  });
+
   it('MAJOR: the one reconcile ends a run whose terminal write FAILED — a STALE listing frees the slot as TERMINAL', async () => {
     const h = harness();
     const c = coordinator(h);

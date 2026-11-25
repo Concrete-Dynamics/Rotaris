@@ -4,6 +4,9 @@
 
 ### PD-ORCH-020 — `intelligent`: the small model chooses each run's strategy from its request
 
+*Revision 2 (2026-11-25, [R-133](../requests.md#r-133)) — **the row draws its reason behind an info icon**, clause 6.
+Revision 1 (2026-11-24, [R-131](../requests.md#r-131)) is quoted where it is replaced, never deleted.*
+
 A fifth value of `rotaris.delegation_strategy`, `intelligent`, MUST be supported. It is no strategy of its own: it has
 the strategy of each run chosen from that run's request. This directive's case is **a run started while the configured
 strategy is `intelligent`**, and nothing it states reaches a run started under one of the four named strategies.
@@ -29,6 +32,15 @@ strategy is `intelligent`**, and nothing it states reaches a run started under o
 6. **The choice is said and recorded.** The run MUST write one transcript row, `Strategy chosen: <strategy>`, with the
    small model's reason in brackets, or why no choice was made, and one timeline entry `run_strategy_chosen` carrying the
    strategy, the reason and whether it was the fallback. The audit's configuration snapshot keeps `intelligent`.
+   **— revision 2:** the row's text is unchanged, and the transcript SHALL draw `Strategy chosen: <strategy>` on the line
+   and the bracketed reason behind an info icon that states it on hover and on keyboard focus, and names it to assistive
+   technology. A row holding a search match in the reason draws the reason inline. Copy, export and search read the
+   whole sentence as before.
+
+   > *Revision 1 said, and no longer governs, by what it left the drawing to:* the row drawn as its text, the reason in
+   > brackets on the line. **Why, 2026-11-25.** The owner asked that the explanation at the top of a run sit behind a
+   > hoverable info icon: a reason of a sentence or more stood at the head of every `intelligent` run as the loudest text
+   > before the agent's first word. The cost: the reason is one hover away, and a reader skimming no longer sees it.
 7. **A run with no request text keeps the previous choice.** A continuation that carries no text of its own (a plain
    Continue) MUST take the strategy the session's previous run was given, without a request to the model; where the
    application has no such choice in memory, clause 4 applies. A continuation that carries text is chosen for afresh.

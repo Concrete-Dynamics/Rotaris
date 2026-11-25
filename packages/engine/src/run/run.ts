@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow, ChildRow, StoreDal } from '@rotaris/store';
-import { AUTO_STRATEGY_FALLBACK, DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, runOverrideOfChoice, type StrategyChoice, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord, type RunOverride, type WorkflowStatus, type IntentCategory, type MoneyStop } from '@rotaris/contracts';
+import { AUTO_STRATEGY_FALLBACK, DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, runOverrideOfChoice, strategyChosenBody, type StrategyChoice, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord, type RunOverride, type WorkflowStatus, type IntentCategory, type MoneyStop } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -1095,9 +1095,9 @@ export class Run {
         this.override = runOverrideOfChoice(choice.strategy);
         this.coordinates = choice.strategy === 'orchestrator';
         this.deps.onStrategyChosen?.(choice);
-        const why = choice.kept === true ? ' (kept from the previous run)' : choice.fallback ? ` (not chosen: ${choice.reason})` : choice.reason === '' ? '' : ` (${choice.reason})`;
-        writer.appendTimeline('run_strategy_chosen', 'rotaris', `Strategy chosen: ${choice.strategy}${why}.`, { strategy: choice.strategy, reason: choice.reason, fallback: choice.fallback, kept: choice.kept === true });
-        writer.appendRow('system', `Strategy chosen: ${choice.strategy}${why}`, true);
+        const said = strategyChosenBody(choice);
+        writer.appendTimeline('run_strategy_chosen', 'rotaris', `${said}.`, { strategy: choice.strategy, reason: choice.reason, fallback: choice.fallback, kept: choice.kept === true });
+        writer.appendRow('system', said, true);
         if (this.override === 'lead') this.classifying = false;
       }
       // PD-ORCH-019 clause 2: a `lead` run is never classified, whether `lead` was configured or chosen.

@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { RUN_AGENT_ID, skillListing, skillListingBody, skillLoadMarkerBody, type AgentRecord, type QuestionPrompt, type SkillRow, type TranscriptRow } from '@rotaris/contracts';
+import { RUN_AGENT_ID, skillListing, skillListingBody, skillLoadMarkerBody, strategyChosenBody, type AgentRecord, type QuestionPrompt, type SkillRow, type TranscriptRow } from '@rotaris/contracts';
 import { trailerRows } from './transcript/project.js';
 import {
   compactTask, defaultExpanded, delegationSummary, expansionKey, groupDurationMs, groupSeverity, groupSummary, isLiveTerminalRow,
@@ -448,5 +448,35 @@ describe('rows — PD-CHAT-016, the skill-load marker', () => {
       display(row({ index: 2, kind: 'agent', body: 'applying it', ...agent })),
     ];
     expect(placements(ds).map((p) => p.blockStart)).toEqual([true, false, false]);
+  });
+});
+
+describe('rows — PD-ORCH-020 clause 6 revision 2, the strategy choice keeps its reason behind an info icon', () => {
+  const drawn = (r: TranscriptRow, match: { start: number; end: number } | null = null) => renderToStaticMarkup(createElement(TranscriptSurfaceProvider, {
+    value: { showReasoning: false, autoCollapseTools: false, runActive: false, nowMs: 0, openLink: undefined },
+    children: createElement(Row, { display: display(r), expanded: false, onToggle: () => undefined, match }),
+  }));
+  const body = strategyChosenBody({ strategy: 'lead', reason: 'a bug to find and fix', fallback: false });
+
+  it('draws the strategy on the line and the reason only in the info icon\'s tooltip and accessible name', () => {
+    const markup = drawn(row({ kind: 'system', body }));
+    expect(markup).toContain('data-testid="strategy-chosen"');
+    expect(markup).toContain('data-strategy="lead"');
+    expect(markup).toContain('strategy-chosen__info');
+    expect(markup).toContain('aria-label="Why: a bug to find and fix"');
+    expect(markup).toContain('role="tooltip"');
+    expect(markup).not.toContain('strategy-chosen__reason');
+  });
+
+  it('a search match inside the reason draws the reason inline, so the match is on screen', () => {
+    const at = body.indexOf('bug');
+    const markup = drawn(row({ kind: 'system', body }), { start: at, end: at + 3 });
+    expect(markup).toContain('strategy-chosen__reason');
+    expect(markup).not.toContain('strategy-chosen__info');
+  });
+
+  it('a choice with no reason draws no icon, and any other system row is drawn as before', () => {
+    expect(drawn(row({ kind: 'system', body: strategyChosenBody({ strategy: 'single', reason: '', fallback: false }) }))).not.toContain('strategy-chosen__info');
+    expect(drawn(row({ kind: 'system', body: 'Context compressed for orchestrator — budget' }))).not.toContain('strategy-chosen');
   });
 });

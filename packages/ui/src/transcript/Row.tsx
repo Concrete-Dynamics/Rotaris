@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { WORKFLOW_STARTED } from './constants.js';
-import { advisorQuestionOf, configureChangeOf, type WorkflowStatus, parseAdvisorResult, parseSkillListing, parseSkillLoadMarker, type ConfigureChangeRecord, type ImageAttachment, type ParsedSkillListing, type ParsedSkillLoadMarker, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
+import { advisorQuestionOf, configureChangeOf, type WorkflowStatus, parseAdvisorResult, parseSkillListing, parseSkillLoadMarker, parseStrategyChosen, type ConfigureChangeRecord, type ParsedStrategyChosen, type ImageAttachment, type ParsedSkillListing, type ParsedSkillLoadMarker, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
 import { Markdown } from '../markdown/Markdown.js';
 import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
@@ -37,7 +37,7 @@ import { describeToolCall } from './tool-description.js';
 // approval dialog needs. Re-exported so a consumer of this module still sees the vocabulary it draws.
 export type { TrailerRow, DisplayRow, RowRenderProps } from './types.js';
 import type { TrailerRow, DisplayRow, RowRenderProps } from './types.js';
-import { Button as DesignButton, layoutContractAttributes, type UiLayoutContract } from '../design-system/index.js';
+import { Button as DesignButton, Tooltip as DesignTooltip, layoutContractAttributes, type UiLayoutContract } from '../design-system/index.js';
 import { QuestionSummaryCard } from '../QuestionStepper.js';
 
 /**
@@ -793,6 +793,31 @@ function SkillLoadMarkerLine({ marker, body, match, onOpenLink }: { marker: Pars
 }
 
 /**
+ * PD-ORCH-020 clause 6, revision 2: the strategy-choice row draws `Strategy chosen` and the strategy, and the reason
+ * behind an info icon that states it on hover or focus. The reason is still the row's text — its title, its accessible
+ * name, what Copy and a search read — and a row holding a search match in the reason draws it inline, so the match is
+ * on screen.
+ */
+function StrategyChosenLine({ chosen, match, onOpenLink }: { chosen: ParsedStrategyChosen; match: RowRenderProps['match']; onOpenLink: ((href: string) => void) | undefined }) {
+  const field = (span: SkillListingSpan) => <PlainText text={span.text} match={spanMatch(match, span)} onOpenLink={onOpenLink} />;
+  const reason = chosen.reason;
+  const reasonMatched = reason !== null && spanMatch(match, reason) !== null;
+  return (
+    <div className="row__body strategy-chosen" data-testid="strategy-chosen" data-strategy={chosen.strategy.text}>
+      <span className="strategy-chosen__lead">{field(chosen.lead)}: </span>
+      <span className="strategy-chosen__name mono">{field(chosen.strategy)}</span>
+      {reason !== null && (reasonMatched
+        ? <span className="strategy-chosen__reason"> ({field(reason)})</span>
+        : (
+          <DesignTooltip className="strategy-chosen__info" content={reason.text} placement="bottom" data-testid="strategy-chosen-info">
+            <span className="strategy-chosen__icon" role="img" tabIndex={0} aria-label={`Why: ${reason.text}`}><i className="ph ph-info" aria-hidden="true" /></span>
+          </DesignTooltip>
+        ))}
+    </div>
+  );
+}
+
+/**
  * PD-CHAT-015: an edit diff (REQ-CHAT-050) draws its heading line and the first lines of the change, and the rest when
  * the reader asks — a forty-line file no longer stands between two things an agent said. A row holding a search match
  * is drawn whole, so the match is on screen. The expansion is the pane's, keyed by the row (REQ-CHAT-059).
@@ -1073,6 +1098,8 @@ export function Row(p: RowProps) {
   const listing = row.kind === 'system' ? parseSkillListing(row.body) : null;
   // PD-CHAT-016: a system notice whose text is a skill-load marker is drawn as the marker.
   const marker = row.kind === 'system' && listing === null ? parseSkillLoadMarker(row.body) : null;
+  // PD-ORCH-020 clause 6: a system notice whose text is a strategy choice draws its reason behind an info icon.
+  const chosen = row.kind === 'system' && listing === null && marker === null ? parseStrategyChosen(row.body) : null;
   return (
     <article {...common} className={`row row--${row.kind}${marker !== null ? ' row--skill-load' : ''}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
       <div className="row__grid">
@@ -1084,6 +1111,8 @@ export function Row(p: RowProps) {
               ? <SkillListingBlock listing={listing} match={match} onOpenLink={surface.openLink} />
               : marker !== null
                 ? <SkillLoadMarkerLine marker={marker} body={row.body} match={match} onOpenLink={surface.openLink} />
+              : chosen !== null
+                ? <StrategyChosenLine chosen={chosen} match={match} onOpenLink={surface.openLink} />
               : row.kind === 'diff'
                 ? <DiffBody body={row.body} expanded={expanded || match !== null} onToggle={p.onToggle} match={match} onOpenLink={surface.openLink} />
                 : <div className="row__body"><PlainText text={row.body} match={match} onOpenLink={surface.openLink} /></div>}

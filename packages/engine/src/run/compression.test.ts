@@ -84,6 +84,37 @@ describe('engine/run/compression — the reconstruction and the turn alignment (
     expect(conv.snapshot()[0]).toEqual(text('user', 'THE-ORIGINAL-REQUEST'));
   });
 
+  describe('PD-ORCH-021: a conversation carried before the request', () => {
+    const backend = (seen: string[]) => ({ runTurn: async (req: { messages: readonly ChatMessage[] }) => { seen.push(JSON.stringify(req.messages)); return { status: 'succeeded' as const, text: 'the summary', usage: { input: 1, output: 1 } }; } });
+    const deps = (seen: string[]) => ({ backend: backend(seen) as never, model: A1, thinking: 'unset' as const, timers: new FakeClock().timers, credentialFor: () => async () => 'k' });
+
+    it('the request the agent works on now is the original kept verbatim; the carried conversation is condensed with what followed it', async () => {
+      const seen: string[] = [];
+      const conv = new Conversation([text('user', 'EARLIER-REQUEST'), call('c0'), result('c0'), text('assistant', 'EARLIER-ANSWER')]);
+      conv.pushRequest(text('user', 'THE-NEW-REQUEST'));
+      for (const m of [call('c1'), result('c1'), text('user', 'recent'), call('c2'), result('c2')]) conv.push(m);
+      const out = await compress({ conversation: conv, preserveRecentTurns: 1, charsPerToken: 4, todoLines: [] }, deps(seen), new AbortController().signal);
+      expect(out.ok).toBe(true);
+      expect(conv.originalRequest).toEqual(text('user', 'THE-NEW-REQUEST'));
+      expect(seen.join('')).toContain('EARLIER-ANSWER');
+      expect(seen.join('')).not.toContain('THE-NEW-REQUEST');
+      expect(conv.snapshot()[0]).toEqual(text('user', 'THE-NEW-REQUEST'));
+      expect(JSON.stringify(conv.snapshot())).not.toContain('EARLIER-REQUEST');
+    });
+
+    it('a request still among the preserved turns is kept there once, after the summary of the carried conversation', async () => {
+      const seen: string[] = [];
+      const conv = new Conversation([text('user', 'EARLIER-REQUEST'), call('c0'), result('c0'), text('assistant', 'EARLIER-ANSWER')]);
+      conv.pushRequest(text('user', 'THE-NEW-REQUEST'));
+      const out = await compress({ conversation: conv, preserveRecentTurns: 1, charsPerToken: 4, todoLines: [] }, deps(seen), new AbortController().signal);
+      expect(out.ok).toBe(true);
+      const after = conv.snapshot();
+      expect(JSON.stringify(after[0])).toContain('[Context compression]');
+      expect(after.at(-1)).toEqual(text('user', 'THE-NEW-REQUEST'));
+      expect(after.filter((m) => JSON.stringify(m).includes('THE-NEW-REQUEST'))).toHaveLength(1);
+    });
+  });
+
   describe('REQ-MONITOR-082 (OQ-156, acceptance A12): the compressing model reads the whole history it replaces', () => {
     /** A read whose result is `size` characters, its fact at the END — past REQ-ORCH-110's 2,000 per event. */
     const read = (i: number, size: number): ChatMessage[] => [

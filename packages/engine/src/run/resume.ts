@@ -14,7 +14,8 @@ import type { TurnOutcome } from './turn.js';
  * result, a user message, a notice or a new message delivered at the resume — is answered by a model step.
  */
 export type TurnStart =
-  | { readonly kind: 'fresh'; readonly task: string }
+  /** PD-ORCH-021: `history`, where present, is a carried conversation the fresh agent's payload is sent after. */
+  | { readonly kind: 'fresh'; readonly task: string; readonly history?: readonly ChatMessage[] }
   | { readonly kind: 'resumed'; readonly history: readonly ChatMessage[]; readonly waiting: boolean };
 
 export function resumedStart(history: readonly ChatMessage[]): TurnStart {
@@ -39,7 +40,7 @@ export function lastAssistantText(messages: readonly ChatMessage[]): string {
  * answer, and the caller goes on waiting for its children.
  */
 export function firstTurn(turn: (task: string | null, history: readonly ChatMessage[]) => Promise<TurnOutcome>, start: TurnStart): Promise<TurnOutcome> {
-  if (start.kind === 'fresh') return turn(start.task, []);
+  if (start.kind === 'fresh') return turn(start.task, start.history ?? []);
   if (start.waiting) return Promise.resolve({ report: { status: 'succeeded', text: lastAssistantText(start.history), usage: { input: 0, output: 0 } }, messages: start.history, toolCallCount: 0 });
   return turn(null, start.history);
 }

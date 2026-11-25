@@ -65,6 +65,9 @@ Part 4 of 9 of [domain 07](../07-sessions-persistence.md), which indexes every p
   > **Extended by [`PD-LIBRARY-003`](../../product/directives/pd-library-003.md#pd-library-003), 2026-10-07.** An artifact a person edited
   > is carried as its document with the frontmatter removed, within the same 6,000 characters, and its header is marked
   > `edited`; an unedited artifact, or one whose document cannot be read, is carried from its columns.
+  > **Extended by [`PD-ORCH-021`](../../product/directives/pd-orch-021.md#pd-orch-021), 2026-11-25.** The first fresh root of a
+  > continued run begins from the conversation of the session's most recent root, cut after its last answer, and is sent
+  > this payload after it, every budget unchanged.
 - **REQ-SESSION-116** — The transcript row for the user's new prompt MUST be recorded and persisted before intent classification begins, and every save of the active resumed run flows through the same save path as a fresh run.
 - **REQ-SESSION-117** — *Withdrawn.* The resume affordances were terminal-UI surfaces; choosing a saved session is carried by the session browser of REQ-SHELL-126 over the session list of REQ-SESSION-182, reached from the action vocabulary of REQ-SHELL-048.
 - **REQ-SESSION-118** — Loading a session chosen in the session browser MUST report a failure to the user rather than leaving the choice silently ineffective, distinguishing three cases and conveying the session id in each: no session under that id; a session whose stored state cannot be parsed, carrying the parse detail; and any other failure, carrying its detail. On success the session-scoped model override is restored, the composer's model label updated, the message-limit prompt shown when applicable (REQ-SESSION-109), and the user told which session was loaded. Wording is left to the implementation.

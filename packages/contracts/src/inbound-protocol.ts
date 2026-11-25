@@ -42,7 +42,9 @@ export type InboundListenerRequest = z.infer<typeof InboundListenerRequestSchema
 export const InboundListenerAskSchema = z.discriminatedUnion('kind', [
   /** REQ-MCP-123/124: a `rotaris_start_run` call, reduced to the prompt it carried. Main owns the workspace. */
   z.object({ kind: z.literal('inbound.startRun'), prompt: z.string().min(1).max(FREE_TEXT_MAX) }),
-  /** REQ-MCP-123/130: a `rotaris_run_status` call, reduced to the handle it carried. */
+  /** REQ-MCP-123/130: a `rotaris_run_status` call, reduced to the handle it carried. The handle is held to the surface's
+   * own shape (`InboundRunHandleSchema`, REQ-MCP-123/130): a value that is not such a handle does not read as this ask, so
+   * main answers it as a malformed ask rather than waiting out a bound on a value it never minted. */
   z.object({ kind: z.literal('inbound.runStatus'), run: InboundRunHandleSchema }),
 ]);
 export type InboundListenerAsk = z.infer<typeof InboundListenerAskSchema>;

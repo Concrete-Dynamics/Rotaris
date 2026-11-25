@@ -12,7 +12,20 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 reconciliation-log.md"), which here would point at itself. Since then each change writes its entry at the top of this file and moves only the date in
 `README.md` (its maintenance rule, item 2).
 
-Last reconciled with the code: **2026-11-24**
+Last reconciled with the code: **2026-11-25**
+
+**The inbound surface's REWORK 1 (ADR-0067; REQ-MCP-120/121/123/125/126; 2026-11-25).** The main↔listener channel is
+repaired and the single-run slot, the status read and the teardown are held to their requirements. Process view:
+`main/inbound-exposure.ts`'s `portOfChild` reads Electron's `UtilityProcess` payload directly (as `main/index.ts`'s own
+adapter always did) and reads the listener's ask through `InboundAskEnvelopeSchema` (`{ask, request}`), so a
+`rotaris_start_run` ask reaches the coordinator. New: `main/inbound-status.ts` (the surface's status read — the run
+host's listing for the state and the waiting fact, main's own record of the run host's terminal `run.result` for the
+STOP REASON). Changed: `main/inbound-runs.ts` holds the slot across a lost start reply (a no-reply is not a refusal) and
+releases it on the run host's exit; `main/index.ts` wires the run host's exit; `main/session-start.ts` accepts a
+caller-minted session id so the slot is tied to the run before the host answers; `inbound-listener/transport.ts` builds
+the surface and its SDK handler per bind and ends the socket deterministically (`closeAllConnections`);
+`inbound-listener/surface.ts` renders the stop reason and the waiting fact; `packages/contracts/src/inbound.ts`'s status
+gains `awaitingInput`; the MCP settings card reads the token from the press's own answer.
 
 **The product opens one loopback MCP surface for external agents (ADR-0067; REQ-MCP-119..130; 2026-11-25).** Process
 view: a SIXTH process kind — the inbound listener — is drawn, owns its row in "What each process owns", and the message

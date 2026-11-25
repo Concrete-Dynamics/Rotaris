@@ -64,13 +64,17 @@ export const InboundRunHandleSchema = z.string().regex(INBOUND_RUN_HANDLE_PATTER
 /**
  * REQ-MCP-123/130: the status `rotaris_run_status` answers in — the product's OWN vocabulary, both halves of it:
  * `state` is the presentation status of REQ-NOTIFY-048, `stopReason` the closed set of REQ-MONITOR-301 (null while the
- * run has not stopped). No internal field, no file content, no token: what a surface shows and nothing more.
+ * run has not stopped). `awaitingInput` (REQ-MCP-125) is the one fact a caller may observe about a run waiting on a
+ * person at the desktop: it is derived from the session listing's own `awaitingInput`, and the caller may never answer
+ * what it observes. No internal field, no file content, no token: what a surface shows and nothing more.
  */
 export const InboundRunStatusSchema = z.object({
   run: InboundRunHandleSchema,
   sessionId: z.string().max(NAME_MAX),
   state: z.enum(PRESENTATION_STATUSES),
   stopReason: z.enum(STOP_REASONS).nullable(),
+  /** REQ-MCP-125: true while the run waits for an approval or a question to be answered at the desktop. */
+  awaitingInput: z.boolean().optional(),
 });
 export type InboundRunStatus = z.infer<typeof InboundRunStatusSchema>;
 

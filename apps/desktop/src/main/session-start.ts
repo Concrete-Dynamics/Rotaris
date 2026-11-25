@@ -43,6 +43,13 @@ export interface SessionStartInput {
   /** The open workspace's root, canonical. */
   readonly workspaceRoot: string;
   readonly prompt: string;
+  /**
+   * REQ-MCP-124/126: a session id the CALLER has already minted, so the surface's single-run slot can be tied to the very
+   * session this start will take before the run host has answered (BLOCKER 2, 2026-11-25). The desktop path leaves it
+   * unset and takes the dialog's minted id or a fresh one; the inbound path names it, because a run whose reply is lost
+   * must still be releaseable by its own `run.result` (see `InboundSurfaceRuns.ended`).
+   */
+  readonly sessionId?: string | undefined;
   readonly attachments?: readonly ImageAttachmentInput[] | undefined;
   /** REQ-GIT-022: an isolated worktree the DESKTOP asked for; the inbound path states none (REQ-MCP-124). */
   readonly isolation?: { readonly branch: string } | undefined;
@@ -162,14 +169,14 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
   if (!effectiveIsolation && !effectiveAttach) {
     const sharing = await sharingRunCount(deps, input.workspaceId);
     if (sharing === null || sharing > 0) {
-      forcedSessionId = (wcId === null ? undefined : mainWindows.takeMintedSession(wcId)) ?? randomUUID();
+      forcedSessionId = input.sessionId ?? (wcId === null ? undefined : mainWindows.takeMintedSession(wcId)) ?? randomUUID();
       effectiveIsolation = { branch: `rotaris/session/${forcedSessionId}` };
       log(`concurrent start while ${sharing === null ? 'the active-run count could not be read' : `${sharing} run(s) share this workspace's tree`}: force-creating isolated worktree ${effectiveIsolation.branch} (REQ-MONITOR-251, PD-GIT-001)`);
     }
   }
   if (effectiveIsolation || effectiveAttach) {
     if (!svc) { log('run refused before start: the workspace service is not running'); return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' }; }
-    sessionId = forcedSessionId ?? (wcId === null ? undefined : mainWindows.takeMintedSession(wcId)) ?? randomUUID();
+    sessionId = input.sessionId ?? forcedSessionId ?? (wcId === null ? undefined : mainWindows.takeMintedSession(wcId)) ?? randomUUID();
     const bindFailure = (r: ProcessReply): CommandOutcome => {
       const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
       const headline = `Error: could not create or attach the requested worktree: ${detail}`;
@@ -197,7 +204,7 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
       binding = { worktree_path: checked.path, branch: checked.branch, base_branch: checked.baseBranch, base_revision: checked.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
     }
   }
-  sessionId ??= randomUUID();
+  sessionId ??= input.sessionId ?? randomUUID();
   if (wcId !== null) mainWindows.beginStart(wcId, sessionId);
 
   /**

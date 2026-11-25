@@ -75,35 +75,39 @@ describe('REQ-MCP-119: the surface binds loopback on an ephemeral port, and only
 });
 
 describe('REQ-MCP-121/122: the guards, measured on the wire', () => {
-  async function bound(): Promise<{ readonly base: string; readonly port: number }> {
+  async function bound(): Promise<{ readonly base: string; readonly port: number; readonly calls: unknown[] }> {
     const token = new InboundToken();
     token.rotate('the-secret-token');
-    const { ask } = askHandler();
+    // ONE ask handler, the one actually wired into the listener: `calls` must come from THIS one, or a refusal assertion
+    // is empty (repair, 2026-11-25 — the previous `bound()` built a throwaway handler whose `calls` was never the bound
+    // listener's, so "the call never reaches main" could not fail).
+    const { ask, calls } = askHandler();
     const listener = createInboundListener({ token, ask, log: () => undefined });
     const binding = await listener.bind();
     open.push({ close: () => listener.unbind() });
-    return { base: `http://127.0.0.1:${binding.port}/mcp`, port: binding.port };
+    return { base: `http://127.0.0.1:${binding.port}/mcp`, port: binding.port, calls };
   }
 
   it('a wrong token is refused (401) and the call never reaches main', async () => {
-    const { base } = await bound();
-    const { ask, calls } = askHandler();
-    void ask;
-    const r = await mcpCall(base, { jsonrpc: '2.0', id: 1, method: 'tools/list' }, { Authorization: 'Bearer wrong' });
+    const { base, calls } = await bound();
+    const r = await mcpCall(base, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'rotaris_start_run', arguments: { prompt: 'p' } } }, { Authorization: 'Bearer wrong' });
+    expect(r.status).toBe(401);
+    // The spy is the BOUND listener's own ask handler: a refusal that reached main would land here.
+    expect(calls).toEqual([]);
+  });
+
+  it('a missing token is refused (401) and reaches main for nothing', async () => {
+    const { base, calls } = await bound();
+    const r = await mcpCall(base, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'rotaris_start_run', arguments: { prompt: 'p' } } });
     expect(r.status).toBe(401);
     expect(calls).toEqual([]);
   });
 
-  it('a missing token is refused (401)', async () => {
-    const { base } = await bound();
-    const r = await mcpCall(base, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
-    expect(r.status).toBe(401);
-  });
-
-  it('a FOREIGN Origin with a valid token is refused (403)', async () => {
-    const { base } = await bound();
-    const r = await mcpCall(base, { jsonrpc: '2.0', id: 1, method: 'tools/list' }, { Authorization: 'Bearer the-secret-token', Origin: 'http://evil.example.com' });
+  it('a FOREIGN Origin with a valid token is refused (403) and reaches main for nothing', async () => {
+    const { base, calls } = await bound();
+    const r = await mcpCall(base, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'rotaris_start_run', arguments: { prompt: 'p' } } }, { Authorization: 'Bearer the-secret-token', Origin: 'http://evil.example.com' });
     expect(r.status).toBe(403);
+    expect(calls).toEqual([]);
   });
 
   it('a non-loopback Host is refused (403)', async () => {
@@ -112,11 +116,12 @@ describe('REQ-MCP-121/122: the guards, measured on the wire', () => {
     expect(status).toBe(403);
   });
 
-  it('a missing Origin from a native client is ALLOWED — the request is served', async () => {
+  it('a missing Origin from a native client is ALLOWED — the request is SERVED, not merely not-refused (repair: 500 is not a pass)', async () => {
     const { base } = await bound();
     const r = await mcpCall(base, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'native', version: '1' } } }, { Authorization: 'Bearer the-secret-token' });
-    expect(r.status).not.toBe(401);
-    expect(r.status).not.toBe(403);
+    // The assertion must be the served status, not "not 401 and not 403": the previous form accepted a 500 and so could
+    // not tell a served request from an internal failure (repair, 2026-11-25).
+    expect(r.status).toBe(200);
   });
 });
 
@@ -179,13 +184,24 @@ describe('REQ-MCP-124: the start tool carries a prompt alone — every authority
 });
 
 describe('REQ-MCP-123/130: the status tool answers a handle, in the product’s own vocabulary', () => {
-  it('reads a run’s state and stop reason', async () => {
+  it('renders a run’s state and stop reason as the surface’s text (the READING of the reason end to end is in main/inbound-wiring.test.ts)', async () => {
+    // This file measures the SURFACE's rendering, with the answer handed in; the stop reason is READ from a run in
+    // `apps/desktop/src/main/inbound-wiring.test.ts`, so an injected value here is a rendering fixture, not a proof.
     const { ask, calls } = askHandler({ status: { kind: 'inbound.runStatus', status: { run: `inr_${'a'.repeat(32)}`, sessionId: 'S-1', state: 'completed', stopReason: 'tasks_complete' } } });
     const out = await callInboundTool(ask, 'rotaris_run_status', { run: `inr_${'a'.repeat(32)}` });
     expect(out.isError).toBe(false);
     expect(out.text).toContain('completed');
     expect(out.text).toContain('tasks_complete');
+    expect(out.text).not.toContain('the run has not stopped');
     expect(calls).toEqual([{ kind: 'inbound.runStatus', run: `inr_${'a'.repeat(32)}` }]);
+  });
+
+  it('REQ-MCP-125: renders that the run waits on a person when the status carries it', async () => {
+    const { ask } = askHandler({ status: { kind: 'inbound.runStatus', status: { run: `inr_${'a'.repeat(32)}`, sessionId: 'S-1', state: 'running', stopReason: null, awaitingInput: true } } });
+    const out = await callInboundTool(ask, 'rotaris_run_status', { run: `inr_${'a'.repeat(32)}` });
+    expect(out.isError).toBe(false);
+    expect(out.text).toContain('waiting for a person at the desktop');
+    expect(JSON.parse(out.text)).toMatchObject({ awaitingInput: true });
   });
 
   it('refuses a value that is not a handle this surface minted', async () => {

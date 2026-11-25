@@ -62,7 +62,8 @@ import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands, confinementRefusalNotice } from './commands/session.js';
 import type { SessionStartDeps } from './session-start.js';
-import { createInboundCoordinator, inboundRunEnded, InboundSurfaceRuns } from './inbound-runs.js';
+import { createInboundCoordinator, inboundRunEnded, inboundRunHostExited, InboundSurfaceRuns } from './inbound-runs.js';
+import { createInboundStatusReader } from './inbound-status.js';
 import { InboundExposure, InboundListenerLink, INBOUND_LISTENER_SERVICE_NAME, inboundListenerGoneRefusal, newInboundToken, portOfChild } from './inbound-exposure.js';
 import { inboundCommands } from './commands/inbound.js';
 import { dictationCommands } from './commands/dictation.js';
@@ -2197,6 +2198,12 @@ async function main(): Promise<void> {
   const inboundExposure = new InboundExposure();
   const inboundRuns = new InboundSurfaceRuns();
   const inboundLog = (m: string, level: 'info' | 'warn') => log(m, level);
+  /**
+   * REQ-MCP-123/125 (BLOCKER 3 of the review, 2026-11-25): the surface's status read. The run host's `session.list`
+   * carries the state and the waiting-on-a-person fact, but NOT the stop reason; that is kept main-side from the run
+   * host's own terminal `run.result` (`inbound-status.ts`), so `rotaris_run_status` answers BOTH halves of REQ-MCP-123.
+   */
+  const inboundStatus = createInboundStatusReader({ request: (req, bound) => runHost.request(req, bound), onEvent: (fn) => runHost.onEvent(fn), log: (m) => log(m, 'warn') });
 
   /**
    * REQ-MCP-123/124: the surface's two tools, answered in main (where the trusted desktop state and the run slot live).
@@ -2217,17 +2224,15 @@ async function main(): Promise<void> {
     start: runHostProjection,
     runs: inboundRuns,
     openWorkspace: (wcId) => runHostProjection.openWorkspaceRead(wcId),
-    readStatus: async (workspaceId, sessionId) => {
-      const r = await runHost.request({ kind: 'session.list', workspaceId }, millis(10_000)).catch(() => null);
-      if (r === null || r.kind !== 'session.list') return null;
-      const row = r.sessions.find((s) => s.sessionId === sessionId);
-      if (row === undefined) return null;
-      // REQ-MCP-123/130: only the product's own vocabulary crosses — never an internal field, a file or a token.
-      return { executionStatus: row.status, stopReason: null };
-    },
+    readStatus: (workspaceId, sessionId) => inboundStatus.readStatus(workspaceId, sessionId),
   });
-  /** REQ-MCP-126: the run's own end releases the single-run slot, whether it ended on its own or was stopped. */
+  /**
+   * REQ-MCP-126: the run's own end releases the single-run slot, whether it ended on its own or was stopped.
+   * MAJOR (REQ-MCP-126): the run host's `exit` releases the slot too (a crash takes the externally started run with it),
+   * exactly as the board's coordinator reaps on the same event (`requirements-runs.ts`).
+   */
   runHost.onEvent((e) => { if (e.kind === 'run.result') inboundRunEnded(inboundRuns, e.sessionId); });
+  runHostChild.on('exit', () => { inboundRunHostExited(inboundRuns); });
 
   /**
    * REQ-MCP-127: fork the listener at the first enable and answer the port it chose. The token is handed over on the

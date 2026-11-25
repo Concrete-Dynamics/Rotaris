@@ -89,7 +89,13 @@ export interface McpSettingsProps {
  */
 export interface InboundSurfaceProps {
   readonly exposure: InboundExposure | null;
-  readonly onToggle: (enabled: boolean) => Promise<{ ok: boolean; message: string }>;
+  /**
+   * REQ-MCP-120/121: presses the switch and answers the FRESH exposure — the enabling press's answer carries the token
+   * (shown once). BLOCKER (Main, 2026-11-25): the card previously read `inbound.exposure` again after the await, which is
+   * the OLD render's prop, so the token was never shown on the first switch-on. The card reads the value THIS call
+   * answers instead.
+   */
+  readonly onToggle: (enabled: boolean) => Promise<{ ok: boolean; message: string; exposure?: InboundExposure | undefined }>;
 }
 
 const HEALTH_TEXT: Record<McpHealth['state'], string> = { unknown: 'Unknown', checking: 'Checking…', healthy: 'Healthy', unreachable: 'Unreachable' };
@@ -114,8 +120,9 @@ function InboundSurfaceCard({ inbound }: { inbound: InboundSurfaceProps }) {
     setBusy(false);
     if (!r.ok) { setMessage(r.message); return; }
     setMessage(null);
-    // REQ-MCP-121: the token is shown once — the enabling press's own answer carries it, and nothing else does.
-    setToken(inbound.exposure?.token ?? null);
+    // REQ-MCP-121: the token is shown once — the enabling press's OWN answer carries it (never the closed-over prop,
+    // which is the previous render's exposure and does not yet carry the fresh token).
+    setToken(r.exposure?.token ?? null);
   };
   return (
     <DesignCard className="card settings__card" data-mcp-inbound>

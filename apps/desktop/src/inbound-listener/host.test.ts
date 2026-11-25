@@ -60,6 +60,22 @@ describe('REQ-MCP-120/121: enable, disable and the token', () => {
     expect(token.accepts('Bearer tok-2')).toBe(true);
   });
 
+  it('REQ-MCP-120/121 (MAJOR, 2026-11-25): a SECOND enable while bound is idempotent — no rotation, no revoke, no rebind', async () => {
+    const token = new InboundToken();
+    const s = standInListener();
+    const host = createInboundHost({ token, log: () => undefined, listener: s.listener, mainAsk: async () => ({ kind: 'refused', code: 'x', headline: 'x' }) });
+    const first = await host.apply({ kind: 'inbound.enable', token: 'tok-1' });
+    expect(first).toEqual({ kind: 'inbound.state', state: { listening: true, port: 51234 } });
+    // A second window presses enable with a DIFFERENT token: the surface is already bound, so this is a read of it.
+    const second = await host.apply({ kind: 'inbound.enable', token: 'tok-2' });
+    expect(second).toEqual({ kind: 'inbound.state', state: { listening: true, port: 51234 } });
+    // The token in force is STILL the first exposure's — the display and the listener do not drift.
+    expect(token.value).toBe('tok-1');
+    expect(token.accepts('Bearer tok-1')).toBe(true);
+    expect(token.accepts('Bearer tok-2')).toBe(false);
+    expect(s.binds2()).toBe(1);
+  });
+
   it('a bind that FAILS leaves nothing exposed and revokes the token with the failure', async () => {
     const token = new InboundToken();
     const failing: InboundListener = { binding: () => null, bind: async () => { throw new Error('EADDRINUSE'); }, unbind: async () => undefined };

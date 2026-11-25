@@ -39,6 +39,14 @@ export function createInboundHost(deps: InboundHostDeps): InboundHost {
     apply: async (request: InboundListenerRequest): Promise<InboundListenerReply> => {
       switch (request.kind) {
         case 'inbound.enable': {
+          /*
+           * REQ-MCP-120/121 (MAJOR, 2026-11-25): a SECOND enable while the surface is ALREADY bound is IDEMPOTENT. It
+           * returns the state that is in force and does NOT rotate or revoke the token: the first socket still serves
+           * `transport.ts`'s bind refuses a second one, so rotating here left the listener comparing a token the display
+           * no longer showed (two settings windows drifted apart). An enable is the FIRST exposure's act; a repeat is a
+           * read of it. The token is rotated only when the surface is genuinely off.
+           */
+          if (listener.binding() !== null) return { kind: 'inbound.state', state: state() };
           // REQ-MCP-121: the token is rotated for this exposure FIRST, so an enable that fails a bind leaves no old
           // token accepted; the surface then binds on loopback, and the OS chooses the port (REQ-MCP-119).
           deps.token.rotate(request.token);

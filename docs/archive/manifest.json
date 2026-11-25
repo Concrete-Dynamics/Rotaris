@@ -1005,6 +1005,7 @@
     "defects/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md": "406407f514c8d3e74de51ec4dcd8e307ee364f214684ce386012120586eb4385",
     "defects/launch-audit-runtime-placeholder.md": "929fb0345bbf702d04d929be2c0e7097cdeedd64825b4ec4419af2f0e4333375",
     "defects/layout-proofs-wide-layout-return-reads-the-narrow-class-at-a-fixed-700-ms-after-the-resize.md": "789c6e6a597d96fb191116f694830a60bca37725314886f9c90ac5c76c65a0e1",
+    "defects/library-proof-reads-the-stash-count-badge-into-the-toolbar-label.md": "8774b8c93557fe18be1d9d48e2000c5fc0b8f93cbfca5a61467ebeac25401190",
     "defects/live-rows-are-never-measured.md": "2e4dab400edd79e88b48c6afa9b3f5eec8cac397ad378979267b88ccc002ccad",
     "defects/live-runs-notes-cite-defect-notes-at-paths-they-no-longer-have.md": "3fc75959e57150ff8d91840ed3b5421af5fc22ac865c76f2d408f5559e725d6a",
     "defects/live-runs-sign-in-check-passes-on-any-agents-yaml-even-one-holding-only-the-initialization-record.md": "5ebd0d24284fcb26dd1ad59bb03e73dba248505bb16d7deb1d689aedc0bf9194",

@@ -77,6 +77,49 @@ describe('REQ-MCP-120/121 (MAJOR): two overlapping enables are serialized', () =
   });
 });
 
+describe('REQ-MCP-120/121 (MAJOR of review 4): a disable behind an in-flight enable actually disables', () => {
+  it('a disable that arrives while an enable is still binding waits for it, then asks the listener to unbind', async () => {
+    const p = ports();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    let disableAsks = 0;
+    // The enable binds only when released, so the disable genuinely overlaps it (the fault of review 4: the disable read
+    // both flags as false, skipped the listener, and the enable's reply then switched the exposure ON).
+    p.askEnable = async (token) => { await gate; p.exposure.turnOn(token); p.exposure.bound(51234); return { ok: true, port: 51234 }; };
+    p.askDisable = async () => { disableAsks += 1; return true; };
+    const seq = createInboundEnableSequencer(p);
+    const enabling = seq.enable();
+    const disabling = seq.disable();
+    release();
+    const [on, off] = await Promise.all([enabling, disabling]);
+    expect(on.ok).toBe(true);
+    // The disable ASKED the listener (it did not skip it on a stale `enabled === false`), confirmed, and the surface is off.
+    expect(disableAsks).toBe(1);
+    expect(off.ok).toBe(true);
+    expect(p.exposure.view(false)).toEqual({ enabled: false, port: null });
+    expect(seq.listenerBound()).toBe(false);
+  });
+
+  it('a disable queued behind an enable whose bind FAILED still ends off, and asks nothing it must not', async () => {
+    const p = ports();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    let disableAsks = 0;
+    p.askEnable = async () => { await gate; return { ok: false, outcome: { ok: false, code: 'inbound.bindFailed', headline: 'could not bind' } }; };
+    p.askDisable = async () => { disableAsks += 1; return true; };
+    const seq = createInboundEnableSequencer(p);
+    const enabling = seq.enable();
+    const disabling = seq.disable();
+    release();
+    await enabling;
+    const off = await disabling;
+    // Nothing was ever bound, so the disable has nothing to ask and reports the surface off.
+    expect(disableAsks).toBe(0);
+    expect(off.ok).toBe(true);
+    expect(p.exposure.view(false)).toEqual({ enabled: false, port: null });
+  });
+});
+
 describe('REQ-MCP-120/121 (MAJOR): a non-confirmed disable is retried, not treated as done', () => {
   it('after a timed-out disable, the NEXT disable asks the listener again', async () => {
     const p = ports();

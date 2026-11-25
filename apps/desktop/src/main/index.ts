@@ -62,7 +62,7 @@ import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands, confinementRefusalNotice } from './commands/session.js';
 import type { SessionStartDeps } from './session-start.js';
-import { createInboundCoordinator, inboundRunEnded, inboundRunHostExited, inboundRunObserved, INBOUND_START_BOUND_MS, InboundSurfaceRuns } from './inbound-runs.js';
+import { createInboundCoordinator, inboundRunEnded, inboundRunHostExited, inboundRunObserved, InboundSurfaceRuns } from './inbound-runs.js';
 import { createInboundStatusReader, stoppedSession } from './inbound-status.js';
 import { InboundExposure, InboundListenerLink, INBOUND_LISTENER_SERVICE_NAME, inboundListenerGoneRefusal, newInboundToken, portOfChild } from './inbound-exposure.js';
 import { createInboundEnableSequencer } from './inbound-enable.js';
@@ -2225,17 +2225,25 @@ async function main(): Promise<void> {
     },
     confinementNotice: confinementRefusalNotice,
   };
+  /**
+   * REQ-MCP-124/126 (REWORK 4, 2026-11-25): the workspace open RIGHT NOW, read SYNCHRONOUSLY. The admission reserves the
+   * slot (handle, session id, workspace) in ONE synchronous step before any `await`, so a start that is refused for want
+   * of a workspace leaves no work and no reservation behind. The inbound path has no window of its own, so this reads the
+   * active window's workspace exactly as the shared fence's `openWorkspaceRead(null)` does.
+   */
+  const openWorkspaceNow = (): { readonly workspaceId: string; readonly workspace: string } | null => {
+    const view = activeWindow();
+    if (view === undefined || view.workspaceId === undefined || view.workspace === '(no workspace)') return null;
+    return { workspaceId: view.workspaceId, workspace: view.workspace };
+  };
   const inboundCoordinator = createInboundCoordinator({
     start: runHostProjection,
     runs: inboundRuns,
-    openWorkspace: (wcId) => runHostProjection.openWorkspaceRead(wcId),
+    openWorkspaceNow,
     readStatus: (workspaceId, sessionId) => inboundStatus.readStatus(workspaceId, sessionId),
-    // BLOCKER B: while a held attempt is unsettled, read its own session from the run host's listing and settle it the
-    // moment it is DEFINITE (the session appears → the run was born; it never appears → no run was born). The bound is
-    // the inbound START bound above the host's credential lease; the probe is the belt behind it. BLOCKER 2: the absence
-    // must span the whole host worst case (spanMs) and an unreadable listing EXTENDS the probe, so the slot is never
-    // freed while a run may still be born.
-    settleProbe: { schedule: (fn, after) => { clocks.timers.after(after, fn); }, attempts: 6, intervalMs: millis(10_000), spanMs: INBOUND_START_BOUND_MS },
+    // MAJOR (REWORK 4, 2026-11-25): the ONE bounded reconcile, re-armed while the run is live, ends a run whose terminal
+    // write failed (its durable image stays busy with nothing running it) on a DEFINITE reading and never on a clock.
+    schedule: (fn, after) => { clocks.timers.after(after, fn); },
   });
   /**
    * REQ-MCP-126: the run's own end releases the single-run slot, whether it ended on its own or was stopped, and its

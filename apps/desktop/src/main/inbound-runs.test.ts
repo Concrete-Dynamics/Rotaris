@@ -522,7 +522,7 @@ describe('REQ-MCP-123/126 (MAJOR 3/4, REWORK 7): the phase unit on the handle, a
     expect((await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).kind).toBe('inbound.runStarted');
   });
 
-  it('MAJOR 4: ACTIVITY extends the reconcile — a run that keeps publishing state is not exhausted by the cap', async () => {
+  it('MAJOR 4: a CHANGING state extends the reconcile — a run that keeps making progress is not exhausted by the cap', async () => {
     const h = harness();
     const c = coordinator(h);
     const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
@@ -531,11 +531,13 @@ describe('REQ-MCP-123/126 (MAJOR 3/4, REWORK 7): the phase unit on the handle, a
     await settle();
     // A live busy run every step: the reconcile holds and re-arms.
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: false });
-    // Drive WELL past the cap, but let the run keep publishing state between steps — each snapshot/review is ACTIVITY and
+    // Drive WELL past the cap, but let the run keep CHANGING state between steps — each DIFFERENT snapshot is PROGRESS and
     // must reset the stall counter, so the chain is never exhausted (the cap is a STALL backstop, not a lifetime limit).
+    // REWORK 9: an UNCHANGED snapshot would NOT count, which the next case proves.
     for (let i = 0; i < RECONCILE_MAX_STEPS * 2; i += 1) {
       await driveStep(h);
-      c.observe(sessionId, { executionStatus: 'running', stopReason: null });
+      // Alternate the waiting flag so each published state DIFFERS from the last: real progress.
+      c.observe(sessionId, { executionStatus: 'running', stopReason: null, awaitingInput: i % 2 === 0 });
     }
     // The chain is still alive: a terminal write that fails LATE is still caught by a later step.
     expect(h.steps.length).toBeGreaterThan(0);
@@ -543,6 +545,31 @@ describe('REQ-MCP-123/126 (MAJOR 3/4, REWORK 7): the phase unit on the handle, a
     await driveStep(h);
     expect(h.runs.holder).toBeNull();
     expect(handle).not.toBe('');
+  });
+
+  it('MAJOR 4 (REWORK 9): polling the SAME unchanged row does NOT extend the chain — it exhausts at the cap', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // The run stays in ONE unchanged phase, and a client POLLS it regularly between reconcile steps. The row is readable
+    // but never CHANGES, so it is no progress: REWORK 8 reset the counter on every readable row, letting the polling hold
+    // the one chain alive indefinitely. REWORK 9 resets only on a CHANGED state, so the chain exhausts at the cap.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false });
+    const poll = (): Promise<unknown> => c.ask({ kind: 'inbound.runStatus', run: handle });
+    for (let i = 0; i < RECONCILE_MAX_STEPS * 3; i += 1) {
+      await driveStep(h);
+      await poll();
+    }
+    // The chain is BOUNDED: the cap was reached and no step is scheduled again, while the run is still HELD (an unchanged
+    // row never ends a run).
+    expect(h.steps).toHaveLength(0);
+    expect(h.runs.holder).toBe(handle);
+    // And a LATER change is still settled by the ordinary paths (a terminal result ends it).
+    h.runs.ended(sessionId, 'tasks_complete', 'completed');
+    expect(h.runs.holder).toBeNull();
   });
 
   it('MAJOR 4 (REWORK 8): an UNREADABLE read does NOT extend the chain — polling cannot keep it alive past the cap', async () => {

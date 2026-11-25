@@ -146,6 +146,10 @@ import type { InboundStatusReading } from './inbound-status.js';
  *    while the slot is held (`endState === null`) `rotaris_run_status` answers `stopReason: null` and the text says the run
  *    has not stopped — even when the hold IS a park the product labelled `paused`/`user_cancelled`. A TERMINAL end answers
  *    its reason, and the text says `it stopped`.
+ * 3. **The reconcile's STALL cap is a hard backstop, also under polling** (REQ-MCP-123/126; MAJOR 2). The counter is reset
+ *    by real PROGRESS alone — a reading whose state (status + waiting flag) DIFFERS from the last one recorded for the
+ *    armed chain. An UNCHANGED row (a client's repeated status poll of the same phase) does NOT extend the chain, so it
+ *    exhausts at `RECONCILE_MAX_STEPS` however often it is read; an `unreadable` reading is likewise no progress.
  */
 
 /** One externally started run, as ONE object per handle: reserved at the admission and mutated through its whole life. */
@@ -734,18 +738,30 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
    * MAJOR 4 (REWORK 8, 2026-11-25): the reset comes from READABLE progress alone. An `unreadable` listing is NOT activity
    * (it proves nothing about the run), so repeated polling of an unreadable listing cannot extend the chain past the cap —
    * the cap is a hard STILLSTAND backstop.
+   *
+   * MAJOR 4 (REWORK 9, 2026-11-25): the reset comes from a CHANGE alone. A readable row that reports the SAME state
+   * (status + waiting flag) as the one this chain last recorded is NOT progress — a client's repeated `rotaris_run_status`
+   * poll of an unchanged phase must not keep the chain alive, so the cap is a hard backstop under polling too. Each entry
+   * therefore remembers the last signature it saw; the very first state for the session (no signature yet) IS progress.
    */
-  const armed = new Map<string, { steps: number }>();
+  const armed = new Map<string, { steps: number; last: string | null }>();
 
   /**
    * MAJOR 4 (REWORK 7): a fresh observation of the session's state — reset the stall counter for its armed reconcile.
    *
-   * MAJOR 4 (REWORK 8): only a READABLE progress calls this. An `unreadable` listing proves nothing about the run, so it
+   * MAJOR 4 (REWORK 8): only a READABLE reading calls this. An `unreadable` listing proves nothing about the run, so it
    * must not count as activity — otherwise repeated polling of an unreadable listing keeps ONE chain alive indefinitely.
+   *
+   * MAJOR 4 (REWORK 9): only a READING THAT CHANGED the state counts. `signature` names the reading; the counter is
+   * reset, and the signature recorded, only when it DIFFERS from the one last seen (or no state was seen yet). An
+   * unchanged row is not progress, so regular polling of one phase cannot hold the chain past `RECONCILE_MAX_STEPS`.
    */
-  const pulse = (sessionId: string): void => {
+  const pulse = (sessionId: string, signature: string): void => {
     const state = armed.get(sessionId);
-    if (state !== undefined) state.steps = 0;
+    if (state === undefined) return;
+    if (state.last === signature) return;
+    state.steps = 0;
+    state.last = signature;
   };
 
   /**
@@ -760,7 +776,7 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     const schedule = deps.schedule;
     if (schedule === undefined) return;
     if (armed.has(sessionId)) return;
-    const state = { steps: 0 };
+    const state = { steps: 0, last: null as string | null };
     armed.set(sessionId, state);
     /*
      * MAJOR 4 (REWORK 8): the chain releases on a definite reading and re-arms while the run is live, so a terminal
@@ -907,12 +923,15 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
      */
     if (read.kind === 'row') armOnConfirm(first, deps.runs.observeListing(first.sessionId, { executionStatus: read.executionStatus, awaitingInput: read.awaitingInput, stale: read.stale }));
     /*
-     * MAJOR 4 (REWORK 8, 2026-11-25): only a READABLE progress on the run resets the reconcile's stall counter. An
-     * UNREADABLE listing proves nothing about the run (BLOCKER 2), so counting it as activity let repeated polling of an
-     * unreadable listing keep ONE chain alive indefinitely (round 7 reset the counter on every read). A row that is
-     * actually the run is progress; an unreadable answer is not.
+     * MAJOR 4 (REWORK 8, 2026-11-25): only a READABLE reading resets the reconcile's stall counter. An UNREADABLE listing
+     * proves nothing about the run (BLOCKER 2), so counting it as activity let repeated polling of an unreadable listing
+     * keep ONE chain alive indefinitely (round 7 reset the counter on every read). A row that is actually the run is
+     * readable; an unreadable answer is not.
+     *
+     * MAJOR 4 (REWORK 9, 2026-11-25): and only a reading that CHANGED the state counts — the signature below is that
+     * row's state, so an unchanged row no longer extends the chain under polling.
      */
-    if (read.kind === 'row') pulse(first.sessionId);
+    if (read.kind === 'row') pulse(first.sessionId, `${read.executionStatus}|${read.awaitingInput}|${read.stale}`);
     const now = deps.runs.byHandle(handle) ?? first;
     // MINOR (REQ-MCP-123): the same guard AFTER the read — a refusal or an end that landed while the listing was being
     // read is stated now, rather than being overtaken by this call's `starting`.
@@ -968,8 +987,12 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     observeSnapshot: (sessionId, state) => {
       const run = deps.runs.openRunForSession(sessionId);
       armOnConfirm(run, deps.runs.observe(sessionId, state));
-      // MAJOR 4 (REWORK 7): a published snapshot is activity on the session; reset the armed reconcile's stall counter.
-      pulse(sessionId);
+      /*
+       * MAJOR 4 (REWORK 7): a published snapshot is activity on the session; reset the armed reconcile's stall counter.
+       * MAJOR 4 (REWORK 9): the snapshot's own signature decides whether it is PROGRESS — a repeated identical snapshot
+       * does not extend the chain.
+       */
+      pulse(sessionId, `${state.executionStatus}|${state.awaitingInput ?? false}|${state.stopReason ?? ''}`);
     },
   };
 }

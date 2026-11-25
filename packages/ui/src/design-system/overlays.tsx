@@ -1,9 +1,9 @@
 import {
-  useCallback, useEffect, useId, useLayoutEffect, useRef, useState,
+  forwardRef, useCallback, useEffect, useId, useLayoutEffect, useRef, useState,
   type ButtonHTMLAttributes, type ReactNode, type RefObject,
 } from 'react';
 import { classes } from './shared.js';
-import { panelPlacement, type PanelBox } from './panel-placement.js';
+import { PANEL_GAP, panelPlacement, type PanelBox } from './panel-placement.js';
 
 /**
  * The design-system press-revealed popover menu (PD-CHAT-001): a value chip whose alternatives
@@ -33,13 +33,16 @@ export interface StripMenuButtonProps extends Omit<ButtonHTMLAttributes<HTMLButt
   readonly ariaLabel?: string | undefined;
   readonly 'aria-label'?: string | undefined;
   readonly onClick?: ((e: React.MouseEvent<HTMLButtonElement>) => void) | undefined;
+  /** PD-ORCH-021 clause 9: `warn` draws the icon, value and caret in the warning ink, always beside the value's words. */
+  readonly tone?: 'warn' | undefined;
 }
 
 /** REQ-CHAT-006/007 govern unchanged: a disabled strip control carries its reason through both channels. */
-export function StripMenuButton({ icon, value, ariaLabel, className, disabled, title, children, onClick, ...rest }: StripMenuButtonProps) {
+export const StripMenuButton = forwardRef<HTMLButtonElement, StripMenuButtonProps>(function StripMenuButton({ icon, value, ariaLabel, className, disabled, title, children, onClick, tone, ...rest }, ref) {
   const name = ariaLabel ?? rest['aria-label'];
   return (
     <button
+      ref={ref}
       type="button"
       className={classes('strip-btn', className)}
       aria-label={name}
@@ -49,6 +52,7 @@ export function StripMenuButton({ icon, value, ariaLabel, className, disabled, t
       title={title}
       data-ui-component="StripMenuButton"
       data-value={value}
+      data-tone={tone}
       onClick={onClick}
       {...rest}
     >
@@ -57,7 +61,7 @@ export function StripMenuButton({ icon, value, ariaLabel, className, disabled, t
       {children}
     </button>
   );
-}
+});
 
 export interface StripActionButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'aria-label'> {
   /** Phosphor class for the icon (e.g. `ph-paperclip`). */
@@ -296,6 +300,139 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
               {o.hint !== undefined && <span className="chip-menu__hint" id={`${listId}-${i}-hint`}>{o.hint}</span>}
             </button>
           ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * PopoverPanel (gap G17, `docs/design/briefs/composer.md` §9; PD-ORCH-021 clause 9): a press-revealed, non-modal panel that
+ * holds a control and what explains it, where `PopoverMenu`'s panel holds a list of choices. It shares the strip's trigger
+ * shell (`StripMenuButton`), `panelPlacement` and the menu panel's craft, and differs where a held control needs it to:
+ * the trigger says `aria-haspopup="dialog"`, the panel is `role="dialog"` (not modal), focus moves into the panel on open,
+ * and a change inside it does not close it.
+ *
+ * Keyboard: on the trigger, Enter, Space, ArrowUp or ArrowDown opens it with focus on `initialFocus` (else the panel's first
+ * focusable element). Escape closes and returns focus to the trigger. The panel follows the trigger in the DOM, so Tab past
+ * its last control reaches the next strip control and Shift+Tab before its first reaches the trigger; focus leaving the panel
+ * closes it, as a press outside does.
+ */
+export interface PopoverPanelProps {
+  /** Phosphor class for the trigger's leading icon. */
+  readonly icon: string;
+  /** The trigger's value text. */
+  readonly value: string;
+  /** The trigger's accessible name, and the dialog's. */
+  readonly ariaLabel: string;
+  readonly 'aria-describedby'?: string | undefined;
+  readonly title?: string | undefined;
+  readonly tone?: 'warn' | undefined;
+  readonly className?: string | undefined;
+  /** The element focused on open; absent, the panel's first focusable element. */
+  readonly initialFocus?: RefObject<HTMLElement | null> | undefined;
+  /** The panel's content; `close` closes it, returning focus to the trigger when asked. */
+  readonly children: (close: (refocus: boolean) => void) => ReactNode;
+  readonly panelClassName?: string | undefined;
+  readonly panelTestId?: string | undefined;
+  /** Test seam only: render with the panel open. The product always starts closed. */
+  readonly defaultOpen?: boolean | undefined;
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export function PopoverPanel({ icon, value, ariaLabel, title, tone, className, initialFocus, children, panelClassName, panelTestId, defaultOpen, ...rest }: PopoverPanelProps) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  // The trigger as state, not a ref: `close` reaches it, and `close` is handed to the content during render.
+  const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+  const [box, setBox] = useState<PanelBox | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const field = trigger;
+    if (!field) return;
+    const measure = () => {
+      const r = field.getBoundingClientRect();
+      // Opening upward it stands above the trigger, so the chip it was opened from stays in view (brief §8).
+      const up = r.top > window.innerHeight - r.bottom;
+      setBox(panelPlacement({ left: r.left, bottom: up ? r.top - PANEL_GAP : r.bottom, width: r.width }, { width: window.innerWidth, height: window.innerHeight }, panel.current?.offsetWidth));
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    observer?.observe(field);
+    window.addEventListener('resize', measure);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure); };
+  }, [open, trigger]);
+
+  // Focus moves into the panel once it is drawn.
+  useEffect(() => {
+    if (!open) return;
+    const target = initialFocus?.current ?? panel.current?.querySelector<HTMLElement>(FOCUSABLE) ?? null;
+    target?.focus();
+  }, [open, initialFocus]);
+
+  const close = useCallback((refocus: boolean) => {
+    setOpen(false);
+    if (refocus) trigger?.focus();
+  }, [trigger]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target instanceof Node)) return;
+      if (panel.current?.contains(e.target) || trigger?.contains(e.target)) return;
+      close(false);
+    };
+    window.addEventListener('pointerdown', onDown);
+    return () => window.removeEventListener('pointerdown', onDown);
+  }, [open, close, trigger]);
+
+  const onTriggerKey = (e: React.KeyboardEvent) => {
+    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setOpen(true); }
+    if (open && e.key === 'Escape') { e.preventDefault(); close(true); }
+  };
+
+  return (
+    <>
+      <StripMenuButton
+        ref={setTrigger}
+        icon={icon}
+        value={value}
+        ariaLabel={ariaLabel}
+        aria-describedby={rest['aria-describedby']}
+        title={title}
+        tone={tone}
+        className={classes(open && 'is-open', className)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        data-open={open ? '1' : '0'}
+        data-popover-panel-trigger=""
+        onKeyDown={onTriggerKey}
+        onClick={() => { if (open) close(true); else setOpen(true); }}
+      >
+        <i className="ph ph-caret-down strip-btn__caret" aria-hidden="true" />
+      </StripMenuButton>
+      {open && (
+        <div
+          ref={panel}
+          id={panelId}
+          className={classes('chip-menu__panel', 'popover-panel', panelClassName)}
+          role="dialog"
+          aria-label={ariaLabel}
+          data-ui-component="PopoverPanel"
+          data-testid={panelTestId}
+          style={box ? { left: box.left, ...(box.top !== undefined ? { top: box.top } : { bottom: box.bottom }), maxHeight: box.maxHeight } : undefined}
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); } }}
+          onBlur={(e) => {
+            const next = e.relatedTarget;
+            if (next instanceof Node && (panel.current?.contains(next) || trigger?.contains(next))) return;
+            if (next !== null) close(false);
+          }}
+        >
+          {children(close)}
         </div>
       )}
     </>

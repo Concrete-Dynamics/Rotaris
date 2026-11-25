@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { Hint, Origin, SettingsTitle, type ValueOrigin } from './page.js';
-import { CIRCUIT_BREAKER_ESCALATION_NAMES, CIRCUIT_BREAKER_REVIEW_MODE_NAMES, DELEGATION_STRATEGY_NAMES, DEPTH_STEPS, UNLIMITED_DEPTH_FROM, EDITABLE_SLOTS, PERMISSION_PRESETS, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
+import { CIRCUIT_BREAKER_ESCALATION_NAMES, CIRCUIT_BREAKER_REVIEW_MODE_NAMES, DELEGATION_STRATEGY_NAMES, DEPTH_STEPS, MONEY_STOPS, UNLIMITED_DEPTH_FROM, EDITABLE_SLOTS, PERMISSION_PRESETS, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
 import { ADVISOR_USES_RANGE, REVIEW_INTERVAL_RANGE, CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, clampForDisplay, COMPRESSION_THRESHOLD_RANGE, FAN_OUT_RANGE, ITERATION_CAP_RANGE, PER_AGENT_TIMEOUT_LABEL, RUNTIME_CATEGORY_LABEL, IMPROVEMENT_TIMEOUT_SECONDS, improvementTimeoutForDisplay, offeredForModel, reasoningChoice, reasoningModelKey, roleReasoningOptions, scopeCellOf, slotModelPick, type NumberRange, storedImprovementTimeoutNote, storedSecondsDescription, storedTimeoutNote, timeoutMinutesForDisplay, timeoutSecondsFromInput, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { DictationSettings } from './DictationSettings.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, StepSlider as DesignStepSlider, Table as DesignTable } from '../design-system/index.js';
 import { Confirm } from './Confirm.js';
+import { MONEY_SETTINGS_EXPLANATION, MONEY_SLIDER_STEPS, moneyStopIndex } from '../MoneySlider.js'; // PD-ORCH-021
 
 export { Confirm };
 
@@ -365,7 +366,16 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
         <DesignSelect id="strategy" className="input select settings__select" aria-label="Delegation strategy" value={pending.delegationStrategy} onChange={(e) => onChange({ kind: 'delegationStrategy', value: e.currentTarget.value as PendingSettings['delegationStrategy'] })}>
           {DELEGATION_STRATEGY_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
         </DesignSelect>
-        <Hint>orchestrator coordinates through specialists; swarm lets roles fan out; single does the work in one role with no delegation; lead does the work in one role and delegates when it chooses.</Hint>
+        <Hint>orchestrator coordinates through specialists; swarm lets roles fan out; single does the work in one role with no delegation; lead does the work in one role and delegates when it chooses. While unset, the money slider chooses it.</Hint>
+      </div>
+    </>);
+  // PD-ORCH-021 clause 1: the money slider's default, first under Starting since it chooses the strategy below it (brief §10 Q11).
+  const moneyRow = (<>
+      <div className="settings__action" id="money-default" data-ui="money-default">
+        <label htmlFor="money-default-slider">Money slider</label>
+        <DesignStepSlider id="money-default-slider" aria-label="Money slider" className="settings__money" steps={MONEY_SLIDER_STEPS}
+          value={moneyStopIndex(pending.moneySlider)} onChange={(index) => { const stop = MONEY_STOPS[index]; if (stop !== undefined) onChange({ kind: 'moneySlider', value: stop }); }} />
+        <Origin of={snapshot.moneySlider.origin} /><Hint about="Money slider">{MONEY_SETTINGS_EXPLANATION}</Hint>
       </div>
     </>);
   const runStartRow = (<>
@@ -534,7 +544,7 @@ export function RuntimeSettings(props: ConfigSettingsProps & { readonly part?: '
     <div className="settings__section">
       <SettingsTitle>Delegation</SettingsTitle>
       <h2 className="settings__heading">Starting</h2>
-      {strategyRow}{runStartRow}
+      {moneyRow}{strategyRow}{runStartRow}
       <h2 className="settings__heading">Limits</h2>
       {depthRow}{fanOutRow}{childTimeoutRow}{iterationRow}{thresholdRow}
       <h2 className="settings__heading">Stopping</h2>

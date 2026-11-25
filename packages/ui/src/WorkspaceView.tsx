@@ -1,7 +1,7 @@
 import { DictationControl, type DictationHost } from './DictationControl.js';
 import { insertTranscript } from './dictation.js';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { DELEGATION_STRATEGY_NAMES, isBusy, PERMISSION_PRESETS, type DelegationStrategyName, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, PROJECT_SETUP_SEND_REASON, PROJECT_SETUP_SUBMIT_DETAIL, PROJECT_SETUP_SUBMIT_HEADLINE, type InitializationStateView, type Notice, type PermissionPreset, type PlanDecision, type QuestionAnswers, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { DELEGATION_STRATEGY_NAMES, isBusy, PERMISSION_PRESETS, type DelegationStrategyName, type MoneyStop, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, PROJECT_SETUP_SEND_REASON, PROJECT_SETUP_SUBMIT_DETAIL, PROJECT_SETUP_SUBMIT_HEADLINE, type InitializationStateView, type Notice, type PermissionPreset, type PlanDecision, type QuestionAnswers, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { projectSidebarSection } from './settings/project-init.js'; // Part AS
 import { err, ok } from '@rotaris/kernel';
 import {
@@ -33,6 +33,8 @@ import type { TrailerRow } from './transcript/types.js';
 import type { TranscriptSurface } from './transcript/Row.js';
 import { TodoPane, type TodoEdit } from './TodoPane.js';
 import { addImageBytes, composerTokenEstimate } from './attachments.js';
+import { STRATEGY_HINTS, STRATEGY_LABELS } from './strategy-labels.js';
+import { MoneyChip, type MoneyChipProps } from './MoneySlider.js'; // PD-ORCH-021
 import { PlanGate } from './PlanGate.js';
 import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
@@ -113,6 +115,11 @@ export interface WorkspaceViewProps {
    */
   readonly delegationStrategy?: DelegationStrategyName | undefined;
   readonly onSetDelegationStrategy?: ((strategy: DelegationStrategyName) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /**
+   * PD-ORCH-021 clause 9: the money slider's chip — the session's stop (or the default it follows), the default, the snapshot's
+   * levers, and the choice. Absent, the strip draws no chip.
+   */
+  readonly money?: (Omit<MoneyChipProps, 'live' | 'onChoose'> & { readonly onChoose: (stop: MoneyStop) => Promise<{ ok: true } | { ok: false; reason: string }> }) | undefined;
   /** REQ-MONITOR-133/137: steer one live agent (`run` for the entry role). */
   readonly onSteer?: ((agentId: string, text: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-MONITOR-142/144: the run header's model and reasoning switch, next-iteration changes. */
@@ -792,14 +799,9 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-/** PD-ORCH-019 clause 10: the composer's names for the four strategies, and what each does in a few words. */
-export const STRATEGY_LABELS: Readonly<Record<DelegationStrategyName, string>> = { orchestrator: 'Orchestrator', swarm: 'Swarm', single: 'Single', lead: 'Lead', intelligent: 'Intelligent' };
-export const STRATEGY_HINTS: Readonly<Record<DelegationStrategyName, string>> = {
-  orchestrator: 'coordinates specialists', swarm: 'delegates as widely as it can', single: 'one agent, no delegation', lead: 'one agent, delegates and scripts workflows',
-  intelligent: 'picks Lead, Single or Orchestrator for each request',
-};
+export { STRATEGY_HINTS, STRATEGY_LABELS } from './strategy-labels.js';
 
-export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], modelReasoning = {}, imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, delegationStrategy = 'orchestrator', onSetDelegationStrategy, onStopWorkflow, dictation}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, panelWidths, onPanelWidths, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, onKeepWaiting, models = [], modelReasoning = {}, imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onUndoConfigChange, onAnswerQuestions, onCancelQuestions, slash, reauthPrompt = null, delegationStrategy = 'orchestrator', onSetDelegationStrategy, money, onStopWorkflow, dictation}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // PD-CHAT-015: whose transcript is shown — the run's own conversation first. REQ-CHAT-069's "This task" needs a
   // selected agent, and without one it is the run's.
@@ -1768,6 +1770,12 @@ export function WorkspaceView({ session, rows, initialScope, onSubmit, onStop, o
               options={nextReasoning.options}
               labels={REASONING_LABELS}
               onChoose={(v) => { void onSetNextReasoning(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+          )}
+          {/* PD-ORCH-021 clauses 9 and 10: the money slider, after the reasoning chip and enabled in every run state. */}
+          {money && (
+            <MoneyChip stop={money.stop} following={money.following} defaultStop={money.defaultStop} levers={money.levers} live={runActive}
+              onOpenDefault={money.onOpenDefault}
+              onChoose={(stop) => { void money.onChoose(stop).then((r) => { if (!r.ok) setError(r.reason); }); }} />
           )}
           {/* REQ-ORCH-152: the run-start mode. It obeys the same enablement rule as its three neighbours — it
             * chooses what the NEXT run starts with, and a change made while a run is in flight takes effect only

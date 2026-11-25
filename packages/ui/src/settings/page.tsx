@@ -62,16 +62,5 @@ export function Hint({ about, always = false, children, className, ...rest }: HT
   );
 }
 
-/** Where a value comes from, as a glyph with its words (PD-CONFIG-012 clause 5): nothing for a built-in default. */
-export type ValueOrigin = 'workspace' | 'global' | 'yours' | 'fixed' | 'default';
-const ORIGIN: Readonly<Record<Exclude<ValueOrigin, 'default'>, { readonly glyph: string; readonly words: string }>> = {
-  workspace: { glyph: 'ph-folder', words: 'Set for this workspace' },
-  global: { glyph: 'ph-user', words: 'Set in your global configuration' },
-  yours: { glyph: 'ph-user', words: 'Yours, kept on this machine' },
-  fixed: { glyph: 'ph-lock', words: 'Fixed; it cannot be changed here' },
-};
-export function Origin({ of }: { readonly of: ValueOrigin }) {
-  if (of === 'default') return null;
-  const { glyph, words } = ORIGIN[of];
-  return <span className="settings__origin-mark" role="img" aria-label={words} title={words} data-origin={of}><i className={`ph ${glyph}`} aria-hidden="true" /></span>;
-}
+/** Where a value comes from (PD-CONFIG-012 clause 5): the design system's mark, re-exported for the Settings pages. */
+export { Origin, type ValueOrigin } from '../design-system/origin.js';

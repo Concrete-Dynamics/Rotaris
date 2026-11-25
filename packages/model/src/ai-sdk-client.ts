@@ -398,7 +398,10 @@ export class AiSdkModelClient implements ModelClient {
             yield err(endedEarly());
             return;
           // The stream parts this client takes nothing from, named so that a part a library upgrade adds is read or passed over on purpose (R-091).
-          case 'file': case 'custom': case 'source': case 'start': case 'raw': case 'tool-result': case 'reasoning-file': case 'tool-approval-request': case 'tool-approval-response': case 'tool-error': case 'tool-output-denied': case 'text-start': case 'text-end': case 'reasoning-start': case 'reasoning-end': case 'tool-input-end':
+          // `ping` (ai 7.0.176) is the provider's keepalive: it carries no content, and every part — this one included — re-arms the idle bound above.
+          // `steering-message` (ai 7.0.176) is the SDK reporting a steering prompt it delivered into the conversation; the product issues, marks
+          // and records that injection itself (REQ-MONITOR-134), so the adapter forwards nothing for it.
+          case 'file': case 'custom': case 'source': case 'start': case 'raw': case 'tool-result': case 'reasoning-file': case 'tool-approval-request': case 'tool-approval-response': case 'tool-error': case 'tool-output-denied': case 'text-start': case 'text-end': case 'reasoning-start': case 'reasoning-end': case 'tool-input-end': case 'ping': case 'steering-message':
           default:
             break;
         }

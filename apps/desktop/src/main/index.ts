@@ -2295,6 +2295,15 @@ async function main(): Promise<void> {
       }
       const link = inboundLink;
       if (link === null) return { ok: false, outcome: { ok: false, code: 'inbound.fork-failed', headline: 'The inbound listener could not be started' }, definite: true };
+      /*
+       * MINOR (REWORK 7, 2026-11-25): a request that times out here is NOT removed in the listener. `ProcessLink` discards
+       * the reply at its bound, but there is no cancel across this boundary — the listener still holds the work and will
+       * still run it (it may yet bind). Main therefore reads a timeout as `inbound.unreachable` (the bind question stays
+       * OPEN, MAJOR 3) and does NOT treat the surface as off. The abandoned work is bounded on the LISTENER's side
+       * (`MAX_QUEUED_LISTENER_REQUESTS`): past that cap a further request is refused rather than queued, so a caller
+       * driving enable in a loop cannot grow the listener's queue without end. Nothing is "cleaned up" here because
+       * nothing CAN be: the honest reading is that the request may still land.
+       */
       const reply = await link.request({ kind: 'inbound.enable', token }, 25_000).catch((cause: Error) => ({ kind: 'refused' as const, code: 'inbound.unreachable', headline: 'The inbound listener did not answer', detail: cause.message }));
       if (reply.kind !== 'inbound.state' || reply.state.port === null) {
         /*

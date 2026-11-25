@@ -300,24 +300,39 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
       void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed after the refused start (${x.kind})`)).catch(() => undefined);
     }
     /*
-     * MINOR (REQ-MCP-124, 2026-11-25; tightened by MAJOR D, REWORK 6): a NO-REPLY kept the tree because the host may
-     * still start the run with it. If the host in fact REFUSED — only after the bound, so `ProcessLink` discarded the
-     * reply — the tree would linger with no session behind it. One bounded follow-up settles it, and it is read over the
-     * WHOLE host worst case (the credential lease, the last moment the host could still be starting the run), not after a
-     * single listing: a start can be standing BEFORE it is written to the listing, so one early read proves nothing. The
-     * tree is removed only when that read is readable AND carries no such session; an unreadable listing, or a session
-     * that IS present, keeps it (the conservative side, REQ-MCP-126's cost argument).
+     * MINOR (REQ-MCP-124, 2026-11-25; tightened by MAJOR D, REWORK 6 and MAJOR 1, REWORK 7): a NO-REPLY kept the tree
+     * because the host may still start the run with it. If the host in fact REFUSED — only after the bound, so
+     * `ProcessLink` discarded the reply — the tree would linger with no session behind it. A bounded follow-up settles
+     * it, but the follow-up must be as CONSERVATIVE as the surface's own slot (REQ-MCP-126's cost argument):
+     *
+     * - the wait does NOT bound the host's start. A start processed LATE may still be waiting on its credential lease
+     *   (`launch.ts`) while this reads the listing, so the listing can answer BEFORE the session is written either. A
+     *   SINGLE empty listing therefore proves nothing (MAJOR 1, REWORK 7) — the tree would be deleted out from under a
+     *   run that is being born.
+     * - the tree is taken away only after the WHOLE host worst case (the credential lease, the last moment the host could
+     *   still be starting the run), on MORE THAN ONE reading over that worst case, and only when EVERY reading is
+     *   readable AND carries no such session.
+     * - an unreadable listing proves nothing and keeps the tree; a session that appears on ANY reading keeps it. Only a
+     *   session that is provably absent on every reading lets the tree go.
      */
     if (r.kind === 'refused' && r.code === 'run-host.unreachable' && binding?.created_by_session && svc && deps.scheduleRecheck !== undefined) {
       const path = binding.worktree_path;
       const boundMs = input.hostStartBoundMs ?? DEFAULT_START_BOUND_MS;
-      deps.scheduleRecheck(() => {
+      const schedule = deps.scheduleRecheck;
+      let emptyReadings = 0;
+      const readOnce = (): void => {
         void runHost.request({ kind: 'session.list', workspaceId: input.workspaceId }, millis(10_000)).then((listing) => {
+          // An unreadable listing proves nothing: the tree is kept (the conservative side).
           if (listing.kind !== 'session.list') return;
           if (listing.sessions.some((row) => row.sessionId === sessionId)) { log(`worktree ${path} kept: session ${sessionId} appeared after the no-reply start`); return; }
+          emptyReadings += 1;
+          // The FIRST empty reading is not enough: the session may not be written yet. Read again past the lease, so the
+          // removal rests on more than one reading over the whole host worst case.
+          if (emptyReadings === 1) { schedule(readOnce, INBOUND_HOST_CREDENTIAL_LEASE_MS); return; }
           void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed: the host refused the late start and no session was born (${x.kind})`)).catch(() => undefined);
         }).catch(() => undefined);
-      }, boundMs + INBOUND_HOST_CREDENTIAL_LEASE_MS);
+      };
+      schedule(readOnce, boundMs + INBOUND_HOST_CREDENTIAL_LEASE_MS);
     }
     if (r.kind === 'refused') {
       if (r.code === 'session.confinement') void notices.report(deps.confinementNotice(r));

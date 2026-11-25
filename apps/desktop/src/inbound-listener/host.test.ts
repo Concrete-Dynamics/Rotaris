@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InboundAskHandler, InboundListenerAsk } from '@rotaris/contracts';
 import { InboundToken } from './guards.js';
-import { createInboundHost } from './host.js';
+import { createInboundHost, MAX_QUEUED_LISTENER_REQUESTS } from './host.js';
 import { listenerAsk, readAnswerEnvelope, readListenerEnvelope, serveListenerRequest } from './protocol.js';
 import type { InboundListener } from './transport.js';
 
@@ -126,6 +126,27 @@ describe('REQ-MCP-124: a refused request reaches no run host', () => {
     expect(asks).toEqual([{ kind: 'inbound.startRun', prompt: 'p' }]);
     expect(answer.kind).toBe('refused');
     expect(answer.kind === 'refused' && answer.detail).toBe('open one');
+  });
+});
+
+describe('REQ-MCP-124 (MINOR, REWORK 7): the listener’s request chain is bounded', () => {
+  it('a burst past the cap is refused with a stated reason rather than queued without end', async () => {
+    const token = new InboundToken();
+    // A bind that does not resolve until released, so the requests genuinely queue behind the first.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    let bound: { addresses: readonly string[]; port: number } | null = null;
+    const slow: InboundListener = {
+      binding: () => bound,
+      bind: async () => { await gate; bound = { addresses: ['127.0.0.1'], port: 51234 }; return bound; },
+      unbind: async () => { bound = null; },
+    };
+    const host = createInboundHost({ token, log: () => undefined, listener: slow, mainAsk: async () => ({ kind: 'refused', code: 'x', headline: 'x' }) });
+    // All requests are issued in the SAME synchronous tick, so they queue before any of them runs.
+    const requests = Array.from({ length: MAX_QUEUED_LISTENER_REQUESTS + 5 }, () => host.apply({ kind: 'inbound.state' }));
+    release();
+    const outs = await Promise.all([...requests]);
+    expect(outs.some((o) => o.kind === 'refused' && o.code === 'inbound.busy')).toBe(true);
   });
 });
 

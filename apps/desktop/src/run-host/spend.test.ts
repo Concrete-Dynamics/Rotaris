@@ -52,7 +52,7 @@ describe('PD-ORCH-021 — the run host reads the money slider', () => {
     expect(build.budget).toMatchObject({ maxActive: 8, maxTotal: 30 });
     expect(build.widening).toBe('one_wider');
     const answer = run.spend!.at('strong_budget', 'question');
-    expect(answer.budget.maxActive).toBe(run.runtime.childBudget.maxActive);
+    expect(answer.budget.maxActive).toBe(run.runtime.childBudget?.maxActive);
     expect(answer.audit.levers['runtime.max_active_children']).toBe('unchanged');
   });
 

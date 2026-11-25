@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { isViewId, LIBRARY_TABS, STARTUP_VIEW, UPDATE_STATE_NONE, type AnalysisPass, type UpdateState, type ViewId } from '@rotaris/contracts';
+import { isViewId, LIBRARY_TABS, STARTUP_VIEW, UPDATE_STATE_NONE, type AnalysisPass, type MoneyStop, type UpdateState, type ViewId } from '@rotaris/contracts';
 
 /**
  * Local-only interface state (ADR-0043, ADR-0057): the active view, and later
@@ -58,6 +58,13 @@ export interface ShellState {
   readonly launchOptions: LaunchChoices | null;
   setLaunchOptions: (options: LaunchChoices | null) => void;
   takeLaunchOptions: () => LaunchChoices | null;
+  /**
+   * PD-ORCH-021 clause 9: the stop the composer chip holds for a session not yet started, recorded as that session's own when
+   * it starts and consumed by the start; null where the chip follows the default.
+   */
+  readonly pendingMoneyStop: MoneyStop | null;
+  setPendingMoneyStop: (stop: MoneyStop | null) => void;
+  takePendingMoneyStop: () => MoneyStop | null;
   /** REQ-MONITOR-042 (Part R): ONE selected agent for every surface — the Workspace sidebar tree, the Overview's delegation graph and agent table (PD-MONITOR-009), the inspector; `run` names the run-level selection (REQ-MONITOR-274), null nothing. */
   readonly selectedAgentId: string | null;
   selectAgent: (id: string | null) => void;
@@ -219,6 +226,15 @@ export const useShellState = create<ShellState>((set, get) => ({
     const options = get().launchOptions;
     if (options !== null) set({ launchOptions: null });
     return options;
+  },
+  pendingMoneyStop: null,
+  setPendingMoneyStop(stop) {
+    set({ pendingMoneyStop: stop });
+  },
+  takePendingMoneyStop() {
+    const stop = get().pendingMoneyStop;
+    if (stop !== null) set({ pendingMoneyStop: null });
+    return stop;
   },
   selectedAgentId: null,
   selectAgent(id) {

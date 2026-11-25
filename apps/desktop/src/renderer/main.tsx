@@ -18,7 +18,7 @@ import '@phosphor-icons/web/fill';
 
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
-import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, reloadThisWindow, replica, retryRun, setDelegationStrategy, setMode, setNextModel, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, reloadThisWindow, replica, retryRun, setDelegationStrategy, setMode, setMoneyStop, setNextModel, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 import { joinOrAsk, settleGuard, type CloseGuardHost, type PendingGuardQuestion } from './guard-question.js';
 import { openWorkspaceFolder, useWindowWidth, useWorkspaceUsage } from './strip-facts.js';
 import { reportNoticeActionRefusal } from './notice-action-refusal.js';
@@ -199,6 +199,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const reachedOldest = useStore(replica, (s) => s.reachedOldest);
   const snapshot = useConfigSnapshot(workspace);
+  // PD-ORCH-021 clause 9: the stop the chip holds for a session not yet started.
+  const pendingMoneyStop = useShellState((st) => st.pendingMoneyStop);
   // REQ-CONFIG-472: what the settings screen currently holds wins over what the file says, until Save says otherwise.
   const pendingCaps = useStore(pendingDisplay, (s) => s.caps);
   const personas = useMemo(() => personasOf(snapshot), [snapshot]);
@@ -374,6 +376,13 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     /* PD-ORCH-019 clause 10: the composer's half of the delegation strategy; Settings writes the same key. */
     delegationStrategy={snapshot?.delegationStrategy ?? 'orchestrator'}
     onSetDelegationStrategy={(strategy) => setDelegationStrategy(strategy)}
+    /* PD-ORCH-021 clause 9: the session's own stop, else the one held for the session the next prompt starts, else the default. */
+    money={snapshot ? {
+      stop: session?.moneyStop ?? (session ? null : pendingMoneyStop) ?? snapshot.moneySlider.stop,
+      following: (session?.moneyStop ?? (session ? null : pendingMoneyStop)) == null,
+      defaultStop: snapshot.moneySlider.stop, levers: snapshot.moneyLevers,
+      onChoose: (stop) => setMoneyStop(stop), onOpenDefault: () => useShellState.getState().openSettings('delegation'),
+    } : undefined}
     onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
     onSetModel={(model) => control('setModel', { model }, 'The run did not accept that model.')}
     /* OQ-188's ruling (PD-MONITOR-004 revision 2): keep waiting is `setModel` marked as a retry of the wait it names, never a switch. */

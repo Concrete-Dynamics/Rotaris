@@ -113,6 +113,16 @@ A strategy the user set is set whatever its value, so a workspace on `intelligen
 its strategy as that directive states; the stop then reaches the run's other levers under the strategy chosen. The cases
 stay apart: that directive's is the strategy's choice, this one's is every lever the user left unset.
 
+**First execution, 2026-11-25.** Built as stated, in two parts. The run reads its stop through a port the run host fills
+(`RunSpend`, `packages/engine/src/run/spend.ts`; `apps/desktop/src/run-host/spend.ts`): the strategy at the run's start,
+the entry role, the personas, the child limits and the cell's widening once the intent is known, and each delegated agent
+records `money_stop` at its admission and runs as the stop then yields (clause 10). The surface is the composer's chip with
+its popover preview and the default row under Settings › Delegation, as the [composer brief](../../design/briefs/composer.md)
+draws them. Measured: unit tests over the resolution, the run host's reading and a child admitted under two stops; the
+chip and popover rendered from their own components in Chromium at the five stops, live and narrow, with focus on the
+range at opening and no horizontal overflow. **Not run:** the built application, which would not start as root on the
+host this was built on, so the composer and settings proofs have not met the surface; a live run at any stop.
+
 > **Narrows:** REQ-ORCH-019, REQ-ORCH-024, REQ-ORCH-029, REQ-ORCH-046
 > **Extends:** REQ-ORCH-025, REQ-ORCH-027, REQ-CONFIG-263, REQ-CHAT-006
 

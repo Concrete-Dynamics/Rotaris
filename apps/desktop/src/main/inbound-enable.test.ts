@@ -15,8 +15,10 @@ import { createInboundEnableSequencer } from './inbound-enable.js';
 interface TestPorts {
   exposure: InboundExposure;
   mintToken: () => string;
-  askEnable: (token: string) => Promise<{ ok: true; port: number } | { ok: false; outcome: CommandOutcome }>;
+  askEnable: (token: string) => Promise<{ ok: true; port: number } | { ok: false; outcome: CommandOutcome; definite: boolean }>;
   askDisable: () => Promise<boolean>;
+  /** The listener's own state, read to resolve a bind question left open by an unanswered enable. */
+  askState: () => Promise<{ listening: boolean; port: number | null } | null>;
 }
 
 function ports(over: Partial<TestPorts> = {}): TestPorts {
@@ -26,6 +28,7 @@ function ports(over: Partial<TestPorts> = {}): TestPorts {
     mintToken: () => `tok-${++n}`,
     askEnable: async () => ({ ok: true as const, port: 51234 }),
     askDisable: async () => true,
+    askState: async () => null,
     ...over,
   };
 }
@@ -49,7 +52,9 @@ describe('REQ-MCP-120/121 (MAJOR): two overlapping enables are serialized', () =
     expect(asks).toBe(1);
     expect(a.ok && b.ok).toBe(true);
     expect(okValue(a)).toMatchObject({ enabled: true, port: 51234, token: 'tok-1' });
-    expect(okValue(b)).toMatchObject({ enabled: true, port: 51234, token: 'tok-1' });
+    // The second enable is a QUEUED gesture, not a join (review 5, point 1): it finds the surface bound and reads the
+    // exposure — same port, and the token is shown once, on the enabling press alone.
+    expect(okValue(b)).toEqual({ enabled: true, port: 51234 });
     expect(bound).toBe(true);
   });
 
@@ -68,12 +73,92 @@ describe('REQ-MCP-120/121 (MAJOR): two overlapping enables are serialized', () =
 
   it('a failed bind leaves the exposure off and the token revoked', async () => {
     const p = ports();
-    p.askEnable = async () => ({ ok: false, outcome: { ok: false, code: 'inbound.bindFailed', headline: 'could not bind' } });
+    p.askEnable = async () => ({ ok: false, outcome: { ok: false, code: 'inbound.bindFailed', headline: 'could not bind' }, definite: true });
     const seq = createInboundEnableSequencer(p);
     const out = await seq.enable();
     expect(out.ok).toBe(false);
     expect(p.exposure.view(true)).toEqual({ enabled: false, port: null });
     expect(seq.listenerBound()).toBe(false);
+  });
+});
+
+describe('REQ-MCP-120/121 (MAJOR of review 5): a timeout leaves the bind question OPEN, and the next gesture resolves it', () => {
+  it('an enable that TIMED OUT leaves listenerBound true, and a following disable still reaches the listener', async () => {
+    const p = ports();
+    let disableAsks = 0;
+    // The enable's ask is answered with a no-reply: the listener may still be binding with the token it was handed.
+    p.askEnable = async () => ({ ok: false, outcome: { ok: false, code: 'inbound.unreachable', headline: 'did not answer' }, definite: false });
+    p.askDisable = async () => { disableAsks += 1; return true; };
+    const seq = createInboundEnableSequencer(p);
+    const out = await seq.enable();
+    expect(out.ok).toBe(false);
+    // Main does NOT claim the listener is off: the bind question is open, so a disable must still reach it.
+    expect(seq.listenerBound()).toBe(true);
+    const off = await seq.disable();
+    expect(disableAsks).toBe(1);
+    expect(off.ok).toBe(true);
+    expect(seq.listenerBound()).toBe(false);
+  });
+
+  it('the NEXT enable after a timeout READS the listener: listening adopts the token already handed over (no rotation)', async () => {
+    const p = ports();
+    const handed: string[] = [];
+    let bound: number | null = null;
+    // The first enable is not answered; the listener in fact bound on the token it was handed.
+    p.askEnable = async (token) => { handed.push(token); return bound === null ? { ok: false, outcome: { ok: false, code: 'inbound.unreachable', headline: 'did not answer' }, definite: false } : { ok: true, port: bound }; };
+    const seq = createInboundEnableSequencer(p);
+    await seq.enable();
+    bound = 51234;
+    // The listener's own state says it IS listening: main adopts the SAME token it handed over.
+    p.askState = async () => ({ listening: true, port: 51234 });
+    const second = await seq.enable();
+    expect(second.ok).toBe(true);
+    // One token was ever minted, so the display and the listener agree on it.
+    expect(handed).toEqual(['tok-1']);
+    expect(okValue(second)).toMatchObject({ enabled: true, port: 51234, token: 'tok-1' });
+  });
+
+  it('the next enable after a timeout whose bind never landed closes the question and binds fresh', async () => {
+    const p = ports();
+    const handed: string[] = [];
+    p.askEnable = async (token) => {
+      handed.push(token);
+      return handed.length === 1
+        ? { ok: false, outcome: { ok: false, code: 'inbound.unreachable', headline: 'did not answer' }, definite: false }
+        : { ok: true, port: 51234 };
+    };
+    const seq = createInboundEnableSequencer(p);
+    await seq.enable();
+    p.askState = async () => ({ listening: false, port: null });
+    const second = await seq.enable();
+    expect(second.ok).toBe(true);
+    // The stale token is discarded and a fresh one is minted for the new exposure.
+    expect(handed).toEqual(['tok-1', 'tok-2']);
+    expect(okValue(second)).toMatchObject({ token: 'tok-2' });
+  });
+
+  it('Enable → Disable → Enable performs the LAST enable: the gesture in between is never skipped', async () => {
+    const p = ports();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    const handed: string[] = [];
+    p.askEnable = async (token) => { handed.push(token); if (handed.length === 1) { await gate; } p.exposure.turnOn(token); p.exposure.bound(51234); return { ok: true, port: 51234 }; };
+    let disableAsks = 0;
+    p.askDisable = async () => { disableAsks += 1; return true; };
+    const seq = createInboundEnableSequencer(p);
+    const first = seq.enable();
+    const off = seq.disable();
+    const second = seq.enable();
+    release();
+    const [a, b, c] = await Promise.all([first, off, second]);
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    // The disable reached the listener, and the LAST enable was performed — the surface ends ON, not off.
+    expect(disableAsks).toBe(1);
+    expect(c.ok).toBe(true);
+    expect(handed).toHaveLength(2);
+    expect(p.exposure.view(false)).toMatchObject({ enabled: true, port: 51234 });
+    expect(seq.listenerBound()).toBe(true);
   });
 });
 
@@ -105,7 +190,7 @@ describe('REQ-MCP-120/121 (MAJOR of review 4): a disable behind an in-flight ena
     let release: () => void = () => undefined;
     const gate = new Promise<void>((r) => { release = r; });
     let disableAsks = 0;
-    p.askEnable = async () => { await gate; return { ok: false, outcome: { ok: false, code: 'inbound.bindFailed', headline: 'could not bind' } }; };
+    p.askEnable = async () => { await gate; return { ok: false, outcome: { ok: false, code: 'inbound.bindFailed', headline: 'could not bind' }, definite: true }; };
     p.askDisable = async () => { disableAsks += 1; return true; };
     const seq = createInboundEnableSequencer(p);
     const enabling = seq.enable();

@@ -422,6 +422,114 @@ describe('REQ-MCP-123/126 (REWORK 4, point 6): release from the REAL execution l
   });
 });
 
+describe('REQ-MCP-123/126 (MAJOR 3/4, REWORK 7): the phase unit on the handle, and the activity-bound reconcile', () => {
+  it('MAJOR 3(a): a listing row WITHOUT a reason does not overwrite the snapshot reason the handle holds', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // A snapshot carries the product's reason for the session (an interrupted run, which is NOT a terminal end).
+    c.observe(sessionId, { executionStatus: 'interrupted', stopReason: 'application_shutdown' });
+    expect(h.runs.holder).toBe(handle);
+    // A later listing row states NO reason. It is SILENT about the reason, so it must NOT clobber the known one with null
+    // (the fault: a reasonless row overwrote a snapshot reason).
+    h.listings.set(sessionId, { status: 'interrupted', awaitingInput: false });
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind).toBe('inbound.runStatus');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('application_shutdown');
+  });
+
+  it('MAJOR 3(b): a late `run.result` completes an end that was frozen WITHOUT a reason (the write publishes state before the result)', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // The terminal write publishes the STATUS first (a terminal row with no reason), freezing the end with a null reason.
+    c.observe(sessionId, { executionStatus: 'completed', stopReason: null });
+    expect(h.runs.holder).toBeNull();
+    // The terminal `run.result` then arrives with the product's own reason: it ADDS it to the frozen end.
+    h.runs.ended(sessionId, 'tasks_complete', 'completed');
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('completed');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('tasks_complete');
+  });
+
+  it('MAJOR 3(b): a computed reason is NOT overwritten by a late `run.result`, and an observed reason is not either', () => {
+    // A dead run whose terminal write failed is frozen with the engine's own reason, COMPUTED. A later result must not
+    // contradict it — it is a positive statement.
+    const h1 = harness();
+    const runs1 = new InboundSurfaceRuns();
+    void h1;
+    const composed = `inr_${'c'.repeat(32)}`;
+    runs1.take('S-C', composed);
+    runs1.committed(composed, 'S-C');
+    runs1.reconcile('S-C', { kind: 'absent' });
+    expect(runs1.stopReasonOf(composed)).toBe('agent_session_aborted');
+    runs1.ended('S-C', 'tasks_complete', 'completed');
+    // The computed reason stands: the late result did not rewrite it.
+    expect(runs1.stopReasonOf(composed)).toBe('agent_session_aborted');
+    // An OBSERVED reason (a park with a reason) is likewise not rewritten by a late result.
+    const runs2 = new InboundSurfaceRuns();
+    const observed = `inr_${'d'.repeat(32)}`;
+    runs2.take('S-D', observed);
+    runs2.committed(observed, 'S-D');
+    runs2.observe('S-D', { executionStatus: 'paused', stopReason: 'user_cancelled', awaitingInput: false });
+    expect(runs2.stopReasonOf(observed)).toBe('user_cancelled');
+    runs2.ended('S-D', 'tasks_complete', 'completed');
+    expect(runs2.stopReasonOf(observed)).toBe('user_cancelled');
+  });
+
+  it('MAJOR 4: the STATUS path ends a run the listing marks STALE — the slot is freed without the reconcile', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    // The start's reply is lost, so no reconcile is armed from it; the run is confirmed only by a LATER reading.
+    h.captureLateReply = true;
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    expect(h.runs.holder).toBe(handle);
+    // The run's terminal write failed: the durable image stays BUSY with nothing running it, and the listing marks it
+    // STALE (REQ-SESSION-171). A plain STATUS query must end it — not only the reconcile.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind).toBe('inbound.runStatus');
+    expect(out.kind === 'inbound.runStatus' && out.status.state).not.toBe('running');
+    expect(h.runs.holder).toBeNull();
+    // A fresh start is admitted once the slot is free.
+    h.captureLateReply = false;
+    h.hostStart = async () => ({ kind: 'session.started', sessionId: 'S-NEXT' });
+    expect((await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).kind).toBe('inbound.runStarted');
+  });
+
+  it('MAJOR 4: ACTIVITY extends the reconcile — a run that keeps publishing state is not exhausted by the cap', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // A live busy run every step: the reconcile holds and re-arms.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: false });
+    // Drive WELL past the cap, but let the run keep publishing state between steps — each snapshot/review is ACTIVITY and
+    // must reset the stall counter, so the chain is never exhausted (the cap is a STALL backstop, not a lifetime limit).
+    for (let i = 0; i < RECONCILE_MAX_STEPS * 2; i += 1) {
+      await driveStep(h);
+      c.observe(sessionId, { executionStatus: 'running', stopReason: null });
+    }
+    // The chain is still alive: a terminal write that fails LATE is still caught by a later step.
+    expect(h.steps.length).toBeGreaterThan(0);
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
+    await driveStep(h);
+    expect(h.runs.holder).toBeNull();
+    expect(handle).not.toBe('');
+  });
+});
+
 describe('REQ-MCP-123 (BLOCKER 3, REWORK 4): ONE object per handle — an end always reaches the caller’s handle', () => {
   it('the reserved handle, once confirmed and ended, answers its own end — not the continuation of the same session', async () => {
     const h = harness();

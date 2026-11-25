@@ -1,8 +1,18 @@
-import { INBOUND_NO_OPEN_WORKSPACE, INBOUND_RUN_ALREADY_ACTIVE, INBOUND_RUN_HANDLE_PATTERN, INBOUND_START_BOUND_MS as INBOUND_START_BOUND_MS_NUMBER, isBusy, presentationStatus, runHasEnded, type InboundListenerAsk, type InboundRunStatus, type InboundStartRunAnswer, type InboundRunStatusAnswer, type StopReason } from '@rotaris/contracts';
+import { INBOUND_NO_OPEN_WORKSPACE, INBOUND_RUN_ALREADY_ACTIVE, INBOUND_RUN_HANDLE_PATTERN, INBOUND_START_BOUND_MS as INBOUND_START_BOUND_MS_NUMBER, isBusy, presentationStatus, runHasEnded, type InboundListenerAsk, type InboundRunStatus, type InboundStartRunAnswer, type InboundRunStatusAnswer, type ProcessReply, type StopReason } from '@rotaris/contracts';
 import { millis, type Millis } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import { startSessionRun, type SessionStartDeps } from './session-start.js';
 import type { InboundStatusReading } from './inbound-status.js';
+
+/**
+ * REQ-MCP-126 (BLOCKER, 2026-11-25): the refusals that DO prove no run exists. Every other answer from the run host —
+ * `run-host.unreachable` (main's own reading of a no-reply within the bound), an unexpected reply, and the generic
+ * `request.failed`/`request.malformed` the host's own dispatch raises on a throw — carries NO assurance that it happened
+ * before the run was dispatched, so it settles nothing and the attempt is HELD.
+ */
+function isDefiniteStartRefusal(code: string): boolean {
+  return code !== 'run-host.unreachable' && code !== 'reply.unexpected' && code !== 'request.failed' && code !== 'request.malformed';
+}
 
 /**
  * THE SURFACE'S MAIN-SIDE COORDINATOR (ADR-0067; REQ-MCP-123/124/125/126/128/130). This is the one place an external
@@ -90,6 +100,13 @@ export interface InboundRun {
   refusal: InboundStartRefusal | null;
   /** Whether the run host confirmed the start. A handle answered before the confirmation reads `starting`. */
   confirmed: boolean;
+  /**
+   * MAJOR 2 (REQ-MCP-123/125/126, 2026-11-25): THE EXECUTION'S OWN IDENTITY, as far as the product publishes one — the
+   * session record's `runStartedAt`, which every launch writes anew. It is adopted from the FIRST state of this execution
+   * the surface sees and never overwritten, so a LATER execution of the same session (a desktop continuation) is not
+   * taken for this handle's run. null while nothing of this execution has been observed.
+   */
+  executionStartedAt: string | null;
 }
 
 /** The two fields frozen at a run's end: its execution status and whether it waited on a person then. */
@@ -111,6 +128,12 @@ export interface ObservedState {
   readonly stopReason: string | null;
   /** REQ-MCP-125: whether the run waited on a person at the moment this state was read; absent means no. */
   readonly awaitingInput?: boolean | undefined;
+  /**
+   * MAJOR 2 (REQ-MCP-123/125/126, 2026-11-25): the execution's own identity — the session record's `runStartedAt`,
+   * written anew by every launch of that session. Absent when the product does not publish it (the listing does not),
+   * in which case the surface falls back to the session id alone.
+   */
+  readonly executionStartedAt?: string | null | undefined;
 }
 
 /** What a reservation answers: the handle and the session id it took, or a bare refusal when one is active. */
@@ -152,7 +175,7 @@ export class InboundSurfaceRuns {
    */
   take(sessionId: string, handle: string): TakeOutcome {
     if (this.#holder !== null) return { ok: false };
-    const run: InboundRun = { handle, sessionId, hostSessionId: null, workspaceId: null, stopReason: null, endState: null, refusal: null, confirmed: false };
+    const run: InboundRun = { handle, sessionId, hostSessionId: null, workspaceId: null, stopReason: null, endState: null, refusal: null, confirmed: false, executionStartedAt: null };
     this.#holder = handle;
     this.#record(run);
     return { ok: true, handle, sessionId };
@@ -180,13 +203,17 @@ export class InboundSurfaceRuns {
    * REQ-MCP-126: the start was confirmed — the run host answered `session.started`, so the execution exists. The
    * record's `confirmed` flag turns the handle's status from `starting` into the product's live state. A handle that has
    * ALREADY ended or been refused is not resurrected (REWORK 4, point 4): a late confirmation may not overwrite a
-   * completed handle.
+   * completed handle. Answers whether this call is what CONFIRMED the run (`false` for a repeat), so the caller arms the
+   * one reconcile exactly once per transition into `confirmed` (MAJOR 2(a), 2026-11-25).
    */
-  committed(handle: string, hostSessionId: string): void {
+  committed(handle: string, hostSessionId: string): boolean {
     const run = this.#runs.get(handle);
-    if (run === undefined) return;
+    if (run === undefined) return false;
+    if (run.endState !== null || run.refusal !== null) return false;
     run.hostSessionId = hostSessionId;
+    const newlyConfirmed = !run.confirmed;
     run.confirmed = true;
+    return newlyConfirmed;
   }
 
   /**
@@ -238,14 +265,27 @@ export class InboundSurfaceRuns {
    *   frees the slot, freezing the state with the handle.
    * - A completed handle is never overwritten, and a state for another session touches nothing.
    */
-  observe(sessionId: string, state: ObservedState): void {
+  observe(sessionId: string, state: ObservedState): InboundRun | null {
     const run = this.#runForSession(sessionId);
-    if (run === null) return;
+    if (run === null) return null;
+    /*
+     * MAJOR 2 (REQ-MCP-123/125/126, 2026-11-25): the execution IDENTITY is bound before anything is adopted. The
+     * handle is „the execution this handle started”; a state whose `runStartedAt` differs belongs to a LATER execution
+     * of the same session (a desktop continuation), and it must not hand this handle its state, its waiting flag or its
+     * reason. The first state seen fixes this handle's own start instant; every later state must match it.
+     */
+    if (state.executionStartedAt !== undefined && state.executionStartedAt !== null) {
+      if (run.executionStartedAt === null) run.executionStartedAt = state.executionStartedAt;
+      else if (run.executionStartedAt !== state.executionStartedAt) return null;
+    }
+    const newlyConfirmed = !run.confirmed;
     run.confirmed = true;
     if (state.stopReason !== null) run.stopReason = state.stopReason;
     if (runHasEnded(state.executionStatus, state.stopReason)) {
       this.#freeze(run, { executionStatus: state.executionStatus, awaitingInput: state.awaitingInput ?? false });
     }
+    // MAJOR 2(a): the caller arms the one reconcile when this state is what confirmed the run.
+    return newlyConfirmed && run.endState === null ? run : null;
   }
 
   /**
@@ -303,6 +343,14 @@ export class InboundSurfaceRuns {
     run.endState = endState;
     run.refusal = null;
     if (this.#holder === run.handle) this.#holder = null;
+  }
+
+  /**
+   * MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25): the still-open run for a session, so a caller that must arm the one
+   * reconcile when a confirmation arrives by the EVENT path can name it. Same rule as `#runForSession`.
+   */
+  openRunForSession(sessionId: string): InboundRun | null {
+    return this.#runForSession(sessionId);
   }
 
   /** The remembered run for a session, still open (neither ended nor refused), or null (REWORK 4, point 4). */
@@ -388,6 +436,13 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
   const reconcileAfter = deps.reconcileAfterMs ?? millis(millis(INBOUND_START_BOUND_MS) + 60_000);
 
   /**
+   * MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25): the runs whose one reconcile is already armed. A confirmation now arrives
+   * on TWO paths (the start's own reply and the product's `publish.snapshot`), and arming the chain twice would put two
+   * independent chains behind one run; this set makes the arming idempotent per session.
+   */
+  const armed = new Set<string>();
+
+  /**
    * MAJOR (REWORK 4, point 6): the one reconcile, re-armed while the run is live. Each step reads the product state and
    * ends the run only on a DEFINITE reading (`InboundSurfaceRuns.reconcile`): the session is gone, or it is stale — busy
    * in its record while nothing runs it, which is exactly the failed-terminal-write case. A live busy run is left alone
@@ -397,11 +452,17 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
   const armReconcile = (workspaceId: string, sessionId: string): void => {
     const schedule = deps.schedule;
     if (schedule === undefined) return;
-    schedule(() => {
-      void deps.readStatus(workspaceId, sessionId).then((read) => {
-        if (deps.runs.reconcile(sessionId, read) === 'held') armReconcile(workspaceId, sessionId);
-      });
-    }, reconcileAfter);
+    if (armed.has(sessionId)) return;
+    armed.add(sessionId);
+    const step = (): void => {
+      schedule(() => {
+        void deps.readStatus(workspaceId, sessionId).then((read) => {
+          if (deps.runs.reconcile(sessionId, read) === 'held') step();
+          else armed.delete(sessionId);
+        });
+      }, reconcileAfter);
+    };
+    step();
   };
 
   /**
@@ -409,15 +470,39 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
    * recorded against the handle. A DEFINITE refusal releases the slot and is kept with the handle; a NO-REPLY
    * (`run-host.unreachable`) and an unexpected reply prove nothing — the host may still be starting the run — so the slot
    * is HELD and the run's own end (or the product's state for that session) settles it.
+   *
+   * BLOCKER (REQ-MCP-126, 2026-11-25): the confirmation is caught the moment the run host answers it — `onStarted` runs
+   * inside `startSessionRun` BEFORE the post-work (`clearForRunStart`, `configFatal.loaded`) and before anything else
+   * that can throw. A throw after that moment cannot be read as "no run was born", so the slot is HELD rather than freed:
+   * freeing on an unclear failure is exactly how two runs come to exist.
+   *
+   * MAJOR 1 (REQ-MCP-123/126, 2026-11-25): `onLateOutcome` receives a reply that arrived AFTER main's bound (the link
+   * would otherwise discard it), so a later DEFINITIVE refusal still settles the handle instead of stranding it.
    */
   const finishStart = async (handle: string, sessionId: string, open: { readonly workspaceId: string; readonly workspace: string }, prompt: string): Promise<void> => {
+    /** The session the host confirmed, once it has — the positive proof that this attempt IS a run. */
+    let confirmedSessionId: string | null = null;
+    const onStarted = (startedId: string): void => {
+      confirmedSessionId = startedId;
+      if (deps.runs.committed(handle, startedId)) armReconcile(open.workspaceId, startedId);
+    };
+    const onLateOutcome = (reply: ProcessReply): void => {
+      if (confirmedSessionId !== null) return;
+      if (reply.kind === 'session.started') { onStarted(reply.sessionId); return; }
+      if (reply.kind === 'refused' && isDefiniteStartRefusal(reply.code)) {
+        deps.runs.refuse(handle, { code: reply.code, headline: reply.headline, ...(reply.detail === undefined ? {} : { detail: reply.detail }) });
+      }
+      // Anything else — a no-reply, an unexpected reply — proves nothing, so the attempt stays held.
+    };
     try {
       // REQ-MCP-124: the ordinary start, through the SAME main-side coordinator a desktop start uses — no authority
       // field is set here, and the workspace is the open one. BLOCKER B: the inbound path sets its OWN bound, above the
       // run host's credential lease, so a healthy-but-slow host is not read as a no-reply in the first place.
-      const outcome = await startSessionRun(deps.start, { workspaceId: open.workspaceId, workspaceRoot: open.workspace, prompt, sessionId, hostStartBoundMs: startBound });
+      const outcome = await startSessionRun(deps.start, { workspaceId: open.workspaceId, workspaceRoot: open.workspace, prompt, sessionId, hostStartBoundMs: startBound, onStarted, onLateOutcome });
       if (!outcome.ok) {
-        if (outcome.code === 'run-host.unreachable' || outcome.code === 'reply.unexpected') {
+        // BLOCKER: only a DEFINITE refusal (`isDefiniteStartRefusal`) proves no run exists. The generic host error
+        // `request.failed`, a no-reply and an unexpected reply all prove nothing, so the attempt is HELD.
+        if (!isDefiniteStartRefusal(outcome.code)) {
           deps.runs.held(handle);
           return;
         }
@@ -425,12 +510,16 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
         return;
       }
       const started = (outcome.value as { sessionId: string }).sessionId;
-      deps.runs.committed(handle, started);
-      // MAJOR: one reconcile behind the start, so a failed terminal write does not hold the slot for good.
-      armReconcile(open.workspaceId, started);
-    } catch (cause) {
-      // Nothing throws into the listener: a rejection here is a refusal with its reason, kept with the handle.
-      deps.runs.refuse(handle, { code: 'inbound.start-failed', headline: 'The run could not be started', detail: cause instanceof Error ? cause.message : String(cause) });
+      // `onStarted` normally did this already; this covers a start that answered without running the seam.
+      if (confirmedSessionId === null && deps.runs.committed(handle, started)) armReconcile(open.workspaceId, started);
+    } catch {
+      /*
+       * BLOCKER (REQ-MCP-126, 2026-11-25): a throw proves NOTHING about whether a run was born, so the slot is HELD.
+       * When the confirmation was already seen the run for certain exists — the one reconcile is armed for it here, so a
+       * terminal write that failed is still covered.
+       */
+      if (confirmedSessionId !== null) armReconcile(open.workspaceId, confirmedSessionId);
+      deps.runs.held(handle);
     }
   };
 
@@ -461,8 +550,13 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     // REQ-MCP-123/130: only a handle this surface minted is answered; anything else is refused, so no other run is readable.
     const first = deps.runs.byHandle(handle);
     if (first === undefined) return { kind: 'refused', code: 'inbound.unknown-run', headline: 'No run of this surface answers to that handle' };
-    // A start that was DEFINITELY refused is stated as that refusal (REWORK 4: "a subsequent startup failure is a status outcome").
+    /*
+     * MINOR (REQ-MCP-123, 2026-11-25): a handle that has DEFINITELY been refused or has ENDED is answered from what is
+     * already known, BEFORE the listing read. Such a handle needs no listing at all, and waiting on one let a refusal or
+     * an end that arrived meanwhile be missed by this very call, which then kept answering `starting`.
+     */
     if (first.refusal !== null) return { kind: 'refused', code: first.refusal.code, headline: first.refusal.headline, ...(first.refusal.detail === undefined ? {} : { detail: first.refusal.detail }) };
+    if (first.endState !== null) return { kind: 'inbound.runStatus', status: endedStatus(first) };
     /*
      * REQ-MCP-123/126 (REWORK 4, point 8): a second, ask-INDEPENDENT path to the attempt's outcome. The product's own state
      * for the minted session is read here; a state for it is positive evidence the execution exists, so a held attempt
@@ -471,6 +565,9 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     const read = await deps.readStatus(first.workspaceId ?? '', first.sessionId);
     if (read.kind === 'row') deps.runs.observe(first.sessionId, { executionStatus: read.executionStatus, stopReason: null, awaitingInput: read.awaitingInput });
     const now = deps.runs.byHandle(handle) ?? first;
+    // MINOR (REQ-MCP-123): the same guard AFTER the read — a refusal or an end that landed while the listing was being
+    // read is stated now, rather than being overtaken by this call's `starting`.
+    if (now.refusal !== null) return { kind: 'refused', code: now.refusal.code, headline: now.refusal.headline, ...(now.refusal.detail === undefined ? {} : { detail: now.refusal.detail }) };
     /*
      * MAJOR (2026-11-25; B3's negative control reverts exactly this): a run that has ENDED is answered from the state
      * FROZEN at its end, never from a later reading of the same session. A desktop continuation of the session would
@@ -503,7 +600,15 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     runs: deps.runs,
     surface: { startRun, runStatus },
     ask: async (ask: InboundListenerAsk): Promise<InboundStartRunAnswer | InboundRunStatusAnswer> => (ask.kind === 'inbound.startRun' ? startRun(ask.prompt) : runStatus(ask.run)),
-    observeSnapshot: (sessionId, state) => deps.runs.observe(sessionId, state),
+    /*
+     * MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25): a `publish.snapshot` that CONFIRMS an attempt arms the one reconcile too.
+     * A start whose reply was lost still becomes `confirmed` by this event path, and without arming here a terminal write
+     * that fails afterwards would leave the slot occupied for good.
+     */
+    observeSnapshot: (sessionId, state) => {
+      const confirmed = deps.runs.observe(sessionId, state);
+      if (confirmed !== null && confirmed.workspaceId !== null) armReconcile(confirmed.workspaceId, sessionId);
+    },
   };
 }
 
@@ -531,10 +636,11 @@ export function inboundRunEnded(runs: InboundSurfaceRuns, sessionId: string, sto
 /**
  * REQ-MCP-123 (BLOCKER C/D): the product's own state for a session, from `publish.snapshot`. Main wires this to the run
  * host's `publish.snapshot`, so a run that parks at the plan gate or the message limit — and any run that leaves the busy
- * set without a `run.result` — settles the slot and hands its reason to the handle.
+ * set without a `run.result` — settles the slot and hands its reason to the handle. Answers the run whose confirmation
+ * this state is, or null.
  */
-export function inboundRunObserved(runs: InboundSurfaceRuns, sessionId: string, state: ObservedState): void {
-  runs.observe(sessionId, state);
+export function inboundRunObserved(runs: InboundSurfaceRuns, sessionId: string, state: ObservedState): InboundRun | null {
+  return runs.observe(sessionId, state);
 }
 
 /**

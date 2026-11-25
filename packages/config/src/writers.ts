@@ -1,6 +1,6 @@
 import { readFileSync, rmSync } from 'node:fs';
 import { isMap, isNode, isScalar, type Document, type Node, type YAMLMap } from 'yaml';
-import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type DesktopSaveRuntimeKey, type DictationConfigView } from '@rotaris/contracts';
+import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type DesktopSaveRuntimeKey, type DictationConfigView, type MoneyStop } from '@rotaris/contracts';
 import { err, millis, ok, type Result, type Timers } from '@rotaris/kernel';
 import { replaceDocument, replaceDocumentSync, type RetryLadder } from '@rotaris/platform';
 import { parseConfig, plainOf } from './document.js';
@@ -309,6 +309,8 @@ export interface DesktopSave {
   readonly advisor?: PlainMap;
   readonly compressorThresholdPercentage?: number;
   readonly delegationStrategy?: DelegationStrategy;
+  /** PD-ORCH-021 clause 1: `rotaris.money_slider`, into the workspace file as the strategy is. */
+  readonly moneySlider?: MoneyStop;
   readonly display?: PlainMap;
   /**
    * REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys, into the WORKSPACE file only. A map value of
@@ -420,6 +422,7 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
   }
   if (save.compressorThresholdPercentage !== undefined) ensureMapping(root, 'compressor', doc).set('threshold_percentage', doc.createNode(save.compressorThresholdPercentage));
   if (save.delegationStrategy !== undefined) ensureMapping(root, 'rotaris', doc).set('delegation_strategy', doc.createNode(save.delegationStrategy));
+  if (save.moneySlider !== undefined) ensureMapping(root, 'rotaris', doc).set('money_slider', doc.createNode(save.moneySlider));
   if (save.display && Object.keys(save.display).length > 0) {
     // REQ-CONFIG-256: written per field, so a display key this screen does not offer stays as the file states it.
     const display = ensureMapping(root, 'display', doc);

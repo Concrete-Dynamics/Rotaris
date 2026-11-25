@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { countNoun, err, ok } from '@rotaris/kernel';
-import { declaredToolsOf, enforcedDepth, isDelegationTarget, NOT_DELEGATION_TARGETS, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName, type RunOverride } from '@rotaris/contracts';
-import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, providerEffort, readProjectSnapshot, readSavedConfiguration, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { declaredToolsOf, isDelegationTarget, NOT_DELEGATION_TARGETS, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type MoneyStop, type SandboxModeName, type RunOverride } from '@rotaris/contracts';
+import { compressionTrigger, effectivePricing, isPlainMap, modelCapInForce, launchConfigurationSnapshot, loadConfiguration, moneyLeversOf, overlayLiveState, PROJECT_SETTINGS_FILE, providerEffort, readProjectSnapshot, readSavedConfiguration, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type AdvisorSetup, type CatalogueEntry, type ClassifierSlots, type HelperModel, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
+import { childBudgetOf, runSpendOf, strategyAtStart } from './spend.js';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
 
 /**
@@ -106,7 +107,7 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: Avai
     // REQ-CONFIG-094 under PD-PROVIDER-001: the entry's stated cap, else its provider's declared one (`modelCapInForce`).
     modelCapFor: (modelKey) => modelCapInForce(cfg.models[modelKey], sharedQuotaCaps),
     // PD-ORCH-019 clause 4: a `max_depth` of 3 or more is the no-limit step.
-    childBudget: { maxDepth: enforcedDepth(r.max_depth), maxTotal: r.max_children, maxActive: r.max_active_children },
+    childBudget: childBudgetOf(cfg),
     drainTimeoutMs: Math.round(r.shutdown_drain_timeout * 1000),
     approvalTimeoutMs: Math.round(r.approval_timeout_seconds * 1000),
     headlessPolicy: r.headless_approval_policy,
@@ -582,6 +583,8 @@ export interface PrepareOptions {
    * open iteration's root ran as, which a continue that resumes it restores. Absent means `default_persona`.
    */
   readonly entryPersona?: string | undefined;
+  /** PD-ORCH-021 clause 9: the session's own money slider stop; absent means the configured default (`rotaris.money_slider`). */
+  readonly moneyStop?: MoneyStop | undefined;
   /**
    * PD-LIBRARY-002 with ADR-0030: the setup is a retrospective's (`leasedSetup`), whose one request goes to its own model
    * (`retrospectiveOf`: `retrospective_model`, then `medium_model`) and nothing to the entry role's. An entry role with no usable
@@ -697,10 +700,19 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   if (!loaded.ok) return err({ reason: `The configuration could not be loaded: ${renderFatal(loaded.error)}${loaded.error.lines.length > 1 ? ` All problems: ${loaded.error.lines.join(' | ')}` : ''}`, code: 'unloaded' });
   const live = overlayLiveState(loaded.value, deps.liveState());
   if (!live.ok) return err({ reason: `The configuration could not be applied with the current settings: ${renderFatal(live.error)}`, cfg: loaded.value, code: 'unloaded' });
+  /*
+   * PD-ORCH-021: the money slider's stop for this run — the session's own, else the configured default — and the levers it reads,
+   * from the configuration before any stop is applied, with the files' own to tell a live edit from a saved one. The strategy is
+   * applied here, since it decides whether the run classifies; every other lever waits for the intent (`runSpendOf`). A
+   * retrospective is no run and reads no stop.
+   */
+  const stop: MoneyStop = options?.moneyStop ?? live.value.moneySlider.stop;
+  const spendWarnings: string[] = [];
+  const started = options?.retrospective === true ? live.value : strategyAtStart(live.value, moneyLeversOf(live.value, loaded.value), stop, (m) => spendWarnings.push(m));
   // REQ-TRACE-470: this grant is confined to the launch and includes the Tier C opt-in.
   const granted: LoadedConfiguration = boardPermissions === 'permissive'
-    ? { ...live.value, runtime: { ...live.value.runtime, permission_mode: 'autonomous', allow_unsandboxed_autonomous: true } }
-    : live.value;
+    ? { ...started, runtime: { ...started.runtime, permission_mode: 'autonomous', allow_unsandboxed_autonomous: true } }
+    : started;
   /*
    * ADR-0022's start-time gate (REQ-SANDBOX-094, -095, -097). It sits HERE — before the credential
    * lease, before the session row, before the session lock — because REQ-SANDBOX-097 requires the
@@ -733,7 +745,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
     // all read one mode rather than the file's and the dialog's separately (REQ-SANDBOX-104, -122).
     if (granted.runtime.sandbox_mode !== mode.value) moded = { ...granted, runtime: { ...granted.runtime, sandbox_mode: mode.value } };
   }
-  const warnings: string[] = [...moded.warnings.map((w) => `configuration: ${w}`)];
+  const warnings: string[] = [...moded.warnings.map((w) => `configuration: ${w}`), ...spendWarnings];
   if (moded.referential.length > 0) {
     const lines = moded.referential.map((m) => `configuration: ${m}`);
     // REQ-CONFIG-246: with no person present, referential errors are always fatal to the run. A retrospective is no run, and
@@ -866,6 +878,16 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
       if (!isScripted && e.auth_provider && !bearers[e.auth_provider]) return { ok: false, reason: `provider ${e.auth_provider} is not authenticated for this run` };
       return { ok: true, key, choice: { model: ref, thinking: thinkingOf(e), ...settingsOf(e) } };
     };
-    return { cfg, model: setup, runtime, configurationSnapshot, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider, tier, resilience: { catalogue, fallbackModel, ...(fallbackModel && fallbackName ? { fallbackKey: fallbackName } : {}) }, contextLimits: contextLimitsOf(cfg) };
+    // PD-ORCH-021: what each stop yields over this run's configuration, with this launch's own folds laid over each re-resolve.
+    const fold = (c: LoadedConfiguration): LoadedConfiguration => ({
+      ...c, defaultPersona: cfg.defaultPersona,
+      runtime: { ...c.runtime, permission_mode: cfg.runtime.permission_mode, allow_unsandboxed_autonomous: cfg.runtime.allow_unsandboxed_autonomous, sandbox_mode: cfg.runtime.sandbox_mode },
+    });
+    const spendBase: LoadedConfiguration = { ...live.value, defaultPersona: cfg.defaultPersona };
+    const spend = options?.retrospective === true ? undefined : runSpendOf({
+      cfg: spendBase, levers: moneyLeversOf(spendBase, loaded.value), startStop: stop, fold,
+      personasOf: (c) => personaResolverFor(c, scripted, (m) => warnings.push(m)), warn: (m) => warnings.push(m),
+    });
+    return { cfg, model: setup, runtime, configurationSnapshot, ...(spend === undefined ? {} : { spend }), retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider, tier, resilience: { catalogue, fallbackModel, ...(fallbackModel && fallbackName ? { fallbackKey: fallbackName } : {}) }, contextLimits: contextLimitsOf(cfg) };
   } });
 }

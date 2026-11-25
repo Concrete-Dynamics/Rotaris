@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow, ChildRow, StoreDal } from '@rotaris/store';
-import { AUTO_STRATEGY_FALLBACK, DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, runOverrideOfChoice, type StrategyChoice, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord, type RunOverride, type WorkflowStatus } from '@rotaris/contracts';
+import { AUTO_STRATEGY_FALLBACK, DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, runOverrideOfChoice, type StrategyChoice, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord, type RunOverride, type WorkflowStatus, type IntentCategory, type MoneyStop } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -26,6 +26,7 @@ import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
+import { widenedCell, type RunSpend, type SpendApplied } from './spend.js'; // PD-ORCH-021
 import { clampBudget, storeChildReport, writeCancelledTeardown } from '../children/ledger.js';
 import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
 import { entryInstructionsFor, resolveRole, runOverrideLayer, type Persona, type PersonaResolver } from '../children/personas.js';
@@ -176,6 +177,12 @@ export interface RunDeps {
   /** Part Y (REQ-ORCH-149): the session artifact store, shared across iterations; absent means no artifacts exist. */
   readonly artifacts?: ArtifactStore | undefined;
   readonly budget?: ChildBudget | undefined;
+  /**
+   * PD-ORCH-021: the money slider — what a stop yields for this run (`RunSpend`), and the session's stop as it stands now, read
+   * at each delegation (clause 10). Absent: no stop reaches the run, which runs as configured.
+   */
+  readonly spend?: RunSpend | undefined;
+  readonly stopNow?: (() => MoneyStop) | undefined;
   readonly modelCap?: ((modelKey: string) => number | null) | undefined;
   /**
    * REQ-CONFIG-094: the process-wide half of the per-model count — the slots the process's other sessions hold on a key,
@@ -586,6 +593,17 @@ export class Run {
    * the switched model was chosen by, which the root's cell carries (`AgentResilienceCell.key`, `entryModelKey`).
    */
   private entryOverride: { model?: ModelRef; key?: string; thinking?: ThinkingLevel } = {};
+  /**
+   * PD-ORCH-021: what the stop the run started at yields under the run's intent, settled once the intent is known (clause 4)
+   * and before the first iteration; null where no stop reaches the run. Its entry choice stands below a switch the user makes
+   * (`entryOverride`), which sets the lever (PD-MONITOR-006, clause 2).
+   */
+  private spendApplied: SpendApplied | null = null;
+  /** The intent the stop is read under, for the agents delegated after a move (clause 10); null for a `lead` run. */
+  private spendIntent: IntentCategory | null = null;
+  private get entryModel(): ModelRef { return this.entryOverride.model ?? this.spendApplied?.entry?.model ?? this.deps.config.model; }
+  private get entryThinking(): ThinkingLevel { return this.entryOverride.thinking ?? this.spendApplied?.entry?.thinking ?? this.deps.config.thinking; }
+  private get entryKey(): string | undefined { return this.entryOverride.model !== undefined ? this.entryOverride.key : this.spendApplied?.entry ? this.spendApplied.entry.key : this.deps.config.modelKey; }
   /** Part Q: the waits parked on a provider limit (REQ-NOTIFY-263 reads `current()`), the memory, the catalogue. */
   private readonly waits: WaitRegistry;
   private readonly memory: ResilienceMemory;
@@ -899,7 +917,7 @@ export class Run {
    * the-entry-agents-context-limit-is-read-from-the-requested-model-not-the-one-it-runs-on.)
    */
   get entryContext(): { readonly used: number; readonly limit: number } {
-    const model = this.rootCell?.model.model ?? this.entryOverride.model ?? this.deps.config.model;
+    const model = this.rootCell?.model.model ?? this.entryModel;
     const advertised = this.deps.compression?.triggerFor(model).advertisedInputLimit ?? null;
     return { used: this.deps.writer.activity.contextUsed(this.rootName), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
   }
@@ -1091,6 +1109,11 @@ export class Run {
       if (this.deps.resumedPreflight && this.resumeFrom !== null) {
         try { this.resumedPreflight = await this.deps.resumedPreflight(this.abort.signal); } catch (cause) { this.deps.warn(`the resumed iteration's pre-flight raised and it continues on this run's intent: ${String(cause)}`); }
       }
+      // PD-ORCH-021 clause 4: the stop is read under the intent now known; a `lead` run classifies nothing and reads it whole.
+      if (this.deps.spend) {
+        this.spendIntent = this.override === 'lead' ? null : (this.preflightInEffect?.intent ?? NO_PREFLIGHT_INTENT).category;
+        this.spendApplied = this.deps.spend.at(this.deps.spend.startStop, this.spendIntent);
+      }
       if (this.deps.continuation) this.appendIntentRow(this.preflightInEffect);
       /*
        * REQ-ORCH-153: the hold is settled HERE — after the pre-flight, so the answer group is known, and ahead of
@@ -1216,6 +1239,8 @@ export class Run {
       session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
       run_intent: p?.intent ?? NO_PREFLIGHT_INTENT, intent_grant: p?.grant ?? 'none',
       permission_mode: this.deps.permission.effective, check_suite: null, resolved_playbooks: p?.resolvedPlaybooks ?? {}, hooks: this.hooks?.auditSnapshot() ?? [], config_snapshot: this.deps.configurationSnapshot ?? {},
+      // PD-ORCH-021 clause 7: the stop the run started at and, per lever, moved or set.
+      ...(this.spendApplied ? { money_slider: this.spendApplied.audit } : {}),
     };
   }
 
@@ -1760,8 +1785,8 @@ export class Run {
    */
   private rootResilience(): TurnResilience {
     const { config } = this.deps;
-    const entryModel = this.entryOverride.model ?? config.model;
-    const thinking = this.entryOverride.thinking ?? config.thinking;
+    const entryModel = this.entryModel;
+    const thinking = this.entryThinking;
     // The cell is settled here for whatever switch is in force: a switch recorded from now on supersedes none.
     this.entrySwitchPending = false;
     if (this.rootCell === null || this.entryRebuild || this.rootRebuildsFor(entryModel)) {
@@ -1771,7 +1796,7 @@ export class Run {
       const persona = this.deps.personas?.resolve(config.persona)?.persona;
       const previous = this.rootCell;
       // The key the cell is taken from: the override the memory followed, else the switched key, else the configured one.
-      const key = this.memory.overrideReaching(base, this.catalogue)?.key ?? (this.entryOverride.model === undefined ? config.modelKey : this.entryOverride.key) ?? null;
+      const key = this.memory.overrideReaching(base, this.catalogue)?.key ?? this.entryKey ?? null;
       this.rootCell = agentCell(current, this.fallbackFor(persona, current), key);
       if (previous) { this.rootCell.fallbackAttempted = previous.fallbackAttempted; this.rootCell.sameTierAttempted = previous.sameTierAttempted; for (const p of previous.attempted) this.rootCell.attempted.add(p); }
       this.appliedEntryModel = entryModel;
@@ -1853,7 +1878,11 @@ export class Run {
         // cell calls next, read at each pass (REQ-MONITOR-080).
         compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
-        budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflightInEffect?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
+        // PD-ORCH-021 clauses 3 and 8: the limits the stop yields, clamped by the cell as the stop widens it.
+        budget: clampBudget(this.spendApplied?.budget ?? this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, widenedCell(this.preflightInEffect?.budgetCell ?? null, this.preflightInEffect?.budgetTier ?? 'none', this.spendApplied?.widening ?? 'cell')),
+        // PD-ORCH-021 clause 10: each child takes the stop the session holds at its admission, under the run's intent.
+        ...(this.deps.spend ? { spend: { stopNow: this.deps.stopNow ?? (() => this.deps.spend!.startStop), personasAt: (stop: MoneyStop) => this.deps.spend!.at(stop, this.spendIntent).personas } } : {}),
+        modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
         ...(this.deps.modelSlots ? { slotsHeldElsewhere: this.deps.modelSlots.heldElsewhere, onSlotFreed: this.deps.modelSlots.freed } : {}),
         // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below. The
         // child's own count is persisted with the total, in one transaction, so a crash leaves the two agreeing.
@@ -1950,7 +1979,7 @@ export class Run {
       // (`withRunOverrideLayer`); pointed at the plan while the gate holds (REQ-ORCH-153). A run the mapping grants the
       // direct-work bundle gets none (PD-ORCH-006 rev 3, OQ-205 as ruled, R-072).
       runOverrideLayer: runOverrideLayer(this.override, this.preflightInEffect?.grant ?? null, entryPersona ?? null, this.planHeld),
-      model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
+      model: this.entryModel, thinking: this.entryThinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       // PD-ORCH-001: no supervision while the plan gate holds the run. The hold withholds every writing tool,
       // so the only work left is reading the same region repeatedly — REQ-ORCH-101's first trigger, fired by the

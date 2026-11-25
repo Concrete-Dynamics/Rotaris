@@ -51,6 +51,8 @@ export interface SessionRow {
   readonly pending_approvals: string;
   /** v35 — PD-ORCH-005 clause 9 / REQ-SESSION-031: the question prompts pending right now, mirrored as JSON ('[]' when none). */
   readonly pending_questions: string;
+  /** v38 — PD-ORCH-021 clause 1: the money-slider stop the session holds of its own; NULL follows the default. */
+  readonly money_stop: string | null;
   // v6 — REQ-ORCH-084/087: the message limit in force and the count reached while paused at it.
   readonly message_limit: number | null;
   readonly paused_at_count: number | null;
@@ -309,8 +311,10 @@ export interface ChildRow {
    * as the one it serves (`todo_item`), or the continued child's; null when it named none.
    */
   readonly todo_item: string | null;
+  /** v38 — PD-ORCH-021 clause 10: the money-slider stop the child was delegated under; NULL for a child admitted before v38. */
+  readonly money_stop: string | null;
 }
-export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope' | 'suppress_auto_context' | 'attach_artifacts' | 'inherited_context_block' | 'todo_item'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string; readonly suppress_auto_context?: number; readonly attach_artifacts?: string; readonly inherited_context_block?: string; readonly todo_item?: string | null };
+export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope' | 'suppress_auto_context' | 'attach_artifacts' | 'inherited_context_block' | 'todo_item' | 'money_stop'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string; readonly suppress_auto_context?: number; readonly attach_artifacts?: string; readonly inherited_context_block?: string; readonly todo_item?: string | null; readonly money_stop?: string | null };
 
 /**
  * v23 — PD-ORCH-005 clause 1: one execution iteration and the task id of its root, open from the moment it begins until it
@@ -684,8 +688,10 @@ export class StoreDal {
       issuesOf: db.prepare('SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal'),
 
       // ADR-0012: the child ledger. Every statement carries session_id (REQ-ORCH-151, asserted by a test over this text).
-      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope, suppress_auto_context, attach_artifacts, inherited_context_block, todo_item)
-        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope, @suppress_auto_context, @attach_artifacts, @inherited_context_block, @todo_item)`),
+      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope, suppress_auto_context, attach_artifacts, inherited_context_block, todo_item, money_stop)
+        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope, @suppress_auto_context, @attach_artifacts, @inherited_context_block, @todo_item, @money_stop)`),
+      // PD-ORCH-021 clause 1: the session's own stop, written alone so no run's save moves it.
+      setMoneyStop: db.prepare('UPDATE sessions SET money_stop = ? WHERE session_id = ?'),
       getChild: db.prepare('SELECT * FROM children WHERE session_id = ? AND task_id = ?'),
       // Acceptance order: children accepted in the same millisecond keep the order they were inserted in, which the
       // resume's re-claim of their write scopes depends on (PD-TOOLS-006 revision 2; found by phase 4's review).
@@ -840,7 +846,7 @@ export class StoreDal {
   }
 
   insertChild(row: ChildInsert): void {
-    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]', suppress_auto_context: row.suppress_auto_context ?? 0, attach_artifacts: row.attach_artifacts ?? '[]', inherited_context_block: row.inherited_context_block ?? '', todo_item: row.todo_item ?? null });
+    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]', suppress_auto_context: row.suppress_auto_context ?? 0, attach_artifacts: row.attach_artifacts ?? '[]', inherited_context_block: row.inherited_context_block ?? '', todo_item: row.todo_item ?? null, money_stop: row.money_stop ?? null });
   }
   getChild(id: SessionId, taskId: string): ChildRow | undefined {
     return this.stmts['getChild']!.get(id, taskId) as ChildRow | undefined;
@@ -1070,6 +1076,10 @@ export class StoreDal {
   }
   listSessions(): SessionRow[] {
     return this.stmts['listSessions']!.all() as SessionRow[];
+  }
+  /** PD-ORCH-021 clause 1: the stop the session holds of its own, or null to follow the default. */
+  setMoneyStop(id: SessionId, stop: string | null): void {
+    this.stmts['setMoneyStop']!.run(stop, id);
   }
   getSession(id: SessionId): SessionRow | undefined {
     return this.stmts['getSession']!.get(id) as SessionRow | undefined;

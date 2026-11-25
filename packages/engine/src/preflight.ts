@@ -27,6 +27,8 @@ export interface Preflight {
   readonly playbookFor: (role: string, asEntry?: boolean) => string;
   /** REQ-ORCH-024: the BUDGET cell as a clamp; null = no clamp. */
   readonly budgetCell: Budget | null;
+  /** The entry cell's BUDGET variant (`tight`, `normal`, `wide`, `none`), which PD-ORCH-021 clause 8 widens by name. */
+  readonly budgetTier?: string | undefined;
   readonly warnings: readonly string[];
 }
 

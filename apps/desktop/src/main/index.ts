@@ -2304,8 +2304,13 @@ async function main(): Promise<void> {
          * about the listener's bind, so the question stays OPEN: the sequencer then does not claim the surface is off,
          * keeps the token it handed over, and the next enable reads the listener's state rather than minting a new token
          * out from under a bind that may still land.
+         *
+         * MAJOR C (REWORK 6, 2026-11-25): `inbound.gone` is the link's own answer that the listener PROCESS is gone.
+         * Nothing of it holds a socket, so the question is CLOSED by it exactly as by a `bindFailed` — the next enable
+         * forks a fresh listener; without this the dying listener's question stayed open and every following enable ran
+         * into `askState → null`.
          */
-        const definite = reply.kind === 'inbound.state' ? !reply.state.listening : reply.kind === 'refused' && reply.code === 'inbound.bindFailed';
+        const definite = reply.kind === 'inbound.state' ? !reply.state.listening : reply.kind === 'refused' && (reply.code === 'inbound.bindFailed' || reply.code === 'inbound.gone');
         return { ok: false, outcome: reply.kind === 'refused' ? { ok: false, code: reply.code, headline: reply.headline, ...(reply.detail === undefined ? {} : { detail: reply.detail }) } : { ok: false, code: 'inbound.not-bound', headline: 'The inbound listener did not bind to loopback' }, definite };
       }
       log(`inbound surface enabled for this session on 127.0.0.1:${reply.state.port} (loopback, ephemeral; REQ-MCP-119/120)`);

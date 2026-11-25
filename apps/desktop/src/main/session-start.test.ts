@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INBOUND_HOST_CREDENTIAL_LEASE_MS, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import { startSessionRun, checkStartInput, SESSION_START_SANDBOX_MODES, type SessionStartDeps } from './session-start.js';
 
@@ -171,20 +171,6 @@ describe('REQ-GIT-022/023: the workspace binding is made before the host is aske
     expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
   });
 
-  it('REQ-MCP-124 (MAJOR D, REWORK 6): the no-reply follow-up reads over the WHOLE host worst case, not after one listing', async () => {
-    const h = harness(() => ({ kind: 'refused', code: 'run-host.unreachable', headline: 'The run host did not answer' }));
-    const scheduled: { fn: () => void; afterMs: number }[] = [];
-    const deps = {
-      ...h.deps,
-      scheduleRecheck: (fn: () => void, afterMs: number) => { scheduled.push({ fn, afterMs }); },
-    } as unknown as SessionStartDeps;
-    const out = await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' }, hostStartBoundMs: 60_000 });
-    expect(out.ok).toBe(false);
-    expect(scheduled).toHaveLength(1);
-    // The recheck waits past the bound PLUS the host's credential lease — the last moment the host could still be starting.
-    expect(scheduled[0]!.afterMs).toBe(60_000 + INBOUND_HOST_CREDENTIAL_LEASE_MS);
-  });
-
   it('REQ-MCP-124: a DEFINITE refusal DOES remove the auto-created worktree (nothing came to exist)', async () => {
     const h = harness(() => ({ kind: 'refused', code: 'session.no-model', headline: 'No model is configured' }));
     const out = await startSessionRun(h.deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
@@ -194,14 +180,16 @@ describe('REQ-GIT-022/023: the workspace binding is made before the host is aske
     expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(true);
   });
 
-  it('REQ-MCP-124 (Minor, 2026-11-25; MAJOR 1, REWORK 7): a start the host refused only AFTER its bound has its session-created worktree removed', async () => {
-    // The follow-up reads `session.list`; with TWO EMPTY readings (the session never appeared) the tree is removed. ONE
-    // empty reading is NOT enough: a start processed late may not be written to the listing yet.
+  it('REQ-MCP-124 (BLOCKER, REWORK 8): a NO-REPLY never removes the tree — no reading of an observation can prove "no run"', async () => {
+    // Replaces the round-7 case ("two empty listings → tree removed"), which was falsifiable: the bound ends only MAIN's
+    // wait, and the host may still be starting the run — the review's counter-probe measured the removal at 110 s and
+    // the session appearing at 112 s. NO finite number of readings over ANY window proves "no run", so the follow-up is
+    // gone entirely and the session-created tree is KEPT. The listing answers EMPTY here (the most tempting case), and
+    // still nothing is removed.
     const h = harness(() => ({ kind: 'refused', code: 'run-host.unreachable', headline: 'The run host did not answer', detail: 'no reply' }));
     const rechecks: (() => void)[] = [];
     const deps = {
       ...h.deps,
-      scheduleRecheck: (fn: () => void) => { rechecks.push(fn); },
       runHost: { request: async (req: RunHostRequest) => {
         h.hostAsked.push(req);
         if (req.kind === 'runs.active') return { kind: 'runs.count', workspaceId: 'ws-1', count: 0 };
@@ -211,96 +199,11 @@ describe('REQ-GIT-022/023: the workspace binding is made before the host is aske
     } as unknown as SessionStartDeps;
     const out = await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
     expect(out.ok).toBe(false);
-    // Nothing is removed at once (the host may still start the run).
-    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
-    expect(rechecks).toHaveLength(1);
-    // The FIRST reading is empty: it proves nothing, so the tree is KEPT and one more reading is armed.
-    rechecks[0]!();
-    for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
-    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
-    expect(rechecks).toHaveLength(2);
-    // The SECOND empty reading over the host worst case: now the absence is proved and the tree goes.
-    rechecks[1]!();
-    for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
-    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(true);
-  });
-
-  it('REQ-MCP-124 (MAJOR 1, REWORK 7): the worktree is KEPT when the start is processed late and the listing answers empty before the session is written', async () => {
-    // The start is waiting on its credential lease while the follow-up reads the listing: the FIRST reading is empty,
-    // and the session only appears on the SECOND. The tree must never be removed on that first empty reading.
-    const h = harness(() => ({ kind: 'refused', code: 'run-host.unreachable', headline: 'The run host did not answer', detail: 'no reply' }));
-    const rechecks: (() => void)[] = [];
-    let readings = 0;
-    const deps = {
-      ...h.deps,
-      scheduleRecheck: (fn: () => void) => { rechecks.push(fn); },
-      runHost: { request: async (req: RunHostRequest) => {
-        h.hostAsked.push(req);
-        if (req.kind === 'runs.active') return { kind: 'runs.count', workspaceId: 'ws-1', count: 0 };
-        if (req.kind === 'session.start') return { kind: 'refused', code: 'run-host.unreachable', headline: 'x' };
-        if (req.kind === 'session.list') {
-          readings += 1;
-          // Empty on the first read (the run is still being born), present on the second.
-          const started = h.hostAsked.find((r) => r.kind === 'session.start') as { sessionId?: string } | undefined;
-          return readings >= 2 ? { kind: 'session.list', sessions: [{ sessionId: started?.sessionId ?? 'none' }] } : { kind: 'session.list', sessions: [] };
-        }
-        return { kind: 'refused', code: 'run-host.unreachable', headline: 'x' };
-      } },
-    } as unknown as SessionStartDeps;
-    await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
-    // The first (empty) reading: nothing is removed.
-    rechecks[0]!();
-    for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
-    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
-    // The second reading sees the session that was born: the tree is KEPT.
-    rechecks[1]!();
-    for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
-    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
-  });
-
-  it('REQ-MCP-124 (MAJOR 1, REWORK 7): an unreadable follow-up reading proves nothing and KEEPS the worktree', async () => {
-    const h = harness(() => ({ kind: 'refused', code: 'run-host.unreachable', headline: 'The run host did not answer' }));
-    const rechecks: (() => void)[] = [];
-    const deps = {
-      ...h.deps,
-      scheduleRecheck: (fn: () => void) => { rechecks.push(fn); },
-      runHost: { request: async (req: RunHostRequest) => {
-        h.hostAsked.push(req);
-        if (req.kind === 'runs.active') return { kind: 'runs.count', workspaceId: 'ws-1', count: 0 };
-        if (req.kind === 'session.start') return { kind: 'refused', code: 'run-host.unreachable', headline: 'x' };
-        if (req.kind === 'session.list') return { kind: 'refused', code: 'workspace.not-open', headline: 'no store' };
-        return { kind: 'refused', code: 'run-host.unreachable', headline: 'x' };
-      } },
-    } as unknown as SessionStartDeps;
-    await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
-    rechecks[0]!();
-    for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
-    // The listing could not be read: no session is proved absent, so the tree stays and no further read is armed.
-    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
-    expect(rechecks).toHaveLength(1);
-  });
-
-  it('REQ-MCP-124 (Minor, 2026-11-25): the worktree is KEPT when the session appears after the no-reply', async () => {
-    const h = harness(() => ({ kind: 'refused', code: 'run-host.unreachable', headline: 'The run host did not answer' }));
-    const rechecks: (() => void)[] = [];
-    // The listing carries the session that was ASKED to start (its id comes from the `session.start` request).
-    const deps = {
-      ...h.deps,
-      scheduleRecheck: (fn: () => void) => { rechecks.push(fn); },
-      runHost: { request: async (req: RunHostRequest) => {
-        h.hostAsked.push(req);
-        if (req.kind === 'runs.active') return { kind: 'runs.count', workspaceId: 'ws-1', count: 0 };
-        if (req.kind === 'session.start') return { kind: 'refused', code: 'run-host.unreachable', headline: 'x' };
-        if (req.kind === 'session.list') {
-          const started = h.hostAsked.find((r) => r.kind === 'session.start') as { sessionId?: string } | undefined;
-          return { kind: 'session.list', sessions: [{ sessionId: started?.sessionId ?? 'none' }] };
-        }
-        return { kind: 'refused', code: 'run-host.unreachable', headline: 'x' };
-      } },
-    } as unknown as SessionStartDeps;
-    await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
-    rechecks[0]!();
-    for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
+    expect(out.ok === false && out.code).toBe('run-host.unreachable');
+    // Nothing is removed at once (the host may still start the run), no listing is read, and no follow-up is armed.
+    expect(rechecks).toHaveLength(0);
+    expect(h.hostAsked.some((r) => r.kind === 'session.list')).toBe(false);
+    for (let i = 0; i < 8; i += 1) await new Promise((r) => setImmediate(r));
     expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
   });
 

@@ -19,6 +19,20 @@ import { randomBytes } from 'node:crypto';
 export const INBOUND_LISTENER_SERVICE_NAME = 'rotaris-inbound-listener';
 export const INBOUND_LISTENER_READY_BOUND_MS = millis(20_000);
 
+/**
+ * REQ-MCP-123/130 (Minor, 2026-11-25): the ask number of a message that HAS an ask number but whose request does not
+ * read — so an unreadable tool call can be answered with a refusal correlated to it, rather than dropped into a timeout.
+ * `InboundListenerAskSchema` fixes both fields, so the unreadable case is exactly a well-formed number beside an
+ * ill-formed request; anything else is not an ask at all and is left to the reply/event readers.
+ */
+function unreadableAskNumber(raw: unknown): number | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const m = raw as Record<string, unknown>;
+  if (!('ask' in m) || typeof m['ask'] !== 'number' || !Number.isInteger(m['ask']) || m['ask'] < 0) return null;
+  if (!('request' in m)) return null;
+  return InboundAskEnvelopeSchema.safeParse(raw).success ? null : m['ask'];
+}
+
 /** The token main mints for one exposure: 32 random bytes, base64url (REQ-MCP-121, shown once). */
 export function newInboundToken(): string {
   const bytes = new Uint8Array(randomBytes(32));
@@ -45,6 +59,17 @@ export class InboundListenerLink {
       const ask = InboundAskEnvelopeSchema.safeParse(raw);
       if (ask.success) {
         this.#answer(ask.data.ask, ask.data.request);
+        return;
+      }
+      /*
+       * REQ-MCP-123/130 (Minor, 2026-11-25): an ASK whose request does not read — a run handle that is not the shape the
+       * surface mints is the case this closes — is answered with a refusal instead of being DROPPED. Dropping left the
+       * listener's ask pending until its own bound elapsed, so the caller saw an IPC timeout rather than a stated
+       * refusal. The ask number is read off the message, so the refusal is correlated like any other answer.
+       */
+      const unreadableAsk = unreadableAskNumber(raw);
+      if (unreadableAsk !== null) {
+        this.port.postMessage({ v: CONTRACT_SCHEMA_VERSION, ask: unreadableAsk, answer: { kind: 'refused', code: 'inbound.malformed-ask', headline: 'The surface refused a malformed tool call', detail: 'A run handle is the value `rotaris_start_run` returned: the shape `inr_` followed by 32 hexadecimal characters.' } });
         return;
       }
       const reply = InboundListenerReplyEnvelopeSchema.safeParse(raw);
@@ -99,8 +124,7 @@ export class InboundListenerLink {
   }
 }
 
-/** The listener-gone refusal, as main answers a request to a listener it ended or lost (OQ-462). */
-export function inboundListenerGoneRefusal(): Extract<InboundListenerReply, { kind: 'refused' }> {
+/** The listener-gone refusal, as main answers a request to a listener it ended or lost (OQ-462). */export function inboundListenerGoneRefusal(): Extract<InboundListenerReply, { kind: 'refused' }> {
   return { kind: 'refused', code: 'inbound.gone', headline: 'The inbound listener has stopped' };
 }
 

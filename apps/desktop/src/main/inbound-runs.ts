@@ -2,17 +2,8 @@ import { INBOUND_NO_OPEN_WORKSPACE, INBOUND_RUN_ALREADY_ACTIVE, INBOUND_RUN_HAND
 import { millis, type Millis } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import { startSessionRun, type SessionStartDeps } from './session-start.js';
+import { isDefiniteStartRefusal } from './start-refusal.js';
 import type { InboundStatusReading } from './inbound-status.js';
-
-/**
- * REQ-MCP-126 (BLOCKER, 2026-11-25): the refusals that DO prove no run exists. Every other answer from the run host —
- * `run-host.unreachable` (main's own reading of a no-reply within the bound), an unexpected reply, and the generic
- * `request.failed`/`request.malformed` the host's own dispatch raises on a throw — carries NO assurance that it happened
- * before the run was dispatched, so it settles nothing and the attempt is HELD.
- */
-function isDefiniteStartRefusal(code: string): boolean {
-  return code !== 'run-host.unreachable' && code !== 'reply.unexpected' && code !== 'request.failed' && code !== 'request.malformed';
-}
 
 /**
  * THE SURFACE'S MAIN-SIDE COORDINATOR (ADR-0067; REQ-MCP-123/124/125/126/128/130). This is the one place an external
@@ -68,6 +59,30 @@ function isDefiniteStartRefusal(code: string): boolean {
  * A lost reply is covered for the same reason the ask no longer carries the outcome: the start is performed MAIN-SIDE,
  * so its outcome (a refusal, or the run's own end) is recorded against the handle whether or not the caller ever asked
  * again, and `rotaris_run_status` re-reads the product state by that handle as a second, ask-independent path.
+ *
+ * REWORK 6 (2026-11-25) — THE EXECUTION IDENTITY, as the advisor ruled it, and ONE lifecycle transition.
+ *
+ * 1. **Desktop approve/revise/continue/double are THIS run, still running.** Round 5 bound the handle to the session
+ *    record's `runStartedAt` and refused a state whose instant differed. That was falsified: a desktop *revise* starts
+ *    the NEXT PHASE of the same run with a NEW instant, and a cancel at that next gate (`paused` + `user_cancelled`,
+ *    without any `run.result`) was then discarded — the one slot stayed occupied for good. The timestamp equality is
+ *    GONE; a state for the handle's session is adopted, whenever it was launched. Equality could never prove ownership
+ *    anyway: the pre-flight read exposes the OLD value, so the instant is not an identity of the execution.
+ * 2. **The phase's fields are replaced as ONE UNIT** (the status, the waiting flag and the reason together), an ABSENT
+ *    reason included. Merging only the populated fields left a prior phase's reason or waiting flag standing after a
+ *    resume; a phase that carries no reason now CLEARS the reason the previous one stopped with.
+ * 3. **Ending always needs a POSITIVE proof** (unchanged): `run.result`, a terminal status, a park WITH a reason
+ *    (`paused`/`paused_message_limit` + reason), the documented STALE/absent listing after a failed terminal write,
+ *    or the run host's exit. A park WITHOUT a reason — the plan gate, the message limit — HOLDS.
+ * 4. **ONE lifecycle transition decides all of it** (`InboundSurfaceRuns.#transition`). `observe`, `ended`,
+ *    `reconcile`, `observeListing` and `abandonAll` are thin events over it, and `rotaris_run_status` reads the state
+ *    the transition stored; there is no second place where an end or a confirmation could be decided differently.
+ * 5. **NAMED RESIDUAL GAP (not claimed closed).** A genuinely FRESH desktop start of the same session, becoming
+ *    visible while an old handle is still open, is adopted by that handle exactly like a continuation — the delivery
+ *    order between main's admission, the handle's closure and the event/listing stream does not enforce the boundary,
+ *    and no timestamp stands in as proof. What IS proved: a handle that has ended keeps its own frozen answer, so a
+ *    later execution can never rewrite a closed handle (see `#freeze`). Closing the open window needs the
+ *    fresh-start-versus-resume distinction carried from the lifecycle code that accepts the action — not done here.
  */
 
 /** One externally started run, as ONE object per handle: reserved at the admission and mutated through its whole life. */
@@ -83,7 +98,11 @@ export interface InboundRun {
   /**
    * REQ-MCP-123 (BLOCKER D): the stop reason of THIS run, read from the product's own state (the run host's terminal
    * `run.result`, and the `publish.snapshot` record's own `stopReason`). It lives beside the handle, so it is evicted
-   * exactly when the handle is, and no other run's result can displace it.
+   * exactly when the handle is, and no other run's result can displace it. Frozen at the run's end.
+   *
+   * MAJOR A (REWORK 6, 2026-11-25): the reason is replaced as part of the phase's ONE UNIT on every accepted transition
+   * — an ABSENT reason included — so a phase that carries none (a resume, a clean completion) clears the reason the
+   * previous phase stopped with. Merging only the populated fields left a stale reason standing.
    */
   stopReason: string | null;
   /**
@@ -100,13 +119,21 @@ export interface InboundRun {
   refusal: InboundStartRefusal | null;
   /** Whether the run host confirmed the start. A handle answered before the confirmation reads `starting`. */
   confirmed: boolean;
-  /**
-   * MAJOR 2 (REQ-MCP-123/125/126, 2026-11-25): THE EXECUTION'S OWN IDENTITY, as far as the product publishes one — the
-   * session record's `runStartedAt`, which every launch writes anew. It is adopted from the FIRST state of this execution
-   * the surface sees and never overwritten, so a LATER execution of the same session (a desktop continuation) is not
-   * taken for this handle's run. null while nothing of this execution has been observed.
-   */
-  executionStartedAt: string | null;
+}
+
+/**
+ * What ONE lifecycle transition did, for the caller that owns the consequences (MAJOR A/B): whether THIS call is what
+ * confirmed the run (so the caller arms the one reconcile, MAJOR B), and whether the run ended on it (frozen answer and
+ * released slot).
+ */
+/**
+ * What ONE lifecycle transition did, for the caller that OWNS the consequences (MAJOR A/B): whether THIS call is what
+ * confirmed the run (so the caller arms the one reconcile — MAJOR B arming on every path), and whether the run ended on
+ * it (frozen answer and released slot).
+ */
+export interface TransitionOutcome {
+  readonly newlyConfirmed: boolean;
+  readonly released: boolean;
 }
 
 /** The two fields frozen at a run's end: its execution status and whether it waited on a person then. */
@@ -128,13 +155,21 @@ export interface ObservedState {
   readonly stopReason: string | null;
   /** REQ-MCP-125: whether the run waited on a person at the moment this state was read; absent means no. */
   readonly awaitingInput?: boolean | undefined;
-  /**
-   * MAJOR 2 (REQ-MCP-123/125/126, 2026-11-25): the execution's own identity — the session record's `runStartedAt`,
-   * written anew by every launch of that session. Absent when the product does not publish it (the listing does not),
-   * in which case the surface falls back to the session id alone.
-   */
-  readonly executionStartedAt?: string | null | undefined;
 }
+
+/**
+ * MAJOR A (REQ-MCP-123/125/126, 2026-11-25): ONE accepted lifecycle transition of a handle, from whichever source feeds
+ * it — a `publish.snapshot` (`snapshot`), the run host's listing (`listing`, whose row carries the stale verdict), the
+ * run host's terminal `run.result` (`result`), or a listing that proves the run is gone (`listing-gone`). The one
+ * private `#transition` reads it and decides; see the class.
+ */
+type LifecycleEvent =
+  | { readonly kind: 'confirmed'; readonly hostSessionId: string }
+  | { readonly kind: 'snapshot'; readonly executionStatus: string; readonly stopReason: string | null; readonly awaitingInput: boolean }
+  | { readonly kind: 'listing'; readonly executionStatus: string; readonly awaitingInput: boolean }
+  | { readonly kind: 'result'; readonly stopReason: string | null; readonly executionStatus: string | null }
+  | { readonly kind: 'listing-gone' }
+  | { readonly kind: 'host-exit' };
 
 /** What a reservation answers: the handle and the session id it took, or a bare refusal when one is active. */
 export type TakeOutcome = { readonly ok: true; readonly handle: string; readonly sessionId: string } | { readonly ok: false };
@@ -175,7 +210,7 @@ export class InboundSurfaceRuns {
    */
   take(sessionId: string, handle: string): TakeOutcome {
     if (this.#holder !== null) return { ok: false };
-    const run: InboundRun = { handle, sessionId, hostSessionId: null, workspaceId: null, stopReason: null, endState: null, refusal: null, confirmed: false, executionStartedAt: null };
+    const run: InboundRun = { handle, sessionId, hostSessionId: null, workspaceId: null, stopReason: null, endState: null, refusal: null, confirmed: false };
     this.#holder = handle;
     this.#record(run);
     return { ok: true, handle, sessionId };
@@ -206,14 +241,10 @@ export class InboundSurfaceRuns {
    * completed handle. Answers whether this call is what CONFIRMED the run (`false` for a repeat), so the caller arms the
    * one reconcile exactly once per transition into `confirmed` (MAJOR 2(a), 2026-11-25).
    */
-  committed(handle: string, hostSessionId: string): boolean {
+  committed(handle: string, hostSessionId: string): TransitionOutcome {
     const run = this.#runs.get(handle);
-    if (run === undefined) return false;
-    if (run.endState !== null || run.refusal !== null) return false;
-    run.hostSessionId = hostSessionId;
-    const newlyConfirmed = !run.confirmed;
-    run.confirmed = true;
-    return newlyConfirmed;
+    if (run === undefined) return { newlyConfirmed: false, released: false };
+    return this.#transition(run, { kind: 'confirmed', hostSessionId });
   }
 
   /**
@@ -242,50 +273,49 @@ export class InboundSurfaceRuns {
 
   /**
    * REQ-MCP-126: the run host's terminal `run.result` — the run is over, so the slot is free again and the handle keeps
-   * the end state and the reason the product reported (REQ-MONITOR-301, REQ-SESSION-073). Bound to the execution id: a
-   * result for another session touches nothing, and a result for a handle that has already ended does not overwrite it
-   * (REWORK 4, point 4).
+   * the end state and the reason the product reported (REQ-MONITOR-301, REQ-SESSION-073). Bound to the handle's session:
+   * a result for another session touches nothing, and a result for a handle that has already ended does not overwrite it
+   * (REWORK 4, point 4). It is one `LifecycleEvent` through the one transition (MAJOR A, 2026-11-25).
    */
   ended(sessionId: string, stopReason: string | null = null, executionStatus: string | null = null): void {
     const run = this.#runForSession(sessionId);
     if (run === null) return;
-    if (stopReason !== null) run.stopReason = stopReason;
-    this.#freeze(run, executionStatus === null ? { executionStatus: 'stopped', awaitingInput: false } : { executionStatus, awaitingInput: false });
+    this.#transition(run, { kind: 'result', stopReason, executionStatus });
   }
 
   /**
-   * REQ-MCP-123/126 (REWORK 4, point 6): the product's own state for one session, as `publish.snapshot` publishes it
-   * (`executionStatus`, `stopReason`, the waiting flag). The coordinator knows the session id it minted, so it reads
-   * that session's state from the product rather than depending on a `run.result` the halted/plan-gate paths never send.
+   * REQ-MCP-123/126 (REWORK 4, point 6; REWORK 6, MAJOR A): the product's own state for one session, as
+   * `publish.snapshot` publishes it (`executionStatus`, `stopReason`, the waiting flag). The coordinator knows the
+   * session id it minted, so it reads that session's state from the product rather than depending on a `run.result` the
+   * halted/plan-gate paths never send.
    *
-   * - Any state for the attempt's session is POSITIVE evidence the execution exists, so a held attempt becomes confirmed.
-   * - A park that CAN resume the same execution (`idle`, a reasonless `paused`/`paused_message_limit`,
-   *   `awaiting_plan_decision`) keeps the slot: the plan gate and the message limit relaunch the same session.
-   * - A TERMINAL state, or a park WITH a reason (the cancel arm: `paused` + `user_cancelled`), ends THIS execution and
-   *   frees the slot, freezing the state with the handle.
-   * - A completed handle is never overwritten, and a state for another session touches nothing.
+   * Any state for the attempt's session is POSITIVE evidence the execution exists, so a held attempt becomes confirmed.
+   * The phase's three fields are adopted as ONE UNIT (an absent reason included), so a phase that starts without a
+   * reason never inherits the last one. Whether the run ENDS is decided by the one transition: a terminal status, or a
+   * park WITH a reason ends it; a park WITHOUT one (`awaiting_plan_decision`, a reasonless `paused`/`paused_message_limit`)
+   * and a live status HOLD. A completed handle is never overwritten, and a state for another session touches nothing.
+   *
+   * REWORK 6: the `runStartedAt` equality is GONE. Desktop *approve/revise/continue/double* start the next phase of THIS
+   * run — not a foreign execution — so a state for the handle's session is adopted whenever it was launched (see the
+   * class comment's named residual gap for a genuinely fresh start).
    */
-  observe(sessionId: string, state: ObservedState): InboundRun | null {
+  observe(sessionId: string, state: ObservedState): TransitionOutcome | null {
     const run = this.#runForSession(sessionId);
     if (run === null) return null;
-    /*
-     * MAJOR 2 (REQ-MCP-123/125/126, 2026-11-25): the execution IDENTITY is bound before anything is adopted. The
-     * handle is „the execution this handle started”; a state whose `runStartedAt` differs belongs to a LATER execution
-     * of the same session (a desktop continuation), and it must not hand this handle its state, its waiting flag or its
-     * reason. The first state seen fixes this handle's own start instant; every later state must match it.
-     */
-    if (state.executionStartedAt !== undefined && state.executionStartedAt !== null) {
-      if (run.executionStartedAt === null) run.executionStartedAt = state.executionStartedAt;
-      else if (run.executionStartedAt !== state.executionStartedAt) return null;
-    }
-    const newlyConfirmed = !run.confirmed;
-    run.confirmed = true;
-    if (state.stopReason !== null) run.stopReason = state.stopReason;
-    if (runHasEnded(state.executionStatus, state.stopReason)) {
-      this.#freeze(run, { executionStatus: state.executionStatus, awaitingInput: state.awaitingInput ?? false });
-    }
-    // MAJOR 2(a): the caller arms the one reconcile when this state is what confirmed the run.
-    return newlyConfirmed && run.endState === null ? run : null;
+    return this.#transition(run, { kind: 'snapshot', executionStatus: state.executionStatus, stopReason: state.stopReason, awaitingInput: state.awaitingInput ?? false });
+  }
+
+  /**
+   * REQ-MCP-123/126 (REWORK 6, MAJOR A): the product's own state as the run host's `session.list` states it — the same
+   * transition as `observe`, from the listing instead of the published record. The row states no stop reason, so the
+   * phase's reason is the absent one and any prior phase's reason is dropped with it (point 2 of the rework): a run that
+   * resumed must not keep the reason it stopped with last time. Whether the run ENDS is the transition's own question
+   * (`runHasEnded`): a terminal status does, a park does not — the listing cannot state the reason a park would need.
+   */
+  observeListing(sessionId: string, row: { readonly executionStatus: string; readonly awaitingInput: boolean }): TransitionOutcome | null {
+    const run = this.#runForSession(sessionId);
+    if (run === null) return null;
+    return this.#transition(run, { kind: 'listing', executionStatus: row.executionStatus, awaitingInput: row.awaitingInput });
   }
 
   /**
@@ -307,18 +337,15 @@ export class InboundSurfaceRuns {
     if (this.#holder !== run.handle) return 'uninvolved';
     if (!run.confirmed) return 'held';
     if (reading.kind === 'unreadable') return 'held';
-    if (reading.kind === 'row') {
-      if (!reading.stale) {
-        // Present and live: either genuinely busy (hold) or resting, which `observe` already settles. A real run is
-        // never ended by this.
-        if (runHasEnded(reading.executionStatus, null)) this.#freeze(run, { executionStatus: reading.executionStatus, awaitingInput: false });
-        return run.endState === null ? 'held' : 'released';
-      }
+    if (reading.kind === 'row' && !reading.stale) {
+      // Present and live: either genuinely busy (hold) or resting, which the SAME transition settles. A real run is
+      // never ended by this, and an unreadable listing above proves nothing.
+      this.#transition(run, { kind: 'listing', executionStatus: reading.executionStatus, awaitingInput: reading.awaitingInput });
+      return run.endState === null ? 'held' : 'released';
     }
     // Absent, or busy in its record while nothing runs it: the terminal write never landed and the run is over.
-    run.stopReason ??= 'agent_session_aborted';
-    this.#freeze(run, { executionStatus: 'stopped', awaitingInput: false });
-    return 'released';
+    this.#transition(run, { kind: 'listing-gone' });
+    return run.endState === null ? 'held' : 'released';
   }
 
   /**
@@ -328,13 +355,83 @@ export class InboundSurfaceRuns {
    * answer its own end rather than vanish (the "orphan displacement must not lose a handle" minor).
    */
   abandonAll(): void {
-    for (const run of this.#runs.values()) {
-      if (run.endState === null && run.refusal === null) {
-        run.stopReason ??= 'agent_session_aborted';
-        run.endState = { executionStatus: 'stopped', awaitingInput: false };
-      }
-    }
+    for (const run of this.#runs.values()) this.#transition(run, { kind: 'host-exit' });
     this.#holder = null;
+  }
+
+  /**
+   * THE ONE LIFECYCLE TRANSITION (MAJOR A, 2026-11-25). Every way the product's own facts reach this surface — a
+   * `publish.snapshot`, a `session.list` row, a terminal `run.result`, the run host's exit, the host's confirmation — is
+   * turned into exactly one decision here, so a confirmation is recorded in one place, a phase's fields are replaced in
+   * one place, and an END (the frozen answer and the released slot) is decided in one place and nowhere else.
+   *
+   * Order of the rules, and each is the positive proof it claims to be:
+   *
+   * 1. **A closed handle is closed.** A run that has ended or been refused keeps its own frozen answer: no later event
+   *    of this or another execution can rewrite it (REWORK 4, point 4).
+   * 2. **A confirmation is the host's `session.started`** — the positive proof the execution exists.
+   * 3. **The phase's fields are replaced as ONE UNIT** on any other event (an ABSENT reason included), so a resumed
+   *    phase never carries the reason or the waiting flag the previous one stopped with.
+   * 4. **An end needs a positive proof**: the terminal `run.result` (with its own reason), a terminal status, a park WITH
+   *    a reason, or a listing that proves the run is GONE. A park WITHOUT a reason — the plan gate, the message limit —
+   *    HOLDs (the run can resume), which is the conservative direction REQ-MCP-126 asks for.
+   */
+  #transition(run: InboundRun, event: LifecycleEvent): TransitionOutcome {
+    const nothing: TransitionOutcome = { newlyConfirmed: false, released: false };
+    // Rule 1: a frozen (ended or refused) handle is never touched by a late event.
+    if (run.endState !== null || run.refusal !== null) return nothing;
+
+    // Rule 2: the host confirmed the start — the execution exists. The handle was answered at the reservation, so this
+    // is what turns `starting` into the product's live state; whether THIS call confirmed it is what the caller arms the
+    // one reconcile on (MAJOR B).
+    if (event.kind === 'confirmed') {
+      run.hostSessionId = event.hostSessionId;
+      const newlyConfirmed = !run.confirmed;
+      run.confirmed = true;
+      return { newlyConfirmed, released: false };
+    }
+
+    // Every other event is a state of the execution the surface has seen, so it CONFIRMS a held attempt: a state for the
+    // attempt's session is positive evidence the execution exists (REWORK 4, point 6).
+    const newlyConfirmed = !run.confirmed;
+    run.confirmed = true;
+
+    // Rule 4a: the run host's own exit. The host is never forked again, so nothing it held can still dispatch: the run
+    // is over, and the frozen answer is terminal and not waiting.
+    if (event.kind === 'host-exit') {
+      run.stopReason ??= 'agent_session_aborted';
+      this.#freeze(run, { executionStatus: 'stopped', awaitingInput: false });
+      return { newlyConfirmed, released: true };
+    }
+
+    // Rule 4b: a listing that proves the run is GONE (absent, or stale — busy with nothing running it). The terminal
+    // write failed; the run is over all the same, and the reason the engine uses for an unconfirmable completion is the
+    // product's own.
+    if (event.kind === 'listing-gone') {
+      run.stopReason ??= 'agent_session_aborted';
+      this.#freeze(run, { executionStatus: 'stopped', awaitingInput: false });
+      return { newlyConfirmed, released: true };
+    }
+
+    // Rule 4c: the terminal `run.result` — the run is over and its own reason rides it (an absent one clears the
+    // phase's reason with it).
+    if (event.kind === 'result') {
+      run.stopReason = event.stopReason;
+      const status = event.executionStatus ?? 'stopped';
+      this.#freeze(run, { executionStatus: status, awaitingInput: false });
+      return { newlyConfirmed, released: true };
+    }
+
+    // Rule 3: a snapshot or a listing row — the phase's status, waiting flag and reason as ONE unit. A snapshot states
+    // the reason the product holds; a listing row states none (an absent reason), which is what drops a prior phase's
+    // reason on a resume.
+    run.stopReason = event.kind === 'snapshot' ? event.stopReason : null;
+    // Rule 4d: the park WITH a reason, or a terminal status, is the end. A park WITHOUT one holds.
+    if (runHasEnded(event.executionStatus, run.stopReason)) {
+      this.#freeze(run, { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput });
+      return { newlyConfirmed, released: true };
+    }
+    return { newlyConfirmed, released: false };
   }
 
   /** Freeze a run's end ONCE and release the slot if this run holds it (REWORK 4, point 4: one identity, one release). */
@@ -387,6 +484,15 @@ export function mintInboundRunHandle(randomBytes: () => string = () => randomUUI
  */
 export const INBOUND_START_BOUND_MS = millis(INBOUND_START_BOUND_MS_NUMBER);
 
+/**
+ * MINOR (REWORK 6, 2026-11-25): the cap on the one reconcile chain's steps. The chain releases on a definite reading and
+ * re-arms while the run is live (so a terminal write that fails later is still caught), but it is BOUNDED: a run that
+ * never resolves cannot schedule reads for the rest of the application's life. When the cap is reached the handle simply
+ * returns to the ordinary paths — a live run stays held, and a later transition (snapshot, `run.result`, host exit) still
+ * ends it. The figure is generous: one step per reconcile delay, so it covers a run of hours.
+ */
+export const RECONCILE_MAX_STEPS = 64;
+
 /** What the coordinator needs to answer both tools: the shared start coordinator's deps, the run store, the open-workspace read, and the session status. */
 export interface InboundCoordinatorDeps {
   readonly start: SessionStartDeps;
@@ -436,9 +542,10 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
   const reconcileAfter = deps.reconcileAfterMs ?? millis(millis(INBOUND_START_BOUND_MS) + 60_000);
 
   /**
-   * MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25): the runs whose one reconcile is already armed. A confirmation now arrives
-   * on TWO paths (the start's own reply and the product's `publish.snapshot`), and arming the chain twice would put two
-   * independent chains behind one run; this set makes the arming idempotent per session.
+   * MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25); MAJOR B (REWORK 6, 2026-11-25): the runs whose one reconcile is already
+   * armed. A confirmation arrives on THREE paths now (the start's own reply, the product's `publish.snapshot`, and the
+   * ask-independent `rotaris_run_status` listing read), and arming the chain twice would put two independent chains
+   * behind one run; this set makes the arming idempotent per session.
    */
   const armed = new Set<string>();
 
@@ -447,14 +554,21 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
    * ends the run only on a DEFINITE reading (`InboundSurfaceRuns.reconcile`): the session is gone, or it is stale — busy
    * in its record while nothing runs it, which is exactly the failed-terminal-write case. A live busy run is left alone
    * and one more step is armed, so a terminal write that fails LATER than the first step is still covered. No step ever
-   * frees the slot on a clock: only a definite reading does, and an unreadable listing ends the chain.
+   * frees the slot on a clock: only a definite reading does, and an unreadable listing ends the chain. The chain is
+   * bounded: an unreadable listing does not re-arm it forever (MINOR, REWORK 6).
    */
   const armReconcile = (workspaceId: string, sessionId: string): void => {
     const schedule = deps.schedule;
     if (schedule === undefined) return;
     if (armed.has(sessionId)) return;
     armed.add(sessionId);
+    // MINOR (REWORK 6): the chain is bounded. Each step is one read; a run whose confirmations stop arriving cannot
+    // extend it without end, and the last step gives the handle back to the ordinary paths (a live run stays held, and
+    // a later transition — snapshot, result, host exit — still ends it).
+    let steps = 0;
     const step = (): void => {
+      if (steps >= RECONCILE_MAX_STEPS) { armed.delete(sessionId); return; }
+      steps += 1;
       schedule(() => {
         void deps.readStatus(workspaceId, sessionId).then((read) => {
           if (deps.runs.reconcile(sessionId, read) === 'held') step();
@@ -463,6 +577,21 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
       }, reconcileAfter);
     };
     step();
+  };
+
+  /**
+   * MAJOR B (REWORK 6, 2026-11-25): ARM the one reconcile on ANY path that turns a handle into `confirmed`, from the
+   * transition's own outcome. Called by every transition site (the start's reply, the late confirmation, the snapshot
+   * event, the status listing read), so no confirmation can travel without arming it: a terminal-write failure after a
+   * confirmation that came only through the listing would otherwise hold the slot for good.
+   */
+  const armOnConfirm = (run: InboundRun | null | undefined, outcome: TransitionOutcome | null): void => {
+    if (run === null || run === undefined || outcome === null || !outcome.newlyConfirmed) return;
+    // A transition that both confirmed and ENDED the run (a first snapshot that is already a cancel) needs no reconcile:
+    // the run is already frozen and its slot is free.
+    if (outcome.released) return;
+    if (run.workspaceId === null) return;
+    armReconcile(run.workspaceId, run.sessionId);
   };
 
   /**
@@ -484,7 +613,8 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     let confirmedSessionId: string | null = null;
     const onStarted = (startedId: string): void => {
       confirmedSessionId = startedId;
-      if (deps.runs.committed(handle, startedId)) armReconcile(open.workspaceId, startedId);
+      const outcome = deps.runs.committed(handle, startedId);
+      if (outcome.newlyConfirmed) armReconcile(open.workspaceId, startedId);
     };
     const onLateOutcome = (reply: ProcessReply): void => {
       if (confirmedSessionId !== null) return;
@@ -511,7 +641,10 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
       }
       const started = (outcome.value as { sessionId: string }).sessionId;
       // `onStarted` normally did this already; this covers a start that answered without running the seam.
-      if (confirmedSessionId === null && deps.runs.committed(handle, started)) armReconcile(open.workspaceId, started);
+      if (confirmedSessionId === null) {
+        const transition = deps.runs.committed(handle, started);
+        if (transition.newlyConfirmed) armReconcile(open.workspaceId, started);
+      }
     } catch {
       /*
        * BLOCKER (REQ-MCP-126, 2026-11-25): a throw proves NOTHING about whether a run was born, so the slot is HELD.
@@ -563,7 +696,13 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
      * settles by this read whether or not the caller ever asked again.
      */
     const read = await deps.readStatus(first.workspaceId ?? '', first.sessionId);
-    if (read.kind === 'row') deps.runs.observe(first.sessionId, { executionStatus: read.executionStatus, stopReason: null, awaitingInput: read.awaitingInput });
+    /*
+     * MAJOR B (REWORK 6, 2026-11-25): the ask-independent read goes through the SAME transition (`observeListing`), and
+     * an outcome that CONFIRMS the run arms the one reconcile — exactly as a `publish.snapshot` or the start's own reply
+     * does. Round 5 dropped `observe`'s answer here, so a confirmation that arrived ONLY through this listing left the
+     * reconcile unarmed and a failed terminal write could hold the slot for good.
+     */
+    if (read.kind === 'row') armOnConfirm(first, deps.runs.observeListing(first.sessionId, { executionStatus: read.executionStatus, awaitingInput: read.awaitingInput }));
     const now = deps.runs.byHandle(handle) ?? first;
     // MINOR (REQ-MCP-123): the same guard AFTER the read — a refusal or an end that landed while the listing was being
     // read is stated now, rather than being overtaken by this call's `starting`.
@@ -601,13 +740,14 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     surface: { startRun, runStatus },
     ask: async (ask: InboundListenerAsk): Promise<InboundStartRunAnswer | InboundRunStatusAnswer> => (ask.kind === 'inbound.startRun' ? startRun(ask.prompt) : runStatus(ask.run)),
     /*
-     * MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25): a `publish.snapshot` that CONFIRMS an attempt arms the one reconcile too.
+     * MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25); MAJOR B (REWORK 6, 2026-11-25): a `publish.snapshot` that CONFIRMS an
+     * attempt arms the one reconcile too — through the ONE transition, whose outcome says whether THIS call confirmed it.
      * A start whose reply was lost still becomes `confirmed` by this event path, and without arming here a terminal write
      * that fails afterwards would leave the slot occupied for good.
      */
     observeSnapshot: (sessionId, state) => {
-      const confirmed = deps.runs.observe(sessionId, state);
-      if (confirmed !== null && confirmed.workspaceId !== null) armReconcile(confirmed.workspaceId, sessionId);
+      const run = deps.runs.openRunForSession(sessionId);
+      armOnConfirm(run, deps.runs.observe(sessionId, state));
     },
   };
 }
@@ -639,7 +779,7 @@ export function inboundRunEnded(runs: InboundSurfaceRuns, sessionId: string, sto
  * set without a `run.result` — settles the slot and hands its reason to the handle. Answers the run whose confirmation
  * this state is, or null.
  */
-export function inboundRunObserved(runs: InboundSurfaceRuns, sessionId: string, state: ObservedState): InboundRun | null {
+export function inboundRunObserved(runs: InboundSurfaceRuns, sessionId: string, state: ObservedState): TransitionOutcome | null {
   return runs.observe(sessionId, state);
 }
 

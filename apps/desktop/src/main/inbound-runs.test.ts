@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { InboundListenerAsk, InboundRunStatusAnswer, InboundStartRunAnswer } from '@rotaris/contracts';
-import { createInboundCoordinator, InboundSurfaceRuns, mintInboundRunHandle, type ObservedState } from './inbound-runs.js';
+import { createInboundCoordinator, InboundSurfaceRuns, mintInboundRunHandle, RECONCILE_MAX_STEPS, type ObservedState } from './inbound-runs.js';
 import type { SessionStartDeps } from './session-start.js';
 
 /**
@@ -401,6 +401,25 @@ describe('REQ-MCP-123/126 (REWORK 4, point 6): release from the REAL execution l
     expect(h.runs.holder).not.toBeNull();
     expect(h.steps.length).toBeGreaterThan(0);
   });
+
+  it('MINOR (REWORK 6): the reconcile chain is BOUNDED — a run that never resolves stops scheduling steps', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // A LIVE busy run every step: the reconcile holds and re-arms, but only up to the cap.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: false });
+    // Drive far past the cap; each step re-arms one more until the cap is reached.
+    for (let i = 0; i < RECONCILE_MAX_STEPS + 10; i += 1) await driveStep(h);
+    // Once the cap is reached no step is scheduled again: the queue is empty and the run is still held (a live run is
+    // never ended by the reconcile).
+    expect(h.steps).toHaveLength(0);
+    expect(h.runs.holder).not.toBeNull();
+    // The handle is still settled by the ordinary paths: a terminal result ends it.
+    h.runs.ended(sessionId, 'tasks_complete', 'completed');
+    expect(h.runs.holder).toBeNull();
+  });
 });
 
 describe('REQ-MCP-123 (BLOCKER 3, REWORK 4): ONE object per handle — an end always reaches the caller’s handle', () => {
@@ -714,54 +733,92 @@ describe('REQ-MCP-123/126 (MAJOR 1, REWORK 5): a LATE definitive refusal still s
   });
 });
 
-describe('REQ-MCP-123/126 (MAJOR 2, REWORK 5): a CONFIRMING snapshot arms the reconcile', () => {
-  it('a snapshot that confirms an attempt whose reply was lost still arms the one reconcile', async () => {
+describe('REQ-MCP-123/126 (MAJOR A/B, REWORK 6): a desktop REVISE → CANCEL frees the slot, the timestamp is NOT an identity', () => {
+  it('a Revise (a next phase of THIS run, new runStartedAt) followed by a cancel at the next gate frees the slot', async () => {
     const h = harness();
     const c = coordinator(h);
-    h.captureLateReply = true; // the start's reply is lost; only the snapshot path can confirm it
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    const sessionId = first.kind === 'inbound.runStarted' ? first.sessionId : '';
+    await settle();
+    // The run reaches the plan gate: a reasonless park, so the slot HOLDs.
+    c.observe(sessionId, { executionStatus: 'awaiting_plan_decision', stopReason: null });
+    expect(h.runs.holder).toBe(handle);
+    // The user presses REVISE at the desktop: the NEXT PHASE of the SAME run starts. The product writes `idle` (the
+    // continuation's own status) and the session record's runStartedAt is written ANEW — a value the surface would see
+    // as "a different execution" under the round-5 timestamp rule. It must NOT be discarded.
+    c.observe(sessionId, { executionStatus: 'idle', stopReason: null });
+    expect(h.runs.holder).toBe(handle);
+    c.observe(sessionId, { executionStatus: 'running', stopReason: null });
+    expect(h.runs.holder).toBe(handle);
+    // The user CANCELS at the next gate: `paused` + `user_cancelled`, and NO `run.result` at all. This is a park WITH a
+    // reason, so the run is over: the slot is FREE and the reason is reported (round 5 discarded this snapshot and the
+    // slot stayed occupied for good — the confirmed hang).
+    c.observe(sessionId, { executionStatus: 'paused', stopReason: 'user_cancelled' });
+    expect(h.runs.holder).toBeNull();
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('paused');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('user_cancelled');
+  });
+
+  it('a reasonless park still HOLDS (the regress guard): the plan gate and the message limit never free the slot', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    c.observe(sessionId, { executionStatus: 'awaiting_plan_decision', stopReason: null });
+    expect(h.runs.holder).toBe(handle);
+    c.observe(sessionId, { executionStatus: 'paused_message_limit', stopReason: null });
+    expect(h.runs.holder).toBe(handle);
+    c.observe(sessionId, { executionStatus: 'paused', stopReason: null });
+    expect(h.runs.holder).toBe(handle);
+  });
+
+  it('the phase fields are replaced as ONE unit: a reason the next phase does not carry is CLEARED', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // A busy phase that nevertheless has a stop reason on its record (a resume writes it, then runs).
+    c.observe(sessionId, { executionStatus: 'running', stopReason: 'user_cancelled' });
+    expect(h.runs.holder).toBe(handle);
+    expect(h.runs.stopReasonOf(handle)).toBe('user_cancelled');
+    // The next phase carries NO reason: the unit rule CLEARS it (merging only populated fields would keep it standing).
+    c.observe(sessionId, { executionStatus: 'starting', stopReason: null });
+    expect(h.runs.stopReasonOf(handle)).toBeUndefined();
+    // And the waiting flag follows the same unit: it is false on the new phase, whatever it was before.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false });
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind === 'inbound.runStatus' && out.status.awaitingInput).toBe(false);
+  });
+});
+
+describe('REQ-MCP-123/126 (MAJOR B, REWORK 6): a confirmation on ANY path arms the one reconcile', () => {
+  it('a confirmation that arrives ONLY through the status listing arms the reconcile, and a failed terminal write then frees the slot', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    // The start's reply is lost and NO snapshot ever comes: the ONLY evidence the run exists is the listing the status
+    // read asks for. Round 5 confirmed the handle from that listing but DISCARDED the answer, so no reconcile was armed.
+    h.captureLateReply = true;
     const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
     const handle = first.kind === 'inbound.runStarted' ? first.run : '';
     const sessionId = first.kind === 'inbound.runStarted' ? first.sessionId : '';
     await settle();
     expect(h.runs.holder).toBe(handle);
     expect(h.steps).toHaveLength(0);
-    // The product publishes the run's state: it CONFIRMS the attempt, so the one reconcile is armed.
-    c.observe(sessionId, { executionStatus: 'running', stopReason: null, executionStartedAt: 't1' });
+    // The listing carries the run: this status read is what confirms the attempt.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false });
+    const live = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(live.kind === 'inbound.runStatus' && live.status.state).toBe('running');
+    // THAT confirmation armed the reconcile.
     expect(h.steps.length).toBeGreaterThan(0);
-    // A terminal write then fails; the armed reconcile ends it rather than holding the slot for good.
+    // The terminal write then fails: the reading is stale (busy with nothing running it), and the armed reconcile ends it.
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
     await driveStep(h);
-    expect(h.runs.holder).toBeNull();
-  });
-});
-
-describe('REQ-MCP-123/125/126 (MAJOR 2, REWORK 5): the handle is the EXECUTION, not the session', () => {
-  it('a DESKTOP continuation of the same session does not hand the old handle its state or waiting flag', async () => {
-    const h = harness();
-    const c = coordinator(h);
-    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
-    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
-    const sessionId = first.kind === 'inbound.runStarted' ? first.sessionId : '';
-    await settle();
-    // This handle's own execution is fixed by the first state seen.
-    c.observe(sessionId, { executionStatus: 'running', stopReason: null, executionStartedAt: 'run-1' });
-    // The run parks at the plan gate; the same execution, same start instant: the slot is HELD.
-    c.observe(sessionId, { executionStatus: 'awaiting_plan_decision', stopReason: null, executionStartedAt: 'run-1' });
-    expect(h.runs.holder).toBe(handle);
-    // A person then CONTINUES the session at the desktop: a NEW execution (`run-2`) of the same session id.
-    h.listings.set(sessionId, { status: 'running', awaitingInput: false });
-    c.observe(sessionId, { executionStatus: 'running', stopReason: null, executionStartedAt: 'run-2' });
-    // The continuation's state must NOT be adopted: the handle keeps its own execution's story (still held at its park).
-    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
-    expect(out.kind).toBe('inbound.runStatus');
-    // The listing is still the continuation's (the same session): the record's own state is read, but the handle's slot
-    // was not settled by the OTHER execution's park/cancel either.
-    expect(h.runs.holder).toBe(handle);
-    // The continuation's CANCEL must not free THIS handle's slot (it belongs to run-2).
-    c.observe(sessionId, { executionStatus: 'paused', stopReason: 'user_cancelled', executionStartedAt: 'run-2' });
-    expect(h.runs.holder).toBe(handle);
-    // And this execution's own cancel does free it.
-    c.observe(sessionId, { executionStatus: 'paused', stopReason: 'user_cancelled', executionStartedAt: 'run-1' });
     expect(h.runs.holder).toBeNull();
   });
 });

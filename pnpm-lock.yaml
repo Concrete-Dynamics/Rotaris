@@ -9,6 +9,12 @@ catalogs:
     '@modelcontextprotocol/client':
       specifier: 2.4.0
       version: 2.4.0
+    '@modelcontextprotocol/node':
+      specifier: 2.1.2
+      version: 2.1.2
+    '@modelcontextprotocol/server':
+      specifier: 2.4.0
+      version: 2.4.0
     '@types/react':
       specifier: ^19.3.0
       version: 19.3.0
@@ -108,6 +114,12 @@ importers:
   apps/desktop:
     dependencies:
       '@modelcontextprotocol/client':
+        specifier: 'catalog:'
+        version: 2.4.0
+      '@modelcontextprotocol/node':
+        specifier: 'catalog:'
+        version: 2.1.2(@modelcontextprotocol/server@2.4.0)
+      '@modelcontextprotocol/server':
         specifier: 'catalog:'
         version: 2.4.0
       '@phosphor-icons/web':
@@ -324,15 +336,6 @@ importers:
       '@modelcontextprotocol/client':
         specifier: 'catalog:'
         version: 2.4.0
-      '@modelcontextprotocol/node':
-        specifier: 2.1.2
-        version: 2.1.2(@modelcontextprotocol/server@2.4.0)
-      '@modelcontextprotocol/server':
-        specifier: 2.4.0
-        version: 2.4.0
-      '@rotaris/contracts':
-        specifier: workspace:*
-        version: link:../contracts
       '@rotaris/kernel':
         specifier: workspace:*
         version: link:../kernel

@@ -46,6 +46,16 @@ interface Harness {
   startBound: number | null;
   /** When true, the coordinator is built WITHOUT `startBoundMs`, so its own default is measured. */
   defaultBound: boolean;
+  /** BLOCKER: when set, the shared fence's read rejects — an exception of which NOTHING is known, so the slot is held. */
+  fenceThrows: boolean;
+  /** BLOCKER: when set, `clearForRunStart` rejects — the run host STARTED the run and the post-work threw. */
+  clearForRunStartThrows: boolean;
+  /** MAJOR 1: when true, a `session.start` rejects after its bound and its LATE reply is captured rather than discarded. */
+  captureLateReply: boolean;
+  /** MAJOR 1: the late reply sink the run host was handed, once a `session.start` timed out. */
+  lateReply: ((reply: unknown) => void) | null;
+  /** MINOR: when set, `readStatus` answers this promise instead of the listing (so a case controls the read's timing). */
+  readGate: Promise<unknown> | null;
 }
 
 function harness(over: Partial<Harness> = {}): Harness {
@@ -61,6 +71,11 @@ function harness(over: Partial<Harness> = {}): Harness {
     unreadableReads: 0,
     startBound: null,
     defaultBound: false,
+    clearForRunStartThrows: false,
+    fenceThrows: false,
+    captureLateReply: false,
+    lateReply: null,
+    readGate: null,
     ...over,
   };
 }
@@ -71,15 +86,18 @@ function coordinator(h: Harness, mint?: () => string): { readonly ask: (a: Inbou
   const startDeps = {
     log: () => undefined,
     runHost: {
-      request: async (req: { kind: string; sessionId?: string }, bound?: number) => {
+      request: async (req: { kind: string; sessionId?: string }, bound?: number, late?: (r: unknown) => void) => {
         if (req.kind === 'runs.active') return { kind: 'runs.count', workspaceId: 'ws-1', count: 0 };
         if (req.kind === 'session.start' && typeof req.sessionId === 'string') h.started.push(req.sessionId);
         if (req.kind === 'session.start' && typeof bound === 'number') h.startBound = bound;
+        if (req.kind === 'session.start' && h.captureLateReply) { h.lateReply = late ?? null; throw new Error(`no reply to session.start within ${bound ?? 0} ms`); }
         return h.hostStart(req);
       },
     },
-    services: new Map(), mainWindows: { takeMintedSession: () => null, beginStart: () => undefined, endStart: () => undefined }, notices: { report: async () => ({ id: 1, shown: true }), clearForRunStart: async () => undefined }, raiseNotice: () => undefined, recoveryFor: () => [],
-    openWorkspaceRead: async () => h.open,
+    services: new Map(), mainWindows: { takeMintedSession: () => null, beginStart: () => undefined, endStart: () => undefined },
+    notices: { report: async () => ({ id: 1, shown: true }), clearForRunStart: async () => { if (h.clearForRunStartThrows) throw new Error('the notice cleanup failed'); } },
+    raiseNotice: () => undefined, recoveryFor: () => [],
+    openWorkspaceRead: async () => { if (h.fenceThrows) throw new Error('the fence read failed'); return h.open; },
     confinementNotice: (r: { headline: string }) => ({ severity: 'error' as const, title: r.headline, message: r.headline, detail: r.headline, persistent: true as const, action: { label: 'Open Workspace', action: { kind: 'open-view' as const, view: 'workspace' } } }),
   } as unknown as SessionStartDeps;
   const c = createInboundCoordinator({
@@ -87,6 +105,8 @@ function coordinator(h: Harness, mint?: () => string): { readonly ask: (a: Inbou
     runs: h.runs,
     openWorkspaceNow: () => h.open,
     readStatus: async (_workspaceId, sessionId) => {
+      // MINOR: a case may hold the read open, so a refusal landing during it is what the caller must still state.
+      if (h.readGate !== null) await h.readGate;
       if (h.unreadableReads > 0) { h.unreadableReads -= 1; return { kind: 'unreadable' as const }; }
       const row = h.listings.get(sessionId);
       return row === undefined ? { kind: 'absent' as const } : { kind: 'row' as const, executionStatus: row.status, awaitingInput: row.awaitingInput, stale: row.stale ?? false };
@@ -576,5 +596,208 @@ describe('REQ-MCP-126 (REWORK 4, point 7): the run host’s exit releases the sl
     const closed = await c.ask({ kind: 'inbound.runStatus', run: handle });
     expect(closed.kind).toBe('inbound.runStatus');
     expect(closed.kind === 'inbound.runStatus' && closed.status.state).not.toBe('starting');
+  });
+});
+
+describe('REQ-MCP-126 (BLOCKER, REWORK 5): an UNCLEAR exception never frees the slot', () => {
+  it('a throw of which nothing is known (the shared fence) HOLDS the slot instead of freeing it', async () => {
+    const h = harness();
+    // The exception is raised inside `startSessionRun` and carries no assurance that it happened BEFORE the dispatch.
+    // Today every exception was read as a definitive refusal (`refuse` → slot free) — which is how two runs come to exist.
+    h.fenceThrows = true;
+    const c = coordinator(h);
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    expect(first.kind).toBe('inbound.runStarted');
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    await settle();
+    // The slot is HELD: the exception proves nothing, so a second external start is refused.
+    expect(h.runs.holder).toBe(handle);
+    expect(await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).toMatchObject({ kind: 'refused', code: 'inbound.run-active' });
+    // The handle is not `refused` either: it stays open and is settled by the product's own state for its session.
+    const status = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(status.kind).toBe('inbound.runStatus');
+    expect(status.kind === 'inbound.runStatus' && status.status.state).toBe('starting');
+    h.listings.set(first.kind === 'inbound.runStarted' ? first.sessionId : '', { status: 'running', awaitingInput: false });
+    const live = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(live.kind === 'inbound.runStatus' && live.status.state).toBe('running');
+  });
+
+  it('a generic host error (`request.failed`, raised after dispatch) HOLDS the slot rather than freeing it', async () => {
+    const h = harness();
+    // `request.failed` is the run host's own dispatch error: it carries NO assurance the start did not dispatch.
+    h.hostStart = async (req) => (req.kind === 'session.start' ? { kind: 'refused', code: 'request.failed', headline: 'the host threw' } : { kind: 'ack' });
+    const c = coordinator(h);
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    await settle();
+    expect(h.runs.holder).toBe(handle);
+    expect(await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).toMatchObject({ kind: 'refused', code: 'inbound.run-active' });
+    // The handle is not refused either: it stays open for the product's own state to settle.
+    const status = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(status.kind === 'inbound.runStatus' && status.status.state).toBe('starting');
+  });
+
+  it('a POST-start failure (the notice cleanup throws) keeps the slot and lets the run be observed', async () => {
+    const h = harness();
+    // The run host STARTS the run; the post-work (`clearForRunStart`) then throws.
+    h.clearForRunStartThrows = true;
+    const c = coordinator(h);
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    expect(first.kind).toBe('inbound.runStarted');
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    await settle();
+    // The slot is HELD: the run exists, so a second external start is refused.
+    expect(h.runs.holder).toBe(handle);
+    expect(await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).toMatchObject({ kind: 'refused', code: 'inbound.run-active' });
+    // And the run that WAS started is observed: the handle turns live under the same handle.
+    h.listings.set(h.started[0]!, { status: 'running', awaitingInput: false });
+    const live = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(live.kind === 'inbound.runStatus' && live.status.state).toBe('running');
+    expect(live.kind === 'inbound.runStatus' && live.status.sessionId).toBe(h.started[0]!);
+  });
+
+  it('a POST-start failure still arms the reconcile, so a failed terminal write does not hold the slot for good', async () => {
+    const h = harness();
+    h.clearForRunStartThrows = true;
+    const c = coordinator(h);
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    await settle();
+    expect(h.steps.length).toBeGreaterThan(0);
+    h.listings.set(h.started[0]!, { status: 'running', awaitingInput: false, stale: true });
+    await driveStep(h);
+    expect(h.runs.holder).toBeNull();
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind === 'inbound.runStatus' && out.status.awaitingInput).toBe(false);
+  });
+});
+
+describe('REQ-MCP-123/126 (MAJOR 1, REWORK 5): a LATE definitive refusal still settles the handle', () => {
+  it('a refusal that arrives after the bound refuses the handle instead of stranding it', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    // The start's ask times out; the host's LATE reply is handed to the sink main asked for.
+    h.captureLateReply = true;
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    expect(first.kind).toBe('inbound.runStarted');
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    await settle();
+    // Nothing definitive yet: the attempt is held and a second start is refused.
+    expect(h.runs.holder).toBe(handle);
+    expect(h.lateReply).not.toBeNull();
+    // The host now answers DEFINITIVELY (its refusal only arrived after the bound): the handle settles.
+    h.lateReply!({ kind: 'refused', code: 'session.refused', headline: 'no run was started' });
+    expect(h.runs.holder).toBeNull();
+    const stated = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(stated.kind).toBe('refused');
+    // And the slot is free for a fresh start.
+    h.captureLateReply = false;
+    h.hostStart = async () => ({ kind: 'session.started', sessionId: 'S-NEXT' });
+    expect((await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).kind).toBe('inbound.runStarted');
+  });
+
+  it('a late CONFIRMATION confirms the handle and arms the reconcile (the run appeared only after the bound)', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    h.captureLateReply = true;
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    await settle();
+    expect(h.steps).toHaveLength(0);
+    h.lateReply!({ kind: 'session.started', sessionId: h.started[0]! });
+    // The late confirmation turns the handle live and arms the one reconcile.
+    expect(h.runs.holder).toBe(handle);
+    expect(h.steps.length).toBeGreaterThan(0);
+    h.listings.set(h.started[0]!, { status: 'running', awaitingInput: false });
+    const live = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(live.kind === 'inbound.runStatus' && live.status.state).toBe('running');
+  });
+});
+
+describe('REQ-MCP-123/126 (MAJOR 2, REWORK 5): a CONFIRMING snapshot arms the reconcile', () => {
+  it('a snapshot that confirms an attempt whose reply was lost still arms the one reconcile', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    h.captureLateReply = true; // the start's reply is lost; only the snapshot path can confirm it
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    const sessionId = first.kind === 'inbound.runStarted' ? first.sessionId : '';
+    await settle();
+    expect(h.runs.holder).toBe(handle);
+    expect(h.steps).toHaveLength(0);
+    // The product publishes the run's state: it CONFIRMS the attempt, so the one reconcile is armed.
+    c.observe(sessionId, { executionStatus: 'running', stopReason: null, executionStartedAt: 't1' });
+    expect(h.steps.length).toBeGreaterThan(0);
+    // A terminal write then fails; the armed reconcile ends it rather than holding the slot for good.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
+    await driveStep(h);
+    expect(h.runs.holder).toBeNull();
+  });
+});
+
+describe('REQ-MCP-123/125/126 (MAJOR 2, REWORK 5): the handle is the EXECUTION, not the session', () => {
+  it('a DESKTOP continuation of the same session does not hand the old handle its state or waiting flag', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    const sessionId = first.kind === 'inbound.runStarted' ? first.sessionId : '';
+    await settle();
+    // This handle's own execution is fixed by the first state seen.
+    c.observe(sessionId, { executionStatus: 'running', stopReason: null, executionStartedAt: 'run-1' });
+    // The run parks at the plan gate; the same execution, same start instant: the slot is HELD.
+    c.observe(sessionId, { executionStatus: 'awaiting_plan_decision', stopReason: null, executionStartedAt: 'run-1' });
+    expect(h.runs.holder).toBe(handle);
+    // A person then CONTINUES the session at the desktop: a NEW execution (`run-2`) of the same session id.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false });
+    c.observe(sessionId, { executionStatus: 'running', stopReason: null, executionStartedAt: 'run-2' });
+    // The continuation's state must NOT be adopted: the handle keeps its own execution's story (still held at its park).
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind).toBe('inbound.runStatus');
+    // The listing is still the continuation's (the same session): the record's own state is read, but the handle's slot
+    // was not settled by the OTHER execution's park/cancel either.
+    expect(h.runs.holder).toBe(handle);
+    // The continuation's CANCEL must not free THIS handle's slot (it belongs to run-2).
+    c.observe(sessionId, { executionStatus: 'paused', stopReason: 'user_cancelled', executionStartedAt: 'run-2' });
+    expect(h.runs.holder).toBe(handle);
+    // And this execution's own cancel does free it.
+    c.observe(sessionId, { executionStatus: 'paused', stopReason: 'user_cancelled', executionStartedAt: 'run-1' });
+    expect(h.runs.holder).toBeNull();
+  });
+});
+
+describe('REQ-MCP-123 (MINOR, REWORK 5): a frozen/refused handle answers before and after the read', () => {
+  it('a handle refused WHILE its status read is in flight answers the refusal, not `starting`', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    h.captureLateReply = true;
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    await settle();
+    // Hold the status read open, then let a definitive refusal land while it is in flight.
+    let release: () => void = () => undefined;
+    h.readGate = new Promise<void>((r) => { release = r; });
+    const pending = c.ask({ kind: 'inbound.runStatus', run: handle });
+    await settle();
+    h.lateReply!({ kind: 'refused', code: 'session.refused', headline: 'no run was started' });
+    release();
+    const out = await pending;
+    // The refusal that arrived during the read is stated, rather than being overtaken by a `starting` answer.
+    expect(out.kind).toBe('refused');
+  });
+
+  it('an already-ended handle is answered from its frozen end without a listing read at all', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    const sessionId = first.kind === 'inbound.runStarted' ? first.sessionId : '';
+    await settle();
+    h.runs.ended(sessionId, 'tasks_complete', 'completed');
+    // A read gate that would HANG the call if it were consulted: the frozen end must be answered without it.
+    h.readGate = new Promise<void>(() => undefined);
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('completed');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('tasks_complete');
   });
 });

@@ -89,6 +89,15 @@ export interface SessionStartDeps {
   readonly openWorkspaceRead: CommandContext['openWorkspaceRead'];
   /** REQ-NOTIFY-060/061: the confinement refusal notice, built where it stands (the command facet owns it). */
   readonly confinementNotice: (r: { readonly headline: string; readonly detail?: string | undefined }) => ReportInput;
+  /**
+   * MINOR (REQ-MCP-124, 2026-11-25): a way to schedule ONE bounded follow-up check. `ProcessLink` discards a reply that
+   * arrives after its own bound (ADR-0002 c.11), so a start that got a NO-REPLY cannot learn what the host decided from
+   * the link. A session-created worktree would then linger if the host refused only after the bound. This schedules the
+   * one check that settles it: read the workspace's session listing after the host worst case, and take the tree away
+   * only if the listing is readable AND the session is definitively not in it. Absent means no such check (a desktop
+   * start that set no bound, or a test); the tree is then left as the caller left it.
+   */
+  readonly scheduleRecheck?: ((fn: () => void, afterMs: number) => void) | undefined;
 }
 
 /** The outcome of a validated start attempt, before any process is asked: what to launch, and the session id it will take. */
@@ -260,6 +269,24 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
     if (r.kind === 'refused' && r.code !== 'run-host.unreachable' && binding?.created_by_session && svc) {
       const path = binding.worktree_path;
       void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed after the refused start (${x.kind})`)).catch(() => undefined);
+    }
+    /*
+     * MINOR (REQ-MCP-124, 2026-11-25): a NO-REPLY kept the tree because the host may still start the run with it. If the
+     * host in fact REFUSED — only after the bound, so `ProcessLink` discarded the reply — the tree would linger with no
+     * session behind it. One bounded follow-up read settles it: after the host worst case, the workspace's session listing
+     * is asked; if it is readable and does NOT carry this session, no run was born and the session-created tree is removed.
+     * An unreadable listing, or a session that IS present, keeps the tree (the conservative side).
+     */
+    if (r.kind === 'refused' && r.code === 'run-host.unreachable' && binding?.created_by_session && svc && deps.scheduleRecheck !== undefined) {
+      const path = binding.worktree_path;
+      const boundMs = input.hostStartBoundMs ?? DEFAULT_START_BOUND_MS;
+      deps.scheduleRecheck(() => {
+        void runHost.request({ kind: 'session.list', workspaceId: input.workspaceId }, millis(10_000)).then((listing) => {
+          if (listing.kind !== 'session.list') return;
+          if (listing.sessions.some((row) => row.sessionId === sessionId)) { log(`worktree ${path} kept: session ${sessionId} appeared after the no-reply start`); return; }
+          void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed: the host refused the late start and no session was born (${x.kind})`)).catch(() => undefined);
+        }).catch(() => undefined);
+      }, boundMs + 5_000);
     }
     if (r.kind === 'refused') {
       if (r.code === 'session.confinement') void notices.report(deps.confinementNotice(r));

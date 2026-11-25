@@ -76,6 +76,34 @@ describe('REQ-MCP-120/121: enable, disable and the token', () => {
     expect(s.binds2()).toBe(1);
   });
 
+  it('REQ-MCP-120/121 (MAJOR, 2026-11-25): two enables IN FLIGHT are serialized — the first bind’s token is the one in force', async () => {
+    const token = new InboundToken();
+    // A socket whose bind does not resolve until released, so the two enables genuinely overlap.
+    let releaseBind: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { releaseBind = r; });
+    let bound: { addresses: readonly string[]; port: number } | null = null;
+    let binds = 0;
+    const slow: InboundListener = {
+      binding: () => bound,
+      bind: async () => { binds += 1; const n = binds; await gate; bound = { addresses: ['127.0.0.1'], port: 51000 + n }; return bound; },
+      unbind: async () => { bound = null; },
+    };
+    const host = createInboundHost({ token, log: () => undefined, listener: slow, mainAsk: async () => ({ kind: 'refused', code: 'x', headline: 'x' }) });
+    // Both enables arrive while nothing is bound yet: the SECOND must not rotate the token out from under the FIRST's bind.
+    const first = host.apply({ kind: 'inbound.enable', token: 'tok-1' });
+    const second = host.apply({ kind: 'inbound.enable', token: 'tok-2' });
+    await Promise.resolve();
+    releaseBind();
+    const [a, b] = await Promise.all([first, second]);
+    // Exactly ONE bind happened (the second saw the first's binding and was idempotent), and the token in force is the first's.
+    expect(binds).toBe(1);
+    expect(a).toEqual({ kind: 'inbound.state', state: { listening: true, port: 51001 } });
+    expect(b).toEqual({ kind: 'inbound.state', state: { listening: true, port: 51001 } });
+    expect(token.value).toBe('tok-1');
+    expect(token.accepts('Bearer tok-1')).toBe(true);
+    expect(token.accepts('Bearer tok-2')).toBe(false);
+  });
+
   it('a bind that FAILS leaves nothing exposed and revokes the token with the failure', async () => {
     const token = new InboundToken();
     const failing: InboundListener = { binding: () => null, bind: async () => { throw new Error('EADDRINUSE'); }, unbind: async () => undefined };

@@ -73,6 +73,17 @@ export function runIsHeld(status: string): boolean {
 }
 
 /**
+ * REQ-MCP-126 (REWORK 9, 2026-11-25): whether this persisted status is a PARK — the product's three "waits for its
+ * user" states (`paused`, `paused_message_limit`, `awaiting_plan_decision`), as opposed to the six ACTIVE ones that
+ * mean a run is in flight. A park is HELD like any other holding state; what it additionally rules out is the
+ * ABSENCE release. A session parked at the desktop is not stale and may be CONTINUED on the same iteration, so the
+ * surface's reconcile must not read a parked session's absence or staleness as proof that its run can never resume.
+ */
+export function isParkedStatus(status: string): boolean {
+  return RUN_HOLDING_STATUSES.has(status) && !isBusy(status);
+}
+
+/**
  * REQ-ORCH-083 / REQ-NOTIFY-049: the persisted statuses that are TERMINAL — the run is over and nothing follows it. `idle` and `interrupted` are deliberately NOT here. `idle` is published BEFORE a continuation of the SAME
  * session (a plan approve/revise and a message-limit continue/double write it before the relaunch), so reading it as an
  * end frees the surface's one-run slot while the continuation runs unobserved (BLOCKER 3, 2026-11-25). `interrupted` is
@@ -83,29 +94,31 @@ export function runIsHeld(status: string): boolean {
 export const TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'failed', 'stopped']);
 
 /**
- * REQ-MCP-126 (BLOCKER C and BLOCKER 3, 2026-11-25): whether the run behind this persisted status has DEFINITELY ENDED —
- * the one question the surface's slot asks of the product state, and asked in the conservative direction: the slot is
- * freed only on a definite signal, because the cost of holding is a surface that refuses further starts for a while and
- * the cost of freeing early is TWO running runs (REQ-MCP-126).
+ * REQ-MCP-126 (BLOCKER C, BLOCKER 3 and REWORK 9, 2026-11-25): whether the run behind this persisted status has
+ * DEFINITELY ENDED — the one question the surface's slot asks of the product state, and asked in the conservative
+ * direction: the slot is freed only on a definite signal, because the cost of holding is a surface that refuses further
+ * starts for a while and the cost of freeing early is TWO running runs (REQ-MCP-126).
  *
+ * - A TERMINAL status (completed, failed, stopped) has ended, and no continuation follows it. This is the ONLY arm.
  * - A BUSY status (starting, running, background, waiting, pausing, cancelling) has not ended.
- * - A TERMINAL status (completed, failed, stopped) has ended, and no continuation follows it.
- * - A PARK (`paused`, `paused_message_limit`, `awaiting_plan_decision`) has ended exactly when a stop reason accompanies
- *   it: a park with no reason waits for its user (the run holds), while a park with a reason was cancelled at the desktop
- *   and the run is over (`paused` + `user_cancelled`, which is what a plan-gate or message-limit cancel writes).
- * - Anything else — `idle`, `interrupted` — is NOT a definite end: a relaunch of the same session may follow, so the
- *   slot is KEPT. The run's own `run.result`, or the session leaving the store / a reconciled-gone reading, is what ends
- *   such a run (REQ-MCP-126's definite signals).
+ * - A PARK (`paused`, `paused_message_limit`, `awaiting_plan_decision`) has NOT ended: it waits for its user, and — as
+ *   REWORK 9 settled — the same iteration may be CONTINUED, so no park is ever a definite end however it is written.
+ * - Anything else — `idle`, `interrupted` — is likewise NOT a definite end: a relaunch of the same session may follow.
+ *
+ * The run's own terminal `run.result`, the run host's exit, or an authoritative ABSENCE (the session gone from the
+ * listing, or STALE — busy with nothing running it) after a failed terminal write are what end such a run; the last two
+ * only while the run is not parked (`isParkedStatus`).
+ *
+ * REWORK 9 (2026-11-25) REMOVED the arm that read a park as an end when a stop reason accompanied it. A normal desktop
+ * Pause writes `paused` + `user_cancelled` and ALSO emits a `run.result`; a desktop Continue then resumes the SAME open
+ * iteration. No product field separates that resumable pause from the plan-gate cancel (both write `paused`/
+ * `user_cancelled`), so reading the plainer one as an end released the slot while the run was continued — a SECOND
+ * external start was admitted and two runs ran at once (REQ-MCP-126). The liveness cost of holding (a desktop-paused run
+ * that is never continued holds the slot until the application ends) is covered by REQ-MCP-126's "refused, never queued".
  */
-export function runHasEnded(status: string, stopReason: string | null): boolean {
+export function runHasEnded(status: string): boolean {
   if (isBusy(status)) return false;
-  if (TERMINAL_STATUSES.has(status)) return true;
-  // A PARK at the message limit, or a paused session, has ended exactly when a reason accompanies it: a park with no
-  // reason waits for its user, and a park with a reason is what a plan-gate or message-limit cancel writes. The plan
-  // gate's own `awaiting_plan_decision` is never an end — it always waits for a decision, and the cancel that ends it
-  // moves the session to `paused` with a reason, which is the arm below.
-  if (status === 'paused' || status === 'paused_message_limit') return stopReason !== null;
-  return false;
+  return TERMINAL_STATUSES.has(status);
 }
 
 /** REQ-NOTIFY-048: one label per member; no two share one; none empty. Wording is the implementation's. */

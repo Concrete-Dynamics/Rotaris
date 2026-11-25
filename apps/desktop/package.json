@@ -1,7 +1,7 @@
 {
   "name": "@rotaris/desktop",
   "private": true,
-  "version": "0.1.0rc9",
+  "version": "0.1.0rc10",
   "homepage": "https://rotaris.ai",
   "license": "GPL-3.0-only",
   "description": "Rotaris — the one Electron desktop application. Five composition roots: main, preload, renderer, run-host, workspace-service.",

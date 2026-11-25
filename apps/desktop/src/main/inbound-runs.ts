@@ -77,19 +77,24 @@ import type { InboundStatusReading } from './inbound-status.js';
  * 4. **ONE lifecycle transition decides all of it** (`InboundSurfaceRuns.#transition`). `observe`, `ended`,
  *    `reconcile`, `observeListing` and `abandonAll` are thin events over it, and `rotaris_run_status` reads the state
  *    the transition stored; there is no second place where an end or a confirmation could be decided differently.
- * 5. **NAMED RESIDUAL GAP (not claimed closed) — THE EXECUTION-IDENTITY RESTGAP (REWORK 7, 2026-11-25).** The session
- *    LOCK serializes a session's writer within one application, and the surface's slot serializes external STARTS — but
- *    neither closes this window: after a run's **terminal write FAILS**, Desktop recovery (`sessions.ts` resume/recovery)
- *    can RE-OPEN the writer for the SAME session id, and a `session.prompt` accepted then starts a NEW run under the
- *    SAME id reachable by the OLD still-open handle. The boundary IS visible where the action is accepted — `prompt`
- *    and `retry` start a FRESH run, whereas `planDecision` and `continue` are a further PHASE of the SAME run — but
- *    main is handed only the session id for the assignment, so the surface cannot tell a fresh start from a resume. The
- *    two advisor rounds established that a TIMESTAMP is NOT an identity proof (and caused the Revise→Cancel hang), so no
- *    timestamp stands in: the equality stays removed. **The damage is bounded on the conservative side** — the slot is
- *    HELD LONGER rather than freed, because adopting a foreign execution is the failure that costs two running runs
- *    (REQ-MCP-126). What IS proved: a handle that has ENDED keeps its own frozen answer, so a later execution can never
- *    rewrite a closed handle. Closing the open window needs the fresh-start-versus-resume distinction carried from the
- *    lifecycle code that ACCEPTS the action — not done here.
+ * 5. **NAMED RESIDUAL GAP (not claimed closed) — THE SESSION-ID-ONLY ASSIGNMENT RESTGAP (REWORK 7; CORRECTED AND BROADENED
+ *    IN REWORK 8, 2026-11-25).** The session LOCK serializes a session's writer within one application, and the surface's
+ *    slot serializes external STARTS — but **every delivery this surface receives is matched to a handle by the SESSION ID
+ *    ALONE** (`#runForSession`, `#frozenRunForSession`): a `publish.snapshot`, a `session.list` row, or a terminal
+ *    `run.result` is assigned to whichever handle holds that session id, with no proof that the event belongs to THAT
+ *    execution. REWORK 7 named this too narrowly ("a fresh start after a failed terminal write"); the boundary is WIDER:
+ *    any delivery found by session id alone can hit a handle that ended groundlessly (frozen without a reason this surface
+ *    computed) or that is still OPEN — a desktop `prompt`/`retry` at the same session (a genuinely FRESH run), a recovery
+ *    re-open after a failed terminal write, or a continuation all share the id. The product does not cleanly separate these
+ *    at the assignment point: main is handed only the session id, so the surface cannot tell a fresh start from a resume.
+ *    The two advisor rounds established that a TIMESTAMP is NOT an identity proof (and caused the Revise→Cancel hang), so
+ *    no timestamp stands in: the equality stays removed. **THE LIMITATION MEASURES (the damage is bounded to the
+ *    conservative side):** (a) a handle that has ENDED keeps its own frozen state, and a late `run.result` may only ADD a
+ *    missing reason — never change the frozen state — and only when the result AGREES with the frozen end (REWORK 8).
+ *    (b) The slot is HELD LONGER rather than freed, because adopting a foreign execution is the failure that costs two
+ *    running runs (REQ-MCP-126). (c) A late event for a finished attempt cannot touch a NEWER holder. What is NOT proved:
+ *    a foreign delivery that happens to carry the SAME terminal status is still indistinguishable — closing that needs the
+ *    fresh-start-versus-resume distinction carried from the lifecycle code that ACCEPTS the action, not done here.
  *
  * REWORK 7 (2026-11-25) — THE PHASE UNIT ON THE HANDLE, THE ACTIVITY-BOUND RECONCILE, AND THE CONSERVATIVE STATUS PATH.
  *
@@ -104,6 +109,25 @@ import type { InboundStatusReading } from './inbound-status.js';
  * 3. **The reconcile is bound by ACTIVITY, not lifetime.** Its counter is reset by `pulse` on every fresh snapshot or
  *    listing for the session, so a legitimately waiting run keeps its reconcile alive and only a COMPLETELY SILENT run
  *    exhausts the chain (a stall backstop). The STATUS path ends a run the listing marks STALE all the same.
+ *
+ * REWORK 8 (2026-11-25) — THE LAST FOUR DEFECTS, all of the same shape: an OBSERVATION used as a PROOF.
+ *
+ * 1. **The worktree is never deleted on an observation** (`session-start.ts`). Round 7 took a session-created tree away
+ *    after two EMPTY listings over the host worst case; that is unfalsifiable false, because the bound ends only MAIN's
+ *    wait and a start the host accepted can be born long after (its credential lease comes first). The observation-based
+ *    removal is GONE; the tree is removed at exactly two POSITIVE places — the definite refusal, and the worktree cleanup
+ *    at session open.
+ * 2. **`session.attachment-invalid`, `session.lock-held` and `runHost.gone` are NOT definite refusals** (`start-refusal.ts`):
+ *    each can come back AFTER the session record is created, so none proves "no run". `runHost.notStarted` (a missed
+ *    `hello`) IS definite — a request before the hello is held, never delivered.
+ * 3. **The status answer is composed EXCLUSIVELY from the handle's ONE phase** and from no second source (REWORK 7 still
+ *    read `state`/`awaitingInput` off the fresh listing). The phase is replaced as ONE UNIT on every accepted event, and
+ *    the end decision reads the reason the EVENT carries, never a carried-over one.
+ * 4. **The reconcile cannot be kept alive by polling.** Only a READABLE progress (a row that is the run) resets the stall
+ *    counter; an `unreadable` reading proves nothing and does not extend the chain. The cap stays a hard STALL backstop.
+ * 5. **The residual gap is named correctly and BROADER** (see the class comment's point 5): every delivery is matched to
+ *    a handle by the SESSION ID ALONE, so a delivery can reach a groundlessly frozen or still-open handle. The bounding
+ *    measure is sharpened: a late `run.result` may only ADD a missing reason to a frozen end it AGREES with.
  */
 
 /** One externally started run, as ONE object per handle: reserved at the admission and mutated through its whole life. */
@@ -437,14 +461,17 @@ export class InboundSurfaceRuns {
   #transition(run: InboundRun, event: LifecycleEvent): TransitionOutcome {
     const nothing: TransitionOutcome = { newlyConfirmed: false, released: false };
     /*
-     * Rule 1 with its REWORK 7 (MAJOR 3b) exception: a frozen (ended or refused) handle is not touched by a late event —
-     * EXCEPT that a late terminal `run.result` completes an end which ended WITHOUT a reason. The normal terminal path
-     * publishes the status BEFORE the result, so the end is frozen first with a null reason, and the result then carries
-     * the product's own reason; a later execution's event can never rewrite a closed handle because it is not a
-     * `run.result` for this session — the reason is added to THIS handle's own frozen end and nowhere else.
+     * Rule 1 with its REWORK 7 (MAJOR 3b) exception, TIGHTENED by REWORK 8 (MAJOR 5): a frozen (ended or refused) handle
+     * is not touched by a late event — EXCEPT that a late terminal `run.result` completes an end which ended WITHOUT a
+     * reason. The normal terminal path publishes the status BEFORE the result, so the end is frozen first with a null
+     * reason, and the result then carries the product's own reason. The exception is NARROWER than round 7's: the result
+     * must AGREE with the frozen end (its own status either absent or equal to the frozen one), because round 7 let a
+     * `run.result` with a DIFFERING end status add its reason to a frozen end it did not describe — a foreign delivery
+     * matched by session id alone could thus rewrite a closed handle's reason. A result that disagrees is ignored.
      */
     if (run.endState !== null) {
-      if (event.kind === 'result' && run.stopReason === null && !run.frozenReasonComputed) {
+      const agrees = event.kind === 'result' && (event.executionStatus === null || event.executionStatus === run.endState.executionStatus);
+      if (agrees && run.stopReason === null && !run.frozenReasonComputed) {
         run.stopReason = event.stopReason;
       }
       return nothing;
@@ -491,12 +518,13 @@ export class InboundSurfaceRuns {
     }
 
     /*
-     * Rule 3 (REWORK 7, MAJOR 3): the phase's status, waiting flag and reason, held as ONE UNIT on the handle.
+     * Rule 3 (REWORK 7, MAJOR 3; REWORK 8, MAJOR 3): the phase's status, waiting flag and reason, held as ONE UNIT on
+     * the handle.
      *
      * - a SNAPSHOT states the reason the product holds, so it replaces all three (an ABSENT reason clears a prior phase's
      *   reason, which is what a resume needs).
      * - a LISTING row states NO reason at all, so it is SILENT about it: the status and the waiting flag are replaced and
-     *   the reason is LEFT as it stands. A row without a reason overwriting a known reason with null was the fault.
+     *   the reason is LEFT as it stands.
      * - a STALE row (busy with nothing running it, REQ-SESSION-171) is the definite proof of an end: it goes through
      *   rule 4b's arm, so the STATUS path ends such a run exactly as the reconcile does (MAJOR 4).
      */
@@ -510,8 +538,17 @@ export class InboundSurfaceRuns {
     } else {
       run.phase = { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput, stopReason: event.stopReason };
     }
-    // Rule 4d: the park WITH a reason, or a terminal status, is the end. A park WITHOUT one holds.
-    if (runHasEnded(event.executionStatus, run.phase.stopReason)) {
+    /*
+     * Rule 4d: the park WITH a reason, or a terminal status, is the end. A park WITHOUT one holds.
+     *
+     * REWORK 8 (MAJOR 3): the END DECISION reads the reason the EVENT itself carries, never the merged phase's reason. A
+     * listing row states NO reason, so its end reason is `null` — a reasonless row on a `paused`/`paused_message_limit`
+     * status therefore HOLDS (the conservative direction), instead of ending the run on a reason the row never stated
+     * (round 7 let a carried-over reason from a PRIOR phase decide an end the fresh row knew nothing about). Only a
+     * TERMINAL status, or a snapshot's own reason, is enough to end it here.
+     */
+    const endReason = event.kind === 'listing' ? null : event.stopReason;
+    if (runHasEnded(event.executionStatus, endReason)) {
       this.#freeze(run, { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput }, run.phase.stopReason, false);
       return { newlyConfirmed, released: true };
     }
@@ -651,10 +688,19 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
    * waiting — publishing state, or being read — keeps its reconcile alive and a terminal write that fails LATE is still
    * caught. Only a run that goes completely silent for `RECONCILE_MAX_STEPS` steps exhausts the chain, and the STATUS
    * path ends a stale run too, so even then a later status query frees the slot.
+   *
+   * MAJOR 4 (REWORK 8, 2026-11-25): the reset comes from READABLE progress alone. An `unreadable` listing is NOT activity
+   * (it proves nothing about the run), so repeated polling of an unreadable listing cannot extend the chain past the cap —
+   * the cap is a hard STILLSTAND backstop.
    */
   const armed = new Map<string, { steps: number }>();
 
-  /** MAJOR 4 (REWORK 7): a fresh observation of the session's state — reset the stall counter for its armed reconcile. */
+  /**
+   * MAJOR 4 (REWORK 7): a fresh observation of the session's state — reset the stall counter for its armed reconcile.
+   *
+   * MAJOR 4 (REWORK 8): only a READABLE progress calls this. An `unreadable` listing proves nothing about the run, so it
+   * must not count as activity — otherwise repeated polling of an unreadable listing keeps ONE chain alive indefinitely.
+   */
   const pulse = (sessionId: string): void => {
     const state = armed.get(sessionId);
     if (state !== undefined) state.steps = 0;
@@ -675,10 +721,11 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     const state = { steps: 0 };
     armed.set(sessionId, state);
     /*
-     * MAJOR 4 (REWORK 7): the chain releases on a definite reading and re-arms while the run is live, so a terminal
-     * write that fails later is still caught. The counter is a STALL backstop: `pulse` (a fresh snapshot or listing for
-     * the session) resets it, so only a run that goes completely silent for `RECONCILE_MAX_STEPS` steps gives the handle
-     * back to the ordinary paths — and the STATUS path still ends a stale run, so the slot is not held for good.
+     * MAJOR 4 (REWORK 8): the chain releases on a definite reading and re-arms while the run is live, so a terminal
+     * write that fails later is still caught. The counter is a STALL backstop: `pulse` (a fresh SNAPSHOT, or a status read
+     * that returned a ROW) resets it, so only a run that goes completely silent for `RECONCILE_MAX_STEPS` steps gives the
+     * handle back to the ordinary paths — and the STATUS path still ends a stale run, so the slot is not held for good. An
+     * `unreadable` reading does NOT reset it (it is no evidence of progress), so polling cannot keep the chain alive.
      */
     const step = (): void => {
       if (state.steps >= RECONCILE_MAX_STEPS) { armed.delete(sessionId); return; }
@@ -817,8 +864,13 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
      * reconcile unarmed and a failed terminal write could hold the slot for good.
      */
     if (read.kind === 'row') armOnConfirm(first, deps.runs.observeListing(first.sessionId, { executionStatus: read.executionStatus, awaitingInput: read.awaitingInput, stale: read.stale }));
-    // MAJOR 4 (REWORK 7): this read IS activity on the session, so the armed reconcile's stall counter is reset.
-    pulse(first.sessionId);
+    /*
+     * MAJOR 4 (REWORK 8, 2026-11-25): only a READABLE progress on the run resets the reconcile's stall counter. An
+     * UNREADABLE listing proves nothing about the run (BLOCKER 2), so counting it as activity let repeated polling of an
+     * unreadable listing keep ONE chain alive indefinitely (round 7 reset the counter on every read). A row that is
+     * actually the run is progress; an unreadable answer is not.
+     */
+    if (read.kind === 'row') pulse(first.sessionId);
     const now = deps.runs.byHandle(handle) ?? first;
     // MINOR (REQ-MCP-123): the same guard AFTER the read — a refusal or an end that landed while the listing was being
     // read is stated now, rather than being overtaken by this call's `starting`.
@@ -837,25 +889,23 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
       return { kind: 'inbound.runStatus', status: starting };
     }
     /*
-     * MAJOR 3 (REWORK 7): the status is composed from the ONE phase the handle holds, not field by field from the fresh
-     * listing. The row that just went through `observeListing` replaced the handle's status and waiting flag; the reason
-     * is the handle's own. A listing that could not confirm an end (not a row at all) falls back to the handle's phase
-     * when there is one, and is only a `run-unreadable` refusal when the handle has never seen a state.
+     * MAJOR 3 (REWORK 8, 2026-11-25): the status is composed EXCLUSIVELY from the ONE phase the handle holds, and from
+     * NO second source. A row that just went through `observeListing` has already replaced the handle's status and
+     * waiting flag (and LEFT its reason); reading `read.executionStatus`/`read.awaitingInput` here again was the second
+     * source that REWORK 7 left in place. The handle's phase is the whole answer; when the read was not a row, the phase
+     * the handle last saw stands. Only a handle that has NEVER seen a state has nothing to answer.
      */
     const phase = now.phase;
-    if (read.kind !== 'row' && phase === null) return { kind: 'refused', code: 'inbound.run-unreadable', headline: 'The run’s state could not be read' };
-    // The handle's own phase is the source; when the read was not a row but a phase is held, the last-seen phase stands.
-    const executionStatus = read.kind === 'row' ? read.executionStatus : (phase as RunPhase).executionStatus;
-    const awaitingInput = read.kind === 'row' ? read.awaitingInput : (phase as RunPhase).awaitingInput;
-    const busy = isBusy(executionStatus);
+    if (phase === null) return { kind: 'refused', code: 'inbound.run-unreadable', headline: 'The run’s state could not be read' };
+    const busy = isBusy(phase.executionStatus);
     const status: InboundRunStatus = {
       run: handle,
       sessionId: now.sessionId,
-      state: presentationStatus(executionStatus),
+      state: presentationStatus(phase.executionStatus),
       // REQ-MCP-123 (BLOCKER D): the reason belongs to the HANDLE and is read from it alone; a run still busy has not
       // stopped, so it reports none however recently the session last stopped.
-      stopReason: busy ? null : ((phase?.stopReason ?? null) as StopReason | null),
-      awaitingInput,
+      stopReason: busy ? null : (phase.stopReason as StopReason | null),
+      awaitingInput: phase.awaitingInput,
     };
     return { kind: 'inbound.runStatus', status };
   };

@@ -528,6 +528,108 @@ describe('REQ-MCP-123/126 (MAJOR 3/4, REWORK 7): the phase unit on the handle, a
     expect(h.runs.holder).toBeNull();
     expect(handle).not.toBe('');
   });
+
+  it('MAJOR 4 (REWORK 8): an UNREADABLE read does NOT extend the chain — polling cannot keep it alive past the cap', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    await settle();
+    // Every reconcile step reads UNREADABLE (the listing cannot be read), and a status query is polled between steps. An
+    // unreadable reading is NO evidence of progress, so it must NOT reset the stall counter: the chain exhausts at the
+    // cap and STOPS scheduling steps, instead of being kept alive indefinitely by the polling (the fault REWORK 7 left).
+    // The status query itself reads an ABSENT listing (no row), which is likewise not progress under the fix.
+    const poll = (): Promise<unknown> => c.ask({ kind: 'inbound.runStatus', run: handle });
+    for (let i = 0; i < RECONCILE_MAX_STEPS * 3; i += 1) {
+      h.unreadableReads = 1;
+      await driveStep(h);
+      await poll();
+    }
+    // The chain is BOUNDED: the cap was reached and no step is scheduled again, while the run is still HELD (an
+    // unreadable reading never ends a run).
+    expect(h.steps).toHaveLength(0);
+    expect(h.runs.holder).toBe(handle);
+  });
+
+  it('MAJOR 3 (REWORK 8): a reasonless STATUS row replaces state/waiting on the handle but never INVENTS a reason to end', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // A prior accepted event left a reason on the handle (a snapshot whose phase then moved on).
+    c.observe(sessionId, { executionStatus: 'running', stopReason: 'user_cancelled' });
+    expect(h.runs.holder).toBe(handle);
+    expect(h.runs.stopReasonOf(handle)).toBe('user_cancelled');
+    // Now a STATUS listing row reports a PARK (`paused`) but states NO reason. A park ENDS only WITH a reason; the row is
+    // SILENT, so it must NOT end the run on the carried-over `user_cancelled` (round 7's fault: the merged reason decided
+    // the end). The state and the waiting flag ARE replaced (the row states those); the reason is LEFT.
+    h.listings.set(sessionId, { status: 'paused', awaitingInput: false });
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    // The slot is STILL HELD — the row did not invent an end — and the answer is composed from the handle's ONE phase:
+    // the state the row stated, the reason the handle still holds.
+    expect(h.runs.holder).toBe(handle);
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('paused');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('user_cancelled');
+  });
+
+  it('MAJOR 3 (REWORK 8): the phase is ONE unit on the handle — a status row replaces state and waiting flag together', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // A snapshot states a busy, waiting-on-a-person phase.
+    c.observe(sessionId, { executionStatus: 'waiting', stopReason: null, awaitingInput: true });
+    // A later status row states a different phase: the state AND the waiting flag are replaced TOGETHER from that ONE row.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false });
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('running');
+    expect(out.kind === 'inbound.runStatus' && out.status.awaitingInput).toBe(false);
+    expect(h.runs.holder).toBe(handle);
+  });
+
+  it('MAJOR 5 (REWORK 8): a late `run.result` whose end status DISAGREES with the frozen end does not touch its reason', () => {
+    // A foreign delivery is matched to a handle by the SESSION ID ALONE (the named residual gap). A handle whose end was
+    // frozen with a null reason must not have that reason filled by a `run.result` that describes a DIFFERENT end status —
+    // only a result that AGREES with the frozen end may complete it. REWORK 7 let a differing-status result add its reason.
+    const runs = new InboundSurfaceRuns();
+    const handle = `inr_${'e'.repeat(32)}`;
+    runs.take('S-E', handle);
+    runs.committed(handle, 'S-E');
+    // The run's own terminal end is frozen as `failed` WITHOUT a reason (the status was published before the result).
+    runs.ended('S-E', null, 'failed');
+    expect(runs.byHandle(handle)?.endState?.executionStatus).toBe('failed');
+    // A later `run.result` for the SAME session but a DIFFERENT end status (`completed`) must NOT complete this end.
+    runs.ended('S-E', 'tasks_complete', 'completed');
+    expect(runs.stopReasonOf(handle)).toBeUndefined();
+    // A result that AGREES with the frozen end does complete it (the same status).
+    runs.ended('S-E', 'iteration_limit_reached', 'failed');
+    expect(runs.stopReasonOf(handle)).toBe('iteration_limit_reached');
+  });
+
+  it('MAJOR 3 (REWORK 8): a reasonless STATUS row replaces state/waiting on the handle but never INVENTS a reason to end', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    // A prior phase ended with a reason the handle holds (a snapshot).
+    c.observe(sessionId, { executionStatus: 'running', stopReason: 'user_cancelled' });
+    expect(h.runs.holder).toBe(handle);
+    expect(h.runs.stopReasonOf(handle)).toBe('user_cancelled');
+    // Now a STATUSS listing row reports a PARK (`paused`) but states NO reason. A park ENDS only WITH a reason; the row is
+    // silent, so it must NOT end the run on the carried-over `user_cancelled` (round 7's fault: the merged reason decided
+    // the end). The state and the waiting flag ARE replaced (the row states those); the reason is LEFT.
+    h.listings.set(sessionId, { status: 'paused', awaitingInput: false });
+    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(h.runs.holder).toBe(handle);
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('paused');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('user_cancelled');
+  });
 });
 
 describe('REQ-MCP-123 (BLOCKER 3, REWORK 4): ONE object per handle — an end always reaches the caller’s handle', () => {

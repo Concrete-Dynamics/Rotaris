@@ -614,10 +614,11 @@ export class InboundSurfaceRuns {
        * unnecessary here and is exactly the conservative direction the brief names.
        *
        * An ordinary row refreshes the held phase: the status and the waiting flag TOGETHER, the reason LEFT as it stands
-       * (a row states none). The accepted consequence of never releasing here: a run whose terminal write failed and
-       * whose session never becomes terminal HOLDS the slot until the run host ends.
+       * (a row states none). A row that READS AS AN END (`runHasEnded`) refreshes nothing either — an end-reading the
+       * surface does not act on, so the held phase STANDS. The accepted consequence of never releasing here: a run whose
+       * terminal write failed and whose session never becomes terminal HOLDS the slot until the run host ends.
        */
-      if (!event.stale || run.phase === null) {
+      if (!runHasEnded(event.executionStatus) && (!event.stale || run.phase === null)) {
         run.phase = { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput, stopReason: run.phase?.stopReason ?? null };
       }
       return { newlyConfirmed, released: false };

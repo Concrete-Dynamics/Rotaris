@@ -2214,9 +2214,6 @@ async function main(): Promise<void> {
    */
   const runHostProjection: SessionStartDeps = {
     log, runHost, services, mainWindows, notices, raiseNotice, recoveryFor, configFatal,
-    // MINOR (REQ-MCP-124, 2026-11-25): the one bounded follow-up that removes a session-created worktree when the host
-    // refused a start only after its bound (so `ProcessLink` discarded the reply and the caller saw a no-reply).
-    scheduleRecheck: (fn, afterMs) => { clocks.timers.after(millis(afterMs), fn); },
     storeRefusal: (workspace) => storeRefusals.get(canonicalPath(workspace))?.held,
     openWorkspaceRead: async (wcId) => {
       const view = wcId === null ? activeWindow() : mainWindows.forSender(wcId);

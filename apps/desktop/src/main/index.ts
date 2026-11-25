@@ -62,7 +62,7 @@ import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands, confinementRefusalNotice } from './commands/session.js';
 import type { SessionStartDeps } from './session-start.js';
-import { createInboundCoordinator, inboundRunEnded, inboundRunHostExited, inboundRunObserved, InboundSurfaceRuns } from './inbound-runs.js';
+import { createInboundCoordinator, inboundRunEnded, inboundRunHostExited, InboundSurfaceRuns } from './inbound-runs.js';
 import { createInboundStatusReader, stoppedSession } from './inbound-status.js';
 import { InboundExposure, InboundListenerLink, INBOUND_LISTENER_SERVICE_NAME, inboundListenerGoneRefusal, newInboundToken, portOfChild } from './inbound-exposure.js';
 import { createInboundEnableSequencer } from './inbound-enable.js';
@@ -2260,7 +2260,9 @@ async function main(): Promise<void> {
    */
   runHost.onEvent((e) => {
     if (e.kind === 'run.result') inboundRunEnded(inboundRuns, e.sessionId, e.result.stop_reason, e.result.execution_status);
-    else if (e.kind === 'publish.snapshot') { const o = stoppedSession(e.payload); inboundRunObserved(inboundRuns, o.sessionId, o.state); }
+    // MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25): through the coordinator's own entry point, so a snapshot that CONFIRMS a
+    // start whose reply was lost also arms the one reconcile (a failed terminal write then still frees the slot).
+    else if (e.kind === 'publish.snapshot') { const o = stoppedSession(e.payload); inboundCoordinator.observeSnapshot(o.sessionId, o.state); }
   });
   runHostChild.on('exit', () => { inboundRunHostExited(inboundRuns); });
 
@@ -2275,7 +2277,7 @@ async function main(): Promise<void> {
   const inboundEnable = createInboundEnableSequencer({
     exposure: inboundExposure,
     mintToken: () => newInboundToken(),
-    askEnable: async (token) => {
+    askEnable: async (token): Promise<{ readonly ok: true; readonly port: number } | { readonly ok: false; readonly outcome: CommandOutcome; readonly definite: boolean }> => {
       if (inboundChild === null) {
         const child = utilityProcess.fork(join(__dirname, 'inbound-listener.js'), [], { serviceName: INBOUND_LISTENER_SERVICE_NAME });
         const link = new InboundListenerLink(portOfChild(child), clocks.timers, inboundLog);
@@ -2292,13 +2294,29 @@ async function main(): Promise<void> {
         inboundLink = link;
       }
       const link = inboundLink;
-      if (link === null) return { ok: false, outcome: { ok: false, code: 'inbound.fork-failed', headline: 'The inbound listener could not be started' } };
+      if (link === null) return { ok: false, outcome: { ok: false, code: 'inbound.fork-failed', headline: 'The inbound listener could not be started' }, definite: true };
       const reply = await link.request({ kind: 'inbound.enable', token }, 25_000).catch((cause: Error) => ({ kind: 'refused' as const, code: 'inbound.unreachable', headline: 'The inbound listener did not answer', detail: cause.message }));
       if (reply.kind !== 'inbound.state' || reply.state.port === null) {
-        return { ok: false, outcome: reply.kind === 'refused' ? { ok: false, code: reply.code, headline: reply.headline, ...(reply.detail === undefined ? {} : { detail: reply.detail }) } : { ok: false, code: 'inbound.not-bound', headline: 'The inbound listener did not bind to loopback' } };
+        /*
+         * MAJOR 3 (REQ-MCP-120/121, 2026-11-25): whether the bind question is CLOSED depends on who decided it. A
+         * `bindFailed` refusal is the listener's OWN verdict — nothing is bound — so the question closes, and so does an
+         * `inbound.state` answer that says the surface is not listening. A TIMEOUT or an unreachable listener says nothing
+         * about the listener's bind, so the question stays OPEN: the sequencer then does not claim the surface is off,
+         * keeps the token it handed over, and the next enable reads the listener's state rather than minting a new token
+         * out from under a bind that may still land.
+         */
+        const definite = reply.kind === 'inbound.state' ? !reply.state.listening : reply.kind === 'refused' && reply.code === 'inbound.bindFailed';
+        return { ok: false, outcome: reply.kind === 'refused' ? { ok: false, code: reply.code, headline: reply.headline, ...(reply.detail === undefined ? {} : { detail: reply.detail }) } : { ok: false, code: 'inbound.not-bound', headline: 'The inbound listener did not bind to loopback' }, definite };
       }
       log(`inbound surface enabled for this session on 127.0.0.1:${reply.state.port} (loopback, ephemeral; REQ-MCP-119/120)`);
       return { ok: true, port: reply.state.port };
+    },
+    // MAJOR 3 (REQ-MCP-120/121, 2026-11-25): the listener's OWN state, read to resolve a bind question left open by an
+    // enable that was not answered in time. `null` when the listener does not answer, which keeps the question open.
+    askState: async () => {
+      if (inboundLink === null) return null;
+      const reply = await inboundLink.request({ kind: 'inbound.state' }, 10_000).catch(() => null);
+      return reply === null || reply.kind !== 'inbound.state' ? null : { listening: reply.state.listening, port: reply.state.port };
     },
     askDisable: async () => {
       if (inboundLink === null) return true;

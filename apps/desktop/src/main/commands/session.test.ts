@@ -185,16 +185,29 @@ describe('session.start, driven without a process behind it', () => {
     expect(h.hostAsked).toEqual([]);
   });
 
-  it('an unanswered run host refuses and takes the created worktree away again', async () => {
+  it('REQ-MCP-124: an unanswered run host refuses and KEEPS the created worktree (the host may still start with it)', async () => {
     const h = harness(
       configured((req) => (req.kind === 'worktree.remove' ? { kind: 'worktree.removed', path: created.path } : { ...created, kind: 'worktree.created' })),
       () => Promise.reject(new Error('no reply to session.start within 10000 ms')),
     );
     const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
     expect(out).toEqual({ ok: false, code: 'run-host.unreachable', headline: 'The session could not be started', detail: expect.stringContaining('no reply to session.start') });
-    expect(h.svcAsked.map((r) => r.kind)).toEqual(['config.read', 'worktree.create', 'worktree.remove']);
+    // MAJOR (2026-11-25): a NO-REPLY is not a definite refusal — the host may still start the run with exactly this
+    // working directory, so the tree is NOT taken away (only a definite refusal removes it).
+    expect(h.svcAsked.map((r) => r.kind)).toEqual(['config.read', 'worktree.create']);
     expect(h.raised.some((n) => n.severity === 'error')).toBe(true);
     expect(h.logs.some((l) => l.startsWith('run refused:'))).toBe(true);
+  });
+
+  it('REQ-MCP-124: a run host that DEFINITELY refuses takes the created worktree away again', async () => {
+    const h = harness(
+      configured((req) => (req.kind === 'worktree.remove' ? { kind: 'worktree.removed', path: created.path } : { ...created, kind: 'worktree.created' })),
+      () => ({ kind: 'refused', code: 'session.no-model', headline: 'No model is configured' }),
+    );
+    const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
+    expect(out).toEqual({ ok: false, code: 'session.no-model', headline: 'The session could not be started', detail: expect.stringContaining('No model is configured') });
+    await new Promise((r) => setImmediate(r));
+    expect(h.svcAsked.map((r) => r.kind)).toEqual(['config.read', 'worktree.create', 'worktree.remove']);
   });
 
   it('the early refusals are logged, not only returned', async () => {

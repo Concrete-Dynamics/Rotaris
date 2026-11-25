@@ -47,6 +47,39 @@ export interface StrategyChoice {
 export const runOverrideOfChoice = (strategy: AutoStrategyName): RunOverride | null => (strategy === 'orchestrator' ? null : strategy);
 
 /**
+ * PD-ORCH-020 clause 6: the row a choice writes — `Strategy chosen: <strategy>`, then why in brackets: the small model's
+ * reason, why no choice was made, or that it was kept. One writer and one reader of the text, so the transcript can draw
+ * the reason behind an info icon (revision 2) while the record, the export and a search keep the sentence whole.
+ */
+const STRATEGY_CHOSEN_PREFIX = 'Strategy chosen: ';
+export function strategyChosenBody(choice: StrategyChoice): string {
+  const why = choice.kept === true ? 'kept from the previous run' : choice.fallback ? `not chosen: ${choice.reason}` : choice.reason;
+  return `${STRATEGY_CHOSEN_PREFIX}${choice.strategy}${why === '' ? '' : ` (${why})`}`;
+}
+
+/** A parsed strategy-choice row: the strategy and the reason, each with its offset in the body, for a search match. */
+export interface ParsedStrategyChosen {
+  readonly lead: { readonly text: string; readonly start: number };
+  readonly strategy: { readonly text: string; readonly start: number };
+  readonly reason: { readonly text: string; readonly start: number } | null;
+}
+
+/** PD-ORCH-020 clause 6: the row's text taken apart, or `null` for any other system row. */
+export function parseStrategyChosen(body: string): ParsedStrategyChosen | null {
+  if (!body.startsWith(STRATEGY_CHOSEN_PREFIX) || body.includes('\n')) return null;
+  const rest = body.slice(STRATEGY_CHOSEN_PREFIX.length);
+  const space = rest.indexOf(' ');
+  const strategy = space === -1 ? rest : rest.slice(0, space);
+  if (!(AUTO_STRATEGY_NAMES as readonly string[]).includes(strategy)) return null;
+  const lead = { text: 'Strategy chosen', start: 0 };
+  const strategySpan = { text: strategy, start: STRATEGY_CHOSEN_PREFIX.length };
+  if (space === -1) return { lead, strategy: strategySpan, reason: null };
+  const tail = rest.slice(space + 1);
+  if (!tail.startsWith('(') || !tail.endsWith(')') || tail.length < 3) return null;
+  return { lead, strategy: strategySpan, reason: { text: tail.slice(1, -1), start: STRATEGY_CHOSEN_PREFIX.length + space + 2 } };
+}
+
+/**
  * PD-ORCH-019 clause 4: `runtime.max_depth` has three meanings and no more. 1: only the entry role spawns. 2: its children
  * may. 3 or more: no depth limit. The owner's word, 2026-11-24: "1 2 and 3 is unlimited".
  */

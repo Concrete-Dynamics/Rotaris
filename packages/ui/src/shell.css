@@ -543,10 +543,13 @@
    of one-liner stay told apart by wording AND hue (docs/design §1.3: colour never carries a fact alone). */
 /* PD-CHAT-015: that an agent thought is the quietest fact on the line — what it did is what a reader follows. */
 .activity__segment--reasoning { color: var(--rt-text-tertiary); }
-/* PD-CHAT-015: colour states a fact about the work. A settled segment is ink; the run colour belongs to the word in
-   flight (`.activity__now`) and to nothing that has ended. The falsified rule, kept: this drew every tool segment in
-   `--rt-axis-y-300`, so a run that had ended an hour ago read as running. */
-.row--group .activity__segment:not(.activity__segment--reasoning) { color: var(--rt-text); }
+/* PD-CHAT-015 revision 2: colour states a fact about the work. A settled segment is drawn in the quiet ink the reasoning
+   segment beside it takes — the work an agent did is a trace beneath what it said, and the run colour belongs to the
+   word in flight (`.activity__now`) and to nothing that has ended. The falsified rules, kept: revision 1 drew a settled
+   tool segment in full ink, which read as loud as the agent's own words —
+     .row--group .activity__segment:not(.activity__segment--reasoning) { color: var(--rt-text); }
+   — and before it every tool segment stood in `--rt-axis-y-300`, so a run that had ended an hour ago read as running. */
+.row--group .activity__segment:not(.activity__segment--reasoning) { color: var(--rt-text-tertiary); }
 /* PD-CHAT-004: the activity word of the segment in flight — what the agent is doing NOW, at a glance. */
 .activity__now { white-space: nowrap; color: var(--rt-run); }
 /* PD-CHAT-004 revision 3: the fail colour is on the FACT that states the failure and on nothing else on the line. The
@@ -744,6 +747,19 @@
 .skill-load__lead { flex: none; padding-inline-end: var(--rt-space-1); }
 .skill-load__name { flex: 0 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--rt-text); font-weight: var(--rt-weight-medium); }
 .skill-load__by { flex: 0 1 auto; min-width: 0; padding-inline-start: var(--rt-space-1); overflow: hidden; text-overflow: ellipsis; color: var(--rt-text-tertiary); }
+/* PD-ORCH-020 clause 6, revision 2: the strategy-choice notice states the strategy; its reason waits behind an info icon,
+   in a bubble that wraps at a readable measure rather than running out of the column on one line. */
+.strategy-chosen { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: var(--rt-space-1); }
+.strategy-chosen__name { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
+.strategy-chosen__reason { color: var(--rt-text-tertiary); }
+.strategy-chosen__info { align-self: center; }
+.strategy-chosen__icon { display: inline-flex; color: var(--rt-text-tertiary); cursor: help; border-radius: var(--rt-radius-sm); }
+.strategy-chosen__icon:hover, .strategy-chosen__icon:focus-visible { color: var(--rt-text); }
+.strategy-chosen__icon:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: var(--rt-hairline-width); }
+.strategy-chosen__info .tooltip-bubble { white-space: normal; width: max-content; max-width: 48ch; text-align: start; }
+/* Each pooled slot is translated, so each is its own stacking context and the slot below would paint over the bubble:
+   the slot holding an open bubble stands above its neighbours while it is open. */
+.transcript__slot:has(.strategy-chosen__info:hover, .strategy-chosen__info:focus-within) { z-index: 1; }
 /* PD-CHAT-006: a row still being written draws no animated indicator of its own. The falsified rules, kept beside
    their replacement — there is no replacement, which is the point; the row's own growth says it is being written:
      .row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse …; }

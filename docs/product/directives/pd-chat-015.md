@@ -4,6 +4,9 @@
 
 ### PD-CHAT-015 — the transcript is the run's conversation and its threads, and a row is a turn with one left edge
 
+*Revision 2 (2026-11-25, [R-132](../requests.md#r-132)) — **a settled tool segment is quiet**, clause 6. Revision 1
+(2026-11-20, [R-109](../requests.md#r-109)) is quoted where it is replaced, never deleted.*
+
 **1. One left edge.** A transcript row SHALL NOT be laid out in a timestamp column and a role column, and SHALL NOT
 be indented by its agent's depth in the delegation tree. Every row's content SHALL start one step of the design
 language's spacing scale in from the row's edge, at any depth and inside an expanded activity line alike; the members
@@ -40,6 +43,20 @@ has no thread line; its tab and its row in the Run panel say that it exists.
 **5. The edit diff.** An edit-diff row SHALL draw its header line and the first five lines of the change, and the
 rest when the reader asks ("Show N more lines", "Show fewer lines"); a row holding the active search match is drawn
 whole. REQ-CHAT-050's fifty-line cap, its text form and its truncation line are untouched.
+
+**6. A settled tool segment is quiet — revision 2.** On the activity line (`PD-CHAT-004`), a tool segment whose calls
+have all ended SHALL be drawn in the theme's tertiary text colour, the colour the reasoning segment beside it takes. The
+word in flight keeps the run colour and the `N failed` and `N blocked` facts keep the fail colour (`PD-CHAT-004`
+revision 3); nothing else on the line changes.
+
+> *Revision 1, as built and stated beside its rule, said, and no longer governs:* "A settled segment is ink; the run
+> colour belongs to the word in flight and to nothing that has ended." — a settled tool segment in the primary text
+> colour.
+>
+> **Why, 2026-11-25.** The owner: settled lines such as "Ran 3 commands" should be "a muted color closer to the
+> background, similar to thinking text". Drawn in full ink, what an agent did read as loudly as what it said, so a
+> turn's words did not stand out from the trace of its work. The cost: a settled segment is now told from a reasoning
+> segment by its wording alone, where it was told apart by wording and ink.
 
 **What is displaced, by name.** REQ-CHAT-057's 52 px timestamp column, its 112 px role column and its 2 px
 continuation bar; REQ-CHAT-069's two-option toggle, its label "This task" and its sentence "Select an agent to scope

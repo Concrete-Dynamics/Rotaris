@@ -327,3 +327,49 @@ describe('ProcessLink — a request held on the child\'s ready (OQ-473 (3))', ()
     link.close();
   });
 });
+
+describe('MAJOR 1 (REQ-MCP-123/126, 2026-11-25): a reply after the bound reaches the sink that asked for it', () => {
+  it('a late reply is handed to the sink instead of being discarded with the id', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    const late: ProcessReply[] = [];
+    const asked = link.request({ kind: 'ping' }, millis(1_000), (r) => { late.push(r); });
+    clock.advance(1_000);
+    await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    // The request ended at its bound as always; the reply that arrives after is NOT thrown away when a sink named it.
+    expect(late).toEqual([]);
+    const definitive: ProcessReply = { kind: 'refused', code: 'session.refused', headline: 'no run was started' };
+    deliver(reply(1, definitive));
+    expect(late).toEqual([definitive]);
+    // The sink fires once: a second late reply for the same id has nothing left to hand it to.
+    deliver(reply(1, definitive));
+    expect(late).toHaveLength(1);
+    link.close();
+  });
+
+  it('a late reply with no sink named is dropped as before (the sink is opt-in)', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    const asked = link.request({ kind: 'ping' }, millis(1_000));
+    clock.advance(1_000);
+    await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    expect(() => deliver(reply(1, pong))).not.toThrow();
+    link.close();
+  });
+
+  it('the link’s end drops every late sink: no reply can follow the child', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    const late: ProcessReply[] = [];
+    const asked = link.request({ kind: 'ping' }, millis(1_000), (r) => { late.push(r); });
+    clock.advance(1_000);
+    await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    link.end({ kind: 'refused', code: 'link.ended', headline: 'the child is gone' });
+    deliver(reply(1, pong));
+    expect(late).toEqual([]);
+    link.close();
+  });
+});

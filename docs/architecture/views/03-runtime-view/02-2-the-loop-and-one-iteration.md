@@ -246,3 +246,13 @@ resume; the root's was recorded at the continue.
 An agent whose record ends on its own answer resumes into waiting (`resumedStart`); any other takes a model step,
 compressed first when the conversation is too long, as any is. A resumed iteration closes like any other, and it can
 rest and be resumed again (clause 7).
+
+**A follow-up's first root carries the previous root's conversation (`PD-ORCH-022`, since 2026-11-25, R-134).** A run
+started with `continuation` sets `Run.carryPending`; the first root its `turn()` starts consumes it, resumed or fresh. A
+fresh one (`Run.freshRootStart`) finds the session's most recent other root, an iteration's or a plan cycle's, by
+`opened_at` (`run/carry.ts`'s `previousRootTaskId`), loads its record as a resume would, cuts it after its last answer and
+drops any call with no result (`carriedConversation`), records the result under the new root as one replacement and writes
+a `root_conversation_carried` timeline entry. `firstTurn` then hands `runTurn` the carried messages as its history, and the
+payload (`firstMessage`, REQ-SESSION-115's handoff unchanged) is pushed after them with `Conversation.pushRequest`, which
+makes it the original request a compression keeps; `compress` condenses whatever stands before the preserved turns other
+than that request, the carried prefix included. Every later root of the run starts with an empty history, as before.

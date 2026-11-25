@@ -325,7 +325,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
   // ADR-0060: the history is an object whose array is SWAPPED by a compression, never spliced under a call in flight.
   // PD-ORCH-005: a null task continues the history as it stands — how a recorded conversation is resumed.
   const conv = new Conversation(history, deps.recorder);
-  if (task !== null) conv.push({ role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] });
+  if (task !== null) conv.pushRequest({ role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] });
   // PD-ORCH-018 clause 3: a periodic review judges progress toward the task this turn was given.
   if (task !== null) deps.supervisor?.noteObjective(task);
   // ADR-0034: the MCP surface is demanded before the listing and the prompt are read — one resolution feeds both.

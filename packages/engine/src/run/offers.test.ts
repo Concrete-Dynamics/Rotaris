@@ -64,7 +64,8 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
   const lists = (content: readonly ContentPart[]): string[] => content.flatMap((p) => (p.kind === 'text' && p.text.includes(OFFERS_HEADER) ? [p.text.slice(p.text.indexOf(OFFERS_HEADER))] : []));
   const firstMessageOf = (sid: SessionId, iteration: number): readonly ContentPart[] => {
     const row = dal.iterationsOf(sid).find((r) => r.iteration === iteration)!;
-    const first = conversationOf(dal.agentConversation(sid, row.root_task_id)).find((m) => m.role === 'user')!;
+    // PD-ORCH-022: a carried conversation is recorded as one replacement before the root's own first message.
+    const first = conversationOf(dal.agentConversation(sid, row.root_task_id).filter((r) => r.kind === 'message')).find((m) => m.role === 'user')!;
     if (first.role !== 'user') throw new Error('no first user message');
     return first.content;
   };

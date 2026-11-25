@@ -372,4 +372,45 @@ describe('MAJOR 1 (REQ-MCP-123/126, 2026-11-25): a reply after the bound reaches
     expect(late).toEqual([]);
     link.close();
   });
+
+  it('MINOR (REWORK 6): a sink that THROWS does not unwind into the port’s message pump', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const { log, lines } = captured('run host');
+    const link = new ProcessLink(port, clock, log);
+    let answered = 0;
+    const asked = link.request({ kind: 'ping' }, millis(1_000), () => { throw new Error('the sink threw'); });
+    clock.advance(1_000);
+    await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    // The sink throws inside the port's own message handler: it must be trapped, not unwind into the pump.
+    expect(() => deliver(reply(1, pong))).not.toThrow();
+    expect(lines.some((l) => l.includes('sink threw'))).toBe(true);
+    // The channel still works: a later request is answered normally.
+    const next = link.request({ kind: 'ping' }, millis(1_000));
+    answered += 1;
+    deliver({ v: CONTRACT_SCHEMA_VERSION, id: 2, reply: pong });
+    await expect(next).resolves.toEqual(pong);
+    expect(answered).toBe(1);
+    link.close();
+  });
+
+  it('MINOR (REWORK 6): the late-sink map is bounded — the oldest sink is dropped past the cap', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    const fired: number[] = [];
+    // More requests than the cap, each naming a sink, none of them ever answered.
+    const count = 40;
+    for (let i = 0; i < count; i += 1) {
+      const asked = link.request({ kind: 'ping' }, millis(1_000), () => { fired.push(i); });
+      clock.advance(1_000);
+      await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    }
+    // The OLDEST ids were dropped, so a reply to id 1 has no sink to reach; a recent one still does.
+    deliver(reply(1, pong));
+    expect(fired).toEqual([]);
+    deliver(reply(count, pong));
+    expect(fired).toEqual([count - 1]);
+    link.close();
+  });
 });

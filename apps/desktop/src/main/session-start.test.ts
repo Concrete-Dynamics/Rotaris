@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { RunHostRequest, WorkspaceServiceRequest } from '@rotaris/contracts';
+import { INBOUND_HOST_CREDENTIAL_LEASE_MS, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import { startSessionRun, checkStartInput, SESSION_START_SANDBOX_MODES, type SessionStartDeps } from './session-start.js';
 
@@ -158,6 +158,31 @@ describe('REQ-GIT-022/023: the workspace binding is made before the host is aske
     // The tree the start created is KEPT: the host may yet start the run with exactly this working directory.
     await new Promise((r) => setImmediate(r));
     expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
+  });
+
+  it('REQ-MCP-124 (MAJOR D, REWORK 6): a `request.failed` (raised AFTER dispatch, or anywhere) KEEPS the worktree', async () => {
+    // `request.failed` is the run host's own dispatch error. It carries no assurance the throw sat before the dispatch, so
+    // the tree is KEPT: the run that may already exist must not have its working directory deleted under it.
+    const h = harness(() => ({ kind: 'refused', code: 'request.failed', headline: 'the host threw' }));
+    const out = await startSessionRun(h.deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' } });
+    expect(out.ok).toBe(false);
+    expect(out.ok === false && out.code).toBe('request.failed');
+    await new Promise((r) => setImmediate(r));
+    expect(h.svcAsked.some((r) => r.kind === 'worktree.remove')).toBe(false);
+  });
+
+  it('REQ-MCP-124 (MAJOR D, REWORK 6): the no-reply follow-up reads over the WHOLE host worst case, not after one listing', async () => {
+    const h = harness(() => ({ kind: 'refused', code: 'run-host.unreachable', headline: 'The run host did not answer' }));
+    const scheduled: { fn: () => void; afterMs: number }[] = [];
+    const deps = {
+      ...h.deps,
+      scheduleRecheck: (fn: () => void, afterMs: number) => { scheduled.push({ fn, afterMs }); },
+    } as unknown as SessionStartDeps;
+    const out = await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', isolation: { branch: 'rotaris/x' }, hostStartBoundMs: 60_000 });
+    expect(out.ok).toBe(false);
+    expect(scheduled).toHaveLength(1);
+    // The recheck waits past the bound PLUS the host's credential lease — the last moment the host could still be starting.
+    expect(scheduled[0]!.afterMs).toBe(60_000 + INBOUND_HOST_CREDENTIAL_LEASE_MS);
   });
 
   it('REQ-MCP-124: a DEFINITE refusal DOES remove the auto-created worktree (nothing came to exist)', async () => {

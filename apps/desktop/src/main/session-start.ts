@@ -1,8 +1,9 @@
-import { ISOLATION_REQUIRED_HINT, SANDBOX_MODE_NAMES, type CommandOutcome, type ImageAttachmentInput, type ProcessReply, type RunHostRequest, type SandboxModeName, type WorktreeBinding } from '@rotaris/contracts';
+import { ISOLATION_REQUIRED_HINT, INBOUND_HOST_CREDENTIAL_LEASE_MS, SANDBOX_MODE_NAMES, type CommandOutcome, type ImageAttachmentInput, type ProcessReply, type RunHostRequest, type SandboxModeName, type WorktreeBinding } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import type { CommandContext, MainWindowState } from './commands/context.js';
+import { isDefiniteStartRefusal } from './start-refusal.js';
 import type { ReportInput } from './notices.js';
 
 /**
@@ -104,12 +105,13 @@ export interface SessionStartDeps {
   /** REQ-NOTIFY-060/061: the confinement refusal notice, built where it stands (the command facet owns it). */
   readonly confinementNotice: (r: { readonly headline: string; readonly detail?: string | undefined }) => ReportInput;
   /**
-   * MINOR (REQ-MCP-124, 2026-11-25): a way to schedule ONE bounded follow-up check. `ProcessLink` discards a reply that
-   * arrives after its own bound (ADR-0002 c.11), so a start that got a NO-REPLY cannot learn what the host decided from
-   * the link. A session-created worktree would then linger if the host refused only after the bound. This schedules the
-   * one check that settles it: read the workspace's session listing after the host worst case, and take the tree away
-   * only if the listing is readable AND the session is definitively not in it. Absent means no such check (a desktop
-   * start that set no bound, or a test); the tree is then left as the caller left it.
+   * REQ-MCP-124/126 (MAJOR D, REWORK 6): a way to schedule ONE bounded follow-up check. `ProcessLink` discards a reply
+   * that arrives after its own bound (ADR-0002 c.11), so a start that got a NO-REPLY cannot learn what the host decided
+   * from the link. A session-created worktree would then linger if the host refused only after the bound. This schedules
+   * the one check that settles it: read the workspace's session listing over the WHOLE host worst case (the credential
+   * lease, the last moment the host could still be starting the run), and take the tree away only if the listing is
+   * readable AND the session is definitively not in it. Absent means no such check (a desktop start that set no bound, or
+   * a test); the tree is then left as the caller left it.
    */
   readonly scheduleRecheck?: ((fn: () => void, afterMs: number) => void) | undefined;
 }
@@ -286,16 +288,25 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
      * run exists) — where the caller that hit the no-reply is responsible for the tree, or leaves it to session open.
      */
     if (wcId !== null) mainWindows.endStart(wcId, sessionId);
-    if (r.kind === 'refused' && r.code !== 'run-host.unreachable' && binding?.created_by_session && svc) {
+    /*
+     * MAJOR D (REQ-MCP-124, 2026-11-25): the SAME conservative rule the surface's slot uses — the tree is taken away only
+     * on a DEFINITE refusal, the host's own answer that no run exists (`isDefiniteStartRefusal`). Round 6 tested one code
+     * by hand and so removed the tree on `request.failed`/`request.malformed`/`reply.unexpected` too, none of which
+     * proves the throw sat BEFORE the dispatch: a `request.failed` raised AFTER the run started would then delete the
+     * working tree of a run that is running.
+     */
+    if (r.kind === 'refused' && isDefiniteStartRefusal(r.code) && binding?.created_by_session && svc) {
       const path = binding.worktree_path;
       void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed after the refused start (${x.kind})`)).catch(() => undefined);
     }
     /*
-     * MINOR (REQ-MCP-124, 2026-11-25): a NO-REPLY kept the tree because the host may still start the run with it. If the
-     * host in fact REFUSED — only after the bound, so `ProcessLink` discarded the reply — the tree would linger with no
-     * session behind it. One bounded follow-up read settles it: after the host worst case, the workspace's session listing
-     * is asked; if it is readable and does NOT carry this session, no run was born and the session-created tree is removed.
-     * An unreadable listing, or a session that IS present, keeps the tree (the conservative side).
+     * MINOR (REQ-MCP-124, 2026-11-25; tightened by MAJOR D, REWORK 6): a NO-REPLY kept the tree because the host may
+     * still start the run with it. If the host in fact REFUSED — only after the bound, so `ProcessLink` discarded the
+     * reply — the tree would linger with no session behind it. One bounded follow-up settles it, and it is read over the
+     * WHOLE host worst case (the credential lease, the last moment the host could still be starting the run), not after a
+     * single listing: a start can be standing BEFORE it is written to the listing, so one early read proves nothing. The
+     * tree is removed only when that read is readable AND carries no such session; an unreadable listing, or a session
+     * that IS present, keeps it (the conservative side, REQ-MCP-126's cost argument).
      */
     if (r.kind === 'refused' && r.code === 'run-host.unreachable' && binding?.created_by_session && svc && deps.scheduleRecheck !== undefined) {
       const path = binding.worktree_path;
@@ -306,7 +317,7 @@ export async function startSessionRun(deps: SessionStartDeps, input: SessionStar
           if (listing.sessions.some((row) => row.sessionId === sessionId)) { log(`worktree ${path} kept: session ${sessionId} appeared after the no-reply start`); return; }
           void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed: the host refused the late start and no session was born (${x.kind})`)).catch(() => undefined);
         }).catch(() => undefined);
-      }, boundMs + 5_000);
+      }, boundMs + INBOUND_HOST_CREDENTIAL_LEASE_MS);
     }
     if (r.kind === 'refused') {
       if (r.code === 'session.confinement') void notices.report(deps.confinementNotice(r));

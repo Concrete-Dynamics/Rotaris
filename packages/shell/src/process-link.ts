@@ -66,6 +66,12 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
    * unchanged), and the late reply is handed over instead of dropped.
    */
   private readonly late = new Map<number, (r: ProcessReply) => void>();
+  /**
+   * MINOR (REWORK 6, 2026-11-25): the cap on the `late` map. An unanswered request's sink is dropped at `end`/`close`,
+   * but a sink whose request asked for the late answer and whose reply NEVER comes (nor the child ending) would sit here
+   * for the life of the link; the cap drops the OLDEST entry so a long-lived link cannot grow without end.
+   */
+  private static readonly LATE_MAX = 32;
   private readonly eventListeners = new Set<(e: ProcessEvent) => void>();
   private askHandler: ((ask: ServiceAsk) => Promise<ProcessReply>) | null = null;
   private ended: Extract<ProcessReply, { kind: 'refused' }> | null = null;
@@ -106,9 +112,24 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
       }
       const p = this.pending.get(m.id);
       if (!p) {
-        // MAJOR 1: a reply whose request already ended at its bound goes to the sink that asked for it, not to the bin.
+        /*
+         * MAJOR 1 (REWORK 5): a reply whose request already ended at its bound goes to the sink that asked for it, not
+         * to the bin.
+         *
+         * MINOR (REWORK 6, 2026-11-25): the sink is trapped. It runs inside the PORT'S OWN message handler, so a throw
+         * from it would unwind into the message pump and take every later message with it — a delivery bug turning into
+         * a dead channel. The reply is still consumed (the entry is deleted first), so a throwing sink cannot be handed
+         * the same reply twice.
+         */
         const sink = this.late.get(m.id);
-        if (sink !== undefined) { this.late.delete(m.id); sink(m.reply); }
+        if (sink !== undefined) {
+          this.late.delete(m.id);
+          try {
+            sink(m.reply);
+          } catch (cause) {
+            this.log.warn(`a late reply's sink threw while handling a reply from the ${this.log.boundary}: ${cause instanceof Error ? cause.message : String(cause)}`);
+          }
+        }
         return;
       }
       this.pending.delete(m.id);
@@ -195,12 +216,22 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
       const h = this.timers.after(boundMs, () => {
         this.pending.delete(id);
         // MAJOR 1: the request ends here as it always did; a sink that asked for the late answer is armed for it.
-        if (lateReply !== undefined) this.late.set(id, lateReply);
+        if (lateReply !== undefined) this.rememberLate(id, lateReply);
         reject(new NoReplyWithinBound(`no reply to ${request.kind} within ${boundMs} ms`));
       });
       this.pending.set(id, { resolve, reject, cancel: () => h.cancel() });
       this.port.postMessage(env);
     });
+  }
+
+  /** MINOR (REWORK 6): remember a late sink, dropping the oldest past `LATE_MAX` so the map is bounded (a Map iterates in insertion order). */
+  private rememberLate(id: number, sink: (r: ProcessReply) => void): void {
+    this.late.set(id, sink);
+    while (this.late.size > ProcessLink.LATE_MAX) {
+      const oldest = this.late.keys().next();
+      if (oldest.done === true) break;
+      this.late.delete(oldest.value);
+    }
   }
 
   close(): void {

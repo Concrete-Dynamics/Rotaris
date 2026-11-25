@@ -60,6 +60,31 @@ export function isBusy(persisted: string): boolean {
   return p === 'starting' || p === 'running' || p === 'pausing' || p === 'cancelling';
 }
 
+/**
+ * REQ-SESSION-055 / REQ-ORCH-085/153 (read by REQ-MCP-126): the persisted statuses that mean the product still holds a
+ * run — the six active ones, plus the three parks (`paused`, `paused_message_limit`, `awaiting_plan_decision`) where a
+ * run waits for its user at the desktop rather than having ended.
+ */
+export const RUN_HOLDING_STATUSES: ReadonlySet<string> = new Set([
+  ...ACTIVE_STATUSES, 'paused', 'paused_message_limit', 'awaiting_plan_decision',
+]);
+export function runIsHeld(status: string): boolean {
+  return RUN_HOLDING_STATUSES.has(status);
+}
+
+/**
+ * REQ-MCP-126 (BLOCKER C, 2026-11-25): whether the run behind this persisted status has ENDED — the one question the
+ * surface's slot asks of the product state. A busy status has not ended. A status outside the holding set (completed,
+ * failed, stopped, idle, interrupted) has ended. A PARK has ended exactly when a stop reason accompanies it: a park with
+ * no reason waits for its user (the run holds), while a park with a reason was cancelled at the desktop and the run is
+ * over (`paused` + `user_cancelled`, which is what a plan-gate or message-limit cancel writes).
+ */
+export function runHasEnded(status: string, stopReason: string | null): boolean {
+  if (isBusy(status)) return false;
+  if (!runIsHeld(status)) return true;
+  return stopReason !== null;
+}
+
 /** REQ-NOTIFY-048: one label per member; no two share one; none empty. Wording is the implementation's. */
 export const STATUS_LABELS: Readonly<Record<PresentationStatus, string>> = {
   idle: 'Idle',

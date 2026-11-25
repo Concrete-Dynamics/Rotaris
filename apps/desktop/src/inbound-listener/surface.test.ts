@@ -204,11 +204,21 @@ describe('REQ-MCP-123/130: the status tool answers a handle, in the product’s 
     expect(JSON.parse(out.text)).toMatchObject({ awaitingInput: true });
   });
 
-  it('refuses a value that is not a handle this surface minted', async () => {
-    const { ask } = askHandler({ status: { kind: 'refused', code: 'inbound.unknown-run', headline: 'No run of this surface answers to that handle' } });
+  it('REQ-MCP-123/130 (Minor, 2026-11-25): refuses a value that is not a handle AT THE SURFACE, without asking main', async () => {
+    const { ask, calls } = askHandler();
     const out = await callInboundTool(ask, 'rotaris_run_status', { run: 'a-desktop-session-id' });
     expect(out.isError).toBe(true);
+    expect(out.text).toContain('requires a run handle');
+    // A malformed handle never reaches main: the caller is refused rather than left to wait out an IPC bound.
+    expect(calls).toEqual([]);
+  });
+
+  it('a well-formed but unknown handle reaches main, whose own refusal is rendered', async () => {
+    const { ask, calls } = askHandler({ status: { kind: 'refused', code: 'inbound.unknown-run', headline: 'No run of this surface answers to that handle' } });
+    const out = await callInboundTool(ask, 'rotaris_run_status', { run: `inr_${'b'.repeat(32)}` });
+    expect(out.isError).toBe(true);
     expect(out.text).toContain('No run of this surface answers to that handle');
+    expect(calls).toEqual([{ kind: 'inbound.runStatus', run: `inr_${'b'.repeat(32)}` }]);
   });
 
   it('refuses a missing handle and an unknown tool name', async () => {
@@ -220,7 +230,17 @@ describe('REQ-MCP-123/130: the status tool answers a handle, in the product’s 
   it('the status text is the product’s own words, and no extra field rides along', () => {
     const text = statusText({ run: `inr_${'a'.repeat(32)}`, sessionId: 'S-1', state: 'paused', stopReason: null });
     expect(text).toContain('paused');
+    // A PARK is not a stop: it still waits for its user, so "has not stopped" is right here.
     expect(text).toContain('the run has not stopped');
     expect(text).not.toContain('Bearer');
+  });
+
+  it('REQ-MCP-123 (BLOCKER D, 2026-11-25): a TERMINAL run without a published reason does not read as still running', () => {
+    const text = statusText({ run: `inr_${'a'.repeat(32)}`, sessionId: 'S-1', state: 'completed', stopReason: null });
+    expect(text).toContain('completed');
+    expect(text).not.toContain('the run has not stopped');
+    expect(text).toContain('it stopped');
+    // A run still busy has not stopped, however recently the session last did.
+    expect(statusText({ run: `inr_${'a'.repeat(32)}`, sessionId: 'S-1', state: 'running', stopReason: null })).toContain('the run has not stopped');
   });
 });

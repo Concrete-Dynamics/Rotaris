@@ -17,6 +17,18 @@ and the service's narrow asks back to main), `inbound-protocol.ts` (main ↔ the
 The ordered edit path for a new command, channel or message is [`04-seams.md`](04-seams.md); who owns a fact
 once it exists is [`05-state-ownership.md`](05-state-ownership.md).
 
+**The one addition since the five kinds above: the inbound listener (ADR-0067; REQ-MCP-119..130, 2026-11-25).** The
+product serves one loopback MCP surface for external agents from a `utilityProcess` of its own
+(`apps/desktop/src/inbound-listener/`), forked from the one shipped binary as the run host is. It holds **no** session
+lock and **no** session store: it binds `127.0.0.1` and, where the platform supplies it, `::1` on an ephemeral port,
+keeps the per-exposure bearer token main minted (shown once, never logged), checks every request's `Host` and `Origin`
+against loopback, and offers exactly the two tools `rotaris_start_run` and `rotaris_run_status`. It speaks to **main**
+in main's own terms and never to the run host or a workspace service directly; every start it asks for goes through
+main's one start coordinator (`main/session-start.ts`), the same one the desktop composer uses, so the workspace fence
+and the run-host admission are shared (REQ-MCP-124), and the single externally started run's slot is held in main, not
+in the listener (REQ-MCP-126). Its wire is `packages/contracts/src/inbound-protocol.ts`; its ownership sits in the
+sixth row the parts' table would carry, and the process count is six rather than five (ADR-0002, amended by ADR-0067).
+
 ```mermaid
 flowchart LR
   subgraph rendererWin["Renderer processes (sandboxed, contextIsolation)"]

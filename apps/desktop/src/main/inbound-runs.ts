@@ -1,4 +1,4 @@
-import { INBOUND_NO_OPEN_WORKSPACE, INBOUND_RUN_ALREADY_ACTIVE, INBOUND_RUN_HANDLE_PATTERN, INBOUND_START_BOUND_MS as INBOUND_START_BOUND_MS_NUMBER, isBusy, presentationStatus, runHasEnded, type InboundListenerAsk, type InboundRunStatus, type InboundStartRunAnswer, type InboundRunStatusAnswer, type ProcessReply, type StopReason } from '@rotaris/contracts';
+import { INBOUND_NO_OPEN_WORKSPACE, INBOUND_RUN_ALREADY_ACTIVE, INBOUND_RUN_HANDLE_PATTERN, INBOUND_START_BOUND_MS as INBOUND_START_BOUND_MS_NUMBER, isParkedStatus, presentationStatus, runHasEnded, type InboundListenerAsk, type InboundRunStatus, type InboundStartRunAnswer, type InboundRunStatusAnswer, type ProcessReply, type StopReason } from '@rotaris/contracts';
 import { millis, type Millis } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import { startSessionRun, type SessionStartDeps } from './session-start.js';
@@ -128,6 +128,24 @@ import type { InboundStatusReading } from './inbound-status.js';
  * 5. **The residual gap is named correctly and BROADER** (see the class comment's point 5): every delivery is matched to
  *    a handle by the SESSION ID ALONE, so a delivery can reach a groundlessly frozen or still-open handle. The bounding
  *    measure is sharpened: a late `run.result` may only ADD a missing reason to a frozen end it AGREES with.
+ *
+ * REWORK 9 (2026-11-25) — A PARK NEVER RELEASES THE SLOT, AND THE TEXT FOLLOWS THE HANDLE'S OWN STATE.
+ *
+ * 1. **`paused` is AMBIGUOUS and therefore never an end** (`runHasEnded`). A normal DESKTOP Pause writes `paused` +
+ *    `user_cancelled` AND emits a `run.result`; a desktop Continue then resumes the SAME open iteration. No product field
+ *    separates that resumable pause from the plan-gate cancel (both write `paused`/`user_cancelled`), so round 8's "a park
+ *    WITH a reason ends the run" admitted a SECOND external start while the first was continued — two running runs
+ *    (REQ-MCP-126). Every park — `paused`, `paused_message_limit`, `awaiting_plan_decision`, each WITH or WITHOUT a reason
+ *    — now HOLDS the slot and the handle, and the handle is NOT finalized on the pause: it stays watchable through the
+ *    pause and the continuation, and is frozen only on the SAME proof that releases the slot (advisor: "premature handle
+ *    finalization" is a High defect). Release comes from a TERMINAL status, a terminal `run.result`, the run host's exit,
+ *    or an authoritative ABSENCE (STALE/absent after a failed terminal write) — the last taken only while the run is NOT
+ *    parked. The liveness cost (a desktop-paused run never continued holds the slot until the application ends) is covered
+ *    by REQ-MCP-126's "refused, never queued".
+ * 2. **A held run NEVER reports a stop reason** (REQ-MCP-123; MAJOR 1). The stop reason belongs to a run that has ended;
+ *    while the slot is held (`endState === null`) `rotaris_run_status` answers `stopReason: null` and the text says the run
+ *    has not stopped — even when the hold IS a park the product labelled `paused`/`user_cancelled`. A TERMINAL end answers
+ *    its reason, and the text says `it stopped`.
  */
 
 /** One externally started run, as ONE object per handle: reserved at the admission and mutated through its whole life. */
@@ -453,10 +471,10 @@ export class InboundSurfaceRuns {
    * 3. **The phase's fields are held as ONE UNIT on the handle** (REWORK 7, MAJOR 3): a snapshot replaces the status, the
    *    waiting flag and the reason together; a listing row, which states NO reason, replaces the status and the waiting
    *    flag and LEAVES the reason (a row is silent about the reason, so it must not overwrite a known one with null).
-   * 4. **An end needs a positive proof**: the terminal `run.result` (with its own reason), a terminal status, a park WITH
-   *    a reason, or a listing that proves the run is GONE (absent, or STALE — busy with nothing running it). A park
-   *    WITHOUT a reason — the plan gate, the message limit — HOLDs (the run can resume), which is the conservative
-   *    direction REQ-MCP-126 asks for.
+   * 4. **An end needs a positive proof**: a TERMINAL `run.result`, a TERMINAL status, the run host's exit, or a listing
+   *    that proves the run is GONE (absent, or STALE — busy with nothing running it), the last only while the run is NOT
+   *    parked. A PARK (`paused`, `paused_message_limit`, `awaiting_plan_decision`), with or without a reason, HOLDS — the
+   *    run can resume the same iteration (REWORK 9), which is the conservative direction REQ-MCP-126 asks for.
    */
   #transition(run: InboundRun, event: LifecycleEvent): TransitionOutcome {
     const nothing: TransitionOutcome = { newlyConfirmed: false, released: false };
@@ -505,14 +523,33 @@ export class InboundSurfaceRuns {
     // Rule 4b: a listing that proves the run is GONE (absent, or stale — busy with nothing running it). The terminal
     // write failed; the run is over all the same, and the reason the engine uses for an unconfirmable completion is the
     // product's own.
+    //
+    // REWORK 9: only while the run is NOT PARKED. A desktop pause leaves the session parked, and a parked session may be
+    // continued on the SAME iteration (the advisor's rule), so an absence of a parked run proves nothing about whether it
+    // can resume. Such a reading is recorded (the phase arm below) and the slot is HELD.
     if (event.kind === 'listing-gone') {
+      if (isParkedStatus(run.phase?.executionStatus ?? '')) {
+        run.phase = { executionStatus: 'paused', awaitingInput: run.phase?.awaitingInput ?? false, stopReason: run.phase?.stopReason ?? null };
+        return { newlyConfirmed, released: false };
+      }
       this.#freeze(run, { executionStatus: 'stopped', awaitingInput: false }, 'agent_session_aborted', true);
       return { newlyConfirmed, released: true };
     }
 
-    // Rule 4c: the terminal `run.result` — the run is over and its own reason rides it (an absent one is a null reason,
-    // which a later result of a still-open handle could not contradict because the handle is closed by this).
+    /*
+     * Rule 4c: the `run.result` — the run is over and its own reason rides it (an absent one is a null reason, which a
+     * later result of a still-open handle could not contradict because the handle is closed by this).
+     *
+     * REWORK 9: UNLESS the result's own execution status is a PARK. A desktop Pause writes `paused` + `user_cancelled`
+     * and ALSO delivers this result; a desktop Continue then resumes the SAME open iteration. The result is recorded on
+     * the handle (state and reason) and the slot is HELD — the exact signal the blocker turned on. A result whose status
+     * is absent (a bare terminal outcome in a test or a repaired path) keeps the round-8 terminal reading.
+     */
     if (event.kind === 'result') {
+      if (event.executionStatus !== null && isParkedStatus(event.executionStatus)) {
+        run.phase = { executionStatus: event.executionStatus, awaitingInput: false, stopReason: event.stopReason };
+        return { newlyConfirmed, released: false };
+      }
       this.#freeze(run, { executionStatus: event.executionStatus ?? 'stopped', awaitingInput: false }, event.stopReason, false);
       return { newlyConfirmed, released: true };
     }
@@ -529,7 +566,17 @@ export class InboundSurfaceRuns {
      *   rule 4b's arm, so the STATUS path ends such a run exactly as the reconcile does (MAJOR 4).
      */
     if (event.kind === 'listing') {
+      /*
+       * REWORK 9: a STALE row (busy while nothing runs it, REQ-SESSION-171) is the definite proof of an end and goes
+       * through rule 4b's arm — but ONLY when the run is NOT parked. A parked session may be continued on the same
+       * iteration, so a stale reading of one (or a reading of a run whose last known phase is a park) proves nothing;
+       * it is recorded and the slot is HELD.
+       */
       if (event.stale) {
+        if (isParkedStatus(event.executionStatus) || isParkedStatus(run.phase?.executionStatus ?? '')) {
+          run.phase = { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput, stopReason: run.phase?.stopReason ?? null };
+          return { newlyConfirmed, released: false };
+        }
         const observed = run.phase?.stopReason ?? null;
         this.#freeze(run, { executionStatus: 'stopped', awaitingInput: false }, observed ?? 'agent_session_aborted', observed === null);
         return { newlyConfirmed, released: true };
@@ -539,16 +586,11 @@ export class InboundSurfaceRuns {
       run.phase = { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput, stopReason: event.stopReason };
     }
     /*
-     * Rule 4d: the park WITH a reason, or a terminal status, is the end. A park WITHOUT one holds.
-     *
-     * REWORK 8 (MAJOR 3): the END DECISION reads the reason the EVENT itself carries, never the merged phase's reason. A
-     * listing row states NO reason, so its end reason is `null` — a reasonless row on a `paused`/`paused_message_limit`
-     * status therefore HOLDS (the conservative direction), instead of ending the run on a reason the row never stated
-     * (round 7 let a carried-over reason from a PRIOR phase decide an end the fresh row knew nothing about). Only a
-     * TERMINAL status, or a snapshot's own reason, is enough to end it here.
+     * Rule 4d: a TERMINAL status is the end. A PARK — every `paused` variant, `paused_message_limit`, the plan gate —
+     * HOLDS, with or without a reason: REWORK 9 made `runHasEnded` a TERMINAL-STATUS question alone, because no product
+     * field separates a resumable desktop pause from the plan-gate cancel and both may be continued on the same iteration.
      */
-    const endReason = event.kind === 'listing' ? null : event.stopReason;
-    if (runHasEnded(event.executionStatus, endReason)) {
+    if (runHasEnded(event.executionStatus)) {
       this.#freeze(run, { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput }, run.phase.stopReason, false);
       return { newlyConfirmed, released: true };
     }
@@ -897,14 +939,17 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
      */
     const phase = now.phase;
     if (phase === null) return { kind: 'refused', code: 'inbound.run-unreadable', headline: 'The run’s state could not be read' };
-    const busy = isBusy(phase.executionStatus);
     const status: InboundRunStatus = {
       run: handle,
       sessionId: now.sessionId,
       state: presentationStatus(phase.executionStatus),
-      // REQ-MCP-123 (BLOCKER D): the reason belongs to the HANDLE and is read from it alone; a run still busy has not
-      // stopped, so it reports none however recently the session last stopped.
-      stopReason: busy ? null : (phase.stopReason as StopReason | null),
+      /*
+       * REQ-MCP-123 (BLOCKER D; MAJOR 1, REWORK 9): a stop reason belongs to a run that has ENDED. This handle's slot is
+       * still HELD (the `endState !== null` case above returned already), so — even when the hold is a park the product
+       * labelled `paused`/`user_cancelled` — the run has not stopped and the answer carries NO reason. Reporting the
+       * phase's parked reason here is what made the text say `it stopped` for a held slot (MAJOR 1).
+       */
+      stopReason: null,
       awaitingInput: phase.awaitingInput,
     };
     return { kind: 'inbound.runStatus', status };

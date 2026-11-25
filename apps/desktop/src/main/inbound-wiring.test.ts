@@ -241,8 +241,8 @@ describe('REQ-MCP-123 (BLOCKER D): the stop reason reaches the caller through th
   });
 });
 
-describe('REQ-MCP-123/126 (BLOCKER C): a desktop cancel at the plan gate settles through the REAL wiring', () => {
-  it('the run parks, the user cancels, and the slot frees with the reason — no `run.result` at all', async () => {
+describe('REQ-MCP-123/126 (BLOCKER C; BLOCKER, REWORK 9): a desktop cancel at the plan gate HOLDS the slot through the REAL wiring', () => {
+  it('the run parks, the user cancels, and the slot is HELD and unsaid — only a TERMINAL end frees it', async () => {
     const w = wired();
     await w.link.request({ kind: 'inbound.enable', token: 'tok-wired' }, 5_000);
     await settle();
@@ -256,19 +256,29 @@ describe('REQ-MCP-123/126 (BLOCKER C): a desktop cancel at the plan gate settles
     // The user cancels at the desktop: the product publishes `paused` + `user_cancelled`, and NO `run.result`.
     w.listings.set(sessionId, { status: 'paused', awaitingInput: false });
     w.emitSnapshot(sessionId, 'paused', 'user_cancelled');
-    // The slot is free, and `rotaris_run_status` names the reason.
+    // REWORK 9: no product field separates this resumable pause from a plan-gate cancel, and a Continue resumes the SAME
+    // iteration, so the slot is HELD and the handle reports NO reason (MAJOR 1).
+    expect(w.runs.active?.sessionId).toBe(sessionId);
+    const held = await w.host.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(held.kind).toBe('inbound.runStatus');
+    expect(held.kind === 'inbound.runStatus' && held.status.state).toBe('paused');
+    expect(held.kind === 'inbound.runStatus' && held.status.stopReason).toBeNull();
+    // A fresh external start is REFUSED while the slot is held.
+    expect(await w.host.ask({ kind: 'inbound.startRun', prompt: 'next' })).toMatchObject({ kind: 'refused', code: 'inbound.run-active' });
+    // Only a TERMINAL end frees it and names the reason.
+    w.listings.set(sessionId, { status: 'stopped', awaitingInput: false });
+    w.emitSnapshot(sessionId, 'stopped', 'user_cancelled');
     expect(w.runs.active).toBeNull();
-    const out = await w.host.ask({ kind: 'inbound.runStatus', run: handle });
-    expect(out.kind).toBe('inbound.runStatus');
-    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('user_cancelled');
+    const ended = await w.host.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(ended.kind === 'inbound.runStatus' && ended.status.stopReason).toBe('user_cancelled');
     // A fresh external start is admitted now.
     const second = await w.host.ask({ kind: 'inbound.startRun', prompt: 'next' });
     expect(second.kind).toBe('inbound.runStarted');
   });
 });
 
-describe('REQ-MCP-123/126 (MAJOR A, REWORK 6): Revise → Cancel frees the slot through the REAL wiring', () => {
-  it('the next phase of the same run (a desktop revise) is adopted, and its cancel at the next gate frees the slot', async () => {
+describe('REQ-MCP-123/126 (MAJOR A, REWORK 6; BLOCKER, REWORK 9): Revise → park through the REAL wiring', () => {
+  it('the next phase of the same run (a desktop revise) is adopted, and a subsequent park HOLDS the slot', async () => {
     const w = wired();
     await w.link.request({ kind: 'inbound.enable', token: 'tok-wired' }, 5_000);
     await settle();
@@ -284,12 +294,13 @@ describe('REQ-MCP-123/126 (MAJOR A, REWORK 6): Revise → Cancel frees the slot 
     w.emitSnapshot(sessionId, 'idle', null);
     w.emitSnapshot(sessionId, 'running', null);
     expect(w.runs.active?.sessionId).toBe(sessionId);
-    // The user CANCELS at the next gate: `paused` + `user_cancelled`, and NO `run.result`.
+    // A CANCEL at the next gate writes `paused` + `user_cancelled`. REWORK 9: the park HOLDS (the same iteration may be
+    // continued), so the slot is NOT free and the handle reports no reason.
     w.emitSnapshot(sessionId, 'paused', 'user_cancelled');
-    expect(w.runs.active).toBeNull();
+    expect(w.runs.active?.sessionId).toBe(sessionId);
     const out = await w.host.ask({ kind: 'inbound.runStatus', run: handle });
     expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('paused');
-    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('user_cancelled');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBeNull();
   });
 });
 

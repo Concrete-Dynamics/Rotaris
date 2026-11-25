@@ -34,9 +34,23 @@ export function createInboundHost(deps: InboundHostDeps): InboundHost {
     const binding = listener.binding();
     return { listening: binding !== null, port: binding === null ? null : binding.port };
   };
+  /**
+   * MAJOR (REQ-MCP-120/121, 2026-11-25): enable/disable/state are SERIALIZED through one chain. Two enables that arrive
+   * together must not race: while the first is binding, `listener.binding()` is still null, so a second would rotate the
+   * token and, on its rejected bind, revoke the token the FIRST (successful) bind is left comparing — the display and the
+   * surface then drift. Applying the requests in the order they arrived makes the second enable see the first's bind and
+   * become idempotent. `state` rides the same chain: it is cheap and must not read a half-applied exposure.
+   */
+  let chain: Promise<unknown> = Promise.resolve();
+  const serialize = <T>(work: () => Promise<T>): Promise<T> => {
+    const next = chain.then(work, work);
+    // Keep the chain alive past a rejection, so one failing request never wedges the next.
+    chain = next.then(() => undefined, () => undefined);
+    return next;
+  };
 
   return {
-    apply: async (request: InboundListenerRequest): Promise<InboundListenerReply> => {
+    apply: (request: InboundListenerRequest): Promise<InboundListenerReply> => serialize(async (): Promise<InboundListenerReply> => {
       switch (request.kind) {
         case 'inbound.enable': {
           /*
@@ -68,7 +82,7 @@ export function createInboundHost(deps: InboundHostDeps): InboundHost {
         case 'inbound.state':
           return { kind: 'inbound.state', state: state() };
       }
-    },
+    }),
     // REQ-MCP-123/124: the two tool calls go to main; the listener answers nothing of its own here.
     ask: deps.mainAsk,
   };

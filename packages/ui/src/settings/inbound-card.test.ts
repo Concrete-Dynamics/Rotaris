@@ -104,4 +104,20 @@ describe('REQ-MCP-120/121: the inbound surface card shows the token the enabling
     const after = draw({ exposure: { enabled: true, port: 51234 }, onToggle: async () => ({ ok: true, message: '', exposure: { enabled: true, port: 51234 } }) });
     expect(after.html).toContain('data-inbound-token-hidden');
   });
+
+  it('REQ-MCP-120 (Minor, 2026-11-25): a toggle whose IPC call REJECTS still clears the busy state', async () => {
+    harness.cells.length = 0;
+    // The IPC call itself throws (a handler that threw, dispatched as `command.failed`): the promise rejects, and the
+    // card must not be left with `busy` true — the switch would hang disabled forever.
+    const onToggle = async (): Promise<{ ok: boolean; message: string }> => { throw new Error('command.failed'); };
+    draw({ exposure: { enabled: false, port: null }, onToggle });
+    press();
+    await settle();
+    await settle();
+    // Re-render with the cell state the rejection left; the switch must NOT be disabled, and the failure is shown.
+    const after = draw({ exposure: { enabled: false, port: null }, onToggle });
+    const toggleEl = harness.elements.find((e) => e.props['data-inbound-toggle'] !== undefined);
+    expect(toggleEl?.props['disabled']).toBe(false);
+    expect(after.html).toContain('command.failed');
+  });
 });

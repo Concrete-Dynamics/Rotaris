@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   INBOUND_FORBIDDEN_FIELDS, INBOUND_TOOL_NAMES, InboundExposureSchema,
-  InboundRunHandleSchema, InboundRunStatusSchema, InboundStartRunInputSchema, isInboundToolName,
+  InboundRunHandleSchema, InboundRunStatusInputSchema, InboundRunStatusSchema, InboundStartRunInputSchema, isInboundToolName,
 } from './inbound.js';
 import { InboundAnswerEnvelopeSchema, InboundListenerEnvelopeSchema, InboundListenerRequestSchema } from './inbound-protocol.js';
 
@@ -53,6 +53,15 @@ describe('REQ-MCP-123/130: the handle and the status', () => {
     expect(InboundRunStatusSchema.safeParse({ run: `inr_${'a'.repeat(32)}`, sessionId: 'S-1', state: 'vibing', stopReason: null }).success).toBe(false);
     // An unknown stop reason is refused (REQ-MONITOR-301).
     expect(InboundRunStatusSchema.safeParse({ run: `inr_${'a'.repeat(32)}`, sessionId: 'S-1', state: 'stopped', stopReason: 'because' }).success).toBe(false);
+  });
+
+  it('REQ-MCP-123/130 (Minor, 2026-11-25): the status INPUT holds the handle to the surface’s own shape', () => {
+    // A well-formed handle is accepted; anything else — an unrelated session id, a wrong-length body — is refused at
+    // the input schema, so a malformed call is answered as a refusal rather than passed on to wait out a bound.
+    expect(InboundRunStatusInputSchema.safeParse({ run: `inr_${'a'.repeat(32)}` }).success).toBe(true);
+    expect(InboundRunStatusInputSchema.safeParse({ run: 'a-desktop-session-id' }).success).toBe(false);
+    expect(InboundRunStatusInputSchema.safeParse({ run: `inr_${'a'.repeat(31)}` }).success).toBe(false);
+    expect(InboundRunStatusInputSchema.safeParse({ run: '' }).success).toBe(false);
   });
 });
 

@@ -1,8 +1,7 @@
-import { ISOLATION_REQUIRED_HINT, type CommandOutcome, type ProcessReply, type WorktreeBinding } from '@rotaris/contracts';
-import { canonicalPath } from '@rotaris/platform';
 import { millis, textOf } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import { refusal, type CommandContext, type CommandHandlers } from './context.js';
+import { startSessionRun } from '../session-start.js';
 import type { ReportInput } from '../notices.js';
 
 /**
@@ -23,9 +22,9 @@ export function confinementRefusalNotice(r: { readonly headline: string; readonl
  * a refusal into a notice where the surface has nowhere to show one.
  */
 export function sessionCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'storeRefusal' | 'withdrawnByClose'>,
+  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'openWorkspaceRead' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'storeRefusal' | 'withdrawnByClose'>,
 ): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.chooseNextModel' | 'session.start' | 'session.newId' | 'session.resume' | 'session.focusFromNotice' | 'session.focusReady' | 'session.control' | 'session.prompt' | 'session.retry' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.release' | 'session.reconcile' | 'session.pageOlder'> {
-  const { capturing, clocks, configFatal, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runFailures, runHost, services, withdrawnByClose } = ctx;
+  const { capturing, clocks, dialogs, log, mainWindows, notices, openWorkspaceRead, pauseWindows, quitting, raiseNotice, relay, runFailures, runHost, withdrawnByClose } = ctx;
   /** PD-GIT-001: the runs a launch in the workspace would share a tree with, or null when the run host's count cannot be read. */
   const sharingRunCount = async (workspaceId: string): Promise<number | null> => {
     const active = await runHost.request({ kind: 'runs.active', workspaceId, scope: 'sharing' }, millis(5_000)).catch(() => null);
@@ -86,118 +85,22 @@ export function sessionCommands(
         }
         log('run refused before start: no workspace is open'); return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
       }
-      // REQ-GIT-021: the two conflicting choices, refused before anything is created (REQ-GIT-158 makes this unreachable from the dialog).
-      if (req.isolation && req.attach) { log('run refused before start: isolation and attach together'); return { ok: false, code: 'session.worktree-options', headline: 'Choose either an isolated worktree or an existing worktree to attach, not both.' }; }
       /**
-       * REQ-GIT-022/023 (Part O), the reading taken with a main-minted id: the binding is made BEFORE the run host is
-       * asked for the session, so a binding failure leaves no session, no lock and no log — "deleted" by construction
-       * rather than by a delete. The id the dialog showed (session.newId) is the id the session takes (REQ-GIT-007/118).
+       * REQ-MCP-124 (ADR-0067): the DESKTOP start and the MCP surface's start are ONE path — `startSessionRun` in
+       * `../session-start.js`. This handler builds the input from the trusted desktop state (the window's open workspace,
+       * and the authority fields the dialog chose), and `startSessionRun` does everything else: the worktree binding, the
+       * forced isolation of PD-GIT-001, the shared fence's re-read of the open workspace, the run-host admission and the
+       * notices. The inbound path calls the same function and fills none of these fields (REQ-MCP-124).
        */
-      let binding: WorktreeBinding | undefined;
-      let sessionId: string | undefined;
-      const root = canonicalPath(w.workspace);
-      const svc = services.get(root);
-      // REQ-MONITOR-251 / REQ-GIT-120 under PD-GIT-001 (OQ-224): a launch beside a run it would share a working tree with is
-      // placed in a worktree. The dialog locks isolation on (REQ-GIT-119) from the same count (`session.newId`), but a start
-      // arriving without an explicit tree — a retry holding pre-dialog launch options, or a run that became active after the
-      // dialog opened — must not share the base tree with the live run, so main force-creates the default isolated tree and
-      // says so. The count is the run host's `scope: 'sharing'` for this window's workspace: its own runs, and any whose tree
-      // is its folder, inside it or around it; a run of an unrelated project never counts. A count that cannot be read
-      // forces too. (fin28's repair round 1 asked the instance's count here, reading REQ-GIT-120's "any" as the whole
-      // instance: that reading is replaced by PD-GIT-001.)
-      let effectiveIsolation = req.isolation;
-      const effectiveAttach = req.attach;
-      let forcedSessionId: string | undefined;
-      if (!effectiveIsolation && !effectiveAttach) {
-        const sharing = await sharingRunCount(w.workspaceId);
-        if (sharing === null || sharing > 0) {
-          forcedSessionId = mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
-          effectiveIsolation = { branch: `rotaris/session/${forcedSessionId}` };
-          log(`concurrent start while ${sharing === null ? 'the active-run count could not be read' : `${sharing} run(s) share this workspace's tree`}: force-creating isolated worktree ${effectiveIsolation.branch} (REQ-MONITOR-251, PD-GIT-001)`);
-        }
-      }
-      if (effectiveIsolation || effectiveAttach) {
-        if (!svc) { log('run refused before start: the workspace service is not running'); return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' }; }
-        sessionId = forcedSessionId ?? mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
-        const bindFailure = (r: ProcessReply): CommandOutcome => {
-          const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
-          const headline = `Error: could not create or attach the requested worktree: ${detail}`;
-          raiseNotice('error', headline);
-          log(`run refused before start: ${headline}`);
-          return { ok: false, code: 'session.worktree', headline, detail };
-        };
-        /**
-         * ADR-0019: the links reject on timeout or close (`ProcessLink.request`), so a rejection is a
-         * refusal carrying the cause as its detail — never a throw out of the command, which the
-         * renderer would meet as a rejected `invoke` and the composer as silence (R0-2).
-         */
-        const unreachable = (cause: Error) => ({ kind: 'refused' as const, code: 'link.unreachable', headline: 'The workspace service did not answer', detail: cause.message });
-        if (effectiveIsolation) {
-          /*
-           * REQ-GIT-073 / REQ-CONFIG-068 / REQ-GIT-005: the tree goes under the directory `worktree_storage_subpath` names, read
-           * from the workspace service's resolved view (main parses no YAML) and sent on the session target. Until 2026-10-13 no
-           * subpath was sent and every tree went under `worktrees/` whatever the file said
-           * (docs/archive/defects/a-configured-worktree-storage-subpath-is-loaded-but-never-reaches-worktree-creation.md).
-           * REQ-GIT-071 / REQ-GIT-138: a configuration that does not load creates nothing — not even the tree the run host
-           * would refuse a moment later — so the start is refused here, on the run host's own terms, with the load's report.
-           */
-          const config = await svc.link.request({ kind: 'config.read', workspaceRoot: root }, millis(10_000)).catch(unreachable);
-          if (config.kind !== 'config.snapshot') return bindFailure(config);
-          if (!config.snapshot.loadOk) {
-            const headline = 'The run was refused before it started';
-            const detail = config.snapshot.fatal ?? 'The configuration could not be loaded.';
-            raiseNotice('error', headline, detail);
-            log(`run refused before start: the configuration did not load, so no worktree was created — ${detail.split('\n')[0]}`);
-            return { ok: false, code: 'session.configuration', headline, detail };
-          }
-          const made = await svc.link.request({ kind: 'worktree.create', workspaceRoot: root, branch: effectiveIsolation.branch, collisionSafe: true, target: { kind: 'session', sessionId, subpath: config.snapshot.worktreeStorageSubpath } }, millis(120_000)).catch(unreachable);
-          if (made.kind !== 'worktree.created') return bindFailure(made);
-          binding = { worktree_path: made.path, branch: made.branch, base_branch: made.baseBranch, base_revision: made.baseRevision, created_by_session: true, merge_status: 'ready', integration_session_id: null };
-        } else if (effectiveAttach) {
-          const checked = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: root, path: effectiveAttach.path }, millis(60_000)).catch(unreachable);
-          if (checked.kind !== 'worktree.attachable') return bindFailure(checked);
-          binding = { worktree_path: checked.path, branch: checked.branch, base_branch: checked.baseBranch, base_revision: checked.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
-        }
-      }
-      /*
-       * REQ-NOTIFY-030/032: main mints the base tree's id too, so the window that asked follows the session from the moment it
-       * is asked for (`MainWindows.beginStart`): a run failing before the renderer's `session.subscribe` arrives is the
-       * focused session's failure, not another's. Until 2026-10-06 main learned of the follow only at that subscription
-       * (docs/archive/defects/a-run-that-fails-before-its-window-subscribes-raises-the-background-failure-warning-about-the-session-on-screen.md).
-       */
-      sessionId ??= randomUUID();
-      mainWindows.beginStart(w.wcId, sessionId);
-      // ADR-0019, as above: an unanswered run host refuses the start rather than throwing out of it.
-      const r = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), sessionId, ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
-      if (r.kind !== 'session.started') {
-        mainWindows.endStart(w.wcId, sessionId);
-        // A tree this request created for a session that never came to exist is taken away again, so nothing is left behind (REQ-GIT-023).
-        if (binding?.created_by_session && svc) {
-          const path = binding.worktree_path;
-          void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed after the refused start (${x.kind})`)).catch(() => undefined);
-        }
-        // REQ-NOTIFY-003: a refusal is also published as a persistent notice, so it outlives the composer's error line.
-        // REQ-WORKSPACE-137: the two provider refusals carry an action leading to the Models settings.
-        if (r.kind === 'refused') {
-          if (r.code === 'session.confinement') void notices.report(confinementRefusalNotice(r));
-          else raiseNotice('error', r.headline, r.detail, r.code === 'session.no-model' || r.code === 'session.provider-auth' ? recoveryFor('config.models') : undefined);
-          log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`);
-        }
-        return refusal(r, 'The session could not be started');
-      }
-      if (binding) log(`session ${r.sessionId} bound to ${binding.worktree_path} on ${binding.branch} (${binding.created_by_session ? 'created by the session' : 'attached'})`);
-      // REQ-NOTIFY-058 / REQ-NOTIFY-029: a starting run clears the standing notice only where it is unscoped or
-      // scoped to this same session; a notice about another session survives, whatever order the events arrived in.
-      await notices.clearForRunStart(r.sessionId);
-      // OQ-279: a run starts only on a configuration that loaded (REQ-EVENTS-021), so this workspace's fatal-load notice, if
-      // one stands, is cleared and a later fault raises it again (REQ-CONFIG-478's recovery: correct the file, start a run).
-      if (configFatal) await configFatal.loaded(root);
-      // PD-GIT-001: a placement main forced is said, after the run start's clear and scoped to the new session, so a launch the
-      // dialog showed on the base tree never lands in a worktree unannounced.
-      if (forcedSessionId !== undefined && binding) raiseNotice('info', ISOLATION_REQUIRED_HINT, `This session runs on branch ${binding.branch}.`, undefined, r.sessionId);
-      // REQ-SHELL-078: a new session starts — every persona window and its cache go.
-      w.personaWindows.destroyAll('a new session started');
-      return { ok: true, value: { sessionId: r.sessionId } };
+      const outcome = await startSessionRun({ ...ctx, openWorkspaceRead: (wcId) => openWorkspaceRead(wcId), confinementNotice: confinementRefusalNotice }, {
+        workspaceId: w.workspaceId, workspaceRoot: w.workspace, prompt: req.prompt,
+        ...(req.attachments === undefined ? {} : { attachments: req.attachments }),
+        ...(req.isolation === undefined ? {} : { isolation: req.isolation }),
+        ...(req.attach === undefined ? {} : { attach: req.attach }),
+        ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }),
+        window: w,
+      });
+      return outcome;
     },
     'session.newId': async (_req, { w }) => {
       // REQ-GIT-118: the id the launch dialog shows; the next isolated or attached start takes it.

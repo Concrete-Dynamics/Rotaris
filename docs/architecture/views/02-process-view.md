@@ -1,9 +1,10 @@
-# Process view — five processes and what crosses each boundary
+# Process view — six processes and what crosses each boundary
 
-One Electron instance (SR-1; ADR-0055's claim), five kinds of process (ADR-0002). Every message crossing a
+One Electron instance (SR-1; ADR-0055's claim), six kinds of process (ADR-0002, amended by ADR-0067 for the inbound
+listener). Every message crossing a
 boundary is a Zod schema in `packages/contracts/src/` — `commands.ts` (renderer ↔ main), `channels.ts`
 (main → renderer, eleven named channels), `process-protocol.ts` (main ↔ run host, main ↔ workspace service,
-and the service's narrow asks back to main).
+and the service's narrow asks back to main), `inbound-protocol.ts` (main ↔ the inbound listener).
 
 | Read this section when you are | Section |
 |---|---|
@@ -32,6 +33,7 @@ flowchart LR
   M["main<br/>windows · dialog queue · notices<br/>UpdateRelay · preferences · theme<br/>credential store · provider sign-in · discovery<br/>capture seams"]
   RHst["run host<br/>utilityProcess, one per instance<br/>Sessions · Runs · tools · hooks<br/>configuration per run start"]
   WS["workspace service<br/>utilityProcess, one per open workspace<br/>identifier · store open/migrate<br/>backup · restore · config Tier A"]
+  IL["inbound listener<br/>utilityProcess, one per instance<br/>loopback MCP surface (streamable HTTP)<br/>ephemeral port · bearer token (ADR-0067)"]
   DB[("workspace.db<br/>SQLite, WAL<br/>%LOCALAPPDATA%/rotaris/data/workspaces/&lt;id&gt;/")]
   FILES[["agents.yaml · models.yml<br/>global: %LOCALAPPDATA%/rotaris/rotaris/<br/>workspace: &lt;ws&gt;/.rotaris/"]]
   PREFS[["preferences.json<br/>ROTARIS_PREFERENCES_ROOT →<br/>config home (Linux) → per-user"]]
@@ -52,6 +54,7 @@ flowchart LR
   M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>requirements:changed · improvement:activity<br/>initialization:state · reauth:prompt<br/>theme:changed · config:changed<br/>display:changed · project-init:open<br/>session:focus · update:state" --> P
   M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
   M -- "WorkspaceServiceRequest → ProcessReply<br/>ServiceAsk ← (forwarded to the run host)" --> WS
+  M -- "InboundListenerRequest → InboundListenerReply<br/>inbound.startRun / inbound.runStatus ask ← (answered here)" --> IL
   RHst --> DB
   WS --> DB
   RHst -- "loadConfiguration per run start" --> FILES

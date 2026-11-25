@@ -83,6 +83,8 @@ export default defineConfig({
           index: resolve(__dirname, 'src/main/index.ts'),
           'run-host': resolve(__dirname, 'src/run-host/index.ts'),
           'workspace-service': resolve(__dirname, 'src/workspace-service/index.ts'),
+          // REQ-MCP-127 / ADR-0067: the inbound listener is a fourth utility process of the one shipped binary.
+          'inbound-listener': resolve(__dirname, 'src/inbound-listener/index.ts'),
         },
         // electron-vite's default external list is replaced, not merged, once rollupOptions is given: state it.
         external: EXTERNAL,

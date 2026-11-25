@@ -35,6 +35,8 @@ interface Harness {
   readonly probes: (() => void)[];
   /** The bound the coordinator was given for its start (BLOCKER B): the inbound one, above the host's lease. */
   startBound: number | null;
+  /** When true, the coordinator is built WITHOUT `startBoundMs`, so its own default is measured. */
+  defaultBound: boolean;
 }
 
 function harness(over: Partial<Harness> = {}): Harness {
@@ -47,6 +49,7 @@ function harness(over: Partial<Harness> = {}): Harness {
     started: [],
     probes: [],
     startBound: null,
+    defaultBound: false,
     ...over,
   };
   return h;
@@ -79,7 +82,8 @@ function coordinator(h: Harness): { readonly ask: (a: InboundListenerAsk) => Pro
     },
     // BLOCKER B: the probe is driven synchronously by the case (its steps are queued, run on demand).
     settleProbe: { schedule: (fn) => { h.probes.push(fn); }, attempts: 3, intervalMs: 1 as never },
-    startBoundMs: 60_000 as never,
+    // BLOCKER B: the bound the INBOUND path sets; a case may omit it to measure the coordinator's own default.
+    ...(h.defaultBound ? {} : { startBoundMs: 60_000 as never }),
     mintHandle: () => `inr_${'a'.repeat(32)}`,
   });
   // The coordinator's own `ask`, exposed directly (the harness records everything the cases need).
@@ -253,6 +257,16 @@ describe('REQ-MCP-126/123 (BLOCKER B): a lost reply settles from the product sta
     await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
     // The bound the inbound path set is the inbound one (60 s), not the desktop default (10 s).
     expect(h.startBound).toBe(60_000);
+  });
+
+  it('the coordinator’s DEFAULT bound is the inbound one, above the run host’s lease (REQ-MCP-126, BLOCKER B)', async () => {
+    // No `startBoundMs` is passed: the coordinator's own default (`INBOUND_START_BOUND_MS`) must be above the host's
+    // `LEASE_ASK_MS` (45 s), or a healthy-but-slow host would again be read as a no-reply.
+    const h = harness({ defaultBound: true });
+    const c = coordinator(h);
+    await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    expect(h.startBound).toBe(60_000);
+    expect(h.startBound!).toBeGreaterThan(45_000);
   });
 
   it('a run that starts LATE (after the reply was lost) is settled into the active run under its handle', async () => {

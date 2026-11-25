@@ -798,6 +798,25 @@ describe('REQ-MCP-123/126 (MAJOR A/B, REWORK 6): a desktop REVISE → CANCEL fre
 });
 
 describe('REQ-MCP-123/126 (MAJOR B, REWORK 6): a confirmation on ANY path arms the one reconcile', () => {
+  it('a confirming SNAPSHOT arms the reconcile when the start reply was lost', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    h.captureLateReply = true; // the start's reply is lost; only the snapshot path can confirm it
+    const first = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = first.kind === 'inbound.runStarted' ? first.run : '';
+    const sessionId = first.kind === 'inbound.runStarted' ? first.sessionId : '';
+    await settle();
+    expect(h.runs.holder).toBe(handle);
+    expect(h.steps).toHaveLength(0);
+    // The product publishes the run's state: it CONFIRMS the attempt, so the one reconcile is armed.
+    c.observe(sessionId, { executionStatus: 'running', stopReason: null });
+    expect(h.steps.length).toBeGreaterThan(0);
+    // A terminal write then fails; the armed reconcile ends it rather than holding the slot for good.
+    h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
+    await driveStep(h);
+    expect(h.runs.holder).toBeNull();
+  });
+
   it('a confirmation that arrives ONLY through the status listing arms the reconcile, and a failed terminal write then frees the slot', async () => {
     const h = harness();
     const c = coordinator(h);

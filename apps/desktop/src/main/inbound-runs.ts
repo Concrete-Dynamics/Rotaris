@@ -470,8 +470,9 @@ export class InboundSurfaceRuns {
       this.#transition(run, { kind: 'listing-gone' });
       return 'held';
     }
-    // A row refreshes the held phase and releases NOTHING (a listing never releases, REWORK 10): a STALE row sets no
-    // phase at all (it states the record's liveness), and an ordinary row replaces the status and the waiting flag.
+    // A row refreshes the held phase and releases NOTHING (a listing never releases, REWORK 10): a STALE row sets a phase
+    // only when the handle holds none yet (never overwriting one), and an ordinary row replaces the status and the
+    // waiting flag.
     this.#transition(run, { kind: 'listing', executionStatus: reading.executionStatus, awaitingInput: reading.awaitingInput, stale: reading.stale });
     return 'held';
   }
@@ -590,10 +591,11 @@ export class InboundSurfaceRuns {
      * - a LISTING row states NO reason at all, so it is SILENT about it: the status and the waiting flag are replaced and
      *   the reason is LEFT as it stands.
      * - a STALE row (busy with nothing running it, REQ-SESSION-171) is an OBSERVATION OF THE RECORD'S LIVENESS, not the
-     *   run's state and NOT an end (REWORK 10): it changes NO phase and releases NOTHING. It used to free the slot, and
-     *   the reviewer measured the hole — a desktop can re-open the store after a failed terminal write and continue the
-     *   same iteration, and the FIRST stale row then overwrote a stored park phase while the SECOND froze the handle and
-     *   freed the slot. The held phase now STANDS across any number of stale rows, and the slot with it.
+     *   run's state and NOT an end (REWORK 10): it releases NOTHING and never OVERWRITES a held phase (it sets one only
+     *   when the handle holds none yet). It used to free the slot, and the reviewer measured the hole — a desktop can
+     *   re-open the store after a failed terminal write and continue the same iteration, and the FIRST stale row then
+     *   overwrote a stored park phase while the SECOND froze the handle and freed the slot. The held phase now STANDS
+     *   across any number of stale rows, and the slot with it.
      */
     if (event.kind === 'listing') {
       /*

@@ -174,7 +174,7 @@ describe('REQ-GIT-022/023: the workspace binding is made before the host is aske
     const bounds: number[] = [];
     const deps = { ...h.deps, runHost: { request: async (req: RunHostRequest, bound: number) => { if (req.kind === 'session.start') bounds.push(bound); return req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : { kind: 'session.started', sessionId: 'S-STARTED' }; } } } as unknown as SessionStartDeps;
     await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p' });
-    await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', hostStartBoundMs: 60_000 as never });
+    await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', hostStartBoundMs: 60_000 });
     expect(bounds).toEqual([10_000, 60_000]);
   });
 });

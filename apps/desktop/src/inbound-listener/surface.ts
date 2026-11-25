@@ -113,12 +113,15 @@ export function statusText(status: InboundRunStatus): string {
 }
 
 /**
- * REQ-NOTIFY-048 (BLOCKER D, 2026-11-25): the presentation states that are terminal or at rest — a run the product has
- * finished with. `paused` is NOT among them: a run parked at the plan gate or the message limit still waits for a
- * person and has not stopped. Everything else is a run the surface may call still in progress.
+ * REQ-NOTIFY-048 (BLOCKER D, 2026-11-25): the presentation states that are TERMINAL — a run the product has finished with.
+ * `paused` is NOT among them: a run parked at the plan gate or the message limit still waits for a person and has not
+ * stopped. `idle` is NOT among them either (BLOCKER 3): the plan-approve/revise and message-limit continue paths publish
+ * `idle` BEFORE relaunching the same session, so a run reading `idle` may be about to run again — the surface says it has
+ * not stopped rather than claiming an end that has not come. Everything else is a run the surface may call still in
+ * progress.
  */
 function hasStoppedState(state: InboundRunStatus['state']): boolean {
-  return state === 'completed' || state === 'failed' || state === 'stopped' || state === 'idle';
+  return state === 'completed' || state === 'failed' || state === 'stopped';
 }
 
 function statusStructured(status: InboundRunStatus): unknown {

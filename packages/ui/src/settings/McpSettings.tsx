@@ -116,13 +116,22 @@ function InboundSurfaceCard({ inbound }: { inbound: InboundSurfaceProps }) {
   const toggle = async () => {
     if (busy) return;
     setBusy(true);
-    const r = await inbound.onToggle(!on);
-    setBusy(false);
-    if (!r.ok) { setMessage(r.message); return; }
-    setMessage(null);
-    // REQ-MCP-121: the token is shown once — the enabling press's OWN answer carries it (never the closed-over prop,
-    // which is the previous render's exposure and does not yet carry the fresh token).
-    setToken(r.exposure?.token ?? null);
+    // REQ-MCP-120 (Minor, 2026-11-25): the reset runs in a `finally` and a REJECTION is caught. A toggle whose IPC call
+    // itself rejects (a thrown handler, dispatched as `command.failed`) would otherwise never reach `setBusy(false)` —
+    // the switch would hang disabled — and the rejection would go unhandled. `onToggle` answers a refusal as a value;
+    // this covers the rejection beside it.
+    try {
+      const r = await inbound.onToggle(!on);
+      if (!r.ok) { setMessage(r.message); return; }
+      setMessage(null);
+      // REQ-MCP-121: the token is shown once — the enabling press's OWN answer carries it (never the closed-over prop,
+      // which is the previous render's exposure and does not yet carry the fresh token).
+      setToken(r.exposure?.token ?? null);
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <DesignCard className="card settings__card" data-mcp-inbound>

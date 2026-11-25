@@ -47,12 +47,6 @@ export const InboundStartRunInputSchema = z.strictObject({
 });
 export type InboundStartRunInput = z.infer<typeof InboundStartRunInputSchema>;
 
-/** REQ-MCP-123/130: what `rotaris_run_status` accepts — the handle a start returned, and nothing else. Strict. */
-export const InboundRunStatusInputSchema = z.strictObject({
-  run: z.string().min(1).max(NAME_MAX),
-});
-export type InboundRunStatusInput = z.infer<typeof InboundRunStatusInputSchema>;
-
 /**
  * REQ-SESSION-080 / REQ-MCP-123: the handle a run started through the surface is named by. The product mints it (it is
  * not the session id a caller could correlate against anything else), the shape is fixed prefix + 32 hex characters,
@@ -60,6 +54,17 @@ export type InboundRunStatusInput = z.infer<typeof InboundRunStatusInputSchema>;
  */
 export const INBOUND_RUN_HANDLE_PATTERN = /^inr_[0-9a-f]{32}$/;
 export const InboundRunHandleSchema = z.string().regex(INBOUND_RUN_HANDLE_PATTERN);
+
+/**
+ * REQ-MCP-123/130: what `rotaris_run_status` accepts — the handle a start returned, and nothing else. Strict, and the
+ * handle is held to the SAME shape the surface mints (`INBOUND_RUN_HANDLE_PATTERN`): a call whose `run` is not such a
+ * value is refused at the schema, as a stated refusal, rather than passed on to wait out an IPC bound on a value the
+ * surface can already tell was never one of its handles.
+ */
+export const InboundRunStatusInputSchema = z.strictObject({
+  run: InboundRunHandleSchema,
+});
+export type InboundRunStatusInput = z.infer<typeof InboundRunStatusInputSchema>;
 
 /**
  * REQ-MCP-123/130: the status `rotaris_run_status` answers in — the product's OWN vocabulary, both halves of it:

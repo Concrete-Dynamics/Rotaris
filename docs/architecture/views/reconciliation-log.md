@@ -14,6 +14,23 @@ reconciliation-log.md"), which here would point at itself. Since then each chang
 
 Last reconciled with the code: **2026-11-24**
 
+**The product opens one loopback MCP surface for external agents (ADR-0067; REQ-MCP-119..130; 2026-11-25).** Process
+view: a SIXTH process kind — the inbound listener — is drawn, owns its row in "What each process owns", and the message
+families gain `inbound-protocol.ts` (main ↔ listener). Component view: the allowed-edge matrix gains
+`app-inbound-listener` (kernel, contracts, platform), and `tsconfig.node.json`'s row names it. New:
+`packages/contracts/src/inbound.ts` (the two tools' shapes, the handle, the status, the exposure) and
+`inbound-protocol.ts` (the listener's wire); `apps/desktop/src/inbound-listener/` (the composition root: `guards.ts`,
+`surface.ts`, `transport.ts`, `host.ts`, `protocol.ts`, `index.ts`); `apps/desktop/src/main/session-start.ts` (the ONE
+main-side start coordinator, extracted from `commands/session.ts` so the desktop start and `rotaris_start_run` share it,
+with the shared fence that re-reads the open workspace before admission); `apps/desktop/src/main/inbound-runs.ts` (the
+single-run slot, the handle scope, the two tool answers), `inbound-exposure.ts` (main's end of the listener link and the
+per-exposure token) and `commands/inbound.ts` (the `inbound.status` / `inbound.setEnabled` settings commands). Changed:
+`electron.vite.config.ts` builds `inbound-listener` as a fourth main-section entry; `eslint.config.js` gains the
+`app-inbound-listener` element; `commands/context.ts` gains `openWorkspaceRead`; `commands/session.ts`'s `session.start`
+delegates to `startSessionRun`; `packages/contracts/src/commands.ts` gains the two `inbound.*` kinds; `packages/ui`'s MCP
+settings category gains the inbound surface's card; `apps/desktop/src/renderer/main.tsx`'s `useMcp` provides it;
+`pnpm-workspace.yaml`'s catalog gains `@modelcontextprotocol/server` and `@modelcontextprotocol/node`.
+
 **An agent may consult an advisor (`PD-TOOLS-022`, R-128; 2026-11-24).** Runtime view §3 gains one paragraph; seams §4 one invariant and §5 one worked example. New: `contracts/src/advisor.ts` (the result text, written by the tool and parsed by the row), `agent-tools/src/tools/advisor.ts` (the executor, `AdvisorPort`, `AdvisorUses`), `engine/src/run/advisor.ts` (`consultAdvisor`, `AdvisorOps`), `config/src/sections/advisor.ts`. Changed: `PUBLIC_TOOL_NAMES`, `DECLARATIONS` and `READ_ONLY_CLASS` gain `advisor`; `MODEL_SLOTS` gains `advisor_model` and `SECTION_KEYS` `advisor`; `ModelSetup.advisor` and `ToolPortContext.advisor` carry it from `advisorOf` (run host) to every port; `PortToolCall.conversation` and `ToolPort.advisorUsesLeft` are the turn's two new seams with a port; `createToolPort` joins the tool to the declared set where the advisor's model is not the agent's own. Surfaces: `Row.tsx` draws an answered consult's line and its question-and-advice card, `tool-description.ts` its header; Settings' Delegation page gains the switch and the bound. The scripted client answers the advisor's request and takes an `advisor:<question>` step.
 
 ---

@@ -34,7 +34,7 @@ interface Harness {
   readonly reported: ReportInput[];
   readonly svcAsked: WorkspaceServiceRequest[];
   readonly hostAsked: RunHostRequest[];
-  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>;
+  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'openWorkspaceRead' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'storeRefusal' | 'withdrawnByClose'>;
   /** REQ-NOTIFY-030/032: the sessions whose held failure `session.subscribe` released. */
   readonly focused: string[];
   /** PD-ORCH-005 clause 9: what `quitting()` answers. */
@@ -66,6 +66,8 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
   const starts: Harness['starts'] = [];
   const cleared: string[] = [];
   const loaded: string[] = [];
+  /** REQ-MCP-124: the shared fence's read — mutable so a case can make the open workspace CHANGE between validation and admission. */
+  const open: { current: { workspaceId: string; workspace: string } | null } = { current: { workspaceId: 'ws-1', workspace: WORKSPACE } };
   const ctx = {
     capturing: false,
     configFatal: { observe: async () => undefined, loaded: async (root: string) => { loaded.push(root); } },
@@ -73,6 +75,10 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     quitting: () => quit.now,
     dialogs: new Map(),
     log: (m: string) => { logs.push(m); },
+    /** REQ-MCP-124 (ADR-0067): the shared fence reads the open workspace through this. */
+    openWorkspaceRead: async (_wcId: number | null) => open.current,
+    /** REQ-NOTIFY-060/061: the confinement notice the coordinator reports through the store. */
+    confinementNotice: (r: { headline: string; detail?: string | undefined }): ReportInput => ({ severity: 'error', title: r.headline, message: r.detail ?? r.headline, detail: r.detail ?? r.headline, persistent: true, action: { label: 'Open Workspace', action: { kind: 'open-view', view: 'workspace' } } }),
     mainWindows: {
       takeMintedSession: () => 'minted-1',
       setMintedSession: () => undefined,

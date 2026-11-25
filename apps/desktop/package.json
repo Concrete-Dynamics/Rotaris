@@ -16,6 +16,8 @@
   "dependencies": {
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
+    "@modelcontextprotocol/node": "catalog:",
+    "@modelcontextprotocol/server": "catalog:",
     "@phosphor-icons/web": "2.1.2",
     "ajv": "catalog:",
     "better-sqlite3": "catalog:",

@@ -1,4 +1,4 @@
-import { INBOUND_NO_OPEN_WORKSPACE, INBOUND_RUN_ALREADY_ACTIVE, INBOUND_RUN_HANDLE_PATTERN, INBOUND_START_BOUND_MS as INBOUND_START_BOUND_MS_NUMBER, isParkedStatus, presentationStatus, runHasEnded, type InboundListenerAsk, type InboundRunStatus, type InboundStartRunAnswer, type InboundRunStatusAnswer, type ProcessReply, type StopReason } from '@rotaris/contracts';
+import { INBOUND_NO_OPEN_WORKSPACE, INBOUND_RUN_ALREADY_ACTIVE, INBOUND_RUN_HANDLE_PATTERN, INBOUND_START_BOUND_MS as INBOUND_START_BOUND_MS_NUMBER, presentationStatus, runHasEnded, type InboundListenerAsk, type InboundRunStatus, type InboundStartRunAnswer, type InboundRunStatusAnswer, type ProcessReply, type StopReason } from '@rotaris/contracts';
 import { millis, type Millis } from '@rotaris/kernel';
 import { randomUUID } from 'node:crypto';
 import { startSessionRun, type SessionStartDeps } from './session-start.js';
@@ -138,10 +138,10 @@ import type { InboundStatusReading } from './inbound-status.js';
  *    (REQ-MCP-126). Every park — `paused`, `paused_message_limit`, `awaiting_plan_decision`, each WITH or WITHOUT a reason
  *    — now HOLDS the slot and the handle, and the handle is NOT finalized on the pause: it stays watchable through the
  *    pause and the continuation, and is frozen only on the SAME proof that releases the slot (advisor: "premature handle
- *    finalization" is a High defect). Release comes from a TERMINAL status, a terminal `run.result`, the run host's exit,
- *    or an authoritative ABSENCE (STALE/absent after a failed terminal write) — the last taken only while the run is NOT
- *    parked. The liveness cost (a desktop-paused run never continued holds the slot until the application ends) is covered
- *    by REQ-MCP-126's "refused, never queued".
+ *    finalization" is a High defect). Release comes from a TERMINAL status, a terminal `run.result`, or the run host's
+ *    exit — and NOTHING else (REWORK 10 removed the authoritative-ABSENCE arm, which the reviewer measured as the
+ *    blocker). The liveness cost (a desktop-paused run never continued holds the slot until the application ends) is
+ *    covered by REQ-MCP-126's "refused, never queued".
  * 2. **A held run NEVER reports a stop reason** (REQ-MCP-123; MAJOR 1). The stop reason belongs to a run that has ended;
  *    while the slot is held (`endState === null`) `rotaris_run_status` answers `stopReason: null` and the text says the run
  *    has not stopped — even when the hold IS a park the product labelled `paused`/`user_cancelled`. A TERMINAL end answers
@@ -150,6 +150,33 @@ import type { InboundStatusReading } from './inbound-status.js';
  *    by real PROGRESS alone — a reading whose state (status + waiting flag) DIFFERS from the last one recorded for the
  *    armed chain. An UNCHANGED row (a client's repeated status poll of the same phase) does NOT extend the chain, so it
  *    exhausts at `RECONCILE_MAX_STEPS` however often it is read; an `unreadable` reading is likewise no progress.
+ *
+ * REWORK 10 (2026-11-25) — THE UNIFORM RULE: AN OBSERVATION NEVER RELEASES THE SLOT.
+ *
+ * 1. **Every release authority left in `STALE`/`absent`/the reconcile is REMOVED.** The three advisor rounds converge on
+ *    one rule: a listing, a MISSING listing, a STALE row (busy while nothing runs it, REQ-SESSION-171) and a snapshot's
+ *    timing are all OBSERVATIONS, and none of them proves the admitted attempt has ended. The previous head released the
+ *    slot on a STALE or absent reading, and the reviewer measured the hole: after a FAILED TERMINAL WRITE the desktop can
+ *    RE-OPEN the store and CONTINUE the open iteration, so `held → released → a second start admitted` happened while the
+ *    first run was still live (REQ-MCP-126). The park guard did not save it either — the FIRST active STALE row overwrote
+ *    the stored park phase, the SECOND froze the handle and freed the slot. A `listing` event now only refreshes the HELD
+ *    phase, and a STALE row is not even a phase (it states the RECORD's liveness, not the run's state), so it leaves the
+ *    held phase STANDING; an `absent` reading (`listing-gone`) is passed through the ONE transition, which decides HOLD.
+ * 2. **Release comes from exactly three proofs**: `runHasEnded(status)` (a TERMINAL status — `completed`/`failed`/
+ *    `stopped` — from a `snapshot` or a listing), the terminal `run.result` itself, and `abandonAll` (the run host's exit;
+ *    the host is never forked again, ADR-0002 consequence 1). Nothing else. The reconcile cannot release at all: it is a
+ *    pure PHASE REFRESH — it turns a lost-reply attempt live, and a TERMINAL row still ends the run there exactly as the
+ *    status path does. In doubt: HOLD.
+ * 3. **THE ACCEPTED CONSEQUENCE, named**: a run whose terminal write FAILED and whose session never becomes terminal
+ *    HOLDS the slot until the run host ends (the application ends), and the surface keeps answering the held (busy)
+ *    phase. That is the deliberately conservative side — REQ-MCP-126 covers the liveness cost ("refused, never
+ *    queued") — and the alternative (freeing on an observation) is the same defect this feature keeps re-learning.
+ * 4. **The reconcile's cap counts EVERY step and NOTHING resets it** (MAJOR 2). Round 9 reset the counter on a CHANGED
+ *    state, and the reviewer showed the escape: a listing row signs `stale` while a snapshot of the SAME phase signs
+ *    `stopReason`, so ALTERNATING the two sources reset the counter forever (after 192 steps a follow-up was still
+ *    planned). The `pulse` reset is GONE; the counter is incremented per step and never cleared, so the chain exhausts at
+ *    `RECONCILE_MAX_STEPS` whatever the sources do. Exhaustion no longer costs correctness — the chain cannot release
+ *    anything — it only stops a periodic refresh, and the STATUS path still refreshes on demand.
  */
 
 /** One externally started run, as ONE object per handle: reserved at the admission and mutated through its whole life. */
@@ -267,8 +294,8 @@ type LifecycleEvent =
 /** What a reservation answers: the handle and the session id it took, or a bare refusal when one is active. */
 export type TakeOutcome = { readonly ok: true; readonly handle: string; readonly sessionId: string } | { readonly ok: false };
 
-/** What the one reconcile found for its run: still held (re-arm), released (the run is over), or not this run's business. */
-export type ReconcileOutcome = 'held' | 'released' | 'uninvolved';
+/** What the one reconcile found for its run: still involved (re-arm the refresh), or no longer this run's business. */
+export type ReconcileOutcome = 'held' | 'uninvolved';
 
 /**
  * REQ-MCP-126's slot and REQ-MCP-123's handles, as ONE thing: at most one handle holds the slot, and every handle this
@@ -406,9 +433,10 @@ export class InboundSurfaceRuns {
    * states it — the same transition as `observe`, from the listing instead of the published record. A listing row states
    * NO stop reason, so it is SILENT about the reason: the status and the waiting flag are replaced and the reason is LEFT
    * as it stands (a row without a reason overwriting a known one with null was the fault REWORK 7 fixed). Whether the run
-   * ENDS is the transition's own question: a terminal status does, a park does not (the listing cannot state the reason a
-   * park would need), and a STALE row (busy with nothing running it) is the definite proof of an end and ends the run
-   * from the STATUS path exactly as the reconcile does (MAJOR 4).
+   * ENDS is the transition's own question, and REWORK 10 leaves only ONE status-driven end: a TERMINAL status (rule 4d).
+   * A PARK does not end it. A STALE row (busy while nothing runs it) is an observation of the RECORD's liveness, not of
+   * the run's state, so it refreshes NOTHING and releases NOTHING — rounds 4-9 read it as an end, which the reviewer
+   * measured as the blocker.
    */
   observeListing(sessionId: string, row: { readonly executionStatus: string; readonly awaitingInput: boolean; readonly stale?: boolean }): TransitionOutcome | null {
     const run = this.#runForSession(sessionId);
@@ -417,35 +445,33 @@ export class InboundSurfaceRuns {
   }
 
   /**
-   * MAJOR (2026-11-25; REWORK 4, point 6): the run host's `session.list` reading, used by the one bounded reconcile
-   * behind a confirmed start. A run whose TERMINAL WRITE failed leaves its durable image busy and sends no `run.result`,
-   * so the surface would hold the slot for good. This ends such a run on a DEFINITE reading and nothing else: the session
-   * is GONE from the listing (`absent`), or it is present and the listing marks it STALE (busy while no live process
-   * holds its lock, REQ-SESSION-171). A live busy run is never ended, and an UNREADABLE listing proves nothing — both
-   * keep the slot and may be checked again.
-   *
-   * The end state frozen here is TERMINAL (`stopped`, not waiting): a dead run must never be frozen as
-   * `running`/`awaitingInput=true`, which is what the review found. The reason is the product's own reason for a run
-   * whose completion could not be confirmed (`agent_session_aborted`, the one the engine uses when durable recording
-   * fails) — the persistence failure itself is reported separately by the run host's own notice.
+   * MAJOR (2026-11-25; REWORK 10, 2026-11-25): the run host's `session.list` reading, used by the one bounded reconcile
+   * behind a confirmed start. It is a PURE PHASE REFRESH and NEVER A RELEASE: it turns a lost-reply attempt `confirmed`
+   * when the session appears, and it lets a TERMINAL row end the run through the ONE transition exactly as the status
+   * path does. Nothing else. A STALE row (busy while no live process holds its lock, REQ-SESSION-171) is an observation
+   * of the RECORD's liveness, not of the run's state, so it changes no phase and frees nothing; an `absent` reading is
+   * routed through the transition, which decides to HOLD. Rounds 4-9 let this release the slot on a stale or absent
+   * reading, and the reviewer measured the hole: after a FAILED TERMINAL WRITE the desktop can re-open the store and
+   * CONTINUE the same iteration, so a release here admitted a second start while the first run was still live. A run
+   * whose terminal write fails therefore holds the slot until the run host ends — the named, accepted consequence.
    */
   reconcile(sessionId: string, reading: InboundStatusReading): ReconcileOutcome {
     const run = this.#runForSession(sessionId);
     if (run === null) return 'uninvolved';
     if (this.#holder !== run.handle) return 'uninvolved';
     if (!run.confirmed) return 'held';
+    // An unreadable listing proves nothing and states no phase: HOLD, change nothing.
     if (reading.kind === 'unreadable') return 'held';
-    if (reading.kind === 'row' && !reading.stale) {
-      // Present and live: either genuinely busy (hold) or resting, which the SAME transition settles. A real run is
-      // never ended by this, and an unreadable listing above proves nothing.
-      this.#transition(run, { kind: 'listing', executionStatus: reading.executionStatus, awaitingInput: reading.awaitingInput, stale: false });
-      return run.endState === null ? 'held' : 'released';
+    // An absent listing proves nothing either (the store may be re-opened and the iteration continued): through the ONE
+    // transition, whose arm for it HOLDs. The held phase stands.
+    if (reading.kind === 'absent') {
+      this.#transition(run, { kind: 'listing-gone' });
+      return 'held';
     }
-    // Absent, or busy in its record while nothing runs it (STALE, REQ-SESSION-171): the terminal write never landed and
-    // the run is over. A STALE row keeps any reason already observed; an ABSENT one has none to keep.
-    if (reading.kind === 'row') this.#transition(run, { kind: 'listing', executionStatus: reading.executionStatus, awaitingInput: reading.awaitingInput, stale: true });
-    else this.#transition(run, { kind: 'listing-gone' });
-    return run.endState === null ? 'held' : 'released';
+    // A row refreshes the held phase and releases NOTHING (a listing never releases, REWORK 10). A STALE row is not even
+    // a phase.
+    this.#transition(run, { kind: 'listing', executionStatus: reading.executionStatus, awaitingInput: reading.awaitingInput, stale: reading.stale });
+    return 'held';
   }
 
   /**
@@ -475,10 +501,12 @@ export class InboundSurfaceRuns {
    * 3. **The phase's fields are held as ONE UNIT on the handle** (REWORK 7, MAJOR 3): a snapshot replaces the status, the
    *    waiting flag and the reason together; a listing row, which states NO reason, replaces the status and the waiting
    *    flag and LEAVES the reason (a row is silent about the reason, so it must not overwrite a known one with null).
-   * 4. **An end needs a positive proof**: a TERMINAL `run.result`, a TERMINAL status, the run host's exit, or a listing
-   *    that proves the run is GONE (absent, or STALE — busy with nothing running it), the last only while the run is NOT
-   *    parked. A PARK (`paused`, `paused_message_limit`, `awaiting_plan_decision`), with or without a reason, HOLDS — the
-   *    run can resume the same iteration (REWORK 9), which is the conservative direction REQ-MCP-126 asks for.
+   * 4. **An end needs a positive proof, and there are exactly THREE** (REWORK 10): a TERMINAL `run.result`, a TERMINAL
+   *    status (from a `snapshot` or a listing), or the run host's exit. A listing — absent, or STALE (busy with nothing
+   *    running it) — and the reconcile are OBSERVATIONS: they refresh the held phase and nothing else, and a STALE row is
+   *    not even a phase. A PARK (`paused`, `paused_message_limit`, `awaiting_plan_decision`), with or without a reason,
+   *    HOLDS — the run can resume the same iteration (REWORK 9) — which is the conservative direction REQ-MCP-126 asks
+   *    for. A run whose terminal write failed therefore holds the slot until the host ends: named and accepted.
    */
   #transition(run: InboundRun, event: LifecycleEvent): TransitionOutcome {
     const nothing: TransitionOutcome = { newlyConfirmed: false, released: false };
@@ -524,31 +552,26 @@ export class InboundSurfaceRuns {
       return { newlyConfirmed, released: true };
     }
 
-    // Rule 4b: a listing that proves the run is GONE (absent, or stale — busy with nothing running it). The terminal
-    // write failed; the run is over all the same, and the reason the engine uses for an unconfirmable completion is the
-    // product's own.
-    //
-    // REWORK 9: only while the run is NOT PARKED. A desktop pause leaves the session parked, and a parked session may be
-    // continued on the SAME iteration (the advisor's rule), so an absence of a parked run proves nothing about whether it
-    // can resume. The absent reading is no observation of a phase (it states no status), so the phase the handle already
-    // holds stands and the slot is HELD.
-    if (event.kind === 'listing-gone') {
-      if (isParkedStatus(run.phase?.executionStatus ?? '')) return { newlyConfirmed, released: false };
-      this.#freeze(run, { executionStatus: 'stopped', awaitingInput: false }, 'agent_session_aborted', true);
-      return { newlyConfirmed, released: true };
-    }
+    // Rule 4b (REWORK 10): an ABSENT listing proves NOTHING, so it releases NOTHING. A session missing from the listing is
+    // an OBSERVATION, and after a failed terminal write the desktop can RE-OPEN the store and CONTINUE the open iteration
+    // — the reviewer measured exactly this release as the blocker (`held → released → the next start admitted` while the
+    // first run was still live). The reading states no phase, so the held phase STANDS and the slot is HELD. This is the
+    // one place an absent reading is decided, and it decides to hold; the reason an unconfirmable completion carries
+    // (`agent_session_aborted`) is now COMPUTED at the run host's exit alone.
+    if (event.kind === 'listing-gone') return { newlyConfirmed, released: false };
 
     /*
-     * Rule 4c: the `run.result` — the run is over and its own reason rides it (an absent one is a null reason, which a
-     * later result of a still-open handle could not contradict because the handle is closed by this).
+     * Rule 4c: the `run.result` — terminal means the run is over and its own reason rides it (an absent reason is a null
+     * reason, which a later result of a still-open handle could not contradict because the handle is closed by this).
      *
-     * REWORK 9: UNLESS the result's own execution status is a PARK. A desktop Pause writes `paused` + `user_cancelled`
-     * and ALSO delivers this result; a desktop Continue then resumes the SAME open iteration. The result is recorded on
-     * the handle (state and reason) and the slot is HELD — the exact signal the blocker turned on. A result whose status
-     * is absent (a bare terminal outcome in a test or a repaired path) keeps the round-8 terminal reading.
+     * REWORK 10: the SAME terminal-status question decides it, so the parking special-case is gone (`isParkedStatus` is
+     * no longer read anywhere). A result whose OWN status is a PARK, or any other non-terminal status, is NOT an end: a
+     * desktop Pause writes `paused` + `user_cancelled` and ALSO delivers this result, and a Continue then resumes the
+     * SAME open iteration — so the phase is recorded and the slot is HELD. A result whose status is ABSENT is a bare
+     * terminal outcome (a repaired path), and keeps the terminal reading.
      */
     if (event.kind === 'result') {
-      if (event.executionStatus !== null && isParkedStatus(event.executionStatus)) {
+      if (event.executionStatus !== null && !runHasEnded(event.executionStatus)) {
         run.phase = { executionStatus: event.executionStatus, awaitingInput: false, stopReason: event.stopReason };
         return { newlyConfirmed, released: false };
       }
@@ -564,33 +587,44 @@ export class InboundSurfaceRuns {
      *   reason, which is what a resume needs).
      * - a LISTING row states NO reason at all, so it is SILENT about it: the status and the waiting flag are replaced and
      *   the reason is LEFT as it stands.
-     * - a STALE row (busy with nothing running it, REQ-SESSION-171) is the definite proof of an end: it goes through
-     *   rule 4b's arm, so the STATUS path ends such a run exactly as the reconcile does (MAJOR 4).
+     * - a STALE row (busy with nothing running it, REQ-SESSION-171) is an OBSERVATION OF THE RECORD'S LIVENESS, not the
+     *   run's state and NOT an end (REWORK 10): it changes NO phase and releases NOTHING. It used to free the slot, and
+     *   the reviewer measured the hole — a desktop can re-open the store after a failed terminal write and continue the
+     *   same iteration, and the FIRST stale row then overwrote a stored park phase while the SECOND froze the handle and
+     *   freed the slot. The held phase now STANDS across any number of stale rows, and the slot with it.
      */
     if (event.kind === 'listing') {
       /*
-       * REWORK 9: a STALE row (busy while nothing runs it, REQ-SESSION-171) is the definite proof of an end and goes
-       * through rule 4b's arm — but ONLY when the run is NOT parked. A parked session may be continued on the same
-       * iteration, so a stale reading of one (or a reading of a run whose last known phase is a park) proves nothing;
-       * it is recorded and the slot is HELD.
+       * REWORK 10 — THE LISTING NEVER RELEASES THE SLOT, and a STALE row does not even refresh the held phase.
+       *
+       * The three release proofs are a terminal `publish.snapshot`, a terminal `run.result`, and the run host's exit.
+       * The listing is an OBSERVATION and is not one of them. Rounds 4-9 released here on a STALE or absent row, and the
+       * reviewer measured the hole: after a FAILED TERMINAL WRITE the desktop can RE-OPEN the store and CONTINUE the same
+       * iteration, so a listing-driven release admitted a second start while the first run was still resumable. The park
+       * guard did not save it either — the FIRST stale row overwrote the stored park phase and the SECOND froze-and-freed.
+       * With the release gone, a STALE row (which states the RECORD's status and that nothing holds its lock,
+       * REQ-SESSION-171 — not the run's state) must not OVERWRITE a held phase: a parked run whose record has gone stale
+       * still reads `paused` to the caller, never the record's busy status. So a stale row sets a phase ONLY when the
+       * handle holds none yet (a lost-reply attempt whose first evidence is a stale record still answers its status);
+       * with a phase already held the stale row changes NOTHING and the slot is HELD. That makes the parking guard
+       * unnecessary here and is exactly the conservative direction the brief names.
+       *
+       * An ordinary row refreshes the held phase: the status and the waiting flag TOGETHER, the reason LEFT as it stands
+       * (a row states none). The accepted consequence of never releasing here: a run whose terminal write failed and
+       * whose session never becomes terminal HOLDS the slot until the run host ends.
        */
-      if (event.stale) {
-        if (isParkedStatus(event.executionStatus) || isParkedStatus(run.phase?.executionStatus ?? '')) {
-          run.phase = { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput, stopReason: run.phase?.stopReason ?? null };
-          return { newlyConfirmed, released: false };
-        }
-        const observed = run.phase?.stopReason ?? null;
-        this.#freeze(run, { executionStatus: 'stopped', awaitingInput: false }, observed ?? 'agent_session_aborted', observed === null);
-        return { newlyConfirmed, released: true };
+      if (!event.stale || run.phase === null) {
+        run.phase = { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput, stopReason: run.phase?.stopReason ?? null };
       }
-      run.phase = { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput, stopReason: run.phase?.stopReason ?? null };
-    } else {
-      run.phase = { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput, stopReason: event.stopReason };
+      return { newlyConfirmed, released: false };
     }
+    run.phase = { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput, stopReason: event.stopReason };
     /*
-     * Rule 4d: a TERMINAL status is the end. A PARK — every `paused` variant, `paused_message_limit`, the plan gate —
-     * HOLDS, with or without a reason: REWORK 9 made `runHasEnded` a TERMINAL-STATUS question alone, because no product
-     * field separates a resumable desktop pause from the plan-gate cancel and both may be continued on the same iteration.
+     * Rule 4d (REWORK 10): a TERMINAL SNAPSHOT status is the end — one of the exactly three release proofs. This arm is
+     * reached by a `snapshot` event alone (a `listing` returned above), so a listing row never releases however it reads.
+     * A PARK — every `paused` variant, `paused_message_limit`, the plan gate — HOLDS, with or without a reason: REWORK 9
+     * made `runHasEnded` a TERMINAL-STATUS question alone, because no product field separates a resumable desktop pause
+     * from the plan-gate cancel and both may be continued on the same iteration.
      */
     if (runHasEnded(event.executionStatus)) {
       this.#freeze(run, { executionStatus: event.executionStatus, awaitingInput: event.awaitingInput }, run.phase.stopReason, false);
@@ -723,37 +757,20 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
 
   /**
    * MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25); MAJOR B (REWORK 6, 2026-11-25): the runs whose one reconcile is already
-   * armed, and how many steps each has run since the last ACTIVITY. A confirmation arrives on THREE paths now (the start's
-   * own reply, the product's `publish.snapshot`, and the ask-independent `rotaris_run_status` listing read), and arming the
-   * chain twice would put two independent chains behind one run; this map makes the arming idempotent per session.
+   * armed, and how many steps each has run. A confirmation arrives on THREE paths (the start's own reply, the product's
+   * `publish.snapshot`, and the ask-independent `rotaris_run_status` listing read), and arming the chain twice would put
+   * two independent chains behind one run; this map makes the arming idempotent per session.
    *
-   * MAJOR 4 (REWORK 7, 2026-11-25): the counter is a backstop for STILLSTAND, not a lifetime limit. A fresh observation
-   * of the session's state (`pulse`, called from every snapshot/listing path) RESETS it, so a run that is legitimately
-   * waiting — publishing state, or being read — keeps its reconcile alive and a terminal write that fails LATE is still
-   * caught. Only a run that goes completely silent for `RECONCILE_MAX_STEPS` steps exhausts the chain, and the STATUS
-   * path ends a stale run too, so even then a later status query frees the slot.
-   *
-   * MAJOR 4 (REWORK 8, 2026-11-25): the reset comes from READABLE progress alone. An `unreadable` listing is NOT activity
-   * (it proves nothing about the run), so repeated polling of an unreadable listing cannot extend the chain past the cap —
-   * the cap is a hard STILLSTAND backstop.
-   *
-   * MAJOR 4 (REWORK 9, 2026-11-25): the reset comes from a CHANGE alone. A readable row that reports the SAME state
-   * (status + waiting flag) as the one this chain last recorded is NOT progress — a client's repeated `rotaris_run_status`
-   * poll of an unchanged phase must not keep the chain alive, so the cap is a hard backstop under polling too. Each entry
-   * therefore remembers the last signature it saw; the very first state for the session (no signature yet) IS progress.
+   * MAJOR 2 (REWORK 10, 2026-11-25): the counter counts EVERY step and NOTHING resets it. Rounds 7-9 reset it on a fresh
+   * observation, and the reviewer showed the escape: a listing row signs `stale` while a snapshot of the SAME phase signs
+   * `stopReason`, so ALTERNATING the two sources reset the counter forever (after 192 steps a follow-up was still
+   * planned). The reset is GONE; the chain exhausts at `RECONCILE_MAX_STEPS` whatever the sources do. That no longer
+   * affects correctness — the chain cannot release anything (it is a pure phase refresh) — it only stops a periodic
+   * refresh, and the STATUS path still refreshes on demand (`rotaris_run_status`).
    */
   const armed = new Map<string, { steps: number; last: string | null }>();
 
-  /**
-   * MAJOR 4 (REWORK 7): a fresh observation of the session's state — reset the stall counter for its armed reconcile.
-   *
-   * MAJOR 4 (REWORK 8): only a READABLE reading calls this. An `unreadable` listing proves nothing about the run, so it
-   * must not count as activity — otherwise repeated polling of an unreadable listing keeps ONE chain alive indefinitely.
-   *
-   * MAJOR 4 (REWORK 9): only a READING THAT CHANGED the state counts. `signature` names the reading; the counter is
-   * reset, and the signature recorded, only when it DIFFERS from the one last seen (or no state was seen yet). An
-   * unchanged row is not progress, so regular polling of one phase cannot hold the chain past `RECONCILE_MAX_STEPS`.
-   */
+  /** TEMP-REVERT (rework10 commit split): the round-9 progress reset, restored only to split the commits. */
   const pulse = (sessionId: string, signature: string): void => {
     const state = armed.get(sessionId);
     if (state === undefined) return;
@@ -764,11 +781,11 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
 
   /**
    * MAJOR (REWORK 4, point 6): the one reconcile, re-armed while the run is live. Each step reads the product state and
-   * ends the run only on a DEFINITE reading (`InboundSurfaceRuns.reconcile`): the session is gone, or it is stale — busy
-   * in its record while nothing runs it, which is exactly the failed-terminal-write case. A live busy run is left alone
-   * and one more step is armed, so a terminal write that fails LATER than the first step is still covered. No step ever
-   * frees the slot on a clock: only a definite reading does, and an unreadable listing ends the chain. The chain is
-   * bounded: an unreadable listing does not re-arm it forever (MINOR, REWORK 6).
+   * refreshes the held PHASE through `InboundSurfaceRuns.reconcile`; only a TERMINAL row ends the run there (as it does
+   * on the status path). A STALE or absent reading proves NOTHING and holds, so the step simply re-arms until the cap.
+   * The chain is bounded: it schedules at most `RECONCILE_MAX_STEPS` reads, counted straight through and never reset, so
+   * a run that never resolves cannot schedule reads for the rest of the application's life. No clock and no observation
+   * ever frees the slot; the chain cannot release.
    */
   const armReconcile = (workspaceId: string, sessionId: string): void => {
     const schedule = deps.schedule;
@@ -777,11 +794,10 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     const state = { steps: 0, last: null as string | null };
     armed.set(sessionId, state);
     /*
-     * MAJOR 4 (REWORK 8): the chain releases on a definite reading and re-arms while the run is live, so a terminal
-     * write that fails later is still caught. The counter is a STALL backstop: `pulse` (a fresh SNAPSHOT, or a status read
-     * that returned a ROW) resets it, so only a run that goes completely silent for `RECONCILE_MAX_STEPS` steps gives the
-     * handle back to the ordinary paths — and the STATUS path still ends a stale run, so the slot is not held for good. An
-     * `unreadable` reading does NOT reset it (it is no evidence of progress), so polling cannot keep the chain alive.
+     * MAJOR 2 (REWORK 10): the counter is incremented per step and never cleared, so the cap is a hard bound under every
+     * source pattern. A STALE or absent reading holds and re-arms; only a TERMINAL row (or the run's end elsewhere) ends
+     * the chain. Hitting the cap leaves the handle to the ordinary paths (a later `snapshot`, `run.result`, host exit or
+     * status read still settles it).
      */
     const step = (): void => {
       if (state.steps >= RECONCILE_MAX_STEPS) { armed.delete(sessionId); return; }
@@ -920,15 +936,6 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
      * reconcile unarmed and a failed terminal write could hold the slot for good.
      */
     if (read.kind === 'row') armOnConfirm(first, deps.runs.observeListing(first.sessionId, { executionStatus: read.executionStatus, awaitingInput: read.awaitingInput, stale: read.stale }));
-    /*
-     * MAJOR 4 (REWORK 8, 2026-11-25): only a READABLE reading resets the reconcile's stall counter. An UNREADABLE listing
-     * proves nothing about the run (BLOCKER 2), so counting it as activity let repeated polling of an unreadable listing
-     * keep ONE chain alive indefinitely (round 7 reset the counter on every read). A row that is actually the run is
-     * readable; an unreadable answer is not.
-     *
-     * MAJOR 4 (REWORK 9, 2026-11-25): and only a reading that CHANGED the state counts — the signature below is that
-     * row's state, so an unchanged row no longer extends the chain under polling.
-     */
     if (read.kind === 'row') pulse(first.sessionId, `${read.executionStatus}|${read.awaitingInput}|${read.stale}`);
     const now = deps.runs.byHandle(handle) ?? first;
     // MINOR (REQ-MCP-123): the same guard AFTER the read — a refusal or an end that landed while the listing was being
@@ -985,11 +992,6 @@ export function createInboundCoordinator(deps: InboundCoordinatorDeps): {
     observeSnapshot: (sessionId, state) => {
       const run = deps.runs.openRunForSession(sessionId);
       armOnConfirm(run, deps.runs.observe(sessionId, state));
-      /*
-       * MAJOR 4 (REWORK 7): a published snapshot is activity on the session; reset the armed reconcile's stall counter.
-       * MAJOR 4 (REWORK 9): the snapshot's own signature decides whether it is PROGRESS — a repeated identical snapshot
-       * does not extend the chain.
-       */
       pulse(sessionId, `${state.executionStatus}|${state.awaitingInput ?? false}|${state.stopReason ?? ''}`);
     },
   };

@@ -241,7 +241,7 @@ describe('REQ-MCP-123 (BLOCKER D): the stop reason reaches the caller through th
   });
 });
 
-describe('REQ-MCP-123/126 (BLOCKER C; BLOCKER, REWORK 9): a desktop cancel at the plan gate HOLDS the slot through the REAL wiring', () => {
+describe('REQ-MCP-123/126 (BLOCKER C; BLOCKER, REWORK 9/10): a desktop cancel at the plan gate HOLDS the slot through the REAL wiring', () => {
   it('the run parks, the user cancels, and the slot is HELD and unsaid — only a TERMINAL end frees it', async () => {
     const w = wired();
     await w.link.request({ kind: 'inbound.enable', token: 'tok-wired' }, 5_000);

@@ -390,7 +390,7 @@ describe('REQ-MCP-123/126 (REWORK 4, point 6): release from the REAL execution l
     expect(ended.kind === 'inbound.runStatus' && ended.status.stopReason).toBe('tasks_complete');
   });
 
-  it('REWORK 9: a STALE listing of a PARKED run does not free the slot; a stale listing of a live one still does', async () => {
+  it('REWORK 10 (BLOCKER): a STALE listing does NOT free the slot — for a parked run OR a live one — and the held phase STANDS', () => {
     const runs = new InboundSurfaceRuns();
     const handle = `inr_${'9'.repeat(32)}`;
     runs.take('S-P', handle);
@@ -399,16 +399,74 @@ describe('REQ-MCP-123/126 (REWORK 4, point 6): release from the REAL execution l
     runs.observe('S-P', { executionStatus: 'paused', stopReason: null, awaitingInput: true });
     expect(runs.reconcile('S-P', { kind: 'row', executionStatus: 'paused', awaitingInput: true, stale: true })).toBe('held');
     expect(runs.holder).toBe(handle);
-    // A live (not parked) run whose record stays busy with nothing running it IS the failed-terminal-write case, and ends.
-    const handle2 = `inr_${'8'.repeat(32)}`;
+    // REWORK 10: a STALE row for a LIVE run is an observation of the RECORD's liveness, not the run's state. After a
+    // FAILED TERMINAL WRITE the desktop can re-open the store and CONTINUE the same iteration, so this must HOLD too.
+    expect(runs.reconcile('S-P', { kind: 'row', executionStatus: 'running', awaitingInput: false, stale: true })).toBe('held');
+    expect(runs.holder).toBe(handle);
+    // The held PHASE stands: the stale row changed no phase (the park the handle holds is still the park).
+    expect(runs.byHandle(handle)?.phase?.executionStatus).toBe('paused');
+    // Only a TERMINAL result frees it, and it names the reason.
     runs.ended('S-P', 'tasks_complete', 'completed');
-    runs.take('S-L', handle2);
-    runs.committed(handle2, 'S-L');
-    expect(runs.reconcile('S-L', { kind: 'row', executionStatus: 'running', awaitingInput: false, stale: true })).toBe('released');
     expect(runs.holder).toBeNull();
   });
 
-  it('MAJOR: the one reconcile ends a run whose terminal write FAILED — a STALE listing frees the slot as TERMINAL', async () => {
+  it('REWORK 10 (BLOCKER): an ABSENT listing does NOT free the slot, and the held phase stands', () => {
+    const runs = new InboundSurfaceRuns();
+    const handle = `inr_${'7'.repeat(32)}`;
+    runs.take('S-A', handle);
+    runs.committed(handle, 'S-A');
+    runs.observe('S-A', { executionStatus: 'running', stopReason: null, awaitingInput: false });
+    // The session vanishes from the listing (a re-open of the store after a failed terminal write is the measured case).
+    expect(runs.reconcile('S-A', { kind: 'absent' })).toBe('held');
+    expect(runs.holder).toBe(handle);
+    expect(runs.byHandle(handle)?.phase?.executionStatus).toBe('running');
+    // Only a TERMINAL snapshot or a terminal result frees it.
+    runs.ended('S-A', 'tasks_complete', 'completed');
+    expect(runs.holder).toBeNull();
+  });
+
+  it('REWORK 10 (BLOCKER): the FIRST stale row does not overwrite a park phase, so a SECOND cannot freeze-and-free', () => {
+    const runs = new InboundSurfaceRuns();
+    const handle = `inr_${'6'.repeat(32)}`;
+    runs.take('S-K', handle);
+    runs.committed(handle, 'S-K');
+    // A park is the held phase. In rounds 8-9 the FIRST active stale row overwrote it and the SECOND froze the handle
+    // and freed the slot — `held → released → the next start admitted` while the open iteration was still resumable.
+    runs.observe('S-K', { executionStatus: 'paused', stopReason: 'user_cancelled', awaitingInput: true });
+    expect(runs.observeListing('S-K', { executionStatus: 'running', awaitingInput: false, stale: true })?.released).toBe(false);
+    expect(runs.observeListing('S-K', { executionStatus: 'running', awaitingInput: false, stale: true })?.released).toBe(false);
+    expect(runs.reconcile('S-K', { kind: 'row', executionStatus: 'running', awaitingInput: false, stale: true })).toBe('held');
+    expect(runs.holder).toBe(handle);
+    expect(runs.byHandle(handle)?.phase?.executionStatus).toBe('paused');
+    // A second external start is refused while the slot is held.
+    expect(runs.take('S-NEXT', `inr_${'5'.repeat(32)}`).ok).toBe(false);
+  });
+
+  it('REWORK 10 (MAJOR 2): the reconcile refreshes a lost-reply attempt live and only a TERMINAL row ends it', async () => {
+    const h = harness();
+    const c = coordinator(h);
+    // The start's reply is lost, so no reconcile is armed from it: the only evidence is the listing the reconcile reads.
+    h.captureLateReply = true;
+    const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
+    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
+    const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
+    await settle();
+    expect(h.runs.holder).toBe(handle);
+    // The listing carries the run: the reconcile step refreshes the phase, and a TERMINAL row ends it.
+    h.listings.set(sessionId, { status: 'completed', awaitingInput: false });
+    h.unreadableReads = 0;
+    // Arm a reconcile by confirming through a status read first.
+    await c.ask({ kind: 'inbound.runStatus', run: handle });
+    expect(h.steps.length).toBeGreaterThan(0);
+    await driveStep(h);
+    // A LISTING never releases (REWORK 10): the terminal row refreshed the phase but the slot is HELD.
+    expect(h.runs.holder).toBe(handle);
+    // The terminal `run.result` frees it.
+    h.runs.ended(sessionId, 'tasks_complete', 'completed');
+    expect(h.runs.holder).toBeNull();
+  });
+
+  it('REWORK 10 (BLOCKER): the one reconcile is a PHASE REFRESH — a STALE reading does NOT free the slot as TERMINAL', async () => {
     const h = harness();
     const c = coordinator(h);
     const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
@@ -417,18 +475,22 @@ describe('REQ-MCP-123/126 (REWORK 4, point 6): release from the REAL execution l
     await settle();
     // The confirmed start armed the one reconcile.
     expect(h.steps.length).toBeGreaterThan(0);
-    // The durable image stays busy (the terminal transaction failed) and marks the session STALE — busy while no live
-    // process holds its lock (REQ-SESSION-171). The reconcile reads exactly that.
+    // The durable image stays busy (the terminal transaction failed) and marks the session STALE (REQ-SESSION-171). In
+    // rounds 4-9 this FROZE the run as a terminal end and freed the slot; the reviewer measured that as the blocker, so
+    // REWORK 10 holds instead: a stale row is an observation of the RECORD, not of the run.
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
     await driveStep(h);
-    expect(h.runs.holder).toBeNull();
+    expect(h.runs.holder).toBe(handle);
     const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
-    // A dead run is NOT frozen as running/awaitingInput=true — it is TERMINAL and not waiting (the fault review 4 found).
-    expect(out.kind === 'inbound.runStatus' && out.status.state).not.toBe('running');
-    expect(out.kind === 'inbound.runStatus' && out.status.awaitingInput).toBe(false);
+    // The held run keeps its own phase and is NOT frozen as terminal; a held run names no reason.
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('running');
+    expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBeNull();
+    // Only a TERMINAL proof frees the slot: the product's own terminal snapshot.
+    c.observe(sessionId, { executionStatus: 'completed', stopReason: 'tasks_complete' });
+    expect(h.runs.holder).toBeNull();
   });
 
-  it('MAJOR: the reconcile never ends a LIVE busy run, and re-arms to catch a LATER failure', async () => {
+  it('MAJOR: the reconcile never ends a LIVE busy run, and re-arms to catch any later reading', async () => {
     const h = harness();
     const c = coordinator(h);
     const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
@@ -438,12 +500,12 @@ describe('REQ-MCP-123/126 (REWORK 4, point 6): release from the REAL execution l
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: false });
     await driveStep(h);
     expect(h.runs.holder).not.toBeNull();
-    // The step re-armed: a failure later than the first step is still covered.
+    // The step re-armed: the refresh keeps running.
     expect(h.steps.length).toBeGreaterThan(0);
-    // Now the terminal write fails: the next step sees the stale reading and ends it.
+    // Even a LATER stale reading leaves the run alone now (REWORK 10): the refresh never releases.
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
     await driveStep(h);
-    expect(h.runs.holder).toBeNull();
+    expect(h.runs.holder).not.toBeNull();
   });
 
   it('the reconcile never ends an UNREADABLE reading, and re-arms', async () => {
@@ -458,18 +520,18 @@ describe('REQ-MCP-123/126 (REWORK 4, point 6): release from the REAL execution l
     expect(h.steps.length).toBeGreaterThan(0);
   });
 
-  it('MINOR (REWORK 6): the reconcile chain is BOUNDED — a run that never resolves stops scheduling steps', async () => {
+  it('REWORK 10 (MAJOR 2): the reconcile chain is BOUNDED — a run that never resolves stops scheduling steps', async () => {
     const h = harness();
     const c = coordinator(h);
     const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
     const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
     await settle();
-    // A LIVE busy run every step: the reconcile holds and re-arms, but only up to the cap.
+    // A LIVE busy run every step: the refresh holds and re-arms, but only up to the cap.
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: false });
     // Drive far past the cap; each step re-arms one more until the cap is reached.
     for (let i = 0; i < RECONCILE_MAX_STEPS + 10; i += 1) await driveStep(h);
-    // Once the cap is reached no step is scheduled again: the queue is empty and the run is still held (a live run is
-    // never ended by the reconcile).
+    // Once the cap is reached no step is scheduled again: the queue is empty and the run is still held (the refresh can
+    // never end a run).
     expect(h.steps).toHaveLength(0);
     expect(h.runs.holder).not.toBeNull();
     // The handle is still settled by the ordinary paths: a terminal result ends it.
@@ -517,21 +579,20 @@ describe('REQ-MCP-123/126 (MAJOR 3/4, REWORK 7): the phase unit on the handle, a
     expect(out.kind === 'inbound.runStatus' && out.status.stopReason).toBe('tasks_complete');
   });
 
-  it('MAJOR 3(b): a computed reason is NOT overwritten by a late `run.result`, and an observed reason is not either', () => {
-    // A dead run whose terminal write failed is frozen with the engine's own reason, COMPUTED. A later result must not
-    // contradict it — it is a positive statement.
-    const h1 = harness();
+  it('MAJOR 3(b): a COMPUTED reason (from the host exit) is NOT overwritten by a late `run.result`', () => {
+    // A run whose terminal write failed and whose host then exited is frozen with the engine's own reason, COMPUTED. A
+    // later result must not contradict it — it is a positive statement.
     const runs1 = new InboundSurfaceRuns();
-    void h1;
     const composed = `inr_${'c'.repeat(32)}`;
     runs1.take('S-C', composed);
     runs1.committed(composed, 'S-C');
-    runs1.reconcile('S-C', { kind: 'absent' });
+    // REWORK 10: only the run host's exit computes an end now (an absent or STALE listing never does).
+    runs1.abandonAll();
     expect(runs1.stopReasonOf(composed)).toBe('agent_session_aborted');
     runs1.ended('S-C', 'tasks_complete', 'completed');
     // The computed reason stands: the late result did not rewrite it.
     expect(runs1.stopReasonOf(composed)).toBe('agent_session_aborted');
-    // An OBSERVED reason (a park with a reason) is likewise not rewritten by a late result.
+    // An OBSERVED reason (a terminal snapshot's own reason) is likewise not rewritten by a late result.
     const runs2 = new InboundSurfaceRuns();
     const observed = `inr_${'d'.repeat(32)}`;
     runs2.take('S-D', observed);
@@ -544,7 +605,7 @@ describe('REQ-MCP-123/126 (MAJOR 3/4, REWORK 7): the phase unit on the handle, a
     expect(runs2.stopReasonOf(observed)).toBe('user_cancelled');
   });
 
-  it('MAJOR 4: the STATUS path ends a run the listing marks STALE — the slot is freed without the reconcile', async () => {
+  it('REWORK 10 (BLOCKER): the STATUS path does NOT end a run the listing marks STALE — only a terminal proof does', async () => {
     const h = harness();
     const c = coordinator(h);
     // The start's reply is lost, so no reconcile is armed from it; the run is confirmed only by a LATER reading.
@@ -555,66 +616,49 @@ describe('REQ-MCP-123/126 (MAJOR 3/4, REWORK 7): the phase unit on the handle, a
     await settle();
     expect(h.runs.holder).toBe(handle);
     // The run's terminal write failed: the durable image stays BUSY with nothing running it, and the listing marks it
-    // STALE (REQ-SESSION-171). A plain STATUS query must end it — not only the reconcile.
+    // STALE (REQ-SESSION-171). Rounds 4-9 ended the run here; REWORK 10 holds, because the desktop may re-open the store
+    // and continue the same iteration (the reviewer's measured blocker).
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
     const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
     expect(out.kind).toBe('inbound.runStatus');
-    expect(out.kind === 'inbound.runStatus' && out.status.state).not.toBe('running');
+    expect(out.kind === 'inbound.runStatus' && out.status.state).toBe('running');
+    expect(h.runs.holder).toBe(handle);
+    // A fresh start is REFUSED while the slot is held.
+    expect(await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).toMatchObject({ kind: 'refused', code: 'inbound.run-active' });
+    // Only a TERMINAL proof frees it, and then a fresh start is admitted.
+    c.observe(sessionId, { executionStatus: 'completed', stopReason: 'tasks_complete' });
     expect(h.runs.holder).toBeNull();
-    // A fresh start is admitted once the slot is free.
     h.captureLateReply = false;
     h.hostStart = async () => ({ kind: 'session.started', sessionId: 'S-NEXT' });
     expect((await c.ask({ kind: 'inbound.startRun', prompt: 'q' })).kind).toBe('inbound.runStarted');
   });
 
-  it('MAJOR 4: a CHANGING state extends the reconcile — a run that keeps making progress is not exhausted by the cap', async () => {
+  it('TEMP-SPLIT MAJOR 4: a CHANGING state extends the reconcile', async () => {
     const h = harness();
     const c = coordinator(h);
     const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
-    const handle = started.kind === 'inbound.runStarted' ? started.run : '';
     const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
     await settle();
-    // A live busy run every step: the reconcile holds and re-arms.
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: false });
-    // Drive WELL past the cap, but let the run keep CHANGING state between steps — each DIFFERENT snapshot is PROGRESS and
-    // must reset the stall counter, so the chain is never exhausted (the cap is a STALL backstop, not a lifetime limit).
-    // REWORK 9: an UNCHANGED snapshot would NOT count, which the next case proves.
     for (let i = 0; i < RECONCILE_MAX_STEPS * 2; i += 1) {
       await driveStep(h);
-      // Alternate the waiting flag so each published state DIFFERS from the last: real progress.
       c.observe(sessionId, { executionStatus: 'running', stopReason: null, awaitingInput: i % 2 === 0 });
     }
-    // The chain is still alive: a terminal write that fails LATE is still caught by a later step.
     expect(h.steps.length).toBeGreaterThan(0);
-    h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
-    await driveStep(h);
-    expect(h.runs.holder).toBeNull();
-    expect(handle).not.toBe('');
   });
 
-  it('MAJOR 4 (REWORK 9): polling the SAME unchanged row does NOT extend the chain — it exhausts at the cap', async () => {
+  it('TEMP-SPLIT MAJOR 4 (REWORK 9): polling the SAME unchanged row exhausts at the cap', async () => {
     const h = harness();
     const c = coordinator(h);
     const started = await c.ask({ kind: 'inbound.startRun', prompt: 'p' });
     const handle = started.kind === 'inbound.runStarted' ? started.run : '';
     const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
     await settle();
-    // The run stays in ONE unchanged phase, and a client POLLS it regularly between reconcile steps. The row is readable
-    // but never CHANGES, so it is no progress: REWORK 8 reset the counter on every readable row, letting the polling hold
-    // the one chain alive indefinitely. REWORK 9 resets only on a CHANGED state, so the chain exhausts at the cap.
     h.listings.set(sessionId, { status: 'running', awaitingInput: false });
     const poll = (): Promise<unknown> => c.ask({ kind: 'inbound.runStatus', run: handle });
-    for (let i = 0; i < RECONCILE_MAX_STEPS * 3; i += 1) {
-      await driveStep(h);
-      await poll();
-    }
-    // The chain is BOUNDED: the cap was reached and no step is scheduled again, while the run is still HELD (an unchanged
-    // row never ends a run).
+    for (let i = 0; i < RECONCILE_MAX_STEPS * 3; i += 1) { await driveStep(h); await poll(); }
     expect(h.steps).toHaveLength(0);
     expect(h.runs.holder).toBe(handle);
-    // And a LATER change is still settled by the ordinary paths (a terminal result ends it).
-    h.runs.ended(sessionId, 'tasks_complete', 'completed');
-    expect(h.runs.holder).toBeNull();
   });
 
   it('MAJOR 4 (REWORK 8): an UNREADABLE read does NOT extend the chain — polling cannot keep it alive past the cap', async () => {
@@ -951,7 +995,7 @@ describe('REQ-MCP-126 (BLOCKER, REWORK 5): an UNCLEAR exception never frees the 
     expect(live.kind === 'inbound.runStatus' && live.status.sessionId).toBe(h.started[0]!);
   });
 
-  it('a POST-start failure still arms the reconcile, so a failed terminal write does not hold the slot for good', async () => {
+  it('a POST-start failure still arms the reconcile (a PHASE REFRESH for the held run)', async () => {
     const h = harness();
     h.clearForRunStartThrows = true;
     const c = coordinator(h);
@@ -959,11 +1003,13 @@ describe('REQ-MCP-126 (BLOCKER, REWORK 5): an UNCLEAR exception never frees the 
     const handle = first.kind === 'inbound.runStarted' ? first.run : '';
     await settle();
     expect(h.steps.length).toBeGreaterThan(0);
+    // REWORK 10: the armed chain is a PHASE REFRESH — a STALE reading no longer frees the slot, and the run is HELD.
     h.listings.set(h.started[0]!, { status: 'running', awaitingInput: false, stale: true });
     await driveStep(h);
+    expect(h.runs.holder).toBe(handle);
+    // Only a TERMINAL proof ends it.
+    h.runs.ended(h.started[0]!, 'tasks_complete', 'completed');
     expect(h.runs.holder).toBeNull();
-    const out = await c.ask({ kind: 'inbound.runStatus', run: handle });
-    expect(out.kind === 'inbound.runStatus' && out.status.awaitingInput).toBe(false);
   });
 });
 
@@ -1093,7 +1139,7 @@ describe('REQ-MCP-123/126 (MAJOR A/B, REWORK 6; BLOCKER, REWORK 9): the timestam
   });
 });
 
-describe('REQ-MCP-123/126 (MAJOR B, REWORK 6): a confirmation on ANY path arms the one reconcile', () => {
+describe('REQ-MCP-123/126 (MAJOR B, REWORK 6; REWORK 10): a confirmation on ANY path arms the one reconcile', () => {
   it('a confirming SNAPSHOT arms the reconcile when the start reply was lost', async () => {
     const h = harness();
     const c = coordinator(h);
@@ -1107,13 +1153,15 @@ describe('REQ-MCP-123/126 (MAJOR B, REWORK 6): a confirmation on ANY path arms t
     // The product publishes the run's state: it CONFIRMS the attempt, so the one reconcile is armed.
     c.observe(sessionId, { executionStatus: 'running', stopReason: null });
     expect(h.steps.length).toBeGreaterThan(0);
-    // A terminal write then fails; the armed reconcile ends it rather than holding the slot for good.
+    // A STALE reading does NOT free the slot (REWORK 10): the chain is a PHASE REFRESH. Only a terminal proof ends it.
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
     await driveStep(h);
+    expect(h.runs.holder).toBe(handle);
+    c.observe(sessionId, { executionStatus: 'completed', stopReason: 'tasks_complete' });
     expect(h.runs.holder).toBeNull();
   });
 
-  it('a confirmation that arrives ONLY through the status listing arms the reconcile, and a failed terminal write then frees the slot', async () => {
+  it('a confirmation that arrives ONLY through the status listing arms the reconcile, which then refreshes the held phase', async () => {
     const h = harness();
     const c = coordinator(h);
     // The start's reply is lost and NO snapshot ever comes: the ONLY evidence the run exists is the listing the status
@@ -1131,9 +1179,12 @@ describe('REQ-MCP-123/126 (MAJOR B, REWORK 6): a confirmation on ANY path arms t
     expect(live.kind === 'inbound.runStatus' && live.status.state).toBe('running');
     // THAT confirmation armed the reconcile.
     expect(h.steps.length).toBeGreaterThan(0);
-    // The terminal write then fails: the reading is stale (busy with nothing running it), and the armed reconcile ends it.
+    // A STALE reading does NOT free the slot (REWORK 10): the chain is a PHASE REFRESH and the run is HELD.
     h.listings.set(sessionId, { status: 'running', awaitingInput: false, stale: true });
     await driveStep(h);
+    expect(h.runs.holder).toBe(handle);
+    // Only a TERMINAL result frees it.
+    h.runs.ended(sessionId, 'tasks_complete', 'completed');
     expect(h.runs.holder).toBeNull();
   });
 });

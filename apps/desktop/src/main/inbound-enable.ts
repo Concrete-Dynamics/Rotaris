@@ -41,6 +41,16 @@ export interface InboundEnablePorts {
   readonly mintToken: () => string;
 }
 
+/**
+ * MINOR (REWORK 6, 2026-11-25): the cap on the gestures queued on the one chain. A burst of presses past it is REFUSED
+ * rather than queued, so the queue cannot grow without end; the figure is generous enough that ordinary use never meets
+ * it (an enable and a disable that overlap are two gestures).
+ */
+export const MAX_QUEUED_GESTURES = 32;
+
+/**
+ * REQ-MCP-120: the settings surface's two gestures, as main's `index.ts` calls them.
+ */
 export interface InboundEnableSequencer {
   /** REQ-MCP-120: turn the surface on — idempotent once bound, serialized behind any gesture already in flight. */
   readonly enable: () => Promise<CommandOutcome>;
@@ -48,7 +58,10 @@ export interface InboundEnableSequencer {
   readonly disable: () => Promise<CommandOutcome>;
   /** Whether the LISTENER may still hold a bound socket (told apart from the exposure main shows). */
   readonly listenerBound: () => boolean;
-  /** The listener is gone: nothing of it is bound any more. */
+  /**
+   * The listener is GONE (its process exited): nothing of it is bound any more, and the enable question it may have left
+   * open is CLOSED. A following enable then forks and binds FRESH (MAJOR C, REWORK 6).
+   */
   readonly listenerGone: () => void;
 }
 
@@ -57,6 +70,15 @@ export function createInboundEnableSequencer(ports: InboundEnablePorts): Inbound
   let listenerBound = false;
   /** The token handed over with an enable whose bind is not yet confirmed, or null when the question is closed. */
   let pendingToken: string | null = null;
+  /**
+   * MAJOR C (REWORK 6, 2026-11-25): the generation of the LISTENER these gestures are talking to. `listenerGone`
+   * increments it, so an enable that was in flight when the listener died cannot resurrect the dead listener's bind
+   * question by writing `pendingToken` after `listenerGone` closed it — the classic race that locked every following
+   * enable into `askState → null` (the listener was gone, so `askState` answered null and the question never closed).
+   */
+  let listenerEpoch = 0;
+  /** MINOR (REWORK 6): how many gestures are queued on the one chain right now, so the queue has a bound. */
+  let queued = 0;
   /** The one chain every gesture rides, so an enable and a disable that overlap are applied in the order they arrived. */
   let chain: Promise<unknown> = Promise.resolve();
 
@@ -68,14 +90,35 @@ export function createInboundEnableSequencer(ports: InboundEnablePorts): Inbound
   };
 
   /**
+   * MINOR (REWORK 6, 2026-11-25): a bounded gesture queue. `serialize` chains forever, and a burst of settings presses
+   * (or a caller driving the command in a loop) would otherwise queue without end. Past the cap the gesture is REFUSED
+   * with a stated reason rather than queued — the same choice REQ-MCP-126 makes for the run slot (refuse, never queue) —
+   * and the queue is counted around the work so the cap is on what is OUTSTANDING, not on how much has ever run.
+   */
+  const serializeBounded = <T>(work: () => Promise<T>, refusal: () => CommandOutcome): Promise<CommandOutcome> => {
+    if (queued >= MAX_QUEUED_GESTURES) return Promise.resolve(refusal());
+    queued += 1;
+    const run = serialize(work);
+    void run.then(() => { queued -= 1; }, () => { queued -= 1; });
+    return run as Promise<CommandOutcome>;
+  };
+
+  /** MAJOR C: a listener that died while an enable was asking it — the bind question is CLOSED, not left open. */
+  const listenerDied = (epoch: number): boolean => epoch !== listenerEpoch;
+
+  /**
    * Resolve a bind question left OPEN by an earlier enable: read the listener's own state. `listening` means the late
    * bind DID happen with the token main handed over, so main adopts that very token (the display and the listener agree);
    * `not listening` closes the question as off; an unanswered read keeps it open.
    */
   const resolvePending = async (): Promise<CommandOutcome | null> => {
     if (pendingToken === null) return null;
+    const epoch = listenerEpoch;
     const token = pendingToken;
     const state = await ports.askState();
+    // MAJOR C: the listener DIED while we were asking it. The question is closed, not left open: a following enable forks
+    // and binds fresh instead of waiting on a listener that no longer exists.
+    if (listenerDied(epoch)) return null;
     if (state === null) {
       // The listener still did not answer: the question stays open and the exposure stays off, but the listener may yet
       // hold a socket — a disable will reach it.
@@ -98,13 +141,27 @@ export function createInboundEnableSequencer(ports: InboundEnablePorts): Inbound
     // An earlier enable whose bind was never confirmed is resolved FIRST, before anything else is decided.
     const resolved = await resolvePending();
     if (resolved !== null) return resolved;
+    // MAJOR C: `resolvePending` may have closed the question because the listener died; if the exposure is not in force,
+    // the enable proceeds as a fresh one below (minting a token for the listener the caller will fork).
+    const epoch = listenerEpoch;
     // A repeat while the exposure is already on and bound is IDEMPOTENT: no fresh token, no rebind.
     const current = ports.exposure.view(false);
     if (current.enabled && current.port !== null && listenerBound) return { ok: true, value: current };
     const token = ports.mintToken();
     const asked = await ports.askEnable(token);
+    ports.exposure.turnOff();
+    /*
+     * MAJOR C (REWORK 6, 2026-11-25): if the listener DIED while this ask was in flight, the answer says nothing about
+     * a listener that is no longer there. The bind question is CLOSED (never left open), so the NEXT enable forks and
+     * binds fresh — the fault was that the dying listener's enable left `pendingToken` standing, and every following
+     * enable then ran into `askState → null` (the listener was gone) and never bound.
+     */
+    if (listenerDied(epoch)) {
+      listenerBound = false;
+      pendingToken = null;
+      return asked.ok ? { ok: false, code: 'inbound.gone', headline: 'The inbound listener has stopped' } : asked.outcome;
+    }
     if (!asked.ok) {
-      ports.exposure.turnOff();
       if (asked.definite) {
         // The listener itself answered that the bind failed: nothing holds a socket, so the question is CLOSED as off.
         listenerBound = false;
@@ -129,7 +186,7 @@ export function createInboundEnableSequencer(ports: InboundEnablePorts): Inbound
    * INSIDE the chain, so two overlapping enables bind once — and, unlike a join, a gesture queued BETWEEN them is still
    * performed (`Enable → Disable → Enable` ends ON, the last gesture's own outcome).
    */
-  const enable = (): Promise<CommandOutcome> => serialize(doEnable);
+  const enable = (): Promise<CommandOutcome> => serializeBounded(doEnable, () => ({ ok: false, code: 'inbound.busy', headline: 'Too many inbound surface gestures are already queued' }));
 
   /**
    * The disable's own work, run INSIDE the one chain (MAJOR of review 4): a disable that arrives while an enable is still
@@ -156,7 +213,15 @@ export function createInboundEnableSequencer(ports: InboundEnablePorts): Inbound
     return { ok: true, value: ports.exposure.view(false) };
   };
 
-  const disable = (): Promise<CommandOutcome> => serialize(doDisable);
+  const disable = (): Promise<CommandOutcome> => serializeBounded(doDisable, () => ({ ok: false, code: 'inbound.busy', headline: 'Too many inbound surface gestures are already queued' }));
 
-  return { enable, disable, listenerBound: () => listenerBound, listenerGone: () => { listenerBound = false; pendingToken = null; } };
+  return {
+    enable,
+    disable,
+    listenerBound: () => listenerBound,
+    // MAJOR C (REWORK 6): the listener's process is gone. Nothing of it holds a socket, and the enable question it may
+    // have left open is CLOSED (the epoch bump makes an in-flight enable's late `pendingToken` write a no-op). The next
+    // enable forks a fresh listener and binds on a fresh token.
+    listenerGone: () => { listenerEpoch += 1; listenerBound = false; pendingToken = null; },
+  };
 }

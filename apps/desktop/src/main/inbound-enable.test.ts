@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandOutcome } from '@rotaris/contracts';
 import { InboundExposure } from './inbound-exposure.js';
-import { createInboundEnableSequencer } from './inbound-enable.js';
+import { createInboundEnableSequencer, MAX_QUEUED_GESTURES } from './inbound-enable.js';
 
 /**
  * REQ-MCP-120/121 (MAJOR of review 3, 2026-11-25): main's enable/disable sequencer, measured without Electron. Two
@@ -159,6 +159,76 @@ describe('REQ-MCP-120/121 (MAJOR of review 5): a timeout leaves the bind questio
     expect(handed).toHaveLength(2);
     expect(p.exposure.view(false)).toMatchObject({ enabled: true, port: 51234 });
     expect(seq.listenerBound()).toBe(true);
+  });
+});
+
+describe('REQ-MCP-120/121 (MAJOR C, REWORK 6): a listener that dies during an enable does not lock the next one', () => {
+  it('the enable question is CLOSED at the exit, so a following enable mints a fresh token and binds', async () => {
+    const p = ports();
+    const handed: string[] = [];
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    let askEntered: () => void = () => undefined;
+    const entered = new Promise<void>((r) => { askEntered = r; });
+    // The first enable's ask is GENUINELY IN FLIGHT when the listener DIES. Its answer is INDEFINITE (a timeout / an
+    // unreachable listener) — exactly the answer whose round-5 handling re-opened the bind question by writing
+    // `pendingToken` AFTER the listener's exit had already closed it.
+    p.askEnable = async (token) => {
+      handed.push(token);
+      if (handed.length === 1) { askEntered(); await gate; return { ok: false, outcome: { ok: false, code: 'inbound.unreachable', headline: 'did not answer' }, definite: false }; }
+      p.exposure.turnOn(token); p.exposure.bound(51234); return { ok: true, port: 51234 };
+    };
+    // `askState` answers null when the listener is gone: without the fix, the open question would never close and the
+    // next enable would loop here forever (`askState → null`).
+    let stateAsks = 0;
+    p.askState = async () => { stateAsks += 1; return null; };
+    const seq = createInboundEnableSequencer(p);
+    const first = seq.enable();
+    // Let the ask reach the listener, THEN let the listener's process exit while it is asking.
+    await entered;
+    seq.listenerGone();
+    release();
+    const a = await first;
+    expect(a.ok).toBe(false);
+    // The question is CLOSED: `listenerBound` is false and no stale token is pending.
+    expect(seq.listenerBound()).toBe(false);
+    // The next enable is a FRESH one: it binds on a new token rather than sitting in `askState`.
+    const second = await seq.enable();
+    expect(second.ok).toBe(true);
+    expect(stateAsks).toBe(0);
+    expect(handed).toEqual(['tok-1', 'tok-2']);
+    expect(okValue(second)).toMatchObject({ enabled: true, port: 51234, token: 'tok-2' });
+    expect(seq.listenerBound()).toBe(true);
+  });
+
+  it('a listener that dies while NO enable is in flight simply closes the question', async () => {
+    const p = ports();
+    p.askEnable = async (token) => { p.exposure.turnOn(token); p.exposure.bound(51234); return { ok: true, port: 51234 }; };
+    const seq = createInboundEnableSequencer(p);
+    await seq.enable();
+    expect(seq.listenerBound()).toBe(true);
+    seq.listenerGone();
+    expect(seq.listenerBound()).toBe(false);
+    // And a following enable binds fresh.
+    const again = await seq.enable();
+    expect(again.ok).toBe(true);
+    expect(seq.listenerBound()).toBe(true);
+  });
+});
+
+describe('REQ-MCP-120/121 (MINOR, REWORK 6): the gesture queue is bounded', () => {
+  it('a burst past the cap is refused with a stated reason rather than queued without end', async () => {
+    const p = ports();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    p.askEnable = async (token) => { await gate; p.exposure.turnOn(token); p.exposure.bound(51234); return { ok: true, port: 51234 }; };
+    const seq = createInboundEnableSequencer(p);
+    // Fire more gestures than the cap while the first is still binding.
+    const gestures = Array.from({ length: MAX_QUEUED_GESTURES + 5 }, () => seq.disable());
+    release();
+    const outs = await Promise.all(gestures);
+    // At least one gesture is refused as `inbound.busy`, so the queue never grew past the cap.
+    expect(outs.some((o) => !o.ok && (o as { code?: string }).code === 'inbound.busy')).toBe(true);
   });
 });
 

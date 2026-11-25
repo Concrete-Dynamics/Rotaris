@@ -226,3 +226,50 @@ describe('REQ-GIT-022/023: the workspace binding is made before the host is aske
     expect(bounds).toEqual([10_000, 60_000]);
   });
 });
+
+describe('REQ-MCP-126 (BLOCKER, REWORK 5): the confirmation is reported BEFORE the post-work', () => {
+  it('`onStarted` runs before `clearForRunStart`/`configFatal.loaded`, so a throw there cannot erase the start', async () => {
+    const h = harness();
+    const order: string[] = [];
+    const deps = {
+      ...h.deps,
+      notices: {
+        report: async () => ({ id: 1, shown: true }),
+        clearForRunStart: async () => { order.push('post-work'); throw new Error('the notice cleanup failed'); },
+      },
+      configFatal: { loaded: async () => { order.push('config-fatal'); } },
+    } as unknown as SessionStartDeps;
+    // The producer confirms the start first; the post-work then throws. The caller has the confirmation already.
+    const out = await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', onStarted: (sid) => { order.push(`started:${sid}`); } });
+    expect(order[0]).toBe('started:S-STARTED');
+    // The failure is logged, NOT travelled out: the run exists, so the start is still `ok` and the coordinator holds.
+    expect(out).toEqual({ ok: true, value: { sessionId: 'S-STARTED' } });
+    expect(order).toContain('post-work');
+  });
+
+  it('a start that never reached `session.started` reports no confirmation', async () => {
+    const h = harness(() => ({ kind: 'refused', code: 'session.refused', headline: 'no run' }));
+    const confirms: string[] = [];
+    const out = await startSessionRun(h.deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', onStarted: (sid) => { confirms.push(sid); } });
+    expect(out.ok).toBe(false);
+    expect(confirms).toEqual([]);
+  });
+
+  it('MAJOR 1: the LATE-reply sink is handed to the link (a reply after the bound is not lost)', async () => {
+    const h = harness();
+    const sinks: ((r: unknown) => void)[] = [];
+    const deps = {
+      ...h.deps,
+      runHost: {
+        request: async (req: RunHostRequest, _bound: number, late?: (r: unknown) => void) => {
+          if (req.kind === 'runs.active') return { kind: 'runs.count', workspaceId: 'ws-1', count: 0 };
+          if (late !== undefined) sinks.push(late);
+          throw new Error('no reply to session.start within 60000 ms');
+        },
+      },
+    } as unknown as SessionStartDeps;
+    await startSessionRun(deps, { workspaceId: 'ws-1', workspaceRoot: WORKSPACE, prompt: 'p', onLateOutcome: (r) => { sinks.push(() => undefined); void r; } });
+    // The sink the caller named was passed down to the host ask, so the link can hand a late reply over.
+    expect(sinks.length).toBe(1);
+  });
+});

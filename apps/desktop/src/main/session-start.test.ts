@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunHostRequest, WorkspaceServiceRequest } from '@rotaris/contracts';
+import { canonicalPath } from '@rotaris/platform';
 import { startSessionRun, checkStartInput, SESSION_START_SANDBOX_MODES, type SessionStartDeps } from './session-start.js';
 
 /**
@@ -44,7 +45,7 @@ function harness(hostAnswer?: (req: RunHostRequest) => { kind: string; sessionId
   const deps = {
     log: () => undefined,
     runHost: host,
-    services: new Map([[WORKSPACE, { link: { request: async (req: WorkspaceServiceRequest) => {
+    services: new Map([[canonicalPath(WORKSPACE), { link: { request: async (req: WorkspaceServiceRequest) => {
       svcAsked.push(req);
       if (req.kind === 'config.read') return { kind: 'config.snapshot', snapshot: { workspaceRoot: WORKSPACE, loadOk: true, fatal: null, worktreeStorageSubpath: 'worktrees' } };
       if (req.kind === 'worktree.create') return { kind: 'worktree.created', path: '/work/wt', branch: 'b', baseBranch: 'main', baseRevision: 'abc' };

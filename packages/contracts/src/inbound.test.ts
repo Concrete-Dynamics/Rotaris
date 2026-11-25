@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  INBOUND_FORBIDDEN_FIELDS, INBOUND_TOOL_NAMES, InboundExposureSchema,
+  INBOUND_FORBIDDEN_FIELDS, INBOUND_HOST_CREDENTIAL_LEASE_MS, INBOUND_LISTENER_ASK_BOUND_MS, INBOUND_START_BOUND_MS, INBOUND_TOOL_NAMES, InboundExposureSchema,
   InboundRunHandleSchema, InboundRunStatusInputSchema, InboundRunStatusSchema, InboundStartRunInputSchema, isInboundToolName,
 } from './inbound.js';
 import { InboundAnswerEnvelopeSchema, InboundListenerEnvelopeSchema, InboundListenerRequestSchema } from './inbound-protocol.js';
@@ -9,6 +9,17 @@ import { InboundAnswerEnvelopeSchema, InboundListenerEnvelopeSchema, InboundList
  * ADR-0067 / REQ-MCP-119..130: the inbound surface's contract — exactly two tools, a start input with NO authority
  * field, a handle only this surface mints, and the exposure the settings row reads.
  */
+
+describe('REQ-MCP-123/126 (BLOCKER 1, 2026-11-25): the two bounds are ONE chain, listener ask above main start', () => {
+  it('every bound is above the one it depends on, so no two can drift apart', () => {
+    // The run host may spend up to its credential lease before it answers `session.start`; main waits above that; and the
+    // LISTENER waits above main, so a slow-but-confirmed start is delivered to the caller rather than timed out here.
+    expect(INBOUND_START_BOUND_MS).toBeGreaterThan(INBOUND_HOST_CREDENTIAL_LEASE_MS);
+    expect(INBOUND_LISTENER_ASK_BOUND_MS).toBeGreaterThan(INBOUND_START_BOUND_MS);
+    // And the listener's bound leaves a real margin over main's, not a bare equality.
+    expect(INBOUND_LISTENER_ASK_BOUND_MS - INBOUND_START_BOUND_MS).toBeGreaterThanOrEqual(30_000);
+  });
+});
 
 describe('REQ-MCP-123: exactly two tools', () => {
   it('names the two accepted tools and no third', () => {

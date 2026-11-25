@@ -20,6 +20,23 @@ import { PRESENTATION_STATUSES, STOP_REASONS } from './status.js';
  *    one, and main constructs the internal start request from its own desktop state.
  */
 
+/*
+ * THE SURFACE'S TWO BOUNDS, and the one figure they are derived from (REQ-MCP-123/126, BLOCKER 1 of review 3).
+ *
+ * A `rotaris_start_run` crosses three processes on its way to a running session: the LISTENER asks main and waits
+ * (`ASK_BOUND_MS`), main asks the run host's `session.start` and waits (`INBOUND_START_BOUND_MS`), and the run host may
+ * spend `LEASE_ASK_MS` leasing credentials before it answers. If the listener's bound is shorter than main's, a start
+ * that main confirms normally but slowly (after the lease, inside main's bound) is answered by the listener's own
+ * timeout FIRST — the caller is told the ask failed and the handle later reserved for it is thrown away. The three are
+ * therefore ONE chain: each is derived from the figure before it here, so no two can drift apart again.
+ */
+/** The run host's own worst case before it answers `session.start`: its credential lease (`run-host/leased-credentials.ts`). The one origin of the chain. */
+export const INBOUND_HOST_CREDENTIAL_LEASE_MS = 45_000;
+/** REQ-MCP-126: how long MAIN waits for the run host's `session.start`, above the host's own credential lease so a healthy-but-slow host is not read as a no-reply. */
+export const INBOUND_START_BOUND_MS = INBOUND_HOST_CREDENTIAL_LEASE_MS + 15_000;
+/** REQ-MCP-123/124 (BLOCKER 1): how long the LISTENER waits for main's answer, above main's own start bound plus a margin, so a start main confirms normally is delivered to the caller rather than timed out by the listener. */
+export const INBOUND_LISTENER_ASK_BOUND_MS = INBOUND_START_BOUND_MS + 30_000;
+
 /** REQ-MCP-123: the surface serves exactly these two tools, and no third. Closed on purpose; the test counts it. */
 export const INBOUND_TOOL_NAMES = ['rotaris_start_run', 'rotaris_run_status'] as const;
 export type InboundToolName = (typeof INBOUND_TOOL_NAMES)[number];

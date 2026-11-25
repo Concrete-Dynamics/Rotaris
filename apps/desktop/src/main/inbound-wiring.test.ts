@@ -61,7 +61,8 @@ function startDeps(): { readonly deps: SessionStartDeps; readonly hostAsked: Run
   const open = { current: { workspaceId: 'ws-1', workspace: '/work' } };
   const deps = {
     log: () => undefined,
-    runHost: { request: async (req: RunHostRequest) => { hostAsked.push(req); return req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : { kind: 'session.started', sessionId: 'S-WIRED' }; } },
+    // The run host records the session id the start named and echoes it back, as production does (`dispatch.ts`: `req.sessionId ?? randomUUID()`).
+    runHost: { request: async (req: RunHostRequest) => { hostAsked.push(req); return req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : { kind: 'session.started', sessionId: req.kind === 'session.start' ? req.sessionId ?? 'S-WIRED' : 'S-WIRED' }; } },
     services: new Map([[canonicalPath('/work'), { link: { request: async (_req: WorkspaceServiceRequest) => ({ kind: 'ack' }) } }]]),
     mainWindows: { takeMintedSession: () => null, beginStart: () => undefined, endStart: () => undefined },
     notices: { report: async () => ({ id: 1, shown: true }), clearForRunStart: async () => undefined },
@@ -111,7 +112,7 @@ function wired(): {
   const coordinator = createInboundCoordinator({
     start: deps,
     runs,
-    openWorkspace: async () => open.current,
+    openWorkspaceNow: () => open.current,
     readStatus: (workspaceId, sessionId) => status.readStatus(workspaceId, sessionId),
   });
   // As `index.ts` wires it: the run's end releases the slot and keeps its reason; the snapshot settles a park/cancel.
@@ -150,6 +151,8 @@ function wired(): {
 
 /** Let the port's synchronous emit chain (and its microtasks) settle. */
 const settle = async (): Promise<void> => { for (let i = 0; i < 20; i += 1) await Promise.resolve(); };
+/** REWORK 4: the start is answered AT THE RESERVATION and runs behind the answer, so a case that reads the confirmed run must let that background start (through the port and the run host) settle first. */
+const settle2 = async (): Promise<void> => { for (let i = 0; i < 60; i += 1) await Promise.resolve(); };
 
 describe('REQ-MCP-120/123/124/126/127: the real main↔listener channel carries a tool call end to end', () => {
   it('enable crosses the boundary (main’s request → the listener → the port it chose)', async () => {
@@ -165,9 +168,10 @@ describe('REQ-MCP-120/123/124/126/127: the real main↔listener channel carries 
     await settle();
     const answer = await w.host.ask({ kind: 'inbound.startRun', prompt: 'Do the wired thing.' });
     expect(answer.kind).toBe('inbound.runStarted');
-    expect(answer.kind === 'inbound.runStarted' && answer.sessionId).toBe('S-WIRED');
+    await settle2();
+    const sessionId = answer.kind === 'inbound.runStarted' ? answer.sessionId : '';
     expect(w.hostAsked.some((r) => r.kind === 'session.start')).toBe(true);
-    expect(w.runs.active?.sessionId).toBe('S-WIRED');
+    expect(w.runs.active?.sessionId).toBe(sessionId);
   });
 
   it('a rotaris_run_status ASK crosses the boundary too, and a second start is refused with the stated reason', async () => {
@@ -176,6 +180,7 @@ describe('REQ-MCP-120/123/124/126/127: the real main↔listener channel carries 
     await settle();
     const started = await w.host.ask({ kind: 'inbound.startRun', prompt: 'first' });
     expect(started.kind).toBe('inbound.runStarted');
+    await settle2();
     const handle = started.kind === 'inbound.runStarted' ? started.run : '';
     const sessionId = started.kind === 'inbound.runStarted' ? started.sessionId : '';
     w.listings.set(sessionId, { status: 'running', awaitingInput: false });

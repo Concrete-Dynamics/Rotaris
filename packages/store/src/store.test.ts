@@ -53,7 +53,12 @@ const clocks = nodeClocks();
 let root: string;
 let ws: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'rotaris-store-')); ws = mkdtempSync(join(tmpdir(), 'rotaris-ws-')); });
-afterEach(() => { rmSync(root, { recursive: true, force: true }); rmSync(ws, { recursive: true, force: true }); });
+/**
+ * Windows can hold a just-closed store open for a moment (an indexer or a scanner): the removal retries, and a
+ * scratch directory that still refuses is left to the temp folder rather than failing the test it did not test.
+ * The same shape `packages/workspace/src/git/checkpoints.test.ts` and `worktrees.test.ts` use.
+ */
+afterEach(() => { for (const dir of [root, ws]) { try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* held briefly on Windows; left to the temp folder */ } } });
 
 /** Hash a directory's content, excluding -wal/-shm which any open connection creates (D8). */
 function treeHash(dir: string): string {
@@ -896,7 +901,7 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
 describe('store — D11: a restore refuses before step 1 where a store it would create crosses the engine\'s path limit (ADR-0058 consequence 18)', () => {
   const id = mintWorkspaceId('00000000000000000000000000000012');
   const made: string[] = [];
-  afterEach(() => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); });
+  afterEach(() => { for (const d of made.splice(0)) { try { rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* held briefly on Windows; left to the temp folder */ } } });
   /** A workspaces root whose live `workspace.db` path is exactly `dbLength` characters long. */
   const rootFor = (dbLength: number): string => {
     const base = realpathSync(mkdtempSync(join(tmpdir(), 'rotaris-long-')));

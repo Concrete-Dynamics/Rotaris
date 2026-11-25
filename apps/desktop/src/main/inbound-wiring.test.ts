@@ -76,7 +76,7 @@ function startDeps(): { readonly deps: SessionStartDeps; readonly hostAsked: Run
 /** A published session snapshot with the two fields the surface reads off it (REQ-MCP-123, BLOCKER C/D). */
 function snapshot(sessionId: string, executionStatus: string, stopReason: string | null): SessionSnapshot {
   return {
-    v: 1 as never, sessionId, seq: 1 as never,
+    v: 1, sessionId, seq: 1,
     session: { id: sessionId, executionStatus, stopReason, workspaceRoot: '/work' } as never,
   };
 }

@@ -29,6 +29,7 @@ import { FieldReader, typeName, vocabularyString, type Problem, type ProblemSink
 import { resolveSlotsAndReasoning } from './slots.js';
 import { referentialMessages, renderProblems, type FatalLoadReport } from './validate.js';
 import { PROJECT_SETTINGS_FILE, readProjectSnapshot, snapshotCapabilityRecords, snapshotLayer } from './project-settings.js';
+import { readMoneySlider, type MoneySliderSetting } from './money-slider-key.js'; // PD-ORCH-021
 
 /**
  * ADR-0036 alternative B, the whole loader: `loadConfiguration(globalDir, workspaceRoot)` — the entry point
@@ -90,6 +91,8 @@ export interface LoadedConfiguration {
   readonly injectAgentsMd: boolean;
   /** Outside the layered model (REQ-CONFIG-477 ground 1): a second lookup over the workspace document only. */
   readonly delegationStrategy: DelegationStrategy;
+  /** PD-ORCH-021 clause 1: the default money-slider stop, `rotaris.money_slider` read from both scopes' documents. */
+  readonly moneySlider: MoneySliderSetting;
   /** REQ-CONFIG-071: computed, never serialised (REQ-CONFIG-072). */
   readonly resolvedPersonaModelTiers: Readonly<Record<string, TierAlias>>;
   /** REQ-CONFIG-081 / REQ-CONFIG-094: computed, never serialised — each synthetic name's source `models:` key (see `syntheticOriginOf`). */
@@ -647,6 +650,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   // REQ-MCP-103/105: the server set the referential stage validates against is the merged map (ADR-0016 consequence 3).
   const referential = referentialMessages({ defaultPersona, slots: draft.slots, models: draft.models, personas: draft.personas, compressorModel: draft.compressorModel, toolServers: ctx.toolServers ?? Object.keys(mcp.servers), authenticatedProviders: ctx.authenticatedProviders ?? [] });
 
+  const moneySlider = readMoneySlider(ctx.raw, files);
   const warnings = [
     ...(ctx.mergeWarnings ?? []),
     // REQ-CONFIG-233/183: a warning a section reader raised on the merged value names the file and scope that stated the
@@ -656,6 +660,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
       return at === null ? `${w.path}: ${w.message}` : `${at.file} at ${at.path} (${at.scope} scope): ${w.message}`;
     }),
     ...resolution.warnings,
+    ...moneySlider.warnings,
   ];
 
   return ok({
@@ -679,6 +684,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     worktreeStorageSubpath: worktree,
     injectAgentsMd,
     delegationStrategy: ctx.delegationStrategy,
+    moneySlider,
     resolvedPersonaModelTiers: resolution.resolvedPersonaModelTiers,
     syntheticOrigins: resolution.syntheticOrigins,
     authenticatedProviders: ctx.authenticatedProviders ?? [],

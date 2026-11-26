@@ -139,6 +139,42 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       }
     });
 
+    it('PD-ORCH-021 clause 10: a child is admitted under the session\'s stop at that moment, records it, and is keyed by that stop\'s model', async () => {
+      const sid = 'S-money-stop' as SessionId;
+      const w = SessionWriter.create({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST });
+      if (!w.ok) throw new Error('writer');
+      const { IterationChildren } = await import('./orchestration.js');
+      const { resolveRole } = await import('./personas.js');
+      let stop: 'regular' | 'token_burner' = 'regular';
+      // The stop's personas: under token burner the coding agent runs on a larger model's key.
+      const personasAt = (at: string) => ({
+        resolve: (name: string) => {
+          const r = resolveRole(name);
+          if (r === null || at !== 'token_burner') return r;
+          return { ...r, persona: { ...r.persona, modelRef: { ...MODEL, modelId: 'large' }, modelKey: 'scripted/large' } };
+        },
+        delegationTargets: () => [],
+      });
+      const ops = new IterationChildren({
+        dal, writer: w.value, sessionId: sid, workspaceRoot: 'C:/ws', owner: null as unknown as ProjectionOwner,
+        backend: new DefaultAgentBackend(new ScriptedModelClient([])), clocks: clock, model: MODEL, thinking: 'unset', modelTimeoutMs: 1000, modelRetries: 0,
+        // A cap of 0 holds each accepted child on its model's slot, so nothing starts.
+        credentialFor: () => async () => '', budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => 0,
+        toolsFor: () => null, summariser: null, runSignal: new AbortController().signal, warn: () => undefined,
+        spend: { stopNow: () => stop, personasAt },
+      }, 1);
+      const root = ops.ledger.root.taskId;
+      const request = (taskName: string) => ({ persona: 'coding-agent', taskName, task: 'TASK: t', dependsOn: [], inheritedContext: [], category: '', runInBackground: true });
+      await ops.delegate(root, request('before'));
+      stop = 'token_burner';
+      await ops.delegate(root, request('after'));
+      const rows = dal.childrenOf(sid);
+      expect(rows.map((r) => [r.given_name, r.money_stop, r.model_key])).toEqual([
+        ['before', 'regular', MODEL.modelId],
+        ['after', 'token_burner', 'scripted/large'],
+      ]);
+    });
+
     it('REQ-ORCH-034 / REQ-ORCH-153 (the repair of delegate-reads-no-alias-on-the-built-in-table): with no configured persona catalogue an alias is admitted as its target — refused while the plan gate holds, and granted its target\'s tools', async () => {
       const sid = 'S-alias-built-in' as SessionId;
       const w = SessionWriter.create({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST });

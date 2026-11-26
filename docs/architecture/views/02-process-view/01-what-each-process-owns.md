@@ -1,4 +1,4 @@
-# Process view — five processes and what crosses each boundary — What each process owns
+# Process view — six processes and what crosses each boundary — What each process owns
 
 Part 1 of 9 of [the process view](../02-process-view.md), which indexes every part.
 

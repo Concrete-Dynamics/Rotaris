@@ -2,6 +2,7 @@ import { PAUSE_RESOLUTIONS, PausePayloadSchema, PLAN_DECISIONS, ControlRequestSc
 import { CONFIG_KEY_PATH_MAX, CONFIGURE_SCOPES } from './configuration-keys.js'; // PD-CONFIG-014
 import { CONFIG_SCOPES, DesktopSaveSchema, LiveStateSchema, SANDBOX_MODE_NAMES } from './config.js';
 import { z } from 'zod';
+import { MoneyStopSchema } from './money-slider.js'; // PD-ORCH-021
 import { HOOK_AGENT_IDS } from './hooks.js';
 import { PROVIDER_DIALOG_MODES } from './providers.js';
 import { ONBOARDING_OUTCOMES } from './onboarding.js';
@@ -112,7 +113,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * (the id it was derived from is the one main minted through `session.newId`), or an attach path already checked,
    * never both (REQ-GIT-158 makes that refusal unreachable); and the sandbox mode.
    */
-  z.object({ kind: z.literal('session.start'), prompt: z.string().max(FREE_TEXT_MAX), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), isolation: z.object({ branch: z.string().max(NAME_MAX).min(1) }).optional(), attach: z.object({ path: z.string().max(PATH_MAX).min(1) }).optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  z.object({ kind: z.literal('session.start'), prompt: z.string().max(FREE_TEXT_MAX), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), isolation: z.object({ branch: z.string().max(NAME_MAX).min(1) }).optional(), attach: z.object({ path: z.string().max(PATH_MAX).min(1) }).optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional(), moneyStop: MoneyStopSchema.optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /**
    * REQ-GIT-118: the id the launch dialog shows in its default branch; main mints it and uses it for the next isolated start.
    * Answered `{sessionId, isolationRequired}`: PD-GIT-001's count for the window's workspace, above zero or unreadable, which
@@ -405,6 +406,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.list') }),
   z.object({ kind: z.literal('mcp.probe'), name: z.string().max(NAME_MAX).min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().max(NAME_MAX).min(1), enabled: z.boolean() }),
+  /**
+   * ADR-0067 / REQ-MCP-120: the inbound surface's switch, in the register of the per-server enable toggle. `inbound.setEnabled`
+   * turns it on for THIS session (off by default, never persisted, revoked at quit — REQ-MCP-120) and answers the exposure
+   * state with the port and the token; `inbound.status` re-reads it (a surface that mounts while the exposure is on). The
+   * surface adds no configuration key: this is not an `mcp_servers` entry and not a session override.
+   */
+  z.object({ kind: z.literal('inbound.status') }),
+  z.object({ kind: z.literal('inbound.setEnabled'), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), server: z.string().max(NAME_MAX).optional() }),
   /**
    * REQ-MCP-110/111's write half: store (or replace) and delete one secret, each naming its scope (`Workspace` when

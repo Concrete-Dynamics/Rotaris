@@ -88,11 +88,15 @@ export const SendPill = forwardRef<HTMLButtonElement, SendPillProps>(function Se
 });
 
 /**
- * A slider over a few named steps (PD-ORCH-019 clause 4: the depth slider). The native range input is the control: it
- * holds the value, the keyboard and the accessible name, and its `aria-valuetext` says the step and what it permits.
- * Under it each step is drawn as a stop with its figure and label; pointing at a stop, or moving focus onto the slider,
- * shows that step's description, and pressing a stop chooses it. The stops are not in the tab order: the range input is
- * the one focusable element, so a keyboard meets one control.
+ * A slider over a few named steps (PD-ORCH-019 clause 4: the depth slider; PD-ORCH-021 clause 9: the money slider). The
+ * native range input is the control: it holds the value, the keyboard and the accessible name, and its `aria-valuetext`
+ * says the step and what it permits. Under it each step is drawn as a stop with its figure and label; pointing at a stop
+ * shows that step's description, and pressing a stop chooses it. A key clears the pointed stop, so what is shown is what has
+ * focus. The stops are not in the tab order: the range input is the one focusable element, so a keyboard meets one control.
+ *
+ * A step may carry a `tone`: `warn` draws the chosen stop in the warning ink, always beside its name (REQ-SHELL-149).
+ * `renderShown` draws what explains the shown step below its description — the money slider's preview — and `onShownChange`
+ * tells the caller which step that is.
  */
 export interface StepSliderStep {
   readonly label: string;
@@ -100,6 +104,7 @@ export interface StepSliderStep {
   readonly description: string;
   /** A small drawing of the step, beside its label. */
   readonly figure?: ReactNode;
+  readonly tone?: 'warn' | undefined;
 }
 export interface StepSliderProps {
   readonly id: string;
@@ -108,26 +113,34 @@ export interface StepSliderProps {
   readonly value: number;
   readonly onChange: (index: number) => void;
   readonly 'aria-label': string;
+  /** Further ids that describe the range, after its description (a rule line, a live line). */
+  readonly 'aria-describedby'?: string | undefined;
   readonly disabled?: boolean;
   readonly className?: string;
   readonly ui?: UiLayoutContract;
+  /** Drawn below the description for the shown step; `pointed` is true while it is a pointed step and not the chosen one. */
+  readonly renderShown?: ((shown: number, pointed: boolean) => ReactNode) | undefined;
 }
-export function StepSlider({ id, steps, value, onChange, disabled, className, ui, ...rest }: StepSliderProps) {
+
+export const StepSlider = forwardRef<HTMLInputElement, StepSliderProps>(function StepSlider({ id, steps, value, onChange, disabled, className, ui, renderShown, ...rest }, ref) {
   const [pointed, setPointed] = useState<number | null>(null);
   const last = steps.length - 1;
   const chosen = Math.min(Math.max(value, 0), last);
-  const shown = steps[pointed ?? chosen];
+  const shownIndex = pointed ?? chosen;
+  const shown = steps[shownIndex];
+  const describedBy = [`${id}-description`, rest['aria-describedby']].filter((v) => v !== undefined && v !== '').join(' ');
   return (
     <div className={classes('step-slider', className)} data-ui-component="StepSlider" data-step={chosen} data-steps={steps.length} {...layoutContractAttributes(ui)} onMouseLeave={() => setPointed(null)}>
       <div className="step-slider__rail">
-        <input id={id} className="step-slider__input" type="range" min={0} max={last} step={1} value={chosen} disabled={disabled}
-          aria-label={rest['aria-label']} aria-valuetext={`${steps[chosen]?.label ?? ''}: ${steps[chosen]?.description ?? ''}`} aria-describedby={`${id}-description`}
+        <input ref={ref} id={id} className="step-slider__input" type="range" min={0} max={last} step={1} value={chosen} disabled={disabled}
+          aria-label={rest['aria-label']} aria-valuetext={`${steps[chosen]?.label ?? ''}: ${steps[chosen]?.description ?? ''}`} aria-describedby={describedBy}
+          onKeyDown={() => setPointed(null)}
           onChange={(e) => onChange(Number(e.currentTarget.value))} />
         <div className="step-slider__stops" aria-hidden="true">
           {steps.map((step, index) => (
-            <button key={step.label} type="button" tabIndex={-1} disabled={disabled} data-step-stop={index}
+            <button key={step.label} type="button" tabIndex={-1} disabled={disabled} data-step-stop={index} data-tone={step.tone}
               className={classes('step-slider__stop', index <= chosen && 'is-reached', index === chosen && 'is-chosen', index === pointed && 'is-pointed')}
-              onMouseEnter={() => setPointed(index)} onClick={() => onChange(index)}>
+              onMouseEnter={() => setPointed(index)} onClick={() => { setPointed(null); onChange(index); }}>
               <span className="step-slider__mark" />
               {step.figure === undefined ? null : <span className="step-slider__figure">{step.figure}</span>}
               <span className="step-slider__label">{step.label}</span>
@@ -136,6 +149,7 @@ export function StepSlider({ id, steps, value, onChange, disabled, className, ui
         </div>
       </div>
       <p id={`${id}-description`} className="step-slider__description" data-testid={`${id}-description`} data-pointed={pointed === null ? 'false' : 'true'}>{shown?.description ?? ''}</p>
+      {renderShown?.(shownIndex, pointed !== null && pointed !== chosen)}
     </div>
   );
-}
+});

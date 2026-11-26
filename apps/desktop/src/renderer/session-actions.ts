@@ -1,4 +1,4 @@
-import { RUN_AGENT_ID, type CommandOutcome, type DelegationStrategyName, type CommandRequest, type ImageAttachmentInput, type PauseResolution, type PermissionPreset, type PlanDecision, type QuestionAnswers, type RendererBridge, type SessionRecord } from '@rotaris/contracts';
+import { RUN_AGENT_ID, type CommandOutcome, type DelegationStrategyName, type CommandRequest, type ImageAttachmentInput, type MoneyStop, type PauseResolution, type PermissionPreset, type PlanDecision, type QuestionAnswers, type RendererBridge, type SessionRecord } from '@rotaris/contracts';
 import { useShellState, type CancelOverlayStore } from '@rotaris/ui';
 
 /**
@@ -56,9 +56,12 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
     const s = replica.getState();
     if (!s.sessionId) {
       const options = useShellState.getState().launchOptions;
-      const r = await send({ kind: 'session.start', prompt: text, ...(attachments.length === 0 ? {} : { attachments: [...attachments] }), ...(options?.isolation ? { isolation: options.isolation } : {}), ...(options?.attach ? { attach: { path: options.attach.path } } : {}), ...(options ? { sandboxMode: options.sandboxMode } : {}) });
+      // PD-ORCH-021 clause 9: the stop the chip held before the session existed becomes the session's own.
+      const moneyStop = useShellState.getState().pendingMoneyStop;
+      const r = await send({ kind: 'session.start', prompt: text, ...(moneyStop === null ? {} : { moneyStop }), ...(attachments.length === 0 ? {} : { attachments: [...attachments] }), ...(options?.isolation ? { isolation: options.isolation } : {}), ...(options?.attach ? { attach: { path: options.attach.path } } : {}), ...(options ? { sandboxMode: options.sandboxMode } : {}) });
       if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
       useShellState.getState().takeLaunchOptions();
+      useShellState.getState().takePendingMoneyStop();
       const { sessionId } = r.value as { sessionId: string };
       replica.getState().follow(sessionId);
       // Every attach begins with a whole-session update (REQ-MONITOR-214); the transcript follows it.
@@ -285,5 +288,16 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
     return r.ok ? { ok: true, resubmitted: 'last-prompt' } : { ok: false, reason: r.detail ?? r.headline };
   }
 
-  return { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, retryRun, setDelegationStrategy, setMode, setNextModel, setRunStartMode, stopRun, submitPrompt };
+  /**
+   * PD-ORCH-021 clauses 9 and 10: the composer chip's stop. With a session followed it is that session's own, written live or
+   * at rest (`setMoneyStop`); with none it is held for the session the next prompt starts.
+   */
+  async function setMoneyStop(stop: MoneyStop): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const sessionId = replica.getState().sessionId;
+    if (!sessionId) { useShellState.getState().setPendingMoneyStop(stop); return { ok: true }; }
+    const r = await control('setMoneyStop', { stop }, 'The session did not take that stop.');
+    return r.ok ? { ok: true } : r;
+  }
+
+  return { answerQuestions, setMoneyStop, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, retryRun, setDelegationStrategy, setMode, setNextModel, setRunStartMode, stopRun, submitPrompt };
 }

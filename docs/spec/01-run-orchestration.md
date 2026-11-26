@@ -20,7 +20,8 @@ link to one now names its part.
 
 | Part | Sections | Requirements it defines |
 |---|---|---|
-| [01](01-run-orchestration/01-requirements.md) | Requirements; 1. Run Entry and Session Setup; 2. Pre-Flight Intent Classification; 3. Intent-Based Capability Gating; 4. Behavior Playbook Matrix | REQ-ORCH-001 – REQ-ORCH-027 (32) |
+| [01](01-run-orchestration/01-requirements.md) | Requirements; 1. Run Entry and Session Setup; 2. Pre-Flight Intent Classification; 3. Intent-Based Capability Gating | REQ-ORCH-001 – REQ-ORCH-018 (23) |
+| [01a](01-run-orchestration/01a-4-behavior-playbook-matrix.md) | 4. Behavior Playbook Matrix (moved out of part 01 on 2026-11-25, under the document budget) | REQ-ORCH-019 – REQ-ORCH-027 (9) |
 | [02](01-run-orchestration/02-5-coordinator-role-contract.md) | 5. Coordinator Role Contract; 6. Delegation Contract; 7. Child Task State Machine; 8. Child Naming, Limits, and Dependency Graph; 9. Per-Model Concurrency; 10. Terminal Marking, Sweeps, and Orphans; 11. Parent Suspension, Resume, and Notifications | REQ-ORCH-028 – REQ-ORCH-060 (33) |
 | [03](01-run-orchestration/03-12-result-retrieval-and-voluntary-waiting.md) | 12. Result Retrieval and Voluntary Waiting; 13. Iteration Loop and Stop Conditions; 14. Message-Limit Soft Pause | REQ-ORCH-061 – REQ-ORCH-087 (27) |
 | [04](01-run-orchestration/04-15-child-execution-safeguards.md) | 15. Child Execution Safeguards; 16. Loop Supervision (Hidden); 17. Child Report Artifacts and Summarization | REQ-ORCH-088 – REQ-ORCH-112 (25) |

@@ -17,7 +17,7 @@ each under the root solution `tsconfig.json`.
 | Project | Holds | Libraries |
 |---|---|---|
 | `tsconfig.shared.json` | `kernel`, `contracts` — loaded on both sides | the language (ES2024) alone, and `contracts/src/web-platform.d.ts`: `URL`, `AbortSignal`, `TextEncoder`, the members it reads, which Node and Chromium both implement |
-| `tsconfig.node.json` | `platform`, `store`, `config`, `hooks`, `providers`, `engine`, `model`, `mcp`, `workspace`, `shell`, `release-naming`; `app-main`, `app-preload`, `app-workspace-service` | ES2024 and Node's types; no DOM |
+| `tsconfig.node.json` | `platform`, `store`, `config`, `hooks`, `providers`, `engine`, `model`, `mcp`, `workspace`, `shell`, `release-naming`; `app-main`, `app-preload`, `app-workspace-service`, `app-inbound-listener` | ES2024 and Node's types; no DOM |
 | `tsconfig.run-host.json` | `agent-tools`, `app-run-host` | ES2024, Node's and Electron's types; no DOM — `@xterm/xterm`, whose typings reference the DOM library and which the terminal emulator's addon imports, resolves to `agent-tools/src/terminal/xterm-api.d.ts`, the names it reads from `@xterm/headless` ([the note](../../../archive/defects/the-run-hosts-typecheck-declares-the-doms-globals-through-the-terminal-emulators-typings.md); `tools/typecheck-projects.test.ts`) |
 | `tsconfig.renderer.json` | `ui-core`, `ui`, `app-renderer` | ES2024, the DOM and `DOM.Iterable`, Vite's client types; no Node types |
 
@@ -48,6 +48,7 @@ Node and may drive both sides (`tsconfig.tests.json`, the DOM and Node's types),
 | `app-renderer` | kernel, contracts, ui-core, ui |
 | `app-run-host` | kernel, contracts, platform, store, engine, agent-tools, model, mcp, config, hooks |
 | `app-workspace-service` | kernel, contracts, platform, store, workspace, config |
+| `app-inbound-listener` | kernel, contracts, platform (ADR-0067; REQ-MCP-127: the listener holds no store, no engine and no workspace — it speaks to main) |
 
 Edges worth knowing the reason for:
 

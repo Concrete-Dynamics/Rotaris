@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { SettingsPageContext, SettingsTitle } from './page.js';
-import type { ConfigSnapshot, McpHealth, McpListing, McpProvisioning, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
+import type { ConfigSnapshot, InboundExposure, McpHealth, McpListing, McpProvisioning, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 import { Confirm } from './Confirm.js';
 import { Fatal } from './ConfigSettings.js';
@@ -69,6 +69,12 @@ export interface McpSettingsProps {
    */
   readonly webSearchSetup: WebSearchSetupHandlers;
   /**
+   * ADR-0067 / REQ-MCP-120: the inbound surface's control — the one switch that exposes the product to external agents
+   * for THIS session. Off by default, never persisted; the card shows the port and the token while it is on. It sits in
+   * the register of the per-server enable toggle and adds no configuration key (REQ-MCP-120).
+   */
+  readonly inbound?: InboundSurfaceProps | undefined;
+  /**
    * The row control's focus route: the panel REGISTERS a function that focuses its key field, and unregisters it when
    * it unmounts (`null`) — so the category's row can land the user there without knowing the panel's layout, and
    * neither side reaches into the other's props (a ref passed through props may not be written by the receiver).
@@ -76,8 +82,80 @@ export interface McpSettingsProps {
   readonly onSetupFocusRoute?: ((focus: (() => void) | null) => void) | undefined;
 }
 
+/**
+ * ADR-0067 / REQ-MCP-120: the inbound surface's control, as the MCP category draws it. `exposure` is what main holds
+ * (off until the user turns it on, per session); `onToggle` presses the switch and answers the fresh exposure, whose
+ * `token` is present on the enabling press alone (REQ-MCP-121: shown once).
+ */
+export interface InboundSurfaceProps {
+  readonly exposure: InboundExposure | null;
+  /**
+   * REQ-MCP-120/121: presses the switch and answers the FRESH exposure — the enabling press's answer carries the token
+   * (shown once). BLOCKER (Main, 2026-11-25): the card previously read `inbound.exposure` again after the await, which is
+   * the OLD render's prop, so the token was never shown on the first switch-on. The card reads the value THIS call
+   * answers instead.
+   */
+  readonly onToggle: (enabled: boolean) => Promise<{ ok: boolean; message: string; exposure?: InboundExposure | undefined }>;
+}
+
 const HEALTH_TEXT: Record<McpHealth['state'], string> = { unknown: 'Unknown', checking: 'Checking…', healthy: 'Healthy', unreachable: 'Unreachable' };
-const STEP_TEXT: Record<McpSetupStep['status'], string> = { pending: 'Not started', running: 'In progress…', succeeded: 'Succeeded', failed: 'Failed', 'skipped-no-code': 'Skipped — no code', 'not-attempted': 'Not attempted' };
+
+/**
+ * ADR-0067 / REQ-MCP-120: the inbound surface's card. One switch, in the register of the per-server enable toggle —
+ * off by default, per session, never persisted — describing what the surface is and how to reach it (REQ-MCP-119: a
+ * loopback address and the ephemeral port the OS chose), with the bearer token shown ONCE when it is switched on
+ * (REQ-MCP-121). It adds no configuration key: the card says so rather than letting the user take it for a toggle that
+ * did not stick.
+ */
+function InboundSurfaceCard({ inbound }: { inbound: InboundSurfaceProps }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const on = inbound.exposure?.enabled ?? false;
+  const port = inbound.exposure?.port ?? null;
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    // REQ-MCP-120 (Minor, 2026-11-25): the reset runs in a `finally` and a REJECTION is caught. A toggle whose IPC call
+    // itself rejects (a thrown handler, dispatched as `command.failed`) would otherwise never reach `setBusy(false)` —
+    // the switch would hang disabled — and the rejection would go unhandled. `onToggle` answers a refusal as a value;
+    // this covers the rejection beside it.
+    try {
+      const r = await inbound.onToggle(!on);
+      if (!r.ok) { setMessage(r.message); return; }
+      setMessage(null);
+      // REQ-MCP-121: the token is shown once — the enabling press's OWN answer carries it (never the closed-over prop,
+      // which is the previous render's exposure and does not yet carry the fresh token).
+      setToken(r.exposure?.token ?? null);
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <DesignCard className="card settings__card" data-mcp-inbound>
+      <div className="providers-card__head">
+        <div className="card-kicker">External agents</div>
+        <div className="providers-card__actions">
+          <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={on ? 'Turn the external agents surface off' : 'Turn the external agents surface on for this session'} disabled={busy} onClick={() => { void toggle(); }} data-inbound-toggle />
+        </div>
+      </div>
+      <p className="text-secondary settings__lede">Serves this running instance to external agents over MCP on the loopback interface only — <code className="mono">127.0.0.1</code> and <code className="mono">::1</code> — on an ephemeral port. Two tools are offered: one to start a run in the workspace that is open, one to read that run’s state. Approvals and questions are still answered here, by you; the caller can only start and watch. Off until you switch it on, and for this session only — quitting the application revokes it. This is not an entry in your configuration file.</p>
+      {on ? (
+        <div data-inbound-exposure>
+          <p className="text-secondary"><span className="card-kicker">Address</span> <code className="mono" data-inbound-address>{port === null ? '(binding…)' : `http://127.0.0.1:${port}/mcp`}</code></p>
+          {token !== null ? (
+            <p className="text-secondary" data-inbound-token><span className="card-kicker">Bearer token</span> <code className="mono">{token}</code> — shown once. Give it to the agent that may call this surface; it is required on every request, and switching the surface off invalidates it.</p>
+          ) : (
+            <p className="text-secondary" data-inbound-token-hidden>The bearer token is shown once, when the surface is switched on. Switch it off and on again to mint a new one.</p>
+          )}
+        </div>
+      ) : null}
+      {message ? <p className="composer__error" role="alert">{message}</p> : null}
+    </DesignCard>
+  );
+}const STEP_TEXT: Record<McpSetupStep['status'], string> = { pending: 'Not started', running: 'In progress…', succeeded: 'Succeeded', failed: 'Failed', 'skipped-no-code': 'Skipped — no code', 'not-attempted': 'Not attempted' };
 const OUTCOME_TEXT: Record<NonNullable<McpSetupStatus['outcome']>, string> = { completed: 'Completed', failed: 'Only partly set up', cancelled: 'Cancelled', unavailable: 'Not available' };
 
 function Row({ row, health, probing, onToggle, onOpenWebSearchSetup, showWebSearchSetup }: { row: McpServerRow; health: McpHealth; probing: boolean; onToggle: McpSettingsProps['onToggle']; onOpenWebSearchSetup?: (() => void) | undefined; showWebSearchSetup?: boolean }) {
@@ -573,6 +651,8 @@ export function McpSettings(props: McpSettingsProps) {
         )}
       </DesignCard>
       <WebSearchPanel {...props} onSetupFocusRoute={registerSetupFocus} />
+      {/* ADR-0067 / REQ-MCP-120: the inbound surface's card — the one switch that exposes the product to external agents. */}
+      {props.inbound ? <InboundSurfaceCard inbound={props.inbound} /> : null}
       <SetupCard setup={props.setup} onStart={props.onSetupStart} onCancel={props.onSetupCancel} />
       <DesignCard className="card settings__card" data-mcp-secrets>
         <div className="card-kicker">Stored secrets</div>

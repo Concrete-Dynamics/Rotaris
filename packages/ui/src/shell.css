@@ -673,6 +673,48 @@
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-persona'] .strip-btn__caret,
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-model'] .strip-btn__value,
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-model'] .strip-btn__caret { display: none; }
+/* PD-ORCH-021 clause 9: the money chip's warning tone at the two upper stops; its stop's name keeps its place at `tight` and
+   gives way at `narrow`, the ink kept (brief §10 Q1). */
+.strip-btn[data-tone="warn"] .ph,
+.strip-btn[data-tone="warn"] .strip-btn__value,
+.strip-btn[data-tone="warn"] .strip-btn__caret,
+.composer__strip[data-compact] .strip-btn[data-tone="warn"] .ph { color: var(--rt-warn); }
+.composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-money'] :is(.strip-btn__value, .strip-btn__caret) { display: none; }
+/* PopoverPanel (gap G17): the press-revealed panel that holds a control. Its head and its control stay in view; what explains
+   them scrolls beneath. */
+.popover-panel { gap: var(--rt-space-3); padding: var(--rt-space-3) var(--rt-space-4); width: var(--rt-popover-panel-width); max-width: calc(100vw - var(--rt-space-4)); overflow: hidden; }
+.popover-panel__head { display: flex; align-items: baseline; gap: var(--rt-space-2); }
+.popover-panel__title { margin: 0; font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); color: var(--rt-text); }
+.popover-panel__aside { margin-left: auto; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+.popover-panel__link { font-size: var(--rt-text-xs); }
+.money-panel > .money-slider { flex: 1 1 auto; min-height: 0; }
+.money-panel .money-preview { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: thin; }
+.money-live { display: flex; gap: var(--rt-space-2); margin: 0; font-size: var(--rt-text-xs); line-height: var(--rt-leading-body); color: var(--rt-text-secondary); }
+.money-live .ph { flex: none; font-size: var(--rt-text-sm); line-height: var(--rt-leading-body); color: var(--rt-info-500); }
+.money-preview { display: flex; flex-direction: column; gap: var(--rt-space-2); padding-top: var(--rt-space-3); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+.money-preview__title { margin: 0; font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); color: var(--rt-text); }
+.money-preview__title .money-preview__if { font-weight: var(--rt-weight-body); color: var(--rt-text-secondary); }
+.money-preview__rule { margin: 0; font-size: var(--rt-text-xs); line-height: var(--rt-leading-body); color: var(--rt-text-secondary); }
+.money-preview__table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--rt-text-xs); }
+.money-preview__table th { padding: 0 var(--rt-space-2) var(--rt-space-1) 0; font-weight: var(--rt-weight-body); text-align: left; color: var(--rt-text-tertiary); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.money-preview__table td { padding: var(--rt-space-1) var(--rt-space-2) var(--rt-space-1) 0; vertical-align: top; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.money-preview__table tr:last-child > * { border-bottom: 0; }
+.money-preview__table col.money-preview__col-role { width: 40%; }
+.money-preview__table col.money-preview__col-model { width: 33%; }
+.money-preview__fact th { color: var(--rt-text-secondary); padding-top: var(--rt-space-1); vertical-align: top; }
+.money-preview__group th { padding-top: var(--rt-space-2); }
+.money-preview__table th[scope="row"] { vertical-align: top; text-align: left; font-weight: var(--rt-weight-body); padding-top: var(--rt-space-1); }
+.money-role { display: block; color: var(--rt-text-secondary); line-height: var(--rt-leading-body); }
+.money-role__name { white-space: nowrap; }
+.money-role__note { display: block; margin-top: var(--rt-space-1); font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); }
+.money-value { display: block; font-family: var(--rt-font-mono); color: var(--rt-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.money-value[data-none] { color: var(--rt-text-tertiary); }
+.money-mark { display: flex; align-items: center; gap: var(--rt-space-1); margin-top: var(--rt-space-1); font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.money-mark .ph { flex: none; font-size: var(--rt-text-xs); }
+.money-mark[data-mark="set"] { color: var(--rt-text-secondary); }
+.money-mark .settings__origin-mark { margin: 0; width: auto; font-size: inherit; color: inherit; }
+.money-preview__fact .money-value { white-space: normal; }
+.money-preview__empty { color: var(--rt-text-tertiary); }
 /* The estimate's auto margin is what pushes the strip's actions to its end; hidden, it hands that margin on to the
  * control after it, so the actions stay at the end of a compact strip too (found by PD-ORCH-005 phase 5's review). */
 .composer__strip:is([data-compact='tight'], [data-compact='narrow']) [data-testid='composer-estimate-strip'] + * { margin-inline-start: auto; }
@@ -1642,6 +1684,15 @@
 .step-slider__description[data-pointed="true"] { color: var(--rt-text); }
 @media (prefers-reduced-motion: reduce) { .step-slider__stop, .step-slider__input::-webkit-slider-thumb { transition: none; } }
 .settings__depth { flex: 1 1 calc(var(--rt-space-8) * 9); max-width: calc(var(--rt-space-8) * 12); }
+/* PD-ORCH-021 (docs/design/briefs/composer.md, mock CSS part A). The slider at any step count: the range's thumb travels
+   between the first and last stop's centres, which sit half a stop in from each edge. */
+.step-slider[data-steps="5"] .step-slider__input { margin-inline: calc(100% / 10 - var(--step-slider-thumb) / 2); }
+.step-slider[data-steps="5"] .step-slider__stop { padding-inline: var(--rt-space-1); }
+.step-slider[data-steps="5"] .step-slider__label { white-space: normal; text-align: center; text-wrap: balance; line-height: var(--rt-leading-tight); }
+/* A step's tone: the two upper money stops carry the warning state, in words and in ink (REQ-SHELL-149). */
+.step-slider__stop[data-tone="warn"].is-chosen { color: var(--rt-warn); }
+.step-slider__stop[data-tone="warn"].is-chosen .step-slider__mark { background: var(--rt-warn); }
+.settings__money { flex: 1 1 calc(var(--rt-space-8) * 12); max-width: calc(var(--rt-space-8) * 15); }
 /* The row's label reads against the slider's rail, its first line, and not against the middle of a control four lines tall. */
 .settings__action:has(> .step-slider) { align-items: flex-start; }
 /* The depth figure: the entry agent filled, each permitted level a ring after it, and three shrinking dots where the chain has no end. */

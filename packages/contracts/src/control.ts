@@ -41,6 +41,8 @@ export const CONTROL_OPS = [
   'terminalKill',
   // PD-ORCH-019 clause 9: stop one workflow of a named agent. Not one of REQ-MONITOR-004's; the directive adds it.
   'stopWorkflow',
+  // PD-ORCH-021 clauses 9 and 10: set the session's money slider stop (`args.stop`, null clears it), live or at rest.
+  'setMoneyStop',
 ] as const;
 export type ControlOp = (typeof CONTROL_OPS)[number];
 

@@ -43,6 +43,9 @@ const ELEMENTS = [
   { type: 'app-renderer', pattern: 'apps/desktop/src/renderer/**' },
   { type: 'app-run-host', pattern: 'apps/desktop/src/run-host/**' },
   { type: 'app-workspace-service', pattern: 'apps/desktop/src/workspace-service/**' },
+  // ADR-0067 / REQ-MCP-127: the inbound listener's own utility process — a composition root of its own, with the same
+  // reach the run host has but no store and no session lock (it speaks to main, never to the host or the service).
+  { type: 'app-inbound-listener', pattern: 'apps/desktop/src/inbound-listener/**' },
 ];
 
 /** @type {Record<string, string[]>} allowed imports, by element type */
@@ -69,6 +72,9 @@ const ALLOW = {
   'app-renderer': ['kernel', 'contracts', 'ui-core', 'ui'],
   'app-run-host': ['kernel', 'contracts', 'platform', 'store', 'engine', 'agent-tools', 'model', 'mcp', 'config', 'hooks'],
   'app-workspace-service': ['kernel', 'contracts', 'platform', 'store', 'workspace', 'config'],
+  // REQ-MCP-127: the listener reaches kernel, contracts, platform and the MCP SDK — never a store, an engine or a
+  // workspace: it holds no session and writes nothing (REQ-MCP-124/128).
+  'app-inbound-listener': ['kernel', 'contracts', 'platform'],
 };
 
 const boundaryRules = Object.entries(ALLOW).map(([from, allow]) => ({

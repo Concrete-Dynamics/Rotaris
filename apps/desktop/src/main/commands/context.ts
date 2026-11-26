@@ -153,6 +153,13 @@ export interface CommandContext {
    * a cut restore whose store could not be put back — so the listing reports it rather than an empty list.
    */
   readonly storeRefusal?: ((workspace: string) => { readonly code: string; readonly headline: string; readonly detail?: string } | undefined) | undefined;
+  /**
+   * REQ-MCP-124 (ADR-0067), the shared fence: the workspace open RIGHT NOW for the window `wcId` — main's own read of its
+   * open-workspace holder, which the start coordinator consults immediately before the run host is asked. The desktop
+   * start and the MCP surface's start read it through the same function, so a workspace switched between the caller's
+   * validation and admission refuses the start rather than launching against a root nobody named.
+   */
+  readonly openWorkspaceRead: (wcId: number | null) => Promise<{ readonly workspaceId: string; readonly workspace: string } | null>;
   /** PD-SHELL-009: the session's run was stopped by its window's close, which withdraws what it waits on (`QuitState`). */
   readonly withdrawnByClose?: ((sessionId: string) => boolean) | undefined;
   readonly announceRepairs: (repaired: readonly { readonly sessionId: string; readonly from: string; readonly reason: string }[]) => void;

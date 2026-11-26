@@ -68,20 +68,25 @@ engineStrict: true
 catalog:
   '@jitl/quickjs-wasmfile-release-sync': 0.32.0
   '@modelcontextprotocol/client': 2.4.0
+  # ADR-0067 / REQ-MCP-119..130 (2026-11-25): the inbound surface's MCP server primitives. The client pin above is the
+  # product-as-client line; these two build the one surface the product serves. The change that builds the surface is the
+  # one that adds them (ADR-0067, closing note), verified on the registry 2026-11-25 and past minimumReleaseAge.
+  '@modelcontextprotocol/node': 2.1.2
+  '@modelcontextprotocol/server': 2.4.0
   '@types/react': ^19.3.0
   '@types/react-dom': ^19.3.0
-  '@vitejs/plugin-react': ^6.2.1
+  '@vitejs/plugin-react': ^6.3.0
   '@xterm/headless': 6.0.0
   ajv: 8.20.0
-  better-sqlite3: ^13.0.3
+  better-sqlite3: ^13.2.0
   node-pty: 1.1.0
   quickjs-emscripten-core: 0.32.0
   react: ^19.3.1
   react-dom: ^19.3.1
-  vite: ^8.3.5
+  vite: ^8.3.8
   yaml: ^2.9.1
   zod: ^4.6.6
-  zustand: ^5.0.16
+  zustand: ^5.1.0
 
 # auditConfig — an advisory that has been read and cannot yet be answered by an update. Each id stands in a reading
 # under docs/architecture/dependency-alerts/ (tools/workflows.test.ts holds that), and each goes when its reading says.

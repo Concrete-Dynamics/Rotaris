@@ -138,8 +138,8 @@ describe('store — the integrity check before a migration (hardening C1, REQ-SE
   });
 });
 
-/** PD-ORCH-019 clause 8: what v37 added, the last migration, undone so a store can stand one version back and climb it again. */
-const UNDO_LAST = 'DROP TABLE workflow_calls; DROP TABLE workflows;';
+/** PD-ORCH-021: what v38 added, the last migration, undone so a store can stand one version back and climb it again. */
+const UNDO_LAST = 'ALTER TABLE sessions DROP COLUMN money_stop; ALTER TABLE children DROP COLUMN money_stop;';
 
 describe('store — foreign keys after a migration (hardening C1)', () => {
   function storeAtV35(orphan: boolean): void {

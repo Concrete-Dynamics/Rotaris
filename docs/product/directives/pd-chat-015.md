@@ -4,7 +4,7 @@
 
 ### PD-CHAT-015 — the transcript is the run's conversation and its threads, and a row is a turn with one left edge
 
-*Revision 2 (2026-11-25, [R-132](../requests.md#r-132)) — **a settled tool segment is quiet**, clause 6. Revision 1
+*Revision 2 (2026-11-25, [R-133](../requests.md#r-133)) — **a settled tool segment is quiet**, clause 6. Revision 1
 (2026-11-20, [R-109](../requests.md#r-109)) is quoted where it is replaced, never deleted.*
 
 **1. One left edge.** A transcript row SHALL NOT be laid out in a timestamp column and a role column, and SHALL NOT

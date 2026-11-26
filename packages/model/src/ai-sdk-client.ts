@@ -398,7 +398,11 @@ export class AiSdkModelClient implements ModelClient {
             yield err(endedEarly());
             return;
           // The stream parts this client takes nothing from, named so that a part a library upgrade adds is read or passed over on purpose (R-091).
-          case 'file': case 'custom': case 'source': case 'start': case 'raw': case 'tool-result': case 'reasoning-file': case 'tool-approval-request': case 'tool-approval-response': case 'tool-error': case 'tool-output-denied': case 'text-start': case 'text-end': case 'reasoning-start': case 'reasoning-end': case 'tool-input-end':
+          // `ping` (ai 7.0.177): a keepalive the transport may interleave, carrying no content. `steering-message` (ai 7.0.177): a user
+          // message added to a run with the SDK's experimental steering, which this client never asks for — `streamText` here is called
+          // without `experimental_steering`, so the part cannot carry a product behaviour and is passed over. The product's own steering
+          // (REQ-MONITOR-133/135) reaches the model as ordinary messages in `req.messages`, never on this stream.
+          case 'file': case 'custom': case 'source': case 'start': case 'raw': case 'tool-result': case 'reasoning-file': case 'tool-approval-request': case 'tool-approval-response': case 'tool-error': case 'tool-output-denied': case 'text-start': case 'text-end': case 'reasoning-start': case 'reasoning-end': case 'tool-input-end': case 'ping': case 'steering-message':
           default:
             break;
         }

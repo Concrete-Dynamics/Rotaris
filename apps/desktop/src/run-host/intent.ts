@@ -69,6 +69,6 @@ export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): 
     intent, grant, route: isAnswerOnly(intent.category) ? 'answer' : 'work',
     resolvedPlaybooks,
     playbookFor: (role, asEntry) => (asEntry ? resolved.asEntry[role] : resolved.perRole[role])?.text ?? '',
-    budgetCell: resolved.budgetCell, warnings,
+    budgetCell: resolved.budgetCell, budgetTier: resolved.budgetTier, warnings,
   };
 }

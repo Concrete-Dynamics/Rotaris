@@ -58,6 +58,20 @@ export function classifyProcessRefusal(raw: unknown): { readonly cls: ProcessRef
 export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
   private nextId = 1;
   private readonly pending = new Map<number, { resolve: (r: ProcessReply) => void; reject: (e: Error) => void; cancel: () => void }>();
+  /**
+   * MAJOR 1 (REQ-MCP-123/126, 2026-11-25): the replies a request asked to hear EVEN AFTER its own bound elapsed.
+   * A request that ended `NoReplyWithinBound` used to have its id erased, so the child's late answer — a definitive
+   * refusal among them — fell into `if (!p) return` and was lost for good; a caller whose decision hinged on it could
+   * never learn it. A request may now name a sink for exactly that; the request still ends at its bound (ADR-0002 c.11
+   * unchanged), and the late reply is handed over instead of dropped.
+   */
+  private readonly late = new Map<number, (r: ProcessReply) => void>();
+  /**
+   * MINOR (REWORK 6, 2026-11-25): the cap on the `late` map. An unanswered request's sink is dropped at `end`/`close`,
+   * but a sink whose request asked for the late answer and whose reply NEVER comes (nor the child ending) would sit here
+   * for the life of the link; the cap drops the OLDEST entry so a long-lived link cannot grow without end.
+   */
+  private static readonly LATE_MAX = 32;
   private readonly eventListeners = new Set<(e: ProcessEvent) => void>();
   private askHandler: ((ask: ServiceAsk) => Promise<ProcessReply>) | null = null;
   private ended: Extract<ProcessReply, { kind: 'refused' }> | null = null;
@@ -97,7 +111,27 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
         return;
       }
       const p = this.pending.get(m.id);
-      if (!p) return;
+      if (!p) {
+        /*
+         * MAJOR 1 (REWORK 5): a reply whose request already ended at its bound goes to the sink that asked for it, not
+         * to the bin.
+         *
+         * MINOR (REWORK 6, 2026-11-25): the sink is trapped. It runs inside the PORT'S OWN message handler, so a throw
+         * from it would unwind into the message pump and take every later message with it — a delivery bug turning into
+         * a dead channel. The reply is still consumed (the entry is deleted first), so a throwing sink cannot be handed
+         * the same reply twice.
+         */
+        const sink = this.late.get(m.id);
+        if (sink !== undefined) {
+          this.late.delete(m.id);
+          try {
+            sink(m.reply);
+          } catch (cause) {
+            this.log.warn(`a late reply's sink threw while handling a reply from the ${this.log.boundary}: ${cause instanceof Error ? cause.message : String(cause)}`);
+          }
+        }
+        return;
+      }
       this.pending.delete(m.id);
       p.cancel();
       p.resolve(m.reply);
@@ -142,6 +176,8 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
     this.signalEnded(refusal);
     for (const p of this.pending.values()) { p.cancel(); p.resolve(refusal); }
     this.pending.clear();
+    // MAJOR 1: no reply can follow the child's end, so no late sink can fire; they are dropped rather than kept.
+    this.late.clear();
     // OQ-485: the link's end closes every refusal window, each with its count line.
     this.refusals.flush();
   }
@@ -171,14 +207,16 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
     return this.held !== null && this.ended === null;
   }
 
-  request(request: Req, boundMs: Millis): Promise<ProcessReply> {
+  request(request: Req, boundMs: Millis, lateReply?: (r: ProcessReply) => void): Promise<ProcessReply> {
     if (this.ended !== null) return Promise.resolve(this.ended);
-    if (this.held !== null) return Promise.race([this.held.then(() => this.request(request, boundMs)), this.endedSignal]);
+    if (this.held !== null) return Promise.race([this.held.then(() => this.request(request, boundMs, lateReply)), this.endedSignal]);
     const id = this.nextId++;
     const env: ProcessRequestEnvelope = { v: CONTRACT_SCHEMA_VERSION, id, request };
     return new Promise<ProcessReply>((resolve, reject) => {
       const h = this.timers.after(boundMs, () => {
         this.pending.delete(id);
+        // MAJOR 1: the request ends here as it always did; a sink that asked for the late answer is armed for it.
+        if (lateReply !== undefined) this.rememberLate(id, lateReply);
         reject(new NoReplyWithinBound(`no reply to ${request.kind} within ${boundMs} ms`));
       });
       this.pending.set(id, { resolve, reject, cancel: () => h.cancel() });
@@ -186,10 +224,21 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
     });
   }
 
+  /** MINOR (REWORK 6): remember a late sink, dropping the oldest past `LATE_MAX` so the map is bounded (a Map iterates in insertion order). */
+  private rememberLate(id: number, sink: (r: ProcessReply) => void): void {
+    this.late.set(id, sink);
+    while (this.late.size > ProcessLink.LATE_MAX) {
+      const oldest = this.late.keys().next();
+      if (oldest.done === true) break;
+      this.late.delete(oldest.value);
+    }
+  }
+
   close(): void {
     this.stop();
     for (const p of this.pending.values()) { p.cancel(); p.reject(new Error('link closed')); }
     this.pending.clear();
+    this.late.clear();
     this.refusals.flush();
   }
 }

@@ -34,7 +34,7 @@ interface Harness {
   readonly reported: ReportInput[];
   readonly svcAsked: WorkspaceServiceRequest[];
   readonly hostAsked: RunHostRequest[];
-  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'withdrawnByClose'>;
+  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'configFatal' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'openWorkspaceRead' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services' | 'storeRefusal' | 'withdrawnByClose'>;
   /** REQ-NOTIFY-030/032: the sessions whose held failure `session.subscribe` released. */
   readonly focused: string[];
   /** PD-ORCH-005 clause 9: what `quitting()` answers. */
@@ -66,6 +66,8 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
   const starts: Harness['starts'] = [];
   const cleared: string[] = [];
   const loaded: string[] = [];
+  /** REQ-MCP-124: the shared fence's read — mutable so a case can make the open workspace CHANGE between validation and admission. */
+  const open: { current: { workspaceId: string; workspace: string } | null } = { current: { workspaceId: 'ws-1', workspace: WORKSPACE } };
   const ctx = {
     capturing: false,
     configFatal: { observe: async () => undefined, loaded: async (root: string) => { loaded.push(root); } },
@@ -73,6 +75,10 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     quitting: () => quit.now,
     dialogs: new Map(),
     log: (m: string) => { logs.push(m); },
+    /** REQ-MCP-124 (ADR-0067): the shared fence reads the open workspace through this. */
+    openWorkspaceRead: async (_wcId: number | null) => open.current,
+    /** REQ-NOTIFY-060/061: the confinement notice the coordinator reports through the store. */
+    confinementNotice: (r: { headline: string; detail?: string | undefined }): ReportInput => ({ severity: 'error', title: r.headline, message: r.detail ?? r.headline, detail: r.detail ?? r.headline, persistent: true, action: { label: 'Open Workspace', action: { kind: 'open-view', view: 'workspace' } } }),
     mainWindows: {
       takeMintedSession: () => 'minted-1',
       setMintedSession: () => undefined,
@@ -179,16 +185,29 @@ describe('session.start, driven without a process behind it', () => {
     expect(h.hostAsked).toEqual([]);
   });
 
-  it('an unanswered run host refuses and takes the created worktree away again', async () => {
+  it('REQ-MCP-124: an unanswered run host refuses and KEEPS the created worktree (the host may still start with it)', async () => {
     const h = harness(
       configured((req) => (req.kind === 'worktree.remove' ? { kind: 'worktree.removed', path: created.path } : { ...created, kind: 'worktree.created' })),
       () => Promise.reject(new Error('no reply to session.start within 10000 ms')),
     );
     const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
     expect(out).toEqual({ ok: false, code: 'run-host.unreachable', headline: 'The session could not be started', detail: expect.stringContaining('no reply to session.start') });
-    expect(h.svcAsked.map((r) => r.kind)).toEqual(['config.read', 'worktree.create', 'worktree.remove']);
+    // MAJOR (2026-11-25): a NO-REPLY is not a definite refusal — the host may still start the run with exactly this
+    // working directory, so the tree is NOT taken away (only a definite refusal removes it).
+    expect(h.svcAsked.map((r) => r.kind)).toEqual(['config.read', 'worktree.create']);
     expect(h.raised.some((n) => n.severity === 'error')).toBe(true);
     expect(h.logs.some((l) => l.startsWith('run refused:'))).toBe(true);
+  });
+
+  it('REQ-MCP-124: a run host that DEFINITELY refuses takes the created worktree away again', async () => {
+    const h = harness(
+      configured((req) => (req.kind === 'worktree.remove' ? { kind: 'worktree.removed', path: created.path } : { ...created, kind: 'worktree.created' })),
+      () => ({ kind: 'refused', code: 'session.no-model', headline: 'No model is configured' }),
+    );
+    const out = await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Write the notes in a worktree.', isolation: { branch: 'rotaris/session/minted-1' } }, windowOn('ws-1'));
+    expect(out).toEqual({ ok: false, code: 'session.no-model', headline: 'The session could not be started', detail: expect.stringContaining('No model is configured') });
+    await new Promise((r) => setImmediate(r));
+    expect(h.svcAsked.map((r) => r.kind)).toEqual(['config.read', 'worktree.create', 'worktree.remove']);
   });
 
   it('the early refusals are logged, not only returned', async () => {

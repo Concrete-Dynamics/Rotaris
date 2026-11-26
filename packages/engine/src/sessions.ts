@@ -1,5 +1,5 @@
 import { asSessionId, type Clocks, countNoun, err, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
-import { type AutoStrategyName, type StrategyChoice, type PlanDecision, type PlanGatePayload, type ResumablePayload, APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ApprovalPayload, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding, DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink, IntentResultSchema, type IntentCategory, type IntentGrant, type IntentResult, type IntentStatus, type RunOverride, type WorkflowStatus, WORKFLOW_STATES    } from '@rotaris/contracts';
+import { type AutoStrategyName, type StrategyChoice, type PlanDecision, type PlanGatePayload, type ResumablePayload, APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ApprovalPayload, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding, DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, splitFrontmatter, trimBlankLines, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink, IntentResultSchema, type IntentCategory, type IntentGrant, type IntentResult, type IntentStatus, type RunOverride, type WorkflowStatus, WORKFLOW_STATES, isMoneyStop, type MoneyStop } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { pathKey } from '@rotaris/platform';
 import { type ChildRow, RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
@@ -29,6 +29,7 @@ import { timedOutOf } from './children/cut-off.js';
 import type { DelegationOps } from './children/delegation.js';
 import { DEFAULT_BUDGET, holdsModelSlot, storeChildReport, userCancellation, writeCancelledTeardown, type Budget } from './children/ledger.js';
 import { costLabelOf } from './run/cost-label.js';
+import type { RunSpend } from './run/spend.js';
 import { recoveryEntryOf, sessionOutcomeOf, summaryFactsOf, SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
@@ -355,7 +356,7 @@ export interface SessionsDeps {
    * (Tier B). Present, it supplies the model and the runtime for that run; absent, `model` and `runtime` stand.
    */
   /** `code: 'confinement'` (REQ-NOTIFY-060/061): the refusal is the start-time confinement gate's, kept as its own class. */
-  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId; readonly executionRoot: string; readonly entryPersona?: string | undefined }) => Result<RunSetup, { readonly reason: string; readonly code?: 'confinement' }>) | undefined;
+  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId; readonly executionRoot: string; readonly entryPersona?: string | undefined; readonly moneyStop?: MoneyStop | undefined }) => Result<RunSetup, { readonly reason: string; readonly code?: 'confinement' }>) | undefined;
   /**
    * REQ-CHAT-006 / REQ-SESSION-026: the model catalogue of a workspace's configuration as it stands, for READING a session no
    * run of this process has started — which configured key a session-wide override replaces. A read, never a run start: it
@@ -394,6 +395,8 @@ export interface RunSetup {
    * workspace context as not built and said the list held only the middle two.)
    */
   readonly contextUnits?: (() => readonly string[]) | undefined;
+  /** PD-ORCH-021: the money slider as this run reads it; absent, the run runs as configured. */
+  readonly spend?: RunSpend | undefined;
 }
 
 /** REQ-NOTIFY-070: what `Sessions.restartOnFallback` pinned and restarted on — the pair that failed and the fallback now in use. */
@@ -901,6 +904,8 @@ export interface StartOptions {
   readonly runType?: RunType | undefined;
   /** REQ-LIBRARY-059/060: a reviewed run may arrive with its approved proposal tasks already shaped as the todo. */
   readonly initialTodo?: TodoDocument | undefined;
+  /** PD-ORCH-021 clause 9: the stop the composer chip showed for a session not yet started; recorded as the session's own. */
+  readonly moneyStop?: MoneyStop | undefined;
 }
 
 /** REQ-SESSION-082 / REQ-EVENTS-021: a refusal before the run starts is one `result` of status error, marked as such. */
@@ -990,6 +995,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     cost: r.cost,
     stopReason: r.stop_reason,
     runType: r.run_type,
+    moneyStop: r.money_stop !== null && isMoneyStop(r.money_stop) ? r.money_stop : null,
     improvementArtifactIds: parseList(r.improvement_artifact_ids),
     runStartedAt: r.run_started_at,
     iterationsCompleted: r.iterations_completed,
@@ -1562,7 +1568,7 @@ export class Sessions {
     if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before starting work: ${storeFailure}` });
     const attendedNow = this.deps.attended?.() ?? false;
     const sessionId = asSessionId(opts.sessionId ?? this.deps.mintSessionId());
-    const setup = opts.setup ? ok(opts.setup) : this.setupFor(workspaceRoot, attendedNow, sessionId, opts.worktree?.worktree_path ?? workspaceRoot);
+    const setup = opts.setup ? ok(opts.setup) : this.setupFor(workspaceRoot, attendedNow, sessionId, opts.worktree?.worktree_path ?? workspaceRoot, undefined, opts.moneyStop);
     if (!setup.ok) return err(setup.error);
     const { model, runtime } = setup.value;
     const inputs = opts.attachments ?? [];
@@ -1596,6 +1602,7 @@ export class Sessions {
         : { code: 'store', reason: created.error.reason });
     }
     const writer = created.value;
+    if (opts.moneyStop !== undefined) dal.setMoneyStop(sessionId, opts.moneyStop);
     const storedAttachments = persistAttachments(this.deps.sessionFilesDir(dal, sessionId), inputs);
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
@@ -1659,6 +1666,7 @@ export class Sessions {
       // REQ-WORKSPACE-060 (ADR-0063): the session's always-active context units, as a getter the run calls at
       // every agent construction (REQ-CONFIG-166 reads the policy at creation, never mid-agent).
       ...(setup.value.contextUnits ? { contextUnits: setup.value.contextUnits } : {}),
+      ...this.spendFor(setup.value, dal, sessionId),
       resilience: { memory: live.memory!, catalogue: setup.value.resilience?.catalogue ?? [], fallbackModel: setup.value.resilience?.fallbackModel ?? null },
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
@@ -1806,6 +1814,31 @@ export class Sessions {
    * the host; one with none (a plain Continue) keeps the strategy the session's previous run was given, and where there
    * is none to keep the host is asked and answers `lead`.
    */
+  /**
+   * PD-ORCH-021 clauses 9 and 10: the session's own stop, written whether or not a run is under way. A running run's entry role
+   * keeps the stop it started with; every child admitted after this reads the new one. `null` clears it back to the default.
+   */
+  private setMoneyStop(s: Live | undefined, req: ControlRequest): ControlResult {
+    const stop = req.args['stop'];
+    if (s === undefined || (stop !== null && !isMoneyStop(stop))) return { ok: false };
+    s.dal.setMoneyStop(asSessionId(req.sessionId), stop);
+    s.owner.reconcile();
+    return { ok: true };
+  }
+
+  /** PD-ORCH-021 clause 9: the stop a session holds as its own; null where it holds none (the configured default stands). */
+  private sessionStop(sessionId: SessionId, dal?: StoreDal): MoneyStop | null {
+    const stored = (dal ?? this.live.get(sessionId)?.dal)?.getSession(sessionId)?.money_stop ?? null;
+    return stored !== null && isMoneyStop(stored) ? stored : null;
+  }
+
+  /** PD-ORCH-021 clauses 9 and 10: the run's spend port, with the session's stop read live for each child admitted. */
+  private spendFor(setup: RunSetup, dal: StoreDal, sessionId: SessionId): Pick<RunDeps, 'spend' | 'stopNow'> {
+    const spend = setup.spend;
+    if (spend === undefined) return {};
+    return { spend, stopNow: () => this.sessionStop(sessionId, dal) ?? spend.startStop };
+  }
+
   private strategyChoiceFor(live: Live, runtime: RuntimePosture | undefined, ctx: Omit<PreflightContext, 'signal'>): { chooseStrategy?: (signal: AbortSignal) => Promise<StrategyChoice> } {
     const ask = this.deps.chooseStrategy;
     if (runtime?.chooseStrategy !== true || !ask) return {};
@@ -1821,10 +1854,12 @@ export class Sessions {
     };
   }
 
-  private setupFor(workspaceRoot: string, attended: boolean, sessionId: SessionId, executionRoot: string, entryPersona?: string): Result<RunSetup, StartRefusal> {
+  private setupFor(workspaceRoot: string, attended: boolean, sessionId: SessionId, executionRoot: string, entryPersona?: string, startStop?: MoneyStop): Result<RunSetup, StartRefusal> {
     const refused = (code: string, summary: string): StartRefusal => ({ code, reason: summary, failedBeforeStart: true, result: { status: 'error', session_id: '', stop_reason: '', summary, error: summary } });
     if (this.deps.configure) {
-      const r = this.deps.configure(workspaceRoot, { attended, sessionId, executionRoot, ...(entryPersona === undefined ? {} : { entryPersona }) });
+      // PD-ORCH-021 clause 9: the session's own stop, where it has one, governs its run; else the configured default.
+      const moneyStop = startStop ?? this.sessionStop(sessionId);
+      const r = this.deps.configure(workspaceRoot, { attended, sessionId, executionRoot, ...(entryPersona === undefined ? {} : { entryPersona }), ...(moneyStop === null || moneyStop === undefined ? {} : { moneyStop }) });
       // REQ-EVENTS-021 / REQ-CONFIG-478: refused before it starts, carrying the report.
       return r.ok ? ok(r.value) : err(refused(r.error.code === 'confinement' ? 'confinement' : 'configuration', r.error.reason));
     }
@@ -1970,6 +2005,7 @@ export class Sessions {
       // REQ-WORKSPACE-073 (ADR-0063): a continuation is where an invoked skill first reaches a model — the
       // command is typed between prompts, so the units MUST be re-read here and not carried from the launch.
       ...(setupIn.contextUnits ? { contextUnits: setupIn.contextUnits } : {}),
+      ...this.spendFor(setupIn, s.dal, sessionId),
       resilience: { memory: s.memory, catalogue: setupIn.resilience?.catalogue ?? [], fallbackModel: setupIn.resilience?.fallbackModel ?? null },
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
@@ -2105,6 +2141,8 @@ export class Sessions {
     // PD-TOOLS-005: a confirmed clear on a live run is the user's input to it too (REQ-MONITOR-004, REQ-CHAT-084).
     if (req.op === 'clearTranscript') { if (run && !run.isEnded) s.presence.returned(); return this.clearTranscript(s, req); }
     if (req.op === 'forceCompression') return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
+    // PD-ORCH-021 clauses 9 and 10: the session's stop, live or at rest; a running run reads it at each child it admits next.
+    if (req.op === 'setMoneyStop') return this.setMoneyStop(s, req);
     // PD-ORCH-005 clause 16: one paused child is cancellable while its session rests, with no run behind it.
     if (req.op === 'cancelAgent' && (!run || run.isEnded)) return this.cancelPausedAtRest(s, req);
     // REQ-CHAT-040: a prompt a resting session holds stays editable in the panel; only a run's own consumption ends that.

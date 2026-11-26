@@ -4,7 +4,7 @@
 
 ### PD-ORCH-020 — `intelligent`: the small model chooses each run's strategy from its request
 
-*Revision 2 (2026-11-25, [R-132](../requests.md#r-132)) — **the row draws its reason behind an info icon**, clause 6.
+*Revision 2 (2026-11-25, [R-133](../requests.md#r-133)) — **the row draws its reason behind an info icon**, clause 6.
 Revision 1 (2026-11-24, [R-131](../requests.md#r-131)) is quoted where it is replaced, never deleted.*
 
 A fifth value of `rotaris.delegation_strategy`, `intelligent`, MUST be supported. It is no strategy of its own: it has

@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { layoutContractAttributes, type UiLayoutContract } from './layout-contract.js';
 import { classes, componentClass } from './shared.js';
 
@@ -86,3 +86,56 @@ export const SendPill = forwardRef<HTMLButtonElement, SendPillProps>(function Se
     </button>
   );
 });
+
+/**
+ * A slider over a few named steps (PD-ORCH-019 clause 4: the depth slider). The native range input is the control: it
+ * holds the value, the keyboard and the accessible name, and its `aria-valuetext` says the step and what it permits.
+ * Under it each step is drawn as a stop with its figure and label; pointing at a stop, or moving focus onto the slider,
+ * shows that step's description, and pressing a stop chooses it. The stops are not in the tab order: the range input is
+ * the one focusable element, so a keyboard meets one control.
+ */
+export interface StepSliderStep {
+  readonly label: string;
+  /** What choosing this step permits, in one or two sentences. */
+  readonly description: string;
+  /** A small drawing of the step, beside its label. */
+  readonly figure?: ReactNode;
+}
+export interface StepSliderProps {
+  readonly id: string;
+  readonly steps: readonly StepSliderStep[];
+  /** The chosen step's index. */
+  readonly value: number;
+  readonly onChange: (index: number) => void;
+  readonly 'aria-label': string;
+  readonly disabled?: boolean;
+  readonly className?: string;
+  readonly ui?: UiLayoutContract;
+}
+export function StepSlider({ id, steps, value, onChange, disabled, className, ui, ...rest }: StepSliderProps) {
+  const [pointed, setPointed] = useState<number | null>(null);
+  const last = steps.length - 1;
+  const chosen = Math.min(Math.max(value, 0), last);
+  const shown = steps[pointed ?? chosen];
+  return (
+    <div className={classes('step-slider', className)} data-ui-component="StepSlider" data-step={chosen} data-steps={steps.length} {...layoutContractAttributes(ui)} onMouseLeave={() => setPointed(null)}>
+      <div className="step-slider__rail">
+        <input id={id} className="step-slider__input" type="range" min={0} max={last} step={1} value={chosen} disabled={disabled}
+          aria-label={rest['aria-label']} aria-valuetext={`${steps[chosen]?.label ?? ''}: ${steps[chosen]?.description ?? ''}`} aria-describedby={`${id}-description`}
+          onChange={(e) => onChange(Number(e.currentTarget.value))} />
+        <div className="step-slider__stops" aria-hidden="true">
+          {steps.map((step, index) => (
+            <button key={step.label} type="button" tabIndex={-1} disabled={disabled} data-step-stop={index}
+              className={classes('step-slider__stop', index <= chosen && 'is-reached', index === chosen && 'is-chosen', index === pointed && 'is-pointed')}
+              onMouseEnter={() => setPointed(index)} onClick={() => onChange(index)}>
+              <span className="step-slider__mark" />
+              {step.figure === undefined ? null : <span className="step-slider__figure">{step.figure}</span>}
+              <span className="step-slider__label">{step.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <p id={`${id}-description`} className="step-slider__description" data-testid={`${id}-description`} data-pointed={pointed === null ? 'false' : 'true'}>{shown?.description ?? ''}</p>
+    </div>
+  );
+}

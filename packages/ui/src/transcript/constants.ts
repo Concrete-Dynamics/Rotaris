@@ -158,3 +158,6 @@ export function countWidgets(root: ParentNode): number {
 export function countUiObjects(root: ParentNode): number {
   return root.querySelectorAll('*').length;
 }
+
+/** PD-ORCH-019 clause 9: what a `workflow` start call's result says, naming the workflow's id — the row that carries the workflow's line. */
+export const WORKFLOW_STARTED = /started in the background as (wf_\d+)\b/;

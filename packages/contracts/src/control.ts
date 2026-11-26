@@ -39,6 +39,8 @@ export const CONTROL_OPS = [
   'terminalResize',
   'terminalInterrupt',
   'terminalKill',
+  // PD-ORCH-019 clause 9: stop one workflow of a named agent. Not one of REQ-MONITOR-004's; the directive adds it.
+  'stopWorkflow',
 ] as const;
 export type ControlOp = (typeof CONTROL_OPS)[number];
 

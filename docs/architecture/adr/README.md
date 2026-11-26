@@ -29,9 +29,9 @@ questions a reader has *after* they have the number: what a record's file looks 
 ## The records §7's table does not carry
 
 §7's table stops at **ADR-0058**, and [`../README.md`](../README.md)'s "Decisions" bullet still counts "58 records",
-while this folder holds **67**; the nine below are cited from ADRs, requirements and requests — the eight before
-ADR-0067 are accepted, and ADR-0067 is accepted too since 2026-11-10, when its amendment round landed (`REQ-MCP-119` to
-`REQ-MCP-130` minted, `PD-EVENTS-001` carrying its dispositions).
+while this folder holds **68**; the ten below are cited from ADRs, requirements and requests — the eight before
+ADR-0067 are accepted, ADR-0067 is accepted too since 2026-11-10, when its amendment round landed (`REQ-MCP-119` to
+`REQ-MCP-130` minted, `PD-EVENTS-001` carrying its dispositions), and ADR-0068 since 2026-11-24.
 They are listed here so nothing in the folder is reachable only by listing it — and they belong in §7's table, which
 is where a reader looks first ([the note](../../defects/the-architecture-readmes-decision-index-and-record-count-lag-the-adr-folder.md)).
 
@@ -46,6 +46,7 @@ is where a reader looks first ([the note](../../defects/the-architecture-readmes
 | [0065](0065-the-retrospective-pass.md) | The retrospective: a second analysis pass, user-started, workspace-wide | accepted, awaiting its first execution | 13 |
 | [0066](0066-the-linux-artifact-is-built-on-a-developer-host.md) | The Linux artifact is built on a developer host, and accepted against stated criteria | accepted (the owner, 2026-10-26), awaiting its first execution | — |
 | [0067](0067-the-loopback-mcp-server-for-external-agents.md) | The product opens one loopback MCP surface, off by default, that starts and watches runs and nothing else | accepted, 2026-11-10 (its amendment round landed); awaiting its first execution | — |
+| [0068](0068-workflow-scripts-run-in-a-quickjs-isolate-in-the-run-host.md) | An agent's workflow script runs in a QuickJS isolate inside the run host, and acts only through its agent's own port | accepted, 2026-11-24, with its first execution | — |
 
 **Five things the numbering itself carries**, each stated in §7 as well: the records are numbered in dependency
 order, not in the order they were written; **two break that rule deliberately** (ADR-0057, found missing after the

@@ -66,6 +66,7 @@ engineStrict: true
 # One specifier per dependency that two or more manifests name; each such
 # manifest writes `catalog:` (pnpm catalogs). A version moves here, once.
 catalog:
+  '@jitl/quickjs-wasmfile-release-sync': 0.32.0
   '@modelcontextprotocol/client': 2.4.0
   # ADR-0067 / REQ-MCP-119..130 (2026-11-25): the inbound surface's MCP server primitives. The client pin above is the
   # product-as-client line; these two build the one surface the product serves. The change that builds the surface is the
@@ -79,6 +80,7 @@ catalog:
   ajv: 8.20.0
   better-sqlite3: ^13.0.3
   node-pty: 1.1.0
+  quickjs-emscripten-core: 0.32.0
   react: ^19.3.1
   react-dom: ^19.3.1
   vite: ^8.3.5

@@ -1,8 +1,8 @@
-import { CONTRACT_SCHEMA_VERSION, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
+import { CONTRACT_SCHEMA_VERSION, runOverrideOfChoice, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
 import { millis, toIsoUtc, type Millis } from '@rotaris/kernel';
 import { dataLayout, environmentWithout, installedProductVersion, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import type { PromptLists, StoreDal, StoreHandle } from '@rotaris/store';
-import { meteredBackend, RefusalLease, LOOP_ACTIVATION_BUDGET_MS, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
+import { chooseStrategy, meteredBackend, RefusalLease, LOOP_ACTIVATION_BUDGET_MS, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
 import type { ModelClient, ModelRef, ThinkingLevel } from '@rotaris/model';
 import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, implementationRole, RunHostPresenter, terminalManagerFromHost } from './tools.js';
@@ -563,6 +563,22 @@ export function createRunHost() {
         },
         classifier,
       } : null;
+    },
+    /*
+     * PD-ORCH-020: an `intelligent` run's strategy, chosen by the small model from the request. The choice becomes the
+     * override of this run's configuration, here, before the run's pre-flight and its tool ports read it (both read
+     * `configuredRuns`), so every reader of the override sees the chosen strategy and none sees `intelligent`.
+     */
+    chooseStrategy: async (ctx) => {
+      const run = configuredRuns.get(ctx.sessionId);
+      if (!run) throw new Error('the run has no configuration');
+      const choice = await chooseStrategy(ctx.prompt, classifierSlotsOf(run.cfg, run.scripted, runBearers.get(ctx.sessionId), (m) => ctx.warn(m)), {
+        backend: ctx.countUsage ? meteredBackend(run.model.backend, ctx.countUsage) : run.model.backend, timers: clocks.timers, credentialFor: run.model.config.credentialFor,
+        modelTimeoutMs: run.model.config.modelTimeoutMs, memory: rungMemory, warn: (m) => ctx.warn(m), helperModel: ctx.helperModel,
+      }, ctx.signal);
+      configuredRuns.set(ctx.sessionId, { ...run, runtime: { ...run.runtime, runOverride: runOverrideOfChoice(choice.strategy) } });
+      log(`strategy: ${choice.strategy}${choice.fallback ? ` (fallback: ${choice.reason})` : ''}`);
+      return choice;
     },
     // REQ-ORCH-005: the pre-flight before the coordinator exists; the slots, the strategy and the tier from the run's configuration.
     preflight: (ctx) => {

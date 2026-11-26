@@ -172,6 +172,14 @@
  *                 launch, `empty-wait`: the root's step right after a background delegation is emptied, so it waits silently;
  *                 the child's report must be the final message of the request that resumes it, with no stuck classification,
  *                 no root stuck activation and no `agent_session_aborted`.
+ *   8l. lead     — OPT-IN (`--only=lead`), a few minutes (R-130): `rotaris.delegation_strategy: lead`, `PD-ORCH-019` clauses 1
+ *                 and 2 — no classification in the launch log, the lead statement and the writing tools beside `delegate`
+ *                 in the first root request, and a completed run (`lib/delegation-readings.mjs`, `leadReading`). A second
+ *                 launch, `lead-workflow`, asks the entry role for a workflow script that starts two agents (clauses 5 to 7).
+ *   8m. intelligent — OPT-IN (`--only=intelligent`), a few minutes (R-131): `rotaris.delegation_strategy: intelligent`,
+ *                 `PD-ORCH-020` clauses 1, 4 and 6 — two launches, a question and a small feature; each must log a strategy
+ *                 that was chosen and not fallen back to, write its `Strategy chosen` row and complete. Which strategy a
+ *                 real model chose is recorded, never asserted.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -271,7 +279,7 @@ import { RENAME_FILES, RENAME_FROM, RENAME_TO, renameReading } from './lib/renam
 import { CLASSIFIER_MARK, DELEGATED_MARK, REPORT_MARK, ROOT_MARK, answerReading, planReading, waitReading } from './lib/plan-open-reading.mjs';
 import { OUTCOME_HEAD, TAG_EVAL, TAG_SELECTOR, cutOffChildren, offerTaken, runFailedRelays, summaryOpeningVerdicts, tagReading, timeoutLimitText, timeoutLine } from './lib/cut-off-reading.mjs';
 import { ARTIFACTS_TAB } from './lib/library-refresh.mjs';
-import { HANDOFF_ARTIFACT_CAP, reportAnswerReading, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, swarmReading } from './lib/delegation-readings.mjs';
+import { HANDOFF_ARTIFACT_CAP, reportAnswerReading, attachReading, delegatesToReading, followUpReading, handoffArtifact, handoffReading, requestOf, leadReading, swarmReading } from './lib/delegation-readings.mjs';
 import { frontmatterOfRow, leadingFrontmatter } from './lib/artifact-frontmatter.mjs';
 import { DEFAULT_SHELL_COMMAND_TIMEOUT_S, LONG_OUTPUT_LINES, PTY_INPUT_LINE_BYTES, attemptCount, diagnosticOf, endedShellReading, hardCapReading, hereStringLinesReturned, interruptedPollReading, longCommandReading, longOutputReading, notReachedNote, outputOf, pairNotReachedNote, pausedBehindReading, reachedShape, replacedShellReading, shapeSends, terminalRunEndReading, terminalShapes, terminalWaitMs, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -390,7 +398,7 @@ const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions',
  * that trebles its wall clock does not belong in it by default, and a scenario nobody can leave out is a
  * scenario people stop running. Naming it is the consent.
  */
-const OPT_IN = ['duress', 'cutoff', 'rename', 'plan-open', 'empty-answer'];
+const OPT_IN = ['duress', 'cutoff', 'rename', 'plan-open', 'empty-answer', 'lead', 'intelligent'];
 const SCENARIOS = [...OPTIONAL, ...OPT_IN];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
@@ -1184,7 +1192,7 @@ function checkCoordinatorTodo() {
         const timeline = db.prepare("SELECT ordinal, at, name, metadata FROM timeline WHERE session_id = ? AND name IN ('child_start', 'child_end', 'child_resumed') ORDER BY ordinal").all(sessionId);
         const listed = calls.find((c) => rootNames.includes(c.agent_name) && c.tool_name === 'todo' && c.status === 'ok');
         return { scenario, rootNames, calls, agentPlanTasks: agentPlanTaskCount(todo), listedAt: listed?.endedAt ?? null, rootPlanIds: planItemIds(rootAgentPlan(todo)), rootPlan: rootAgentPlan(todo), children, timeline,
-          runOverride: launchRunOverride(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null),
+          runOverride: launchRunOverride(db.prepare('SELECT payload FROM launch_audits WHERE session_id = ?').get(sessionId)?.payload ?? null, db.prepare("SELECT metadata FROM timeline WHERE session_id = ? AND name = 'run_strategy_chosen' ORDER BY ordinal DESC LIMIT 1").get(sessionId)?.metadata ?? null),
         };
       });
       r = coordinatorTodoReading(read);
@@ -1200,7 +1208,7 @@ function checkCoordinatorTodo() {
   check(r.unlisted.length === 0, 'no coordinator\'s second work item ran before it wrote a todo list of its own (REQ-ORCH-029, OQ-213)', r.unlisted.length === 0 ? `${r.multiStep.length} multi-step session(s): ${r.multiStep.join(', ') || 'none'}` : r.unlisted.map(at).join(', '));
   check(r.withoutPlan.length === 0, 'every multi-step coordinating session stores an agent plan (REQ-ORCH-029, REQ-TOOLS-147)', r.withoutPlan.length === 0 ? `${r.multiStep.length} multi-step session(s)` : `no agent plan stored: ${r.withoutPlan.join(', ')}`);
   if (r.refused.length > 0) noted('the gate refused a coordinator\'s second work item until it wrote its todo list (OQ-213)', r.refused.map(at).join(', '));
-  if (r.single.length > 0) noted('sessions launched under the `single` run override were not read for the coordinator\'s todo list (REQ-ORCH-025)', r.single.join(', '));
+  if (r.single.length > 0) noted('sessions launched under the `single` or `lead` run override were not read for the coordinator\'s todo list (REQ-ORCH-025, PD-ORCH-019)', r.single.join(', '));
   // PD-TOOLS-006 revision 6 (OQ-220): which todo item each implementation child served, read from the store.
   const child = (c) => `${c.scenario}: ${c.child}`;
   check(items.unnamed.length === 0, 'every root implementation delegation after the coordinator\'s first todo list names the item it serves (PD-TOOLS-006 revision 6, OQ-220)', items.unnamed.length === 0 ? `${items.named.length} child(ren) named an item` : items.unnamed.map((c) => `${child(c)} (${c.persona})`).join(', '));
@@ -3266,6 +3274,142 @@ if (wanted.includes('delegation')) {
   await budgetGate();
 }
 
+// ── 8l. A run under the lead strategy (PD-ORCH-019) ────────────────────────────────────────────────────────────
+/*
+ * OPT-IN (`--only=lead`), a few minutes: `rotaris.delegation_strategy: lead` against a real model (PD-ORCH-019 clauses 1
+ * and 2). What the product owes is read from the launch log and the first root request: no classification, the lead
+ * statement, the writing tools beside `delegate`. Whether the model wrote the files itself or delegated is the model's, and
+ * is recorded, never asserted.
+ */
+if (wanted.includes('lead')) {
+  const agentsBefore = readFileSync(agentsFile, 'utf8');
+  const LEAD_PROMPT = 'Make addTodo in src/todos.js refuse an empty or blank title, add a test for it beside the existing ones, and mention the rule in README.md. Run the tests when done. Reply with one sentence.';
+  let leadLog = '';
+  const leadStartedAt = Date.now();
+  try {
+    writeFileSync(agentsFile, withSectionKey(agentsBefore, 'rotaris', 'delegation_strategy', 'lead'));
+    cpSync(agentsFile, join(scenarioDir('lead'), 'agents.yaml'));
+    leadLog = await launch('lead', {
+      ROTARIS_CAPTURE_PROMPT: LEAD_PROMPT,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+    }, EDIT_WAIT_MS + 120_000);
+  } finally {
+    writeFileSync(agentsFile, agentsBefore);
+  }
+  const leadEndedAt = Date.now();
+  const leadRead = readSession();
+  const leadCalls = leadRead === null ? [] : readToolCalls(leadRead.session.session_id);
+  const leadDeadline = overrunReading({
+    log: leadLog, startedAt: leadStartedAt, endedAt: leadEndedAt, records: readTraffic('lead'),
+    calls: leadCalls, budgetMs: EDIT_WAIT_MS, recorded: proxy !== null, raise: 'LIVE_RUN_EDIT_WAIT_MS',
+  });
+  if (leadDeadline.outcome === 'window') noted('the lead run was bounded by the window, not by the product', leadDeadline.detail);
+  else check(leadDeadline.outcome === 'inside', 'the lead run reached its result inside the wait', leadDeadline.detail);
+  check(leadRead?.session.execution_status === 'completed', 'the lead run completed', `status ${leadRead?.session.execution_status ?? 'no session'}`);
+  const leadFirst = readTraffic('lead').filter((r) => String(r.path ?? '').includes('/chat/completions')).map(requestOf).find((r) => r !== null && r.tools.length > 0) ?? null;
+  const lead = leadReading(leadFirst, leadLog);
+  if (lead.kind === 'absent') noted('no root request of the lead run was recorded', RECORD_TRAFFIC ? 'what the entry role was told is unasked' : 'traffic not recorded (--no-record-traffic)');
+  check(lead.faults.length === 0, 'a lead run was not classified, and its entry role was told it works and may delegate and was offered the writing tools beside delegate (PD-ORCH-019 clauses 1 and 2)', lead.faults.join('; ') || `offered ${lead.offered.length} tools`);
+  const own = leadCalls.filter((c) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(c.tool_name) && c.status === 'ok');
+  const ownByRoot = own.filter((c) => c.agent_name === leadCalls[0]?.agent_name).length;
+  const leadChildren = leadCalls.filter((c) => c.tool_name === 'delegate' && c.status === 'ok').length;
+  noted('how the lead run divided the work', `${ownByRoot} writing or command call(s) by the entry role, ${leadChildren} admitted delegation(s); the division is the model's`);
+  results.scenarios['lead'] = { status: leadRead?.session.execution_status, faults: lead.faults, offered: lead.offered, ownCalls: ownByRoot, delegations: leadChildren, deadline: leadDeadline.outcome };
+  if (leadRead) preserveRun('lead', leadRead.session.session_id);
+  await budgetGate();
+
+  /*
+   * lead-workflow — PD-ORCH-019 clauses 5 to 7 against a real model: the entry role is asked to write a workflow script that
+   * starts two agents side by side. What the product owes: the `workflow` call is admitted, its agents run as children, and
+   * a later root request carries the workflow's ending. Whether the model's script was right the first time is the model's.
+   */
+  const WORKFLOW_PROMPT = 'Use the workflow tool for this, not delegate: write a script that starts two agents side by side with parallel(), both with persona codebase-analyst. The first reports every function src/todos.js exports. The second reports what README.md says the project is. The script returns both reports. When you are told the workflow ended, reply with two sentences saying what the two agents found.';
+  let wfLog = '';
+  const wfStartedAt = Date.now();
+  try {
+    writeFileSync(agentsFile, withSectionKey(agentsBefore, 'rotaris', 'delegation_strategy', 'lead'));
+    wfLog = await launch('lead-workflow', {
+      ROTARIS_CAPTURE_PROMPT: WORKFLOW_PROMPT,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+    }, EDIT_WAIT_MS + 120_000);
+  } finally {
+    writeFileSync(agentsFile, agentsBefore);
+  }
+  const wfEndedAt = Date.now();
+  const wfRead = readSession();
+  const wfCalls = wfRead === null ? [] : readToolCalls(wfRead.session.session_id);
+  const wfDeadline = overrunReading({ log: wfLog, startedAt: wfStartedAt, endedAt: wfEndedAt, records: readTraffic('lead-workflow'), calls: wfCalls, budgetMs: EDIT_WAIT_MS, recorded: proxy !== null, raise: 'LIVE_RUN_EDIT_WAIT_MS' });
+  if (wfDeadline.outcome === 'window') noted('the lead-workflow run was bounded by the window, not by the product', wfDeadline.detail);
+  else check(wfDeadline.outcome === 'inside', 'the lead-workflow run reached its result inside the wait', wfDeadline.detail);
+  check(wfRead?.session.execution_status === 'completed', 'the lead-workflow run completed', `status ${wfRead?.session.execution_status ?? 'no session'}`);
+  const wfStarts = wfCalls.filter((c) => c.tool_name === 'workflow');
+  const wfAdmitted = wfStarts.filter((c) => c.status === 'ok');
+  const rootName = wfCalls[0]?.agent_name;
+  const wfAgents = new Set(wfCalls.filter((c) => c.agent_name !== rootName).map((c) => c.agent_name));
+  const wfTraffic = readTraffic('lead-workflow').map((r) => String(r.requestBody ?? ''));
+  const offered = wfTraffic.some((b) => b.includes('"name":"workflow"'));
+  const endings = wfTraffic.filter((b) => /Workflow [^\n"]* \(wf_\d+\) (completed|failed|was stopped|was interrupted)/.test(b));
+  // The ending reaches the entry role one of two ways: the run's notice at its turn's end, or its own `status` call, after
+  // which the notice is withdrawn so it is not told twice (`acknowledgeWorkflow`).
+  const readByStatus = wfTraffic.filter((b) => /workflow: [^\n"]* \(wf_\d+\)\\nstate: (completed|failed|stopped|interrupted)/.test(b));
+  const completedTold = wfTraffic.some((b) => /Workflow [^\n"]* \(wf_\d+\) completed/.test(b) || /workflow: [^\n"]* \(wf_\d+\)\\nstate: completed/.test(b));
+  if (RECORD_TRAFFIC) check(offered, 'a lead run\'s entry role was offered the workflow tool (PD-ORCH-019 clause 5)', offered ? 'offered' : 'no recorded request offers it');
+  if (wfStarts.length === 0) noted('the model never called the workflow tool, so clauses 5 to 7 are unasked', `${wfCalls.length} tool calls, none of them workflow`);
+  else {
+    check(wfAdmitted.length > 0, 'a workflow call was admitted (PD-ORCH-019 clause 5)', `${wfAdmitted.length} of ${wfStarts.length} workflow calls ok`);
+    if (RECORD_TRAFFIC) check(endings.length > 0 || readByStatus.length > 0, 'the entry role was told its workflow ended, in a later request (PD-ORCH-019 clause 7)', `${endings.length} request(s) carry the run's notice, ${readByStatus.length} a status result that reads an ending`);
+    // Recorded, not asserted: a role told by the notice may still call `status` afterwards, which reads the same ending.
+    if (RECORD_TRAFFIC && readByStatus.length > 0) noted('how the entry role learned the ending', endings.length === 0 ? 'by its own status call; the notice was withdrawn' : `by the notice (${endings.length} request(s)) and by status`);
+    if (completedTold) check(wfAgents.size >= 2, 'a completed workflow\'s agents ran as children of the run (PD-ORCH-019 clause 6)', `${wfAgents.size} agent(s) besides the root made tool calls: ${[...wfAgents].join(', ')}`);
+    else noted('no workflow of this run completed, so its agents are unasked', 'the script the model wrote failed or was stopped; the ending it was told is in the traffic');
+  }
+  results.scenarios['lead-workflow'] = { status: wfRead?.session.execution_status, workflowCalls: wfStarts.length, admitted: wfAdmitted.length, agents: [...wfAgents], completedTold, deadline: wfDeadline.outcome };
+  if (wfRead) preserveRun('lead-workflow', wfRead.session.session_id);
+  await budgetGate();
+}
+
+// ── 8m. The strategy an `intelligent` run chooses ───────────────────────────────────────────────────────────
+/**
+ * OPT-IN (`--only=intelligent`), a few minutes (R-131): `PD-ORCH-020` against a real model. Two launches under
+ * `rotaris.delegation_strategy: intelligent`. What the product owes is read from the launch log and the session: one
+ * strategy logged per run, chosen and not fallen back to (clauses 1 and 4), its row in the transcript (clause 6), and a
+ * completed run. Which of the three the model chose is the model's, and is recorded, never asserted.
+ */
+if (wanted.includes('intelligent')) {
+  const agentsBefore = readFileSync(agentsFile, 'utf8');
+  const launches = [
+    ['intelligent', 'What does addTodo in src/todos.js return? Answer in one sentence and change nothing.'],
+    ['intelligent-feature', 'Make addTodo in src/todos.js refuse an empty or blank title and add a test for it beside the existing ones. Run the tests when done. Reply with one sentence.'],
+  ];
+  const chosen = {};
+  for (const [name, prompt] of launches) {
+    let runLog = '';
+    try {
+      writeFileSync(agentsFile, withSectionKey(agentsBefore, 'rotaris', 'delegation_strategy', 'intelligent'));
+      cpSync(agentsFile, join(scenarioDir(name), 'agents.yaml'));
+      runLog = await launch(name, {
+        ROTARIS_CAPTURE_PROMPT: prompt,
+        ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+      }, EDIT_WAIT_MS + 120_000);
+    } finally {
+      writeFileSync(agentsFile, agentsBefore);
+    }
+    const read = readSession();
+    const line = /strategy: (lead|single|orchestrator)( \(fallback: [^\n]*)?/.exec(runLog);
+    check(line !== null, `the ${name} run logged the strategy it chose (PD-ORCH-020 clause 1)`, line === null ? 'no `strategy:` line in the launch log' : line[0]);
+    check(line !== null && line[2] === undefined, `the ${name} run's strategy was chosen by the small model, not fallen back to (PD-ORCH-020 clause 4)`, line?.[2] ?? 'chosen');
+    const rows = (read?.rows ?? []).map((r) => String(r.body ?? ''));
+    const row = rows.find((b) => b.startsWith('Strategy chosen: ')) ?? null;
+    check(row !== null && line !== null && row.startsWith(`Strategy chosen: ${line[1]}`), `the ${name} run wrote the row naming the strategy it logged (PD-ORCH-020 clause 6)`, row ?? 'no row');
+    check(read?.session.execution_status === 'completed', `the ${name} run completed`, `status ${read?.session.execution_status ?? 'no session'}`);
+    chosen[name] = line?.[1] ?? null;
+    results.scenarios[name] = { status: read?.session.execution_status, strategy: chosen[name], row };
+    if (read) preserveRun(name, read.session.session_id);
+    await budgetGate();
+  }
+  noted('which strategies the model chose', `question: ${chosen['intelligent'] ?? 'none'}; small feature: ${chosen['intelligent-feature'] ?? 'none'}; the choice is the model's`);
+}
+
 // ── 8i. A symbol rename through the code-intelligence EDIT tier ─────────────────────────────────────────────
 /**
  * OPT-IN (`--only=rename`), a few minutes (fin42, N59): the first live run of a cross-file code-intelligence EDIT call that
@@ -3540,9 +3684,9 @@ if (wanted.includes('empty-answer')) {
 
 // ── 9. The long run ──────────────────────────────────────────────────────────────────────────────────────
 /**
- * OPT-IN (`--only=duress`), one of five: `OPT_IN` also names `cutoff`, `rename`, `plan-open` and `empty-answer` (8e, 8i, 8j
- * and 8k above), and no default run reaches any of them. What only they ask — PD-ORCH-009 revisions 3 to 5 (`empty-answer`),
- * PD-ORCH-015 (`plan-open`), PD-MCP-004's cold rename (`rename`), PD-CONFIG-003's cut-off child (`cutoff`) and the long run
+ * OPT-IN (`--only=duress`), one of seven: `OPT_IN` also names `cutoff`, `rename`, `plan-open`, `empty-answer`, `lead` and `intelligent` (8e,
+ * 8i, 8j, 8k, 8l and 8m above), and no default run reaches any of them. What only they ask — PD-ORCH-009 revisions 3 to 5
+ * (`empty-answer`), PD-ORCH-019 (`lead`), PD-ORCH-020 (`intelligent`), PD-ORCH-015 (`plan-open`), PD-MCP-004's cold rename (`rename`), PD-CONFIG-003's cut-off child (`cutoff`) and the long run
  * here — is measured by a run that names them, never by a default one (acceptance finding L9 at b9e3005,
  * docs/archive/defects/the-live-runs-duress-section-calls-itself-its-only-opt-in-scenario.md).
  *

@@ -1,4 +1,4 @@
-import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, isDelegationTarget, NOT_DELEGATION_TARGETS, ROLE_SPAWN_ALIASES, type BuiltInRoleName, type IntentGrant, type PermissionPreset } from '@rotaris/contracts';
+import { BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, isDelegationTarget, NOT_DELEGATION_TARGETS, ROLE_SPAWN_ALIASES, type BuiltInRoleName, type IntentGrant, type PermissionPreset, type RunOverride } from '@rotaris/contracts';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 /**
  * Decision 2 of the plan: REQ-ORCH-028's thirteen roles and the two aliases as a BUILT-IN table, each
@@ -204,6 +204,14 @@ const ORCHESTRATOR_COORDINATING = (routing: string): string => `You are the orch
  * coordinates (`Run.todoListOwed`); under `single` it stays instruction, the role being the worker (REQ-ORCH-025).
  */
 export const DIRECT_WORK_INSTRUCTION = 'For this run you hold the tools to read and write files and run commands yourself: do the work with them rather than handing it to a specialist, keep a todo list current where the work spans more than one step, and finish by answering the user plainly with what was done.';
+/**
+ * PD-ORCH-019 clause 1: what the entry role of a `lead` run is told. It is the worker, as under `single`, and it keeps
+ * `delegate`, so the text names both and says which is the default.
+ */
+export const LEAD_INSTRUCTION = 'For this run you hold the tools to read and write files and run commands yourself, and the delegate tool beside them. Do the work yourself by default. Hand a part to a specialist only where that helps: independent parts that can run side by side, or a part worth keeping out of your own conversation, such as a wide search. Keep a todo list current where the work spans more than one step, and finish by answering the user plainly with what was done.';
+// It opens as the role's other two prompts do: the role is still the orchestrator, and readers of a request (the scripted
+// client, the live run's harness) know the root by these words.
+const ORCHESTRATOR_LEAD = `You are the orchestrator. ${LEAD_INSTRUCTION} Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`;
 const ORCHESTRATOR_DIRECT_WORK = `You are the orchestrator. ${DIRECT_WORK_INSTRUCTION} Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`;
 
 /**
@@ -217,7 +225,9 @@ const ORCHESTRATOR_DIRECT_WORK = `You are the orchestrator. ${DIRECT_WORK_INSTRU
  * two simplest intents while its prompt said it did not modify files or run commands, and the model spent its first turn
  * on the contradiction before using them (14.5 s of a 32 s run, the default live run at `27a5127`, finding G2).
  */
-export function entryInstructionsFor(systemPrompt: string, grant: IntentGrant | null, role: Pick<Persona, 'coordinatorOnly'> | null): string {
+export function entryInstructionsFor(systemPrompt: string, grant: IntentGrant | null, role: Pick<Persona, 'coordinatorOnly'> | null, override: RunOverride | null = null): string {
+  // PD-ORCH-019 clause 1: under `lead` every entry role is told it works and may delegate, whatever its persona's flag.
+  if (override === 'lead') return systemPrompt === BUILT_IN_ORCHESTRATOR_PROMPT ? ORCHESTRATOR_LEAD : systemPrompt === '' ? LEAD_INSTRUCTION : `${systemPrompt}\n\n${LEAD_INSTRUCTION}`;
   if (grant !== 'direct-work' || role?.coordinatorOnly !== true) return systemPrompt;
   if (systemPrompt === BUILT_IN_ORCHESTRATOR_PROMPT) return ORCHESTRATOR_DIRECT_WORK;
   return systemPrompt === '' ? DIRECT_WORK_INSTRUCTION : `${systemPrompt}\n\n${DIRECT_WORK_INSTRUCTION}`;
@@ -272,7 +282,7 @@ export const SWARM_PLAN_HELD_NOTE = 'While this run\'s plan awaits approval no c
  * `swarm` text on any turn, the turn the plan gate holds and a continuation included. Until 2026-10-07 this was OQ-205's
  * reading while it was open; the ruling confirmed it as built.
  */
-export function runOverrideLayer(override: 'single' | 'swarm' | null, grant: IntentGrant | null, role: Pick<Persona, 'tools'> | null, planHeld = false): string {
+export function runOverrideLayer(override: RunOverride | null, grant: IntentGrant | null, role: Pick<Persona, 'tools'> | null, planHeld = false): string {
   if (override !== 'swarm' || grant === 'direct-work' || role?.tools.includes('delegate') !== true) return '';
   return planHeld ? `${SWARM_INSTRUCTION}\n\n${SWARM_PLAN_HELD_NOTE}` : SWARM_INSTRUCTION;
 }

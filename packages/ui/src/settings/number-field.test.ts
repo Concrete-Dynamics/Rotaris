@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ConfigSnapshot } from '@rotaris/contracts';
 import { RuntimeSettings, type ConfigSettingsProps } from './ConfigSettings.js';
-import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, COMPRESSION_THRESHOLD_RANGE, DEPTH_CAP_RANGE, FAN_OUT_RANGE, IMPROVEMENT_TIMEOUT_SECONDS, ITERATION_CAP_RANGE, pendingFrom, type NumberRange } from './config-state.js';
+import { CHILD_TIMEOUT_MINUTES, clampedNumberCommit, clampedNumberEdit, COMPRESSION_THRESHOLD_RANGE, FAN_OUT_RANGE, IMPROVEMENT_TIMEOUT_SECONDS, ITERATION_CAP_RANGE, pendingFrom, type NumberRange } from './config-state.js';
 import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
 
 /**
@@ -14,7 +14,8 @@ import { DICTATION_CONFIG_DEFAULT } from '@rotaris/contracts';
  * (`docs/archive/defects/a-settings-number-field-clamps-every-keystroke-so-some-values-cannot-be-typed.md`).
  */
 const FIELDS: readonly (readonly [string, NumberRange])[] = [
-  ['max-depth', DEPTH_CAP_RANGE], ['max-active', FAN_OUT_RANGE], ['child-timeout', CHILD_TIMEOUT_MINUTES],
+  // Depth cap is a three-step slider since PD-ORCH-019 clause 4 and is no number field (`depth-slider.test.ts`).
+  ['max-active', FAN_OUT_RANGE], ['child-timeout', CHILD_TIMEOUT_MINUTES],
   ['improvement-timeout', IMPROVEMENT_TIMEOUT_SECONDS], ['threshold', COMPRESSION_THRESHOLD_RANGE], ['iterations', ITERATION_CAP_RANGE],
 ];
 
@@ -42,9 +43,9 @@ describe('a Settings number field — REQ-CONFIG-322, REQ-CONFIG-325, PD-CONFIG-
     }
   });
 
-  it('the cases the note names: 70 into Compression threshold, 4 into Depth cap, 45 into Per-agent timeout', () => {
+  it('the cases the note names: 70 into Compression threshold, 4 into a 1-to-12 range (Depth cap\'s until PD-ORCH-019), 45 into Per-agent timeout', () => {
     expect(typeInto(COMPRESSION_THRESHOLD_RANGE, '70')).toEqual([70]);
-    expect(typeInto(DEPTH_CAP_RANGE, '4')).toEqual([4]);
+    expect(typeInto({ min: 1, max: 12 }, '4')).toEqual([4]);
     expect(typeInto(CHILD_TIMEOUT_MINUTES, '45')).toEqual([4, 45]);
   });
 
@@ -60,7 +61,7 @@ describe('a Settings number field — REQ-CONFIG-322, REQ-CONFIG-325, PD-CONFIG-
     }
     expect(clampedNumberCommit('9999', ITERATION_CAP_RANGE)).toBe(500);
     expect(clampedNumberCommit('', COMPRESSION_THRESHOLD_RANGE)).toBe(50);
-    expect(clampedNumberCommit('2.5', DEPTH_CAP_RANGE)).toBe(3);
+    expect(clampedNumberCommit('2.5', { min: 1, max: 12 })).toBe(3);
   });
 
   it('every Runtime number field is drawn as the clamped field, with its range on the input', () => {

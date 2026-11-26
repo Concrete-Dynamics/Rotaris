@@ -56,6 +56,8 @@ export const VOCABULARY = {
   approval_withdrawn: 'PD-ORCH-014', question_withdrawn: 'PD-ORCH-014', run_pause_requested: 'PD-ORCH-014',
   run_pause_refused: 'PD-ORCH-014', run_continuation_intent: 'PD-ORCH-014', loop_supervisor_activation: 'PD-ORCH-014',
   context_selection: 'PD-ORCH-014', notice: 'PD-ORCH-014',
+  // PD-ORCH-020: the strategy an `intelligent` run chose, written before its pre-flight.
+  run_strategy_chosen: 'PD-ORCH-020',
   waiting_on_tools: 'PD-ORCH-014', stall_recovered: 'PD-ORCH-014', corrective_message: 'PD-ORCH-014',
   // PD-CHAT-009 (OQ-157; R-071): the chat domain's words for the user's chat controls.
   steering_submitted: 'PD-CHAT-009', steering_injected: 'PD-CHAT-009', steering_not_delivered: 'PD-CHAT-009',

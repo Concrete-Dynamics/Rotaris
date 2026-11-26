@@ -39,7 +39,7 @@ export interface ScriptedCallRecord {
  * It answers the shape a real client answers (`ModelClient`) from a STEP LIST read out of the environment:
  * the script variable (`…_SCRIPT`) names the orchestrator's steps, comma-separated, one per model call, and
  * the child script variable (`…_CHILD_SCRIPT`) every child's. `glob`, `read`, `write`, `writeinfer`, `rm`, `git`, `push`, `edit`, `todo`, `plan`, `planopen`, `plandone`, `plan:<n>`, `done`, `donereplace` request a tool
- * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `readfile:<path>` a `read_file` of that path (PD-CHAT-016); `configure:<key>=<json>` a `configure` set and `configure:<key>` its read (PD-CONFIG-014); `advisor:<question>` a consult of the advisor (PD-TOOLS-022); `continue:<persona>:<name>` a delegation taking up the newest continuation offer
+ * call; `silent` ends the call with neither text nor a tool call (PD-ORCH-009's silent root); `fetch:<url>` a fetch of that URL; `readfile:<path>` a `read_file` of that path (PD-CHAT-016); `workflow:<name>` a `workflow` start of a fixed two-agent script (PD-ORCH-019); `configure:<key>=<json>` a `configure` set and `configure:<key>` its read (PD-CONFIG-014); `advisor:<question>` a consult of the advisor (PD-TOOLS-022); `continue:<persona>:<name>` a delegation taking up the newest continuation offer
  * the conversation was told (`offeredTaskId`, PD-ORCH-004 revisions 3 and 4); `wait:<ms>` holds the call that long ON THE CLOCK PORT and then
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
@@ -367,7 +367,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
     async *stream(req: ModelRequest) {
       const credential = await req.resolveCredential();
       const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
-      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You condense an agent conversation/.test(system) ? 'compressor' : /^You classify a user request/.test(system) ? 'classifier' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
+      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You condense an agent conversation/.test(system) ? 'compressor' : /^You classify a user request/.test(system) ? 'classifier' : /^You choose how a software agent system/.test(system) ? 'strategy' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
       call += 1;
       // Part S: every child instance follows the child script from its own first call (keyed by its TASK line), so a fan-out of
       // three children each takes the same steps; a single child reads exactly as before.
@@ -399,6 +399,15 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         const text = want === 'garbage' ? 'lol no' : want === 'reject' ? 'small_feature\nfrom the text rung' : req.output === undefined ? `${want}\nscripted` : JSON.stringify({ intent: want, confidence: 0.75, reason: 'scripted classification' });
         yield ok<StreamPart>({ kind: 'text', delta: text });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 12, output: 8 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
+      if (who === 'strategy') {
+        // ROTARIS_STRATEGY_SCRIPT: lead | single | orchestrator | swarm (a name never taken) | garbage — verification only (PD-ORCH-020).
+        const want = ((__ROTARIS_SEAMS__ ? process.env['ROTARIS_STRATEGY_SCRIPT'] : undefined) ?? 'lead').trim();
+        const text = want === 'garbage' ? 'lol no' : req.output === undefined ? `${want}\nscripted` : JSON.stringify({ strategy: want, reason: 'scripted choice' });
+        yield ok<StreamPart>({ kind: 'text', delta: text });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 10, output: 6 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
         return;
       }
@@ -881,6 +890,8 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         : step.startsWith('configure:') ? configureStep(step.slice('configure:'.length))
         // advisor:<question> — a consult of the advisor with that question (PD-TOOLS-022).
         : step.startsWith('advisor:') ? { name: 'advisor', args: { question: step.slice('advisor:'.length) } }
+        // PD-ORCH-019: `workflow:<name>` starts a workflow whose script runs two agents one after another and returns both reports.
+        : step.startsWith('workflow:') ? { name: 'workflow', args: { action: 'start', name: step.slice('workflow:'.length), script: "await phase('First'); const a = await agent('TASK: workflow step one', { name: 'wf-one' }); await phase('Second'); const b = await agent('TASK: workflow step two', { name: 'wf-two' }); return { a, b };" } }
         : TOOL_STEPS[step]);
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
         yield ok<StreamPart>({ kind: 'text', delta: `Calling ${tool.name}. ` });

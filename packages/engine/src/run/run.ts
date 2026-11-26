@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow, ChildRow, StoreDal } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import { AUTO_STRATEGY_FALLBACK, DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, runOverrideOfChoice, type StrategyChoice, type ApprovalOption, type ApprovalPayload, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord, type RunOverride, type WorkflowStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -287,7 +287,14 @@ export interface RunDeps {
    * through `coordinating` and the grant; `swarm` changes the entry role's instruction text only (`runOverrideLayer`).
    * Absent means none.
    */
-  readonly runOverride?: 'single' | 'swarm' | null | undefined;
+  readonly runOverride?: RunOverride | null | undefined;
+  /**
+   * PD-ORCH-020: present under `intelligent`. Asked once as the run starts, before the pre-flight and before any tool port
+   * exists; its answer becomes the run's override, and `coordinating` follows from it. A raise leaves the run on `lead`.
+   */
+  readonly chooseStrategy?: ((signal: AbortSignal) => Promise<StrategyChoice>) | undefined;
+  /** PD-ORCH-020: told the choice before the pre-flight runs, so whoever builds the tool ports reads the chosen override. */
+  readonly onStrategyChosen?: ((choice: StrategyChoice) => void) | undefined;
   /** REQ-ORCH-085: the host told the run paused at the limit, with the count and the limit. */
   readonly onPaused?: ((info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
   /**
@@ -502,6 +509,10 @@ export class Run {
    * showing as the intent in effect while the new one is decided.
    */
   private classifying = false;
+  /** REQ-ORCH-025: the override in effect. The launch's, until PD-ORCH-020's choice replaces it as the run starts. */
+  private override: RunOverride | null = null;
+  /** REQ-ORCH-029: whether the entry role coordinates; `deps.coordinating` until PD-ORCH-020's choice decides it. */
+  private coordinates = true;
   get intentClassifying(): boolean { return this.classifying; }
   /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
   private pauseRequested = false;
@@ -644,6 +655,8 @@ export class Run {
   private entrySwitchPending = false;
 
   constructor(private readonly deps: RunDeps) {
+    this.override = deps.runOverride ?? null;
+    this.coordinates = deps.coordinating !== false;
     this.sessionId = deps.sessionId;
     this.rootName = deps.config.persona;
     this.hooks = deps.hooks ?? null;
@@ -1047,7 +1060,7 @@ export class Run {
       // REQ-SESSION-087, in order and observably. PD-ORCH-005 clause 17: the todo with it, so a continue's message task
       // survives a process that dies during the pre-flight, as the message itself does in the resumed root's record.
       // REQ-ORCH-014: set before the save that publishes `starting`, so that snapshot already reads `classifying`.
-      this.classifying = this.deps.preflight !== undefined && this.deps.preflightCarries !== true;
+      this.classifying = this.deps.chooseStrategy !== undefined || (this.deps.preflight !== undefined && this.deps.preflightCarries !== true);
       writer.save('starting', { todo: this.todoJson() });
       this.startedAt = clocks.monotonic.now();
       /*
@@ -1057,7 +1070,20 @@ export class Run {
        */
       const runStartedAt = this.deps.readSession()?.updated_at ?? null;
       // REQ-ORCH-005: the intent is in effect before the first iteration; while it is being decided the session reads `classifying`.
-      if (this.deps.preflight) {
+      // PD-ORCH-020: under `intelligent` the strategy is chosen first, from the request alone; everything below reads it.
+      if (this.deps.chooseStrategy) {
+        let choice: StrategyChoice;
+        try { choice = await this.deps.chooseStrategy(this.abort.signal); } catch (cause) { choice = { strategy: AUTO_STRATEGY_FALLBACK, reason: `the choice raised: ${String(cause)}`, fallback: true }; }
+        this.override = runOverrideOfChoice(choice.strategy);
+        this.coordinates = choice.strategy === 'orchestrator';
+        this.deps.onStrategyChosen?.(choice);
+        const why = choice.kept === true ? ' (kept from the previous run)' : choice.fallback ? ` (not chosen: ${choice.reason})` : choice.reason === '' ? '' : ` (${choice.reason})`;
+        writer.appendTimeline('run_strategy_chosen', 'rotaris', `Strategy chosen: ${choice.strategy}${why}.`, { strategy: choice.strategy, reason: choice.reason, fallback: choice.fallback, kept: choice.kept === true });
+        writer.appendRow('system', `Strategy chosen: ${choice.strategy}${why}`, true);
+        if (this.override === 'lead') this.classifying = false;
+      }
+      // PD-ORCH-019 clause 2: a `lead` run is never classified, whether `lead` was configured or chosen.
+      if (this.deps.preflight && this.override !== 'lead') {
         try { this.preflight = await this.deps.preflight(this.abort.signal); } catch (cause) { this.deps.warn(`the pre-flight raised and the run continues on the fallback intent: ${String(cause)}`); }
         finally { this.classifying = false; }
       }
@@ -1195,6 +1221,8 @@ export class Run {
 
   /** REQ-SESSION-114 / REQ-ORCH-014: a continuation's intent row, with the carried-over suffix where it applies. */
   private appendIntentRow(p: Preflight | null): void {
+    // PD-ORCH-019 clause 2: a `lead` run is never classified, so it has no intent to say, at a launch or a continuation.
+    if (this.override === 'lead') return;
     const intent = p?.intent ?? NO_PREFLIGHT_INTENT;
     this.deps.writer.appendRow('system', `Intent classified: ${intent.category}${intent.carried_over ? ' (continued from previous run)' : ''}`, true);
   }
@@ -1885,7 +1913,7 @@ export class Run {
      * a resumed iteration's carried intent, never the classification a continue's message brought for the next one —
      * so a resumed coordinator's instructions agree with the carried tools and do not change partway through it.
      */
-    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflightInEffect?.grant ?? null, entryPersona ?? null);
+    const entryInstructions = entryInstructionsFor(config.systemPrompt, this.preflightInEffect?.grant ?? null, entryPersona ?? null, this.override);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
     let rootDetached = false;
     /*
@@ -1921,7 +1949,7 @@ export class Run {
       // REQ-ORCH-025: the run override's layer, which `runTurn` places after everything else, the MCP section included
       // (`withRunOverrideLayer`); pointed at the plan while the gate holds (REQ-ORCH-153). A run the mapping grants the
       // direct-work bundle gets none (PD-ORCH-006 rev 3, OQ-205 as ruled, R-072).
-      runOverrideLayer: runOverrideLayer(this.deps.runOverride ?? null, this.preflightInEffect?.grant ?? null, entryPersona ?? null, this.planHeld),
+      runOverrideLayer: runOverrideLayer(this.override, this.preflightInEffect?.grant ?? null, entryPersona ?? null, this.planHeld),
       model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       // PD-ORCH-001: no supervision while the plan gate holds the run. The hold withholds every writing tool,
@@ -2486,7 +2514,7 @@ export class Run {
 
   /** REQ-ORCH-029: the root's own plan while the entry role acts as coordinator; none under `single` (REQ-ORCH-025). */
   private coordinatorPlan(): AgentTodoDocument | null {
-    return this.deps.coordinating === false ? null : this.agentTodo;
+    return !this.coordinates ? null : this.agentTodo;
   }
 
   /** The planner task the current iteration works on, as the todo holds it; null outside an iteration. */
@@ -2594,7 +2622,7 @@ export class Run {
    * calls neither count nor are refused), none outside an iteration.
    */
   private workItemTask(): Task | null {
-    if (this.deps.coordinating === false || this.planHeld) return null;
+    if (!this.coordinates || this.planHeld) return null;
     return this.iterationTaskRecord();
   }
 
@@ -2623,7 +2651,7 @@ export class Run {
    * said once per run, while the entry role coordinates, so a persona configured without the tool is not deadlocked silently.
    */
   todoListUnavailable(): void {
-    if (this.deps.coordinating === false || this.todoListUnavailableTold) return;
+    if (!this.coordinates || this.todoListUnavailableTold) return;
     this.todoListUnavailableTold = true;
     this.deps.warn(`${this.rootName} holds no todo tool, so REQ-ORCH-029's todo list cannot be kept and no work item waits for one on this run`);
   }
@@ -3059,6 +3087,19 @@ export class Run {
     for (const p of this.ports) out.push(...(p.pendingApprovals?.() ?? []));
     if (this.deps.tools && !this.ports.has(this.deps.tools)) out.push(...(this.deps.tools.pendingApprovals?.() ?? []));
     return out;
+  }
+  /** PD-ORCH-019 clause 9: every agent's workflows, for the whole-session update. */
+  workflows(): WorkflowStatus[] {
+    const out: WorkflowStatus[] = [];
+    for (const p of this.ports) out.push(...(p.workflows?.() ?? []));
+    if (this.deps.tools && !this.ports.has(this.deps.tools)) out.push(...(this.deps.tools.workflows?.() ?? []));
+    return out;
+  }
+  /** PD-ORCH-019 clause 9: stops workflow `id` of the agent named `agent`; false where no port of that agent runs one of that id. */
+  stopWorkflow(agent: string, id: string): boolean {
+    const ports = [...this.ports, ...(this.deps.tools && !this.ports.has(this.deps.tools) ? [this.deps.tools] : [])];
+    for (const p of ports) if (p.workflows?.().some((w) => w.agent === agent && w.id === id) === true && p.stopWorkflow?.(id) === true) return true;
+    return false;
   }
   /** REQ-CHAT-097: every conversation's pending prompt, for the whole-session update. */
   pendingQuestions(): QuestionPrompt[] {

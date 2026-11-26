@@ -1,4 +1,4 @@
-import { INTENT_CATEGORIES, isIntentCategory, type IntentCategory, type IntentGrant } from '@rotaris/contracts';
+import { INTENT_CATEGORIES, isIntentCategory, type IntentCategory, type IntentGrant, type RunOverride } from '@rotaris/contracts';
 import type { IntentMappingRead } from '@rotaris/config';
 
 /**
@@ -36,7 +36,7 @@ export function resolveIntentMapping(read: IntentMappingRead): ResolvedIntentMap
   return { mapping, source: 'file', warning: '' };
 }
 
-export function intentGrant(intent: IntentCategory, override: 'single' | 'swarm' | null, mapping: Readonly<Record<IntentCategory, IntentGrant>>): IntentGrant {
-  if (override === 'single') return 'direct-work';
+export function intentGrant(intent: IntentCategory, override: RunOverride | null, mapping: Readonly<Record<IntentCategory, IntentGrant>>): IntentGrant {
+  if (override === 'single' || override === 'lead') return 'direct-work';
   return mapping[intent] ?? 'none';
 }

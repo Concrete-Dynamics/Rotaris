@@ -62,7 +62,7 @@ describe('a Runtime number field takes a value typed over the same clamped digit
 
   it('every clamped field commits from the input event and none from React\'s change event, which skips an unchanged value', () => {
     draw({});
-    for (const id of ['max-depth', 'max-active', 'child-timeout', 'improvement-timeout', 'threshold', 'iterations']) {
+    for (const id of ['max-active', 'child-timeout', 'improvement-timeout', 'threshold', 'iterations']) {
       const field = handed.get(id);
       expect(field, id).toBeDefined();
       expect(typeof field!['onInput'], id).toBe('function');

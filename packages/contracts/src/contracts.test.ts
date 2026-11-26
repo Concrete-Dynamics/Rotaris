@@ -95,8 +95,9 @@ describe('contracts — no credential and no diagnostics-bound content in any pa
 
 describe('contracts — the control channel (ADR-0010, REQ-MONITOR-005/013)', () => {
   it('names exactly twenty-one operations and exactly two of them carry a string value', () => {
-    expect(CONTROL_OPS).toHaveLength(22);
-    expect(new Set(CONTROL_OPS).size).toBe(22);
+    // REQ-MONITOR-004's twenty-two, and PD-ORCH-019's `stopWorkflow`.
+    expect(CONTROL_OPS).toHaveLength(23);
+    expect(new Set(CONTROL_OPS).size).toBe(23);
     expect([...CONTROL_OPS_WITH_VALUE].sort()).toEqual(['createQueuedPrompt', 'submitSteeringPrompt']);
   });
   it('arguments are limited to text, numbers, booleans and simple collections — a nested object is refused', () => {
@@ -140,14 +141,26 @@ describe('contracts — the presentation mapping (REQ-NOTIFY-049, REQ-NOTIFY-050
   });
 });
 
+describe('contracts — the depth steps (PD-ORCH-019 clause 4)', () => {
+  it('1 and 2 are limits, and 3 or more is no limit', async () => {
+    const c = await import('./config.js');
+    expect(c.DEPTH_STEPS).toEqual([1, 2, 3]);
+    expect([1, 2, 3, 12].map((n) => c.isUnlimitedDepth(n))).toEqual([false, false, true, true]);
+    expect([1, 2].map((n) => c.enforcedDepth(n))).toEqual([1, 2]);
+    expect(c.enforcedDepth(3)).toBe(Number.MAX_SAFE_INTEGER);
+    expect([1, 2, 3, 9].map((n) => c.depthLimitLabel(n))).toEqual(['1', '2', 'no limit', 'no limit']);
+  });
+});
+
 describe('contracts — tools vocabularies', () => {
   it('REQ-TOOLS-001/028/041/047: the sets are exactly as fixed and the ranks total', async () => {
     const t = await import('./tools.js');
-    // REQ-TOOLS-001's nineteen, PD-CONFIG-014's `configure` the twentieth and PD-TOOLS-022's `advisor` the twenty-first.
-    expect(t.PUBLIC_TOOL_NAMES).toHaveLength(21);
-    expect(new Set(t.PUBLIC_TOOL_NAMES).size).toBe(21);
+    // REQ-TOOLS-001's nineteen, PD-CONFIG-014's `configure` the twentieth, PD-TOOLS-022's `advisor` the twenty-first and PD-ORCH-019's `workflow` the twenty-second.
+    expect(t.PUBLIC_TOOL_NAMES).toHaveLength(22);
+    expect(new Set(t.PUBLIC_TOOL_NAMES).size).toBe(22);
     expect(t.PUBLIC_TOOL_NAMES).toContain('configure');
     expect(t.PUBLIC_TOOL_NAMES).toContain('advisor');
+    expect(t.PUBLIC_TOOL_NAMES).toContain('workflow');
     expect(t.DECISION_SOURCES).toHaveLength(12);
     // PD-TOOLS-011 (OQ-54): the audit's vocabularies are the policy's with the two members of a user's own terminal action.
     expect(t.AUDIT_DECISIONS).toEqual(['allow', 'ask', 'deny', 'user-input']);

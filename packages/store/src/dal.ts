@@ -350,6 +350,35 @@ export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'r
  * cycle is not an iteration, so this is the record that names its root once its run is gone: the canonical instance name
  * its reads and publishes record, and the name its rows carry.
  */
+/** v37 (PD-ORCH-019 clause 8): one workflow an agent started. */
+export interface WorkflowRow {
+  session_id: string;
+  agent: string;
+  workflow_id: string;
+  name: string;
+  script: string;
+  state: string;
+  phase: string;
+  agents_started: number;
+  agents_ended: number;
+  calls: number;
+  result: string;
+  /** 1 once the agent that started it has been told how it ended. */
+  notified: number;
+  started_at: string;
+}
+/** v37: one call of a workflow's journal; `outcome` is JSON, null until the call was answered. */
+export interface WorkflowCallRow {
+  session_id: string;
+  agent: string;
+  workflow_id: string;
+  seq: number;
+  kind: string;
+  payload: string;
+  task_id: string | null;
+  outcome: string | null;
+}
+
 export interface PlanRootRow {
   readonly session_id: string;
   readonly root_task_id: string;
@@ -535,6 +564,17 @@ export class StoreDal {
       // v33: the plan cycle's root's own count, raised with the total; a row recorded before v33 (NULL) stays unknown.
       countPlanRootCalls: db.prepare('UPDATE plan_roots SET tool_calls = tool_calls + ? WHERE session_id = ? AND root_task_id = ? AND tool_calls IS NOT NULL'),
       planRootsOf: db.prepare('SELECT * FROM plan_roots WHERE session_id = ? ORDER BY opened_at, root_task_id'),
+      // PD-ORCH-019 clause 8 (v37): a workflow's row and its journal. Every read is a primary key's prefix.
+      upsertWorkflow: db.prepare(`INSERT INTO workflows (session_id, agent, workflow_id, name, script, state, phase, agents_started, agents_ended, calls, result, notified, started_at)
+        VALUES (@session_id, @agent, @workflow_id, @name, @script, @state, @phase, @agents_started, @agents_ended, @calls, @result, @notified, @started_at)
+        ON CONFLICT (session_id, agent, workflow_id) DO UPDATE SET state = excluded.state, phase = excluded.phase, agents_started = excluded.agents_started, agents_ended = excluded.agents_ended, calls = excluded.calls, result = excluded.result, notified = excluded.notified`),
+      workflowsOf: db.prepare('SELECT * FROM workflows WHERE session_id = ? ORDER BY started_at, agent, workflow_id'),
+      workflowsOfAgent: db.prepare('SELECT * FROM workflows WHERE session_id = ? AND agent = ? ORDER BY started_at, workflow_id'),
+      upsertWorkflowCall: db.prepare(`INSERT INTO workflow_calls (session_id, agent, workflow_id, seq, kind, payload, task_id, outcome)
+        VALUES (@session_id, @agent, @workflow_id, @seq, @kind, @payload, @task_id, @outcome)
+        ON CONFLICT (session_id, agent, workflow_id, seq) DO UPDATE SET kind = excluded.kind, payload = excluded.payload, task_id = COALESCE(excluded.task_id, workflow_calls.task_id), outcome = excluded.outcome`),
+      workflowCallsOf: db.prepare('SELECT * FROM workflow_calls WHERE session_id = ? AND agent = ? AND workflow_id = ? ORDER BY seq'),
+      deleteWorkflowCallsFrom: db.prepare('DELETE FROM workflow_calls WHERE session_id = ? AND agent = ? AND workflow_id = ? AND seq >= ?'),
       // REQ-ORCH-087 / REQ-SESSION-110: the pause recorded with its count; the resolution clears it in the same act that writes the status.
       setPause: db.prepare('UPDATE sessions SET execution_status = ?, paused_at_count = ?, message_limit = ?, updated_at = ? WHERE session_id = ?'),
       // REQ-ORCH-153/154 (v17): the plan cycle record, and the two session columns that hold a gate open across a restart.
@@ -1067,6 +1107,27 @@ export class StoreDal {
     return this.stmts['insertPlanRoot']!.run(row).changes === 1;
   }
   /** v30: the session's plan cycles' roots, in the order they started. */
+  /** PD-ORCH-019 clause 8: a workflow's row, written at its start and at each change; the script and the name are its start's. */
+  upsertWorkflow(row: WorkflowRow): void {
+    this.stmts['upsertWorkflow']!.run(row);
+  }
+  workflowsOf(id: SessionId): WorkflowRow[] {
+    return this.stmts['workflowsOf']!.all(id) as WorkflowRow[];
+  }
+  workflowsOfAgent(id: SessionId, agent: string): WorkflowRow[] {
+    return this.stmts['workflowsOfAgent']!.all(id, agent) as WorkflowRow[];
+  }
+  /** PD-ORCH-019 clause 8: one journal entry. A later write for the same call keeps the child task an earlier one named. */
+  upsertWorkflowCall(row: WorkflowCallRow): void {
+    this.stmts['upsertWorkflowCall']!.run(row);
+  }
+  workflowCallsOf(id: SessionId, agent: string, workflowId: string): WorkflowCallRow[] {
+    return this.stmts['workflowCallsOf']!.all(id, agent, workflowId) as WorkflowCallRow[];
+  }
+  /** PD-ORCH-019 clause 8: a replay diverged at `seq`; the entries from there on no longer describe the script. */
+  deleteWorkflowCallsFrom(id: SessionId, agent: string, workflowId: string, seq: number): void {
+    this.stmts['deleteWorkflowCallsFrom']!.run(id, agent, workflowId, seq);
+  }
   planRootsOf(id: SessionId): PlanRootRow[] {
     return this.stmts['planRootsOf']!.all(id) as PlanRootRow[];
   }

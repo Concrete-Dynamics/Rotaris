@@ -10,8 +10,10 @@ import { nodeClocks } from '@rotaris/platform';
 import { checkEmptyPlace, establishInEmptyPlace, firstStoreSibling, legacyFirstStoreSibling, plannedAsideName, CutRestoreError, recoverCutRestore, RestorePendingError, restoreJournal, StorePlaceEmptyError, writeRestoreJournal } from './index.js';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, FILE_STAMP_LENGTH, openStore, openStoreForInspection, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, storePathLimit, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
-/** PD-LIBRARY-007: what v36 added, undone before v35's so a test that lowers `user_version` below 36 can climb it again. */
-const UNDO_V36 = 'ALTER TABLE artifacts DROP COLUMN answer;';
+/** PD-ORCH-019 clause 8: what v37 added, undone so a test that lowers `user_version` below 37 can climb it again. */
+const UNDO_V37 = 'DROP TABLE workflow_calls; DROP TABLE workflows;';
+/** PD-LIBRARY-007: what v36 added, undone before v35's so a test that lowers `user_version` below 36 can climb it again. v37's goes first. */
+const UNDO_V36 = `${UNDO_V37} ALTER TABLE artifacts DROP COLUMN answer;`;
 /** PD-ORCH-005 clause 9 / REQ-SESSION-031: what v35 added, undone before v34's so a test that lowers `user_version` below 35 can climb it again. v36's goes first. */
 const UNDO_V35 = `${UNDO_V36} ALTER TABLE sessions DROP COLUMN pending_questions;`;
 /** PD-TOOLS-006 revision 6 (OQ-220): what v34 added, undone before v33's so a test that lowers `user_version` below 34 can climb it again. v35's goes first. */
@@ -51,7 +53,12 @@ const clocks = nodeClocks();
 let root: string;
 let ws: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'rotaris-store-')); ws = mkdtempSync(join(tmpdir(), 'rotaris-ws-')); });
-afterEach(() => { rmSync(root, { recursive: true, force: true }); rmSync(ws, { recursive: true, force: true }); });
+/**
+ * Windows can hold a just-closed store open for a moment (an indexer or a scanner): the removal retries, and a
+ * scratch directory that still refuses is left to the temp folder rather than failing the test it did not test.
+ * The same shape `packages/workspace/src/git/checkpoints.test.ts` and `worktrees.test.ts` use.
+ */
+afterEach(() => { for (const dir of [root, ws]) { try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* held briefly on Windows; left to the temp folder */ } } });
 
 /** Hash a directory's content, excluding -wal/-shm which any open connection creates (D8). */
 function treeHash(dir: string): string {
@@ -894,7 +901,7 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
 describe('store — D11: a restore refuses before step 1 where a store it would create crosses the engine\'s path limit (ADR-0058 consequence 18)', () => {
   const id = mintWorkspaceId('00000000000000000000000000000012');
   const made: string[] = [];
-  afterEach(() => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); });
+  afterEach(() => { for (const d of made.splice(0)) { try { rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* held briefly on Windows; left to the temp folder */ } } });
   /** A workspaces root whose live `workspace.db` path is exactly `dbLength` characters long. */
   const rootFor = (dbLength: number): string => {
     const base = realpathSync(mkdtempSync(join(tmpdir(), 'rotaris-long-')));
@@ -1506,8 +1513,8 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     // backend a confined run used (REQ-SANDBOX-121); v32 the calls of the plan cycle's root under way that the total holds
     // (REQ-MONITOR-102, OQ-116); v33 each plan cycle's root's own count, kept past its release (REQ-SESSION-140); v34 the todo
     // item a delegation serves (PD-TOOLS-006 revision 6); v35 the pending questions' mirror (PD-ORCH-005 clause 9, REQ-SESSION-031).
-    // v36 the answer a child ended on, on the artifact of its report (PD-LIBRARY-007).
-    expect(CURRENT_SCHEMA_VERSION).toBe(36);
+    // v36 the answer a child ended on, on the artifact of its report (PD-LIBRARY-007); v37 a workflow and its journal (PD-ORCH-019 clause 8).
+    expect(CURRENT_SCHEMA_VERSION).toBe(37);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]', suppress_auto_context: 0, attach_artifacts: '[]', inherited_context_block: '', todo_item: null });
@@ -1651,6 +1658,9 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
       dal.insertChild({ session_id: sid, task_id: 'bg_00000001', canonical_name: 'c', given_name: 'c', persona: 'p', state: 'queued', parent_id: 'root', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
       dal.enqueueSlot(sid, 'm', 'bg_00000001');
       dal.insertQueuedPrompt(sid, 'q1', 'later', 't');
+      // v37 (PD-ORCH-019 clause 8): a workflow and its journal belong to their session.
+      dal.upsertWorkflow({ session_id: sid, agent: 'a', workflow_id: 'wf_1', name: 'n', script: 's', state: 'running', phase: '', agents_started: 0, agents_ended: 0, calls: 0, result: '', notified: 0, started_at: 't' });
+      dal.upsertWorkflowCall({ session_id: sid, agent: 'a', workflow_id: 'wf_1', seq: 0, kind: 'agent', payload: '{}', task_id: null, outcome: null });
       dal.insertCheckpoint({ session_id: sid, sequence: 1, ref: 'refs/rotaris/checkpoints/x/1', commit_id: 'c', created_at: 't', iteration: 1, child_name: '', files: '[]', kind: 'iteration' });
       // v20 (REQ-SESSION-166): the plan cycle goes with its session, so its VERBATIM plan text leaves with the delete.
       dal.insertPlanCycle(sid, 1, 't', 'the plan, verbatim', 'small_feature', '', '');
@@ -1678,10 +1688,10 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
     // requirement's run history outlives the session it names (REQ-TRACE-405/476: "no requirement SHALL be silently
     // reset"), so the dependants of the session row are the tables whose session_id column REFERENCES it.
     const tables = (r.db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND (m.name = 'sessions' OR EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"from\" = 'session_id' AND \"table\" = 'sessions'))").all() as { name: string }[]).map((t) => t.name).sort();
-    // Every table whose session_id references the session row is a dependant of it: twenty today (v20's
+    // Every table whose session_id references the session row is a dependant of it: twenty-two today (v37's two, v20's
     // `plan_cycles` cascade, v23's three, v24's one and v30's `plan_roots` among them) plus `sessions` itself. `delivery_runs` names a session and is NOT among them (Part AK).
     expect((r.db.prepare("SELECT count(*) AS c FROM pragma_table_info('delivery_runs') WHERE name = 'session_id'").get() as { c: number }).c).toBe(1);
-    expect(tables).toEqual(['agent_fingerprints', 'agent_messages', 'agent_terminals', 'artifacts', 'checkpoints', 'children', 'events', 'issues', 'iterations', 'launch_audits', 'model_slot_queue', 'permission_audit', 'plan_cycles', 'plan_roots', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
+    expect(tables).toEqual(['agent_fingerprints', 'agent_messages', 'agent_terminals', 'artifacts', 'checkpoints', 'children', 'events', 'issues', 'iterations', 'launch_audits', 'model_slot_queue', 'permission_audit', 'plan_cycles', 'plan_roots', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows', 'workflow_calls', 'workflows']);
     const count = (table: string, sid: string) => (r.db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid) as { c: number }).c;
     for (const t of tables) expect(count(t, gone), `${t} planted`).toBeGreaterThan(0);
     // The delete runs on the RUN HOST's kind of connection — openStore on the resolved file, no migrateStore — which is
@@ -1801,13 +1811,13 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
     forgetSpelling(r.dir);
   });
 
-  it('is v36, and the migration list is append-only with nothing renumbered', () => {
+  it('is v37, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
     // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23, and its revision 4 v24; REQ-TOOLS-152's `suppress_auto_context` (R-067) appended v25; REQ-MONITOR-102's root count (R-067) appended v26; the explicit cancel's mark (OQ-103, R-067) appended v27; a child's attachments and inherited-context block (REQ-LIBRARY-098, REQ-TOOLS-152, R-067) appended v28; the plan cycle's root under way (REQ-MONITOR-102 with REQ-ORCH-153, R-067) appended v29; every plan cycle's root, kept (REQ-MONITOR-044 with REQ-ORCH-153, R-067), v30; the backend a confined run used (REQ-SANDBOX-121), v31; the calls of the plan cycle's root under way the total holds (REQ-MONITOR-102, OQ-116, R-071), v32; each plan cycle's root's own count (REQ-SESSION-140, fin22), v33; the todo item a delegation serves (PD-TOOLS-006 revision 6, OQ-220), v34; the pending questions' mirror (PD-ORCH-005 clause 9, REQ-SESSION-031, fin41), v35. The ladder is asserted whole rather than at its top, so a later part
     // that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(36);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(37);
   });
 });
 
@@ -2175,6 +2185,34 @@ describe('store — v24: the fingerprint an agent started with (PD-ORCH-005 revi
     expect(dal.getChild(sid, 'bg_00000003')!.todo_item).toBeNull();
     r.db.close();
     forgetSpelling(r.dir);
+  });
+
+  it('PD-ORCH-019 clause 8: a v36 store migrates to v37; a session written before it holds no workflow, and a workflow and its journal are kept in call order', () => {
+    const { r, sid } = open('a');
+    r.db.exec(UNDO_V37);
+    r.db.pragma('user_version = 36');
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 36, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.workflowsOf(sid)).toEqual([]);
+    const wf = { session_id: sid, agent: 'orchestrator', workflow_id: 'wf_1', name: 'review', script: 'return 1;', state: 'running', phase: '', agents_started: 0, agents_ended: 0, calls: 0, result: '', notified: 0, started_at: '2026-11-24T00:00:00.000Z' };
+    dal.upsertWorkflow(wf);
+    // A later write moves what stands and keeps the name and the script the start wrote.
+    dal.upsertWorkflow({ ...wf, name: 'other', script: 'changed', state: 'completed', phase: 'Verify', agents_started: 2, agents_ended: 2, calls: 3, result: '{"ok":true}', notified: 1 });
+    expect(dal.workflowsOfAgent(sid, 'orchestrator')).toEqual([{ ...wf, state: 'completed', phase: 'Verify', agents_started: 2, agents_ended: 2, calls: 3, result: '{"ok":true}', notified: 1 }]);
+    expect(dal.workflowsOfAgent(sid, 'someone-else')).toEqual([]);
+    const call = (seq: number, over: object = {}) => ({ session_id: sid, agent: 'orchestrator', workflow_id: 'wf_1', seq, kind: 'agent', payload: `{"prompt":"p${seq}"}`, task_id: null, outcome: null, ...over });
+    dal.upsertWorkflowCall(call(1, { task_id: 'bg_00000002' }));
+    dal.upsertWorkflowCall(call(0, { outcome: '{"ok":true,"value":"report"}' }));
+    // The answer arrives after the child was named: the later write keeps the child.
+    dal.upsertWorkflowCall(call(1, { outcome: '{"ok":true,"value":"second"}' }));
+    dal.upsertWorkflowCall(call(2));
+    expect(dal.workflowCallsOf(sid, 'orchestrator', 'wf_1').map((c) => [c.seq, c.task_id, c.outcome])).toEqual([[0, null, '{"ok":true,"value":"report"}'], [1, 'bg_00000002', '{"ok":true,"value":"second"}'], [2, null, null]]);
+    dal.deleteWorkflowCallsFrom(sid, 'orchestrator', 'wf_1', 1);
+    expect(dal.workflowCallsOf(sid, 'orchestrator', 'wf_1').map((c) => c.seq)).toEqual([0]);
+    // Every read is a primary key's prefix: the planner searches the key and scans no table.
+    const plan = (sql: string) => (r.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as { detail: string }[]).map((p) => p.detail).join(' | ');
+    expect(plan("SELECT * FROM workflows WHERE session_id = 'a' AND agent = 'b' ORDER BY started_at, workflow_id")).toMatch(/SEARCH workflows USING (INDEX|PRIMARY KEY)/);
+    expect(plan("SELECT * FROM workflow_calls WHERE session_id = 'a' AND agent = 'b' AND workflow_id = 'c' ORDER BY seq")).toMatch(/SEARCH workflow_calls USING (INDEX|PRIMARY KEY)/);
   });
 
   it('PD-LIBRARY-007: a v35 store migrates to v36; an artifact written before it carries no answer, and a write stores one', () => {

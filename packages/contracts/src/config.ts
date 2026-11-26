@@ -23,7 +23,47 @@ export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fa
 export const REASONING_LEVEL_NAMES = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type ReasoningLevelName = (typeof REASONING_LEVEL_NAMES)[number];
 export const ROLE_REASONING_NAMES = ['default', 'provider_default', ...REASONING_LEVEL_NAMES] as const;
-export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single'] as const;
+export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single', 'lead', 'intelligent'] as const;
+/** REQ-ORCH-025 with PD-ORCH-019: the override a strategy puts on a run; `orchestrator` puts none. */
+export type DelegationStrategyName = (typeof DELEGATION_STRATEGY_NAMES)[number];
+export type RunOverride = 'single' | 'swarm' | 'lead';
+/**
+ * PD-ORCH-020: `intelligent` is no strategy of its own. It has the small model choose one of these three for each run from
+ * the run's request; `swarm` is never among them (clause 3), and `lead` is the one a choice that could not be made leaves
+ * the run on (clause 4).
+ */
+export const AUTO_STRATEGY_NAMES = ['lead', 'single', 'orchestrator'] as const;
+export type AutoStrategyName = (typeof AUTO_STRATEGY_NAMES)[number];
+export const AUTO_STRATEGY_FALLBACK: AutoStrategyName = 'lead';
+export interface StrategyChoice {
+  readonly strategy: AutoStrategyName;
+  /** Why, in the small model's words; where `fallback` is true, why no choice was made. */
+  readonly reason: string;
+  readonly fallback: boolean;
+  /** True where the choice is the previous run's, kept because this run carries no request text of its own. */
+  readonly kept?: boolean | undefined;
+}
+/** The override a chosen strategy puts on the run: `orchestrator` puts none. */
+export const runOverrideOfChoice = (strategy: AutoStrategyName): RunOverride | null => (strategy === 'orchestrator' ? null : strategy);
+
+/**
+ * PD-ORCH-019 clause 4: `runtime.max_depth` has three meanings and no more. 1: only the entry role spawns. 2: its children
+ * may. 3 or more: no depth limit. The owner's word, 2026-11-24: "1 2 and 3 is unlimited".
+ */
+export const UNLIMITED_DEPTH_FROM = 3;
+export const DEPTH_STEPS = [1, 2, UNLIMITED_DEPTH_FROM] as const;
+/** Whether a configured `max_depth` is the no-limit step. */
+export function isUnlimitedDepth(maxDepth: number): boolean {
+  return maxDepth >= UNLIMITED_DEPTH_FROM;
+}
+/** The depth the run enforces for a configured `max_depth`: the value itself, or a bound no run reaches. */
+export function enforcedDepth(maxDepth: number): number {
+  return isUnlimitedDepth(maxDepth) ? Number.MAX_SAFE_INTEGER : maxDepth;
+}
+/** How a surface names a configured `max_depth` as a limit: the number, or `no limit`. */
+export function depthLimitLabel(maxDepth: number): string {
+  return isUnlimitedDepth(maxDepth) ? 'no limit' : String(maxDepth);
+}
 export const RUN_START_MODE_NAMES = ['auto', 'plan'] as const;
 /** REQ-SANDBOX-048 / REQ-SHELL-125: the three values, in the order the launch dialog offers them. */
 export const SANDBOX_MODE_NAMES = ['off', 'workspace-write', 'read-only'] as const;

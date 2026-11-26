@@ -60,7 +60,7 @@ export const FORBIDDEN = [
   // behind `__ROTARIS_SEAMS__` since 2026-10-14, and a packaged build's scripted provider takes a fixed script
   // (docs/archive/defects/a-packaged-build-still-answers-the-scripted-model-clients-variables.md). `ROTARIS_SCRIPT` covers its
   // `_SCRIPT_*_ARGS` and `_SCRIPT_QUESTIONS` family.
-  'ROTARIS_MODEL_DIALECT', 'ROTARIS_SCRIPT', 'ROTARIS_CHILD_SCRIPT', 'ROTARIS_LOOP_SCRIPT', 'ROTARIS_INTENT_SCRIPT',
+  'ROTARIS_MODEL_DIALECT', 'ROTARIS_SCRIPT', 'ROTARIS_CHILD_SCRIPT', 'ROTARIS_LOOP_SCRIPT', 'ROTARIS_INTENT_SCRIPT', 'ROTARIS_STRATEGY_SCRIPT',
   'ROTARIS_COMPRESSOR_SCRIPT', 'ROTARIS_IMPROVEMENT_SCRIPT',
   // Domain 22 (PD-TRACE-001, 2026-10-30): the adoption interpretation's own script, which chooses the answer the
   // adoption assistant composes its layout from. Read behind `__ROTARIS_SEAMS__`; a packaged build must not answer it.

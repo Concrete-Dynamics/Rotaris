@@ -132,6 +132,16 @@ describe('the gestures against the followed session', () => {
   });
 });
 
+describe('PD-ORCH-019 clause 10: the composer\'s delegation strategy', () => {
+  it('writes the one key Settings writes, and reports a refusal', async () => {
+    const a = actions([{ ok: true, value: null }]);
+    expect(await a.setDelegationStrategy('lead')).toEqual({ ok: true });
+    expect(a.sent).toEqual([{ kind: 'config.save', save: { delegationStrategy: 'lead' } }]);
+    const refused = actions([{ ok: false, code: 'config-write-failed', headline: 'The configuration was not saved', detail: 'the workspace file is read-only' }]);
+    expect(await refused.setDelegationStrategy('swarm')).toEqual({ ok: false, reason: 'the workspace file is read-only' });
+  });
+});
+
 describe('PD-ORCH-005 clause 6: the Continue action', () => {
   it('resumes by default: the command carries no decline', async () => {
     const a = actions([{ ok: true, value: { resumed: true, messageLimit: null } }]);

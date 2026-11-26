@@ -60,7 +60,13 @@ import { onboardingCommands } from './commands/onboarding.js';
 import { createOnboarding } from './onboarding.js';
 import { providersCommands } from './commands/providers.js';
 import { requirementsCommands } from './commands/requirements.js';
-import { sessionCommands } from './commands/session.js';
+import { sessionCommands, confinementRefusalNotice } from './commands/session.js';
+import type { SessionStartDeps } from './session-start.js';
+import { createInboundCoordinator, inboundRunEnded, inboundRunHostExited, InboundSurfaceRuns } from './inbound-runs.js';
+import { createInboundStatusReader, stoppedSession } from './inbound-status.js';
+import { InboundExposure, InboundListenerLink, INBOUND_LISTENER_SERVICE_NAME, inboundListenerGoneRefusal, newInboundToken, portOfChild } from './inbound-exposure.js';
+import { createInboundEnableSequencer } from './inbound-enable.js';
+import { inboundCommands } from './commands/inbound.js';
 import { dictationCommands } from './commands/dictation.js';
 import type { DictationCredentialDeps } from './dictation/credential.js';
 import { installPermissionHandlers, type ApplicationPages, type PermissionSession } from './permissions.js';
@@ -2162,6 +2168,16 @@ async function main(): Promise<void> {
     openHookReview, restoreFlow, establishFlow, checkpointOp, quitting, authFallback,
     withdrawnByClose: (sessionId) => quit.withdrawnByClose(sessionId),
     storeRefusal: (workspace) => storeRefusals.get(canonicalPath(workspace))?.held,
+    /**
+     * REQ-MCP-124 (ADR-0067), the shared fence's read: the workspace open RIGHT NOW — the named window's, else the active
+     * window's (the surface speaks for no window). The desktop `session.start` and the MCP surface's `rotaris_start_run`
+     * both read it through `startSessionRun`, so a workspace switched between validation and admission refuses the start.
+     */
+    openWorkspaceRead: async (wcId) => {
+      const view = wcId === null ? activeWindow() : mainWindows.forSender(wcId);
+      if (view === undefined || view.workspaceId === undefined || view.workspace === '(no workspace)') return null;
+      return { workspaceId: view.workspaceId, workspace: view.workspace };
+    },
     // R-091 (hardening §3.2 row 4): `window.reload`, the render-failure boundary's one action — the sender's own page, loaded again.
     reloadWindow: (senderId) => {
       // A main window reloads through `MainWindows`, which hands the reloaded renderer the session it followed (REQ-SHELL-020).
@@ -2174,10 +2190,157 @@ async function main(): Promise<void> {
     },
   };
   /**
-   * Every command this product answers, filed under its kind. `CommandHandlers` is total over
-   * `CommandRequest['kind']`, so a kind added to the contract and to no facet fails to compile here —
-   * which is the stop `04-seams.md` §1 names, and is why this table has no `default`.
+   * ADR-0067 / REQ-MCP-127: the inbound listener's own `utilityProcess`, forked from the one shipped binary as the run host
+   * is. It is forked ONCE, at the first enable (`inbound.enable`), and lives until the application ends: main holds the
+   * exposure, and the process holds the socket bound to loopback on an ephemeral port (REQ-MCP-119).
    */
+  let inboundChild: UtilityProcess | null = null;
+  let inboundLink: InboundListenerLink | null = null;
+  const inboundExposure = new InboundExposure();
+  const inboundRuns = new InboundSurfaceRuns();
+  const inboundLog = (m: string, level: 'info' | 'warn') => log(m, level);
+  /**
+   * REQ-MCP-123/125/128 (BLOCKER C/D of the review, 2026-11-25): the surface's status read. The run host's `session.list`
+   * carries the state and the waiting-on-a-person fact; the STOP REASON is not held in a map of its own (a per-session map
+   * counted every run's result against one cap and let a desktop run evict or displace a live handle's reason) — it lives
+   * with the handle and is fed from the product's own publications, below.
+   */
+  const inboundStatus = createInboundStatusReader({ request: (req, bound) => runHost.request(req, bound), log: (m) => log(m, 'warn') });
+
+  /**
+   * REQ-MCP-123/124: the surface's two tools, answered in main (where the trusted desktop state and the run slot live).
+   * `readStatus` reads the run's state from the run host's listing for its workspace — the product's own read, in the
+   * product's own vocabulary (REQ-MCP-123/130).
+   */
+  const runHostProjection: SessionStartDeps = {
+    log, runHost, services, mainWindows, notices, raiseNotice, recoveryFor, configFatal,
+    storeRefusal: (workspace) => storeRefusals.get(canonicalPath(workspace))?.held,
+    openWorkspaceRead: async (wcId) => {
+      const view = wcId === null ? activeWindow() : mainWindows.forSender(wcId);
+      if (view === undefined || view.workspaceId === undefined || view.workspace === '(no workspace)') return null;
+      return { workspaceId: view.workspaceId, workspace: view.workspace };
+    },
+    confinementNotice: confinementRefusalNotice,
+  };
+  /**
+   * REQ-MCP-124/126 (REWORK 4, 2026-11-25): the workspace open RIGHT NOW, read SYNCHRONOUSLY. The admission reserves the
+   * slot (handle, session id, workspace) in ONE synchronous step before any `await`, so a start that is refused for want
+   * of a workspace leaves no work and no reservation behind. The inbound path has no window of its own, so this reads the
+   * active window's workspace exactly as the shared fence's `openWorkspaceRead(null)` does.
+   */
+  const openWorkspaceNow = (): { readonly workspaceId: string; readonly workspace: string } | null => {
+    const view = activeWindow();
+    if (view === undefined || view.workspaceId === undefined || view.workspace === '(no workspace)') return null;
+    return { workspaceId: view.workspaceId, workspace: view.workspace };
+  };
+  const inboundCoordinator = createInboundCoordinator({
+    start: runHostProjection,
+    runs: inboundRuns,
+    openWorkspaceNow,
+    readStatus: (workspaceId, sessionId) => inboundStatus.readStatus(workspaceId, sessionId),
+    // MAJOR (REWORK 4, 2026-11-25): the ONE bounded reconcile, re-armed while the run is live, ends a run whose terminal
+    // write failed (its durable image stays busy with nothing running it) on a DEFINITE reading and never on a clock.
+    schedule: (fn, after) => { clocks.timers.after(after, fn); },
+  });
+  /**
+   * REQ-MCP-126: the run's own end releases the single-run slot, whether it ended on its own or was stopped, and its
+   * reason is kept with the handle (BLOCKER D).
+   *
+   * REQ-MCP-123/126 (BLOCKER B/C, 2026-11-25): the product's own state (`publish.snapshot`, whose record carries
+   * `executionStatus` and `stopReason`) settles the slot and the reason for the two cases a `run.result` does not cover:
+   * a held attempt whose host answered late (the session appears), and a run that left the busy set WITHOUT a terminal
+   * result — a desktop cancel at the plan gate or the message limit (`execution_status: 'paused'`, `stop_reason:
+   * 'user_cancelled'`). `inbound-status.ts`'s `stoppedSession` reads exactly those two fields off the published record.
+   *
+   * MAJOR (REQ-MCP-126): the run host's `exit` releases the slot too (a crash takes the externally started run with it),
+   * exactly as the board's coordinator reaps on the same event (`requirements-runs.ts`).
+   */
+  runHost.onEvent((e) => {
+    if (e.kind === 'run.result') inboundRunEnded(inboundRuns, e.sessionId, e.result.stop_reason, e.result.execution_status);
+    // MAJOR 2(a) (REQ-MCP-123/126, 2026-11-25): through the coordinator's own entry point, so a snapshot that CONFIRMS a
+    // start whose reply was lost also arms the one reconcile (a failed terminal write then still frees the slot).
+    else if (e.kind === 'publish.snapshot') { const o = stoppedSession(e.payload); inboundCoordinator.observeSnapshot(o.sessionId, o.state); }
+  });
+  runHostChild.on('exit', () => { inboundRunHostExited(inboundRuns); });
+
+  /**
+   * REQ-MCP-127/120/121: fork the listener at the first enable and answer the port it chose; the token is handed over on
+   * the `enable` ask alone and never logged. MAJOR (2026-11-25): the two gestures share ONE serialized path (`createInboundEnableSequencer`).
+   * `enable` forks the listener on the first press and asks it to bind; a second press while the first binds JOINS it,
+   * and a press while the surface is already on is idempotent (no fresh token, no rebind). `disable` revokes the exposure
+   * at once and asks the listener to unbind; a disable the listener did NOT confirm is not treated as done, so the next
+   * disable asks it again. The token is shown ONCE, on the enabling press's answer, and never logged.
+   */
+  const inboundEnable = createInboundEnableSequencer({
+    exposure: inboundExposure,
+    mintToken: () => newInboundToken(),
+    askEnable: async (token): Promise<{ readonly ok: true; readonly port: number } | { readonly ok: false; readonly outcome: CommandOutcome; readonly definite: boolean }> => {
+      if (inboundChild === null) {
+        const child = utilityProcess.fork(join(__dirname, 'inbound-listener.js'), [], { serviceName: INBOUND_LISTENER_SERVICE_NAME });
+        const link = new InboundListenerLink(portOfChild(child), clocks.timers, inboundLog);
+        link.onAsk(inboundCoordinator.ask);
+        child.once('spawn', () => log(`inbound listener forked (pid ${child.pid ?? '?'}); REQ-MCP-127`));
+        child.on('exit', (code) => {
+          log(`inbound listener exited (${code}); the surface is off and no run is admitted until it is forked again`, code === 0 ? 'info' : 'warn');
+          link.end(inboundListenerGoneRefusal());
+          inboundExposure.turnOff();
+          inboundEnable.listenerGone();
+          if (inboundChild === child) { inboundChild = null; inboundLink = null; }
+        });
+        inboundChild = child;
+        inboundLink = link;
+      }
+      const link = inboundLink;
+      if (link === null) return { ok: false, outcome: { ok: false, code: 'inbound.fork-failed', headline: 'The inbound listener could not be started' }, definite: true };
+      /*
+       * MINOR (REWORK 7, 2026-11-25): a request that times out here is NOT removed in the listener. `ProcessLink` discards
+       * the reply at its bound, but there is no cancel across this boundary — the listener still holds the work and will
+       * still run it (it may yet bind). Main therefore reads a timeout as `inbound.unreachable` (the bind question stays
+       * OPEN, MAJOR 3) and does NOT treat the surface as off. The abandoned work is bounded on the LISTENER's side
+       * (`MAX_QUEUED_LISTENER_REQUESTS`): past that cap a further request is refused rather than queued, so a caller
+       * driving enable in a loop cannot grow the listener's queue without end. Nothing is "cleaned up" here because
+       * nothing CAN be: the honest reading is that the request may still land.
+       */
+      const reply = await link.request({ kind: 'inbound.enable', token }, 25_000).catch((cause: Error) => ({ kind: 'refused' as const, code: 'inbound.unreachable', headline: 'The inbound listener did not answer', detail: cause.message }));
+      if (reply.kind !== 'inbound.state' || reply.state.port === null) {
+        /*
+         * MAJOR 3 (REQ-MCP-120/121, 2026-11-25): whether the bind question is CLOSED depends on who decided it. A
+         * `bindFailed` refusal is the listener's OWN verdict — nothing is bound — so the question closes, and so does an
+         * `inbound.state` answer that says the surface is not listening. A TIMEOUT or an unreachable listener says nothing
+         * about the listener's bind, so the question stays OPEN: the sequencer then does not claim the surface is off,
+         * keeps the token it handed over, and the next enable reads the listener's state rather than minting a new token
+         * out from under a bind that may still land.
+         *
+         * MAJOR C (REWORK 6, 2026-11-25): `inbound.gone` is the link's own answer that the listener PROCESS is gone.
+         * Nothing of it holds a socket, so the question is CLOSED by it exactly as by a `bindFailed` — the next enable
+         * forks a fresh listener; without this the dying listener's question stayed open and every following enable ran
+         * into `askState → null`.
+         */
+        const definite = reply.kind === 'inbound.state' ? !reply.state.listening : reply.kind === 'refused' && (reply.code === 'inbound.bindFailed' || reply.code === 'inbound.gone');
+        return { ok: false, outcome: reply.kind === 'refused' ? { ok: false, code: reply.code, headline: reply.headline, ...(reply.detail === undefined ? {} : { detail: reply.detail }) } : { ok: false, code: 'inbound.not-bound', headline: 'The inbound listener did not bind to loopback' }, definite };
+      }
+      log(`inbound surface enabled for this session on 127.0.0.1:${reply.state.port} (loopback, ephemeral; REQ-MCP-119/120)`);
+      return { ok: true, port: reply.state.port };
+    },
+    // MAJOR 3 (REQ-MCP-120/121, 2026-11-25): the listener's OWN state, read to resolve a bind question left open by an
+    // enable that was not answered in time. `null` when the listener does not answer, which keeps the question open.
+    askState: async () => {
+      if (inboundLink === null) return null;
+      const reply = await inboundLink.request({ kind: 'inbound.state' }, 10_000).catch(() => null);
+      return reply === null || reply.kind !== 'inbound.state' ? null : { listening: reply.state.listening, port: reply.state.port };
+    },
+    askDisable: async () => {
+      if (inboundLink === null) return true;
+      const reply = await inboundLink.request({ kind: 'inbound.disable' }, 10_000).catch(() => null);
+      const confirmed = reply !== null && reply.kind === 'inbound.state' && !reply.state.listening;
+      if (!confirmed) log('inbound surface: the listener did not confirm the disable; the exposure is revoked in main and the next disable asks it again', 'warn');
+      else log('inbound surface disabled; the token is invalidated with the exposure (REQ-MCP-120/121)');
+      return confirmed;
+    },
+  });
+  const enableInbound = (): Promise<CommandOutcome> => inboundEnable.enable();
+  const disableInbound = (): Promise<CommandOutcome> => inboundEnable.disable();
+
   const handlers: CommandHandlers = {
     ...authRecoveryCommands(commandContext),
     ...checkpointsCommands(commandContext),
@@ -2196,6 +2359,7 @@ async function main(): Promise<void> {
     ...providersCommands(commandContext),
     ...requirementsCommands(commandContext),
     ...sessionCommands(commandContext),
+    ...inboundCommands({ state: (includeToken) => inboundExposure.view(includeToken), enable: enableInbound, disable: disableInbound }),
     ...shellCommands(commandContext),
     ...skillsCommands(commandContext),
     ...updateCommands(commandContext),
@@ -2431,6 +2595,10 @@ async function main(): Promise<void> {
       await Promise.all([...services].map(([key, s]) => shutdownAtQuit(() => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)), s.exit, (cause) => { log(`quit: the workspace service for ${key} did not complete its shutdown (${String(cause)}); its in-flight work may be lost`, 'error'); })));
       // The run host is gone before main is, so no session lock it held outlives this instance (`endBeforeMain`).
       await endBeforeMain(runHostEndable, runHostExit, clocks.timers, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
+      // REQ-MCP-120/121: quitting the application revokes the inbound exposure, and the token dies with it. The listener
+      // gets a `disable` (bounded) so it unbinds, then the process ends with the application; nothing of it persists a choice.
+      inboundExposure.turnOff();
+      if (inboundLink !== null) await inboundLink.request({ kind: 'inbound.disable' }, 5_000).catch(() => undefined);
     })();
     return shutdownRun;
   };

@@ -327,3 +327,90 @@ describe('ProcessLink — a request held on the child\'s ready (OQ-473 (3))', ()
     link.close();
   });
 });
+
+describe('MAJOR 1 (REQ-MCP-123/126, 2026-11-25): a reply after the bound reaches the sink that asked for it', () => {
+  it('a late reply is handed to the sink instead of being discarded with the id', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    const late: ProcessReply[] = [];
+    const asked = link.request({ kind: 'ping' }, millis(1_000), (r) => { late.push(r); });
+    clock.advance(1_000);
+    await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    // The request ended at its bound as always; the reply that arrives after is NOT thrown away when a sink named it.
+    expect(late).toEqual([]);
+    const definitive: ProcessReply = { kind: 'refused', code: 'session.refused', headline: 'no run was started' };
+    deliver(reply(1, definitive));
+    expect(late).toEqual([definitive]);
+    // The sink fires once: a second late reply for the same id has nothing left to hand it to.
+    deliver(reply(1, definitive));
+    expect(late).toHaveLength(1);
+    link.close();
+  });
+
+  it('a late reply with no sink named is dropped as before (the sink is opt-in)', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    const asked = link.request({ kind: 'ping' }, millis(1_000));
+    clock.advance(1_000);
+    await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    expect(() => deliver(reply(1, pong))).not.toThrow();
+    link.close();
+  });
+
+  it('the link’s end drops every late sink: no reply can follow the child', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    const late: ProcessReply[] = [];
+    const asked = link.request({ kind: 'ping' }, millis(1_000), (r) => { late.push(r); });
+    clock.advance(1_000);
+    await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    link.end({ kind: 'refused', code: 'link.ended', headline: 'the child is gone' });
+    deliver(reply(1, pong));
+    expect(late).toEqual([]);
+    link.close();
+  });
+
+  it('MINOR (REWORK 6): a sink that THROWS does not unwind into the port’s message pump', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const { log, lines } = captured('run host');
+    const link = new ProcessLink(port, clock, log);
+    let answered = 0;
+    const asked = link.request({ kind: 'ping' }, millis(1_000), () => { throw new Error('the sink threw'); });
+    clock.advance(1_000);
+    await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    // The sink throws inside the port's own message handler: it must be trapped, not unwind into the pump.
+    expect(() => deliver(reply(1, pong))).not.toThrow();
+    expect(lines.some((l) => l.includes('sink threw'))).toBe(true);
+    // The channel still works: a later request is answered normally.
+    const next = link.request({ kind: 'ping' }, millis(1_000));
+    answered += 1;
+    deliver({ v: CONTRACT_SCHEMA_VERSION, id: 2, reply: pong });
+    await expect(next).resolves.toEqual(pong);
+    expect(answered).toBe(1);
+    link.close();
+  });
+
+  it('MINOR (REWORK 6): the late-sink map is bounded — the oldest sink is dropped past the cap', async () => {
+    const clock = new FakeClock();
+    const { port, deliver } = fakePort();
+    const link = new ProcessLink(port, clock, quiet());
+    const fired: number[] = [];
+    // More requests than the cap, each naming a sink, none of them ever answered.
+    const count = 40;
+    for (let i = 0; i < count; i += 1) {
+      const asked = link.request({ kind: 'ping' }, millis(1_000), () => { fired.push(i); });
+      clock.advance(1_000);
+      await expect(asked).rejects.toBeInstanceOf(NoReplyWithinBound);
+    }
+    // The OLDEST ids were dropped, so a reply to id 1 has no sink to reach; a recent one still does.
+    deliver(reply(1, pong));
+    expect(fired).toEqual([]);
+    deliver(reply(count, pong));
+    expect(fired).toEqual([count - 1]);
+    link.close();
+  });
+});

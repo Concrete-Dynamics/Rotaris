@@ -2,7 +2,7 @@ import { captureSupport, startCapture } from './dictation-capture.js';
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createReportingRoot, RenderFaultSeam } from './render-failure.js';
 import { useStore } from 'zustand';
-import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult, type CommandRequest, type DiagnosticsCardState, type ModelSlotName, type OnboardingOutcome, type OnboardingView, type PermissionPreset, type ProviderSignInPrompt, type ProviderSignInResult } from '@rotaris/contracts';
+import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult , EMPTY_SKILLS_STATE, SKILLS_DISCOVERING_CODE, SKILLS_DISCOVERING_NOTE, SKILLS_DISCOVERY_STALLED, SKILLS_DISCOVERY_STALLED_CODE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState, type PromptsRootsResult, type CommandRequest, type DiagnosticsCardState, type ModelSlotName, type OnboardingOutcome, type OnboardingView, type PermissionPreset, type ProviderSignInPrompt, type ProviderSignInResult, type InboundExposure } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE, UpdateStateSchema } from '@rotaris/contracts';
@@ -1768,6 +1768,17 @@ function useMcp(): McpSettingsProps {
   useEffect(() => bridge.onConfigChanged(() => { void read(); void readSecrets(secretsServer); void readWebSearchSecrets(); }), [read, readSecrets, secretsServer, readWebSearchSecrets]);
   // ADR-0035 (Part T) / REQ-MCP-112: the project-setup action's status, read at mount and polled every 500 ms while a run is under way.
   const [setup, setSetup] = useState<McpSetupStatus | null>(null);
+  /**
+   * ADR-0067 / REQ-MCP-120: the inbound surface's exposure, read at mount (a window that mounts while the surface is on
+   * shows the port); the token is present ONLY on the enabling press's own answer (REQ-MCP-121: shown once), so a read
+   * never carries it and this state remembers it for the session's display.
+   */
+  const [inbound, setInbound] = useState<InboundExposure | null>(null);
+  const readInbound = useCallback(async () => {
+    const r = await bridge.command({ kind: 'inbound.status' });
+    if (r.ok) setInbound((prev) => { const v = r.value as InboundExposure; return prev?.token !== undefined && v.enabled ? { ...v, token: prev.token } : v; });
+  }, []);
+  useEffect(() => { queueMicrotask(() => { void readInbound(); }); }, [readInbound]);
   const readSetup = useCallback(async () => {
     const r = await bridge.command({ kind: 'mcp.setup', action: 'status' });
     if (r.ok) setSetup(r.value as McpSetupStatus);
@@ -1826,6 +1837,20 @@ function useMcp(): McpSettingsProps {
         return r.ok ? { ok: true, message: enabled ? `${name} enabled for this session.` : `${name} disabled for this session.` } : { ok: false, message: r.detail ?? r.headline };
       }
       return pressMcpToggle({ command: (req) => bridge.command(req), read: async () => { await read(); } }, row, enabled);
+    },
+    // ADR-0067 / REQ-MCP-120/121: the inbound surface's switch. The enabling press's answer carries the token ONCE — it is
+    // remembered here for the card to show and is never re-read (so a later `inbound.status` cannot leak it).
+    inbound: {
+      exposure: inbound,
+      onToggle: async (enabled) => {
+        const r = await bridge.command({ kind: 'inbound.setEnabled', enabled });
+        if (!r.ok) return { ok: false, message: r.detail ?? r.headline };
+        const value = r.value as InboundExposure;
+        setInbound(value);
+        // REQ-MCP-121: the FRESH exposure rides back with the press, so the card shows the token the enabling answer
+        // carries without reading a stale prop (BLOCKER of the review, 2026-11-25).
+        return { ok: true, message: enabled ? 'The surface is on for this session.' : 'The surface is off; its token is invalidated.', exposure: value };
+      },
     },
   };
 }

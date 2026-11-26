@@ -172,7 +172,9 @@ const stashed = await launch('stash', shellProfile.workspace, shellProfile.local
   ROTARIS_CAPTURE_CLICKS: '.composer__input@1000;;[data-testid="composer-stash"]@1900',
   ROTARIS_CAPTURE_TYPE: 'Draft a migration plan>>no-enter@1400',
   // `inspect-at` rather than `probe-at`: it reads a control's VALUE and every attribute, which the stated names need.
-  ROTARIS_CAPTURE_INSPECT_AT: '.composer__input@2300;;[data-testid="transcript-stash"]@2300',
+  // The stash control's label and its count badge are read apart: the badge is the compact band's stand-in for the
+  // label it hides (shell.css, `.tool-count`), aria-hidden and undrawn at full width, yet its text is in the control's.
+  ROTARIS_CAPTURE_INSPECT_AT: '.composer__input@2300;;[data-testid="transcript-stash"]@2300;;[data-testid="transcript-stash"] .tool-label@2300;;[data-testid="transcript-stash"] .tool-count@2300',
   ROTARIS_CAPTURE_AFTER_MS: '3000',
 });
 const afterStash = storedPrompts(shellProfile.local);
@@ -185,7 +187,11 @@ if (afterStash.history.length !== 0) throw new Error(`stashing wrote ${afterStas
 const clearedComposer = stashed.inspects['.composer__input@2300']?.matches?.[0]?.text;
 if (clearedComposer !== '') throw new Error(`REQ-CHAT-042: the composer was not cleared by Stash (it holds ${JSON.stringify(clearedComposer)})`);
 const toolbar = stashed.inspects['[data-testid="transcript-stash"]@2300']?.matches?.[0];
-if (toolbar?.text !== 'Apply stash (1)') throw new Error(`the transcript toolbar read "${toolbar?.text ?? 'nothing'}"`);
+const toolbarLabel = stashed.inspects['[data-testid="transcript-stash"] .tool-label@2300']?.matches?.[0]?.text;
+if (toolbarLabel !== 'Apply stash (1)') throw new Error(`REQ-LIBRARY-140: the transcript toolbar's label read "${toolbarLabel ?? 'nothing'}"`);
+if (toolbar?.attrs['data-count'] !== '1') throw new Error(`REQ-LIBRARY-140: the transcript toolbar's live count is ${JSON.stringify(toolbar?.attrs['data-count'] ?? null)}`);
+const toolbarBadge = stashed.inspects['[data-testid="transcript-stash"] .tool-count@2300']?.matches?.[0];
+if (toolbarBadge?.text !== '1' || toolbarBadge.attrs['aria-hidden'] !== 'true') throw new Error(`the compact band's count badge is ${JSON.stringify(toolbarBadge ?? null)}; it repeats the count, hidden from assistive technology`);
 if (toolbar.attrs['aria-label'] !== 'Manage prompt stash' || toolbar.attrs['title'] !== 'Apply or pop a stashed prompt') throw new Error(`the toolbar control's names are ${JSON.stringify(toolbar.attrs)}`);
 
 // The relaunch: a second process against the same profile — the entry is loaded from the store, not remembered.
@@ -195,7 +201,7 @@ const relaunched = await launch('relaunch', shellProfile.workspace, shellProfile
 });
 const survivingRows = texts(relaunched.probes, '[data-testid="library-stash-row"]');
 if (JSON.stringify(survivingRows) !== JSON.stringify(['Draft a migration plan'])) throw new Error(`after the restart the stash showed ${JSON.stringify(survivingRows)}`);
-results.stash = { stored: afterStash.stash, historyRows: afterStash.history.length, composerCleared: true, toolbar: toolbar.text, afterRestart: survivingRows, storeVersion: afterStash.userVersion };
+results.stash = { stored: afterStash.stash, historyRows: afterStash.history.length, composerCleared: true, toolbar: toolbarLabel, toolbarBadge: toolbarBadge.text, afterRestart: survivingRows, storeVersion: afterStash.userVersion };
 
 // ── 3. Use, and Use-and-remove under a filter (REQ-LIBRARY-104/107, REQ-CHAT-044) ──────────────────
 const useProfile = profile('use');

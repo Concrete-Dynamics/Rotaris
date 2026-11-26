@@ -22,6 +22,7 @@
     "apps/desktop/src/main/**/*.ts",
     "apps/desktop/src/preload/**/*.ts",
     "apps/desktop/src/workspace-service/**/*.ts",
+    "apps/desktop/src/inbound-listener/**/*.ts",
     "tools/release-naming/src/**/*.ts"
   ],
   "exclude": ["**/node_modules", "**/dist", "**/out", "**/*.test.ts", "**/*.test.tsx", "**/*.test-support.ts"]

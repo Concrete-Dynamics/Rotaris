@@ -1,7 +1,7 @@
 # Component view — packages and the edges between them
 
 Packages follow **process boundaries** (ADR-0002, `codebase.md`): every package is instantiated by one or
-more of the five composition roots, arrows point downward only, and `eslint-plugin-boundaries` fails
+more of the six composition roots, arrows point downward only, and `eslint-plugin-boundaries` fails
 `pnpm lint` on any edge outside the matrix below (`eslint.config.js`, `ALLOW`). Composition roots are the
 only places `electron` is imported.
 

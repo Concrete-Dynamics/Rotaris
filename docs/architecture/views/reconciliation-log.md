@@ -12,7 +12,9 @@ The entries from 2026-09-16 (the navigation pass) to 2026-10-13 were written in 
 reconciliation-log.md"), which here would point at itself. Since then each change writes its entry at the top of this file and moves only the date in
 `README.md` (its maintenance rule, item 2).
 
-Last reconciled with the code: **2026-11-24**
+Last reconciled with the code: **2026-11-25**
+
+**The product opens one loopback MCP surface for external agents (ADR-0067; REQ-MCP-119..130; 2026-11-25).** Process view gains a sixth process kind (the inbound listener) and `inbound-protocol.ts`; edges gain `app-inbound-listener`. New: `contracts/src/{inbound,inbound-protocol}.ts`, `apps/desktop/src/inbound-listener/`, `main/{session-start,inbound-runs,inbound-status,inbound-exposure,start-refusal}.ts`.
 
 **An agent may consult an advisor (`PD-TOOLS-022`, R-128; 2026-11-24).** Runtime view §3 gains one paragraph; seams §4 one invariant and §5 one worked example. New: `contracts/src/advisor.ts` (the result text, written by the tool and parsed by the row), `agent-tools/src/tools/advisor.ts` (the executor, `AdvisorPort`, `AdvisorUses`), `engine/src/run/advisor.ts` (`consultAdvisor`, `AdvisorOps`), `config/src/sections/advisor.ts`. Changed: `PUBLIC_TOOL_NAMES`, `DECLARATIONS` and `READ_ONLY_CLASS` gain `advisor`; `MODEL_SLOTS` gains `advisor_model` and `SECTION_KEYS` `advisor`; `ModelSetup.advisor` and `ToolPortContext.advisor` carry it from `advisorOf` (run host) to every port; `PortToolCall.conversation` and `ToolPort.advisorUsesLeft` are the turn's two new seams with a port; `createToolPort` joins the tool to the declared set where the advisor's model is not the agent's own. Surfaces: `Row.tsx` draws an answered consult's line and its question-and-advice card, `tool-description.ts` its header; Settings' Delegation page gains the switch and the bound. The scripted client answers the advisor's request and takes an `advisor:<question>` step.
 

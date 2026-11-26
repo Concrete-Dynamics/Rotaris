@@ -406,6 +406,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.list') }),
   z.object({ kind: z.literal('mcp.probe'), name: z.string().max(NAME_MAX).min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().max(NAME_MAX).min(1), enabled: z.boolean() }),
+  /**
+   * ADR-0067 / REQ-MCP-120: the inbound surface's switch, in the register of the per-server enable toggle. `inbound.setEnabled`
+   * turns it on for THIS session (off by default, never persisted, revoked at quit — REQ-MCP-120) and answers the exposure
+   * state with the port and the token; `inbound.status` re-reads it (a surface that mounts while the exposure is on). The
+   * surface adds no configuration key: this is not an `mcp_servers` entry and not a session override.
+   */
+  z.object({ kind: z.literal('inbound.status') }),
+  z.object({ kind: z.literal('inbound.setEnabled'), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), server: z.string().max(NAME_MAX).optional() }),
   /**
    * REQ-MCP-110/111's write half: store (or replace) and delete one secret, each naming its scope (`Workspace` when

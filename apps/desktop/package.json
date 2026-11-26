@@ -16,6 +16,8 @@
   "dependencies": {
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
+    "@modelcontextprotocol/node": "catalog:",
+    "@modelcontextprotocol/server": "catalog:",
     "@phosphor-icons/web": "2.1.2",
     "ajv": "catalog:",
     "better-sqlite3": "catalog:",
@@ -48,7 +50,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
-    "electron": "45.3.3",
+    "electron": "45.3.4",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "esbuild": "^0.28.2",
